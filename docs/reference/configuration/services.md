@@ -83,7 +83,7 @@ auth tokens in localStorage rather than in HTTP cookies need. Extraction is read
 Definitions of remote unshackle service servers, used by the `--remote` mode. Each entry is
 named by you (pick it with `--server`, or do not write that flag when you configure only one) and gives
 the server's `url` (required), an optional `api_key`, an optional `auth_headers` list, an
-optional `server_cdm` boolean, and an optional `services` sub-dict of per-service local
+optional `server_cdm` boolean, an optional `timeout` in seconds, and an optional `services` sub-dict of per-service local
 overrides such as `title_map`.
 
 Leave `server_cdm` unset and the client follows the server: it uses the server CDM for each
@@ -96,6 +96,12 @@ first name. If the server answers `401`, it retries the same request with the ne
 keeps the one that works for the rest of the HTTP session. Names you give keep your spelling and
 are not repeated in the fallbacks, so unshackle tries
 `auth_headers: ["Authorization", "x-secret-key"]` as `Authorization`, `x-secret-key`, `X-Api-Key`.
+
+`timeout` is the time in seconds that the client waits for data from the server. The
+default is `120`. The server sends a heartbeat every 30 seconds while it gets titles, tracks
+or licences, so a slow service does not cause a timeout. Increase `timeout` only when the
+server runs an older version that sends no heartbeat. Give a number of seconds. With a
+value below 30 the client can time out before the first heartbeat. `0` means the default.
 
 In `--remote` mode unshackle turns the server's service list into synthetic CLI
 commands that operate against it, falling back to the tags in that `services` sub-dict when

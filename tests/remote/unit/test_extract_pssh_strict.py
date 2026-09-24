@@ -5,6 +5,7 @@ loop licensed a PlayReady-only track as Widevine by accident. A Widevine device 
 license PlayReady-only content, but only as a deliberate step in the batch loop.
 """
 
+import asyncio
 import json
 from types import SimpleNamespace
 
@@ -44,6 +45,7 @@ def test_extractor_is_type_strict():
 
 async def _run_batch(monkeypatch, tracks, cdm_type, calls):
     session = SimpleNamespace(
+        lock=asyncio.Lock(),
         service_tag="EXAMPLE",
         service_instance=SimpleNamespace(),
         served_keys={},

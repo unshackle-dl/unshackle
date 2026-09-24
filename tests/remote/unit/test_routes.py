@@ -7,12 +7,16 @@ stubbing the route table for selected paths.
 
 from __future__ import annotations
 
+import asyncio
+import json
+
 import pytest
 from aiohttp import web
 
+from unshackle.core.api import routes
 from unshackle.core.api.compression import compression_middleware
 from unshackle.core.api.errors import APIError, APIErrorCode
-from unshackle.core.api.routes import api_handler, cors_middleware, setup_routes
+from unshackle.core.api.routes import api_handler, cors_middleware, heartbeat, setup_routes
 
 pytestmark = pytest.mark.unit
 
@@ -129,6 +133,93 @@ async def test_api_handler_maps_apierror(aiohttp_client) -> None:
     assert body["error_code"] == "NOT_FOUND"
     assert body["message"] == "nope"
     assert body["details"] == {"x": 1}
+
+
+async def test_heartbeat_keeps_slow_request_alive(aiohttp_client, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A fast route answers unchanged; a slow one streams newlines, then its body, and a late error arrives as 200."""
+    monkeypatch.setattr(routes, "HEARTBEAT_INTERVAL", 0.05)
+
+    @heartbeat
+    async def fast(request: web.Request) -> web.Response:
+        return web.json_response({"x": 1}, status=201)
+
+    @heartbeat
+    async def slow(request: web.Request) -> web.Response:
+        await asyncio.sleep(0.2)
+        return web.json_response({"titles": [1]})
+
+    @heartbeat
+    async def slow_fail(request: web.Request) -> web.Response:
+        await asyncio.sleep(0.2)
+        raise APIError(APIErrorCode.SERVICE_ERROR, "late")
+
+    app = web.Application()
+    app["debug_api"] = False
+    app.router.add_get("/fast", fast)
+    app.router.add_get("/slow", slow)
+    app.router.add_get("/slow_fail", slow_fail)
+    client = await aiohttp_client(app)
+
+    resp = await client.get("/fast")
+    assert resp.status == 201 and await resp.json() == {"x": 1}
+
+    resp = await client.get("/slow")
+    text = await resp.text()
+    assert resp.status == 200 and text.startswith("\n") and json.loads(text) == {"titles": [1]}
+    assert resp.headers["X-Accel-Buffering"] == "no"
+
+    resp = await client.get("/slow_fail")
+    body = json.loads(await resp.text())
+    assert resp.status == 200 and body["status"] == "error" and body["error_code"] == "SERVICE_ERROR"
+
+
+async def test_heartbeat_late_error_counts_as_rejected(aiohttp_client, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Stats count a late failure by its real status and the bytes the stream sent (with framing), not as an empty 200."""
+    from unshackle.core.api.stats import stats, stats_middleware
+
+    monkeypatch.setattr(routes, "HEARTBEAT_INTERVAL", 0.05)
+    monkeypatch.setattr(stats, "keys", {})
+
+    @heartbeat
+    async def slow_fail(request: web.Request) -> web.Response:
+        await asyncio.sleep(0.2)
+        raise APIError(APIErrorCode.SERVICE_ERROR, "late")
+
+    app = web.Application(middlewares=[stats_middleware])
+    app["debug_api"] = False
+    app.router.add_get("/slow_fail", slow_fail)
+    client = await aiohttp_client(app)
+
+    resp = await client.get("/slow_fail")
+    sent = len(await resp.read())
+    (entry,) = stats.keys.values()
+    assert resp.status == 200 and entry.rejected == 1 and entry.bytes_out >= sent > 0
+
+
+async def test_heartbeat_client_disconnect_is_quiet(
+    aiohttp_client, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A client that leaves during the heartbeat logs no traceback, and the work runs to the end."""
+    monkeypatch.setattr(routes, "HEARTBEAT_INTERVAL", 0.02)
+    finished = asyncio.Event()
+
+    @heartbeat
+    async def slow(request: web.Request) -> web.Response:
+        await asyncio.sleep(0.3)
+        finished.set()
+        return web.json_response({})
+
+    app = web.Application()
+    app["debug_api"] = False
+    app.router.add_get("/slow", slow)
+    client = await aiohttp_client(app)
+
+    resp = await client.get("/slow")
+    await resp.content.read(1)
+    resp.close()
+    await asyncio.wait_for(finished.wait(), 2)
+    await asyncio.sleep(0.1)
+    assert "Error handling request" not in caplog.text
 
 
 async def test_cors_preflight_returns_headers(make_app, aiohttp_client) -> None:

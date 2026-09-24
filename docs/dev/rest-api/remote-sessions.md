@@ -277,8 +277,8 @@ generally never touch this directly, but it explains behaviour you might observe
 
 | Behavior | Value | Notes |
 |---|---|---|
-| Idle session TTL | **300s** (5 min) default | Refreshed on every request to the session |
-| Max concurrent sessions | **100** default | Oldest (least recently used) is evicted when full |
+| Idle session TTL | **300s** (5 min) default | Refreshed on every request to the session and when a `titles` or `tracks` request ends. A remote session does not expire while a request works on it |
+| Max concurrent sessions | **100** default | Oldest (least recently used) is evicted when full. A remote session that a request works on goes last |
 | Auth/input timeout | **600s** (10 min) | Sessions still authenticating or awaiting a prompt use this longer window instead of the TTL |
 | Cleanup sweep | every 60s | Expired sessions are removed and their input prompts cancelled |
 
@@ -403,6 +403,9 @@ layer.
 - `InputBridge.request_input(prompt, timeout=600)` blocks the sync auth thread on a
   `threading.Event` until `submit_response()` or `cancel()` fires.
 - A timeout raises `TimeoutError` and marks the remote session `FAILED`.
+- A prompt after authentication (in `get_titles()`, `get_tracks()` or licensing) raises
+  `RuntimeError` at once. The client polls for prompts only during authentication, so
+  no answer can come.
 - `AUTH_INPUT_TIMEOUT = 600.0` seconds. This is also the TTL granted to
   `AUTHENTICATING` / `PENDING_INPUT` sessions in the store.
 
@@ -513,9 +516,18 @@ Source: `unshackle/core/remote_service.py`. This is the canonical consumer of th
 remote session API and a good template for any client.
 
 - **`RemoteClient.request`** sets `X-Secret-Key` and `User-Agent: unshackle/<version>`,
-  uses a 120s timeout for `POST` and 30s for `GET`/`DELETE`, and treats any
-  `status_code >= 400` as fatal: it logs `Server error [<error_code>]: <message>`
-  and raises `SystemExit(1)`.
+  uses the server's `timeout` from `remote_services` (default 120s) as the read timeout,
+  and treats any `status_code >= 400` as fatal: it logs `Server error [<error_code>]: <message>`
+  and raises `SystemExit(1)`. A `200` body with `"status": "error"` is also fatal (see
+  the heartbeat below).
+- **Heartbeat.** The `titles`, `tracks` and `license` routes send a newline every 30s while
+  the service works. The read timeout starts again at each byte, so a slow request stays
+  open for as long as the server works on it, and a reverse proxy does not close it as
+  idle. A route that answers within 30s sends the usual response. After 30s the status
+  is already `200`, so a failure after that time arrives as the usual error body with
+  status `200`. Your client must check `status` in the body. JSON parsers ignore the
+  leading newlines. The server does not gzip-compress a heartbeat response, because gzip
+  output cannot start before the body is ready.
 - **Retries.** The download-side HTTP session mounts an adapter with
   `Retry(total=5, backoff_factor=0.2, status_forcelist=[429, 500, 502, 503, 504])`.
 - **Flow.** `authenticate()` → `create` (+ poll `prompt` every 2s up to a 600s

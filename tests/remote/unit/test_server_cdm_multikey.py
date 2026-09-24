@@ -6,6 +6,7 @@ instead of short-circuiting on a vault hit for the PSSH KID alone, and the batch
 path must give each track the full bundle without borrowing another PSSH's keys.
 """
 
+import asyncio
 import base64
 import json
 from types import SimpleNamespace
@@ -118,6 +119,7 @@ async def test_batch_shares_full_bundle_per_pssh(monkeypatch):
 
     tracks = {tid: SimpleNamespace(id=tid, drm=[object()]) for tid in track_pssh}
     session = SimpleNamespace(
+        lock=asyncio.Lock(),
         service_tag="EXAMPLE",
         service_instance=SimpleNamespace(),
         served_keys={},

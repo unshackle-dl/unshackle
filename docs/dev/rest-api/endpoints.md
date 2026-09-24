@@ -15,7 +15,7 @@ Start the server with [`unshackle serve`](../../guide/cli-reference.md). By defa
 - **Authentication.** Every request except `GET /api/health` requires the `X-Secret-Key` header when you configure an API key. `--no-key` disables the check entirely. See [Authentication](authentication.md).
 - **Content type.** Request bodies are JSON (`Content-Type: application/json`). All success responses are JSON unless this page documents a `204 No Content`.
 - **CORS.** Every response carries permissive CORS headers, and the server answers `OPTIONS` preflight requests automatically.
-- **Compression.** JSON responses of 256 bytes or more are gzip-compressed when the client sends `Accept-Encoding: gzip`.
+- **Compression.** JSON responses of 256 bytes or more are gzip-compressed when the client sends `Accept-Encoding: gzip`. A [slow response](#slow-responses) is not compressed.
 - **Service allowlist.** The effective allowlist for your API key filters the service-facing endpoints (the intersection of the global `serve.services` list and your per-key list). The server treats services you cannot use as unknown.
 
 !!! warning "Error responses have two shapes"
@@ -883,6 +883,22 @@ POST /api/session/{id}/keys/bad → report a server-vault content key that did n
 DELETE /api/session/{id}        → tear down, harvest updated cache
 ```
 
+### Slow responses
+
+The `titles`, `tracks` and `license` routes can take minutes on a large catalogue. When the
+answer is not ready after 30 seconds, the route sends status `200` and the headers. It then
+sends a newline every 30 seconds until the JSON body is ready. JSON parsers ignore the leading
+newlines. This keeps the connection open through a reverse proxy that closes an idle request.
+
+!!! warning "A late failure has status `200`"
+    The server sent the status before the work ended. A failure after the first 30 seconds
+    arrives as the [standard error body](errors.md#the-standard-error-shape) with status `200`.
+    Check `status` in the body, not only the HTTP status. The body has no HTTP status field.
+    Use `error_code` and `retryable` to decide what to do.
+
+A slow response is not gzip-compressed. Gzip output cannot start before the body is ready, and
+the newlines must go out at once.
+
 ### `POST /api/session/create`
 
 Make a remote session for a service and title. Authentication runs asynchronously in the background. This call returns immediately with `status: "authenticating"`, and you then poll the prompt endpoint. The body accepts `service` and `title_id` (both required). It also accepts a broad set of optional keys, because the body allows `additionalProperties`. These are `credentials` (`{username, password, extra?}`), `cookies` (base64 of zlib-compressed Netscape cookie file), `proxy`, `no_proxy`, `profile`, `cache` (map of forwarded cache files, keyed by the file path relative to the service cache directory with `/` separators and no `.json` suffix, so a nested key such as `session_web/<sha1>` lands in a subdirectory), `client_region`, `proxy_region`, `cdm_type`, `range_`, `vcodec`, `quality`, `best_available`, `dl_params`, `client`, and any service CLI options. `proxy_region` is the country code the client resolved `proxy` from; the server matches it against its own accounts. `client` is a freeform object the dashboard shows as sent (the CLI puts `version`, `code_hash`, `platform` and a redacted `argv` in it); the server ignores it above 4096 bytes of JSON.
@@ -989,6 +1005,7 @@ The buffer keeps the newest 500 records. Only the service instance's own logger 
 ### `GET /api/session/{session_id}/titles`
 
 Fetch the titles for an authenticated remote session.
+A slow answer arrives as a [slow response](#slow-responses).
 
 === "Response `200`"
 
@@ -1003,7 +1020,7 @@ Requires an authenticated remote session. Otherwise it returns `404 SESSION_NOT_
 
 ### `POST /api/session/{session_id}/tracks`
 
-Get tracks and chapters for a specific title within the remote session. Body: `{ "title_id": "..." }` (required). Unlike `list-tracks`, track objects here **include** download URLs, along with session headers/cookies and manifest data the client needs to download directly.
+Get tracks and chapters for a specific title within the remote session. Body: `{ "title_id": "..." }` (required). Unlike `list-tracks`, track objects here **include** download URLs, along with session headers/cookies and manifest data the client needs to download directly. A slow answer arrives as a [slow response](#slow-responses).
 
 `manifests` holds each served DASH/ISM manifest once. A service can build an AdaptationSet of its own that the served manifest does not contain. `track_manifests` holds a one-AdaptationSet MPD for each such track, and the client re-parses that in place of the whole manifest.
 
@@ -1071,6 +1088,7 @@ Get the HLS segments a service drops (ads, bumpers, dub cards). The server runs 
 ### `POST /api/session/{session_id}/license`
 
 Get the content keys for the DRM. The `mode` field selects one of two modes.
+A slow answer arrives as a [slow response](#slow-responses).
 
 **Proxy mode** (`mode: "proxy"`, the default) forwards the client's CDM `challenge` to the service's license endpoint and returns the raw license bytes:
 

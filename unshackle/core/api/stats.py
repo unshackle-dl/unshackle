@@ -184,14 +184,16 @@ async def stats_middleware(request: web.Request, handler: Any) -> web.StreamResp
     stats.requests_total += 1
     started = time.perf_counter()
     response = await handler(request)
-    if response.status == 401:
+    status = response.get("late_status", response.status)
+    bytes_out = getattr(response, "content_length", None) or response.body_length
+    if status == 401:
         stats.requests_rejected += 1
     else:
         entry = stats.key_stats(configured_key(request_secret_key(request)))
         entry.requests += 1
         entry.last_seen = time.time()
-        entry.bytes_out += getattr(response, "content_length", None) or 0
-        if response.status >= 400:
+        entry.bytes_out += bytes_out
+        if status >= 400:
             entry.rejected += 1
     session_id = request.match_info.get("session_id")
     if session_id and request.method != "OPTIONS" and not request.path.endswith("/logs"):
@@ -204,10 +206,10 @@ async def stats_middleware(request: web.Request, handler: Any) -> web.StreamResp
                 "method": request.method,
                 "action": request.path.split(f"/{session_id}", 1)[-1].strip("/") or "info",
                 "query": dict(request.query),
-                "status": response.status,
+                "status": status,
                 "ms": round((time.perf_counter() - started) * 1000, 1),
                 "bytes_in": request.content_length or 0,
-                "bytes_out": getattr(response, "content_length", None) or 0,
+                "bytes_out": bytes_out,
             },
         )
     return response

@@ -76,6 +76,17 @@ async def test_cleanup_expired_drops_old_authenticated(store: SessionStore, monk
     assert store.session_count == 0
 
 
+async def test_session_with_work_in_progress_does_not_expire(store: SessionStore) -> None:
+    """A request that holds the lock for longer than the TTL keeps its session and cache directory."""
+    from datetime import datetime, timedelta, timezone
+
+    entry = await store.create("EXAMPLE", _FakeService(), session_id="busy")
+    entry.last_accessed = datetime.now(timezone.utc) - timedelta(seconds=store.ttl + 100)
+    async with entry.lock:
+        assert await store.cleanup_expired() == 0
+        assert await store.get("busy") is entry
+
+
 async def test_cleanup_expired_keeps_pending_input_under_grace(store: SessionStore) -> None:
     """Sessions awaiting user input get a longer grace period (10 min) than authenticated TTL."""
     entry = await store.create("EXAMPLE", _FakeService())

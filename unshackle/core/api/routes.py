@@ -1,3 +1,4 @@
+import asyncio
 import functools
 import logging
 import re
@@ -96,6 +97,53 @@ def api_handler(handler: Handler) -> Handler:
             return await handler(request)
         except APIError as e:
             return build_error_response(e, request.app.get("debug_api", False))
+
+    return wrapper
+
+
+HEARTBEAT_INTERVAL = 30.0
+
+
+def heartbeat(handler: Handler) -> Handler:
+    """Keep a slow request alive with a newline every ``HEARTBEAT_INTERVAL`` seconds.
+
+    A response that is ready within one interval goes out unchanged. After that the route
+    sends status 200 and the headers, then a newline for each interval until the JSON body is
+    ready. JSON parsers ignore the leading whitespace. The status is already sent, so a late
+    failure arrives as the usual error body with ``"status": "error"`` and a 200 status. The
+    work continues if the client disconnects, so the remote session state stays complete.
+    """
+
+    @functools.wraps(handler)
+    async def wrapper(request: web.Request) -> web.StreamResponse:
+        task = asyncio.ensure_future(handler(request))
+        done, _ = await asyncio.wait({task}, timeout=HEARTBEAT_INTERVAL)
+        if done:
+            return task.result()
+
+        headers = {"Content-Type": "application/json", "X-Accel-Buffering": "no", **CORS_HEADERS}
+        response = web.StreamResponse(headers=headers)
+        await response.prepare(request)
+        try:
+            while not done:
+                await response.write(b"\n")
+                done, _ = await asyncio.wait({task}, timeout=HEARTBEAT_INTERVAL)
+        except ConnectionResetError:
+            log.info(f"Client left {request.path} before the response was ready; the work continues")
+            return response
+        debug_mode = request.app.get("debug_api", False)
+        try:
+            result = task.result()
+        except APIError as e:
+            result = build_error_response(e, debug_mode)
+        except Exception as e:
+            log.exception(f"Error in {request.path}")
+            result = handle_api_exception(e, debug_mode=debug_mode)
+        response["late_status"] = result.status
+        body = result.body if isinstance(result, web.Response) else None
+        await response.write(bytes(body) if isinstance(body, (bytes, bytearray)) else b"{}")
+        await response.write_eof()
+        return response
 
     return wrapper
 
@@ -1737,6 +1785,7 @@ async def session_create(request: web.Request) -> web.Response:
 
 
 @api_handler
+@heartbeat
 async def session_titles(request: web.Request) -> web.Response:
     """
     Get titles for an authenticated remote session.
@@ -1751,7 +1800,10 @@ async def session_titles(request: web.Request) -> web.Response:
           type: string
     responses:
       '200':
-        description: List of titles
+        description: >-
+          List of titles.
+          After 30 s the route sends 200 and a newline every 30 s. A failure after that time
+          arrives as the error body with status 200.
       '404':
         description: Remote session not found
     """
@@ -1766,6 +1818,7 @@ async def session_titles(request: web.Request) -> web.Response:
 
 
 @api_handler
+@heartbeat
 async def session_tracks(request: web.Request) -> web.Response:
     """
     Get tracks and chapters for a specific title.
@@ -1792,7 +1845,10 @@ async def session_tracks(request: web.Request) -> web.Response:
                 description: ID of the title to get tracks for
     responses:
       '200':
-        description: Tracks and chapters for the title
+        description: >-
+          Tracks and chapters for the title.
+          After 30 s the route sends 200 and a newline every 30 s. A failure after that time
+          arrives as the error body with status 200.
       '404':
         description: Remote session or title not found
     """
@@ -1915,6 +1971,7 @@ async def session_segment_filter(request: web.Request) -> web.Response:
 
 
 @api_handler
+@heartbeat
 async def session_license(request: web.Request) -> web.Response:
     """
     Proxy DRM license through authenticated service.
@@ -1955,6 +2012,8 @@ async def session_license(request: web.Request) -> web.Response:
           tracks, lists the content keys a server vault supplied, which the client has to prove
           before it trusts them. `clear_tracks`, absent when empty, lists the requested track ids
           that carry no DRM and so have no keys.
+          After 30 s the route sends 200 and a newline every 30 s. A failure after that time
+          arrives as the error body with status 200.
       '404':
         description: Remote session or track not found
     """

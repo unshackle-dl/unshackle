@@ -8,6 +8,7 @@ client's choice decides, and the type the routes plan with must be the type of t
 they load.
 """
 
+import asyncio
 import json
 from types import SimpleNamespace
 from uuid import UUID
@@ -74,6 +75,7 @@ def _session(track):
         get_playready_license=lambda **k: b"",
     )
     return SimpleNamespace(
+        lock=asyncio.Lock(),
         service_tag="PCOK",
         service_instance=service,
         served_keys={},

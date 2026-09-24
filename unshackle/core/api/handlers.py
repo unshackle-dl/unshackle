@@ -3243,7 +3243,10 @@ async def session_titles_handler(session_id: str, request: Optional[web.Request]
     try:
         service_instance = session.service_instance
         async with session.lock:
-            titles = await asyncio.to_thread(service_instance.get_titles)
+            try:
+                titles = await asyncio.to_thread(service_instance.get_titles)
+            finally:
+                session.touch()
         session.titles = titles
 
         if hasattr(titles, "__iter__") and not isinstance(titles, str):
@@ -3346,7 +3349,10 @@ async def session_tracks_handler(
     try:
         service_instance = session.service_instance
         async with session.lock:
-            tracks = await asyncio.to_thread(service_instance.get_tracks, title)
+            try:
+                tracks = await asyncio.to_thread(service_instance.get_tracks, title)
+            finally:
+                session.touch()
 
             title_tracks: Dict[str, Any] = {}
             for track in tracks.videos:
@@ -4299,14 +4305,14 @@ def handle_proxy_license(
     # Surface it as a structured licence error, not an uncaught 500 the edge turns into a 502.
     try:
         if drm_type == "widevine":
-            license_response = service.get_widevine_license(
+            license_blob = service.get_widevine_license(
                 **declared_kwargs(
                     service.get_widevine_license, {"challenge": challenge_bytes, "title": title, "track": track}
                 )
             )
         else:
             challenge_str = challenge_bytes.decode("utf-8", errors="replace")
-            license_response = service.get_playready_license(
+            license_blob = service.get_playready_license(
                 **declared_kwargs(
                     service.get_playready_license, {"challenge": challenge_str, "title": title, "track": track}
                 )
@@ -4317,10 +4323,10 @@ def handle_proxy_license(
         log.exception(f"{sanitize_log(drm_type)} licence request failed for the proxied challenge")
         raise APIError(APIErrorCode.SERVICE_ERROR, f"Licence request failed: {exc}") from None
 
-    if isinstance(license_response, str):
-        license_response = license_response.encode("utf-8")
+    if isinstance(license_blob, str):
+        license_blob = license_blob.encode("utf-8")
 
-    return web.json_response({"license": base64.b64encode(license_response).decode("ascii")})
+    return web.json_response({"license": base64.b64encode(license_blob).decode("ascii")})
 
 
 async def session_segment_filter_handler(
@@ -4350,7 +4356,7 @@ async def session_segment_filter_handler(
     if not callable(segment_filter) or not getattr(track, "url", None):
         return web.json_response({"unwanted": None})
 
-    try:
+    def unwanted_segments() -> list[str]:
         import m3u8
         import requests
 
@@ -4360,7 +4366,11 @@ async def session_segment_filter_handler(
         if isinstance(response, requests.Response):
             response.encoding = response.encoding or "utf-8"
         playlist = m3u8.loads(response.text, uri=str(track.url))
-        unwanted = [segment.absolute_uri for segment in playlist.segments if segment_filter(segment)]
+        return [segment.absolute_uri for segment in playlist.segments if segment_filter(segment)]
+
+    try:
+        async with session.lock:
+            unwanted = await asyncio.to_thread(unwanted_segments)
     except (Exception, SystemExit):
         # `from None`: a debug-mode traceback would otherwise carry the service's exception chain
         log.exception(f"Error running the segment filter for track {sanitize_log(str(track_id))}")
@@ -4385,6 +4395,14 @@ async def session_license_handler(
     session = await get_validated_session(session_id, request)
     require_authenticated(session)
 
+    async with session.lock:
+        return await asyncio.to_thread(license_response, data, session, session_id, request)
+
+
+def license_response(
+    data: Dict[str, Any], session: Any, session_id: str, request: Optional[web.Request]
+) -> web.Response:
+    """The licence response for :func:`session_license_handler`, made on a worker thread."""
     track_id = data.get("track_id")
     track_ids = data.get("track_ids")
     challenge_b64 = data.get("challenge")

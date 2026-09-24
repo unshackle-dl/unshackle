@@ -6,6 +6,7 @@ the first PSSH alone and so handed one track another track's narrower key set, a
 with no readable PSSH told the client nothing.
 """
 
+import asyncio
 import base64
 import json
 from types import SimpleNamespace
@@ -77,6 +78,7 @@ async def test_single_track_path_keeps_siblings(env, monkeypatch):
         drm=[_FakePlayReady(pssh_b64=PSSH, kid=KID_A), _FakePlayReady(pssh_b64=PSSH, kid=KID_B)],
     )
     session = SimpleNamespace(
+        lock=asyncio.Lock(),
         service_tag="EX",
         service_instance=SimpleNamespace(),
         served_keys={},
@@ -111,6 +113,7 @@ async def test_batch_cache_does_not_starve_second_track(env, monkeypatch):
     )
     tracks = {"vid": vid, "aud": aud}
     session = SimpleNamespace(
+        lock=asyncio.Lock(),
         service_tag="EX",
         service_instance=SimpleNamespace(),
         served_keys={},
@@ -142,6 +145,7 @@ async def test_no_pssh_tells_the_client_why(env, monkeypatch):
     buf = SessionLogBuffer()
     track = SimpleNamespace(id="vid", drm=[object()])
     session = SimpleNamespace(
+        lock=asyncio.Lock(),
         service_tag="EX",
         service_instance=SimpleNamespace(),
         served_keys={},

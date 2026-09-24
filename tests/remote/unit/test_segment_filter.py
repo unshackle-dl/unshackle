@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from types import SimpleNamespace
 
@@ -29,6 +30,7 @@ BASE = "https://cdn.test/hls/media.m3u8"
 
 def make_session(monkeypatch, track):
     session = SimpleNamespace(
+        lock=asyncio.Lock(),
         tracks={"t1": track},
         service_instance=SimpleNamespace(session=SimpleNamespace(get=lambda url: SimpleNamespace(text=PLAYLIST))),
     )

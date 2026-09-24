@@ -8,6 +8,7 @@ named different KIDs got one licence; and a KID the licence did not cover was lo
 server alone.
 """
 
+import asyncio
 import base64
 import json
 from types import SimpleNamespace
@@ -100,6 +101,7 @@ def fake_playready(monkeypatch):
 
 def _session(tracks: dict, buf=None):
     session = SimpleNamespace(
+        lock=asyncio.Lock(),
         service_tag="EX",
         service_instance=SimpleNamespace(),
         served_keys={},

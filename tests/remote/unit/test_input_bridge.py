@@ -107,3 +107,12 @@ def test_answered_only_after_an_accepted_response() -> None:
     assert bridge.submit_response("CODE") is True
     worker.join(timeout=2)
     assert bridge.answered is True
+
+
+def test_request_input_after_authentication_fails_fast() -> None:
+    """The client stops polling for prompts once authenticated, so a later prompt must not wait for an answer."""
+    bridge = InputBridge()
+    bridge.status = AuthStatus.AUTHENTICATED
+    with pytest.raises(RuntimeError, match="after authentication"):
+        bridge.request_input("Pick a profile", timeout=5)
+    assert bridge.status is AuthStatus.AUTHENTICATED

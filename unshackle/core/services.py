@@ -452,7 +452,9 @@ class Services(click.Group):
 
             server_name = ctx.params.get("server")
             server_url, api_key, services_config = resolve_server(server_name)
-            client = RemoteClient(server_url, api_key, services_config.get("_auth_headers"))
+            client = RemoteClient(
+                server_url, api_key, services_config.get("_auth_headers"), services_config.get("_timeout")
+            )
             result = client.get("/api/services")
             Services.remote_services_cache = result.get("services", [])
             return Services.remote_services_cache

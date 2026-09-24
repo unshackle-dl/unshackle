@@ -57,11 +57,13 @@ class InputBridge:
 
         Raises:
             TimeoutError: If the bridge gets no response within *timeout*.
-            RuntimeError: If the server cancelled the bridge.
+            RuntimeError: If the server cancelled the bridge, or authentication is complete.
         """
         with self._lock:
             if self._cancelled:
                 raise RuntimeError("Session was cancelled")
+            if self._status == AuthStatus.AUTHENTICATED:
+                raise RuntimeError(f"Remote mode cannot relay a prompt after authentication: {prompt}")
             self._prompt = prompt
             self._response = None
             self._status = AuthStatus.PENDING_INPUT

@@ -25,6 +25,7 @@ from uuid import UUID
 
 import click
 import requests
+import urllib3
 from langcodes import Language
 from requests.adapters import HTTPAdapter, Retry
 from rich.padding import Padding
@@ -61,8 +62,15 @@ def redact_secrets(text: str, data: Optional[Dict[str, Any]] = None) -> str:
 class RemoteClient:
     """HTTP client for the unshackle serve API."""
 
-    def __init__(self, server_url: str, api_key: str, auth_headers: Optional[list[str]] = None) -> None:
+    def __init__(
+        self,
+        server_url: str,
+        api_key: str,
+        auth_headers: Optional[list[str]] = None,
+        timeout: Optional[float] = None,
+    ) -> None:
         self.server_url = server_url.rstrip("/")
+        self.timeout = timeout or 120
         self.api_key = api_key
         self.auth_headers = list(auth_headers) if auth_headers else list(DEFAULT_AUTH_HEADERS)
         self._auth_header_index = 0
@@ -95,31 +103,45 @@ class RemoteClient:
         url = f"{self.server_url}{endpoint}"
         while True:
             try:
-                resp = getattr(self.session, method)(url, json=data, timeout=120)
-            except requests.ConnectionError:
+                resp = getattr(self.session, method)(url, json=data, timeout=self.timeout)
+            except requests.ConnectionError as e:
+                if isinstance(e.args[0] if e.args else None, urllib3.exceptions.ReadTimeoutError):
+                    log.error(
+                        f"Request to remote server timed out after {self.timeout}s: {endpoint}. "
+                        "Raise 'timeout' for this server in remote_services."
+                    )
+                    raise SystemExit(1)
                 server_url = safe_display_url(self.server_url)
                 log.error(f"Could not connect to remote server at {server_url}. Is it running? (unshackle serve)")
                 raise SystemExit(1)
             except requests.Timeout:
-                log.error(f"Request to remote server timed out: {endpoint}")
+                log.error(
+                    f"Request to remote server timed out after {self.timeout}s: {endpoint}. "
+                    "Raise 'timeout' for this server in remote_services."
+                )
                 raise SystemExit(1)
             # servers differ on which header carries the key, so retry the rest before giving up
             if resp.status_code == 401 and self.next_auth_header():
                 continue
             break
-        if resp.status_code >= 400:
-            try:
-                detail = resp.json()
-            except ValueError:
-                detail = {}
-            error_msg = redact_secrets(str(detail.get("message", resp.text)), data)
+        try:
+            detail = resp.json()
+        except ValueError:
+            if resp.status_code < 400:
+                raise
+            detail = {}
+        late_error = isinstance(detail, dict) and detail.get("status") == "error" and "error_code" in detail
+        if resp.status_code >= 400 or late_error:
+            page_title = re.search(r"<title>(.*?)</title>", resp.text, re.S) if not detail else None
+            fallback = f"HTTP {resp.status_code}: {page_title.group(1).strip()}" if page_title else resp.text
+            error_msg = redact_secrets(str(detail.get("message", fallback)), data)
             error_code = detail.get("error_code", "UNKNOWN")
             if optional:
                 log.debug(f"Optional endpoint {endpoint} unavailable [{error_code}]: {error_msg}")
                 return {}
             log.error(f"Server error [{error_code}]: {error_msg}")
             raise SystemExit(1)
-        return resp.json()
+        return detail
 
     def post(self, endpoint: str, data: Dict[str, Any]) -> Dict[str, Any]:
         return self.request("post", endpoint, data)
@@ -632,6 +654,7 @@ def resolve_server(server_name: Optional[str]) -> tuple[str, str, dict]:
         services = svc.get("services", {})
         services["_server_cdm"] = svc.get("server_cdm")
         services["_auth_headers"] = resolve_auth_headers(svc, server_name)
+        services["_timeout"] = svc.get("timeout")
         return svc["url"], svc.get("api_key", ""), services
 
     if len(remote_services) == 1:
@@ -642,6 +665,7 @@ def resolve_server(server_name: Optional[str]) -> tuple[str, str, dict]:
         services = svc.get("services", {})
         services["_server_cdm"] = svc.get("server_cdm")
         services["_auth_headers"] = resolve_auth_headers(svc, name)
+        services["_timeout"] = svc.get("timeout")
         return svc["url"], svc.get("api_key", ""), services
 
     available = ", ".join(remote_services.keys())
@@ -842,7 +866,9 @@ class RemoteService:
 
         self.service_tag = service_tag
         self.title_id = title_id
-        self.client = RemoteClient(server_url, api_key, services_config.get("_auth_headers"))
+        self.client = RemoteClient(
+            server_url, api_key, services_config.get("_auth_headers"), services_config.get("_timeout")
+        )
         self.ctx = ctx
         self._service_params = service_params or {}
         self.log = logging.getLogger(service_tag)
