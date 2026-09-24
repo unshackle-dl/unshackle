@@ -2237,7 +2237,7 @@ dashboard UI that wants history must keep its own copy.</p>
 <tbody>
 <tr>
 <td><code>/api/dashboard/status</code></td>
-<td>Version, <code>code_hash</code>, bind host and port, <code>mode</code> (<code>full</code>, <code>api_only</code>, <code>remote_only</code>), uptime, <code>requests_total</code>, <code>requests_rejected</code> (401s), <code>requests_by_key</code> (label → count), loaded service count, session count, <code>max_sessions</code> (<code>null</code> when the operator configured no limit), <code>session_ttl</code>, job counts by status. The service count includes services that failed to import - use <code>/api/dashboard/services</code> for the number that loaded.</td>
+<td>Version, <code>code_hash</code>, bind host and port, <code>mode</code> (<code>full</code>, <code>api_only</code>, <code>remote_only</code>), uptime, <code>requests_total</code>, <code>requests_rejected</code> (401s), <code>requests_by_key</code> (label → count), configured service count (the same services as <code>/api/dashboard/services</code>), session count, <code>max_sessions</code> (<code>null</code> when the operator configured no limit), <code>session_ttl</code>, job counts by status. The service count includes services that failed to import - use <code>/api/dashboard/services</code> for the number that loaded.</td>
 </tr>
 <tr>
 <td><code>/api/dashboard/sessions</code></td>
@@ -2261,7 +2261,7 @@ dashboard UI that wants history must keep its own copy.</p>
 </tr>
 <tr>
 <td><code>/api/dashboard/services</code></td>
-<td>Every discovered service and its load state, including the ones that failed to import. Not filtered by any allowlist.</td>
+<td>Every service configured on this server and its load state, including the ones that failed to import. See <a href="#services">Services</a> for what configured means.</td>
 </tr>
 <tr>
 <td><code>/api/dashboard/health</code></td>
@@ -2434,6 +2434,23 @@ limit never applies to the dashboard key, and never to <code>/api/health</code>.
 </span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>  "staged_since": 1756908900.0, "sessions": 1, "jobs": 1,
 </span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>  "aliases": ["EXMPL"], "geofence": ["US"], "geoblock": []}]
 </span></code></pre></div>
+<p>The list holds only the services configured on this server:</p>
+<ol>
+<li>The global <code>serve.services</code> list, when it is set.</li>
+<li>Else, the union of the <code>services</code> lists of all keys in <code>serve.users</code>.</li>
+<li>Else, every installed service.</li>
+</ol>
+<div class="admonition note">
+<p class="admonition-title">The union does not show what every API key can reach</p>
+<p>An API key with no <code>services</code> list can use every service, but it does not add to the union. The
+<code>api_secret</code> API key is the same. So with <code>k1: {services: [A]}</code> and a <code>k2</code> with no list, the
+list shows only <code>A</code>. To list every service, remove the <code>services</code> lists or set
+<code>serve.services</code>.</p>
+</div>
+<p><code>GET /api/dashboard/services?all=1</code> lists every installed service. <code>/status</code> always counts
+only the configured services.</p>
+<p>A configured tag that names no installed service does not show. Name a service by its tag: an
+alias resolves only for a service that imported.</p>
 <p><code>state</code> is <code>loaded</code>, <code>staged</code> or <code>failed</code>. A service that failed to import keeps its error
 here instead of disappearing, and <code>/status</code> still counts it in the service total - count the
 <code>state</code> values here for the number that loaded.</p>
