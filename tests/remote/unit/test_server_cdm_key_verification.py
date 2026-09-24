@@ -28,6 +28,7 @@ def remote_service() -> RemoteService:
     svc.server_vault_keys = {}
     svc.server_vault = ServerVault(svc)
     svc._session_id = "sess"
+    svc.client_licensed = set()
     svc.log = SimpleNamespace(warning=lambda *a, **k: None)
     return svc
 
@@ -106,7 +107,7 @@ async def test_batch_reports_vault_keys_from_the_init_segment_pssh(monkeypatch):
     async def validated(sid, req):
         return session
 
-    def fake_single(service, title, track, pssh_str, drm_type, request, sources=None):
+    def fake_single(service, title, track, pssh_str, drm_type, request, sources=None, refusal=None):
         if pssh_str == "init":
             sources[CDM_KID.hex] = "sqlite"
             return {CDM_KID.hex: "v"}

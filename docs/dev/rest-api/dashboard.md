@@ -44,7 +44,7 @@ All are `GET`.
 | Path | Returns |
 |------|---------|
 | `/api/dashboard/status` | Version, `code_hash`, bind host and port, `mode` (`full`, `api_only`, `remote_only`), uptime, `requests_total`, `requests_rejected` (401s), `requests_by_key` (label → count), loaded service count, session count, `max_sessions` (`null` when the operator configured no limit), `session_ttl`, job counts by status. The service count includes services that failed to import - use `/api/dashboard/services` for the number that loaded. |
-| `/api/dashboard/sessions` | Every live remote session: `id`, `owner` (username or masked key), `creator_ip`, `service`, `title_id`, `titles`, `tracks`, `title` (the display name of the title the client is on: the last one it asked tracks for, else the first resolved title), `auth_status`, `auth_error`, `server_account` (the server profile lent to the remote session, else `null`), `client`, `actions`, `created_at` and `last_accessed` (ISO 8601) with `created_ts` and `last_accessed_ts` (Unix epoch, the same clock as log `ts`), `age_seconds`, `idle_seconds`, `log_seq`. `client` is whatever the remote client sent as `client` in its session create request. The CLI sends `version`, `code_hash` (the commit the client runs, `null` when its source cannot be read), `platform` and `argv`. `argv` is the command line the user ran: proxy and URL userinfo, secret query parameters and credential values become `***`, home and install paths shorten as in the logs, and the line is cut at 3000 characters. An older client sends less or nothing and the field is `{}`. `log_seq` is the last sequence number in the remote session's service log - poll `/api/dashboard/sessions/{id}/logs` when it changes. `actions` is the session's request log, newest last, capped at 500: `ts`, `method`, `action` (`titles`, `tracks`, `segments`, `license`, `prompt`, …), `query`, `status`, `ms`, `bytes_in`, `bytes_out`. |
+| `/api/dashboard/sessions` | Every live remote session: `id`, `owner` (username or masked key), `creator_ip`, `service`, `title_id`, `titles`, `tracks`, `title` (the display name of the title the client is on: the last one it asked tracks for, else the first resolved title), `auth_status`, `auth_error`, `server_account` (the server profile lent to the remote session, else `null`), `server_cdm` (`false` when the client's own device licenses the remote session), `server_cdm_max_height` (the tallest video the server CDM licenses live, else `null`), `client`, `actions`, `created_at` and `last_accessed` (ISO 8601) with `created_ts` and `last_accessed_ts` (Unix epoch, the same clock as log `ts`), `age_seconds`, `idle_seconds`, `log_seq`. `client` is whatever the remote client sent as `client` in its session create request. The CLI sends `version`, `code_hash` (the commit the client runs, `null` when its source cannot be read), `platform` and `argv`. `argv` is the command line the user ran: proxy and URL userinfo, secret query parameters and credential values become `***`, home and install paths shorten as in the logs, and the line is cut at 3000 characters. An older client sends less or nothing and the field is `{}`. `log_seq` is the last sequence number in the remote session's service log - poll `/api/dashboard/sessions/{id}/logs` when it changes. `actions` is the session's request log, newest last, capped at 500: `ts`, `method`, `action` (`titles`, `tracks`, `segments`, `license`, `prompt`, …), `query`, `status`, `ms`, `bytes_in`, `bytes_out`. |
 | `/api/dashboard/jobs` | Every download job with full detail, regardless of owner. Empty in `--remote-only` mode. |
 | `/api/dashboard/logs` | `{"seq": N, "records": [...]}`: the last 1000 log records. `?since=<seq>` returns only newer records; `?level=WARNING` sets the minimum level; `?logger=serve` keeps one logger and its children (`aiohttp.access` is the noisiest). `ts` is a Unix epoch in seconds. |
 | `/api/dashboard/sessions/{id}/logs` | One remote session's service log: `{"session_id", "last_seq", "records": [...]}`. Each record has `seq`, `ts`, `level`, `message`. `?since=<seq>` returns only newer records. 404 when the remote session is unknown. |
@@ -118,11 +118,11 @@ never keeps it alive or makes it look active.
 ```
 GET /api/dashboard/keys
 [{"id": "3ed054be9371", "role": "user", "label": "tier1", "services": ["EXAMPLE", "DEMO"],
-  "server_cdm": false, "server_accounts": false, "server_proxy": false,
+  "server_cdm": false, "server_cdm_max_height": null, "server_accounts": false, "server_proxy": false,
   "tier": "bot", "rate_limit": 600, "window_used": 412,
   "requests": 41300, "rejected": 4, "bytes_out": 103079215104, "last_seen": 1756909188.2},
  {"id": "7c1d0f52a884", "role": "dashboard", "label": "dash…", "services": [],
-  "server_cdm": false, "server_accounts": false, "server_proxy": false,
+  "server_cdm": false, "server_cdm_max_height": null, "server_accounts": false, "server_proxy": false,
   "tier": null, "rate_limit": null, "window_used": 0,
   "requests": 8140, "rejected": 0, "bytes_out": 41200311, "last_seen": 1756909350.9}]
 ```
@@ -136,6 +136,7 @@ here, so use `id` as the identity and `label` only for display.
 | `role` | Which key this is: `user` (a `serve.users` entry), `admin` (`serve.api_secret`) or `dashboard` (`serve.dashboard.key`). Identity, not capability - read the grant fields for what the API key may do. |
 | `services` | The effective allowlist, the global list intersected with the API key's. `null` means unrestricted; `[]` means the API key reaches no service route at all. |
 | `server_cdm`, `server_accounts` | `false`, `true`, or the list of service tags the grant covers. |
+| `server_cdm_max_height` | The configured limit on live server CDM licences: a height, a map of service tag to height, or `null` for no limit. |
 | `server_proxy` | Boolean. Only a literal `true` grants it, and an API key with no `users` entry does not get it. |
 | `rate_limit` | Requests per hour, from the API key's own value or its tier's. `null` means no limit. |
 | `window_used` | Requests counted in the current hourly window. |

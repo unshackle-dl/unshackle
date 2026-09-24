@@ -805,7 +805,9 @@ async def download(request: web.Request) -> web.Response:
                 type: array
                 items:
                   type: integer
-                description: Download resolution(s) (default - best available)
+                description: >-
+                  Download resolution(s) (default - best available). An API key with a
+                  server_cdm_max_height for the service must pass a quality at or under that height.
               vcodec:
                 oneOf:
                   - type: string
@@ -830,7 +832,9 @@ async def download(request: web.Request) -> web.Response:
                 type: array
                 items:
                   type: string
-                description: Video colour range (SDR, HDR10, HDR10+, HLG, DV, HYBRID) (default - ["SDR"])
+                description: >-
+                  Video colour range (SDR, HDR10, HDR10+, HLG, DV, HYBRID) (default - ["SDR"]).
+                  An API key with a server_cdm_max_height for the service cannot set HYBRID.
               channels:
                 type: number
                 description: Audio channels (e.g., 2.0, 5.1, 7.1) (default - None)
@@ -999,7 +1003,9 @@ async def download(request: web.Request) -> web.Response:
                 description: Amount of tracks to download concurrently (default - 1)
               best_available:
                 type: boolean
-                description: Continue with best available if requested quality unavailable (default - false)
+                description: >-
+                  Continue with best available if requested quality unavailable (default - false).
+                  An API key with a server_cdm_max_height for the service cannot set it.
               worst:
                 type: boolean
                 description: Select the lowest bitrate track within the specified quality. Requires `quality` (default - false)
@@ -1043,6 +1049,10 @@ async def download(request: web.Request) -> web.Response:
                   type: string
       '400':
         description: Invalid request
+      '403':
+        description: >-
+          A gated parameter is not permitted (FORBIDDEN), or the job goes above the
+          server_cdm_max_height of the API key (SERVER_CDM_CAPPED)
     """
     try:
         data = await request.json()
@@ -1739,6 +1749,15 @@ async def session_create(request: web.Request) -> web.Response:
                   forced_subs:
                     type: boolean
                     default: false
+              cdm_type:
+                type: string
+                enum: [widevine, playready]
+                description: DRM system of the client's local CDM; absent when the client has none
+              cdm_security_level:
+                type: integer
+                description: |
+                  Security level of the client's local CDM, in the device's own numbers
+                  (Widevine 1 to 3, PlayReady 150 to 3000)
               client:
                 type: object
                 additionalProperties: true
@@ -1763,8 +1782,23 @@ async def session_create(request: web.Request) -> web.Response:
                 server_account:
                   type: boolean
                   description: True when the server authenticated with one of its own accounts
+                server_cdm:
+                  type: boolean
+                  description: |
+                    True when the server CDM licenses this remote session. False when the client's own
+                    local CDM licenses it.
+                server_cdm_max_height:
+                  type: integer
+                  nullable: true
+                  description: |
+                    Tallest video track the server CDM licenses live for this API key and service;
+                    null for no limit
       '400':
         description: Invalid request
+      '403':
+        description: |
+          SERVER_CDM_CAPPED when `quality` asks for more than the server CDM limit and the client
+          reported no local CDM
       '401':
         description: Authentication failed
     """
@@ -2011,7 +2045,9 @@ async def session_license(request: web.Request) -> web.Response:
           an array of KID hex strings that may be absent and may repeat a KID shared by several
           tracks, lists the content keys a server vault supplied, which the client has to prove
           before it trusts them. `clear_tracks`, absent when empty, lists the requested track ids
-          that carry no DRM and so have no keys.
+          that carry no DRM and so have no keys. `capped_tracks`, absent when empty, maps each
+          track id the server refused to license live to the refusal details (`reason` and
+          `max_height`); the client licenses those tracks with its own local CDM.
           After 30 s the route sends 200 and a newline every 30 s. A failure after that time
           arrives as the error body with status 200.
       '404':
@@ -2028,7 +2064,10 @@ async def session_license(request: web.Request) -> web.Response:
     try:
         return await session_license_handler(data, session_id, request)
     except Exception as e:
-        log.exception("Error in session license")
+        if isinstance(e, APIError) and e.error_code is APIErrorCode.SERVER_CDM_CAPPED:
+            log.info(f"Session licence refused: {e.message}")
+        else:
+            log.exception("Error in session license")
         return handle_api_exception(
             e, context={"operation": "session_license"}, debug_mode=request.app.get("debug_api", False)
         )
@@ -2592,6 +2631,9 @@ async def dashboard_keys(request: web.Request) -> web.Response:
                       dashboard API key with no `serve.users` entry does
                   server_cdm:
                     description: false, true, or the list of service tags it covers
+                  server_cdm_max_height:
+                    nullable: true
+                    description: The configured live licence height limit, a map of service tag to one, or null
                   server_accounts:
                     description: false, true, or the list of service tags it covers
                   server_proxy:

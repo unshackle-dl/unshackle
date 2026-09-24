@@ -506,6 +506,7 @@ profile, never a service's own `--profile` option.
 | `400` | `INVALID_PARAMETERS` | A parameter failed validation. |
 | `400` | `INVALID_SERVICE` | Unknown or disallowed service. |
 | `403` | `FORBIDDEN` | A gated parameter is not permitted. |
+| `403` | `SERVER_CDM_CAPPED` | The API key has a `server_cdm_max_height` for the service, and the job has no `quality` at or under it, sets `best_available`, or has `HYBRID` in `range`. |
 
 ### `GET /api/download/jobs`
 
@@ -690,6 +691,7 @@ Enqueue a **new** job that reuses a terminal job's service, title, and parameter
 | `409` | `CONFLICT` | Job is not in a terminal state. |
 | `400` | `INVALID_SERVICE` | Service is no longer allowed. |
 | `403` | `FORBIDDEN` | A gated parameter is no longer permitted. |
+| `403` | `SERVER_CDM_CAPPED` | The job is no longer inside the `server_cdm_max_height` of the API key. |
 
 ### `POST /api/download/jobs/{job_id}/priority`
 
@@ -1220,6 +1222,7 @@ The server serialises every structured error raised inside a handler to the same
 | `INVALID_PARAMETERS` | 400 |
 | `AUTH_FAILED` | 401 |
 | `FORBIDDEN` | 403 |
+| `SERVER_CDM_CAPPED` | 403 |
 | `GEOFENCE` | 403 |
 | `NOT_FOUND` | 404 |
 | `NO_CONTENT` | 404 |

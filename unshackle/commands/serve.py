@@ -22,6 +22,7 @@ from unshackle.core.api.handlers import (
     rate_limit_response,
     request_secret_key,
     server_account_regions,
+    server_cdm_max_height_error,
     validate_server_accounts,
 )
 from unshackle.core.api.stats import key_rate_limit, rate_limit_error, ring, stats, stats_middleware
@@ -294,6 +295,10 @@ def serve(
                 raise click.ClickException(f"serve.users.{username}.tier: no such tier '{tier}' under serve.tiers")
             if isinstance(user_cfg, dict):
                 if problem := rate_limit_error(f"serve.users.{username}", user_cfg.get("rate_limit")):
+                    raise click.ClickException(problem)
+                if problem := server_cdm_max_height_error(
+                    f"serve.users.{username}", user_cfg.get("server_cdm_max_height")
+                ):
                     raise click.ClickException(problem)
             limit = key_rate_limit(user_key)
             if limit:

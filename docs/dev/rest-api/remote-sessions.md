@@ -268,6 +268,15 @@ There are two ways DRM keys get resolved, chosen by the client's `server_cdm` fl
       already answered. The client proves it, and a server key waits as the next
       candidate.
 
+!!! note "A height limit on the server CDM"
+    An API key with `server_cdm_max_height` gets the server CDM only up to that height. The
+    session create response tells the client who licenses the session in `server_cdm` and gives
+    the limit in `server_cdm_max_height`. In a server CDM session, the batch licence response
+    lists each track the server refused to license live under `capped_tracks`. A single-track
+    server CDM licence answers `403 SERVER_CDM_CAPPED` for such a track. In both cases the client
+    licenses those tracks in proxy mode with its own local CDM. See
+    [`server_cdm_max_height`](../../reference/configuration/services.md).
+
 ---
 
 ## Remote session lifecycle and expiry

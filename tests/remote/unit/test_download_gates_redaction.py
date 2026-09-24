@@ -83,19 +83,22 @@ def test_to_dict_full_details_redacts_error_fields_and_parameters():
 
 
 class _PastGate(Exception):
-    """Raised by the stubbed Services.load to prove a request got past the gate into the try block."""
+    """Raised by the stubbed download manager to prove a request got past the gate."""
 
 
 @pytest.fixture
 def stub_handler(monkeypatch):
-    """Make the service valid and make the first call after the gate (Services.load) explode, so a
-    forbidden request raises APIError *before* the try block and an allowed one is caught inside it."""
+    """Make the service valid and make the first call after the gate (get_download_manager) explode, so a
+    forbidden request raises APIError and the handler returns an allowed one as an error response."""
+    from unshackle.core.api import download_manager
+
     monkeypatch.setattr(handlers, "validate_service", lambda tag, request=None: tag)
+    monkeypatch.setattr(handlers.Services, "load", lambda tag: object())
 
     def boom(*_args, **_kwargs):
         raise _PastGate()
 
-    monkeypatch.setattr(handlers.Services, "load", boom)
+    monkeypatch.setattr(download_manager, "get_download_manager", boom)
     return monkeypatch
 
 

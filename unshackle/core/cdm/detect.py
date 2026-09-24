@@ -1,14 +1,19 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, Optional
 
 
-def cdm_type_stub(cdm_type: str) -> SimpleNamespace:
+def cdm_type_stub(cdm_type: str, security_level: Optional[int] = None) -> SimpleNamespace:
     """Type-only CDM stand-in so is_widevine_cdm()/is_playready_cdm() (and thus
     get_drm_for_cdm) route correctly without loading a real device. Used for
-    server_cdm mode, where the server holds the device and returns the keys."""
-    return SimpleNamespace(is_playready=cdm_type == "playready")
+    server_cdm mode, where the server holds the device and returns the keys.
+
+    ``security_level`` lets a service pick a robustness tier; the attribute is absent when unknown."""
+    stub = SimpleNamespace(is_playready=cdm_type == "playready")
+    if security_level is not None:
+        stub.security_level = security_level
+    return stub
 
 
 def is_remote_cdm(cdm: Any) -> bool:

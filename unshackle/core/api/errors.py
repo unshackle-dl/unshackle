@@ -27,6 +27,7 @@ class APIErrorCode(str, Enum):
 
     AUTH_FAILED = "AUTH_FAILED"
     FORBIDDEN = "FORBIDDEN"
+    SERVER_CDM_CAPPED = "SERVER_CDM_CAPPED"
     GEOFENCE = "GEOFENCE"
 
     NOT_FOUND = "NOT_FOUND"
@@ -85,6 +86,7 @@ class APIError(Exception):
             APIErrorCode.INVALID_PARAMETERS: 400,
             APIErrorCode.AUTH_FAILED: 401,
             APIErrorCode.FORBIDDEN: 403,
+            APIErrorCode.SERVER_CDM_CAPPED: 403,
             APIErrorCode.GEOFENCE: 403,
             APIErrorCode.NOT_FOUND: 404,
             APIErrorCode.NO_CONTENT: 404,

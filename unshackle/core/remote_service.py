@@ -98,8 +98,14 @@ class RemoteClient:
         return True
 
     def request(
-        self, method: str, endpoint: str, data: Optional[Dict[str, Any]] = None, optional: bool = False
+        self,
+        method: str,
+        endpoint: str,
+        data: Optional[Dict[str, Any]] = None,
+        optional: bool = False,
+        expect: tuple[str, ...] = (),
     ) -> Dict[str, Any]:
+        """Send one request and return its JSON body; an error outside ``expect`` exits, one inside it returns."""
         url = f"{self.server_url}{endpoint}"
         while True:
             try:
@@ -136,6 +142,8 @@ class RemoteClient:
             fallback = f"HTTP {resp.status_code}: {page_title.group(1).strip()}" if page_title else resp.text
             error_msg = redact_secrets(str(detail.get("message", fallback)), data)
             error_code = detail.get("error_code", "UNKNOWN")
+            if error_code in expect:
+                return detail
             if optional:
                 log.debug(f"Optional endpoint {endpoint} unavailable [{error_code}]: {error_msg}")
                 return {}
@@ -143,8 +151,8 @@ class RemoteClient:
             raise SystemExit(1)
         return detail
 
-    def post(self, endpoint: str, data: Dict[str, Any]) -> Dict[str, Any]:
-        return self.request("post", endpoint, data)
+    def post(self, endpoint: str, data: Dict[str, Any], expect: tuple[str, ...] = ()) -> Dict[str, Any]:
+        return self.request("post", endpoint, data, expect=expect)
 
     def post_optional(self, endpoint: str, data: Dict[str, Any]) -> Dict[str, Any]:
         """POST to an endpoint that an older server may not have. Empty dict when the route is missing."""
@@ -880,6 +888,7 @@ class RemoteService:
         self._chapters_by_title: Dict[str, list] = {}
         self._session_id: Optional[str] = None
         self._server_cdm_type: str = "widevine"
+        self.client_licensed: set[str] = set()  # track ids this machine's device licenses by challenge relay
         self.server_vault_keys: Dict[UUID, str] = {}
         self.server_vault = ServerVault(self)
         self._segment_filters: Dict[str, tuple[set[str], set[str]]] = {}
@@ -1040,11 +1049,15 @@ class RemoteService:
             create_data.update(self._service_params)
             create_data["service_params"] = self._service_params
 
-        cdm = self.ctx.obj.cdm if self.ctx.obj and not self._server_cdm else None
+        # sent with the server CDM too: a capped server hands the tracks above its cap to this device
+        cdm = self.local_cdm
         if cdm is not None:
             from unshackle.core.cdm.detect import is_playready_cdm
 
             create_data["cdm_type"] = "playready" if is_playready_cdm(cdm) else "widevine"
+            level = getattr(cdm, "security_level", None)
+            if isinstance(level, int):
+                create_data["cdm_security_level"] = level
 
         cache_data = self.load_cache_files(profile) if self._server_accounts is None else None
         if cache_data:
@@ -1064,12 +1077,39 @@ class RemoteService:
         result = self.client.post("/api/session/create", create_data)
         self._session_id = result["session_id"]
         atexit.register(self.close)
+        # an older server omits the field, and the tracks response settles it
+        if "server_cdm" in result:
+            self.adopt_session_cdm(bool(result["server_cdm"]), result.get("server_cdm_max_height"))
 
         status = result.get("status", "authenticated")
         if status == "authenticating":
             self.poll_auth_completion()
         self.drain_server_logs()
         self.start_keepalive()
+
+    @property
+    def local_cdm(self) -> Any:
+        """The CDM device dl loaded on this machine, or None. dl may later swap its own copy for a stub."""
+        return self.ctx.obj.cdm if self.ctx.obj else None
+
+    def adopt_session_cdm(self, server_cdm: bool, max_height: Optional[int]) -> None:
+        """Take the server's choice of who licenses this remote session, and say why when a cap made it."""
+        if self._server_cdm and not server_cdm and max_height is None:
+            self.log.warning(
+                f"{self.service_tag} is not available for server CDM licensing with this API key, "
+                "falling back to the local CDM"
+            )
+        self._server_cdm = server_cdm
+        if max_height is None:
+            if server_cdm and self.ctx.parent and self.ctx.parent.params.get("cdm_name"):
+                self.log.warning("--cdm is ignored: the server CDM licenses this remote session")
+            return
+        message = f"The server CDM licenses up to {max_height}p for this API key"
+        if not server_cdm:
+            message += "; licensing with your own device"
+        elif self.local_cdm is not None:
+            message += "; pass a higher -q to license above it with your own device"
+        self.log.info(message)
 
     def start_keepalive(self) -> None:
         """Send keep-alive requests so that a long download or mux operation does not outlive the server's idle TTL.
@@ -1256,6 +1296,8 @@ class RemoteService:
         server_cdm_type. We send track IDs and the server does the full
         CDM flow, returning KID:KEY pairs.
         """
+        # track ids can repeat across titles, so a refusal for the last title must not carry over
+        self.client_licensed.clear()
         if not self._server_cdm:
             return
 
@@ -1268,6 +1310,7 @@ class RemoteService:
         drm_type = getattr(self, "_server_cdm_type", "widevine")
         self.log.debug(f"Requesting server CDM keys (server_cdm_type={drm_type})")
 
+        capped: Dict[str, Any] = {}
         try:
             with console.status("Retrieving Remote License...", spinner="dots"):
                 resp = self.client.post(
@@ -1286,13 +1329,14 @@ class RemoteService:
                 self.note_vault_keys(track_keys, vault_kids)
             server_drm_type = resp.get("drm_type", drm_type)
             drm_types_by_track = resp.get("drm_types", {})
+            capped = resp.get("capped_tracks") or {}
             self._server_cdm_type = server_drm_type
             self.log.debug(f"Server responded with drm_type={server_drm_type}, keys for {len(keys_by_track)} track(s)")
 
             for track in title.tracks:
                 track_keys = keys_by_track.get(str(track.id), {})
                 if not track_keys:
-                    if str(track.id) in track_ids and str(track.id) not in clear_tracks:
+                    if str(track.id) in track_ids and str(track.id) not in clear_tracks | set(capped):
                         self.log.warning(f"Server CDM returned no content keys for track {track.id}")
                     continue
 
@@ -1310,6 +1354,34 @@ class RemoteService:
                 self.log.debug(f"Server CDM resolved {key_count} key(s) using {server_drm_type.upper()}")
         except Exception as e:
             self.log.warning("Failed to resolve server CDM keys: %s", e)
+
+        for track in title.tracks:
+            if str(track.id) in capped:
+                self.license_locally(track, capped[str(track.id)])
+
+    def license_locally(self, track: AnyTrack, refusal: Dict[str, Any]) -> None:
+        """Hand a track the server CDM refused to license live to this machine's own device.
+
+        dl then licenses it through the challenge relay. An HLS track with no DRM yet passes, as its
+        media playlist names the DRM and the downloader honours ``drm_preference``.
+        """
+        from unshackle.core.cdm.detect import is_playready_cdm
+
+        cap = refusal.get("max_height")
+        why = f"The server CDM licenses up to {cap}p for this key" if cap else "The server CDM refused this track"
+        cdm = self.local_cdm
+        if cdm is None:
+            raise click.ClickException(f"{why}, and {track} needs a local CDM to license it with your own device.")
+        drm_class = "PlayReady" if is_playready_cdm(cdm) else "Widevine"
+        if track.drm and not any(d.__class__.__name__ == drm_class for d in track.drm):
+            height = getattr(track, "height", None)
+            raise click.ClickException(
+                f"{why}, and {track} carries no {drm_class} DRM for your local device to license. "
+                f"Pass -q {height or 'with that height'} so the session starts on your own device."
+            )
+        track.drm_preference = drm_class.lower()
+        self.client_licensed.add(str(track.id))
+        self.log.info(f"{why}; licensing {track.id} with your own {drm_class} device")
 
     def note_vault_keys(self, keys: Dict[str, str], vault_kids: set[str]) -> None:
         """Remember which of the served keys a server vault supplied, and forget the rest."""
@@ -1421,7 +1493,7 @@ class RemoteService:
         if isinstance(challenge, str):
             challenge = challenge.encode("utf-8")
 
-        if self._server_cdm:
+        if self._server_cdm and str(track.id) not in self.client_licensed:
             from uuid import UUID
 
             server_type = self._server_cdm_type
@@ -1429,6 +1501,7 @@ class RemoteService:
             drm_type, pssh_b64 = server_type, track_pssh(track, server_type)
             if not pssh_b64:
                 drm_type, pssh_b64 = other_type, track_pssh(track, other_type)
+            refusal: Optional[Dict[str, Any]] = None
             if pssh_b64:
                 try:
                     resp = self.client.post(
@@ -1439,7 +1512,10 @@ class RemoteService:
                             "mode": "server_cdm",
                             "pssh": pssh_b64,
                         },
+                        expect=("SERVER_CDM_CAPPED",),
                     )
+                    if resp.get("error_code") == "SERVER_CDM_CAPPED":
+                        refusal = resp.get("details") or {}
                     self._server_cdm_type = resp.get("drm_type", server_type)
                     keys = resp.get("keys", {})
                     self.note_vault_keys(keys, set(resp.get("vault_keys", [])))
@@ -1453,6 +1529,9 @@ class RemoteService:
                     self.log.warning("server_cdm license failed: %s", e)
             else:
                 self.log.warning(f"Track {track.id} has no PSSH to send to the server CDM")
+            if refusal is not None:
+                # dl sees the track in client_licensed and calls again with this device's challenge
+                self.license_locally(track, refusal)
             return challenge
 
         pssh_b64 = track_pssh(track, drm_type)

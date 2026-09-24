@@ -40,7 +40,7 @@ class _Client:
         self.answer = answer
         self.posts: list = []
 
-    def post(self, endpoint, payload):
+    def post(self, endpoint, payload, expect=()):
         self.posts.append(payload)
         return self.answer
 
@@ -49,6 +49,7 @@ def _service(server_type, answer):
     svc = RemoteService.__new__(RemoteService)
     svc._server_cdm = True
     svc._server_cdm_type = server_type
+    svc.client_licensed = set()
     svc._session_id = "sess"
     svc.server_vault_keys = {}
     svc.log = logging.getLogger("test-remote-license")

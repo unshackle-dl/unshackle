@@ -1574,8 +1574,11 @@ class dl:
         self.service_anime = bool(getattr(service, "ANIME", False))
         self.service_daily = bool(getattr(service, "DAILY", False))
         self.server_cdm = getattr(service, "_server_cdm", False)
-        if self.server_cdm and self.cdm_override:
-            self.log.warning("--cdm is ignored: this remote service licenses with the server CDM")
+        from unshackle.core.import_service import ImportService
+
+        # a remote session sends --cdm to the server, which can hand it the tracks above its cap
+        if self.cdm_override and isinstance(service, ImportService):
+            self.log.warning("--cdm is ignored: an import uses the keys in the export")
         self._remote_service = service if hasattr(service, "_server_cdm") else None
         start_time = time.time()
 
@@ -4466,8 +4469,10 @@ class dl:
 
         svc_for_cdm = getattr(self, "_remote_service", None)
         server_cdm = getattr(svc_for_cdm, "_server_cdm", getattr(self, "server_cdm", False))
+        client_licensed = getattr(svc_for_cdm, "client_licensed", ())
+        licensed_locally = bool(client_licensed) and str(track.id) in client_licensed
 
-        if server_cdm:
+        if server_cdm and not licensed_locally:
             with self.drm_lock(drm):
                 pending_vault_writes: list[Callable[[], Any]] = []
                 vault_kids = list(getattr(drm, "kids", None) or [])
@@ -4513,6 +4518,9 @@ class dl:
                     pending_vault_writes.append(partial(self.cache_keys_to_vaults, new_keys))
                 self.flush_vault_writes(pending_vault_writes)
 
+            # the server can refuse the licence above its cap and hand the track to this machine
+            licensed_locally = bool(client_licensed) and str(track.id) in client_licensed
+        if server_cdm and not licensed_locally:
             if not drm.content_keys:
                 self.log.warning("Server CDM did not resolve any keys for this track")
                 return
@@ -4576,6 +4584,28 @@ class dl:
             track_quality = max((v.height for v in title.tracks.videos if v.height), default=None)
 
         track_cdm = self.cdm
+        if licensed_locally:
+            track_cdm = getattr(svc_for_cdm, "local_cdm", None)
+            local_drm = track.get_drm_for_cdm(track_cdm)
+            if local_drm is not None and local_drm is not drm:
+                # a mid-download handover leaves drm on the server's DRM system, and the caller decrypts with it
+                self.prepare_drm(
+                    local_drm,
+                    track,
+                    title,
+                    certificate,
+                    licence,
+                    clearkey_licence,
+                    track_kid,
+                    table,
+                    cdm_only,
+                    vaults_only,
+                    export,
+                    service_session,
+                )
+                with self.drm_lock(drm):
+                    drm.content_keys.update(local_drm.content_keys)
+                return
 
         licence = partial(licence, drm_system="playready" if isinstance(drm, PlayReady) else "widevine")
 

@@ -46,6 +46,8 @@ class SessionEntry:
     owner_key: Optional[str] = None  # X-Secret-Key that owns this session
     cache_tag: Optional[str] = None
     server_account: Optional[str] = None  # profile name when the server lent its own account
+    server_cdm: Optional[bool] = None  # False: the client's own device licenses this session
+    server_cdm_max_height: Optional[int] = None
     client_auth: bool = (
         False  # the client sent its own cookies, credentials, or cache files, or answered a login prompt
     )
@@ -92,6 +94,8 @@ class SessionEntry:
             "auth_status": self.auth_status.value,
             "auth_error": self.auth_error,
             "server_account": self.server_account,
+            "server_cdm": self.server_cdm,
+            "server_cdm_max_height": self.server_cdm_max_height,
             "log_seq": self.log_buffer.last_seq if self.log_buffer else 0,
             "client": self.client,
             "actions": list(self.actions),
