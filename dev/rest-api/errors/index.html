@@ -1807,6 +1807,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#late-failures-with-status-200" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Late failures with status 200
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#responses-with-no-body" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2194,6 +2205,17 @@
     <span class="md-ellipsis">
       
         The authentication error exception
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#late-failures-with-status-200" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Late failures with status 200
       
     </span>
   </a>
@@ -2627,6 +2649,17 @@ body that uses an integer <code>status</code> and no <code>error_code</code> or 
 (integer <code>status</code>, no <code>error_code</code>). The <code>GET /api/health</code> endpoint is exempt
 from authentication, so it never returns the key-error shape.</p>
 </div>
+<h2 id="late-failures-with-status-200">Late failures with status <code>200</code><a class="headerlink" href="#late-failures-with-status-200" title="Permanent link">&para;</a></h2>
+<p>The remote session <code>titles</code>, <code>tracks</code> and <code>license</code> routes send status <code>200</code> and the headers
+when the work takes longer than 30 seconds. They then send a newline every 30 seconds to keep
+the connection open. See <a href="../endpoints/#slow-responses">Slow responses</a>. A failure after that
+time arrives as the standard error body, but with status <code>200</code>. The body has no field for the
+HTTP status that the error would otherwise have. <code>error_code</code> and <code>retryable</code> stay in the body.</p>
+<div class="admonition warning">
+<p class="admonition-title">Check the body on these routes</p>
+<p>On these routes a <code>200</code> does not always mean success. Parse the body and treat
+<code>"status": "error"</code> with an <code>error_code</code> as a failure.</p>
+</div>
 <h2 id="responses-with-no-body">Responses with no body<a class="headerlink" href="#responses-with-no-body" title="Permanent link">&para;</a></h2>
 <p>Not every failure or completion has a JSON body. Some endpoints answer with
 <strong><code>204 No Content</code></strong> and an empty body, notably deleting a terminal download job and
@@ -2676,7 +2709,8 @@ debugging, never on a server reachable by untrusted clients.</p>
 <div class="admonition note">
 <p class="admonition-title">Reference consumer</p>
 <p>unshackle's own remote-download client treats any status of <code>400</code> or above as
-fatal: it logs <code>Server error [&lt;error_code&gt;]: &lt;message&gt;</code> and exits. It also wraps
+fatal, and a <code>200</code> body with <code>"status": "error"</code> and an <code>error_code</code> too: it logs
+<code>Server error [&lt;error_code&gt;]: &lt;message&gt;</code> and exits. It also wraps
 requests in a retry adapter (five attempts, backing off on <code>429</code>, <code>500</code>, <code>502</code>,
 <code>503</code>, and <code>504</code>). This is a reasonable template for your own client's error
 handling.</p>

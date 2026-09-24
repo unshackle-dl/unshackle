@@ -2646,12 +2646,12 @@ generally never touch this directly, but it explains behaviour you might observe
 <tr>
 <td>Idle session TTL</td>
 <td><strong>300s</strong> (5 min) default</td>
-<td>Refreshed on every request to the session</td>
+<td>Refreshed on every request to the session and when a <code>titles</code> or <code>tracks</code> request ends. A remote session does not expire while a request works on it</td>
 </tr>
 <tr>
 <td>Max concurrent sessions</td>
 <td><strong>100</strong> default</td>
-<td>Oldest (least recently used) is evicted when full</td>
+<td>Oldest (least recently used) is evicted when full. A remote session that a request works on goes last</td>
 </tr>
 <tr>
 <td>Auth/input timeout</td>
@@ -2827,6 +2827,9 @@ layer.</p>
 <li><code>InputBridge.request_input(prompt, timeout=600)</code> blocks the sync auth thread on a
   <code>threading.Event</code> until <code>submit_response()</code> or <code>cancel()</code> fires.</li>
 <li>A timeout raises <code>TimeoutError</code> and marks the remote session <code>FAILED</code>.</li>
+<li>A prompt after authentication (in <code>get_titles()</code>, <code>get_tracks()</code> or licensing) raises
+  <code>RuntimeError</code> at once. The client polls for prompts only during authentication, so
+  no answer can come.</li>
 <li><code>AUTH_INPUT_TIMEOUT = 600.0</code> seconds. This is also the TTL granted to
   <code>AUTHENTICATING</code> / <code>PENDING_INPUT</code> sessions in the store.</li>
 </ul>
@@ -2956,9 +2959,18 @@ seconds left before this specific remote session expires.</p>
 remote session API and a good template for any client.</p>
 <ul>
 <li><strong><code>RemoteClient.request</code></strong> sets <code>X-Secret-Key</code> and <code>User-Agent: unshackle/&lt;version&gt;</code>,
-  uses a 120s timeout for <code>POST</code> and 30s for <code>GET</code>/<code>DELETE</code>, and treats any
-  <code>status_code &gt;= 400</code> as fatal: it logs <code>Server error [&lt;error_code&gt;]: &lt;message&gt;</code>
-  and raises <code>SystemExit(1)</code>.</li>
+  uses the server's <code>timeout</code> from <code>remote_services</code> (default 120s) as the read timeout,
+  and treats any <code>status_code &gt;= 400</code> as fatal: it logs <code>Server error [&lt;error_code&gt;]: &lt;message&gt;</code>
+  and raises <code>SystemExit(1)</code>. A <code>200</code> body with <code>"status": "error"</code> is also fatal (see
+  the heartbeat below).</li>
+<li><strong>Heartbeat.</strong> The <code>titles</code>, <code>tracks</code> and <code>license</code> routes send a newline every 30s while
+  the service works. The read timeout starts again at each byte, so a slow request stays
+  open for as long as the server works on it, and a reverse proxy does not close it as
+  idle. A route that answers within 30s sends the usual response. After 30s the status
+  is already <code>200</code>, so a failure after that time arrives as the usual error body with
+  status <code>200</code>. Your client must check <code>status</code> in the body. JSON parsers ignore the
+  leading newlines. The server does not gzip-compress a heartbeat response, because gzip
+  output cannot start before the body is ready.</li>
 <li><strong>Retries.</strong> The download-side HTTP session mounts an adapter with
   <code>Retry(total=5, backoff_factor=0.2, status_forcelist=[429, 500, 502, 503, 504])</code>.</li>
 <li><strong>Flow.</strong> <code>authenticate()</code> → <code>create</code> (+ poll <code>prompt</code> every 2s up to a 600s

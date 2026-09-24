@@ -1917,6 +1917,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#slow-responses" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Slow responses
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#post-apisessioncreate" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2788,6 +2799,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#slow-responses" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Slow responses
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#post-apisessioncreate" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2999,7 +3021,7 @@
 <li><strong>Authentication.</strong> Every request except <code>GET /api/health</code> requires the <code>X-Secret-Key</code> header when you configure an API key. <code>--no-key</code> disables the check entirely. See <a href="../authentication/">Authentication</a>.</li>
 <li><strong>Content type.</strong> Request bodies are JSON (<code>Content-Type: application/json</code>). All success responses are JSON unless this page documents a <code>204 No Content</code>.</li>
 <li><strong>CORS.</strong> Every response carries permissive CORS headers, and the server answers <code>OPTIONS</code> preflight requests automatically.</li>
-<li><strong>Compression.</strong> JSON responses of 256 bytes or more are gzip-compressed when the client sends <code>Accept-Encoding: gzip</code>.</li>
+<li><strong>Compression.</strong> JSON responses of 256 bytes or more are gzip-compressed when the client sends <code>Accept-Encoding: gzip</code>. A <a href="#slow-responses">slow response</a> is not compressed.</li>
 <li><strong>Service allowlist.</strong> The effective allowlist for your API key filters the service-facing endpoints (the intersection of the global <code>serve.services</code> list and your per-key list). The server treats services you cannot use as unknown.</li>
 </ul>
 <div class="admonition warning">
@@ -4647,6 +4669,20 @@ an HTTP caller would be remote code execution. You configure post-scripts only i
 </span><span id="__span-28-8"><a id="__codelineno-28-8" name="__codelineno-28-8" href="#__codelineno-28-8"></a>POST /api/session/{id}/keys/bad → report a server-vault content key that did not decrypt
 </span><span id="__span-28-9"><a id="__codelineno-28-9" name="__codelineno-28-9" href="#__codelineno-28-9"></a>DELETE /api/session/{id}        → tear down, harvest updated cache
 </span></code></pre></div>
+<h3 id="slow-responses">Slow responses<a class="headerlink" href="#slow-responses" title="Permanent link">&para;</a></h3>
+<p>The <code>titles</code>, <code>tracks</code> and <code>license</code> routes can take minutes on a large catalogue. When the
+answer is not ready after 30 seconds, the route sends status <code>200</code> and the headers. It then
+sends a newline every 30 seconds until the JSON body is ready. JSON parsers ignore the leading
+newlines. This keeps the connection open through a reverse proxy that closes an idle request.</p>
+<div class="admonition warning">
+<p class="admonition-title">A late failure has status <code>200</code></p>
+<p>The server sent the status before the work ended. A failure after the first 30 seconds
+arrives as the <a href="../errors/#the-standard-error-shape">standard error body</a> with status <code>200</code>.
+Check <code>status</code> in the body, not only the HTTP status. The body has no HTTP status field.
+Use <code>error_code</code> and <code>retryable</code> to decide what to do.</p>
+</div>
+<p>A slow response is not gzip-compressed. Gzip output cannot start before the body is ready, and
+the newlines must go out at once.</p>
 <h3 id="post-apisessioncreate"><code>POST /api/session/create</code><a class="headerlink" href="#post-apisessioncreate" title="Permanent link">&para;</a></h3>
 <p>Make a remote session for a service and title. Authentication runs asynchronously in the background. This call returns immediately with <code>status: "authenticating"</code>, and you then poll the prompt endpoint. The body accepts <code>service</code> and <code>title_id</code> (both required). It also accepts a broad set of optional keys, because the body allows <code>additionalProperties</code>. These are <code>credentials</code> (<code>{username, password, extra?}</code>), <code>cookies</code> (base64 of zlib-compressed Netscape cookie file), <code>proxy</code>, <code>no_proxy</code>, <code>profile</code>, <code>cache</code> (map of forwarded cache files, keyed by the file path relative to the service cache directory with <code>/</code> separators and no <code>.json</code> suffix, so a nested key such as <code>session_web/&lt;sha1&gt;</code> lands in a subdirectory), <code>client_region</code>, <code>proxy_region</code>, <code>cdm_type</code>, <code>range_</code>, <code>vcodec</code>, <code>quality</code>, <code>best_available</code>, <code>dl_params</code>, <code>client</code>, and any service CLI options. <code>proxy_region</code> is the country code the client resolved <code>proxy</code> from; the server matches it against its own accounts. <code>client</code> is a freeform object the dashboard shows as sent (the CLI puts <code>version</code>, <code>code_hash</code>, <code>platform</code> and a redacted <code>argv</code> in it); the server ignores it above 4096 bytes of JSON.</p>
 <p><code>dl_params</code> is an object with the <code>dl</code> track selection: <code>lang</code>, <code>v_lang</code> and <code>a_lang</code> (arrays of language strings), <code>acodec</code> (an array of audio codec names or <code>dl -a</code> aliases such as <code>ddp</code>) and <code>forced_subs</code> (boolean). The service reads these values from <code>ctx.parent.params</code>. The server uses the <code>dl</code> default for each absent or malformed value, and drops an unknown codec name.</p>
@@ -4816,7 +4852,8 @@ an HTTP caller would be remote code execution. You configure post-scripts only i
 </table>
 <p>The buffer keeps the newest 500 records. Only the service instance's own logger is mirrored; core pipeline loggers stay on the server. A server-account session gets no log relay at all - auth-time service output can carry the operator account's identity, so it stays server-side.</p>
 <h3 id="get-apisessionsession_idtitles"><code>GET /api/session/{session_id}/titles</code><a class="headerlink" href="#get-apisessionsession_idtitles" title="Permanent link">&para;</a></h3>
-<p>Fetch the titles for an authenticated remote session.</p>
+<p>Fetch the titles for an authenticated remote session.
+A slow answer arrives as a <a href="#slow-responses">slow response</a>.</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="23:1"><input checked="checked" id="__tabbed_23_1" name="__tabbed_23" type="radio" /><div class="tabbed-labels"><label for="__tabbed_23_1">Response <code>200</code></label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
@@ -4830,7 +4867,7 @@ an HTTP caller would be remote code execution. You configure post-scripts only i
 </div>
 <p>Requires an authenticated remote session. Otherwise it returns <code>404 SESSION_NOT_FOUND</code>.</p>
 <h3 id="post-apisessionsession_idtracks"><code>POST /api/session/{session_id}/tracks</code><a class="headerlink" href="#post-apisessionsession_idtracks" title="Permanent link">&para;</a></h3>
-<p>Get tracks and chapters for a specific title within the remote session. Body: <code>{ "title_id": "..." }</code> (required). Unlike <code>list-tracks</code>, track objects here <strong>include</strong> download URLs, along with session headers/cookies and manifest data the client needs to download directly.</p>
+<p>Get tracks and chapters for a specific title within the remote session. Body: <code>{ "title_id": "..." }</code> (required). Unlike <code>list-tracks</code>, track objects here <strong>include</strong> download URLs, along with session headers/cookies and manifest data the client needs to download directly. A slow answer arrives as a <a href="#slow-responses">slow response</a>.</p>
 <p><code>manifests</code> holds each served DASH/ISM manifest once. A service can build an AdaptationSet of its own that the served manifest does not contain. <code>track_manifests</code> holds a one-AdaptationSet MPD for each such track, and the client re-parses that in place of the whole manifest.</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="24:1"><input checked="checked" id="__tabbed_24_1" name="__tabbed_24" type="radio" /><div class="tabbed-labels"><label for="__tabbed_24_1">Response <code>200</code></label></div>
 <div class="tabbed-content">
@@ -4960,7 +4997,8 @@ an HTTP caller would be remote code execution. You configure post-scripts only i
 </tbody>
 </table>
 <h3 id="post-apisessionsession_idlicense"><code>POST /api/session/{session_id}/license</code><a class="headerlink" href="#post-apisessionsession_idlicense" title="Permanent link">&para;</a></h3>
-<p>Get the content keys for the DRM. The <code>mode</code> field selects one of two modes.</p>
+<p>Get the content keys for the DRM. The <code>mode</code> field selects one of two modes.
+A slow answer arrives as a <a href="#slow-responses">slow response</a>.</p>
 <p><strong>Proxy mode</strong> (<code>mode: "proxy"</code>, the default) forwards the client's CDM <code>challenge</code> to the service's license endpoint and returns the raw license bytes:</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="27:2"><input checked="checked" id="__tabbed_27_1" name="__tabbed_27" type="radio" /><input id="__tabbed_27_2" name="__tabbed_27" type="radio" /><div class="tabbed-labels"><label for="__tabbed_27_1">Request</label><label for="__tabbed_27_2">Response <code>200</code></label></div>
 <div class="tabbed-content">

@@ -2171,7 +2171,7 @@ to the normal file-based cookie path (<code>cookies/&lt;SERVICE&gt;.txt</code> o
 <p>Definitions of remote unshackle service servers, used by the <code>--remote</code> mode. Each entry is
 named by you (pick it with <code>--server</code>, or do not write that flag when you configure only one) and gives
 the server's <code>url</code> (required), an optional <code>api_key</code>, an optional <code>auth_headers</code> list, an
-optional <code>server_cdm</code> boolean, and an optional <code>services</code> sub-dict of per-service local
+optional <code>server_cdm</code> boolean, an optional <code>timeout</code> in seconds, and an optional <code>services</code> sub-dict of per-service local
 overrides such as <code>title_map</code>.</p>
 <p>Leave <code>server_cdm</code> unset and the client follows the server: it uses the server CDM for each
 service the API key has it on, and the local CDM for the others. <code>true</code> asks for the server CDM
@@ -2182,6 +2182,11 @@ first name. If the server answers <code>401</code>, it retries the same request 
 keeps the one that works for the rest of the HTTP session. Names you give keep your spelling and
 are not repeated in the fallbacks, so unshackle tries
 <code>auth_headers: ["Authorization", "x-secret-key"]</code> as <code>Authorization</code>, <code>x-secret-key</code>, <code>X-Api-Key</code>.</p>
+<p><code>timeout</code> is the time in seconds that the client waits for data from the server. The
+default is <code>120</code>. The server sends a heartbeat every 30 seconds while it gets titles, tracks
+or licences, so a slow service does not cause a timeout. Increase <code>timeout</code> only when the
+server runs an older version that sends no heartbeat. Give a number of seconds. With a
+value below 30 the client can time out before the first heartbeat. <code>0</code> means the default.</p>
 <p>In <code>--remote</code> mode unshackle turns the server's service list into synthetic CLI
 commands that operate against it, falling back to the tags in that <code>services</code> sub-dict when
 unshackle cannot fetch the list. Each synthetic command carries the server-side service's options and
