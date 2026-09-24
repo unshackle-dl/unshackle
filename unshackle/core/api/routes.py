@@ -2665,19 +2665,31 @@ async def dashboard_keys(request: web.Request) -> web.Response:
 @api_handler
 async def dashboard_services(request: web.Request) -> web.Response:
     """
-    Dashboard: every discovered service and its load state.
+    Dashboard: every configured service and its load state.
     ---
     summary: Dashboard services
     description: >
-      Unlike `/api/services` this is not filtered by any allowlist and it keeps the services
-      that failed to import, with their error. `state` is `loaded`, `staged` (an update is on
+      Shows only the services configured on this server: the global `serve.services`
+      allowlist, else the union of every `serve.users` key's `services`, else every discovered
+      service. An API key with no `services` list does not widen the union, so the list can be
+      smaller than what an unrestricted API key can reach. `?all=1` lists every installed
+      service instead. Unlike `/api/services` it keeps the
+      services that failed to import, with their error. `state` is `loaded`, `staged` (an update is on
       disk but a busy service blocks the re-import) or `failed`.
       A staged service applies when its last job finishes; watch the `service` event on
       `/api/dashboard/events` instead of polling for it.
     tags: [Dashboard]
+    parameters:
+      - name: all
+        in: query
+        required: false
+        schema:
+          type: string
+          enum: ["1"]
+        description: List every installed service, not only the configured ones
     responses:
       '200':
-        description: One row per discovered service
+        description: One row per listed service
         content:
           application/json:
             schema:

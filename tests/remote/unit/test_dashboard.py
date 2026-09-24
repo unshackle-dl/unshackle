@@ -24,6 +24,7 @@ pytestmark = pytest.mark.unit
 def dashboard_cfg(monkeypatch):
     monkeypatch.setitem(config.serve, "dashboard", {"key": "dash-secret"})
     monkeypatch.setitem(config.serve, "users", {"tier-key": {"username": "tier1"}})
+    monkeypatch.setitem(config.serve, "services", None)
     stats.requests_total = 0
     stats.requests_rejected = 0
     stats.keys.clear()
@@ -264,6 +265,33 @@ async def test_dashboard_services_states(aiohttp_client, dashboard_cfg, monkeypa
     if staged != failed:
         assert rows[staged]["state"] == "staged" and rows[staged]["staged_since"] == 1756908900.0
         assert all(r["state"] == "loaded" for t, r in rows.items() if t not in (staged, failed))
+
+
+async def test_dashboard_services_lists_only_configured(aiohttp_client, dashboard_cfg, monkeypatch) -> None:
+    from pathlib import Path
+
+    from unshackle.core import services as services_module
+
+    monkeypatch.setattr(services_module, "SERVICES", [Path(f"/svc/{t}/__init__.py") for t in ("AAA", "BBB", "CCC")])
+    client = await aiohttp_client(make_app())
+    headers = {"X-Secret-Key": "dash-secret"}
+
+    async def listed() -> set[str]:
+        rows = await (await client.get("/api/dashboard/services", headers=headers)).json()
+        count = (await (await client.get("/api/dashboard/status", headers=headers)).json())["services"]
+        assert count == len(rows)
+        return {r["tag"] for r in rows}
+
+    assert await listed() == {"AAA", "BBB", "CCC"}
+    users = {"k1": {"services": ["aaa"]}, "k2": {"services": ["BBB", 1]}, "k3": {"services": "CCC"}, "k4": {}}
+    monkeypatch.setitem(config.serve, "users", users)
+    assert await listed() == {"AAA", "BBB"}
+    monkeypatch.setitem(config.serve, "users", ["not", "a", "mapping"])
+    assert await listed() == {"AAA", "BBB", "CCC"}
+    monkeypatch.setitem(config.serve, "services", ["CCC"])
+    assert await listed() == {"CCC"}
+    everything = await (await client.get("/api/dashboard/services?all=1", headers=headers)).json()
+    assert {r["tag"] for r in everything} == {"AAA", "BBB", "CCC"}
 
 
 async def test_status_reports_no_session_limit(aiohttp_client, dashboard_cfg, monkeypatch) -> None:

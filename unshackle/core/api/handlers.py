@@ -2229,6 +2229,24 @@ async def download_job_events_handler(job_id: str, request: web.Request) -> web.
     return response
 
 
+def configured_service_tags() -> List[str]:
+    """The installed services this server names in its config, for the dashboard.
+
+    The global ``serve.services`` list, else the union of every ``serve.users`` key's ``services``, else every
+    installed service. An API key with no ``services`` list does not widen the union, and a malformed entry is skipped.
+    """
+    tags = Services.get_tags()
+    allowed = allowed_services_for_key(None)
+    if allowed is None:
+        users = config.serve.get("users")
+        lists = [u.get("services") for u in users.values() if isinstance(u, dict)] if isinstance(users, dict) else []
+        allowed = [Services.get_tag(s) for lst in lists if isinstance(lst, list) for s in lst if isinstance(s, str)]
+    if not allowed:
+        return tags
+    named = set(allowed)
+    return [tag for tag in tags if tag in named]
+
+
 async def dashboard_status_handler(request: web.Request) -> web.Response:
     """Server-wide stats for the developer dashboard."""
     from unshackle.core.api.download_manager import get_download_manager
@@ -2240,7 +2258,7 @@ async def dashboard_status_handler(request: web.Request) -> web.Response:
     return web.json_response(
         {
             **stats.to_dict(),
-            "services": len(Services.get_tags()),
+            "services": len(configured_service_tags()),
             "sessions": store.session_count,
             "max_sessions": store.max_sessions,
             "session_ttl": store.ttl,
@@ -2361,10 +2379,7 @@ def user_grant(secret_key: str, name: str) -> Any:
 
 
 async def dashboard_services_handler(request: web.Request) -> web.Response:
-    """Every discovered service and its load state, including the ones that failed to import.
-
-    Not allowlist-filtered: an operator needs to see the services their keys cannot reach.
-    """
+    """Every service configured on this server, or every installed one with ``?all=1``, and its load state."""
     from unshackle.core import services as services_module
     from unshackle.core.api.download_manager import TERMINAL_STATUSES, get_download_manager
     from unshackle.core.api.session_store import get_session_store
@@ -2375,8 +2390,9 @@ async def dashboard_services_handler(request: web.Request) -> web.Response:
     errors = {err.split(":", 1)[0]: err for err in services_module.LOAD_ERRORS if ":" in err}
     staged_commits: Dict[Any, Optional[str]] = {}
 
+    tags = Services.get_tags() if request.query.get("all") == "1" else configured_service_tags()
     rows = []
-    for tag in Services.get_tags():
+    for tag in tags:
         error = errors.get(tag)
         staged = tag in services_module.PENDING
         row: Dict[str, Any] = {

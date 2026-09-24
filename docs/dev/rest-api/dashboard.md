@@ -43,13 +43,13 @@ All are `GET`.
 
 | Path | Returns |
 |------|---------|
-| `/api/dashboard/status` | Version, `code_hash`, bind host and port, `mode` (`full`, `api_only`, `remote_only`), uptime, `requests_total`, `requests_rejected` (401s), `requests_by_key` (label → count), loaded service count, session count, `max_sessions` (`null` when the operator configured no limit), `session_ttl`, job counts by status. The service count includes services that failed to import - use `/api/dashboard/services` for the number that loaded. |
+| `/api/dashboard/status` | Version, `code_hash`, bind host and port, `mode` (`full`, `api_only`, `remote_only`), uptime, `requests_total`, `requests_rejected` (401s), `requests_by_key` (label → count), configured service count (the same services as `/api/dashboard/services`), session count, `max_sessions` (`null` when the operator configured no limit), `session_ttl`, job counts by status. The service count includes services that failed to import - use `/api/dashboard/services` for the number that loaded. |
 | `/api/dashboard/sessions` | Every live remote session: `id`, `owner` (username or masked key), `creator_ip`, `service`, `title_id`, `titles`, `tracks`, `title` (the display name of the title the client is on: the last one it asked tracks for, else the first resolved title), `auth_status`, `auth_error`, `server_account` (the server profile lent to the remote session, else `null`), `server_cdm` (`false` when the client's own device licenses the remote session), `server_cdm_max_height` (the tallest video the server CDM licenses live, else `null`), `client`, `actions`, `created_at` and `last_accessed` (ISO 8601) with `created_ts` and `last_accessed_ts` (Unix epoch, the same clock as log `ts`), `age_seconds`, `idle_seconds`, `log_seq`. `client` is whatever the remote client sent as `client` in its session create request. The CLI sends `version`, `code_hash` (the commit the client runs, `null` when its source cannot be read), `platform` and `argv`. `argv` is the command line the user ran: proxy and URL userinfo, secret query parameters and credential values become `***`, home and install paths shorten as in the logs, and the line is cut at 3000 characters. An older client sends less or nothing and the field is `{}`. `log_seq` is the last sequence number in the remote session's service log - poll `/api/dashboard/sessions/{id}/logs` when it changes. `actions` is the session's request log, newest last, capped at 500: `ts`, `method`, `action` (`titles`, `tracks`, `segments`, `license`, `prompt`, …), `query`, `status`, `ms`, `bytes_in`, `bytes_out`. |
 | `/api/dashboard/jobs` | Every download job with full detail, regardless of owner. Empty in `--remote-only` mode. |
 | `/api/dashboard/logs` | `{"seq": N, "records": [...]}`: the last 1000 log records. `?since=<seq>` returns only newer records; `?level=WARNING` sets the minimum level; `?logger=serve` keeps one logger and its children (`aiohttp.access` is the noisiest). `ts` is a Unix epoch in seconds. |
 | `/api/dashboard/sessions/{id}/logs` | One remote session's service log: `{"session_id", "last_seq", "records": [...]}`. Each record has `seq`, `ts`, `level`, `message`. `?since=<seq>` returns only newer records. 404 when the remote session is unknown. |
 | `/api/dashboard/keys` | Every configured API key: what it may do and what it has done. One row per key in `serve.users`, plus `serve.api_secret` when it is set. |
-| `/api/dashboard/services` | Every discovered service and its load state, including the ones that failed to import. Not filtered by any allowlist. |
+| `/api/dashboard/services` | Every service configured on this server and its load state, including the ones that failed to import. See [Services](#services) for what configured means. |
 | `/api/dashboard/health` | Preflight: whether this instance could finish a download. Cached 30 seconds. |
 | `/api/dashboard/events` | Server-Sent Events stream. With `?since=<seq>` it returns `{"seq", "stats", "events": [...]}` instead: every event after `seq` (the server keeps the last 20000, log records included, so a poll every few seconds is safe even under a busy access log) as one JSON burst, so a UI that polls every few seconds still sees a remote session that opened and closed in between. |
 
@@ -185,6 +185,24 @@ GET /api/dashboard/services
   "staged_since": 1756908900.0, "sessions": 1, "jobs": 1,
   "aliases": ["EXMPL"], "geofence": ["US"], "geoblock": []}]
 ```
+
+The list holds only the services configured on this server:
+
+1. The global `serve.services` list, when it is set.
+2. Else, the union of the `services` lists of all keys in `serve.users`.
+3. Else, every installed service.
+
+!!! note "The union does not show what every API key can reach"
+    An API key with no `services` list can use every service, but it does not add to the union. The
+    `api_secret` API key is the same. So with `k1: {services: [A]}` and a `k2` with no list, the
+    list shows only `A`. To list every service, remove the `services` lists or set
+    `serve.services`.
+
+`GET /api/dashboard/services?all=1` lists every installed service. `/status` always counts
+only the configured services.
+
+A configured tag that names no installed service does not show. Name a service by its tag: an
+alias resolves only for a service that imported.
 
 `state` is `loaded`, `staged` or `failed`. A service that failed to import keeps its error
 here instead of disappearing, and `/status` still counts it in the service total - count the
