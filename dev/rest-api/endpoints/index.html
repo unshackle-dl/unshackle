@@ -4072,6 +4072,11 @@ an HTTP caller would be remote code execution. You configure post-scripts only i
 <td><code>FORBIDDEN</code></td>
 <td>A gated parameter is not permitted.</td>
 </tr>
+<tr>
+<td><code>403</code></td>
+<td><code>SERVER_CDM_CAPPED</code></td>
+<td>The API key has a <code>server_cdm_max_height</code> for the service, and the job has no <code>quality</code> at or under it, sets <code>best_available</code>, or has <code>HYBRID</code> in <code>range</code>.</td>
+</tr>
 </tbody>
 </table>
 <h3 id="get-apidownloadjobs"><code>GET /api/download/jobs</code><a class="headerlink" href="#get-apidownloadjobs" title="Permanent link">&para;</a></h3>
@@ -4398,6 +4403,11 @@ an HTTP caller would be remote code execution. You configure post-scripts only i
 <td><code>403</code></td>
 <td><code>FORBIDDEN</code></td>
 <td>A gated parameter is no longer permitted.</td>
+</tr>
+<tr>
+<td><code>403</code></td>
+<td><code>SERVER_CDM_CAPPED</code></td>
+<td>The job is no longer inside the <code>server_cdm_max_height</code> of the API key.</td>
 </tr>
 </tbody>
 </table>
@@ -5219,6 +5229,10 @@ A slow answer arrives as a <a href="#slow-responses">slow response</a>.</p>
 </tr>
 <tr>
 <td><code>FORBIDDEN</code></td>
+<td>403</td>
+</tr>
+<tr>
+<td><code>SERVER_CDM_CAPPED</code></td>
 <td>403</td>
 </tr>
 <tr>

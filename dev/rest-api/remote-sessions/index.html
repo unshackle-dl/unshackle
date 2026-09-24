@@ -2630,6 +2630,16 @@ CDM.</p>
 </div>
 </div>
 </div>
+<div class="admonition note">
+<p class="admonition-title">A height limit on the server CDM</p>
+<p>An API key with <code>server_cdm_max_height</code> gets the server CDM only up to that height. The
+session create response tells the client who licenses the session in <code>server_cdm</code> and gives
+the limit in <code>server_cdm_max_height</code>. In a server CDM session, the batch licence response
+lists each track the server refused to license live under <code>capped_tracks</code>. A single-track
+server CDM licence answers <code>403 SERVER_CDM_CAPPED</code> for such a track. In both cases the client
+licenses those tracks in proxy mode with its own local CDM. See
+<a href="../../../reference/configuration/services/"><code>server_cdm_max_height</code></a>.</p>
+</div>
 <hr />
 <h2 id="remote-session-lifecycle-and-expiry">Remote session lifecycle and expiry<a class="headerlink" href="#remote-session-lifecycle-and-expiry" title="Permanent link">&para;</a></h2>
 <p>Remote sessions live in an <strong>in-memory store on the server</strong> and expire on a timer. You

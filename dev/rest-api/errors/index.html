@@ -2442,6 +2442,11 @@ but the defaults hold for the overwhelming majority of responses.</p>
 <td>The action is not allowed. Raised by server-side gates (per-key restrictions on CDM or credential overrides) and by remote session IP binding.</td>
 </tr>
 <tr>
+<td><code>SERVER_CDM_CAPPED</code></td>
+<td>403</td>
+<td>The server CDM does not license live above the <code>server_cdm_max_height</code> of the API key. <code>details.reason</code> is <code>server_cdm_max_height</code> (with <code>details.max_height</code>) or <code>client_device</code>, for a remote session where the client's own device licenses. A remote client licenses the track with its own device.</td>
+</tr>
+<tr>
 <td><code>GEOFENCE</code></td>
 <td>403</td>
 <td>The title is not available in the applicable region.</td>

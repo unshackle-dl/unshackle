@@ -2333,6 +2333,31 @@ client configured with <code>server_cdm: true</code> to license with its own loc
 client that asks anyway gets a <code>FORBIDDEN</code> error. Because a download job always licenses with the server's CDM,
 an API key without <code>server_cdm</code> for that service also cannot submit or retry <code>/api/download</code>
 jobs. Keys that have no <code>users</code> entry, such as <code>api_secret</code>, keep server CDM access.</p>
+<p><code>server_cdm_max_height</code> limits the live licences the server's device makes for that API key.
+Set it to a height in pixels for every service, or to a map of service tag to height with an
+optional <code>default</code> entry. A service the map does not name or sets to <code>null</code> gets the <code>default</code>, and
+with no <code>default</code> it has no limit. The server compares the limit with the lowest <code>-q</code> that selects
+the track: the track height, or the 16:9 height from the width when that is lower. The server reads
+the remote client's <code>-q</code> when the remote session starts:</p>
+<ul>
+<li>With no <code>-q</code>, or a <code>-q</code> at or below the limit, the server CDM licenses the remote session. The server
+  refuses a live licence for a video track taller than the limit, and the client licenses that
+  track with its own local CDM.</li>
+<li>With a <code>-q</code> above the limit, the client's own local CDM licenses every track of the remote session.
+  The service sees the DRM system and security level of the client's device. A client with no
+  local CDM gets a <code>SERVER_CDM_CAPPED</code> error.</li>
+<li>A download job must pass a <code>quality</code> at or below the limit, and must not set <code>best_available</code> or
+  a <code>HYBRID</code> range. <code>HYBRID</code> always keeps the lowest Dolby Vision track, at any quality. A job with
+  no <code>quality</code>, with a higher one, with <code>best_available</code>, or with <code>HYBRID</code> gets a <code>SERVER_CDM_CAPPED</code>
+  error. The server checks the values the job runs with, after it applies the service defaults
+  and the <code>serve:</code> download defaults.</li>
+</ul>
+<p>The limit protects the server's device, not the content keys. For a Widevine track, a server vault
+still supplies a content key at every height. A PlayReady track never reads the vault, so above
+the limit it always goes to the client's device. A licence for a lower track can carry the
+content key of a higher track when the service shares one content key between them. With server
+accounts enabled, a client that reports a stronger device than it holds makes the server's
+account request those manifests; the licence server still refuses its challenge.</p>
 <p><code>admin</code> is a boolean that lets the API key run the maintenance endpoints (clear-cache, clear-temp, refresh-services). It is <code>false</code> unless the entry sets it. Keys that have no <code>users</code> entry, such as <code>api_secret</code>, keep that access.</p>
 <p>A <code>tier</code> names an entry under <code>serve.tiers</code>, which holds the settings that several API keys
 share. Today a tier carries <code>rate_limit</code>, the requests per hour that API key may make; an API
@@ -2410,11 +2435,12 @@ region; a client that reports none is not blocked.</p>
 </span><span id="__span-3-14"><a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a><span class="w">      </span><span class="nt">tier</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">bot</span><span class="w">                   </span><span class="c1"># 600 requests/hour; 429 with Retry-After once over</span>
 </span><span id="__span-3-15"><a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a><span class="w">    </span><span class="nt">e5f6a7b8</span><span class="p">:</span>
 </span><span id="__span-3-16"><a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a><span class="w">      </span><span class="nt">server_cdm</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w">            </span><span class="c1"># this key may have the server do the licensing</span>
-</span><span id="__span-3-17"><a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a><span class="w">    </span><span class="nt">c9d0e1f2</span><span class="p">:</span>
-</span><span id="__span-3-18"><a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a><span class="w">      </span><span class="nt">services</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">EXAMPLE1</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">EXAMPLE2</span><span class="p p-Indicator">]</span>
-</span><span id="__span-3-19"><a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a><span class="w">      </span><span class="nt">server_cdm</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">EXAMPLE1</span><span class="p p-Indicator">]</span><span class="w">      </span><span class="c1"># the server licenses only EXAMPLE1; EXAMPLE2 needs a local CDM</span>
-</span><span id="__span-3-20"><a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a><span class="w">      </span><span class="nt">server_accounts</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">EXAMPLE1</span><span class="p p-Indicator">]</span><span class="w"> </span><span class="c1"># may authenticate EXAMPLE1 with one of the server's own accounts</span>
-</span><span id="__span-3-21"><a id="__codelineno-3-21" name="__codelineno-3-21" href="#__codelineno-3-21"></a><span class="w">      </span><span class="nt">server_proxy</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w">          </span><span class="c1"># this key may also use the server's proxy providers</span>
+</span><span id="__span-3-17"><a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a><span class="w">      </span><span class="nt">server_cdm_max_height</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1080</span><span class="w"> </span><span class="c1"># above 1080p the client licenses with its own device</span>
+</span><span id="__span-3-18"><a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a><span class="w">    </span><span class="nt">c9d0e1f2</span><span class="p">:</span>
+</span><span id="__span-3-19"><a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a><span class="w">      </span><span class="nt">services</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">EXAMPLE1</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">EXAMPLE2</span><span class="p p-Indicator">]</span>
+</span><span id="__span-3-20"><a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a><span class="w">      </span><span class="nt">server_cdm</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">EXAMPLE1</span><span class="p p-Indicator">]</span><span class="w">      </span><span class="c1"># the server licenses only EXAMPLE1; EXAMPLE2 needs a local CDM</span>
+</span><span id="__span-3-21"><a id="__codelineno-3-21" name="__codelineno-3-21" href="#__codelineno-3-21"></a><span class="w">      </span><span class="nt">server_accounts</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">EXAMPLE1</span><span class="p p-Indicator">]</span><span class="w"> </span><span class="c1"># may authenticate EXAMPLE1 with one of the server's own accounts</span>
+</span><span id="__span-3-22"><a id="__codelineno-3-22" name="__codelineno-3-22" href="#__codelineno-3-22"></a><span class="w">      </span><span class="nt">server_proxy</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w">          </span><span class="c1"># this key may also use the server's proxy providers</span>
 </span></code></pre></div>
 <div class="admonition note">
 <p class="admonition-title"><code>dl</code> keys inside <code>serve</code></p>
