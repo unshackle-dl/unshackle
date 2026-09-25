@@ -729,15 +729,13 @@ def resolve_remote_proxy_arg(proxy_arg: str) -> Optional[str]:
     profile's resolver instead (`controld://`), and a bare region query skips Control D.
     """
     from unshackle.core.proxies.controld import ControlD
-    from unshackle.core.proxies.resolve import initialize_proxy_providers, resolve_proxy
+    from unshackle.core.proxies.resolve import find_provider, initialize_proxy_providers, resolve_proxy
 
     try:
         providers = initialize_proxy_providers()
         provider, _, query = proxy_arg.partition(":")
         if provider.lower() == "controld" and query:
-            controld = next((x for x in providers if isinstance(x, ControlD)), None)
-            if not controld:
-                raise ValueError("Proxy provider 'controld' is not configured")
+            controld = find_provider(providers, "controld")
             uri = controld.get_remote_proxy(query)
             if not uri:
                 raise ValueError(f"Control D has no location for {query}")

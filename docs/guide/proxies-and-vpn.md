@@ -128,6 +128,11 @@ So if you have both Basic and NordVPN configured and use `--proxy us`, a `us` en
 your Basic config wins, because unshackle tries Basic first. To skip ahead to a specific
 proxy provider, prefix the query (`--proxy nordvpn:us`).
 
+If a proxy provider cannot load, for example because its server list cannot be fetched
+or its config is not valid, unshackle logs a warning and continues with the other proxy
+providers. A bare query skips the proxy provider that did not load. A query that names it,
+such as `--proxy nordvpn:us`, fails and shows the reason it did not load.
+
 !!! note "A bare region reaches Control D last"
     unshackle asks Control D for a bare region such as `--proxy us` only when no other
     loaded proxy provider has a proxy for it. Hola loads automatically when the

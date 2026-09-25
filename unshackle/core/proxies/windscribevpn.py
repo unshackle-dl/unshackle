@@ -160,6 +160,7 @@ class WindscribeVPN(Proxy):
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
                 "Content-Type": "application/json",
             },
+            timeout=10,
         )
         if not res.ok:
             raise ValueError(f"Failed to get a list of WindscribeVPN locations [{res.status_code}]")

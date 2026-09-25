@@ -53,18 +53,8 @@ from unshackle.core.events import events
 from unshackle.core.export_name import ExportNamer, move_export, plural, season_episodes, title_label
 from unshackle.core.providers.anilist import parse_anilist_ref
 from unshackle.core.providers.tvdb import SEASON_TYPES, parse_int
-from unshackle.core.proxies import (
-    Basic,
-    ControlD,
-    ExpressVPN,
-    Gluetun,
-    Hola,
-    NordVPN,
-    ProtonVPN,
-    SurfsharkVPN,
-    WindscribeVPN,
-)
-from unshackle.core.proxies.resolve import REGION, is_loopback, resolve_proxy
+from unshackle.core.proxies import Basic
+from unshackle.core.proxies.resolve import REGION, find_provider, is_loopback, load_proxy_providers, resolve_proxy
 from unshackle.core.service import Service, grow_session_pool
 from unshackle.core.services import Services
 from unshackle.core.temp import with_task_temp
@@ -1363,29 +1353,7 @@ class dl:
                 self.proxy_providers = list(proxy_providers)
             else:
                 with console.status("Loading Proxy Providers...", spinner="dots"):
-                    if config.proxy_providers.get("basic"):
-                        self.proxy_providers.append(Basic(**config.proxy_providers["basic"]))
-                    # ExpressVPN/ProtonVPN auto-load when their default cookie file exists (no yaml needed)
-                    expressvpn = ExpressVPN(**(config.proxy_providers.get("expressvpn") or {}))
-                    if config.proxy_providers.get("expressvpn") or expressvpn.cache_path.is_file():
-                        self.proxy_providers.append(expressvpn)
-                    if config.proxy_providers.get("nordvpn"):
-                        self.proxy_providers.append(NordVPN(**config.proxy_providers["nordvpn"]))
-                    proton = ProtonVPN(**(config.proxy_providers.get("protonvpn") or {}))
-                    if config.proxy_providers.get("protonvpn") or proton.cookie_path.is_file():
-                        self.proxy_providers.append(proton)
-                    if config.proxy_providers.get("surfsharkvpn"):
-                        self.proxy_providers.append(SurfsharkVPN(**config.proxy_providers["surfsharkvpn"]))
-                    if config.proxy_providers.get("windscribevpn"):
-                        self.proxy_providers.append(WindscribeVPN(**config.proxy_providers["windscribevpn"]))
-                    if config.proxy_providers.get("gluetun"):
-                        self.proxy_providers.append(Gluetun(**config.proxy_providers["gluetun"]))
-                    if binaries.HolaProxy:
-                        self.proxy_providers.append(Hola())
-                    if config.proxy_providers.get("controld"):
-                        self.proxy_providers.append(ControlD(**config.proxy_providers["controld"]))
-                    for proxy_provider in self.proxy_providers:
-                        self.log.info(f"Loaded {proxy_provider.__class__.__name__}: {proxy_provider}")
+                    self.proxy_providers = load_proxy_providers()
 
             if proxy and proxy.startswith("controld://"):
                 proxy = ctx.params["proxy"] = resolve_proxy(proxy, [])
@@ -1413,16 +1381,10 @@ class dl:
                     )
                     with console.status(status_msg, spinner="dots"):
                         if requested_provider:
-                            proxy_provider = next(
-                                (
-                                    x
-                                    for x in self.proxy_providers
-                                    if x.__class__.__name__.lower() == requested_provider.lower()
-                                ),
-                                None,
-                            )
-                            if not proxy_provider:
-                                self.log.error(f"The proxy provider '{requested_provider}' was not recognised.")
+                            try:
+                                proxy_provider = find_provider(self.proxy_providers, requested_provider)
+                            except ValueError as e:
+                                self.log.error(str(e))
                                 sys.exit(1)
                             proxy_uri = proxy_provider.get_proxy(proxy)
                             if not proxy_uri:

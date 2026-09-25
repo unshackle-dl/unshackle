@@ -163,7 +163,9 @@ class NordVPN(Proxy):
         Note: There may not always be more than one recommended server.
         """
         res = requests.get(
-            url="https://api.nordvpn.com/v1/servers/recommendations", params={"filters[country_id]": country_id}
+            url="https://api.nordvpn.com/v1/servers/recommendations",
+            params={"filters[country_id]": country_id},
+            timeout=10,
         )
         if not res.ok:
             raise ValueError(f"Failed to get a list of NordVPN countries [{res.status_code}]")
@@ -176,9 +178,7 @@ class NordVPN(Proxy):
     @staticmethod
     def get_countries() -> list[dict]:
         """Get a list of available Countries and their metadata."""
-        res = requests.get(
-            url="https://api.nordvpn.com/v1/servers/countries",
-        )
+        res = requests.get(url="https://api.nordvpn.com/v1/servers/countries", timeout=10)
         if not res.ok:
             raise ValueError(f"Failed to get a list of NordVPN countries [{res.status_code}]")
 

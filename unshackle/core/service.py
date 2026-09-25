@@ -23,6 +23,7 @@ from unshackle.core.constants import AnyTrack
 from unshackle.core.credential import Credential
 from unshackle.core.drm import DRM_T
 from unshackle.core.proxies.basic import Basic
+from unshackle.core.proxies.resolve import find_provider
 from unshackle.core.search_result import SearchResult
 from unshackle.core.session import (
     BACKOFF_FACTOR,
@@ -217,10 +218,10 @@ class Service(metaclass=ABCMeta):
                     )
                     if proxy_provider_name:
                         # Specific provider requested
-                        proxy_provider = next(
-                            (x for x in ctx.obj.proxy_providers if x.__class__.__name__.lower() == proxy_provider_name),
-                            None,
-                        )
+                        try:
+                            proxy_provider = find_provider(ctx.obj.proxy_providers, proxy_provider_name)
+                        except ValueError:
+                            proxy_provider = None
                         if proxy_provider:
                             mapped_proxy_uri = proxy_provider.get_proxy(mapped_value)
                             if mapped_proxy_uri:
