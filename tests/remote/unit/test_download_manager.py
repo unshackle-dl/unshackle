@@ -227,22 +227,31 @@ def test_perform_download_puts_the_lang_selection_in_the_service_ctx(
     assert (p["lang"], p["v_lang"], p["a_lang"], [c.name for c in p["acodec"]], p["forced_subs"]) == expected
 
 
-def test_worker_relays_a_prompt_and_reads_the_answer(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_worker_relays_a_prompt_and_reads_the_answer(monkeypatch: pytest.MonkeyPatch) -> None:
     import json
+    import os
     import sys
+    from types import SimpleNamespace
 
     from unshackle.core.api import download_worker
     from unshackle.core.console import prompt_user, set_prompt_handler
 
-    answers = tmp_path / "stdin"
-    answers.write_text(json.dumps("12\n34") + "\n", encoding="utf-8")
-    monkeypatch.setattr(sys, "stdin", answers.open("rb"))
+    read_fd, write_fd = os.pipe()
+    monkeypatch.setattr(sys, "stdin", SimpleNamespace(fileno=lambda: read_fd))
     updates: list[dict] = []
-    download_worker.relay_prompts(updates.append)
+
+    def answer_on_prompt(update: dict) -> None:
+        """Answer only once the prompt is out: the prompt discards answers that arrived before it."""
+        updates.append(update)
+        if update["input_prompt"]:
+            os.write(write_fd, (json.dumps("12\n34") + "\n").encode("utf-8"))
+
+    download_worker.relay_prompts(answer_on_prompt)
     try:
         assert prompt_user("Enter PIN") == "12\n34"
     finally:
         set_prompt_handler(None)
+        os.close(write_fd)
     assert updates == [{"input_prompt": "Enter PIN"}, {"input_prompt": None}]
 
 
@@ -260,8 +269,9 @@ def test_a_prompt_discards_an_answer_sent_before_it(tmp_path: Path, monkeypatch:
     monkeypatch.setattr(sys, "stdin", answers.open("rb"))
     monkeypatch.setattr(download_worker, "AUTH_INPUT_TIMEOUT", 0.2)
     download_worker.relay_prompts(lambda update: None)
-    reader = next(t for t in threading.enumerate() if t.name == "prompt-answers")
-    reader.join(timeout=5)
+    # The reader exits at EOF, so a finished join means the stale line is already queued.
+    for reader in [t for t in threading.enumerate() if t.name == "prompt-answers"]:
+        reader.join(timeout=5)
     try:
         with pytest.raises(TimeoutError) as exc_info:
             prompt_user("Enter PIN")
