@@ -2724,6 +2724,10 @@ resolution:</p>
 <p>So if you have both Basic and NordVPN configured and use <code>--proxy us</code>, a <code>us</code> entry in
 your Basic config wins, because unshackle tries Basic first. To skip ahead to a specific
 proxy provider, prefix the query (<code>--proxy nordvpn:us</code>).</p>
+<p>If a proxy provider cannot load, for example because its server list cannot be fetched
+or its config is not valid, unshackle logs a warning and continues with the other proxy
+providers. A bare query skips the proxy provider that did not load. A query that names it,
+such as <code>--proxy nordvpn:us</code>, fails and shows the reason it did not load.</p>
 <div class="admonition note">
 <p class="admonition-title">A bare region reaches Control D last</p>
 <p>unshackle asks Control D for a bare region such as <code>--proxy us</code> only when no other
@@ -3176,7 +3180,8 @@ the extra throughput.</p>
    that alias always wins.</li>
 <li>unshackle changes a <code>us1239</code>-style query (country code + number) with no explicit
    mapping into a provider-specific server hostname (for example <code>us1239.nordvpn.com</code>
-   for NordVPN, <code>us-1239.prod.surfshark.com</code> for Surfshark).</li>
+   for NordVPN). Surfshark has no numbered servers, so map a Surfshark region to a
+   server name such as <code>us-dal.prod.surfshark.com</code> in <code>server_hostnames</code>.</li>
 <li>unshackle expands a bare two-letter code to the full country name Gluetun expects.</li>
 </ol>
 <p>A few providers (Windscribe, VyprVPN, VPN Secure) select by <strong>region</strong> rather than
@@ -3492,12 +3497,17 @@ them from the <a href="https://my.surfshark.com/vpn/manual-setup/main/openvpn">S
 </span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="w">  </span><span class="nt">surfsharkvpn</span><span class="p">:</span>
 </span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a><span class="w">    </span><span class="nt">username</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">YOUR_SERVICE_USERNAME</span>
 </span><span id="__span-20-4"><a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a><span class="w">    </span><span class="nt">password</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">YOUR_SERVICE_PASSWORD</span>
-</span><span id="__span-20-5"><a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a><span class="w">    </span><span class="nt">server_map</span><span class="p">:</span><span class="w">                </span><span class="c1"># optional</span>
-</span><span id="__span-20-6"><a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a><span class="w">      </span><span class="nt">us</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1234</span>
+</span><span id="__span-20-5"><a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a><span class="w">    </span><span class="nt">server_map</span><span class="p">:</span><span class="w">                </span><span class="c1"># optional: region -&gt; server name</span>
+</span><span id="__span-20-6"><a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a><span class="w">      </span><span class="nt">us</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">us-dal</span>
+</span><span id="__span-20-7"><a id="__codelineno-20-7" name="__codelineno-20-7" href="#__codelineno-20-7"></a><span class="w">      </span><span class="nt">us:seattle</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">us-sea</span>
 </span></code></pre></div>
 <p><strong>Required keys:</strong> <code>username</code>, <code>password</code>, validated with the same 48-character rule as
 NordVPN (combined username+password must be 48 alphanumeric characters, case-insensitive, no <code>@</code>).
-<code>server_map</code> optionally pins server IDs per region.</p>
+<code>server_map</code> optionally pins a server per region. Give the server name from Surfshark's
+server list, for example <code>us-dal</code>. A full hostname such as <code>us-dal.prod.surfshark.com</code> also
+works. Surfshark does not use numeric server IDs. unshackle ignores a numeric or empty value
+and logs a warning. A <code>us:seattle</code> entry applies only to that city query, and it does not
+fall back to the <code>us</code> entry.</p>
 <p><strong>Query forms:</strong></p>
 <table>
 <thead>
@@ -3508,19 +3518,24 @@ NordVPN (combined username+password must be 48 alphanumeric characters, case-ins
 </thead>
 <tbody>
 <tr>
-<td><code>us</code></td>
-<td>A random US server.</td>
+<td><code>surfsharkvpn:us</code></td>
+<td>A random US server. <code>uk</code> and <code>gb</code> both give a UK server.</td>
 </tr>
 <tr>
-<td><code>us-bos</code></td>
-<td>A specific server.</td>
+<td><code>surfsharkvpn:us-bos</code></td>
+<td>A specific server from Surfshark's server list.</td>
 </tr>
 <tr>
-<td><code>us:seattle</code></td>
+<td><code>surfsharkvpn:us:seattle</code></td>
 <td>A random server in Seattle.</td>
 </tr>
 </tbody>
 </table>
+<p>unshackle ignores case, spaces, hyphens and accents in a city name, so <code>us:new-york</code>
+matches New York. A city also matches the start of a longer name: <code>de:frankfurt</code> matches
+Frankfurt am Main. A bare <code>us</code> also reaches Surfshark, but a bare <code>us-bos</code> or
+<code>us:seattle</code> can stop at a proxy provider earlier in the order, so use the
+<code>surfsharkvpn:</code> prefix for those forms.</p>
 <p>The returned proxy is HTTPS on <strong>port 443</strong>.</p>
 <h2 id="windscribe">Windscribe<a class="headerlink" href="#windscribe" title="Permanent link">&para;</a></h2>
 <p>Windscribe uses <strong>Service Credentials</strong> from its
