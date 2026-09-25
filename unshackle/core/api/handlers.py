@@ -218,9 +218,11 @@ def build_parent_ctx(
 
     parent = click.Context(dummy)
     parent.obj = ContextData(config=service_config, cdm=cdm, proxy_providers=proxy_providers, profile=profile)
-    params = {"proxy": proxy_param, "no_proxy": no_proxy, "served": True}
+    params: Dict[str, Any] = {"proxy": proxy_param, "no_proxy": no_proxy, "served": True}
     if extra_params:
         params.update(extra_params)
+    # dl defaults -q to [], and services iterate it
+    params["quality"] = params.get("quality") or []
     parent.params = params
     return parent
 
@@ -586,9 +588,19 @@ def serve_user_config(api_key: str) -> Dict[str, Any]:
 
 
 def server_cdm_allowed(request: Optional[web.Request] = None, service: Optional[str] = None) -> bool:
-    """Whether the calling API key may have the server operate the CDM licensing for ``service``.
+    """Whether the calling API key may have the server operate the CDM licensing for ``service``."""
+    return key_grant_allows(request, service, "server_cdm")
 
-    Configured API keys opt in with ``server_cdm: true`` for every service, or with a list of
+
+def server_vault_allowed(request: Optional[web.Request] = None, service: Optional[str] = None) -> bool:
+    """Whether the calling API key may read the server vault in a remote session its own device licenses."""
+    return key_grant_allows(request, service, "server_vault") or server_cdm_allowed(request, service)
+
+
+def key_grant_allows(request: Optional[web.Request], service: Optional[str], name: str) -> bool:
+    """Whether the calling API key holds the ``name`` grant for ``service``.
+
+    Configured API keys opt in with ``<name>: true`` for every service, or with a list of
     service tags for only those. An API key absent from ``serve.users`` (the admin secret) keeps
     full access.
     """
@@ -598,7 +610,7 @@ def server_cdm_allowed(request: Optional[web.Request] = None, service: Optional[
     user_config = config.serve.get("users", {}).get(secret_key)
     if user_config is None:
         return True
-    allowed = user_config.get("server_cdm", False)
+    allowed = user_config.get(name, False)
     if isinstance(allowed, str):
         allowed = [allowed]
     if isinstance(allowed, (list, tuple, set)):
@@ -692,6 +704,12 @@ def live_licence_refusal(session: Any, track: Any) -> Optional[APIError]:
     Only a live licence spends the server's device, so a vault hit always passes. A track measures as the
     smallest ``-q`` that selects it: the lower of its height and the 16:9 height of its width.
     """
+    if getattr(session, "server_device", False):
+        return APIError(
+            APIErrorCode.SERVER_CDM_CAPPED,
+            "This session runs on the server's device, so its keys come only from a vault.",
+            details={"reason": "server_device"},
+        )
     if getattr(session, "server_cdm", None) is False:
         return capped_error("This session licenses with your own device, so the server CDM makes no licence for it.")
     cap = getattr(session, "server_cdm_max_height", None)
@@ -699,7 +717,6 @@ def live_licence_refusal(session: Any, track: Any) -> Optional[APIError]:
     width = getattr(track, "width", None) if isinstance(track, Video) else None
     measures = [m for m in (height, int(width * 9 / 16) if width else None) if m]
     height = min(measures) if measures else None
-    # ponytail: a track with no size passes; a parser that fills sizes in closes that gap
     if cap is None or not height or height <= cap:
         return None
     return capped_error(
@@ -3133,6 +3150,10 @@ SESSION_TRANSPORT_KEYS = {
     "proxy_region",
     "cdm_type",
     "cdm_security_level",
+    "cdm_relay",
+    "cdm_system_id",
+    "cdm_device_type",
+    "service_config",
     "range_",
     "vcodec",
     "quality",
@@ -3178,6 +3199,80 @@ def forwarded_dl_params(data: Dict[str, Any]) -> Dict[str, Any]:
     return params
 
 
+# A client's service config carries a device identity (an ESN, a few keys), never a bulk payload.
+MAX_CLIENT_CONFIG_BYTES = 16384
+
+
+def client_config_overlay(
+    service_config: Dict[str, Any], allowed: Iterable[str], supplied: Any
+) -> tuple[Dict[str, Any], bool]:
+    """The service config for a remote session that the client's own device licenses, and whether the client sent an identity.
+
+    Only the ``allowed`` keys come from the client, and a mapping merges its entries over the server's.
+    When the client sends any scalar value (an identity such as an ESN), the server's scalar values for
+    the allowed keys are dropped, so the two identities never mix. With none, the server's stay.
+    """
+    allowed = set(allowed)
+    if supplied is None:
+        supplied = {}
+    if not isinstance(supplied, dict) or len(json.dumps(supplied, default=str)) > MAX_CLIENT_CONFIG_BYTES:
+        raise APIError(
+            APIErrorCode.INVALID_INPUT, f"service_config must be an object under {MAX_CLIENT_CONFIG_BYTES} bytes"
+        )
+
+    def scalar(value: Any) -> bool:
+        return isinstance(value, str) or is_whole_number(value)
+
+    for key, value in supplied.items():
+        if key in allowed and not scalar(value) and not (isinstance(value, dict) and all(map(scalar, value.values()))):
+            raise APIError(
+                APIErrorCode.INVALID_INPUT,
+                f"service_config.{key} must be a string, a whole number, or an object of them",
+            )
+    identity = any(key in allowed and scalar(value) for key, value in supplied.items())
+    merged = {k: v for k, v in service_config.items() if not identity or k not in allowed or isinstance(v, dict)}
+    for key, value in supplied.items():
+        if key not in allowed:
+            log.warning(f"Ignoring service_config.{sanitize_log(str(key))}: the service does not take it from a client")
+        elif isinstance(value, dict):
+            existing = merged.get(key)
+            base = existing if isinstance(existing, dict) else {}
+            # JSON makes every client key a string, so a server key it spells the same way gives way
+            merged[key] = {**{k: v for k, v in base.items() if str(k) not in value}, **value}
+        else:
+            merged[key] = value
+    return merged, identity
+
+
+def client_device_cdm(
+    data: Dict[str, Any], input_bridge: Optional[InputBridge], server_device: Optional[Callable[[], Any]] = None
+) -> Any:
+    """The service's view of the client's device: a relaying stand-in when the client can answer CDM calls."""
+    from unshackle.core.cdm.client_relay import ClientDeviceCdm
+
+    level = data.get("cdm_security_level")
+    level = level if is_whole_number(level) else None
+    if not (data.get("cdm_relay") is True and input_bridge is not None):
+        return cdm_type_stub(str(data.get("cdm_type")), level)
+
+    from pywidevine import DeviceTypes
+
+    system_id = data.get("cdm_system_id")
+    device_type = data.get("cdm_device_type")
+    if device_type is not None and device_type not in DeviceTypes.__members__:
+        raise APIError(
+            APIErrorCode.INVALID_INPUT, f"cdm_device_type must be one of {', '.join(DeviceTypes.__members__)}"
+        )
+    return ClientDeviceCdm(
+        input_bridge,
+        server_device=server_device,
+        is_playready=data.get("cdm_type") == "playready",
+        security_level=level,
+        system_id=system_id if is_whole_number(system_id) else None,
+        device_type=DeviceTypes[device_type] if device_type else None,
+    )
+
+
 def create_service_instance(
     normalized_service: str,
     title_id: str,
@@ -3188,10 +3283,12 @@ def create_service_instance(
     server_account: bool = False,
     server_cdm: bool = False,
     client_device: bool = False,
+    input_bridge: Optional[InputBridge] = None,
 ) -> Any:
     """Make a service instance and resolve its credentials and cookies.
 
-    With ``client_device`` the service sees a stand-in with the client's DRM system and security level.
+    With ``client_device`` the service sees a stand-in for the client's device, which relays CDM calls
+    through ``input_bridge`` when the client can answer them, and a config holding the client's own identity.
 
     With ``server_account`` the service takes the server's own credential and cookie file for
     ``profile`` and drops anything the client sent. Otherwise only client-sent data counts: a
@@ -3202,11 +3299,25 @@ def create_service_instance(
     from unshackle.core.credential import Credential
     from unshackle.core.tracks import Video
 
-    service_config = load_service_yaml(normalized_service)
+    server_config = service_config = load_service_yaml(normalized_service)
+    service_module = Services.load(normalized_service)
     cdm: Any
+    client_identity = False
     if client_device:
-        level = data.get("cdm_security_level")
-        cdm = cdm_type_stub(str(data.get("cdm_type")), level if is_whole_number(level) else None)
+        client_config = getattr(service_module, "CLIENT_CONFIG", ())
+        if client_config:
+            service_config, client_identity = client_config_overlay(
+                server_config, client_config, data.get("service_config")
+            )
+
+        def lend_server_device() -> Any:
+            """The server's device, with the server's own config back in the dict the service holds as ``self.config``."""
+            if service_config is not server_config:
+                service_config.clear()
+                service_config.update(server_config)
+            return load_full_cdm(normalized_service, profile, None)
+
+        cdm = client_device_cdm(data, input_bridge, lend_server_device)
     else:
         cdm = load_full_cdm(normalized_service, profile, None if server_cdm else data.get("cdm_type"))
 
@@ -3248,6 +3359,10 @@ def create_service_instance(
         cookies = load_client_cookies(data.get("cookies"))
 
     extra_params["cookies_supplied"] = cookies is not None
+    # A service with CLIENT_CONFIG reads these: with client_identity it uses only what the client sent,
+    # and without it the server's identity, whose keys then come only from a vault.
+    extra_params["client_device"] = client_device
+    extra_params["client_identity"] = client_identity
     # Services key their token caches on this. Only sessions get it: they run on a cache
     # directory of their own, where the list and search handlers share the server's cache.
     extra_params["profile"] = profile
@@ -3262,7 +3377,6 @@ def create_service_instance(
         extra_params=extra_params,
     )
 
-    service_module = Services.load(normalized_service)
     service_instance = instantiate_service(parent_ctx, service_module, title_id, data, SESSION_TRANSPORT_KEYS)
 
     return service_instance, cookies, credential
@@ -3315,7 +3429,13 @@ async def session_create_handler(data: Dict[str, Any], request: Optional[web.Req
             log.info(f"Using server account '{sanitize_log(profile or 'default')}' for {normalized_service}")
 
         use_server_cdm, max_height = choose_session_cdm(request, normalized_service, data)
-        client_device = max_height is not None and not use_server_cdm
+        # an old client without cdm_relay keeps the server's device outside a capped session
+        client_device = (
+            not use_server_cdm
+            and bool(data.get("cdm_type"))
+            and (max_height is not None or data.get("cdm_relay") is True)
+        )
+        bridge = InputBridge()
         log_buffer = None if server_account else SessionLogBuffer()
         service_class_name = getattr(Services.load(normalized_service), "__name__", normalized_service)
 
@@ -3331,6 +3451,7 @@ async def session_create_handler(data: Dict[str, Any], request: Optional[web.Req
                     server_account=server_account,
                     server_cdm=use_server_cdm,
                     client_device=client_device,
+                    input_bridge=bridge,
                 )
 
         service_instance, cookies, credential = await asyncio.to_thread(build_service)
@@ -3347,7 +3468,6 @@ async def session_create_handler(data: Dict[str, Any], request: Optional[web.Req
         if cache_data and session_cache_tag:
             write_client_cache(cache_data, session_cache_tag)
 
-        bridge = InputBridge()
         service_instance._input_bridge = bridge
 
         store = get_session_store()
@@ -3362,6 +3482,10 @@ async def session_create_handler(data: Dict[str, Any], request: Optional[web.Req
         session.cache_tag = session_cache_tag
         session.server_cdm = use_server_cdm
         session.server_cdm_max_height = max_height
+        session.server_vault = client_device and server_vault_allowed(request, normalized_service)
+        # the service asked for the server's device in __init__, so the session never licenses live
+        stand_in = getattr(getattr(getattr(service_instance, "ctx", None), "obj", None), "cdm", None)
+        session.server_device = getattr(stand_in, "lent", False) is True
         session.client_auth = not server_account and (
             cookies is not None or credential is not None or bool(cache_data and session_cache_tag)
         )
@@ -3398,6 +3522,8 @@ async def session_create_handler(data: Dict[str, Any], request: Optional[web.Req
                 "server_account": server_account,
                 "server_cdm": use_server_cdm,
                 "server_cdm_max_height": max_height,
+                "server_vault": session.server_vault,
+                "server_device": session.server_device,
             }
         )
 
@@ -3467,7 +3593,8 @@ def client_session_auth(session: Any) -> tuple[Dict[str, str], Dict[str, str]]:
     Only a client that sent its own cookies or credentials gets them back. Otherwise (a server
     account, or an anonymous login through the server's proxy) the cookie jar stays on the
     server and the server drops the auth-bearing headers, so the client cannot reuse a login
-    the server paid for.
+    the server paid for. A remote session on the server's lent device keeps its cookies (the client's account)
+    but drops those headers too.
     """
     svc_session = session.service_instance.session
     headers = dict(svc_session.headers) if hasattr(svc_session, "headers") and svc_session.headers else {}
@@ -3476,10 +3603,19 @@ def client_session_auth(session: Any) -> tuple[Dict[str, str], Dict[str, str]]:
         for cookie in svc_session.cookies:
             if hasattr(cookie, "name") and hasattr(cookie, "value"):
                 cookies[cookie.name] = cookie.value
-    if not session.client_auth:
+    if not client_owns_login(session):
         headers = {k: v for k, v in headers.items() if not CONFIG_SECRET_KEY_RE.search(str(k))}
+    if not session.client_auth:
         cookies = {}
     return headers, cookies
+
+
+def client_owns_login(session: Any) -> bool:
+    """Whether the login state of ``session`` is the client's to take back.
+
+    A remote session on the server's lent device logs in with the server's device identity, so its tokens stay there.
+    """
+    return bool(session.client_auth) and not getattr(session, "server_device", False)
 
 
 def scrub_secret_keys(value: Any) -> Any:
@@ -3497,7 +3633,7 @@ def scrub_track_data(data: Optional[Dict[str, Any]], session: Any) -> Optional[D
     A service can stash a token in ``track.data`` for its license call; under the same rule as
     :func:`client_session_auth` that token never reaches a client that did not log in itself.
     """
-    if not data or session.client_auth:
+    if not data or client_owns_login(session):
         return data
     return scrub_secret_keys(data) or None
 
@@ -3802,12 +3938,19 @@ def require_authenticated(session: Any) -> None:
 
 
 async def session_prompt_get_handler(session_id: str, request: Optional[web.Request] = None) -> web.Response:
-    """Poll for pending interactive prompts during authentication.
+    """Poll for pending interactive prompts during authentication, and for CDM calls at any time.
 
     Returns the current auth status and any pending prompt that the
-    remote client should display to the user.
+    remote client should display to the user. A CDM call comes first, because service code can
+    wait on the client's CDM after authentication too, for example in get_tracks.
     """
     session = await get_validated_session(session_id, request)
+
+    bridge = session.input_bridge
+    if bridge and (cdm_call := bridge.get_pending_cdm_call()):
+        return web.json_response(
+            {"status": "pending_input", "prompt": bridge.get_pending_prompt(), "cdm_call": cdm_call}
+        )
 
     if session.auth_status == AuthStatus.AUTHENTICATED:
         return web.json_response({"status": "authenticated"})
@@ -3815,7 +3958,6 @@ async def session_prompt_get_handler(session_id: str, request: Optional[web.Requ
     if session.auth_status == AuthStatus.FAILED:
         return web.json_response({"status": "failed", "error": session.auth_error or "unknown error"})
 
-    bridge = session.input_bridge
     if bridge:
         prompt = bridge.get_pending_prompt()
         if prompt:
@@ -4156,6 +4298,12 @@ def resolve_device_name(user_config: dict, drm_type: str, service_tag: str = "")
     return device_name
 
 
+def vault_candidates(client_drm_type: str) -> List[str]:
+    """Both DRM systems, the client's first: a vault lookup needs only the KIDs, whatever device made the manifest."""
+    first = client_drm_type if client_drm_type in ("widevine", "playready") else "widevine"
+    return [first, "playready" if first == "widevine" else "widevine"]
+
+
 def server_drm_candidates(
     service_tag: str,
     user_config: dict,
@@ -4370,12 +4518,14 @@ def handle_single_server_cdm(
     request: Optional[web.Request],
     sources: Optional[Dict[str, str]] = None,
     refusal: Optional[APIError] = None,
+    vault_only: bool = False,
 ) -> Dict[str, str]:
     """Do the single-track server_cdm licensing with the DRM class get_content_keys() flow.
 
     ``sources`` is filled with the vault name for every returned content key a server vault
     supplied. A content key the CDM licensed gets no entry. It raises ``refusal`` before a live licence:
     after a Widevine vault miss, or at once for PlayReady, whose licence can carry keys its header does not name.
+    With ``vault_only`` no server device is involved: the header's KIDs come from the vault, else ``refusal``.
     """
     import base64
 
@@ -4388,6 +4538,24 @@ def handle_single_server_cdm(
         pssh_b64 = extract_pssh_from_track(track, drm_type)
     if not pssh_b64:
         raise APIError(APIErrorCode.INVALID_INPUT, "No PSSH available for server_cdm licensing")
+
+    if vault_only:
+        from unshackle.core.drm import PlayReady, Widevine
+
+        if drm_type == "playready":
+            from pyplayready.system.pssh import PSSH as PlayReadyPSSH
+
+            kids = PlayReady(pssh=PlayReadyPSSH(base64.b64decode(pssh_b64)), pssh_b64=pssh_b64).kids
+        else:
+            from pywidevine.pssh import PSSH as WvPSSH
+
+            kids = Widevine(pssh=WvPSSH(pssh_b64)).kids
+        vault_hit = check_vaults(kids, service.__class__.__name__)
+        if vault_hit:
+            if sources is not None:
+                sources.update(vault_hit[1])
+            return vault_hit[0]
+        raise refusal or APIError(APIErrorCode.NO_CONTENT, "The server vault holds no key for this track")
 
     api_key = request.headers.get("X-Secret-Key", "anonymous") if request else "anonymous"
     user_config = serve_user_config(api_key)
@@ -4476,8 +4644,9 @@ def handle_proxy_license(
     track: Any,
     challenge_b64: Optional[str],
     drm_type: str,
+    certificate: bool = False,
 ) -> web.Response:
-    """Forward a client CDM challenge to the service license endpoint."""
+    """Forward a client CDM challenge to the service license endpoint, or to its certificate hook with ``certificate``."""
     import base64
 
     if not challenge_b64:
@@ -4494,7 +4663,14 @@ def handle_proxy_license(
     # A service raises when the upstream licence server rejects the challenge.
     # Surface it as a structured licence error, not an uncaught 500 the edge turns into a 502.
     try:
-        if drm_type == "widevine":
+        if drm_type == "widevine" and certificate:
+            license_blob = service.get_widevine_service_certificate(
+                **declared_kwargs(
+                    service.get_widevine_service_certificate,
+                    {"challenge": challenge_bytes, "title": title, "track": track},
+                )
+            )
+        elif drm_type == "widevine":
             license_blob = service.get_widevine_license(
                 **declared_kwargs(
                     service.get_widevine_license, {"challenge": challenge_bytes, "title": title, "track": track}
@@ -4513,8 +4689,11 @@ def handle_proxy_license(
         log.exception(f"{sanitize_log(drm_type)} licence request failed for the proxied challenge")
         raise APIError(APIErrorCode.SERVICE_ERROR, f"Licence request failed: {exc}") from None
 
+    if license_blob is None:
+        return web.json_response({"license": None})
     if isinstance(license_blob, str):
-        license_blob = license_blob.encode("utf-8")
+        # a Widevine service may answer in Base64 text, and the client hands its CDM the raw bytes
+        license_blob = base64.b64decode(license_blob) if drm_type == "widevine" else license_blob.encode("utf-8")
 
     return web.json_response({"license": base64.b64encode(license_blob).decode("ascii")})
 
@@ -4599,7 +4778,11 @@ def license_response(
     drm_type = data.get("drm_type", "widevine")
     mode = data.get("mode", "proxy")
 
-    if mode == "server_cdm" and not server_cdm_allowed(request, session.service_tag):
+    # a session the client's device licenses reaches the server vault only; its live licences stay client-side
+    vault_only = getattr(session, "server_cdm", None) is False
+    if mode == "server_cdm" and not (
+        getattr(session, "server_vault", False) if vault_only else server_cdm_allowed(request, session.service_tag)
+    ):
         raise APIError(
             APIErrorCode.FORBIDDEN,
             "Server CDM licensing is not enabled for this key on this service. Use a local CDM (proxy mode).",
@@ -4672,6 +4855,7 @@ def license_response(
                         request,
                         sources_by_pssh[cache_key],
                         live_licence_refusal(session, track),
+                        vault_only=vault_only,
                     )
                     if keys:
                         keys_by_pssh[cache_key] = keys
@@ -4700,7 +4884,12 @@ def license_response(
                 continue
 
             title = find_title_for_track(tid, session)
-            candidates = server_drm_candidates(service_tag, user_config, drm_type, track, warn)
+            # with no server device in play, the client's DRM system is the one its vault keys are for
+            candidates = (
+                vault_candidates(drm_type)
+                if vault_only
+                else server_drm_candidates(service_tag, user_config, drm_type, track, warn)
+            )
 
             keys, track_drm_type, pssh_str = license_track(track, title, candidates)
             # a refused track still tries its init segment PSSH, where a server vault can hold the key
@@ -4780,7 +4969,11 @@ def license_response(
             # The server's config.cdm mapping decides the DRM system, as in the batch path.
             # The client only knows its own local device, which the server never uses here.
             api_key = request.headers.get("X-Secret-Key", "anonymous") if request else "anonymous"
-            candidates = server_drm_candidates(session.service_tag, serve_user_config(api_key), drm_type, track)
+            candidates = (
+                vault_candidates(drm_type)
+                if vault_only
+                else server_drm_candidates(session.service_tag, serve_user_config(api_key), drm_type, track)
+            )
             picked = pick_server_pssh(track, candidates)
             if not picked:
                 raise APIError(
@@ -4808,6 +5001,7 @@ def license_response(
                 request,
                 key_sources,
                 live_licence_refusal(session, track),
+                vault_only=vault_only,
             )
             log.info(f"Server CDM resolved {len(keys)} key(s) for track {sanitize_log(track_id[:12])}")
             note_served_keys(session, keys, key_sources)
@@ -4818,7 +5012,12 @@ def license_response(
             if drm_type == "playready":
                 track.pr_pssh = pssh_b64
 
-        return handle_proxy_license(service, title, track, challenge_b64, drm_type)
+        certificate = data.get("is_certificate") is True
+        if getattr(session, "server_device", False) and not certificate:
+            denied = live_licence_refusal(session, track)
+            if denied:
+                raise denied
+        return handle_proxy_license(service, title, track, challenge_b64, drm_type, certificate=certificate)
 
     except APIError:
         raise
@@ -4918,7 +5117,7 @@ async def session_delete_handler(session_id: str, request: Optional[web.Request]
         session.input_bridge.cancel()
 
     cache_tag = session.cache_tag
-    cache_data = collect_cache_files(cache_tag) if cache_tag and session.client_auth else {}
+    cache_data = collect_cache_files(cache_tag) if cache_tag and client_owns_login(session) else {}
 
     await store.delete(session_id)
 

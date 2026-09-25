@@ -48,6 +48,8 @@ class SessionEntry:
     server_account: Optional[str] = None  # profile name when the server lent its own account
     server_cdm: Optional[bool] = None  # False: the client's own device licenses this session
     server_cdm_max_height: Optional[int] = None
+    server_vault: bool = False  # a session the client's device licenses may still take keys from the server vault
+    server_device: bool = False  # its service runs on the server's lent device, so keys come only from a vault
     client_auth: bool = (
         False  # the client sent its own cookies, credentials, or cache files, or answered a login prompt
     )

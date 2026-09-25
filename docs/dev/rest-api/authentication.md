@@ -84,8 +84,8 @@ Under the integrated server, an API key can do DRM licensing only through a CDM 
 !!! warning "PlayReady access is opt-in per user"
     If a user entry omits `playready_devices`, the server gives that API key **no** PlayReady access, and logs a warning at startup. You must name the PlayReady devices explicitly for any API key that needs them. Widevine and PlayReady device files themselves are auto-loaded from your WVDs and PRDs directories.
 
-!!! note "Device lists *are* the server-side-decryption switch"
-    There is no separate tier, capability flag, or permission toggle for whether the server will hand back content keys (`KID:KEY`) for a remote session download. The presence of devices on the calling API key decides it. With **empty** `devices` and `playready_devices`, the server can only proxy CDM challenges, so the client must operate its own CDM. Once those lists are **populated**, the client may request `mode:server_cdm` and receive content keys back. Do not look for a tier setting. The devices you configure are what enables server-side decryption.
+!!! note "Grants decide whether the server returns content keys"
+    The devices on an API key decide which CDM the server can use. Two grants in the same user entry decide whether the server returns content keys (`KID:KEY`) for a remote session. `server_cdm` lets the server license with those devices. `server_vault` lets a remote session that the client's own device licenses read the server vault, and the server then makes no live licence. Without either grant, the server can only proxy CDM challenges, so the client must operate its own CDM. See [`serve`](../../reference/configuration/services.md) for both grants.
 
 ### Disabling authentication
 

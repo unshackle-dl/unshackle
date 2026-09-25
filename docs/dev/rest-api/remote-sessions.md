@@ -215,7 +215,8 @@ hood the client walks a remote session through its lifecycle.
     client saves them locally, so the **next** remote session can skip interactive
     authentication. The login belongs to the client when the client sent
     cookies, credentials, or cache files, or answered a login prompt (a device code
-    or an OTP) that led to a successful login. A server-account login never does.
+    or an OTP) that led to a successful login. A server-account login never does,
+    and neither does a remote session on the server's device (see below).
     The client saves only the returned files that pass the same profile check it
     applies before it sends them, so a file for another profile cannot overwrite
     that profile's local file.
@@ -245,6 +246,10 @@ There are two ways DRM keys get resolved, chosen by the client's `server_cdm` fl
 
     - Keeps your CDM local. The server only relays the license request.
     - Used when `server_cdm` is `false` (the default).
+    - The service on the server sees your device, not the server's: its DRM system,
+      security level, system ID and device type. A CDM call that the service makes
+      (for example a session-key exchange at login) goes to your client as a `cdm_call`,
+      and your local CDM answers it. See [Your own device identity](#your-own-device-identity).
 
 === "Server-side CDM (server_cdm: true)"
 
@@ -276,6 +281,48 @@ There are two ways DRM keys get resolved, chosen by the client's `server_cdm` fl
     server CDM licence answers `403 SERVER_CDM_CAPPED` for such a track. In both cases the client
     licenses those tracks in proxy mode with its own local CDM. See
     [`server_cdm_max_height`](../../reference/configuration/services.md).
+
+### Your own device identity
+
+A service can need more than a licence challenge from your device: an ESN, model keys, or a
+session-key exchange that runs on the CDM. The device never leaves your machine. Only these cross
+the wire:
+
+- **Device facts.** When it creates the remote session, the client sends its DRM system, security level,
+  system ID and device type. The service sees a stand-in with these facts.
+- **CDM calls.** When the service calls the CDM, the server sends a `cdm_call` to the client
+  and waits. The client makes the challenge, or parses the licence, on its own CDM. When
+  the service closes a CDM session, the server sends a `close` call, because a CDM holds
+  only a few sessions. The client polls for calls during login and while one of its own
+  requests runs service code, so an idle remote session sends nothing extra.
+- **Session keys only.** A `keys` call returns Widevine `OPERATOR_SESSION` and `SIGNING`
+  keys. It never returns a content key, and the client refuses a PlayReady `keys` call.
+  So a server cannot use your device to license titles for itself.
+- **Identity config.** A service names the config keys a client may send (for example
+  `esn`, `Kpe`, `Kph`, `esn_map`). The server lists them in the service listing as
+  `client_config`. The client sends only those keys, from its own `services: <TAG>:`
+  block in `unshackle.yaml`. When the client sends an identity, the server drops its own
+  value for each of those keys, so the two identities never mix. A mapping (such as
+  `esn_map`) merges the client's entries over the server's. A client entry replaces a
+  server entry with the same key, also when the server's key is a number. The server keeps
+  these values in the remote session's memory only.
+
+A service can also offer an option that builds the remote session on the server's own
+device and identity, for the quality that device reaches. The session then makes no live
+licence at all: each content key comes from the server vault or the client's own vaults,
+and a content key that no vault holds stops the download with an error. The create
+response sets `server_device` to `true` for such a remote session. The service then uses
+the server's own config: the client's identity values do not apply. The client reads the
+server vault only when the API key has the `server_vault` grant (or `server_cdm`); without
+it, the client reads only its own vaults. The login tokens of such a remote session hold the
+server's device identity, so the server keeps them: `DELETE` returns no cache files, and the
+HTTP session headers and `track.data` lose their secret-looking keys, as for a server login.
+
+!!! note "The server vault in a session your device licenses"
+    With the `server_vault` grant (or `server_cdm`) on the API key, a remote session that your own
+    device licenses still takes content keys from the server vault. The server tries the
+    vault first. A track that no server vault holds goes back to your device. See
+    [`server_vault`](../../reference/configuration/services.md).
 
 ---
 
@@ -365,8 +412,10 @@ The server mounts all these routes, even in `--remote-only` mode. Paths use the
 `POST /api/session/create` requires `service` and `title_id`. It also accepts
 `credentials`, `cookies` (base64 of zlib-compressed Netscape cookie file), `proxy`,
 `no_proxy`, `profile`, `cache` (a map of `filename → base64(zlib(bytes))`),
-`client_region`, `cdm_type`, `client` (a freeform identity object the dashboard
-shows as sent), and the track-selection hints `range_`, `vcodec`,
+`client_region`, `cdm_type`, `cdm_security_level`, `cdm_relay` (`true` when the client
+answers CDM calls), `cdm_system_id` and `cdm_device_type` (Widevine only), `service_config`
+(the identity config keys the service lists in `client_config`), `client` (a freeform identity
+object the dashboard shows as sent), and the track-selection hints `range_`, `vcodec`,
 `quality`, `best_available`, plus arbitrary service CLI options
 (`additionalProperties: true`).
 
@@ -395,8 +444,13 @@ a per-profile ESN.
 The response returns **before** authentication finishes:
 
 ```json
-{ "session_id": "...uuid4...", "service": "EXAMPLE", "status": "authenticating" }
+{ "session_id": "...uuid4...", "service": "EXAMPLE", "status": "authenticating",
+  "server_cdm": false, "server_cdm_max_height": null, "server_vault": true, "server_device": false }
 ```
+
+`server_vault` tells the client that the server vault serves a remote session its own device
+licenses. `server_device` tells it that the service runs on the server's device, so every
+content key comes from a vault.
 
 Authentication runs on a background thread (`asyncio.to_thread(authenticate, ...)`).
 The remote session starts in `AUTHENTICATING`. The client must poll the prompt
@@ -415,6 +469,10 @@ layer.
 - A prompt after authentication (in `get_titles()`, `get_tracks()` or licensing) raises
   `RuntimeError` at once. The client polls for prompts only during authentication, so
   no answer can come.
+- A CDM call (`InputBridge.request_cdm`) works during and after authentication, because the
+  client also polls while its own requests run. A call that no client fetches within 10 seconds
+  fails then, because no client is listening. A fetched call waits 60 seconds for its answer.
+  The call leaves the auth status as it was. An answer never marks the remote session as client-authenticated.
 - `AUTH_INPUT_TIMEOUT = 600.0` seconds. This is also the TTL granted to
   `AUTHENTICATING` / `PENDING_INPUT` sessions in the store.
 
@@ -424,8 +482,16 @@ layer.
 { "status": "authenticated" }
 { "status": "authenticating" }
 { "status": "pending_input", "prompt": "Enter code: " }
+{ "status": "pending_input", "prompt": "...", "cdm_call": { "op": "challenge", "drm": "widevine", "init_data": "...", "license_type": "OFFLINE", "privacy_mode": true, "service_certificate": "..." } }
 { "status": "failed", "error": "...message..." }
 ```
+
+A `cdm_call` comes first, in any auth state. The client answers it with a JSON object in
+`response`: `{"session": "...", "challenge": "<base64>"}` for `challenge`,
+`{"keys": [{"kid", "type", "key", "permissions"}]}` for `keys`, `{}` for `close`, or
+`{"error": "..."}` when its CDM refuses. An older client refuses `close`, and the server
+ignores that refusal. An answered call stops being pending at once, so a client that polls again
+straight away does not see it twice.
 
 A missing remote session returns `404 SESSION_NOT_FOUND`. An IP mismatch returns
 `403 FORBIDDEN`. `POST /api/session/{id}/prompt` takes `{ "response": "..." }` and
@@ -477,8 +543,8 @@ _sessions/<pbkdf2_hmac(sha256, X-Secret-Key, "unshackle-session-ns", 100000)[:12
 ```
 
 The handler writes forwarded `cache` files into that directory before authentication.
-On `DELETE`, when the login belongs to the client (`client_auth`), the handler
-harvests updated cache files from the whole directory tree (compressing each
+On `DELETE`, when the login belongs to the client (`client_auth`) and the remote
+session does not run on the server's device, the handler harvests updated cache files from the whole directory tree (compressing each
 with zlib and base64-encoding, **excluding** `titles_*` files) and returns them
 under a `cache` field, so the client can keep refreshed tokens. Each cache key
 is the file path relative to that directory, with `/` separators and no `.json`

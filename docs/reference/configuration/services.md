@@ -180,6 +180,14 @@ content key of a higher track when the service shares one content key between th
 accounts enabled, a client that reports a stronger device than it holds makes the server's
 account request those manifests; the licence server still refuses its challenge.
 
+`server_vault` lets a remote session that the client's own device licenses take content keys
+from the server vault. Set it to `true` for every service, or to a list of service tags. It is
+`false` unless the entry sets it, and `server_cdm` for a service implies it. The server looks up
+every KID of the track in its vault and makes no live licence. A track that the vault does not
+hold goes back to the client's device. When the service runs the remote session on the server's
+own device (a service option, such as a server-identity flag), the client's own vaults, and the
+server vault with this grant, are the only source, and a missing content key stops the download.
+
 `admin` is a boolean that lets the API key run the maintenance endpoints (clear-cache, clear-temp, refresh-services). It is `false` unless the entry sets it. Keys that have no `users` entry, such as `api_secret`, keep that access.
 
 A `tier` names an entry under `serve.tiers`, which holds the settings that several API keys
@@ -274,6 +282,9 @@ serve:
       server_cdm: [EXAMPLE1]      # the server licenses only EXAMPLE1; EXAMPLE2 needs a local CDM
       server_accounts: [EXAMPLE1] # may authenticate EXAMPLE1 with one of the server's own accounts
       server_proxy: true          # this key may also use the server's proxy providers
+    f3a4b5c6:
+      services: [EXAMPLE1]
+      server_vault: [EXAMPLE1]    # the client's device licenses; the server vault still serves keys
 ```
 
 !!! note "`dl` keys inside `serve`"

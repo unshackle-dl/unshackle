@@ -100,7 +100,7 @@ but the defaults hold for the overwhelming majority of responses.
 | `INVALID_PARAMETERS` | 400 | One or more download or query parameters failed validation (bad codec, bitrate, sort field, and so on). |
 | `AUTH_FAILED` | 401 | Authentication with the streaming service failed (bad credentials or cookies). |
 | `FORBIDDEN` | 403 | The action is not allowed. Raised by server-side gates (per-key restrictions on CDM or credential overrides) and by remote session IP binding. |
-| `SERVER_CDM_CAPPED` | 403 | The server CDM does not license live above the `server_cdm_max_height` of the API key. `details.reason` is `server_cdm_max_height` (with `details.max_height`) or `client_device`, for a remote session where the client's own device licenses. A remote client licenses the track with its own device. |
+| `SERVER_CDM_CAPPED` | 403 | The server CDM does not license live above the `server_cdm_max_height` of the API key. `details.reason` is `server_cdm_max_height` (with `details.max_height`), `client_device`, for a remote session where the client's own device licenses, or `server_device`, for a remote session that runs on the server's device. A remote client licenses the track with its own device, except for `server_device`: then only its own vaults can supply the key. |
 | `GEOFENCE` | 403 | The title is not available in the applicable region. |
 | `NOT_FOUND` | 404 | A requested resource (title, history entry, and so on) does not exist. |
 | `NO_CONTENT` | 404 | The request was valid but produced nothing: no matching titles, tracks, episodes, or keys. |

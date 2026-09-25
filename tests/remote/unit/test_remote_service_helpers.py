@@ -549,7 +549,7 @@ def test_session_create_writes_nested_cache_and_skips_colliding_keys(tmp_path, m
         "create_service_instance",
         lambda *args, **kwargs: (SimpleNamespace(log=logging.getLogger("Svc")), None, None),
     )
-    monkeypatch.setattr(handlers, "InputBridge", lambda: (_ for _ in ()).throw(Stop()))
+    monkeypatch.setattr("unshackle.core.api.session_store.get_session_store", lambda: (_ for _ in ()).throw(Stop()))
 
     cache = {"x": blob("flat"), "x.json/y": blob("collides"), "MSL/keys.v2": blob("dotted")}
     response = asyncio.run(handlers.session_create_handler({"service": "TESTSVC", "title_id": "t", "cache": cache}))

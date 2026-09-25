@@ -158,6 +158,9 @@ class Service(metaclass=ABCMeta):
     # Auth methods the service accepts ("cookies"/"credentials"); when None the REST /services
     # endpoint infers them from authenticate().
     AUTH_METHODS: Optional[tuple[str, ...]] = None
+    # Config keys a remote client may supply for a session its own device licenses (a device identity
+    # such as an ESN); the server's own values for these keys are withheld from that session.
+    CLIENT_CONFIG: tuple[str, ...] = ()
 
     def __init__(self, ctx: click.Context):
         console.print(Padding(Rule(f"[rule.text]Service: {self.__class__.__name__}"), (1, 2)))

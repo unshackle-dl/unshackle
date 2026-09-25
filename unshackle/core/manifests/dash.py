@@ -75,7 +75,7 @@ class RollingMerge:
         self.ready: dict[int, tuple[Path, Optional[Future]]] = {}
 
     def add(self, index: int, segment_file: Path, future: Optional[Future] = None) -> None:
-        # ponytail: runs on the downloader's own loop, so a decrypt wait or a catch-up burst
+        # runs on the downloader's own loop, so a decrypt wait or a catch-up burst
         # delays new submissions; move the drain to a writer thread if throughput measurably drops
         self.ready[index] = (segment_file, future)
         while self.cursor in self.ready:

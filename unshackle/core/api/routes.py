@@ -383,6 +383,9 @@ async def services(request: web.Request) -> web.Response:
                 service_data["needs_auth"] = (
                     getattr(service_module, "authenticate", None) is not _BaseService.authenticate
                 )
+                client_config = getattr(service_module, "CLIENT_CONFIG", ())
+                if client_config:
+                    service_data["client_config"] = list(client_config)
                 service_data["has_search"] = getattr(service_module, "search", None) is not _BaseService.search
                 service_data["has_drm"] = (
                     getattr(service_module, "get_widevine_license", None) is not _BaseService.get_widevine_license
@@ -1813,6 +1816,24 @@ async def session_create(request: web.Request) -> web.Response:
                 description: |
                   Security level of the client's local CDM, in the device's own numbers
                   (Widevine 1 to 3, PlayReady 150 to 3000)
+              cdm_relay:
+                type: boolean
+                description: |
+                  True when the client answers CDM calls, so the service sees a stand-in for its
+                  device instead of the server's
+              cdm_system_id:
+                type: integer
+                description: System ID of the client's Widevine device
+              cdm_device_type:
+                type: string
+                enum: [CHROME, ANDROID]
+                description: Device type of the client's Widevine device
+              service_config:
+                type: object
+                additionalProperties: true
+                description: |
+                  The client's own identity config for the service. The server takes only the keys
+                  the service lists in `client_config`, and only when the client's device licenses.
               client:
                 type: object
                 additionalProperties: true
@@ -1848,6 +1869,14 @@ async def session_create(request: web.Request) -> web.Response:
                   description: |
                     Tallest video track the server CDM licenses live for this API key and service;
                     null for no limit
+                server_vault:
+                  type: boolean
+                  description: True when the server vault serves content keys to a remote session the client's device licenses
+                server_device:
+                  type: boolean
+                  description: |
+                    True when the service runs on the server's own device. Every content key then comes
+                    from a vault, and the server makes no live licence.
       '400':
         description: Invalid request
       '403':
@@ -2093,16 +2122,24 @@ async def session_license(request: web.Request) -> web.Response:
                 type: string
                 enum: [widevine, playready]
                 description: DRM type (default widevine)
+              is_certificate:
+                type: boolean
+                description: >-
+                  True to send the challenge to the service's Widevine service certificate hook
+                  instead of its licence hook. `license` is then the raw certificate, or null.
     responses:
       '200':
         description: >-
-          License response. In server_cdm mode `keys` maps KID to content key and `vault_keys`,
+          License response. A Widevine licence or certificate that the service returns as Base64
+          text arrives decoded, as raw bytes in Base64. In server_cdm mode `keys` maps KID to content key and `vault_keys`,
           an array of KID hex strings that may be absent and may repeat a KID shared by several
           tracks, lists the content keys a server vault supplied, which the client has to prove
           before it trusts them. `clear_tracks`, absent when empty, lists the requested track ids
           that carry no DRM and so have no keys. `capped_tracks`, absent when empty, maps each
           track id the server refused to license live to the refusal details (`reason` and
-          `max_height`); the client licenses those tracks with its own local CDM.
+          `max_height`); the client licenses those tracks with its own local CDM. A `reason` of
+          `server_device` means the remote session runs on the server's device: the client reads
+          only its own vaults for that track and makes no licence.
           After 30 s the route sends 200 and a newline every 30 s. A failure after that time
           arrives as the error body with status 200.
       '404':
@@ -2253,6 +2290,14 @@ async def session_prompt_get(request: web.Request) -> web.Response:
                 prompt:
                   type: string
                   description: Prompt to display to the user (only when status is pending_input)
+                cdm_call:
+                  type: object
+                  additionalProperties: true
+                  description: |
+                    A call the service makes on the client's CDM, in any auth state: `op` is `challenge`
+                    (with `drm`, `init_data`, `license_type`, `privacy_mode` and `service_certificate`),
+                    `keys` (with `session` and `license`) or `close` (with `session`). The client answers
+                    with a JSON object in the POST `response`, or `{"error": ...}` for an op it does not know.
                 error:
                   type: string
                   description: Error message (only for the failed status)
