@@ -2444,7 +2444,7 @@ but the defaults hold for the overwhelming majority of responses.</p>
 <tr>
 <td><code>SERVER_CDM_CAPPED</code></td>
 <td>403</td>
-<td>The server CDM does not license live above the <code>server_cdm_max_height</code> of the API key. <code>details.reason</code> is <code>server_cdm_max_height</code> (with <code>details.max_height</code>) or <code>client_device</code>, for a remote session where the client's own device licenses. A remote client licenses the track with its own device.</td>
+<td>The server CDM does not license live above the <code>server_cdm_max_height</code> of the API key. <code>details.reason</code> is <code>server_cdm_max_height</code> (with <code>details.max_height</code>), <code>client_device</code>, for a remote session where the client's own device licenses, or <code>server_device</code>, for a remote session that runs on the server's device. A remote client licenses the track with its own device, except for <code>server_device</code>: then only its own vaults can supply the key.</td>
 </tr>
 <tr>
 <td><code>GEOFENCE</code></td>

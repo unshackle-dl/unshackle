@@ -2556,8 +2556,8 @@
 <p>If a user entry omits <code>playready_devices</code>, the server gives that API key <strong>no</strong> PlayReady access, and logs a warning at startup. You must name the PlayReady devices explicitly for any API key that needs them. Widevine and PlayReady device files themselves are auto-loaded from your WVDs and PRDs directories.</p>
 </div>
 <div class="admonition note">
-<p class="admonition-title">Device lists <em>are</em> the server-side-decryption switch</p>
-<p>There is no separate tier, capability flag, or permission toggle for whether the server will hand back content keys (<code>KID:KEY</code>) for a remote session download. The presence of devices on the calling API key decides it. With <strong>empty</strong> <code>devices</code> and <code>playready_devices</code>, the server can only proxy CDM challenges, so the client must operate its own CDM. Once those lists are <strong>populated</strong>, the client may request <code>mode:server_cdm</code> and receive content keys back. Do not look for a tier setting. The devices you configure are what enables server-side decryption.</p>
+<p class="admonition-title">Grants decide whether the server returns content keys</p>
+<p>The devices on an API key decide which CDM the server can use. Two grants in the same user entry decide whether the server returns content keys (<code>KID:KEY</code>) for a remote session. <code>server_cdm</code> lets the server license with those devices. <code>server_vault</code> lets a remote session that the client's own device licenses read the server vault, and the server then makes no live licence. Without either grant, the server can only proxy CDM challenges, so the client must operate its own CDM. See <a href="../../../reference/configuration/services/"><code>serve</code></a> for both grants.</p>
 </div>
 <h3 id="disabling-authentication">Disabling authentication<a class="headerlink" href="#disabling-authentication" title="Permanent link">&para;</a></h3>
 <p>The <code>--no-key</code> flag turns authentication off entirely. The server allows every request, ignores <code>X-Secret-Key</code>, and needs no API key in your configuration.</p>
