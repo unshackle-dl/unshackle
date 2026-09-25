@@ -2682,6 +2682,11 @@ full detail:</p>
 <td>list</td>
 <td>Subtitles that were skipped as non-fatal failures (when <code>skip_subtitle_errors</code> is set).</td>
 </tr>
+<tr>
+<td><code>input_prompt</code></td>
+<td>string or <code>null</code></td>
+<td>The prompt the service waits on. Answer it with <code>POST /api/download/jobs/{job_id}/input</code>.</td>
+</tr>
 </tbody>
 </table>
 <p>The full detail adds <code>started_time</code>, <code>completed_time</code>, <code>output_files</code>, the redacted
@@ -2884,6 +2889,9 @@ server process. For each job it spawns a separate Python subprocess:</p>
 <li><strong><code>progress.json</code></strong>: the job worker writes it continuously as the download proceeds.</li>
 <li><strong><code>result.json</code></strong>: the job worker writes it at the end.</li>
 </ul>
+<p>The job worker has no terminal. When a service asks the user for input, the job worker writes
+the prompt to <code>progress.json</code> as <code>input_prompt</code> and waits. The answer from
+<code>POST /api/download/jobs/{job_id}/input</code> goes to the job worker on its stdin.</p>
 <p>Running each download out-of-process isolates the server from crashes, memory growth,
 and blocking work inside the download engine, and makes hard cancellation (killing the
 process) reliable.</p>

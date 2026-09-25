@@ -2732,8 +2732,8 @@ Two kinds of members matter: <strong>class variables</strong> that give the deta
 <li><strong>DRM license hooks</strong>: <code>get_widevine_service_certificate</code>, <code>get_widevine_license</code>,
   <code>get_playready_license</code> (delegates to Widevine by default), and
   <code>get_clearkey_license</code> (returns <code>None</code> by default). See <a href="#drm-hooks">DRM hooks</a> below.</li>
-<li><strong><code>request_input(prompt)</code></strong>: prompts the user. It goes through the serve-mode input
-  bridge or the rich console.</li>
+<li><strong><code>request_input(prompt)</code></strong>: prompts the user. It goes through the remote-dl input
+  bridge, the REST download job relay, or the rich console.</li>
 <li><strong>Event callbacks</strong>: <code>on_segment_downloaded</code>, <code>on_track_downloaded</code>,
   <code>on_track_decrypted</code>, <code>on_track_repacked</code>, <code>on_track_multiplex</code> let a service react to
   pipeline events (for example, MonaLisa decrypts each segment in <code>on_segment_downloaded</code>).</li>

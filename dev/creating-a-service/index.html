@@ -2643,7 +2643,8 @@ and stores <code>self.credential</code>. Do all token fetching here. It runs bef
 use <code>self.request_input(prompt)</code>, never a bare <code>input()</code>. Under <code>serve</code> mode
 there is no local terminal, so a bare <code>input()</code> would hang the server waiting on
 stdin that never arrives. <code>request_input</code> instead relays the prompt to the
-remote client through the attached <code>InputBridge</code>. Locally it routes through the
+client: a remote-dl session gets it through the attached <code>InputBridge</code>, and a
+REST download job shows it as <code>input_prompt</code>. Locally it routes through the
 shared Rich console (<code>prompt_user</code>) so the prompt renders correctly alongside
 progress and log output.</p>
 <div class="admonition warning">
