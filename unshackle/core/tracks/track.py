@@ -1160,6 +1160,8 @@ class Track:
                     "bitexact",
                     "-codec",
                     "copy",
+                    "-strict",
+                    "unofficial",
                 ]
             )
             if bsf:
