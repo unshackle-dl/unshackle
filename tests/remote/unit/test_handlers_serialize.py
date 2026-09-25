@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+import io
+
 import pytest
+import requests
 from langcodes import Language
 
 from unshackle.core.api.errors import APIError, APIErrorCode
 from unshackle.core.api.handlers import (
     drm_preference_name,
+    listed_titles,
     sanitize_log,
     search_handler,
     serialize_audio_track,
@@ -133,6 +137,26 @@ def test_serialize_title_episode_unnamed_falls_back_to_number() -> None:
     )
     d = serialize_title(ep)
     assert d["name"] == "Episode 05"
+
+
+def test_no_titles_is_a_service_error() -> None:
+    with pytest.raises(APIError) as exc:
+        listed_titles(None)
+    assert exc.value.error_code == APIErrorCode.SERVICE_ERROR
+
+
+def test_init_segment_reports_the_http_status() -> None:
+    refused = requests.Response()
+    refused.status_code = 403
+    refused.raw = io.BytesIO()
+
+    class FakeSession(requests.Session):
+        def request(self, *args: object, **kwargs: object) -> requests.Response:
+            return refused
+
+    track = Video(url="https://cdn.example/v.mp4", language=Language.get("en"))
+    with pytest.raises(ValueError, match="HTTP 403"):
+        track.get_init_segment(session=FakeSession())
 
 
 def test_serialize_video_track_basic() -> None:

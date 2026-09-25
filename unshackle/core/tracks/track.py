@@ -1095,6 +1095,9 @@ class Track:
         else:
             init_data = None
             s = session.get(url, stream=True)
+            if not s.ok:
+                s.close()
+                raise ValueError(f"Track URI returned HTTP {s.status_code}")
             for chunk in s.iter_content(content_length):
                 init_data = chunk
                 break

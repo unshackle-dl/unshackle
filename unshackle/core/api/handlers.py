@@ -1077,6 +1077,13 @@ def part_key_suffix(part: Optional[int]) -> str:
     return f".{part}" if part is not None else ""
 
 
+def listed_titles(titles: Any) -> list[Any]:
+    """The result of a service's get_titles() as a list."""
+    if titles is None:
+        raise APIError(APIErrorCode.SERVICE_ERROR, "The service returned no titles.")
+    return list(titles) if hasattr(titles, "__iter__") and not isinstance(titles, str) else [titles]
+
+
 def serialize_title(title: Title_T) -> Dict[str, Any]:
     """Convert a title object to JSON-serializable dict."""
     title_language = str(title.language) if hasattr(title, "language") and title.language else None
@@ -1560,10 +1567,7 @@ async def list_titles_handler(data: Dict[str, Any], request: Optional[web.Reques
         )
         titles = await asyncio.to_thread(service_instance.get_titles)
 
-        if hasattr(titles, "__iter__") and not isinstance(titles, str):
-            title_list = [stamp_service_flags(serialize_title(t), service_instance) for t in titles]
-        else:
-            title_list = [stamp_service_flags(serialize_title(titles), service_instance)]
+        title_list = [stamp_service_flags(serialize_title(t), service_instance) for t in listed_titles(titles)]
 
         return request_cache.json_response({"titles": title_list})
 
@@ -3558,10 +3562,7 @@ async def session_titles_handler(session_id: str, request: Optional[web.Request]
                 session.touch()
         session.titles = titles
 
-        if hasattr(titles, "__iter__") and not isinstance(titles, str):
-            titles_list = list(titles)
-        else:
-            titles_list = [titles]
+        titles_list = listed_titles(titles)
 
         serialized_titles = []
         for t in titles_list:
