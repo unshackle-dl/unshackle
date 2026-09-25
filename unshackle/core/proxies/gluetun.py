@@ -534,9 +534,13 @@ class Gluetun(Proxy):
             Server hostname (e.g., "us1239.nordvpn.com")
         """
         country_lower = country_code.lower()
+        if provider_name == "surfshark":
+            raise ValueError(
+                "Surfshark has no numbered servers. Map the region to a server name such as "
+                f"'{country_lower}-dal.prod.surfshark.com' in server_hostnames instead."
+            )
         hostname_formats = {
             "nordvpn": f"{country_lower}{server_num}.nordvpn.com",
-            "surfshark": f"{country_lower}-{server_num}.prod.surfshark.com",
             "expressvpn": f"{country_lower}-{server_num}.expressvpn.com",
             "cyberghost": f"{country_lower}-s{server_num}.cg-dialup.net",
             # Generic fallback for other providers

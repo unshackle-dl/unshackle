@@ -1,15 +1,20 @@
 import json
+import logging
 import random
 import re
 from typing import Optional
 
 import requests
+from unidecode import unidecode
 
 from unshackle.core.proxies.proxy import Proxy
+from unshackle.core.utilities import COUNTRY_CODE_ALIASES
+
+log = logging.getLogger("proxies.surfsharkvpn")
 
 
 class SurfsharkVPN(Proxy):
-    def __init__(self, username: str, password: str, server_map: Optional[dict[str, int]] = None):
+    def __init__(self, username: str, password: str, server_map: Optional[dict[str, str]] = None):
         """
         Proxy provider that uses SurfsharkVPN Service Credentials.
 
@@ -27,11 +32,25 @@ class SurfsharkVPN(Proxy):
             )
 
         if server_map is not None and not isinstance(server_map, dict):
-            raise TypeError(f"Expected server_map to be a dict mapping a region to a server ID, not '{server_map!r}'.")
+            raise TypeError(
+                f"Expected server_map to be a dict mapping a region to a server name, not '{server_map!r}'."
+            )
 
         self.username = username
         self.password = password
-        self.server_map = server_map or {}
+        self.server_map: dict[str, str] = {}
+        for region, server in (server_map or {}).items():
+            server = str(server or "").strip()
+            if not server or server.isdigit():
+                # A warning, not an error: one stale entry must not disable the whole proxy provider.
+                log.warning(
+                    "SurfsharkVPN: ignoring server_map entry '%s: %s'. Use a server name such as 'us-dal'. "
+                    "SurfsharkVPN no longer uses numeric server IDs.",
+                    region,
+                    server,
+                )
+                continue
+            self.server_map[region] = server
 
         self.countries = self.get_countries()
 
@@ -46,108 +65,66 @@ class SurfsharkVPN(Proxy):
         Get an HTTP(SSL) proxy URI for a SurfsharkVPN server.
 
         Supports:
-        - Country code: "us", "ca", "gb"
-        - Country ID: "228"
+        - Country code: "us", "ca", "gb" (or "uk")
         - Specific server: "us-bos" (Boston)
-        - City selection: "us:seattle", "ca:toronto"
+        - City selection: "us:seattle", "us:new-york"
 
-        Returns None if SurfsharkVPN has no servers in the queried country. A city with no matching
-        server raises ValueError.
+        Returns None for a query that names no SurfsharkVPN country or server, so that the
+        next proxy provider can answer it. A city with no matching server raises ValueError.
         """
-        query = query.lower()
+        query = query.strip().lower()
         city = None
 
-        # Check if query includes city specification (e.g., "us:seattle")
         if ":" in query:
             query, city = query.split(":", maxsplit=1)
             city = city.strip()
 
-        if re.match(r"^[a-z]{2}\d+$", query):
-            # country and surfsharkvpn server id, e.g., au-per, be-anr, us-bos
-            hostname = f"{query}.prod.surfshark.com"
+        server_map_key = f"{query}:{city}" if city else query
+        if server_map_key in self.server_map:
+            server = self.server_map[server_map_key]
+        elif not city and any(x["connectionName"].split(".", 1)[0] == query for x in self.countries):
+            server = query
+        elif re.fullmatch(r"[a-z]{2}", query):
+            country_code = COUNTRY_CODE_ALIASES.get(query, query).upper()
+            servers = [x for x in self.countries if x["countryCode"] == country_code]
+            if not servers:
+                return None
+            server = self.get_random_server(servers, city)
         else:
-            if query.isdigit():
-                country = self.get_country(by_id=int(query))
-            elif re.match(r"^[a-z]+$", query):
-                country = self.get_country(by_code=query)
-            else:
-                raise ValueError(f"The query provided is unsupported and unrecognized: {query}")
-            if not country:
-                return
+            return None
 
-            server_map_key = f"{country['countryCode'].lower()}:{city}" if city else country["countryCode"].lower()
-            server_mapping = self.server_map.get(server_map_key) or (
-                self.server_map.get(country["countryCode"].lower()) if not city else None
-            )
+        return f"https://{self.username}:{self.password}@{self.get_hostname(server)}:443"
 
-            if server_mapping:
-                hostname = f"{country['code'].lower()}{server_mapping}.prod.surfshark.com"
-            else:
-                random_server = self.get_random_server(country["countryCode"], city)
-                if not random_server:
-                    raise ValueError(
-                        f"The SurfsharkVPN Country {query} currently has no random servers. "
-                        "Try again later. If the issue persists, double-check the query."
-                    )
-                hostname = random_server
+    @staticmethod
+    def get_hostname(server: str) -> str:
+        """Expand a server name such as 'us-dal' to its full hostname."""
+        server = server.lower()
+        return server if server.endswith(".surfshark.com") else f"{server}.prod.surfshark.com"
 
-        return f"https://{self.username}:{self.password}@{hostname}:443"
-
-    def get_country(self, by_id: Optional[int] = None, by_code: Optional[str] = None) -> Optional[dict]:
-        """Find a Country and its metadata."""
-        if all(x is None for x in (by_id, by_code)):
-            raise ValueError("At least one search query must be made.")
-
-        for country in self.countries:
-            if all(
-                [
-                    by_id is None or country["id"] == int(by_id),
-                    by_code is None or country["countryCode"] == by_code.upper(),
-                ]
-            ):
-                return country
-
-    def get_random_server(self, country_id: str, city: Optional[str] = None):
+    def get_random_server(self, servers: list[dict], city: Optional[str] = None) -> str:
         """
-        Get a random server for a Country, optionally filtered by city.
+        Get a random server name from a country's servers, optionally filtered by city.
 
-        Args:
-            country_id: The country code (e.g., "US", "CA")
-            city: Optional city name to filter by (case-insensitive)
-
-        Note: The API may include a 'location' field with city information.
-        If not available, this will return any server from the country.
+        A city matches with case, spaces, hyphens and accents ignored ("new-york" matches "New York"),
+        exactly first, then as a prefix ("frankfurt" matches "Frankfurt am Main").
         """
-        servers = [x for x in self.countries if x["countryCode"].lower() == country_id.lower()]
-
         if city:
-            city_lower = city.lower()
-            # Check if servers have a 'location' field for city filtering
-            city_servers = [
-                x
-                for x in servers
-                if x.get("location", "").lower() == city_lower or x.get("city", "").lower() == city_lower
+            wanted = self.fold(city)
+            located = [(self.fold(x.get("location", "")), x) for x in servers]
+            servers = [x for location, x in located if location == wanted] or [
+                x for location, x in located if location.startswith(wanted)
             ]
-
-            if city_servers:
-                servers = city_servers
-            else:
+            if not servers:
                 raise ValueError(
-                    f"No servers found in city '{city}' for country '{country_id}'. "
-                    "Try a different city or check the city name spelling."
+                    f"No servers found in city '{city}'. Try a different city or check the city name spelling."
                 )
 
-        # Get connection names from filtered servers
-        if not servers:
-            raise ValueError(f"Could not get random server for country '{country_id}': no servers found.")
+        return random.choice(servers)["connectionName"]
 
-        connection_names = [x["connectionName"] for x in servers if "connectionName" in x]
-        if not connection_names:
-            raise ValueError(
-                f"Could not get random server for country '{country_id}': no servers with connectionName found."
-            )
-
-        return random.choice(connection_names)
+    @staticmethod
+    def fold(text: str) -> str:
+        """Reduce a place name to lowercase ASCII letters and digits."""
+        return re.sub(r"[^a-z0-9]", "", unidecode(text).lower())
 
     @staticmethod
     def get_countries() -> list[dict]:
@@ -158,6 +135,7 @@ class SurfsharkVPN(Proxy):
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
                 "Content-Type": "application/json",
             },
+            timeout=10,
         )
         if not res.ok:
             raise ValueError(f"Failed to get a list of SurfsharkVPN countries [{res.status_code}]")

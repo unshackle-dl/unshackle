@@ -503,7 +503,8 @@ For a given query region, Gluetun resolves the server like this:
    that alias always wins.
 2. unshackle changes a `us1239`-style query (country code + number) with no explicit
    mapping into a provider-specific server hostname (for example `us1239.nordvpn.com`
-   for NordVPN, `us-1239.prod.surfshark.com` for Surfshark).
+   for NordVPN). Surfshark has no numbered servers, so map a Surfshark region to a
+   server name such as `us-dal.prod.surfshark.com` in `server_hostnames`.
 3. unshackle expands a bare two-letter code to the full country name Gluetun expects.
 
 A few providers (Windscribe, VyprVPN, VPN Secure) select by **region** rather than
@@ -765,21 +766,32 @@ proxy_providers:
   surfsharkvpn:
     username: YOUR_SERVICE_USERNAME
     password: YOUR_SERVICE_PASSWORD
-    server_map:                # optional
-      us: 1234
+    server_map:                # optional: region -> server name
+      us: us-dal
+      us:seattle: us-sea
 ```
 
 **Required keys:** `username`, `password`, validated with the same 48-character rule as
 NordVPN (combined username+password must be 48 alphanumeric characters, case-insensitive, no `@`).
-`server_map` optionally pins server IDs per region.
+`server_map` optionally pins a server per region. Give the server name from Surfshark's
+server list, for example `us-dal`. A full hostname such as `us-dal.prod.surfshark.com` also
+works. Surfshark does not use numeric server IDs. unshackle ignores a numeric or empty value
+and logs a warning. A `us:seattle` entry applies only to that city query, and it does not
+fall back to the `us` entry.
 
 **Query forms:**
 
 | Query | Meaning |
 |---|---|
-| `us` | A random US server. |
-| `us-bos` | A specific server. |
-| `us:seattle` | A random server in Seattle. |
+| `surfsharkvpn:us` | A random US server. `uk` and `gb` both give a UK server. |
+| `surfsharkvpn:us-bos` | A specific server from Surfshark's server list. |
+| `surfsharkvpn:us:seattle` | A random server in Seattle. |
+
+unshackle ignores case, spaces, hyphens and accents in a city name, so `us:new-york`
+matches New York. A city also matches the start of a longer name: `de:frankfurt` matches
+Frankfurt am Main. A bare `us` also reaches Surfshark, but a bare `us-bos` or
+`us:seattle` can stop at a proxy provider earlier in the order, so use the
+`surfsharkvpn:` prefix for those forms.
 
 The returned proxy is HTTPS on **port 443**.
 
