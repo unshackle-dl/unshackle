@@ -551,7 +551,8 @@ Show download jobs, with optional filtering and sorting.
           "segments_done": 120,
           "segments_total": 300,
           "speed": "5.2 MB/s",
-          "skipped_subtitles": []
+          "skipped_subtitles": [],
+          "input_prompt": null
         }
       ]
     }
@@ -708,6 +709,36 @@ Move a queued job to the front of the download queue.
 | `200` | - | Job moved to front. |
 | `404` | `JOB_NOT_FOUND` | No such job. |
 | `409` | `CONFLICT` | Job is not queued. |
+
+### `POST /api/download/jobs/{job_id}/input`
+
+Answer the prompt that a running job waits on. A service can ask for input during a job, for
+example an OTP code, a PIN, or a device-code confirmation. The job then shows the prompt in its
+`input_prompt` field and in its `progress` events. Show the prompt to the user and send the
+answer here.
+
+=== "Request"
+
+    ```json
+    { "response": "123456" }
+    ```
+
+=== "Response `200`"
+
+    ```json
+    { "status": "accepted" }
+    ```
+
+| Status | Error code | Meaning |
+| --- | --- | --- |
+| `200` | - | Answer sent to the job. The `input_prompt` field goes back to `null`. |
+| `400` | `INVALID_INPUT` | The body is not JSON, or it has no `response`. |
+| `404` | `JOB_NOT_FOUND` | No such job. |
+| `409` | `CONFLICT` | The job does not wait on a prompt. |
+
+!!! warning
+    The job keeps its download slot while it waits. It fails with `AUTH_FAILED` if nobody
+    answers the prompt within 10 minutes.
 
 ---
 

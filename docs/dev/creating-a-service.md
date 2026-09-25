@@ -251,7 +251,8 @@ Cookies come from files under `directories.cookies`. Credentials come from the
 use `self.request_input(prompt)`, never a bare `input()`. Under `serve` mode
 there is no local terminal, so a bare `input()` would hang the server waiting on
 stdin that never arrives. `request_input` instead relays the prompt to the
-remote client through the attached `InputBridge`. Locally it routes through the
+client: a remote-dl session gets it through the attached `InputBridge`, and a
+REST download job shows it as `input_prompt`. Locally it routes through the
 shared Rich console (`prompt_user`) so the prompt renders correctly alongside
 progress and log output.
 

@@ -87,8 +87,8 @@ These are abstract. A service will not load unless it defines all three:
 - **DRM license hooks**: `get_widevine_service_certificate`, `get_widevine_license`,
   `get_playready_license` (delegates to Widevine by default), and
   `get_clearkey_license` (returns `None` by default). See [DRM hooks](#drm-hooks) below.
-- **`request_input(prompt)`**: prompts the user. It goes through the serve-mode input
-  bridge or the rich console.
+- **`request_input(prompt)`**: prompts the user. It goes through the remote-dl input
+  bridge, the REST download job relay, or the rich console.
 - **Event callbacks**: `on_segment_downloaded`, `on_track_downloaded`,
   `on_track_decrypted`, `on_track_repacked`, `on_track_multiplex` let a service react to
   pipeline events (for example, MonaLisa decrypts each segment in `on_segment_downloaded`).

@@ -34,6 +34,7 @@ from unshackle.core.api.handlers import (
     download_handler,
     download_history_handler,
     download_job_events_handler,
+    download_job_input_handler,
     env_check_handler,
     get_allowed_services,
     get_download_job_handler,
@@ -1346,6 +1347,60 @@ async def prioritize_download_job(request: web.Request) -> web.Response:
     """
     job_id = request.match_info["job_id"]
     return await prioritize_download_job_handler(job_id, request)
+
+
+@api_handler
+async def download_job_input(request: web.Request) -> web.Response:
+    """
+    Answer a download job prompt.
+    ---
+    summary: Answer a download job prompt
+    description: >
+      Submit the answer to the prompt a running job waits on (an OTP code, a PIN, a device-code
+      confirmation). The job shows the prompt in its `input_prompt` field and in its SSE `progress`
+      events. The job fails if nobody answers within the prompt timeout.
+    parameters:
+      - name: job_id
+        in: path
+        required: true
+        schema:
+          type: string
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - response
+            properties:
+              response:
+                type: string
+                description: The user's answer to the prompt
+    responses:
+      '200':
+        description: Answer accepted
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  example: accepted
+      '400':
+        description: Invalid request body
+      '404':
+        description: Job not found
+      '409':
+        description: No prompt pending for this job
+    """
+    job_id = request.match_info["job_id"]
+    try:
+        data = await request.json()
+    except Exception as e:
+        raise APIError(APIErrorCode.INVALID_INPUT, "Invalid JSON request body", details={"error": str(e)}) from e
+    return await download_job_input_handler(data, job_id, request)
 
 
 @api_handler
@@ -2838,6 +2893,7 @@ ROUTES: list[tuple[str, str, Handler, bool]] = [
     ("DELETE", "/api/download/jobs/{job_id}", cancel_download_job, False),
     ("POST", "/api/download/jobs/{job_id}/retry", retry_download_job, False),
     ("POST", "/api/download/jobs/{job_id}/priority", prioritize_download_job, False),
+    ("POST", "/api/download/jobs/{job_id}/input", download_job_input, False),
     ("GET", "/api/profiles", profiles, False),
     ("GET", "/api/config", server_config, False),
     ("GET", "/api/history", download_history, False),

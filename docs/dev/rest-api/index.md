@@ -166,6 +166,7 @@ request and response in full.
 | `DELETE` | `/api/download/jobs/{job_id}` | Cancel a running job, or remove a finished one. |
 | `POST` | `/api/download/jobs/{job_id}/retry` | Re-queue a finished job's parameters as a new job. |
 | `POST` | `/api/download/jobs/{job_id}/priority` | Move a queued job to the front. |
+| `POST` | `/api/download/jobs/{job_id}/input` | Answer the prompt that a running job waits on. |
 
 ### History and server info
 

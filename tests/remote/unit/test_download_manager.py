@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -224,3 +225,177 @@ def test_perform_download_puts_the_lang_selection_in_the_service_ctx(
     ctx = exc.value.args[0]
     p = ctx.params
     assert (p["lang"], p["v_lang"], p["a_lang"], [c.name for c in p["acodec"]], p["forced_subs"]) == expected
+
+
+def test_worker_relays_a_prompt_and_reads_the_answer(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import json
+    import sys
+
+    from unshackle.core.api import download_worker
+    from unshackle.core.console import prompt_user, set_prompt_handler
+
+    answers = tmp_path / "stdin"
+    answers.write_text(json.dumps("12\n34") + "\n", encoding="utf-8")
+    monkeypatch.setattr(sys, "stdin", answers.open("rb"))
+    updates: list[dict] = []
+    download_worker.relay_prompts(updates.append)
+    try:
+        assert prompt_user("Enter PIN") == "12\n34"
+    finally:
+        set_prompt_handler(None)
+    assert updates == [{"input_prompt": "Enter PIN"}, {"input_prompt": None}]
+
+
+def test_a_prompt_discards_an_answer_sent_before_it(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A late answer to an earlier prompt must not answer the next one; the timeout is not retryable."""
+    import sys
+    import threading
+
+    from unshackle.core.api import download_worker
+    from unshackle.core.api.errors import APIErrorCode, categorize_exception
+    from unshackle.core.console import prompt_user, set_prompt_handler
+
+    answers = tmp_path / "stdin"
+    answers.write_text('"stale"\n', encoding="utf-8")
+    monkeypatch.setattr(sys, "stdin", answers.open("rb"))
+    monkeypatch.setattr(download_worker, "AUTH_INPUT_TIMEOUT", 0.2)
+    download_worker.relay_prompts(lambda update: None)
+    reader = next(t for t in threading.enumerate() if t.name == "prompt-answers")
+    reader.join(timeout=5)
+    try:
+        with pytest.raises(TimeoutError) as exc_info:
+            prompt_user("Enter PIN")
+    finally:
+        set_prompt_handler(None)
+    assert categorize_exception(exc_info.value).error_code is APIErrorCode.AUTH_FAILED
+
+
+def test_concurrent_prompts_go_out_one_at_a_time(monkeypatch: pytest.MonkeyPatch) -> None:
+    import json
+    import os
+    import sys
+    import threading
+    import time
+    from types import SimpleNamespace
+
+    from unshackle.core.api import download_worker
+    from unshackle.core.console import prompt_user, set_prompt_handler
+
+    read_fd, write_fd = os.pipe()
+    monkeypatch.setattr(sys, "stdin", SimpleNamespace(fileno=lambda: read_fd))
+    monkeypatch.setattr(download_worker, "AUTH_INPUT_TIMEOUT", 5.0)
+    updates: list[dict] = []
+    download_worker.relay_prompts(updates.append)
+    results: list[str] = []
+    askers = [threading.Thread(target=lambda p=p: results.append(prompt_user(p)), daemon=True) for p in ("A", "B")]
+    try:
+        for asker in askers:
+            asker.start()
+        time.sleep(0.2)
+        assert len(updates) == 1
+        for answer, prompts_sent in (("1", 1), ("2", 3)):
+            deadline = time.monotonic() + 5
+            while len(updates) < prompts_sent and time.monotonic() < deadline:
+                time.sleep(0.01)
+            os.write(write_fd, (json.dumps(answer) + "\n").encode("utf-8"))
+        for asker in askers:
+            asker.join(timeout=5)
+    finally:
+        set_prompt_handler(None)
+        os.close(write_fd)
+    assert sorted(results) == ["1", "2"]
+    assert [u["input_prompt"] is None for u in updates] == [False, True, False, True]
+
+
+def test_submit_input_writes_one_json_line_to_the_worker(manager: DownloadQueueManager) -> None:
+    import io
+    from types import SimpleNamespace
+
+    job = manager.create_job("EXAMPLE", "t")
+    stdin = io.BytesIO()
+    manager._download_processes[job.job_id] = SimpleNamespace(stdin=stdin)  # type: ignore[assignment]
+    assert manager.submit_input(job, "1234") is False
+
+    job.input_prompt = "Enter PIN"
+    assert manager.submit_input(job, "1234") is True
+    assert stdin.getvalue() == b'"1234"\n'
+    assert job.input_prompt is None
+    assert manager.submit_input(job, "5678") is False
+
+
+FAKE_PROMPT_WORKER = """
+import sys
+from pathlib import Path
+from typing import Any
+
+from unshackle.core.api import download_worker
+from unshackle.core.console import prompt_user
+
+result_path, progress_path = Path(sys.argv[-2]), Path(sys.argv[-1])
+state = {}
+
+
+def progress(update):
+    state.update(update)
+    download_worker.write_result(progress_path, state)
+
+
+download_worker.relay_prompts(progress)
+answers = [prompt_user("Enter OTP"), prompt_user("Enter OTP")]
+download_worker.write_result(result_path, {"status": "success", "output_files": answers})
+"""
+
+
+async def test_a_repeated_prompt_reaches_an_event_listener(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, manager: DownloadQueueManager
+) -> None:
+    """A re-prompt with the same text right after an answer must still publish an event."""
+    import asyncio
+
+    from unshackle.core.api import download_manager
+
+    worker = tmp_path / "worker.py"
+    worker.write_text(FAKE_PROMPT_WORKER, encoding="utf-8")
+    spawn = asyncio.create_subprocess_exec
+
+    async def spawn_fake_worker(executable: str, *args: str, **kwargs: Any) -> Any:
+        return await spawn(executable, str(worker), *args[2:], **kwargs)
+
+    monkeypatch.setattr(download_manager.asyncio, "create_subprocess_exec", spawn_fake_worker)
+    job = manager.create_job("EXAMPLE", "t")
+    events = manager.subscribe(job.job_id)
+    run = asyncio.create_task(manager.run_download_async(job))
+
+    async def answer_next_prompt(answer: str) -> None:
+        while True:
+            event = await events.get()
+            if event and event["data"]["input_prompt"]:
+                assert manager.submit_input(job, answer) is True
+                return
+
+    await asyncio.wait_for(answer_next_prompt("111111"), timeout=20)
+    await asyncio.wait_for(answer_next_prompt("222222"), timeout=20)
+    assert await asyncio.wait_for(run, timeout=20) == ["111111", "222222"]
+    assert job.input_prompt is None
+
+
+async def test_input_handler_rejects_bad_requests(
+    monkeypatch: pytest.MonkeyPatch, manager: DownloadQueueManager
+) -> None:
+    from unshackle.core.api import download_manager
+    from unshackle.core.api.errors import APIError, APIErrorCode
+    from unshackle.core.api.handlers import download_job_input_handler
+
+    monkeypatch.setattr(download_manager, "get_download_manager", lambda: manager)
+    job = manager.create_job("EXAMPLE", "t")
+
+    async def error_code(data: dict, job_id: str) -> APIErrorCode:
+        with pytest.raises(APIError) as exc_info:
+            await download_job_input_handler(data, job_id)
+        return exc_info.value.error_code
+
+    assert await error_code({"response": "1"}, "missing") is APIErrorCode.JOB_NOT_FOUND
+    assert await error_code({}, job.job_id) is APIErrorCode.INVALID_INPUT
+    assert await error_code({"response": "1"}, job.job_id) is APIErrorCode.CONFLICT
+    job.owner_key = "another-key"
+    assert await error_code({"response": "1"}, job.job_id) is APIErrorCode.JOB_NOT_FOUND

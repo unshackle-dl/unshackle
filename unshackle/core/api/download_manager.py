@@ -124,6 +124,9 @@ class DownloadJob:
     segments_total: float = 0.0
     speed: Optional[str] = None
 
+    # Prompt a service raised through prompt_user() and waits on; answered by submit_input().
+    input_prompt: Optional[str] = None
+
     # Subtitles skipped under skip_subtitle_errors (non-fatal). Each entry is a dl.SkippedSubtitle
     # dict (id / language / title) so a client can report which weren't available.
     skipped_subtitles: List[Dict[str, Any]] = field(default_factory=list)
@@ -156,6 +159,7 @@ class DownloadJob:
             "segments_total": self.segments_total,
             "speed": self.speed,
             "skipped_subtitles": self.skipped_subtitles,
+            "input_prompt": self.input_prompt,
         }
 
         if include_full_details:
@@ -805,6 +809,17 @@ class DownloadQueueManager:
 
         return False
 
+    def submit_input(self, job: DownloadJob, response: str) -> bool:
+        """Send *response* to the job's worker when it waits on a prompt; ``False`` when no prompt is pending."""
+        process = self._download_processes.get(job.job_id)
+        if not job.input_prompt or process is None or process.stdin is None:
+            return False
+        process.stdin.write((json.dumps(response) + "\n").encode("utf-8"))
+        # Cleared here, not on the worker's next progress write, so a second submit cannot queue a stale answer.
+        job.input_prompt = None
+        self.publish(job, "progress")
+        return True
+
     def remove_job(self, job_id: str) -> bool:
         """Remove a terminal (completed/failed/cancelled) job entirely."""
         job = self._jobs.get(job_id)
@@ -1028,6 +1043,7 @@ class DownloadQueueManager:
             payload_path,
             result_path,
             progress_path,
+            stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
@@ -1035,7 +1051,13 @@ class DownloadQueueManager:
         self._download_processes[job.job_id] = process
         self._job_temp_files[job.job_id] = {"payload": payload_path, "result": result_path, "progress": progress_path}
 
-        communicate_task = asyncio.create_task(process.communicate())
+        async def drain() -> tuple[bytes, bytes]:
+            """Collect the worker's output; unlike communicate(), leave stdin open for prompt answers."""
+            assert process.stdout is not None and process.stderr is not None
+            out, err, _ = await asyncio.gather(process.stdout.read(), process.stderr.read(), process.wait())
+            return out, err
+
+        communicate_task = asyncio.create_task(drain())
 
         stdout_bytes = b""
         stderr_bytes = b""
@@ -1056,6 +1078,7 @@ class DownloadQueueManager:
                     if stat_key != last_progress_stat:
                         with open(progress_path, "r", encoding="utf-8") as handle:
                             progress_data = json.load(handle)
+                            prompt_before = job.input_prompt
                             if progress_data.get("phase") and progress_data["phase"] != job.phase:
                                 job.phase = progress_data["phase"]
                             if progress_data.get("current_title"):
@@ -1080,6 +1103,8 @@ class DownloadQueueManager:
                                         pass
                             if progress_data.get("speed"):
                                 job.speed = str(progress_data["speed"])
+                            if "input_prompt" in progress_data:
+                                job.input_prompt = progress_data["input_prompt"]
                             if progress_data.get("skipped_subtitles"):
                                 job.skipped_subtitles = progress_data["skipped_subtitles"]
                             if "progress" in progress_data:
@@ -1087,7 +1112,9 @@ class DownloadQueueManager:
                                 if new_progress != job.progress:
                                     job.progress = new_progress
                                     log.info(f"Job {job.job_id} progress updated: {job.progress}%")
-                            if progress_data != last_published:
+                            # submit_input() clears the prompt out of band, so a re-prompt with the same text
+                            # leaves the file equal to last_published; publish the prompt change anyway.
+                            if progress_data != last_published or job.input_prompt != prompt_before:
                                 last_published = progress_data
                                 self.publish(job, "progress")
                         last_progress_stat = stat_key
@@ -1160,6 +1187,7 @@ class DownloadQueueManager:
                     await communicate_task
 
             self._download_processes.pop(job.job_id, None)
+            job.input_prompt = None
 
             temp_paths = self._job_temp_files.pop(job.job_id, {})
             for path in temp_paths.values():

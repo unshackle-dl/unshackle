@@ -2829,6 +2829,26 @@ async def prioritize_download_job_handler(job_id: str, request: Optional[web.Req
         )
 
 
+async def download_job_input_handler(
+    data: Dict[str, Any], job_id: str, request: Optional[web.Request] = None
+) -> web.Response:
+    """Answer the prompt a running job waits on (its ``input_prompt``), to unblock the service."""
+    from unshackle.core.api.download_manager import get_download_manager
+
+    manager = get_download_manager()
+    job = manager.get_job(job_id)
+    if not job or not owns_job(job, request):
+        raise APIError(APIErrorCode.JOB_NOT_FOUND, "Job not found", details={"job_id": job_id})
+
+    response_text = data.get("response")
+    if response_text is None:
+        raise APIError(APIErrorCode.INVALID_INPUT, "Missing required field: response")
+
+    if not manager.submit_input(job, str(response_text)):
+        raise APIError(APIErrorCode.CONFLICT, "No prompt pending for this job", details={"job_id": job_id})
+    return web.json_response({"status": "accepted"})
+
+
 CONFIG_SECRET_KEY_RE = re.compile(
     r"secret|passw|pwd|token|api[_-]?key|credential|auth|cookie|bearer|private", re.IGNORECASE
 )

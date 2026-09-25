@@ -73,6 +73,7 @@ def test_setup_routes_full_mode_wires_all_endpoints(make_app) -> None:
         ("GET", "/api/download/jobs"),
         ("GET", "/api/download/jobs/{job_id}"),
         ("DELETE", "/api/download/jobs/{job_id}"),
+        ("POST", "/api/download/jobs/{job_id}/input"),
         ("POST", "/api/session/create"),
         ("GET", "/api/session/{session_id}/titles"),
         ("POST", "/api/session/{session_id}/tracks"),

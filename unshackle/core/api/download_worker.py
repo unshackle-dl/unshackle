@@ -2,16 +2,21 @@
 
 from __future__ import annotations
 
+import io
 import json
 import logging
 import os
+import queue
 import sys
 import threading
 import time
 import traceback
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Callable, Dict
 from uuid import uuid4
+
+from unshackle.core.api.input_bridge import AUTH_INPUT_TIMEOUT
+from unshackle.core.console import set_prompt_handler
 
 from .download_manager import perform_download
 
@@ -51,6 +56,42 @@ def write_result(path: Path, payload: Dict[str, Any]) -> None:
     except OSError:
         tmp.unlink(missing_ok=True)
         raise
+
+
+def relay_prompts(progress_callback: Callable[[Dict[str, Any]], None]) -> None:
+    """Send each prompt_user() prompt to the parent as ``input_prompt`` progress, and read the answer from stdin.
+
+    The parent writes each answer as one JSON string per line, so an answer can hold a newline. The reader
+    uses unbuffered stdin: a daemon thread blocked in ``sys.stdin.buffer`` aborts the interpreter at shutdown.
+    Prompts go out one at a time, and a prompt discards answers that arrived before it, such as a late
+    answer to a prompt that timed out.
+    """
+    answers: queue.Queue[str] = queue.Queue()
+    one_prompt = threading.Lock()
+
+    def read_answers() -> None:
+        for line in io.FileIO(sys.stdin.fileno(), "rb", closefd=False):
+            answers.put(json.loads(line.decode("utf-8", errors="replace")))
+
+    threading.Thread(target=read_answers, name="prompt-answers", daemon=True).start()
+
+    def ask(prompt: str) -> str:
+        with one_prompt:
+            while not answers.empty():
+                answers.get_nowait()
+            progress_callback({"input_prompt": prompt})
+            try:
+                return answers.get(timeout=AUTH_INPUT_TIMEOUT)
+            except queue.Empty:
+                # "authentication" makes categorize_exception report AUTH_FAILED, not a retryable network
+                # error: a retry only waits on another prompt.
+                raise TimeoutError(
+                    f"No client answer to the authentication prompt within {AUTH_INPUT_TIMEOUT:.0f}s"
+                ) from None
+            finally:
+                progress_callback({"input_prompt": None})
+
+    set_prompt_handler(ask)
 
 
 def main(argv: list[str]) -> int:
@@ -93,6 +134,7 @@ def main(argv: list[str]) -> int:
                 except Exception as e:
                     log.error(f"Failed to write progress update: {e}")
 
+        relay_prompts(progress_callback)
         output_files = perform_download(job_id, service, title_id, params, progress_callback=progress_callback)
 
         result = {"status": "success", "output_files": output_files}

@@ -464,10 +464,9 @@ class Service(metaclass=ABCMeta):
     def request_input(self, prompt: str) -> str:
         """Request interactive input from the user.
 
-        When running locally (CLI), prompts through the shared rich console so the
-        prompt renders correctly alongside Live progress / log handlers.
-        When running in serve mode with an :class:`InputBridge` attached,
-        delegates to the bridge which relays the prompt to the remote client.
+        Locally, prompts through the shared rich console so the prompt renders alongside
+        Live progress. A remote-dl session relays it through its :class:`InputBridge`, and a
+        REST download job relays it through ``prompt_user`` to the job's ``input_prompt``.
         """
         if self._input_bridge is not None:
             return self._input_bridge.request_input(prompt)
