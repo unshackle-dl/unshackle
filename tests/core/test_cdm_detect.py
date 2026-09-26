@@ -157,13 +157,13 @@ def test_load_remote_decryptlabs_widevine_is_stamped():
 
 
 def test_load_remote_native_playready_is_stamped(monkeypatch):
-    import pyplayready.remote.remotecdm as prmod
+    import unshackle.core.cdm.unprobed_remote_cdm as unprobed_mod
 
     class FakePlayReadyRemote:
         def __init__(self, **kwargs):
             self.kwargs = kwargs
 
-    monkeypatch.setattr(prmod, "RemoteCdm", FakePlayReadyRemote)
+    monkeypatch.setattr(unprobed_mod, "UnprobedPlayReadyRemoteCdm", FakePlayReadyRemote)
     cdm_api = {"name": "pr", "Device Type": "PLAYREADY", "host": "h", "secret": "s", "device_name": "d"}
     cdm = loader_mod.load_remote_cdm(dict(cdm_api), "pr", "EXAMPLE", None)
     assert isinstance(cdm, FakePlayReadyRemote)
@@ -173,13 +173,13 @@ def test_load_remote_native_playready_is_stamped(monkeypatch):
 
 
 def test_load_remote_native_widevine_is_stamped(monkeypatch):
-    import pywidevine.remotecdm as wvmod
+    import unshackle.core.cdm.unprobed_remote_cdm as unprobed_mod
 
     class FakeWidevineRemote:
         def __init__(self, **kwargs):
             self.kwargs = kwargs
 
-    monkeypatch.setattr(wvmod, "RemoteCdm", FakeWidevineRemote)
+    monkeypatch.setattr(unprobed_mod, "UnprobedWidevineRemoteCdm", FakeWidevineRemote)
     cdm_api = {"name": "wv", "Device Type": "ANDROID", "host": "h", "secret": "s", "device_name": "d"}
     cdm = loader_mod.load_remote_cdm(dict(cdm_api), "wv", "EXAMPLE", None)
     assert isinstance(cdm, FakeWidevineRemote)

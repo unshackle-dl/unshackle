@@ -74,6 +74,13 @@ For the two pywidevine/pyplayready backends, field names are read case-insensiti
 styles: `Device Type`/`device_type`, `System ID`/`system_id`, `Security Level`/`security_level`,
 `Host`/`host`, `Secret`/`secret`, `Device Name`/`device_name`.
 
+!!! note "Serve APIs behind a proxy"
+    unshackle does not send upstream's `HEAD` request or examine the `Server` response
+    header, so the server can operate behind a reverse proxy or a CDN that removes or
+    changes that header. Thus a `host` that is not a serve API fails at the first licence
+    request, not when unshackle loads the CDM. On a redirect to a different host or port,
+    unshackle removes the `secret` from the request.
+
 !!! warning "PlayReady `host` needs a `/playready` suffix"
     pyplayready's `RemoteCdm` treats `host` as a base URL and appends its own endpoint paths,
     so a PlayReady entry's `host` must include the trailing `/playready` segment (for example

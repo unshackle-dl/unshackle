@@ -92,10 +92,10 @@ def load_remote_cdm(
 
     device_type = cdm_api.get("Device Type", cdm_api.get("device_type", ""))
     if str(device_type).upper() == "PLAYREADY":
-        from pyplayready.remote.remotecdm import RemoteCdm as PlayReadyRemoteCdm
+        from unshackle.core.cdm.unprobed_remote_cdm import UnprobedPlayReadyRemoteCdm
 
         return stamp_remote(
-            PlayReadyRemoteCdm(
+            UnprobedPlayReadyRemoteCdm(
                 security_level=cdm_api.get("Security Level", cdm_api.get("security_level", 3000)),
                 host=cdm_api.get("Host", cdm_api.get("host")),
                 secret=cdm_api.get("Secret", cdm_api.get("secret")),
@@ -104,10 +104,10 @@ def load_remote_cdm(
             "playready",
         )
 
-    from pywidevine.remotecdm import RemoteCdm
+    from unshackle.core.cdm.unprobed_remote_cdm import UnprobedWidevineRemoteCdm
 
     return stamp_remote(
-        RemoteCdm(
+        UnprobedWidevineRemoteCdm(
             device_type=cdm_api.get("Device Type", cdm_api.get("device_type", "")),
             system_id=cdm_api.get("System ID", cdm_api.get("system_id", "")),
             security_level=cdm_api.get("Security Level", cdm_api.get("security_level", 3000)),
