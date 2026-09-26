@@ -2866,6 +2866,8 @@ remote CDM:</p>
 so a host without the suffix points the requests at the wrong location. The symptom
 is <code>404</code> responses from the server rather than an obvious configuration error.</p>
 </div>
+<p>A pywidevine or pyplayready serve API can operate behind a reverse proxy or a CDN. Refer to
+<a href="../../reference/configuration/drm/#remote_cdm">Serve APIs behind a proxy</a>.</p>
 <h3 id="decrypt-labs-hosted-keyxtractor-api">Decrypt Labs (hosted KeyXtractor API)<a class="headerlink" href="#decrypt-labs-hosted-keyxtractor-api" title="Permanent link">&para;</a></h3>
 <p>Set <code>type: decrypt_labs</code> to use Decrypt Labs' hosted KeyXtractor service, which
 includes an intelligent key-caching layer:</p>

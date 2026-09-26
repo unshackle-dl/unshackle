@@ -2212,6 +2212,14 @@ matches, unshackle loads it as a local device file, in this order: <code>&lt;nam
 <p>For the two pywidevine/pyplayready backends, field names are read case-insensitively in both
 styles: <code>Device Type</code>/<code>device_type</code>, <code>System ID</code>/<code>system_id</code>, <code>Security Level</code>/<code>security_level</code>,
 <code>Host</code>/<code>host</code>, <code>Secret</code>/<code>secret</code>, <code>Device Name</code>/<code>device_name</code>.</p>
+<div class="admonition note">
+<p class="admonition-title">Serve APIs behind a proxy</p>
+<p>unshackle does not send upstream's <code>HEAD</code> request or examine the <code>Server</code> response
+header, so the server can operate behind a reverse proxy or a CDN that removes or
+changes that header. Thus a <code>host</code> that is not a serve API fails at the first licence
+request, not when unshackle loads the CDM. On a redirect to a different host or port,
+unshackle removes the <code>secret</code> from the request.</p>
+</div>
 <div class="admonition warning">
 <p class="admonition-title">PlayReady <code>host</code> needs a <code>/playready</code> suffix</p>
 <p>pyplayready's <code>RemoteCdm</code> treats <code>host</code> as a base URL and appends its own endpoint paths,
