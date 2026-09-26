@@ -27,7 +27,13 @@ class MockCertificateChain:
 class Key:
     """`Key` object compatible with pywidevine."""
 
-    def __init__(self, kid: str, key: str, type_: str = "CONTENT"):
+    def __init__(
+        self,
+        kid: Union[str, UUID],
+        key: Union[str, bytes],
+        type_: str = "CONTENT",
+        permissions: Optional[List[str]] = None,
+    ):
         if isinstance(kid, str):
             clean_kid = kid.replace("-", "")
             if len(clean_kid) == 32:
@@ -43,6 +49,7 @@ class Key:
             self.key = key
 
         self.type = type_
+        self.permissions = permissions or []
 
 
 class CustomRemoteCDMExceptions:
