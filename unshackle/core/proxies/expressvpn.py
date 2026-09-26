@@ -352,8 +352,8 @@ class ExpressVPN(Proxy):
         data = response.json()
 
         log.info(
-            "ExpressVPN: sign in to authorize this device: open %s and enter code %s",
-            data.get("verification_uri", f"{self.AUTH_BASE}/../realms/xvpn/device"),
+            "ExpressVPN: sign in to authorize this device: open %s (code %s)",
+            data.get("verification_uri_complete") or data.get("verification_uri"),
             data.get("user_code"),
         )
 
