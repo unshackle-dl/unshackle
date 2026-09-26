@@ -31,11 +31,12 @@ class Unavailable(Proxy):
         return None
 
 
-def find_provider(proxy_providers: List[Any], name: str) -> Any:
+def find_provider(proxy_providers: List[Any], name: str, hint: str = "") -> Any:
     """
     Find a proxy provider by its class name, case-insensitive.
 
     Raises ValueError when no proxy provider has that name, or when it failed to load.
+    *hint* follows the message when no proxy provider has that name.
     """
     for provider in proxy_providers:
         if isinstance(provider, Unavailable):
@@ -44,7 +45,8 @@ def find_provider(proxy_providers: List[Any], name: str) -> Any:
         elif provider.__class__.__name__.lower() == name.lower():
             return provider
     available = [x.__class__.__name__ for x in proxy_providers if not isinstance(x, Unavailable)]
-    raise ValueError(f"The proxy provider '{name}' was not found. Available: {available}")
+    message = f"The proxy provider '{name}' was not found. Available: {available}"
+    raise ValueError(f"{message}. {hint}" if hint else message)
 
 
 def load_proxy_providers(exclude: tuple[str, ...] = (), raise_errors: bool = False, quiet: bool = False) -> List[Any]:
@@ -109,14 +111,82 @@ def initialize_proxy_providers(raise_errors: bool = False, quiet: bool = False) 
     """
     Load the proxy providers for the REST API and the remote service client.
 
-    WindscribeVPN and Gluetun are not offered on this path. *quiet* drops the per-provider summary
-    lines: rendering a proxy provider asks some of them for their server catalogue over the network,
-    which a repeated caller must not pay for.
+    Gluetun is not offered on this path, because it starts a local Docker container. *quiet* drops the
+    per-provider summary lines: rendering a proxy provider asks some of them for their server catalogue
+    over the network, which a repeated caller must not pay for.
     """
-    proxy_providers = load_proxy_providers(("windscribevpn", "gluetun"), raise_errors, quiet)
+    proxy_providers = load_proxy_providers(("gluetun",), raise_errors, quiet)
     if not quiet and not proxy_providers:
         log.warning("No proxy providers were loaded. Check your proxy provider configuration in unshackle.yaml")
     return proxy_providers
+
+
+CITY_HINT = "A city query needs a proxy provider prefix, for example nordvpn:us:seattle."
+
+
+def split_proxy_query(proxy: str, proxy_providers: List[Any]) -> tuple[Optional[str], str]:
+    """
+    Split a proxy value into the proxy provider that its prefix names and the query for it.
+
+    A URI, a bare query and a ``host:port`` name no proxy provider. Raises ValueError when the prefix
+    is not a loaded proxy provider, so a city query without a proxy provider prefix fails here.
+    """
+    if re.match(r"^[a-z][a-z0-9+.-]*://", proxy, re.IGNORECASE) or not re.match(r"^[a-z]+:.+$", proxy, re.IGNORECASE):
+        return None, proxy
+    name, query = proxy.split(":", maxsplit=1)
+    if query.isdigit():
+        return None, proxy
+    find_provider(proxy_providers, name, hint=CITY_HINT)
+    return name, query
+
+
+def pick_proxy(proxy_providers: List[Any], query: str, provider_name: Optional[str] = None) -> tuple[Any, str]:
+    """
+    Get a proxy provider and its proxy URI: from the named one, or else from the first one that answers.
+
+    A named proxy provider's error goes to the caller. In a bare query, a proxy provider that fails is
+    logged and skipped, so a later one can still answer. Raises ValueError when no proxy provider answers.
+    """
+    if provider_name:
+        provider = find_provider(proxy_providers, provider_name)
+        uri = provider.get_proxy(query)
+        if not uri:
+            raise ValueError(f"The proxy provider {provider_name} had no proxy for {query}")
+        return provider, uri
+    errors = []
+    for provider in proxy_providers:
+        name = provider.__class__.__name__
+        try:
+            uri = provider.get_proxy(query)
+        except Exception as e:
+            log.warning(f"The {name} proxy provider failed for {query}, so the next one is tried: {e}")
+            errors.append(f"{name}: {e}")
+            continue
+        if uri:
+            return provider, uri
+    detail = f" ({'; '.join(errors)})" if errors else ""
+    raise ValueError(f"No proxy provider had a proxy for {query}{detail}")
+
+
+def describe_proxy(provider: Any, uri: str, query: str, allow_debug: bool = True) -> str:
+    """
+    Get the log line that names the proxy provider that answered, with the proxy credentials masked.
+
+    Set *allow_debug* to False where the line can reach more than the operator's own terminal.
+    """
+    from unshackle.core.proxies.basic import Basic
+
+    name = provider.__class__.__name__
+    if hasattr(provider, "get_connection_info"):
+        info = provider.get_connection_info(query)
+        if info and info.get("public_ip"):
+            location = ", ".join(x for x in (info.get("city"), info.get("country")) if x)
+            return f"VPN Connected: {info['public_ip']} ({location})"
+    elif hasattr(provider, "last_connection_display"):
+        display = provider.last_connection_display()
+        if display:
+            return f"Using {name} Proxy {display}"
+    return f"Using {name} Proxy: {mask_proxy(uri, isinstance(provider, Basic), allow_debug)}"
 
 
 def resolve_proxy(proxy: str, proxy_providers: List[Any]) -> Optional[str]:
@@ -139,32 +209,10 @@ def resolve_proxy(proxy: str, proxy_providers: List[Any]) -> Optional[str]:
     if re.match(r"^(https?://|socks)", proxy):
         return proxy
 
-    requested_provider = None
-    query = proxy
-    if re.match(r"^[a-z]+:.+$", proxy, re.IGNORECASE):
-        requested_provider, query = proxy.split(":", maxsplit=1)
-
-    if requested_provider:
-        provider = find_provider(proxy_providers, requested_provider)
-        proxy_uri = provider.get_proxy(query)
-        if not proxy_uri:
-            raise ValueError(f"Proxy provider {requested_provider} had no proxy for {query}")
-        log.info(
-            f"Using {provider.__class__.__name__} Proxy: "
-            f"{mask_proxy(proxy_uri, provider.__class__.__name__ == 'Basic', allow_debug=False)}"
-        )
-        return proxy_uri
-
-    for provider in proxy_providers:
-        proxy_uri = provider.get_proxy(query)
-        if proxy_uri:
-            log.info(
-                f"Using {provider.__class__.__name__} Proxy: "
-                f"{mask_proxy(proxy_uri, provider.__class__.__name__ == 'Basic', allow_debug=False)}"
-            )
-            return proxy_uri
-
-    raise ValueError(f"No proxy provider had a proxy for {proxy}")
+    provider_name, query = split_proxy_query(proxy, proxy_providers)
+    provider, uri = pick_proxy(proxy_providers, query, provider_name)
+    log.info(describe_proxy(provider, uri, query, allow_debug=False))
+    return uri
 
 
 def is_loopback(uri: str) -> bool:

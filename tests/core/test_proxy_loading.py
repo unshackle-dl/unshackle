@@ -61,3 +61,19 @@ def test_query_naming_an_unknown_provider_lists_the_loaded_ones() -> None:
 def test_raise_errors_raises_the_load_failure() -> None:
     with pytest.raises(requests.ConnectionError):
         load_proxy_providers(OTHERS, raise_errors=True)
+
+
+def test_rest_path_loads_windscribe_but_not_gluetun(monkeypatch: pytest.MonkeyPatch) -> None:
+    from unshackle.core.proxies import Gluetun, WindscribeVPN
+    from unshackle.core.proxies.resolve import initialize_proxy_providers
+
+    countries = [
+        {"country_code": "US", "groups": [{"city": "Dallas", "hosts": [{"hostname": "us-central-1.example"}]}]}
+    ]
+    monkeypatch.setattr(config, "proxy_providers", {"windscribevpn": CREDENTIALS, "gluetun": {"windscribe": {}}})
+    monkeypatch.setattr(WindscribeVPN, "get_countries", staticmethod(lambda: countries))
+
+    providers = initialize_proxy_providers(quiet=True)
+    assert any(isinstance(p, WindscribeVPN) for p in providers)
+    assert not any(isinstance(p, Gluetun) or getattr(p, "name", None) == "Gluetun" for p in providers)
+    assert resolve_proxy("windscribevpn:us", providers).endswith("@us-central-1.example:443")

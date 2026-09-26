@@ -96,15 +96,19 @@ flowchart TD
 
 1. **An explicit URI.** unshackle uses anything shaped like `http://...`,
    `https://...`, or a `socks...` URI exactly as you give it. unshackle logs
-   `Using explicit Proxy: ...` and does no lookup.
+   `Using explicit Proxy: ...` and does no lookup. A `host:port` value such as
+   `localhost:8080` is also an explicit proxy.
 2. **A provider-prefixed query**: `provider:query`, for example `nordvpn:us` or
    `gluetun:windscribe:us`. unshackle finds the proxy provider whose name matches
    the prefix (case-insensitive). It then asks *only* that proxy provider to find a
    proxy for the remainder. If unshackle loads no such proxy provider, or if that
    proxy provider returns no proxy, the download errors.
-3. **A bare query**: a region like `us`, `gb`, `us:seattle`, or `us1234`. unshackle
-   asks each loaded proxy provider **in order** and uses the first proxy any of them
-   returns.
+3. **A bare query**: a region like `us`, `gb`, or `us1234`. unshackle asks each
+   loaded proxy provider **in order** and uses the first proxy any of them returns. A
+   bare city query such as `us:seattle` does not work: unshackle reads `us` as a proxy
+   provider name. Use the proxy provider prefix, for example `nordvpn:us:seattle`.
+   If no proxy provider has a proxy for the query, unshackle stops with
+   `No proxy provider had a proxy for <query>` and does not continue without a proxy.
 
 unshackle compares the query against a region grammar: a country or location code of two
 to four letters, with an optional `_code` part (`res_yyz`), then an optional server
@@ -659,7 +663,7 @@ that server for a day or two as a workaround, until it degrades and you swap in 
 |---|---|
 | `us` | A recommended US server. |
 | `us1234` | The specific server `us1234`. |
-| `us:seattle` | A recommended server in Seattle. |
+| `nordvpn:us:seattle` | A recommended server in Seattle. |
 | `228` | A NordVPN numeric country ID. |
 
 The returned proxy is HTTPS on **port 89** (NordVPN disabled its plain-HTTP proxies on
@@ -799,8 +803,8 @@ fall back to the `us` entry.
 
 unshackle ignores case, spaces, hyphens and accents in a city name, so `us:new-york`
 matches New York. A city also matches the start of a longer name: `de:frankfurt` matches
-Frankfurt am Main. A bare `us` also reaches Surfshark, but a bare `us-bos` or
-`us:seattle` can stop at a proxy provider earlier in the order, so use the
+Frankfurt am Main. A bare `us` also reaches Surfshark. A bare `us-bos` can stop at a
+proxy provider earlier in the order, and a bare `us:seattle` does not work, so use the
 `surfsharkvpn:` prefix for those forms.
 
 The returned proxy is HTTPS on **port 443**.
@@ -830,7 +834,7 @@ proxy_providers:
 |---|---|
 | `us` | A random US server. |
 | `us150` / `sg007` | A specific numbered server. |
-| `us:seattle` | A random server in Seattle. |
+| `windscribevpn:us:seattle` | A random server in Seattle. |
 
 The returned proxy is HTTPS on **port 443**.
 

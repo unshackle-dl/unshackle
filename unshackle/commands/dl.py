@@ -53,8 +53,15 @@ from unshackle.core.events import events
 from unshackle.core.export_name import ExportNamer, move_export, plural, season_episodes, title_label
 from unshackle.core.providers.anilist import parse_anilist_ref
 from unshackle.core.providers.tvdb import SEASON_TYPES, parse_int
-from unshackle.core.proxies import Basic
-from unshackle.core.proxies.resolve import REGION, find_provider, is_loopback, load_proxy_providers, resolve_proxy
+from unshackle.core.proxies.resolve import (
+    REGION,
+    describe_proxy,
+    is_loopback,
+    load_proxy_providers,
+    pick_proxy,
+    resolve_proxy,
+    split_proxy_query,
+)
 from unshackle.core.service import Service, grow_session_pool
 from unshackle.core.services import Services
 from unshackle.core.temp import with_task_temp
@@ -1358,85 +1365,34 @@ class dl:
             if proxy and proxy.startswith("controld://"):
                 proxy = ctx.params["proxy"] = resolve_proxy(proxy, [])
             if proxy:
-
-                def log_proxy_used(provider: object, uri: str) -> None:
-                    self.log.info(
-                        f"Using {provider.__class__.__name__} Proxy: {mask_proxy(uri, isinstance(provider, Basic))}"
-                    )
-
-                requested_provider = None
-                if re.match(r"^[a-z]+:.+$", proxy, re.IGNORECASE):
-                    # requesting proxy from a specific proxy provider
-                    requested_provider, proxy = proxy.split(":", maxsplit=1)
+                try:
+                    requested_provider, query = split_proxy_query(proxy, self.proxy_providers)
+                except ValueError as e:
+                    self.log.error(str(e))
+                    sys.exit(1)
                 # Match region codes (us, ca, uk1, us:ny, yul) or provider:region (nordvpn:ca, protonvpn:us:ny).
-                if re.fullmatch(rf"(?:[a-z]+:)?{REGION}", proxy, re.IGNORECASE):
-                    proxy = proxy.lower()
-                    # Preserve the original user query (region code) for service-specific proxy_map overrides.
-                    # NOTE: `proxy` may be overwritten with the resolved proxy URI later.
-                    proxy_query = proxy
+                if re.fullmatch(rf"(?:[a-z]+:)?{REGION}", query, re.IGNORECASE):
+                    # Kept apart from ctx.params["proxy"], which becomes the URI: a service proxy_map keys on it.
+                    proxy_query = query.lower()
                     status_msg = (
-                        f"Connecting to VPN ({proxy})..."
+                        f"Connecting to VPN ({proxy_query})..."
                         if requested_provider == "gluetun"
-                        else f"Getting a Proxy to {proxy}..."
+                        else f"Getting a Proxy to {proxy_query}..."
                     )
                     with console.status(status_msg, spinner="dots"):
-                        if requested_provider:
-                            try:
-                                proxy_provider = find_provider(self.proxy_providers, requested_provider)
-                            except ValueError as e:
-                                self.log.error(str(e))
-                                sys.exit(1)
-                            proxy_uri = proxy_provider.get_proxy(proxy)
-                            if not proxy_uri:
-                                self.log.error(f"The proxy provider {requested_provider} had no proxy for {proxy}")
-                                sys.exit(1)
-                            proxy = ctx.params["proxy"] = proxy_uri
-                            # Show connection info for Gluetun (IP, location) instead of proxy URL
-                            if hasattr(proxy_provider, "get_connection_info"):
-                                conn_info = proxy_provider.get_connection_info(proxy_query)
-                                if conn_info and conn_info.get("public_ip"):
-                                    location_parts = [conn_info.get("city"), conn_info.get("country")]
-                                    location = ", ".join(p for p in location_parts if p)
-                                    self.log.info(f"VPN Connected: {conn_info['public_ip']} ({location})")
-                                else:
-                                    log_proxy_used(proxy_provider, proxy)
-                            else:
-                                display = None
-                                if hasattr(proxy_provider, "last_connection_display"):
-                                    display = proxy_provider.last_connection_display()
-                                if display:
-                                    self.log.info(f"Using {proxy_provider.__class__.__name__} Proxy {display}")
-                                else:
-                                    log_proxy_used(proxy_provider, proxy)
-                        else:
-                            for proxy_provider in self.proxy_providers:
-                                proxy_uri = proxy_provider.get_proxy(proxy)
-                                if proxy_uri:
-                                    proxy = ctx.params["proxy"] = proxy_uri
-                                    # Show connection info for Gluetun (IP, location) instead of proxy URL
-                                    if hasattr(proxy_provider, "get_connection_info"):
-                                        conn_info = proxy_provider.get_connection_info(proxy_query)
-                                        if conn_info and conn_info.get("public_ip"):
-                                            location_parts = [conn_info.get("city"), conn_info.get("country")]
-                                            location = ", ".join(p for p in location_parts if p)
-                                            self.log.info(f"VPN Connected: {conn_info['public_ip']} ({location})")
-                                        else:
-                                            log_proxy_used(proxy_provider, proxy)
-                                    else:
-                                        display = None
-                                        if hasattr(proxy_provider, "last_connection_display"):
-                                            display = proxy_provider.last_connection_display()
-                                        if display:
-                                            self.log.info(f"Using {proxy_provider.__class__.__name__} Proxy {display}")
-                                        else:
-                                            log_proxy_used(proxy_provider, proxy)
-                                    break
-                    # Store proxy query info for service-specific overrides
+                        try:
+                            proxy_provider, proxy_uri = pick_proxy(
+                                self.proxy_providers, proxy_query, requested_provider
+                            )
+                        except ValueError as e:
+                            self.log.error(str(e))
+                            sys.exit(1)
+                        ctx.params["proxy"] = proxy_uri
+                        self.log.info(describe_proxy(proxy_provider, proxy_uri, proxy_query))
                     ctx.params["proxy_query"] = proxy_query
                     ctx.params["proxy_provider"] = requested_provider
                 else:
                     self.log.info(f"Using explicit Proxy: {mask_proxy(ctx.params['proxy'])}")
-                    # For explicit proxies, store None for query/provider
                     ctx.params["proxy_query"] = None
                     ctx.params["proxy_provider"] = None
 
