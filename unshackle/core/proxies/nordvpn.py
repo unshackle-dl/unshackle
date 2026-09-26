@@ -6,6 +6,7 @@ from typing import Optional
 import requests
 
 from unshackle.core.proxies.proxy import Proxy
+from unshackle.core.utilities import COUNTRY_CODE_ALIASES
 
 
 class NordVPN(Proxy):
@@ -52,10 +53,10 @@ class NordVPN(Proxy):
         - Country code: "us", "ca", "gb"
         - Country ID: "228"
         - Specific server: "us1234"
-        - City selection: "us:seattle", "ca:calgary"
+        - City selection: "us:seattle", "us:new-york", "ca:calgary"
 
-        Returns None if the country code or ID is not one NordVPN lists. A country with no recommended
-        servers, or a city with no matching server, raises ValueError.
+        Returns None for a query NordVPN cannot serve: an unrecognised form, a country it does not list,
+        or a country with no recommended servers. A city with no matching server raises ValueError.
         """
         query = query.lower()
         city = None
@@ -64,17 +65,17 @@ class NordVPN(Proxy):
             query, city = query.split(":", maxsplit=1)
             city = city.strip()
 
-        if re.match(r"^[a-z]{2}\d+$", query):
+        if re.fullmatch(r"[a-z]{2}\d+", query):
             hostname = f"{query}.proxy.nordvpn.com"
         else:
             if query.isdigit():
                 country = self.get_country(by_id=int(query))
-            elif re.match(r"^[a-z]+$", query):
-                country = self.get_country(by_code=query)
+            elif re.fullmatch(r"[a-z]+", query):
+                country = self.get_country(by_code=COUNTRY_CODE_ALIASES.get(query, query))
             else:
-                raise ValueError(f"The query provided is unsupported and unrecognized: {query}")
+                return None
             if not country:
-                return
+                return None
 
             server_map_key = f"{country['code'].lower()}:{city}" if city else country["code"].lower()
             server_mapping = self.server_map.get(server_map_key) or (
@@ -84,27 +85,27 @@ class NordVPN(Proxy):
             if server_mapping:
                 hostname = f"{country['code'].lower()}{server_mapping}.proxy.nordvpn.com"
             else:
-                recommended_servers = self.get_recommended_servers(country["id"])
-                if not recommended_servers:
-                    raise ValueError(
-                        f"The NordVPN Country {query} currently has no recommended servers. "
-                        "Try again later. If the issue persists, double-check the query."
-                    )
-
+                city_id = None
                 if city:
-                    city_servers = self.filter_servers_by_city(recommended_servers, city)
-                    if not city_servers:
+                    # Recommendations are ordered by distance from the caller, so the API has to filter by city.
+                    city_id = next(
+                        (x["id"] for x in country.get("cities", []) if city in (x["name"].lower(), x.get("dns_name"))),
+                        None,
+                    )
+                    if city_id is None:
                         raise ValueError(
                             f"No servers found in city '{city}' for country '{country['name']}'. "
                             "Try a different city or check the city name spelling."
                         )
-                    recommended_servers = city_servers
+                recommended_servers = self.get_recommended_servers(country["id"], city_id)
+                if not recommended_servers:
+                    return None
 
                 hostname = random.choice(recommended_servers)["hostname"]
 
         if hostname.startswith("gb"):
             # NordVPN uses the alpha2 of 'GB' in API responses, but 'UK' in the hostname
-            hostname = f"gb{hostname[2:]}"
+            hostname = f"uk{hostname[2:]}"
 
         if hostname.endswith(".nordvpn.com") and not hostname.endswith(".proxy.nordvpn.com"):
             hostname = hostname[: -len(".nordvpn.com")] + ".proxy.nordvpn.com"
@@ -123,50 +124,16 @@ class NordVPN(Proxy):
                 return country
 
     @staticmethod
-    def filter_servers_by_city(servers: list[dict], city: str) -> list[dict]:
+    def get_recommended_servers(country_id: int, city_id: Optional[int] = None) -> list[dict]:
         """
-        Filter servers by city name.
-
-        The API returns servers with location data that includes city information.
-        This method filters servers to only those in the specified city.
-
-        Args:
-            servers: List of server dictionaries from the NordVPN API
-            city: City name to filter by (case-insensitive)
-
-        Returns:
-            List of servers in the specified city
-        """
-        city_lower = city.lower()
-        filtered = []
-
-        for server in servers:
-            locations = server.get("locations", [])
-            for location in locations:
-                # City data can be in different formats:
-                # - {"city": {"name": "Seattle", ...}}
-                # - {"city": "Seattle"}
-                city_data = location.get("city")
-                if city_data:
-                    city_name = city_data.get("name") if isinstance(city_data, dict) else city_data
-                    if city_name and city_name.lower() == city_lower:
-                        filtered.append(server)
-                        break  # Found a match, no need to check other locations for this server
-
-        return filtered
-
-    @staticmethod
-    def get_recommended_servers(country_id: int) -> list[dict]:
-        """
-        Get the list of recommended Servers for a Country.
+        Get the list of recommended Servers for a Country, or for one of its cities.
 
         Note: There may not always be more than one recommended server.
         """
-        res = requests.get(
-            url="https://api.nordvpn.com/v1/servers/recommendations",
-            params={"filters[country_id]": country_id},
-            timeout=10,
-        )
+        params = {"filters[country_id]": country_id}
+        if city_id is not None:
+            params["filters[country_city_id]"] = city_id
+        res = requests.get(url="https://api.nordvpn.com/v1/servers/recommendations", params=params, timeout=10)
         if not res.ok:
             raise ValueError(f"Failed to get a list of NordVPN countries [{res.status_code}]")
 

@@ -240,9 +240,11 @@ class Gluetun(Proxy):
             query: Query format: "provider:region" (e.g., "windscribe:us", "nordvpn:uk")
 
         Returns:
-            HTTP proxy URI or None if unavailable
+            HTTP proxy URI, or None for a bare region, so that a bare query moves on to the next proxy provider
         """
         parts = query.split(":")
+        if len(parts) == 1:
+            return None
         if len(parts) != 2:
             raise ValueError(f"Invalid query format: '{query}'. Expected 'provider:region' (e.g., 'windscribe:us')")
 

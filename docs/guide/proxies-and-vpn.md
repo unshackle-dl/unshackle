@@ -744,12 +744,16 @@ for a plain proxy. On success, unshackle prints a summary such as `(Name - City)
 
 ## Hola
 
-Hola requires no configuration at all. It uses the
-[`hola-proxy`](https://github.com/Snawoot/hola-proxy) binary, and **auto-loads** whenever
-that binary is found on your `PATH`. If you query Hola but the binary is missing, the
-proxy provider raises an error that tells you to install it.
+Hola requires no configuration at all. It uses the `hola-proxy` binary, and
+**auto-loads** whenever that binary is found on your `PATH`. If you query Hola but the
+binary is missing, the proxy provider raises an error that tells you to install it.
 
-```shell title="Install hola-proxy, then just query a country"
+The `hola-proxy` GitHub repository is no longer online, so build the binary with Go. The
+Go module proxy still has the source for version 1.18.2. `go install` puts the binary in
+`$(go env GOPATH)/bin`, which must be on your `PATH`.
+
+```shell title="Build hola-proxy, then query a country"
+go install github.com/Snawoot/hola-proxy@v1.18.2
 unshackle dl --proxy hola:us EXAMPLE 81234567
 ```
 
@@ -758,8 +762,9 @@ for available proxies in that country and picks one at random, returning an HTTP
 
 !!! warning "Temporary bans"
     Hola's free tier can rate-limit or temporarily ban you if queried too aggressively. If
-    you see a *temporary ban detected* error, wait before retrying. Hola currently uses
-    only datacenter proxies.
+    you see a *temporary ban detected* error, wait before retrying. While a ban is active,
+    `hola-proxy` does not stop, so unshackle waits 30 seconds and then reports the ban.
+    Hola currently uses only datacenter proxies.
 
 ## Surfshark
 

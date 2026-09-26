@@ -10,7 +10,7 @@ from unshackle.core.utils.redact import mask_proxy
 
 
 class Basic(Proxy):
-    def __init__(self, **countries: dict[str, Union[str, list[str]]]):
+    def __init__(self, **countries: Union[str, list[str]]):
         """Basic proxy provider that uses the proxies given in the configuration file."""
         self.countries = {k.lower(): v for k, v in countries.items()}
 
@@ -21,12 +21,12 @@ class Basic(Proxy):
         return f"{countries} Countr{['ies', 'y'][countries == 1]} ({servers} Server{['s', ''][servers == 1]})"
 
     def get_proxy(self, query: str) -> Optional[str]:
-        """Get a proxy URI from the config."""
+        """Get a proxy URI from the config. A query for a region or an entry number not in the config returns None."""
         query = query.lower()
 
-        match = re.match(r"^([a-z]{2})(\d+)?$", query, re.IGNORECASE)
+        match = re.fullmatch(r"([a-z]{2})(\d+)?", query)
         if not match:
-            raise ValueError(f'The query "{query}" was not recognized...')
+            return None
 
         country_code = match.group(1)
         entry = match.group(2)
@@ -38,12 +38,9 @@ class Basic(Proxy):
         if isinstance(servers, str):
             proxy = servers
         elif entry:
-            try:
-                proxy = servers[int(entry) - 1]
-            except IndexError:
-                raise ValueError(
-                    f'There\'s only {len(servers)} prox{"y" if len(servers) == 1 else "ies"} for "{country_code}"...'
-                )
+            if not 1 <= int(entry) <= len(servers):
+                return None
+            proxy = servers[int(entry) - 1]
         else:
             proxy = random.choice(servers)
 

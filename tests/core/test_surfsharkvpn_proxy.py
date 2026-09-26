@@ -109,3 +109,10 @@ def test_unusable_server_map_entry_is_ignored_with_a_warning(server: object, cap
         proxy = SurfsharkVPN(USERNAME, PASSWORD, server_map={"us": server})  # type: ignore[dict-item]
     assert "ignoring server_map entry" in caplog.text
     assert host(proxy.get_proxy("us")) in US_HOSTS
+
+
+@pytest.mark.parametrize("key", ["gb", "uk", "GB"])
+@pytest.mark.parametrize("query", ["gb", "uk"])
+def test_server_map_uk_and_gb_are_the_same_region(key: str, query: str) -> None:
+    proxy = SurfsharkVPN(USERNAME, PASSWORD, server_map={key: "uk-lon"})
+    assert host(proxy.get_proxy(query)) == "uk-lon.prod.surfshark.com:443"

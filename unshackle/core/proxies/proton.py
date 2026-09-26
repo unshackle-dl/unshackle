@@ -187,9 +187,12 @@ class ProtonVPN(Proxy):
         return chosen
 
     def get_logicals(self) -> list[dict]:
+        """Get Proton's server list. Only a list that loaded is cached, so a later session can still fetch it."""
         if self.logicals is None:
             response = self.api("GET", "/vpn/v1/logicals")
-            self.logicals = (response.json().get("LogicalServers") or []) if response is not None else []
+            if response is None:
+                return []
+            self.logicals = response.json().get("LogicalServers") or []
         return self.logicals
 
     def get_max_tier(self) -> int:

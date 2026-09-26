@@ -50,7 +50,8 @@ class SurfsharkVPN(Proxy):
                     server,
                 )
                 continue
-            self.server_map[region] = server
+            country, sep, city = str(region).lower().partition(":")
+            self.server_map[COUNTRY_CODE_ALIASES.get(country, country) + sep + city] = server
 
         self.countries = self.get_countries()
 
@@ -78,6 +79,7 @@ class SurfsharkVPN(Proxy):
         if ":" in query:
             query, city = query.split(":", maxsplit=1)
             city = city.strip()
+        query = COUNTRY_CODE_ALIASES.get(query, query)
 
         server_map_key = f"{query}:{city}" if city else query
         if server_map_key in self.server_map:
@@ -85,8 +87,7 @@ class SurfsharkVPN(Proxy):
         elif not city and any(x["connectionName"].split(".", 1)[0] == query for x in self.countries):
             server = query
         elif re.fullmatch(r"[a-z]{2}", query):
-            country_code = COUNTRY_CODE_ALIASES.get(query, query).upper()
-            servers = [x for x in self.countries if x["countryCode"] == country_code]
+            servers = [x for x in self.countries if x["countryCode"] == query.upper()]
             if not servers:
                 return None
             server = self.get_random_server(servers, city)

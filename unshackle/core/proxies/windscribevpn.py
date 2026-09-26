@@ -47,6 +47,8 @@ class WindscribeVPN(Proxy):
         - Country code: "us", "ca", "gb"
         - Specific server: "sg007", "us150", "us-central-150"
         - City selection: "us:seattle", "ca:toronto"
+
+        Returns None for a query WindscribeVPN cannot serve. A city with no matching server raises ValueError.
         """
         # Windscribe names GB hosts "uk-NNN"; Ukraine is "ua", so "uk" is unambiguous.
         query = re.sub(r"^uk(?=$|[:\d])", "gb", query.lower())
@@ -62,23 +64,15 @@ class WindscribeVPN(Proxy):
         elif query in self.server_map:
             hostname = self.server_map[query]
         else:
-            server_match = re.match(r"^([a-z]{2})(\d+)$", query)
+            server_match = re.fullmatch(r"([a-z]{2})(\d+)", query)
             if server_match:
-                country_code, server_num = server_match.groups()
-                hostname = self.get_specific_server(country_code, server_num)
-                if not hostname:
-                    raise ValueError(
-                        f"No WindscribeVPN server found matching '{query}'. "
-                        f"Check the server number or use just '{country_code}' for a random server."
-                    )
-            elif re.match(r"^[a-z]+$", query):
+                hostname = self.get_specific_server(*server_match.groups())
+            elif re.fullmatch(r"[a-z]+", query):
                 hostname = self.get_random_server(query, city)
             elif "-" in query:
                 hostname = next((h for h in self.iter_hostnames() if h.startswith(f"{query}.")), None)
-                if not hostname:
-                    raise ValueError(f"No WindscribeVPN server found matching '{query}'.")
             else:
-                raise ValueError(f"The query provided is unsupported and unrecognized: {query}")
+                hostname = None
 
         if not hostname:
             return None
