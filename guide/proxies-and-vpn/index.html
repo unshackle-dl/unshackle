@@ -2698,15 +2698,19 @@ them in this order.</p>
 <ol>
 <li><strong>An explicit URI.</strong> unshackle uses anything shaped like <code>http://...</code>,
    <code>https://...</code>, or a <code>socks...</code> URI exactly as you give it. unshackle logs
-   <code>Using explicit Proxy: ...</code> and does no lookup.</li>
+   <code>Using explicit Proxy: ...</code> and does no lookup. A <code>host:port</code> value such as
+   <code>localhost:8080</code> is also an explicit proxy.</li>
 <li><strong>A provider-prefixed query</strong>: <code>provider:query</code>, for example <code>nordvpn:us</code> or
    <code>gluetun:windscribe:us</code>. unshackle finds the proxy provider whose name matches
    the prefix (case-insensitive). It then asks <em>only</em> that proxy provider to find a
    proxy for the remainder. If unshackle loads no such proxy provider, or if that
    proxy provider returns no proxy, the download errors.</li>
-<li><strong>A bare query</strong>: a region like <code>us</code>, <code>gb</code>, <code>us:seattle</code>, or <code>us1234</code>. unshackle
-   asks each loaded proxy provider <strong>in order</strong> and uses the first proxy any of them
-   returns.</li>
+<li><strong>A bare query</strong>: a region like <code>us</code>, <code>gb</code>, or <code>us1234</code>. unshackle asks each
+   loaded proxy provider <strong>in order</strong> and uses the first proxy any of them returns. A
+   bare city query such as <code>us:seattle</code> does not work: unshackle reads <code>us</code> as a proxy
+   provider name. Use the proxy provider prefix, for example <code>nordvpn:us:seattle</code>.
+   If no proxy provider has a proxy for the query, unshackle stops with
+   <code>No proxy provider had a proxy for &lt;query&gt;</code> and does not continue without a proxy.</li>
 </ol>
 <p>unshackle compares the query against a region grammar: a country or location code of two
 to four letters, with an optional <code>_code</code> part (<code>res_yyz</code>), then an optional server
@@ -3363,7 +3367,7 @@ country-code confusion that <code>uk</code> invites.</p>
 <td>The specific server <code>us1234</code>.</td>
 </tr>
 <tr>
-<td><code>us:seattle</code></td>
+<td><code>nordvpn:us:seattle</code></td>
 <td>A recommended server in Seattle.</td>
 </tr>
 <tr>
@@ -3476,19 +3480,23 @@ have non-contiguous IDs like <code>#203</code>, <code>#813</code>, and so on. Co
 previous run's log line (e.g. <code>DE#203</code>) instead.</p>
 </div>
 <h2 id="hola">Hola<a class="headerlink" href="#hola" title="Permanent link">&para;</a></h2>
-<p>Hola requires no configuration at all. It uses the
-<a href="https://github.com/Snawoot/hola-proxy"><code>hola-proxy</code></a> binary, and <strong>auto-loads</strong> whenever
-that binary is found on your <code>PATH</code>. If you query Hola but the binary is missing, the
-proxy provider raises an error that tells you to install it.</p>
-<div class="language-shell highlight"><span class="filename">Install hola-proxy, then just query a country</span><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--proxy<span class="w"> </span>hola:us<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+<p>Hola requires no configuration at all. It uses the <code>hola-proxy</code> binary, and
+<strong>auto-loads</strong> whenever that binary is found on your <code>PATH</code>. If you query Hola but the
+binary is missing, the proxy provider raises an error that tells you to install it.</p>
+<p>The <code>hola-proxy</code> GitHub repository is no longer online, so build the binary with Go. The
+Go module proxy still has the source for version 1.18.2. <code>go install</code> puts the binary in
+<code>$(go env GOPATH)/bin</code>, which must be on your <code>PATH</code>.</p>
+<div class="language-shell highlight"><span class="filename">Build hola-proxy, then query a country</span><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>go<span class="w"> </span>install<span class="w"> </span>github.com/Snawoot/hola-proxy@v1.18.2
+</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--proxy<span class="w"> </span>hola:us<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
 <p><strong>Query forms:</strong> a two-letter country code (e.g. <code>us</code>, <code>gb</code>). unshackle asks <code>hola-proxy</code>
 for available proxies in that country and picks one at random, returning an HTTP proxy.</p>
 <div class="admonition warning">
 <p class="admonition-title">Temporary bans</p>
 <p>Hola's free tier can rate-limit or temporarily ban you if queried too aggressively. If
-you see a <em>temporary ban detected</em> error, wait before retrying. Hola currently uses
-only datacenter proxies.</p>
+you see a <em>temporary ban detected</em> error, wait before retrying. While a ban is active,
+<code>hola-proxy</code> does not stop, so unshackle waits 30 seconds and then reports the ban.
+Hola currently uses only datacenter proxies.</p>
 </div>
 <h2 id="surfshark">Surfshark<a class="headerlink" href="#surfshark" title="Permanent link">&para;</a></h2>
 <p>Surfshark, like NordVPN, uses <strong>Service Credentials</strong> rather than your login. Make
@@ -3533,8 +3541,8 @@ fall back to the <code>us</code> entry.</p>
 </table>
 <p>unshackle ignores case, spaces, hyphens and accents in a city name, so <code>us:new-york</code>
 matches New York. A city also matches the start of a longer name: <code>de:frankfurt</code> matches
-Frankfurt am Main. A bare <code>us</code> also reaches Surfshark, but a bare <code>us-bos</code> or
-<code>us:seattle</code> can stop at a proxy provider earlier in the order, so use the
+Frankfurt am Main. A bare <code>us</code> also reaches Surfshark. A bare <code>us-bos</code> can stop at a
+proxy provider earlier in the order, and a bare <code>us:seattle</code> does not work, so use the
 <code>surfsharkvpn:</code> prefix for those forms.</p>
 <p>The returned proxy is HTTPS on <strong>port 443</strong>.</p>
 <h2 id="windscribe">Windscribe<a class="headerlink" href="#windscribe" title="Permanent link">&para;</a></h2>
@@ -3569,7 +3577,7 @@ sure that a username and a password are present (there is no 48-character rule).
 <td>A specific numbered server.</td>
 </tr>
 <tr>
-<td><code>us:seattle</code></td>
+<td><code>windscribevpn:us:seattle</code></td>
 <td>A random server in Seattle.</td>
 </tr>
 </tbody>

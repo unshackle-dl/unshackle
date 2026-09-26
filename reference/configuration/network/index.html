@@ -2345,9 +2345,8 @@ for the full proxy provider guide. Recognised proxy providers and their exit por
 </table>
 <div class="admonition note">
 <p class="admonition-title">Provider loading differs between CLI and REST server</p>
-<p>The <code>dl</code> CLI loads all providers, including <code>windscribevpn</code> and <code>gluetun</code>. The REST API /
-remote-client path uses a separate resolver that does <strong>not</strong> load <code>windscribevpn</code> or
-<code>gluetun</code>. ExpressVPN and ProtonVPN also auto-load when their cached session exists, and Hola
+<p>The <code>dl</code> CLI loads all providers, including <code>gluetun</code>. The REST API / remote-client path
+does <strong>not</strong> load <code>gluetun</code>, because it starts a local Docker container. ExpressVPN and ProtonVPN also auto-load when their cached session exists, and Hola
 auto-loads whenever the <code>hola-proxy</code> binary is present.</p>
 </div>
 
