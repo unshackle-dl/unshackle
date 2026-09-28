@@ -591,6 +591,7 @@ def perform_download(
                 select_titles=False,
                 wanted=params.get("wanted", []),
                 latest_episode=params.get("latest_episode", False),
+                latest_episodes=params.get("latest_episodes"),
                 lang=ctx.params["lang"],
                 v_lang=ctx.params["v_lang"],
                 a_lang=ctx.params["a_lang"],

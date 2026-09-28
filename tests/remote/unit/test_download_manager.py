@@ -227,6 +227,37 @@ def test_perform_download_puts_the_lang_selection_in_the_service_ctx(
     assert (p["lang"], p["v_lang"], p["a_lang"], [c.name for c in p["acodec"]], p["forced_subs"]) == expected
 
 
+def test_perform_download_passes_latest_episodes_to_dl_result(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import click
+
+    import unshackle.commands.dl as dl_module
+    from unshackle.core.api import download_manager, handlers
+    from unshackle.core.services import Services
+
+    class FakeDl:
+        cli = click.Command("dl")
+
+        def __init__(self, ctx: click.Context, **kwargs: object) -> None:
+            pass
+
+        def result(self, **kwargs: object) -> None:
+            raise _CapturedCtx(kwargs)
+
+    class FakeService:
+        def __init__(self, ctx: click.Context) -> None:
+            pass
+
+    monkeypatch.setattr(dl_module, "dl", FakeDl)
+    monkeypatch.setattr(Services, "get_path", staticmethod(lambda s: tmp_path))
+    monkeypatch.setattr(Services, "load", staticmethod(lambda s: FakeService))
+    monkeypatch.setattr(handlers, "load_full_cdm", lambda *a: None)
+
+    with pytest.raises(_CapturedCtx) as exc:
+        download_manager.perform_download("job-1", "EXAMPLE", "t1", {"latest_episodes": 3})
+
+    assert exc.value.args[0]["latest_episodes"] == 3
+
+
 def test_worker_relays_a_prompt_and_reads_the_answer(monkeypatch: pytest.MonkeyPatch) -> None:
     import json
     import os

@@ -214,6 +214,18 @@ def title_wanted(candidate: Any, wanted: Collection[str]) -> bool:
     return bool(candidate.matches_wanted(wanted))
 
 
+def latest_episode_keys(titles: Any, latest_episode: bool, latest_episodes: Optional[int]) -> list[tuple[int, int]]:
+    """The (season, number) of each episode ``--latest-episode(s)`` keeps, oldest first.
+
+    Counts distinct episodes, not Series entries, so a split episode takes one slot and all its parts download.
+    """
+    count = latest_episodes or (1 if latest_episode else 0)
+    if not count or not isinstance(titles, Series):
+        return []
+    # a Series keeps itself sorted, so the newest episodes are last
+    return list(dict.fromkeys((ep.season, ep.number) for ep in titles))[-count:]
+
+
 def server_url(server_name: Optional[str]) -> str:
     """The configured URL of a remote server, or an empty string when the config cannot be read."""
     from unshackle.core.remote_service import resolve_server
@@ -643,6 +655,12 @@ class dl:
         is_flag=True,
         default=False,
         help="Download only the single most recent episode available.",
+    )
+    @click.option(
+        "--latest-episodes",
+        type=click.IntRange(min=1),
+        default=None,
+        help="Download only the N most recent episodes available.",
     )
     @click.option(
         "-vl",
@@ -1431,6 +1449,7 @@ class dl:
         select_titles: bool,
         wanted: list[str],
         latest_episode: bool,
+        latest_episodes: Optional[int],
         lang: list[str],
         v_lang: list[str],
         a_lang: list[str],
@@ -1898,13 +1917,12 @@ class dl:
                 count = len(titles)
                 console.print(Padding(f"[text]Total selected: {count}[/]", (0, 5)))
 
-        latest_episode_id = None
-        if latest_episode and isinstance(titles, Series) and len(titles) > 0:
-            # Series is already sorted by (season, number, year)
-            # The last episode in the sorted list is the latest
-            latest_ep = titles[-1]
-            latest_episode_id = f"{latest_ep.season}x{latest_ep.number}"
-            self.log.info(f"Latest episode mode: Selecting S{latest_ep.season:02}E{latest_ep.number:02}")
+        latest_keys = latest_episode_keys(titles, latest_episode, latest_episodes)
+        if latest_keys:
+            picked = ", ".join(f"S{season:02}E{number:02}" for season, number in latest_keys)
+            self.log.info(f"Latest episode mode: Selecting {picked}")
+            # replaces -w; a base SxE key selects every part of a split episode
+            wanted = [f"{season}x{number}" for season, number in latest_keys]
 
         def select_best_audio(
             audio: list[Audio],
@@ -1955,15 +1973,9 @@ class dl:
 
         base_selection = (v_lang, a_lang, s_lang, range_)
 
-        def post_script_queued(candidate: Any) -> bool:
-            """Mirror of the filters the loop below applies, so the season counter matches it."""
-            if isinstance(candidate, Episode) and latest_episode and latest_episode_id:
-                return f"{candidate.season}x{candidate.number}" == latest_episode_id
-            return title_wanted(candidate, wanted)
-
         post_script_pending: dict[Any, int] = {}
         for candidate in titles:
-            if post_script_queued(candidate):
+            if title_wanted(candidate, wanted):
                 key = post_script_group(candidate)
                 post_script_pending[key] = post_script_pending.get(key, 0) + 1
         post_script_last: dict[Any, dict[Path, dict[str, str]]] = {}
@@ -1972,11 +1984,7 @@ class dl:
 
         for i, title in enumerate(titles):
             v_lang, a_lang, s_lang, range_ = base_selection
-            if isinstance(title, Episode) and latest_episode and latest_episode_id:
-                # If --latest-episode is set, only process the latest episode
-                if f"{title.season}x{title.number}" != latest_episode_id:
-                    continue
-            elif not title_wanted(title, wanted):
+            if not title_wanted(title, wanted):
                 continue
 
             if progress_sink:

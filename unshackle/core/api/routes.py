@@ -853,6 +853,10 @@ async def download(request: web.Request) -> web.Response:
               latest_episode:
                 type: boolean
                 description: Download only the single most recent episode (default - false)
+              latest_episodes:
+                type: integer
+                minimum: 1
+                description: Download only the N most recent episodes; overrides latest_episode (default - null)
               lang:
                 type: array
                 items:

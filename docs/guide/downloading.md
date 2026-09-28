@@ -55,7 +55,7 @@ with `--skip-dl`.
 2. **Authenticate**: sign in to the service with your profile's cookies/credentials.
 3. **Fetch titles**: retrieve the movie, episode list, or album (cached unless
    `--no-cache`/`--reset-cache`).
-4. **Filter titles**: apply `--wanted`, `--latest-episode`, or `--select-titles`.
+4. **Filter titles**: apply `--wanted`, `--latest-episode`, `--latest-episodes`, or `--select-titles`.
 5. **Get tracks**: parse the manifest into video, audio, subtitle, and chapter tracks.
 6. **Select tracks**: narrow each type down using your quality, codec, range, language,
    and bitrate flags.
@@ -65,7 +65,7 @@ with `--skip-dl`.
    `mkvmerge`, and move the finished file to your downloads directory.
 
 `--list` prints the tracks a title exposes and stops before selection. `--list-titles`
-prints every title the service returned and stops before `--wanted`/`--latest-episode`
+prints every title the service returned and stops before `--wanted`/`--latest-episode`/`--latest-episodes`
 filtering. `--skip-dl` runs the license step but skips the actual segment download.
 
 ## Choosing quality
@@ -600,10 +600,17 @@ when you want a part on its own.
 | --- | --- |
 | `--select-titles` | Interactively pick episodes of a series, or films when a title has more than one. **Cannot combine with `-w`.** |
 | `--latest-episode` | Download only the single most recent episode. |
-| `--list-titles` | List every title the service returned, then stop. `-w`/`--latest-episode` are not applied to this listing. |
+| `--latest-episodes N` | Download only the N most recent episodes. The newest episodes can come from more than one season. A [split episode](#split-episodes) counts as one episode, and all its parts download. |
+| `--list-titles` | List every title the service returned, then stop. `-w`, `--latest-episode` and `--latest-episodes` are not applied to this listing. |
+
+When `--latest-episode` or `--latest-episodes` is set, `-w` has no effect.
 
 ```shell title="Grab just the newest episode"
 unshackle dl --latest-episode EXAMPLE 81234567
+```
+
+```shell title="Grab the three newest episodes"
+unshackle dl --latest-episodes 3 EXAMPLE 81234567
 ```
 
 ## Including and excluding track types
@@ -653,7 +660,7 @@ Before committing to a long download, inspect what unshackle *would* do:
 | Flag | Effect |
 | --- | --- |
 | `--list` | List the tracks the service exposes for each title, then stop. No selection, no download. |
-| `--list-titles` | List every title the service returned, then stop. `-w`/`--latest-episode` are not applied to this listing. |
+| `--list-titles` | List every title the service returned, then stop. `-w`, `--latest-episode` and `--latest-episodes` are not applied to this listing. |
 | `--skip-dl` | Skip downloading but still acquire the decryption keys. |
 
 ```shell title="See the track selection without downloading"
@@ -1002,6 +1009,7 @@ authoritative list.
 | `--daily` | | Fill missing air dates from TVDB during `--enrich`. |
 | `--select-titles` | | Interactively pick episodes or films. |
 | `--latest-episode` | | Only the newest episode. |
+| `--latest-episodes N` | | Only the N newest episodes. |
 | `--video-only` / `--audio-only` / `--subs-only` | `-V` / `-A` / `-S` | Restrict track types. |
 | `--no-video` / `--no-audio` / `--no-subs` / `--no-chapters` / `--no-attachments` | `-nv` / `-na` / `-ns` / `-nc` / `-nt` | Skip track types. |
 | `--worst` | | Lowest bitrate within `-q`. |

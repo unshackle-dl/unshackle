@@ -55,6 +55,7 @@ DEFAULT_DOWNLOAD_PARAMS = {
     "no_atmos": False,
     "wanted": [],
     "latest_episode": False,
+    "latest_episodes": None,
     "lang": ["orig"],
     "v_lang": [],
     "a_lang": [],
@@ -1871,7 +1872,7 @@ def validate_download_parameters(data: Dict[str, Any]) -> Optional[str]:
         if not isinstance(data["downloads"], int) or data["downloads"] <= 0:
             return "downloads must be a positive integer"
 
-    for name in ("tmdb_id", "tvdb_id"):
+    for name in ("tmdb_id", "tvdb_id", "latest_episodes"):
         if data.get(name) is not None:
             value = data[name]
             if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
