@@ -2302,6 +2302,14 @@ async def dashboard_jobs_handler(request: web.Request) -> web.Response:
     return web.json_response([job.to_dict(include_full_details=True) for job in get_download_manager().list_jobs()])
 
 
+def _poll_cursor(before: int, items: List[Dict[str, Any]]) -> int:
+    """Cursor for the next poll, from the buffer's seq read *before* its ``since()`` call.
+
+    This poll or the next one returns a record added between the two reads; no poll skips it.
+    """
+    return max(before, items[-1]["seq"]) if items else before
+
+
 async def dashboard_logs_handler(request: web.Request) -> web.Response:
     """Recent log records; `since` (seq) and `level` filter the ring buffer."""
     from unshackle.core.api.stats import ring
@@ -2310,8 +2318,9 @@ async def dashboard_logs_handler(request: web.Request) -> web.Response:
         since = int(request.query.get("since", 0))
     except ValueError:
         since = 0
+    before = ring.seq
     records = ring.since(since, request.query.get("level"), request.query.get("logger"))
-    return web.json_response({"seq": ring.seq, "records": records})
+    return web.json_response({"seq": _poll_cursor(before, records), "records": records})
 
 
 async def dashboard_session_logs_handler(request: web.Request) -> web.Response:
@@ -2332,13 +2341,9 @@ async def dashboard_session_logs_handler(request: web.Request) -> web.Response:
     except ValueError:
         since = 0
     buffer = session.log_buffer
-    return web.json_response(
-        {
-            "session_id": session_id,
-            "records": buffer.since(since) if buffer else [],
-            "last_seq": buffer.last_seq if buffer else 0,
-        }
-    )
+    before = buffer.last_seq if buffer else 0
+    records = buffer.since(since) if buffer else []
+    return web.json_response({"session_id": session_id, "records": records, "last_seq": _poll_cursor(before, records)})
 
 
 async def dashboard_keys_handler(request: web.Request) -> web.Response:
@@ -2630,7 +2635,11 @@ async def dashboard_events_handler(request: web.Request) -> web.StreamResponse:
         except ValueError:
             since = 0
         status = await dashboard_status_handler(request)
-        return web.json_response({"seq": bus.seq, "stats": json.loads(status.text or "{}"), "events": bus.since(since)})
+        before = bus.seq
+        events = bus.since(since)
+        return web.json_response(
+            {"seq": _poll_cursor(before, events), "stats": json.loads(status.text or "{}"), "events": events}
+        )
 
     response = web.StreamResponse(
         headers={

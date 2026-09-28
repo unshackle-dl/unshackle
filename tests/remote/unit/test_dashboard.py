@@ -4,13 +4,16 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import sys
+import threading
 import time
+from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
 
 import pytest
 from aiohttp import web
 
-from unshackle.core.api.events import bus
+from unshackle.core.api.events import EventBus, bus
 from unshackle.core.api.handlers import api_key_authentication, dashboard_authentication
 from unshackle.core.api.routes import cors_middleware, setup_routes
 from unshackle.core.api.session_store import SessionStore
@@ -70,6 +73,56 @@ def test_ring_since_and_level() -> None:
     assert ring.seq == 5
     assert [r["msg"] for r in ring.since(3)] == ["m3", "m4"]
     assert [r["msg"] for r in ring.since(0, "warning")] == ["m3"]
+
+
+def _hammer(write: Callable[[], object], read: Callable[[], object]) -> None:
+    """Call ``read`` on this thread while four threads call ``write`` in a loop."""
+    stop = threading.Event()
+
+    def spin() -> None:
+        while not stop.is_set():
+            write()
+
+    old_interval = sys.getswitchinterval()
+    sys.setswitchinterval(1e-6)
+    threads = [threading.Thread(target=spin, daemon=True) for _ in range(4)]
+    try:
+        for t in threads:
+            t.start()
+        for _ in range(300):
+            read()
+    finally:
+        stop.set()
+        sys.setswitchinterval(old_interval)
+        for t in threads:
+            t.join()
+
+
+def test_bus_since_survives_concurrent_publish() -> None:
+    local = EventBus(history=5000)
+    _hammer(lambda: local.publish("log", {}), lambda: local.since(0))
+    seqs = [item["seq"] for item in local.history]
+    assert seqs == list(range(seqs[0], seqs[0] + len(seqs)))
+
+
+def test_bus_publish_reenters_its_lock() -> None:
+    local = EventBus()
+
+    def nested() -> None:
+        with local._lock:
+            local.publish("log", {})
+
+    worker = threading.Thread(target=nested, daemon=True)
+    worker.start()
+    worker.join(5)
+    assert not worker.is_alive(), "publish() deadlocked re-entering its own lock"
+    assert [item["seq"] for item in local.since(0)] == [1]
+
+
+def test_ring_since_survives_concurrent_emit() -> None:
+    ring = RingLogHandler(maxlen=5000)
+    record = logging.LogRecord("test.ring", logging.INFO, __file__, 0, "m", None, None)
+    _hammer(lambda: ring.handle(record), lambda: ring.since(0))
 
 
 def test_ring_masks_host_paths_and_secrets_in_records() -> None:

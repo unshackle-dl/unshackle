@@ -18,6 +18,7 @@ class EventBus:
         self.history: Deque[Dict[str, Any]] = deque(maxlen=history)
         self._loop: Optional[asyncio.AbstractEventLoop] = None
         self._loop_thread: Optional[threading.Thread] = None
+        self._lock = threading.RLock()
 
     def subscribe(self) -> asyncio.Queue:
         self._loop = asyncio.get_running_loop()
@@ -31,12 +32,25 @@ class EventBus:
             self._subs.remove(queue)
 
     def since(self, seq: int) -> List[Dict[str, Any]]:
-        return [item for item in self.history if item["seq"] > seq]
+        """Return the history after ``seq``.
+
+        ``deque.copy()`` is one C call, so it is atomic against an append from another thread.
+        Do not take the lock here: a finalizer that logs on the loop can then wait for the log
+        handler's lock while a worker that holds it waits for this lock, and the server stops.
+        """
+        return [item for item in self.history.copy() if item["seq"] > seq]
 
     def publish(self, event: str, data: Dict[str, Any]) -> None:
-        self.seq += 1
-        item = {"seq": self.seq, "event": event, "data": data}
-        self.history.append(item)
+        """Record and fan out one event; safe to call from any thread.
+
+        The lock is re-entrant because a log call inside it publishes again. ``seq``
+        moves only after the append, so a reader that sees it also finds the event in history.
+        """
+        with self._lock:
+            seq = self.seq + 1
+            item = {"seq": seq, "event": event, "data": data}
+            self.history.append(item)
+            self.seq = seq
         if not self._subs:
             return
         on_loop = self._loop is None or threading.current_thread() is self._loop_thread

@@ -224,24 +224,27 @@ class RingLogHandler(logging.Handler):
         self.seq = 0
 
     def emit(self, record: logging.LogRecord) -> None:
-        self.seq += 1
+        """Buffer and publish one record; ``seq`` moves only after the append, as in ``EventBus``."""
+        seq = self.seq + 1
         item = {
-            "seq": self.seq,
+            "seq": seq,
             "ts": record.created,
             "level": record.levelname,
             "logger": record.name,
             "msg": redact_secrets(self.format(record)),
         }
         self.records.append(item)
+        self.seq = seq
         bus.publish("log", item)
 
     def since(self, seq: int = 0, level: Optional[str] = None, logger: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Filter a copy of the records: ``emit()`` appends from worker threads."""
         min_level = logging.getLevelName(level.upper()) if level else 0
         if not isinstance(min_level, int):
             min_level = 0
         return [
             r
-            for r in self.records
+            for r in self.records.copy()
             if r["seq"] > seq
             and logging.getLevelName(r["level"]) >= min_level
             and (not logger or r["logger"] == logger or r["logger"].startswith(logger + "."))
