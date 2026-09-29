@@ -2690,8 +2690,8 @@ full detail:</p>
 </tbody>
 </table>
 <p>The full detail adds <code>started_time</code>, <code>completed_time</code>, <code>output_files</code>, the redacted
-<code>parameters</code>, and, for failed jobs, <code>error_message</code>, <code>error_details</code>, <code>error_code</code>,
-<code>error_traceback</code>, and <code>worker_stderr</code>.</p>
+<code>parameters</code>, and, for failed jobs, <code>error_message</code>, <code>error_details</code>, and <code>error_code</code>.
+With <code>--debug-api</code>, it also adds <code>error_traceback</code> and <code>worker_stderr</code>.</p>
 <div class="admonition example">
 <p class="admonition-title">A typical polling loop</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nv">JOB</span><span class="o">=</span>b1e6c7de-6d0a-4f2f-9d1e-3a2b4c5d6e7f

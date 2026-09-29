@@ -4188,7 +4188,7 @@ an HTTP caller would be remote code execution. You configure post-scripts only i
 </div>
 </div>
 </div>
-<p>With <code>full=true</code>, each job additionally includes <code>parameters</code> (with secrets redacted), <code>started_time</code>, <code>completed_time</code>, <code>output_files</code>, <code>error_message</code>, <code>error_details</code>, <code>error_code</code>, <code>error_traceback</code>, and <code>worker_stderr</code>.</p>
+<p>With <code>full=true</code>, each job additionally includes <code>parameters</code> (with secrets redacted), <code>started_time</code>, <code>completed_time</code>, <code>output_files</code>, <code>error_message</code>, <code>error_details</code>, and <code>error_code</code>. When you start the server with <code>--debug-api</code>, each job also includes <code>error_traceback</code> and <code>worker_stderr</code>.</p>
 <table>
 <thead>
 <tr>
