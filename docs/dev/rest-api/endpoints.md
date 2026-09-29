@@ -559,7 +559,7 @@ Show download jobs, with optional filtering and sorting.
     }
     ```
 
-With `full=true`, each job additionally includes `parameters` (with secrets redacted), `started_time`, `completed_time`, `output_files`, `error_message`, `error_details`, `error_code`, `error_traceback`, and `worker_stderr`.
+With `full=true`, each job additionally includes `parameters` (with secrets redacted), `started_time`, `completed_time`, `output_files`, `error_message`, `error_details`, and `error_code`. When you start the server with `--debug-api`, each job also includes `error_traceback` and `worker_stderr`.
 
 | Status | Error code | Meaning |
 | --- | --- | --- |

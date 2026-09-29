@@ -1005,14 +1005,13 @@ class DownloadQueueManager:
 
             job.status = JobStatus.FAILED
             job.error_message = str(e)
-            job.error_details = str(e)
 
             api_error = categorize_exception(
                 e, context={"service": job.service, "title_id": job.title_id, "job_id": job.job_id}
             )
-            job.error_code = api_error.error_code.value
-
-            job.error_traceback = traceback.format_exc()
+            job.error_details = job.error_details or str(e)
+            job.error_code = job.error_code or api_error.error_code.value
+            job.error_traceback = job.error_traceback or traceback.format_exc()
 
             log.error(f"Download failed for job {job.job_id}: {e}")
             raise
@@ -1164,6 +1163,9 @@ class DownloadQueueManager:
                 except json.JSONDecodeError as exc:
                     log.error(f"Failed to parse worker result for job {job.job_id}: {exc}")
                 break
+
+            if result_data:
+                job.error_traceback = result_data.get("traceback")
 
             if returncode != 0:
                 message = result_data.get("message") if result_data else "unknown error"

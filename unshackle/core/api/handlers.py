@@ -2141,7 +2141,7 @@ async def list_download_jobs_handler(data: Dict[str, Any], request: Optional[web
         jobs = sorted(jobs, key=get_sort_key, reverse=reverse)
 
         include_full = str(data.get("full") or "").lower() == "true"
-        job_list = [job.to_dict(include_full_details=include_full) for job in jobs]
+        job_list = [client_job_view(job.to_dict(include_full_details=include_full), request) for job in jobs]
 
         return web.json_response({"jobs": job_list})
 
@@ -2155,6 +2155,16 @@ async def list_download_jobs_handler(data: Dict[str, Any], request: Optional[web
             context={"operation": "list_download_jobs"},
             debug_mode=debug_mode,
         )
+
+
+def client_job_view(job: Dict[str, Any], request: Optional[web.Request]) -> Dict[str, Any]:
+    """Drop a job's traceback and stderr for API clients unless the server runs with ``--debug-api``.
+
+    Redaction masks only the job's own secrets, so these fields can still carry server-side values.
+    """
+    if request is not None and request.app.get("debug_api", False):
+        return job
+    return {k: v for k, v in job.items() if k not in ("error_traceback", "worker_stderr")}
 
 
 async def get_download_job_handler(job_id: str, request: Optional[web.Request] = None) -> web.Response:
@@ -2172,7 +2182,7 @@ async def get_download_job_handler(job_id: str, request: Optional[web.Request] =
                 details={"job_id": job_id},
             )
 
-        return web.json_response(job.to_dict(include_full_details=True))
+        return web.json_response(client_job_view(job.to_dict(include_full_details=True), request))
 
     except APIError:
         raise
@@ -2214,7 +2224,7 @@ async def download_job_events_handler(job_id: str, request: web.Request) -> web.
     await response.prepare(request)
 
     async def send(event: str, data: Dict[str, Any]) -> None:
-        payload = json.dumps(data, separators=(",", ":"), default=str)
+        payload = json.dumps(client_job_view(data, request), separators=(",", ":"), default=str)
         await response.write(f"event: {event}\ndata: {payload}\n\n".encode())
 
     queue: Optional[asyncio.Queue] = None

@@ -165,8 +165,8 @@ full detail:
 | `input_prompt` | string or `null` | The prompt the service waits on. Answer it with `POST /api/download/jobs/{job_id}/input`. |
 
 The full detail adds `started_time`, `completed_time`, `output_files`, the redacted
-`parameters`, and, for failed jobs, `error_message`, `error_details`, `error_code`,
-`error_traceback`, and `worker_stderr`.
+`parameters`, and, for failed jobs, `error_message`, `error_details`, and `error_code`.
+With `--debug-api`, it also adds `error_traceback` and `worker_stderr`.
 
 !!! example "A typical polling loop"
     ```shell

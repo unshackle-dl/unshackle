@@ -440,3 +440,55 @@ async def test_input_handler_rejects_bad_requests(
     assert await error_code({"response": "1"}, job.job_id) is APIErrorCode.CONFLICT
     job.owner_key = "another-key"
     assert await error_code({"response": "1"}, job.job_id) is APIErrorCode.JOB_NOT_FOUND
+
+
+FAKE_FAILING_WORKER = """
+import sys
+from unshackle.core.api import download_worker
+
+
+def fail(*args, **kwargs):
+    {}[[1]] = 2
+
+
+download_worker.perform_download = fail
+sys.exit(download_worker.main(["worker"] + sys.argv[1:]))
+"""
+
+
+async def test_a_failed_job_keeps_the_worker_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, manager: DownloadQueueManager
+) -> None:
+    """The job records the worker's traceback and error, not the parent's "Worker exited" wrapper."""
+    import asyncio
+
+    from unshackle.core.api import download_manager
+
+    worker = tmp_path / "worker.py"
+    worker.write_text(FAKE_FAILING_WORKER, encoding="utf-8")
+    spawn = asyncio.create_subprocess_exec
+
+    async def spawn_fake_worker(executable: str, *args: str, **kwargs: Any) -> Any:
+        return await spawn(executable, str(worker), *args[2:], **kwargs)
+
+    monkeypatch.setattr(download_manager.asyncio, "create_subprocess_exec", spawn_fake_worker)
+    job = manager.create_job("EXAMPLE", "t")
+    with pytest.raises(Exception, match="Worker exited"):
+        await asyncio.wait_for(manager.execute_download(job), timeout=60)
+
+    assert job.status is JobStatus.FAILED
+    assert "{}[[1]] = 2" in (job.error_traceback or "")
+    assert not (job.error_details or "").startswith("Worker exited")
+
+
+def test_client_job_view_hides_debug_fields_without_debug_api() -> None:
+    from types import SimpleNamespace
+
+    from unshackle.core.api.handlers import client_job_view
+
+    job = {"job_id": "j", "error_traceback": "tb", "worker_stderr": "err"}
+    off: Any = SimpleNamespace(app={"debug_api": False})
+    on: Any = SimpleNamespace(app={"debug_api": True})
+    assert client_job_view(job, off) == {"job_id": "j"}
+    assert client_job_view(job, None) == {"job_id": "j"}
+    assert client_job_view(job, on) == job
