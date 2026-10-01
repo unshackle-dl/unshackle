@@ -2138,6 +2138,13 @@ the <a href="../../../guide/drm-and-cdm/">DRM &amp; CDM guide</a>. Device files 
 Resolution is case-insensitive: an override (<code>dl --cdm &lt;name&gt;</code>, or the <code>cdm</code> field of an API
 job) wins, then the per-service entry, then <code>default</code>. An override pins one device for the whole
 run and skips any quality or Widevine/PlayReady sub-entries.</p>
+<p>Over <code>--remote</code>, an override also makes your device license the remote session, not the server
+CDM. A per-service entry does the same when it names a device without a quality: a device name,
+a <code>widevine</code> or <code>playready</code> sub-entry, or a profile or <code>default</code> sub-entry. A per-service entry
+that selects only by quality, or only for a different profile, loads no device when the run
+starts. unshackle then shows a warning, and the server decides who licenses the remote session.
+With only the top-level <code>default</code> entry, the server CDM licenses when the API key has it. See
+<a href="../services/#remote_services"><code>remote_services</code></a>.</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">cdm</span><span class="p">:</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="nt">default</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">chromecdm_l3</span>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span><span class="nt">EXAMPLE2</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">android_l1</span>

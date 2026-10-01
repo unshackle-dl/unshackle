@@ -2175,7 +2175,15 @@ optional <code>server_cdm</code> boolean, an optional <code>timeout</code> in se
 overrides such as <code>title_map</code>.</p>
 <p>Leave <code>server_cdm</code> unset and the client follows the server: it uses the server CDM for each
 service the API key has it on, and the local CDM for the others. <code>true</code> asks for the server CDM
-and falls back to the local CDM when the server refuses; <code>false</code> always uses the local CDM.</p>
+and falls back to the local CDM when the server refuses; <code>false</code> always uses the local CDM.
+<code>dl --cdm &lt;name&gt;</code> on a remote run has the same effect as <code>false</code> for that run: the device you
+name licenses the remote session. A <a href="../drm/#cdm"><code>cdm</code></a> entry for the service has the same
+effect for that service when it names the device that unshackle loaded. Both take priority over
+<code>server_cdm: true</code>. Remove the entry to use the server CDM for that service. The <code>default</code>
+entry does not count.</p>
+<p>The server has the last word. When it keeps the server CDM for a remote session that your
+device was to license, unshackle shows a warning. This occurs with a server that does not read
+your choice, and with a service option that runs the remote session on the server's device.</p>
 <p><code>auth_headers</code> lists extra header names to send the API key in, tried before the defaults
 <code>X-Secret-Key</code> and <code>X-Api-Key</code>, which unshackle always appends as fallbacks. It sends the
 first name. If the server answers <code>401</code>, it retries the same request with the next name, and
@@ -2333,6 +2341,11 @@ client configured with <code>server_cdm: true</code> to license with its own loc
 client that asks anyway gets a <code>FORBIDDEN</code> error. Because a download job always licenses with the server's CDM,
 an API key without <code>server_cdm</code> for that service also cannot submit or retry <code>/api/download</code>
 jobs. Keys that have no <code>users</code> entry, such as <code>api_secret</code>, keep server CDM access.</p>
+<p>A remote client that picks its own device licenses the remote session with that device. It picks
+with <code>dl --cdm</code>, with a <code>cdm</code> entry for the service, or with <code>server_cdm: false</code> in its
+<code>remote_services</code> entry. The server CDM makes no licence for that remote session, with or without
+a limit. A service option that runs the remote session on the server's device, such as a
+server-identity flag, keeps the server CDM.</p>
 <p><code>server_cdm_max_height</code> limits the live licences the server's device makes for that API key.
 Set it to a height in pixels for every service, or to a map of service tag to height with an
 optional <code>default</code> entry. A service the map does not name or sets to <code>null</code> gets the <code>default</code>, and

@@ -2639,6 +2639,14 @@ the raw license bytes come back for your local CDM to parse.</p>
 <ul>
 <li>Keeps your CDM local. The server only relays the license request.</li>
 <li>Used when <code>server_cdm</code> is <code>false</code> (the default).</li>
+<li>Also used for a run with <code>dl --cdm &lt;name&gt;</code>, and for a service whose own entry in
+  your <code>cdm</code> config named the loaded device. In each case the client sends
+  <code>server_cdm: false</code> when it creates the remote session, and the server builds the
+  service on your device even when the API key has the server CDM.</li>
+<li>A service option that the service lists in <code>SERVER_DEVICE_OPTIONS</code> keeps the server
+  CDM. The server reads the option from <code>service_params</code>, then from the top level of
+  the request. The create response gives the result in <code>server_cdm</code>, and the client
+  shows a warning when the server did not apply its choice.</li>
 <li>The service on the server sees your device, not the server's: its DRM system,
   security level, system ID and device type. A CDM call that the service makes
   (for example a session-key exchange at login) goes to your client as a <code>cdm_call</code>,
@@ -2879,7 +2887,7 @@ from a browser origin, not when you want only the local HTTP API.</p>
 <p><code>POST /api/session/create</code> requires <code>service</code> and <code>title_id</code>. It also accepts
 <code>credentials</code>, <code>cookies</code> (base64 of zlib-compressed Netscape cookie file), <code>proxy</code>,
 <code>no_proxy</code>, <code>profile</code>, <code>cache</code> (a map of <code>filename → base64(zlib(bytes))</code>),
-<code>client_region</code>, <code>cdm_type</code>, <code>cdm_security_level</code>, <code>cdm_relay</code> (<code>true</code> when the client
+<code>client_region</code>, <code>server_cdm</code> (<code>false</code> when the user picked the local CDM), <code>cdm_type</code>, <code>cdm_security_level</code>, <code>cdm_relay</code> (<code>true</code> when the client
 answers CDM calls), <code>cdm_system_id</code> and <code>cdm_device_type</code> (Widevine only), <code>service_config</code>
 (the identity config keys the service lists in <code>client_config</code>), <code>client</code> (a freeform identity
 object the dashboard shows as sent), and the track-selection hints <code>range_</code>, <code>vcodec</code>,
