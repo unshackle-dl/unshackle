@@ -2938,8 +2938,8 @@ encrypted file (for Widevine, PlayReady, and ClearKey-CENC):</p>
 <li><strong>shaka-packager</strong> is the default.</li>
 <li><strong>mp4decrypt</strong> is part of the Bento4 tools.</li>
 </ul>
-<p>Both must be discoverable in unshackle's bundled <code>binaries/</code> directory or on your
-<code>PATH</code>. If the selected tool's binary is missing at decrypt time, unshackle raises an
+<p>Both must be discoverable in unshackle's bundled <code>binaries/</code> directory, the
+<code>binaries</code> folder of your user data directory, or on your <code>PATH</code>. If the selected tool's binary is missing at decrypt time, unshackle raises an
 "executable not found but is required" error. See <a href="../../getting-started/installation/">dependencies</a> for
 installation.</p>
 <p>You choose the backend with the <code>decryption</code> config key. It can be a single value applied

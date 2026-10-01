@@ -2273,19 +2273,20 @@
 <hr />
 <h2 id="before-you-begin">Before you begin<a class="headerlink" href="#before-you-begin" title="Permanent link">&para;</a></h2>
 <p>You need a working unshackle install with services and CDM devices already configured, exactly as you would for a normal command-line download. If <code>unshackle dl</code> works for you, the API will too, since it runs the identical download pipeline.</p>
-<div class="tabbed-set tabbed-alternate" data-tabs="1:2"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Installed as a tool</label><label for="__tabbed_1_2">From a clone</label></div>
+<p>If you have no install yet, follow <a href="../../../getting-started/installation/">Installation</a>. Then check your tools:</p>
+<div class="tabbed-set tabbed-alternate" data-tabs="1:2"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">From a clone</label><label for="__tabbed_1_2">Installed as a uv tool</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>uv<span class="w"> </span>tool<span class="w"> </span>install<span class="w"> </span>git+https://github.com/unshackle-dl/unshackle.git
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>unshackle<span class="w"> </span>--help
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>uv<span class="w"> </span>run<span class="w"> </span>unshackle<span class="w"> </span>env<span class="w"> </span>check
 </span></code></pre></div>
 </div>
 <div class="tabbed-block">
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>uv<span class="w"> </span>run<span class="w"> </span>unshackle<span class="w"> </span>--help
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>unshackle<span class="w"> </span>env<span class="w"> </span>check
 </span></code></pre></div>
 </div>
 </div>
 </div>
+<p>This page uses the bare <code>unshackle</code> command. From a git clone, the recommended install, run each command as <code>uv run unshackle ...</code>.</p>
 <hr />
 <h2 id="step-1-configure-an-api-secret">Step 1: Configure an API secret<a class="headerlink" href="#step-1-configure-an-api-secret" title="Permanent link">&para;</a></h2>
 <p>The server authenticates every request (except the health check) with an API key that you send in the <code>X-Secret-Key</code> header. The server reads this API key from the <code>serve</code> section of your <code>unshackle.yaml</code> config.</p>

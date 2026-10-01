@@ -2166,31 +2166,47 @@ at a title and it will:</p>
 </tbody>
 </table>
 <h2 id="installation-at-a-glance">Installation at a glance<a class="headerlink" href="#installation-at-a-glance" title="Permanent link">&para;</a></h2>
-<div class="tabbed-set tabbed-alternate" data-tabs="1:2"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Install as a tool</label><label for="__tabbed_1_2">Run from a clone</label></div>
+<p>A git clone with the install script is the recommended way to install unshackle.</p>
+<div class="tabbed-set tabbed-alternate" data-tabs="1:3"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Linux (recommended)</label><label for="__tabbed_1_2">Windows (recommended)</label><label for="__tabbed_1_3">Advanced: uv tool</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>uv<span class="w"> </span>tool<span class="w"> </span>install<span class="w"> </span>git+https://github.com/unshackle-dl/unshackle.git
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>unshackle<span class="w"> </span>--help
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/unshackle-dl/unshackle.git
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nb">cd</span><span class="w"> </span>unshackle
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>sh<span class="w"> </span>install.sh
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>uv<span class="w"> </span>run<span class="w"> </span>unshackle<span class="w"> </span>env<span class="w"> </span>check
 </span></code></pre></div>
 </div>
 <div class="tabbed-block">
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/unshackle-dl/unshackle.git
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="nb">cd</span><span class="w"> </span>unshackle
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>uv<span class="w"> </span>run<span class="w"> </span>unshackle<span class="w"> </span>--help
+<div class="language-bat highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>git clone https://github.com/unshackle-dl/unshackle.git
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="k">cd</span> unshackle
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>.\install.bat
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>uv run unshackle env check
 </span></code></pre></div>
 </div>
+<div class="tabbed-block">
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>uv<span class="w"> </span>tool<span class="w"> </span>install<span class="w"> </span>git+https://github.com/unshackle-dl/unshackle.git
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>unshackle<span class="w"> </span>setup
+</span></code></pre></div>
+<p>This installs unshackle into the tool folder of <code>uv</code>, not a folder that you
+choose. <code>unshackle setup</code> then puts the tools, config, and data in your user
+data and config directories.</p>
 </div>
 </div>
+</div>
+<p>The install script installs <code>uv</code> and unshackle, then runs <code>unshackle setup</code>. In a
+clone, run every command as <code>uv run unshackle ...</code>. The examples on this site use
+the bare <code>unshackle</code> command.</p>
 <div class="admonition note">
 <p class="admonition-title">External tools</p>
 <p>unshackle shells out to FFmpeg, MKVToolNix, shaka-packager, Bento4, and
-<code>dovi_tool</code> for decryption, repacking, muxing, and Dolby Vision work. See
+<code>dovi_tool</code> for decryption, repacking, muxing, and Dolby Vision work.
+<code>unshackle setup</code> downloads them when a portable build exists for your system. See
 <a href="getting-started/installation/">Installation</a> for the full list and recommended versions.</p>
 </div>
 <h2 id="a-first-download">A first download<a class="headerlink" href="#a-first-download" title="Permanent link">&para;</a></h2>
 <p>Every download is three parts: the <code>dl</code> command, a <strong>service tag</strong>, and the
 service's title argument (a URL, ID, or slug).</p>
-<div class="language-shell highlight"><span class="filename">Download a 1080p title with English audio</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-q<span class="w"> </span><span class="m">1080</span><span class="w"> </span>-l<span class="w"> </span>en<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+<div class="language-shell highlight"><span class="filename">Download a 1080p title with English audio</span><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-q<span class="w"> </span><span class="m">1080</span><span class="w"> </span>-l<span class="w"> </span>en<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
 <p>The <code>dl</code> command carries all the quality, language, and output flags. The service
 tag (<code>EXAMPLE</code> above) selects which streaming service to talk to, and unshackle passes

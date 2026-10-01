@@ -3265,8 +3265,8 @@ either enum <strong>names</strong> or their <strong>values</strong>, comma-separ
 <p class="admonition-title">HYBRID requires dovi_tool</p>
 <p><code>-r HYBRID</code> makes a single hybrid track by injecting the Dolby Vision RPU
 metadata onto an HDR10/HDR10+ base layer with <strong>dovi_tool</strong>.
-It requires the <code>dovi_tool</code> binary, resolved from unshackle's <code>binaries/</code> folder or
-your <code>PATH</code>. The normal case is a DV track plus an HDR10 or HDR10+ base. With HDR10+
+It requires the <code>dovi_tool</code> binary, resolved from unshackle's <code>binaries/</code> folder,
+the <code>binaries</code> folder of your user data directory, or your <code>PATH</code>. The normal case is a DV track plus an HDR10 or HDR10+ base. With HDR10+
 and no DV, unshackle converts the HDR10+ metadata to DV instead, which also needs
 <code>hdr10plus_tool</code>. With no DV and no HDR10+, the title fails.
 When HDR10+ is present, unshackle prefers it over HDR10 as the base layer.</p>
