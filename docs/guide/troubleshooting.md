@@ -241,7 +241,7 @@ Each command reports how many files it removed and how much space it freed, then
 !!! example "A required tool is missing"
     **Symptom:** decryption, muxing, or analysis fails early, sometimes with a "binary not found" style error.
 
-    **Inspect:** use `unshackle env check` and look for a red `✗` on a **required** row. Install the missing tool and re-run.
+    **Inspect:** use `unshackle env check` and look for a red `✗` on a **required** row. Run `unshackle setup` to install it, or install it by hand, and re-run.
 
 !!! example "Decryption produces garbage or fails"
     **Symptom:** the download completes but the file will not play, or the decrypt step errors.

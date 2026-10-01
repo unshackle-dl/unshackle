@@ -5,11 +5,15 @@ A complete reference for every `unshackle` command, subcommand, and flag. This p
 - **[`dl`](#dl)**: the download pipeline (the command you use most).
 - **[`search`](#search)**: find titles on a service.
 - **[`import`](#import)**: rebuild a download from an export file.
+- **[`setup`](#setup)**: install the external tools and make a first config.
 - **[`cfg`](#cfg)**, **[`env`](#env)**: manage configuration and the environment.
 - **[`kv`](#kv)**: Key Vault operations.
 - **[`wvd`](#wvd)**, **[`prd`](#prd)**: Widevine / PlayReady device management.
 - **[`serve`](#serve)**: operate the local CDM and REST API server.
 - **[`util`](#util)**: helper media utilities.
+
+!!! note "Running commands from a clone"
+    This page uses the bare `unshackle` command. From a git clone, the recommended install, run each command as `uv run unshackle ...`.
 
 !!! tip "Getting help on any command"
     Every command accepts `-h`, `--help`, or `-?`. For example `unshackle dl --help` or `unshackle wvd new --help`. Each service defines its own arguments for `dl` and `search` (such as a title ID or a query), so examine `unshackle dl SERVICE --help` for those.
@@ -268,6 +272,24 @@ The export file can be a `mediaexport` file from `dl --export`, an export from a
 
 ---
 
+## `setup`
+
+Install the external tools and make a first config.
+
+```
+unshackle setup
+```
+
+The command takes no options and asks its questions at the prompt. It shows the missing [external tools](../getting-started/installation.md#external-tools-on-your-path) and downloads the ones you accept. It puts them in a `binaries` folder, in the package folder of a git clone or in your user data directory for a `uv` tool install. If no `unshackle.yaml` exists, it writes a first one: inside the clone, or to your user config directory for a `uv` tool install. It then makes the data folders and imports `.wvd` and `.prd` devices, one file or folder per answer, until you give an empty answer. It ends with a summary of the tools, the path of a config that it wrote, and a pointer to `env check`. You can run it again: it skips the tools it finds and never overwrites a config. [Installation](../getting-started/installation.md#what-unshackle-setup-does) gives the full steps and where each file goes.
+
+!!! example
+    ```shell
+    uv run unshackle setup   # from a git clone
+    unshackle setup          # from a uv tool install
+    ```
+
+---
+
 ## `cfg`
 
 Read, set, delete, or show configuration values in `unshackle.yaml` without hand-editing YAML.
@@ -312,7 +334,7 @@ unshackle env COMMAND [ARGS]...
 unshackle env check
 ```
 
-Prints a dependency table (Category / Tool / Status / Required / Purpose) that shows which external tools unshackle finds on your `PATH`. It also gives a summary of how many required tools are present.
+Prints a dependency table (Category / Tool / Status / Required / Purpose) that shows which external tools unshackle finds on your `PATH`. It also gives a summary of how many required tools are present. If a required tool is missing, it tells you to run [`unshackle setup`](#setup).
 
 | Category | Tools |
 |---|---|

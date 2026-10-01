@@ -3,16 +3,19 @@ import sys
 from pathlib import Path
 from typing import Optional
 
+from appdirs import user_data_dir
+
 __shaka_platform = {"win32": "win", "darwin": "osx"}.get(sys.platform, sys.platform)
+
+package_binaries_dir = Path(__file__).resolve().parent.parent / "binaries"
+user_binaries_dir = Path(user_data_dir("unshackle", False)) / "binaries"
 
 
 def find(*names: str, search_dirs: Optional[list[Path]] = None) -> Optional[Path]:
     """Find the path of the first found binary name."""
-    current_dir = Path(__file__).resolve().parent.parent
-    local_binaries_dir = current_dir / "binaries"
-    services_dir = current_dir / "services"
+    services_dir = package_binaries_dir.parent / "services"
 
-    dirs_to_check: list[Path] = [local_binaries_dir]
+    dirs_to_check: list[Path] = [package_binaries_dir, user_binaries_dir]
     if services_dir.exists():
         for s_dir in services_dir.iterdir():
             s_bin = s_dir / "binaries"

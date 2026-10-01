@@ -407,8 +407,8 @@ encrypted file (for Widevine, PlayReady, and ClearKey-CENC):
 - **shaka-packager** is the default.
 - **mp4decrypt** is part of the Bento4 tools.
 
-Both must be discoverable in unshackle's bundled `binaries/` directory or on your
-`PATH`. If the selected tool's binary is missing at decrypt time, unshackle raises an
+Both must be discoverable in unshackle's bundled `binaries/` directory, the
+`binaries` folder of your user data directory, or on your `PATH`. If the selected tool's binary is missing at decrypt time, unshackle raises an
 "executable not found but is required" error. See [dependencies](../getting-started/installation.md) for
 installation.
 

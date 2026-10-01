@@ -362,13 +362,14 @@ class Config:
 
 
 # noinspection PyProtectedMember
+PACKAGE_CONFIG_PATH = Config._Directories.namespace_dir / Config._Filenames.root_config
+USER_CONFIG_PATH = Path(Config._Directories.app_dirs.user_config_dir) / Config._Filenames.root_config
+# noinspection PyProtectedMember
 POSSIBLE_CONFIG_PATHS = (
-    # The unshackle Namespace Folder (e.g., %appdata%/Python/Python311/site-packages/unshackle)
-    Config._Directories.namespace_dir / Config._Filenames.root_config,
+    PACKAGE_CONFIG_PATH,
     # The Parent Folder to the unshackle Namespace Folder (e.g., %appdata%/Python/Python311/site-packages)
     Config._Directories.namespace_dir.parent / Config._Filenames.root_config,
-    # The AppDirs User Config Folder (e.g., ~/.config/unshackle on Linux, %LOCALAPPDATA%\unshackle on Windows)
-    Path(Config._Directories.app_dirs.user_config_dir) / Config._Filenames.root_config,
+    USER_CONFIG_PATH,
 )
 
 

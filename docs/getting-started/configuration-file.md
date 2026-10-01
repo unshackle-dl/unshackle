@@ -17,11 +17,16 @@ When unshackle starts, it searches a fixed list of locations and uses the **firs
 
 | # | Location | Typical path |
 |---|----------|--------------|
-| 1 | The unshackle package folder | `.../site-packages/unshackle/unshackle.yaml` |
-| 2 | The parent of the package folder | `.../site-packages/unshackle.yaml` |
+| 1 | The unshackle package folder | `<clone>/unshackle/unshackle.yaml` (a `uv` tool install: `.../site-packages/unshackle/unshackle.yaml`) |
+| 2 | The parent of the package folder | `<clone>/unshackle.yaml` (a `uv` tool install: `.../site-packages/unshackle.yaml`) |
 | 3 | Your OS user-config directory | see the table below |
 
-The third location, your per-user config directory, is the recommended place for most installations, because it lives outside the package and survives reinstalls and upgrades. Its exact path depends on your operating system:
+Where the file belongs depends on how you installed unshackle:
+
+- **Git clone (recommended).** Keep the file at `unshackle/unshackle.yaml` inside the clone, which is location 1. [`unshackle setup`](installation.md#what-unshackle-setup-does) writes a new config there, and it stays with the clone when you update it.
+- **`uv` tool install.** Use location 3, your per-user config directory. A `uv` tool upgrade replaces the package folder, so a file at location 1 or 2 is lost. `unshackle setup` writes a new config there.
+
+The path of the per-user config directory depends on your operating system:
 
 === "Linux"
 
@@ -217,7 +222,10 @@ $ unshackle cfg cdm.default --unset
 $ unshackle cfg --list
 ```
 
-When it writes, `unshackle cfg` targets the config file that unshackle loaded. If none exists yet, it makes `unshackle.yaml` inside the `unshackle` package folder (location 1 above), not your OS user-config directory. To keep the config outside the package, make the file at the user-config path yourself first, then `unshackle cfg` writes to it.
+When it writes, `unshackle cfg` targets the config file that unshackle loaded. If none exists yet, it makes `unshackle.yaml` in the `unshackle` package folder (location 1 above):
+
+- **Git clone.** That is `unshackle/unshackle.yaml` in the clone, which is the correct place.
+- **`uv` tool install.** A tool upgrade replaces the package folder and deletes that file. Run `unshackle setup` first, which writes the config to your user config directory, or make the file there yourself. Then `unshackle cfg` writes to it.
 
 !!! warning "Editing with `cfg` strips comments"
     Because `unshackle cfg` rewrites the whole file when it saves, a write removes any comments in `unshackle.yaml`. If you keep important notes as comments, edit the file by hand instead, or keep those notes elsewhere.

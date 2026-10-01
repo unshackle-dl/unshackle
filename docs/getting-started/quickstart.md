@@ -6,9 +6,10 @@ module and CDM it needs to fetch and decrypt media, operate a basic `unshackle d
 command, and learn where the finished file lands.
 
 !!! note "Before you start"
-    This guide assumes unshackle is already installed and on your `PATH`. If
-    `unshackle --help` does not print a help screen, work through
-    [Installation](installation.md) first.
+    This guide assumes that you installed unshackle as
+    [Installation](installation.md) describes. The examples use the bare
+    `unshackle` command. From a git clone, the recommended install, run each
+    one as `uv run unshackle ...`, for example `uv run unshackle env check`.
 
 !!! warning "unshackle includes no services"
     unshackle handles manifests, DRM, downloading, and muxing. It does not include a
@@ -16,52 +17,47 @@ command, and learn where the finished file lands.
     ([step 3](#3-write-a-service)). `EXAMPLE` in this guide stands in for the tag you
     give yours.
 
-## 1. Examine your environment
+## 1. Run setup
 
 unshackle drives several external tools (FFmpeg, MKVToolNix, shaka-packager, and
-others) to decrypt, repack, and mux media. Make sure that they are visible before
-you download anything:
+others) to decrypt, repack, and mux media, and it needs a config file. The
+`unshackle setup` command prepares both. If you used the install script, setup
+has already run. You can run it again at any time:
+
+```shell
+unshackle setup
+```
+
+Setup downloads the missing required tools and, if you agree, groups of optional
+tools. If no `unshackle.yaml` exists, it writes a minimal one with your downloads
+folder. It also makes the data folders and lets you import `.wvd` and `.prd`
+devices, one file or a whole folder at a time. [Installation](installation.md#what-unshackle-setup-does) tells you what
+each step does and where the files go.
+
+Then make sure that unshackle finds the tools:
 
 ```shell
 unshackle env check
 ```
 
-This prints a dependency table. The **required** tools (FFmpeg, FFprobe,
-MKVToolNix, mkvpropedit, and shaka-packager) must show a green check. Optional
-tools such as `dovi_tool` (Dolby Vision) and CCExtractor (closed captions) only
-matter for the features that use them.
+The **required** tools (FFmpeg, FFprobe, MKVToolNix, mkvpropedit, and
+shaka-packager) must show a green check. Optional tools such as `dovi_tool`
+(Dolby Vision) and CCExtractor (closed captions) only matter for the features
+that use them.
 
-!!! tip
-    The summary line at the bottom reports `installed/total` and lists anything
-    required that is still missing, so you know exactly what to install next.
+!!! note "Set up by hand"
+    To do these steps yourself, install the tools from the tables in
+    [Installation](installation.md#external-tools-on-your-path). Then run
+    `unshackle env info` to see where unshackle looks for `unshackle.yaml`, and
+    make the file in one of those locations. The
+    [configuration guide](configuration-file.md) gives the details.
 
-## 2. Make a minimal config
-
-unshackle reads a single configuration file named `unshackle.yaml`. To see where it
-looks for that file, and where it *would* accept one if you have not made it yet,
-use this command:
-
-```shell
-unshackle env info
-```
-
-If no config exists, this prints the candidate locations. In the order unshackle
-examines them, they are:
-
-1. `unshackle.yaml` inside the unshackle package folder.
-2. `unshackle.yaml` in that folder's parent.
-3. `unshackle.yaml` in your OS user-config directory
-   (`~/.config/unshackle/` on Linux, `%LOCALAPPDATA%\unshackle\` on Windows,
-   `~/Library/Application Support/unshackle/` on macOS).
-
-The **first** file that exists wins. Make `unshackle.yaml` in one of those
-locations.
-
-### The one config key you must set
+## 2. Check the output template
 
 unshackle refuses to start a download unless it knows how to name the output file.
 That means `output_template` is the one setting a first run genuinely requires.
-Everything else has a sensible default. A minimal, working config looks like this:
+Everything else has a sensible default. The config that setup writes copies `tag`
+and `output_template` from the example config. A minimal, working config looks like this:
 
 ```yaml title="unshackle.yaml"
 output_template:
@@ -98,7 +94,9 @@ commands.
 ## 4. Add a CDM for DRM
 
 Most streaming services encrypt their titles. To fetch content keys, unshackle
-needs a **CDM**, a Widevine device (`.wvd`) or a PlayReady device (`.prd`). Add a
+needs a **CDM**, a Widevine device (`.wvd`) or a PlayReady device (`.prd`). If you
+imported devices during `unshackle setup`, they are already in place. If setup also
+wrote your config, it set `cdm.default` to the device that you chose. Otherwise, add a
 Widevine device you already have with:
 
 ```shell
@@ -217,7 +215,8 @@ codec, bitrate, channel-layout, and track-type selection.
 ## 8. Where the output lands
 
 By default, unshackle writes finished files to the `downloads` directory.
-`unshackle env info` shows its exact path. The built-in default is a `downloads`
+`unshackle env info` shows its exact path. A config from `unshackle setup` uses the
+folder that you gave at its prompt. Without that setting, the default is a `downloads`
 folder one level above the installed `unshackle` package. Override it for one
 command with `-o`:
 

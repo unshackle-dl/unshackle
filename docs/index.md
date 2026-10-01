@@ -47,24 +47,45 @@ at a title and it will:
 
 ## Installation at a glance
 
-=== "Install as a tool"
+A git clone with the install script is the recommended way to install unshackle.
 
-    ```shell
-    uv tool install git+https://github.com/unshackle-dl/unshackle.git
-    unshackle --help
-    ```
-
-=== "Run from a clone"
+=== "Linux (recommended)"
 
     ```shell
     git clone https://github.com/unshackle-dl/unshackle.git
     cd unshackle
-    uv run unshackle --help
+    sh install.sh
+    uv run unshackle env check
     ```
+
+=== "Windows (recommended)"
+
+    ```bat
+    git clone https://github.com/unshackle-dl/unshackle.git
+    cd unshackle
+    .\install.bat
+    uv run unshackle env check
+    ```
+
+=== "Advanced: uv tool"
+
+    ```shell
+    uv tool install git+https://github.com/unshackle-dl/unshackle.git
+    unshackle setup
+    ```
+
+    This installs unshackle into the tool folder of `uv`, not a folder that you
+    choose. `unshackle setup` then puts the tools, config, and data in your user
+    data and config directories.
+
+The install script installs `uv` and unshackle, then runs `unshackle setup`. In a
+clone, run every command as `uv run unshackle ...`. The examples on this site use
+the bare `unshackle` command.
 
 !!! note "External tools"
     unshackle shells out to FFmpeg, MKVToolNix, shaka-packager, Bento4, and
-    `dovi_tool` for decryption, repacking, muxing, and Dolby Vision work. See
+    `dovi_tool` for decryption, repacking, muxing, and Dolby Vision work.
+    `unshackle setup` downloads them when a portable build exists for your system. See
     [Installation](getting-started/installation.md) for the full list and recommended versions.
 
 ## A first download

@@ -13,18 +13,21 @@ The full loop runs end to end: start the server, authenticate, submit a download
 
 You need a working unshackle install with services and CDM devices already configured, exactly as you would for a normal command-line download. If `unshackle dl` works for you, the API will too, since it runs the identical download pipeline.
 
-=== "Installed as a tool"
-
-    ```shell
-    uv tool install git+https://github.com/unshackle-dl/unshackle.git
-    unshackle --help
-    ```
+If you have no install yet, follow [Installation](../../getting-started/installation.md). Then check your tools:
 
 === "From a clone"
 
     ```shell
-    uv run unshackle --help
+    uv run unshackle env check
     ```
+
+=== "Installed as a uv tool"
+
+    ```shell
+    unshackle env check
+    ```
+
+This page uses the bare `unshackle` command. From a git clone, the recommended install, run each command as `uv run unshackle ...`.
 
 ---
 

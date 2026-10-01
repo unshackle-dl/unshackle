@@ -26,13 +26,19 @@ A modular archival tool for movies, TV, and music. Fork of [Devine](https://gith
 
 ## Install
 
+The recommended way is a git clone with the install script. The script installs `uv` and unshackle, then runs `unshackle setup` to download the external tools and write a first config.
+
 ```shell
-uv tool install git+https://github.com/unshackle-dl/unshackle.git
-unshackle --help
+git clone https://github.com/unshackle-dl/unshackle.git
+cd unshackle
+sh install.sh                 # Windows: .\install.bat
+uv run unshackle env check
 ```
 
-> [!TIP]
-> Prefer `uv run unshackle ...` inside a clone to keep the virtual environment active.
+In a clone, run every command as `uv run unshackle ...`.
+
+> [!NOTE]
+> Advanced: `uv tool install git+https://github.com/unshackle-dl/unshackle.git` installs unshackle into the tool folder of `uv`, not a folder that you choose. `unshackle setup` then puts the tools, config, and data in your user data and config directories. See [Installation](https://docs.unshackle.dev/getting-started/installation/) for details.
 
 ### Requirements
 

@@ -238,6 +238,8 @@ def check() -> None:
         summary_parts.append(f"[red]Missing required: {', '.join(missing_required)}[/red]")
 
     console.print(Padding("  ".join(summary_parts), (0, 3, 1, 3)))
+    if not all_required_installed:
+        console.print(Padding("[text]Run [cyan]unshackle setup[/cyan] to install them.[/text]", (0, 3, 1, 3)))
 
 
 @env.command()
@@ -370,10 +372,14 @@ def info() -> None:
         if sys.platform == "win32" and os.getenv(x)
     }
 
-    for name in sorted(dir(config.directories)):
-        if name.startswith("__") or name == "app_dirs":
-            continue
-        attr_value = getattr(config.directories, name)
+    rows = {
+        name: getattr(config.directories, name)
+        for name in dir(config.directories)
+        if not name.startswith("__") and name != "app_dirs"
+    }
+    rows["user_binaries"] = binaries.user_binaries_dir
+    for name in sorted(rows):
+        attr_value = rows[name]
 
         if isinstance(attr_value, list):
             paths_str = "\n".join(str(p.resolve()) if isinstance(p, Path) else str(p) for p in attr_value)
