@@ -162,6 +162,9 @@ class Service(metaclass=ABCMeta):
     # Config keys a remote client may supply for a session its own device licenses (a device identity
     # such as an ESN); the server's own values for these keys are withheld from that session.
     CLIENT_CONFIG: tuple[str, ...] = ()
+    # Every service option that makes the service call ``cdm.lend_server_device()``. A remote session with
+    # one of them set keeps the server CDM even when the remote client picked its own device.
+    SERVER_DEVICE_OPTIONS: tuple[str, ...] = ()
 
     def __init__(self, ctx: click.Context):
         console.print(Padding(Rule(f"[rule.text]Service: {self.__class__.__name__}"), (1, 2)))

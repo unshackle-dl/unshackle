@@ -246,6 +246,14 @@ There are two ways DRM keys get resolved, chosen by the client's `server_cdm` fl
 
     - Keeps your CDM local. The server only relays the license request.
     - Used when `server_cdm` is `false` (the default).
+    - Also used for a run with `dl --cdm <name>`, and for a service whose own entry in
+      your `cdm` config named the loaded device. In each case the client sends
+      `server_cdm: false` when it creates the remote session, and the server builds the
+      service on your device even when the API key has the server CDM.
+    - A service option that the service lists in `SERVER_DEVICE_OPTIONS` keeps the server
+      CDM. The server reads the option from `service_params`, then from the top level of
+      the request. The create response gives the result in `server_cdm`, and the client
+      shows a warning when the server did not apply its choice.
     - The service on the server sees your device, not the server's: its DRM system,
       security level, system ID and device type. A CDM call that the service makes
       (for example a session-key exchange at login) goes to your client as a `cdm_call`,
@@ -412,7 +420,7 @@ The server mounts all these routes, even in `--remote-only` mode. Paths use the
 `POST /api/session/create` requires `service` and `title_id`. It also accepts
 `credentials`, `cookies` (base64 of zlib-compressed Netscape cookie file), `proxy`,
 `no_proxy`, `profile`, `cache` (a map of `filename → base64(zlib(bytes))`),
-`client_region`, `cdm_type`, `cdm_security_level`, `cdm_relay` (`true` when the client
+`client_region`, `server_cdm` (`false` when the user picked the local CDM), `cdm_type`, `cdm_security_level`, `cdm_relay` (`true` when the client
 answers CDM calls), `cdm_system_id` and `cdm_device_type` (Widevine only), `service_config`
 (the identity config keys the service lists in `client_config`), `client` (a freeform identity
 object the dashboard shows as sent), and the track-selection hints `range_`, `vcodec`,

@@ -89,6 +89,15 @@ overrides such as `title_map`.
 Leave `server_cdm` unset and the client follows the server: it uses the server CDM for each
 service the API key has it on, and the local CDM for the others. `true` asks for the server CDM
 and falls back to the local CDM when the server refuses; `false` always uses the local CDM.
+`dl --cdm <name>` on a remote run has the same effect as `false` for that run: the device you
+name licenses the remote session. A [`cdm`](drm.md#cdm) entry for the service has the same
+effect for that service when it names the device that unshackle loaded. Both take priority over
+`server_cdm: true`. Remove the entry to use the server CDM for that service. The `default`
+entry does not count.
+
+The server has the last word. When it keeps the server CDM for a remote session that your
+device was to license, unshackle shows a warning. This occurs with a server that does not read
+your choice, and with a service option that runs the remote session on the server's device.
 
 `auth_headers` lists extra header names to send the API key in, tried before the defaults
 `X-Secret-Key` and `X-Api-Key`, which unshackle always appends as fallbacks. It sends the
@@ -153,6 +162,12 @@ client configured with `server_cdm: true` to license with its own local CDM inst
 client that asks anyway gets a `FORBIDDEN` error. Because a download job always licenses with the server's CDM,
 an API key without `server_cdm` for that service also cannot submit or retry `/api/download`
 jobs. Keys that have no `users` entry, such as `api_secret`, keep server CDM access.
+
+A remote client that picks its own device licenses the remote session with that device. It picks
+with `dl --cdm`, with a `cdm` entry for the service, or with `server_cdm: false` in its
+`remote_services` entry. The server CDM makes no licence for that remote session, with or without
+a limit. A service option that runs the remote session on the server's device, such as a
+server-identity flag, keeps the server CDM.
 
 `server_cdm_max_height` limits the live licences the server's device makes for that API key.
 Set it to a height in pixels for every service, or to a map of service tag to height with an

@@ -70,6 +70,17 @@ def resolve_cdm_name(cdm: dict, service: str, override: Any = None) -> Any:
     return override or ci_get(cdm, service) or ci_get(cdm, "default")
 
 
+def cdm_entry_names_device(entry: Any, profile: Optional[str] = None) -> bool:
+    """Whether a per-service ``cdm`` entry names a device when no quality is known.
+
+    An entry that selects only by quality, or by a different profile, names none.
+    """
+    if not isinstance(entry, dict):
+        return bool(entry)
+    systems = {"widevine", "playready"} & {str(key).lower() for key in entry}
+    return bool(systems or entry.get(profile) or entry.get("default"))
+
+
 class Config:
     class _Directories:
         # default directories, do not modify here, set via config

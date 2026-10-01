@@ -16,6 +16,7 @@ from unshackle.commands.dl import dl
 from unshackle.core.api import handlers
 from unshackle.core.api.errors import APIError, APIErrorCode
 from unshackle.core.api.session_store import SessionEntry
+from unshackle.core.config import cdm_entry_names_device
 from unshackle.core.drm import Widevine
 from unshackle.core.remote_service import RemoteClient, RemoteService
 from unshackle.core.tracks import Audio, Video
@@ -33,6 +34,7 @@ USERS = {
 
 @pytest.fixture(autouse=True)
 def serve_users(monkeypatch):
+    monkeypatch.setattr(handlers.config, "cdm", {}, raising=False)
     monkeypatch.setattr(handlers.config, "serve", {"users": USERS}, raising=False)
     monkeypatch.setattr(handlers, "request_secret_key", lambda request: request.headers.get("X-Secret-Key"))
 
@@ -72,10 +74,32 @@ def test_cap_per_key_and_service(key, service, cap):
         ("flat", {"quality": [2160, 1080], "cdm_type": "widevine"}, (False, 1080)),
         ("flat", {"quality": ["2160p"], "cdm_type": "widevine"}, (False, 1080)),
         ("none", {"quality": [2160], "cdm_type": "widevine"}, (False, None)),
+        ("open", {"cdm_type": "widevine", "server_cdm": False}, (False, None)),  # the client picked its own device
+        ("flat", {"quality": [1080], "cdm_type": "widevine", "server_cdm": False}, (False, None)),
+        ("open", {"server_cdm": False}, (True, None)),  # no device to hand the licensing to
+        ("open", {"cdm_type": "widevine", "server_cdm": None}, (True, None)),  # only a literal false declines
+        ("open", {"cdm_type": "widevine", "server_cdm": 0}, (True, None)),
     ],
 )
-def test_session_mode(key, data, expected):
+def test_session_mode(key, data, expected, monkeypatch):
+    monkeypatch.setattr(handlers.Services, "load", lambda tag: type("Svc", (), {}))
     assert handlers.choose_session_cdm(request(key), "EXAMPLE1", data) == expected
+
+
+def test_a_server_device_option_keeps_the_server_cdm_against_the_clients_choice(monkeypatch):
+    svc = type("Svc", (), {"SERVER_DEVICE_OPTIONS": ("server_side",)})
+    monkeypatch.setattr(handlers.Services, "load", lambda tag: svc)
+    data = {"cdm_type": "widevine", "server_cdm": False, "server_side": True}
+    assert handlers.choose_session_cdm(request("flat"), "EXAMPLE1", data) == (True, 1080)
+    assert handlers.choose_session_cdm(request("flat"), "EXAMPLE1", {**data, "quality": [2160]}) == (False, 1080)
+    assert handlers.choose_session_cdm(request("flat"), "EXAMPLE1", {**data, "server_side": False}) == (False, None)
+    assert handlers.choose_session_cdm(request("flat"), "EXAMPLE1", {**data, "server_side": "yes"}) == (True, 1080)
+
+    nested = {"cdm_type": "widevine", "server_cdm": False, "service_params": {"server_side": True}}
+    assert handlers.choose_session_cdm(request("flat"), "EXAMPLE1", nested) == (True, 1080)
+    # service_params wins over the flat key, as it does when the service is built
+    nested["server_side"], nested["service_params"] = True, {"server_side": False}
+    assert handlers.choose_session_cdm(request("flat"), "EXAMPLE1", nested) == (False, None)
 
 
 def test_above_the_cap_without_a_device_is_refused_at_create():
@@ -623,16 +647,162 @@ def test_the_client_returns_only_an_expected_error_body():
         client.post("/x", {}, expect=("FORBIDDEN",))
 
 
-def test_cdm_with_an_uncapped_server_cdm_key_warns_that_it_is_ignored(caplog):
+class _SentCreate(Exception):
+    pass
+
+
+def sent_create(
+    server_cdm, cdm_name=None, local_cdm=SimpleNamespace(is_playready=False), cdm_entry=False, cdm_map=None
+):
+    def post(path, data):
+        raise _SentCreate(data)
+
+    handlers.config.cdm = cdm_map or {}
+    svc = remote(local_cdm, {})
+    svc.ctx.obj.cdm_entry = cdm_entry
+    svc._server_cdm = server_cdm
+    svc.service_tag = "EXAMPLE1"
+    svc.title_id = "t1"
+    svc._server_accounts = {"global": True}
+    svc._service_params = {}
+    svc._client_config = None
+    svc.ctx.parent = SimpleNamespace(params={"no_proxy": True, "cdm_name": cdm_name})
+    svc.client = SimpleNamespace(post=post)
+    with pytest.raises(_SentCreate) as exc:
+        svc.authenticate()
+    return svc, exc.value.args[0]
+
+
+@pytest.mark.parametrize(
+    ("server_cdm", "cdm_name", "declines"),
+    [
+        (True, "my_device", True),  # --cdm wins over server_cdm: true
+        (None, "my_device", True),
+        (False, None, True),
+        (True, None, False),
+        (None, None, False),
+    ],
+)
+def test_the_client_declines_the_server_cdm_when_the_user_picked_a_device(server_cdm, cdm_name, declines):
+    svc, data = sent_create(server_cdm, cdm_name)
+    assert (data.get("server_cdm") is False) is declines
+    assert data["cdm_type"] == "widevine"
+
+    assert svc._server_cdm is (False if declines else server_cdm)
+
+    # the server built the service, so its answer is final
+    svc.adopt_session_cdm(True, None)
+    assert svc._server_cdm is True
+
+
+def test_a_device_loaded_from_the_services_cdm_entry_declines_the_server_cdm():
+    svc, data = sent_create(True, cdm_entry=True, cdm_map={"EXAMPLE1": "my_device"})
+    assert data["server_cdm"] is False
+    assert svc._server_cdm is False
+
+
+def test_cdm_over_an_existing_cdm_entry_declines_without_a_warning(caplog):
+    with caplog.at_level(logging.WARNING):
+        _, data = sent_create(True, "my_device", cdm_map={"EXAMPLE1": {">=1080": "other"}})
+    assert data["server_cdm"] is False
+    assert not caplog.text
+
+
+def test_a_device_loaded_from_the_default_cdm_entry_does_not_decline(caplog):
+    with caplog.at_level(logging.WARNING):
+        svc, data = sent_create(True, cdm_map={"default": "my_device", "EXAMPLE2": "other"})
+    assert "server_cdm" not in data
+    assert svc._server_cdm is True
+    assert not caplog.text
+
+
+@pytest.mark.parametrize("local_cdm", [SimpleNamespace(is_playready=False), None])
+def test_a_cdm_entry_that_did_not_load_the_device_warns_and_does_not_decline(local_cdm, caplog):
+    with caplog.at_level(logging.WARNING):
+        svc, data = sent_create(True, local_cdm=local_cdm, cdm_map={"example1": {">=1080": "my_device"}})
+    assert "server_cdm" not in data
+    assert svc._server_cdm is True
+    assert "cdm entry for EXAMPLE1" in caplog.text
+
+
+@pytest.mark.parametrize(
+    ("entry", "profile", "names"),
+    [
+        ("my_device", None, True),
+        ({"widevine": "my_device"}, None, True),
+        ({"PlayReady": "my_device"}, None, True),
+        ({"default": "my_device", ">=1080": "other"}, None, True),
+        ({"john": "my_device"}, "john", True),
+        ({"john": "my_device"}, "jane", False),
+        ({">=1080": "my_device", "<1080": "other"}, None, False),  # a quality alone selects nothing at the start
+        (None, None, False),
+    ],
+)
+def test_which_cdm_entries_name_a_device_with_no_quality(entry, profile, names):
+    assert cdm_entry_names_device(entry, profile) is names
+
+
+def test_a_client_with_no_device_does_not_decline():
+    _, data = sent_create(False, None, local_cdm=None)
+    assert "server_cdm" not in data
+
+
+def created(answer):
+    """Run ``authenticate()`` to its end for a device the service's cdm entry loaded."""
+    svc, _ = sent_create(True, cdm_entry=True, cdm_map={"EXAMPLE1": "my_device"})
+    svc._server_cdm = True
+    svc.client = SimpleNamespace(post=lambda path, data: {"session_id": "sess", **answer})
+    svc.close = svc.start_keepalive = lambda: None
+    svc.authenticate()
+    return svc
+
+
+def test_the_client_says_when_a_cdm_entry_gave_the_licensing_to_its_device(caplog):
+    with caplog.at_level(logging.INFO):
+        svc = created({"server_cdm": False})
+    assert svc._server_cdm is False
+    assert "cdm config has an entry for EXAMPLE1" in caplog.text
+
+
+def test_the_client_does_not_claim_its_device_when_the_server_keeps_the_server_cdm(caplog):
+    with caplog.at_level(logging.INFO):
+        svc = created({"server_cdm": True, "server_cdm_max_height": 1080})
+    assert svc._server_cdm is True
+    assert "your own device is not used" in caplog.text
+    assert "cdm config has an entry" not in caplog.text
+
+
+@pytest.mark.parametrize(
+    ("cdm", "override", "cdm_map", "expected"),
+    [
+        (object(), None, {"EXAMPLE1": "my_device"}, True),
+        (object(), None, {"example1": {"widevine": "my_device"}}, True),
+        (object(), "my_device", {"EXAMPLE1": "my_device"}, False),  # --cdm is its own reason
+        (object(), None, {"default": "my_device"}, False),
+        (object(), None, {"EXAMPLE1": {">=1080": "other"}, "default": "my_device"}, False),
+        (None, None, {"EXAMPLE1": {">=1080": "other"}}, False),
+    ],
+)
+def test_dl_records_whether_the_services_cdm_entry_named_the_loaded_device(cdm, override, cdm_map, expected):
+    handlers.config.cdm = cdm_map
+    runner = dl.__new__(dl)
+    runner.cdm, runner.cdm_override, runner.service, runner.profile = cdm, override, "EXAMPLE1", None
+    assert runner.cdm_from_service_entry() is expected
+
+
+@pytest.mark.parametrize("max_height", [None, 1080])
+def test_a_declined_server_cdm_that_the_server_keeps_is_reported(max_height, caplog):
     svc = remote(SimpleNamespace(is_playready=False), {})
     svc.service_tag = "EXAMPLE1"
-    svc.ctx.parent = SimpleNamespace(params={"cdm_name": "my_device"})
-    with caplog.at_level(logging.WARNING):
-        svc.adopt_session_cdm(True, None)
-    assert "--cdm is ignored" in caplog.text
+    svc._server_cdm = False
+    with caplog.at_level(logging.INFO):
+        svc.adopt_session_cdm(True, max_height)
+    assert svc._server_cdm is True
+    assert "your own device is not used" in caplog.text
+    assert "pass a higher -q" not in caplog.text
 
     caplog.clear()
-    svc.ctx.parent.params = {}
+    svc._server_cdm = True
     with caplog.at_level(logging.WARNING):
-        svc.adopt_session_cdm(True, None)
-    assert "--cdm is ignored" not in caplog.text
+        svc.adopt_session_cdm(True, max_height)
+    assert "your own device is not used" not in caplog.text

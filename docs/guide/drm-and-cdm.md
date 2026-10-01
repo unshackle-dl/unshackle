@@ -501,7 +501,7 @@ control this trade-off on the `dl` command:
 |------|--------|
 | `--vaults-only` | Never send a license request; use only cached/vault keys. Fails if a content key is missing. |
 | `--cdm-only` | Ignore vaults for sourcing keys and always perform a fresh license request. Over a `server_cdm` remote session the server still reads its own vaults; the flag only skips the client's decode check on the key it gets back. |
-| `--cdm <name>` | Use the named CDM device for this run instead of the one the `cdm` config maps for the service. |
+| `--cdm <name>` | Use the named CDM device for this run instead of the one the `cdm` config maps for the service. Over `--remote`, that device licenses the remote session, not the server CDM. |
 
 See [key vaults](vaults.md) for how to configure vault backends.
 

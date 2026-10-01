@@ -192,7 +192,7 @@ order the service used, then renumbers the episodes into the order you asked for
 | Flag | Description |
 |---|---|
 | `--cdm-only` / `--vaults-only` | Use only the CDM, or only Key Vaults, for key acquisition. |
-| `--cdm <name>` | Use the named CDM device from the `cdm` config mapping for this run, ignoring the service/default mapping. |
+| `--cdm <name>` | Use the named CDM device from the `cdm` config mapping for this run, ignoring the service/default mapping. Over `--remote`, that device licenses the remote session, not the server CDM. |
 | `--skip-dl` | Skip the download but still retrieve keys. |
 | `--export` | Export track info and keys to a `mediaexport` JSON file in the exports directory. |
 

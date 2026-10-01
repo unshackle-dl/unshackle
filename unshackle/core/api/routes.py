@@ -1811,6 +1811,13 @@ async def session_create(request: web.Request) -> web.Response:
                   forced_subs:
                     type: boolean
                     default: false
+              server_cdm:
+                type: boolean
+                description: |
+                  False when the user picked the local CDM. With `cdm_type`, the server then builds
+                  the service on the client's device, also for an API key with the server CDM.
+                  A request that sets one of the service's `SERVER_DEVICE_OPTIONS`, in
+                  `service_params` or at the top level, keeps the server CDM
               cdm_type:
                 type: string
                 enum: [widevine, playready]

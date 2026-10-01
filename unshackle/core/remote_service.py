@@ -45,6 +45,7 @@ from unshackle.core.titles.music import Album, Song
 from unshackle.core.tracks import Audio, Chapter, Chapters, Subtitle, Tracks, Video
 from unshackle.core.tracks.attachment import Attachment
 from unshackle.core.tracks.track import Track
+from unshackle.core.utils.collections import ci_get
 from unshackle.core.utils.redact import redact_path, redact_text, safe_display_url
 from unshackle.core.vault import Vault
 
@@ -1064,9 +1065,20 @@ class RemoteService:
 
         # sent with the server CDM too: a capped server hands the tracks above its cap to this device
         cdm = self.local_cdm
+        cdm_name = self.ctx.parent and self.ctx.parent.params.get("cdm_name")
+        cdm_entry = cdm is not None and self.ctx.obj.cdm_entry and self._server_cdm is not False
+        if not (cdm_entry or cdm_name or self._server_cdm is False) and ci_get(config.cdm, self.service_tag):
+            self.log.warning(
+                f"The cdm entry for {self.service_tag} did not load a device for this remote session, "
+                "so the server decides who licenses it"
+            )
         if cdm is not None:
             from unshackle.core.cdm.detect import is_playready_cdm
 
+            if cdm_entry or cdm_name:
+                self._server_cdm = False
+            if self._server_cdm is False:
+                create_data["server_cdm"] = False
             create_data["cdm_type"] = "playready" if is_playready_cdm(cdm) else "widevine"
             level = getattr(cdm, "security_level", None)
             if isinstance(level, int):
@@ -1103,6 +1115,11 @@ class RemoteService:
         if "server_cdm" in result:
             self.adopt_session_cdm(bool(result["server_cdm"]), result.get("server_cdm_max_height"))
         self._server_device = bool(result.get("server_device"))
+        if cdm_entry and self._server_cdm is False and not self._server_device:
+            self.log.info(
+                f"The cdm config has an entry for {self.service_tag}, so your own device licenses "
+                "this remote session and not the server CDM"
+            )
         vault = bool(result.get("server_vault"))
         if self._server_device:
             self._server_cdm = True
@@ -1134,10 +1151,15 @@ class RemoteService:
         """Take the server's choice of who licenses this remote session, and say why when a cap made it.
 
         A remote session on the server's lent device keeps the server-CDM flow: dl checks the local vaults, then asks the
-        server, which answers only from its vault.
+        server, which answers only from its vault. ``_server_cdm`` is False on entry when the user picked the local
+        device, so a server that keeps its own CDM gets a warning.
         """
         if getattr(self, "_server_device", False):
             self._server_cdm = True
+            return
+        if self._server_cdm is False and server_cdm:
+            self._server_cdm = True
+            self.log.warning("The server CDM licenses this remote session, so your own device is not used")
             return
         if self._server_cdm and not server_cdm and max_height is None:
             self.log.warning(
@@ -1146,8 +1168,6 @@ class RemoteService:
             )
         self._server_cdm = server_cdm
         if max_height is None:
-            if server_cdm and self.ctx.parent and self.ctx.parent.params.get("cdm_name"):
-                self.log.warning("--cdm is ignored: the server CDM licenses this remote session")
             return
         message = f"The server CDM licenses up to {max_height}p for this API key"
         if not server_cdm:

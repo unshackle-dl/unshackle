@@ -682,10 +682,18 @@ def choose_session_cdm(
     """``(server_cdm, max_height)`` for a new remote session.
 
     The service picks its manifest from the CDM it sees, so it decides once, before any tracks.
+    A client that sends ``server_cdm: false`` with a device licenses with that device, unless it also set
+    one of the service's ``SERVER_DEVICE_OPTIONS``.
     When ``-q`` asks for more than the cap, the client's own device licenses, and a client with no device gets a refusal.
     """
     if not server_cdm_allowed(request, service):
         return False, None
+    if data.get("server_cdm") is False and data.get("cdm_type"):
+        server_device_options = getattr(Services.load(service), "SERVER_DEVICE_OPTIONS", ())
+        service_params = data.get("service_params")
+        options = {**data, **service_params} if isinstance(service_params, dict) else data
+        if not any(options.get(option) for option in server_device_options):
+            return False, None
     cap = server_cdm_max_height(request, service)
     wanted = requested_height(data.get("quality"))
     if cap is None or wanted is None or wanted <= cap:
@@ -3172,6 +3180,7 @@ SESSION_TRANSPORT_KEYS = {
     "cache",
     "client_region",
     "proxy_region",
+    "server_cdm",
     "cdm_type",
     "cdm_security_level",
     "cdm_relay",

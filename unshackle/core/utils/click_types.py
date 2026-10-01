@@ -156,11 +156,20 @@ class SubtitleCodecChoice(click.Choice):
 
 
 class ContextData:
-    def __init__(self, config: dict, cdm: WidevineCdm, proxy_providers: list, profile: Optional[str] = None):
+    def __init__(
+        self,
+        config: dict,
+        cdm: WidevineCdm,
+        proxy_providers: list,
+        profile: Optional[str] = None,
+        cdm_entry: bool = False,
+    ):
         self.config = config
         self.cdm = cdm
         self.proxy_providers = proxy_providers
         self.profile = profile
+        # True when the service's own entry in the cdm config named the loaded device
+        self.cdm_entry = cdm_entry
 
 
 class SeasonRange(click.ParamType):

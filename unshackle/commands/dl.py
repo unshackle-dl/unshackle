@@ -43,7 +43,7 @@ from rich.tree import Tree
 from unshackle.core import __version__, binaries, providers
 from unshackle.core.cdm import DecryptLabsRemoteCDM
 from unshackle.core.cdm.detect import cdm_type_stub, is_playready_cdm, is_widevine_cdm
-from unshackle.core.config import config, resolve_cdm_name, resolve_decryption
+from unshackle.core.config import cdm_entry_names_device, config, resolve_cdm_name, resolve_decryption
 from unshackle.core.console import GradientPulseBarColumn, SyncLive, console, listing_panel
 from unshackle.core.constants import DOWNLOAD_CANCELLED, DOWNLOAD_LICENCE_ONLY, AnyTrack, context_settings
 from unshackle.core.credential import Credential
@@ -877,7 +877,7 @@ class dl:
         "cdm_name",
         type=str,
         default=None,
-        help="Use this CDM device for the run, overriding the cdm config mapping.",
+        help="Use this CDM device for the run, overriding the cdm config mapping and, over --remote, the server CDM.",
     )
     @click.option("--no-proxy", is_flag=True, default=False, help="Force disable all proxy use.")
     @click.option(
@@ -1418,7 +1418,11 @@ class dl:
                 raise click.UsageError("That proxy is on your machine, so --remote cannot use it.")
 
         ctx.obj = ContextData(
-            config=self.service_config, cdm=self.cdm, proxy_providers=self.proxy_providers, profile=self.profile
+            config=self.service_config,
+            cdm=self.cdm,
+            proxy_providers=self.proxy_providers,
+            profile=self.profile,
+            cdm_entry=self.cdm_from_service_entry(),
         )
 
         if repack:
@@ -5186,6 +5190,14 @@ class dl:
                 if isinstance(credentials, list):
                     return Credential(*credentials)
                 return Credential.loads(credentials)  # type: ignore
+
+    def cdm_from_service_entry(self) -> bool:
+        """Whether the service's own ``cdm`` entry named the loaded device, not ``--cdm`` or the ``default`` entry."""
+        return (
+            self.cdm is not None
+            and not self.cdm_override
+            and cdm_entry_names_device(ci_get(config.cdm, self.service), self.profile)
+        )
 
     def get_cdm(
         self,
