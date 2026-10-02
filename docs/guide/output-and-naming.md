@@ -380,7 +380,9 @@ unicode_filenames: true
 | Value | Result |
 |---|---|
 | `false` (default) | `기생충` → transliterated ASCII; accents stripped. |
-| `true` | Native characters preserved in filenames and folders. |
+| `true` | Native characters preserved in filenames and folders, with the vowel and tone marks of languages such as Thai, Hindi and Bengali. |
+
+With each value, unshackle first normalises the name to Unicode NFC. A title that a service sends in composed form and in decomposed form gives the same name.
 
 Regardless of this setting, unshackle always removes or replaces a set of filesystem-unsafe and structural characters during sanitisation. For example, `/` and `;` become ` & `, and unshackle removes characters like `\ * ! ? , ' " < > | $ # ~`. This is why you must never put path-unsafe characters directly in a template.
 
