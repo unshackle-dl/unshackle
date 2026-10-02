@@ -118,6 +118,25 @@ def import_module_by_path(path: Path) -> ModuleType:
     return module
 
 
+def _strip_hidden_characters(text: str, keep_letter_marks: bool) -> str:
+    """Drop control characters (Cc) and hidden nonspacing marks (Mn).
+
+    Several scripts write vowels and tone marks as nonspacing marks on a base letter, e.g.
+    Thai "เป็นต่อ" or Devanagari "हिंदी"; dropping those changes the word ("เปนตอ"). With
+    ``keep_letter_marks`` a mark that sits on a letter (or on another such mark) is kept, while
+    one with nothing to attach to, or on a symbol (a variation selector after an emoji), is not.
+    """
+    kept: list[str] = []
+    for c in text:
+        category = unicodedata.category(c)
+        if category == "Cc":
+            continue
+        if category == "Mn" and not (keep_letter_marks and kept and unicodedata.category(kept[-1])[0] in "LM"):
+            continue
+        kept.append(c)
+    return "".join(kept)
+
+
 def sanitize_filename(filename: str, spacer: str = ".", unicode: Optional[bool] = None) -> str:
     """
     Sanitise a string to be filename safe.
@@ -130,11 +149,12 @@ def sanitize_filename(filename: str, spacer: str = ".", unicode: Optional[bool] 
     transliterating them to ASCII equivalents. Pass ``unicode`` to decide that
     for one call instead of the config value.
     """
-    if not (config.unicode_filenames if unicode is None else unicode):
+    keep_unicode = config.unicode_filenames if unicode is None else unicode
+    if not keep_unicode:
         filename = unidecode(filename)
         filename = re.sub(r"\[\(+", "[", filename)
         filename = re.sub(r"\)+\]", "]", filename)
-    filename = "".join(c for c in filename if unicodedata.category(c) not in ("Mn", "Cc"))
+    filename = _strip_hidden_characters(filename, keep_letter_marks=keep_unicode)
     filename = filename.replace("/", " & ").replace(";", " & ")  # e.g. multi-episode filenames
     if spacer == ".":
         filename = re.sub(r" - ", spacer, filename)  # title separators to spacer (avoids .-. pattern)
