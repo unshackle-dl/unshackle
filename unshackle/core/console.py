@@ -1,6 +1,9 @@
+import codecs
+import io
 import logging
 import math
 import shutil
+import sys
 from datetime import datetime
 from types import ModuleType
 from typing import IO, Any, Callable, Iterable, List, Literal, Mapping, Optional, TextIO, Union
@@ -401,6 +404,15 @@ class _GradientPulse:
     def __rich_measure__(self, console: Console, options: ConsoleOptions) -> Measurement:
         return Measurement(4, self.width or options.max_width)
 
+
+def force_utf8_streams() -> None:
+    """Make stdout and stderr write UTF-8. A redirected stream on Windows uses a legacy code page that cannot encode the console output."""
+    for stream in (sys.stdout, sys.stderr):
+        if isinstance(stream, io.TextIOWrapper) and codecs.lookup(stream.encoding).name != "utf-8":
+            stream.reconfigure(encoding="utf-8", errors="replace")
+
+
+force_utf8_streams()
 
 console = ComfyConsole(
     log_time=False,
