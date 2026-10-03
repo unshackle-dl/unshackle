@@ -74,6 +74,7 @@ from unshackle.core.tracks.dv_fixup import apply_dv_fixup
 from unshackle.core.tracks.hybrid import Hybrid
 from unshackle.core.tracks.track import assert_fragments_decrypted, has_encrypted_sample_entry
 from unshackle.core.utilities import (
+    apply_original_language,
     as_requested,
     declared_kwargs,
     embedded_audio_langs,
@@ -1759,13 +1760,13 @@ class dl:
         cache_region = service.current_region if hasattr(service, "current_region") else None
         cache_account_hash = get_account_hash(service.credential) if hasattr(service, "credential") else None
 
+        enrich_lang: Optional[Language] = None
         if self.enrich:
             sample_title = titles[0] if hasattr(titles, "__getitem__") else titles
             kind = "tv" if isinstance(sample_title, Episode) else "movie"
 
             enrich_title: Optional[str] = None
             enrich_year: Optional[int] = None
-            enrich_lang: Optional[Language] = None
 
             enrich_result = providers.resolve_by_ids(
                 self.tmdb_id,
@@ -2099,6 +2100,8 @@ class dl:
                 try:
                     title.tracks.add(service.get_tracks(title), warn_only=True)
                     title.tracks.chapters = service.get_chapters(title)
+                    if enrich_lang:
+                        apply_original_language(title, enrich_lang)
                 except Exception as e:
                     if self.debug_logger:
                         self.debug_logger.log_error(

@@ -248,6 +248,24 @@ def embedded_audio_langs(videos: Sequence[Any], keep_videos: bool) -> list[str]:
     return [video.data["audio_language"] for video in videos if video.data.get("audio_language")]
 
 
+def apply_original_language(title: Any, language: Language) -> None:
+    """
+    Make ``language`` the title's original language over the one the service set.
+
+    A service tags its videos and original-language flags with its own guess, so the videos that
+    carry that guess move to ``language`` and every track's flag is set again.
+    """
+    guess = title.language
+    if guess == language:
+        return
+    for video in title.tracks.videos:
+        if guess and video.language == guess:
+            video.language = language
+    for track in title.tracks:
+        track.is_original_lang = bool(track.language and is_close_match(track.language, [language]))
+    title.language = language
+
+
 def find_missing_langs(
     requested: Sequence[str],
     available: Sequence[Union[str, Language, None]],
