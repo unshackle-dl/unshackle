@@ -227,6 +227,35 @@ def latest_episode_keys(titles: Any, latest_episode: bool, latest_episodes: Opti
     return list(dict.fromkeys((ep.season, ep.number) for ep in titles))[-count:]
 
 
+def apply_enrich(title: Title_T, name: Optional[str], year: Optional[int], language: Optional[Language]) -> None:
+    """Set the --enrich name, year and original language on a title. A song takes only the language.
+
+    A service can set the title again in get_tracks, so dl applies them after that call too.
+    """
+    if isinstance(title, Episode):
+        title.title = name or title.title
+    elif isinstance(title, Movie):
+        title.name = name or title.name
+    if isinstance(title, (Episode, Movie)):
+        title.year = year or title.year
+    if language:
+        apply_original_language(title, language)
+
+
+def load_tracks(
+    service: Service,
+    title: Title_T,
+    *,
+    name: Optional[str] = None,
+    year: Optional[int] = None,
+    language: Optional[Language] = None,
+) -> None:
+    """Load the tracks and chapters of a title, then apply the --enrich name, year and language again."""
+    title.tracks.add(service.get_tracks(title), warn_only=True)
+    title.tracks.chapters = service.get_chapters(title)
+    apply_enrich(title, name, year, language)
+
+
 def server_url(server_name: Optional[str]) -> str:
     """The configured URL of a remote server, or an empty string when the config cannot be read."""
     from unshackle.core.remote_service import resolve_server
@@ -1754,12 +1783,11 @@ class dl:
         cache_account_hash = get_account_hash(service.credential) if hasattr(service, "credential") else None
 
         enrich_lang: Optional[Language] = None
+        enrich_title: Optional[str] = None
+        enrich_year: Optional[int] = None
         if self.enrich:
             sample_title = titles[0] if hasattr(titles, "__getitem__") else titles
             kind = "tv" if isinstance(sample_title, Episode) else "movie"
-
-            enrich_title: Optional[str] = None
-            enrich_year: Optional[int] = None
 
             enrich_result = providers.resolve_by_ids(
                 self.tmdb_id,
@@ -1789,17 +1817,9 @@ class dl:
             ]:
                 self.log.warning(f"--enrich source gave no {', '.join(missing)}. Those fields are unchanged.")
 
-            if enrich_title or enrich_year or enrich_lang:
-                for t in titles if isinstance(titles, (Series, Movies)) else [titles]:
-                    if enrich_title:
-                        if isinstance(t, Episode):
-                            t.title = enrich_title
-                        else:
-                            t.name = enrich_title
-                    if enrich_year:
-                        t.year = enrich_year
-                    if enrich_lang:
-                        t.language = enrich_lang
+            if isinstance(titles, (Series, Movies)):
+                for t in titles:
+                    apply_enrich(t, enrich_title, enrich_year, enrich_lang)
 
             if isinstance(titles, Series):
                 enrich_tvdb_id = self.tvdb_id or (enrich_result.external_ids.tvdb_id if enrich_result else None)
@@ -2090,10 +2110,7 @@ class dl:
             tracks_label = "Getting Remote Tracks..." if self.is_remote else "Getting Tracks..."
             with console.status(tracks_label, spinner="dots"):
                 try:
-                    title.tracks.add(service.get_tracks(title), warn_only=True)
-                    title.tracks.chapters = service.get_chapters(title)
-                    if enrich_lang:
-                        apply_original_language(title, enrich_lang)
+                    load_tracks(service, title, name=enrich_title, year=enrich_year, language=enrich_lang)
                 except Exception as e:
                     if self.debug_logger:
                         self.debug_logger.log_error(
