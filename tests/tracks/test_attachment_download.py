@@ -114,3 +114,21 @@ def test_direct_session_copies_rnet_cookies_set_by_name() -> None:
     new = track_module.direct_session(rs, "http://dl-proxy:2")
     assert new.cookies.get("via_set") == "1"
     assert new.cookies.get("via_item") == "3"
+
+
+def test_delete_removes_only_files_in_the_temp_directory(tmp_path, monkeypatch) -> None:
+    temp = tmp_path / "temp"
+    temp.mkdir()
+    monkeypatch.setattr(config.directories, "temp", temp)
+    temp_font = temp / "font.ttf"
+    user_font = tmp_path / "font.ttf"
+    temp_font.write_bytes(b"font")
+    user_font.write_bytes(b"font")
+
+    for path in (temp_font, user_font):
+        attachment = Attachment(path=path)
+        attachment.delete()
+        assert attachment.path is None
+
+    assert not temp_font.exists()
+    assert user_font.exists()

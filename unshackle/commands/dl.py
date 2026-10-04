@@ -363,9 +363,7 @@ class dl:
             return fonts[0] if fonts else None
         return None
 
-    def prepare_temp_font(
-        self, font_name: str, matched_font: Path, system_fonts: dict[str, Path], temp_font_files: list[Path]
-    ) -> Path:
+    def prepare_temp_font(self, font_name: str, matched_font: Path, system_fonts: dict[str, Path]) -> Path:
         """
         Copy system font to temp and log if using fallback.
 
@@ -373,7 +371,6 @@ class dl:
             font_name: Requested font name
             matched_font: Path to matched system font
             system_fonts: Dictionary of available system fonts
-            temp_font_files: List to track temp files for cleanup
 
         Returns:
             Path to temp font file
@@ -388,20 +385,16 @@ class dl:
 
         if not temp_path.exists():
             shutil.copy2(matched_font, temp_path)
-            temp_font_files.append(temp_path)
 
         return temp_path
 
-    def attach_subtitle_fonts(
-        self, font_names: list[str], title: Title_T, temp_font_files: list[Path]
-    ) -> tuple[int, list[str]]:
+    def attach_subtitle_fonts(self, font_names: list[str], title: Title_T) -> tuple[int, list[str]]:
         """
         Attach fonts for subtitle rendering.
 
         Args:
             font_names: List of font names requested by subtitles
             title: Title object to attach fonts to
-            temp_font_files: List to track temp files for cleanup
 
         Returns:
             Tuple of (fonts_attached_count, missing_fonts_list)
@@ -418,7 +411,7 @@ class dl:
                 continue
 
             if system_font := find_font_with_fallbacks(font_name, system_fonts):
-                temp_path = self.prepare_temp_font(font_name, system_font, system_fonts, temp_font_files)
+                temp_path = self.prepare_temp_font(font_name, system_font, system_fonts)
                 title.tracks.add(Attachment(path=temp_path, name=f"{font_name} ({system_font.stem})"))
                 font_count += 1
             else:
@@ -2006,7 +1999,6 @@ class dl:
 
             title_rule = f"Track {title.track:02}: {title.name}" if isinstance(title, Song) else str(title)
             console.print(Padding(Rule(f"[rule.text]{title_rule}"), (1, 2)))
-            temp_font_files = []
 
             if isinstance(title, Episode) and not self.tmdb_searched:
                 kind = "tv"
@@ -3076,7 +3068,7 @@ class dl:
                         if subtitle.codec in (Subtitle.Codec.SubStationAlpha, Subtitle.Codec.SubStationAlphav4):
                             font_names.extend(Subtitle.extract_fonts(subtitle.path.read_text("utf8")))
 
-                    font_count, missing_fonts = self.attach_subtitle_fonts(font_names, title, temp_font_files)
+                    font_count, missing_fonts = self.attach_subtitle_fonts(font_names, title)
 
                     if font_count:
                         self.log.info(f"Attached {font_count} fonts for the Subtitles")
@@ -3480,13 +3472,7 @@ class dl:
                                 track.delete()
 
                             for attachment in title.tracks.attachments:
-                                if attachment.path and attachment.path in temp_font_files:
-                                    attachment.path = None
-                                else:
-                                    attachment.delete()
-
-                            for temp_path in temp_font_files:
-                                temp_path.unlink(missing_ok=True)
+                                attachment.delete()
                             for temp_path in sidecar_original_paths.values():
                                 temp_path.unlink(missing_ok=True)
                     finally:

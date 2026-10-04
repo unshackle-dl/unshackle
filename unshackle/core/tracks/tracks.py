@@ -1003,8 +1003,7 @@ class Tracks:
                 for track in self:
                     track.delete()
                 for attachment in self.attachments:
-                    if attachment.path and attachment.path.exists():
-                        attachment.path.unlink()
+                    attachment.delete()
 
 
 __all__ = ("Tracks",)

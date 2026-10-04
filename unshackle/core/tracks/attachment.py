@@ -154,8 +154,9 @@ class Attachment:
         return hex(checksum)
 
     def delete(self) -> None:
-        if self.path and self.path.exists():
-            self.path.unlink()
+        """Delete the file only if it is in the temp directory. Files in other locations belong to the user."""
+        if self.path and self.path.is_relative_to(config.directories.temp):
+            self.path.unlink(missing_ok=True)
         self.path = None
 
     @classmethod
