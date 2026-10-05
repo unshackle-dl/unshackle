@@ -2515,6 +2515,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#unshackle.core.tracks.Track.add_init_drm" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;add_init_drm
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#unshackle.core.tracks.Track.prefers_playready" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3640,6 +3651,17 @@
     <span class="md-ellipsis">
       
         <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;drm_preference
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unshackle.core.tracks.Track.add_init_drm" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;add_init_drm
       
     </span>
   </a>
@@ -6578,6 +6600,27 @@ than one DRM system but only one of them licenses this track.</p>
 
 
 
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="unshackle.core.tracks.Track.add_init_drm" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">add_init_drm</span>
+
+
+<a href="#unshackle.core.tracks.Track.add_init_drm" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">add_init_drm</span><span class="p">(</span><span class="n">init_data</span><span class="p">,</span> <span class="n">cdm</span><span class="p">)</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Add the Widevine and PlayReady DRM that the init segment carries and the track does not have.</p>
+<p>A track with a different DRM type stays as it is. The DRM system that agrees with the CDM comes first.</p>
+
+
+    </div>
+
+</div>
 
 <div class="doc doc-object doc-function">
 

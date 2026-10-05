@@ -3172,7 +3172,7 @@ therefore keeps its <code>3840×1920</code> HDR10 track, even when another range
 <tbody>
 <tr>
 <td><code>--best-available</code> (<code>--warn-only</code>)</td>
-<td>If the requested resolution(s) are not present, continue with the best that <em>is</em> available instead of failing. Also softens missing video/audio/subtitle languages and hybrid fallbacks.</td>
+<td>If the requested resolution(s) are not present, continue with the best that <em>is</em> available instead of failing. Also softens missing video/audio/subtitle languages and hybrid fallbacks, and with <code>--all-drm</code> a DRM system that does not license.</td>
 </tr>
 <tr>
 <td><code>--worst</code></td>
@@ -3838,6 +3838,10 @@ are always kept.</p>
 <td><code>--skip-dl</code></td>
 <td>Skip downloading but still acquire the decryption keys.</td>
 </tr>
+<tr>
+<td><code>--all-drm</code></td>
+<td>License each track with both Widevine and PlayReady. See <a href="../drm-and-cdm/#widevine-and-playready-on-the-same-title">Widevine and PlayReady on the same title</a>.</td>
+</tr>
 </tbody>
 </table>
 <div class="language-shell highlight"><span class="filename">See the track selection without downloading</span><pre><span></span><code><span id="__span-35-1"><a id="__codelineno-35-1" name="__codelineno-35-1" href="#__codelineno-35-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-q<span class="w"> </span><span class="m">1080</span><span class="w"> </span>-v<span class="w"> </span>H.265<span class="w"> </span>-r<span class="w"> </span>HDR10<span class="w"> </span>--list<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
@@ -3992,6 +3996,10 @@ each track only the content keys for its KIDs. The importer also reads the
 older unshackle <code>version: 2</code> files and unidl's own export files.</p>
 <div class="language-shell highlight"><span class="filename">Export track info and keys</span><pre><span></span><code><span id="__span-44-1"><a id="__codelineno-44-1" name="__codelineno-44-1" href="#__codelineno-44-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--skip-dl<span class="w"> </span>--export<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
+<p>Add <code>--all-drm</code> to send a challenge for each DRM system the title offers. The export then
+holds the DRM init data of both.</p>
+<div class="language-shell highlight"><span class="filename">License with Widevine and PlayReady, no download</span><pre><span></span><code><span id="__span-45-1"><a id="__codelineno-45-1" name="__codelineno-45-1" href="#__codelineno-45-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--skip-dl<span class="w"> </span>--all-drm<span class="w"> </span>--export<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+</span></code></pre></div>
 <p>The file name tells what the file holds, in the form
 <code>{title}.{scope}.{resolutions}.{codecs}.{ranges}.{manifests}.{audio}-{SERVICE}.json</code>:</p>
 <table>
@@ -4114,9 +4122,9 @@ lookups but keep the IDs you give, set
 </tr>
 </tbody>
 </table>
-<div class="language-shell highlight"><span class="filename">Force the right IMDb match, and keep the service&#x27;s own naming</span><pre><span></span><code><span id="__span-45-1"><a id="__codelineno-45-1" name="__codelineno-45-1" href="#__codelineno-45-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--imdb<span class="w"> </span>tt1375666<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+<div class="language-shell highlight"><span class="filename">Force the right IMDb match, and keep the service&#x27;s own naming</span><pre><span></span><code><span id="__span-46-1"><a id="__codelineno-46-1" name="__codelineno-46-1" href="#__codelineno-46-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--imdb<span class="w"> </span>tt1375666<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
-<div class="language-shell highlight"><span class="filename">Force the match and take IMDb&#x27;s title, year and language too</span><pre><span></span><code><span id="__span-46-1"><a id="__codelineno-46-1" name="__codelineno-46-1" href="#__codelineno-46-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--imdb<span class="w"> </span>tt1375666<span class="w"> </span>--enrich<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+<div class="language-shell highlight"><span class="filename">Force the match and take IMDb&#x27;s title, year and language too</span><pre><span></span><code><span id="__span-47-1"><a id="__codelineno-47-1" name="__codelineno-47-1" href="#__codelineno-47-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--imdb<span class="w"> </span>tt1375666<span class="w"> </span>--enrich<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
 <h3 id="what-each-metadata-provider-supplies">What each metadata provider supplies<a class="headerlink" href="#what-each-metadata-provider-supplies" title="Permanent link">&para;</a></h3>
 <p>Metadata providers differ in what they answer with, so the fields <code>--enrich</code> can replace
@@ -4234,7 +4242,7 @@ selection.</p>
 TVDB's <code>alternate</code> (Streaming) order for Futurama, for example, while TVDB's <code>official</code> order
 holds back four season-one episodes to the start of season two. <code>--tvdb-order</code> works out which
 order the service used, then renumbers the episodes into the order you asked for:</p>
-<div class="language-shell highlight"><span class="filename">Download Futurama in DVD order</span><pre><span></span><code><span id="__span-47-1"><a id="__codelineno-47-1" name="__codelineno-47-1" href="#__codelineno-47-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--tvdb-order<span class="w"> </span>dvd<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+<div class="language-shell highlight"><span class="filename">Download Futurama in DVD order</span><pre><span></span><code><span id="__span-48-1"><a id="__codelineno-48-1" name="__codelineno-48-1" href="#__codelineno-48-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--tvdb-order<span class="w"> </span>dvd<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
 <p>Available orders are <code>official</code> (aired), <code>dvd</code>, <code>absolute</code>, <code>alternate</code>, and <code>regional</code>. Set
 <code>tvdb_order</code> in your config to apply one by default.</p>

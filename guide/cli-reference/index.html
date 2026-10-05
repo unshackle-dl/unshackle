@@ -3065,7 +3065,7 @@
 <tr>
 <td><code>--best-available</code>, <code>--warn-only</code></td>
 <td>off</td>
-<td>Warn and continue when a requested resolution, range, or language is absent, instead of failing.</td>
+<td>Warn and continue when a requested resolution, range, or language is absent, instead of failing. With <code>--all-drm</code>, also when one DRM system does not license.</td>
 </tr>
 <tr>
 <td><code>-rvb</code>, <code>--real-video-bitrate</code></td>
@@ -3368,6 +3368,10 @@ and keeps the service's numbering unchanged. Pick an order that covers the whole
 <tr>
 <td><code>--skip-dl</code></td>
 <td>Skip the download but still retrieve keys.</td>
+</tr>
+<tr>
+<td><code>--all-drm</code></td>
+<td>License each track with both Widevine and PlayReady. Needs a CDM for each DRM system. Not for use with <code>--vaults-only</code> or <code>--cdm</code>.</td>
 </tr>
 <tr>
 <td><code>--export</code></td>

@@ -3920,6 +3920,12 @@ ignore it safely. See <a href="../../creating-a-service/#split-episodes">Split e
 <td>Only fetch keys, do not download.</td>
 </tr>
 <tr>
+<td><code>all_drm</code></td>
+<td>boolean</td>
+<td><code>false</code></td>
+<td>License each track with both Widevine and PlayReady. Needs a CDM for each DRM system. The server refuses it with <code>cdm_only: false</code> and with <code>cdm</code>, which selects one device.</td>
+</tr>
+<tr>
 <td><code>export</code></td>
 <td>boolean</td>
 <td><code>false</code></td>
@@ -3977,7 +3983,7 @@ ignore it safely. See <a href="../../creating-a-service/#split-episodes">Split e
 <td><code>best_available</code></td>
 <td>boolean</td>
 <td><code>false</code></td>
-<td>Fall back to best available.</td>
+<td>Fall back to best available. With <code>all_drm</code>, a DRM system that does not license is a warning.</td>
 </tr>
 <tr>
 <td><code>repack</code></td>

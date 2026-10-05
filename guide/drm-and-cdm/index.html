@@ -1026,6 +1026,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Widevine and PlayReady on the same title">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#license-both-systems-with-all-drm" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        License both systems with --all-drm
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -2473,6 +2490,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Widevine and PlayReady on the same title">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#license-both-systems-with-all-drm" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        License both systems with --all-drm
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -3001,6 +3035,42 @@ mapping. If it cannot find a matching device, it fails with a clear message such
 <p>Use the <code>cdm</code> mapping's <a href="#advanced-selection-by-quality-drm-or-profile">DRM-based selection</a>
 to configure a device for each system. unshackle selects the right one per track
 automatically.</p>
+<h3 id="license-both-systems-with-all-drm">License both systems with <code>--all-drm</code><a class="headerlink" href="#license-both-systems-with-all-drm" title="Permanent link">&para;</a></h3>
+<p>By default a track licenses with one DRM system. <code>--all-drm</code> sends a challenge for
+Widevine and for PlayReady on each track that offers both. Use it with <code>--skip-dl</code> and
+<code>--export</code> to keep the content keys and the DRM init data of both systems. The two
+systems can return different sets of KIDs, and unshackle keeps the content keys of both.</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--skip-dl<span class="w"> </span>--all-drm<span class="w"> </span>--export<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+</span></code></pre></div>
+<ul>
+<li>The <code>cdm</code> mapping must name a device for each system. A single device name, or <code>--cdm</code>,
+  stops the run with an error that names the missing system.</li>
+<li>Each DRM system sends one challenge for a set of KIDs in a run. A content key in a
+  Key Vault does not stop the challenge, so <code>--vaults-only</code> is refused.</li>
+<li>A service with a Widevine licence function only gets the PlayReady challenge through that
+  function. If its licence server refuses the challenge, that DRM system does not license.</li>
+<li>If one DRM system does not license, the title fails. With <code>--best-available</code> unshackle
+  shows a warning and continues, if the other system gave the content key of the track.
+  unshackle does not send the challenge again for the same KIDs in that run.</li>
+<li>A track gets its DRM systems from the manifest. For a DASH track or a direct URL,
+  unshackle also reads the init segment for a system that the manifest does not carry.</li>
+<li>The service gets a challenge from each DRM system for each set of KIDs. A licence server
+  that limits the request rate can answer <code>429</code>, and unshackle then tries again.</li>
+</ul>
+<div class="admonition note">
+<p class="admonition-title">Where <code>--all-drm</code> licenses one system only</p>
+<ul>
+<li>A service that gets a different manifest for each DRM system. unshackle shows a
+  warning one time when a track offers one system only.</li>
+<li>A service that fetched its playback for one DRM system and refuses the other. That
+  system does not license, so the title fails unless you use <code>--best-available</code>.</li>
+<li>An HLS playlist that changes its <code>EXT-X-KEY</code> entries part-way: only the first set
+  licenses with the second system.</li>
+<li>A remote session that the server CDM licenses, and <code>unshackle import</code>. unshackle
+  shows a warning and ignores the flag.</li>
+<li>A remote CDM that stores content keys can answer without a challenge to the service.</li>
+</ul>
+</div>
 <h2 id="keys-vaults-and-caching">Keys, vaults, and caching<a class="headerlink" href="#keys-vaults-and-caching" title="Permanent link">&para;</a></h2>
 <p>Fetching a license is comparatively slow and, for some services, rate-limited.
 unshackle therefore resolves each key ID in this order before ever contacting a
@@ -3065,8 +3135,8 @@ control this trade-off on the <code>dl</code> command:</p>
 </tr>
 </tbody>
 </table>
-<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="nt">debug_keys</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
-</span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a><span class="nt">debug_requests</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="nt">debug_keys</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a><span class="nt">debug_requests</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
 </span></code></pre></div>
 <div class="admonition warning">
 <p class="admonition-title">Keys and paths in logs</p>
