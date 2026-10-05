@@ -3180,6 +3180,10 @@ HLS streams that carry a valid DV RPU but advertise plain HEVC (<code>dv_compati
 extracts the RPU with <code>dovi_tool</code>, and injects it onto the base layer, to make a single
 track that carries both HDR10 metadata and the DV RPU. Both are automatic once the
 pipeline selects the right tracks. A service only needs to give accurate ranges.</p>
+<p>The fixup replaces the track file with a raw HEVC file. A raw HEVC file has no duration and
+FFmpeg cannot seek in it. When a hybrid base also gets the fixup, the pipeline keeps the
+container file of that track until its hybrid step is complete, and the hybrid step reads
+the container file.</p>
 <h2 id="request-and-http-session-objects">Request and HTTP session objects<a class="headerlink" href="#request-and-http-session-objects" title="Permanent link">&para;</a></h2>
 <p>Everything a service does over the network flows through objects the base constructor
 prepared, all derived from the Click context (<code>ctx</code>) that <code>dl</code> passes in.</p>
