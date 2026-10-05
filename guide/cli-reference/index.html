@@ -3371,7 +3371,7 @@ and keeps the service's numbering unchanged. Pick an order that covers the whole
 </tr>
 <tr>
 <td><code>--all-drm</code></td>
-<td>License each track with both Widevine and PlayReady. Needs a CDM for each DRM system. Not for use with <code>--vaults-only</code> or <code>--cdm</code>.</td>
+<td>License each track with both Widevine and PlayReady. Needs a CDM for each DRM system. Key Vaults are read first; <code>--cdm-only</code> sends a challenge for each system. Not for use with <code>--cdm</code>.</td>
 </tr>
 <tr>
 <td><code>--export</code></td>

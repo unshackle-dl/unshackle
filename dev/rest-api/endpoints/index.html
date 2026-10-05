@@ -3923,7 +3923,7 @@ ignore it safely. See <a href="../../creating-a-service/#split-episodes">Split e
 <td><code>all_drm</code></td>
 <td>boolean</td>
 <td><code>false</code></td>
-<td>License each track with both Widevine and PlayReady. Needs a CDM for each DRM system. The server refuses it with <code>cdm_only: false</code> and with <code>cdm</code>, which selects one device.</td>
+<td>License each track with both Widevine and PlayReady. Needs a CDM for each DRM system. Key vaults are read first; <code>cdm_only: true</code> sends a challenge for each system. The server refuses it with <code>cdm</code>, which selects one device.</td>
 </tr>
 <tr>
 <td><code>export</code></td>

@@ -3996,8 +3996,9 @@ each track only the content keys for its KIDs. The importer also reads the
 older unshackle <code>version: 2</code> files and unidl's own export files.</p>
 <div class="language-shell highlight"><span class="filename">Export track info and keys</span><pre><span></span><code><span id="__span-44-1"><a id="__codelineno-44-1" name="__codelineno-44-1" href="#__codelineno-44-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--skip-dl<span class="w"> </span>--export<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
-<p>Add <code>--all-drm</code> to send a challenge for each DRM system the title offers. The export then
-holds the DRM init data of both.</p>
+<p>Add <code>--all-drm</code> to get the content keys of each DRM system the title offers. The export then
+holds the DRM init data of both. A Key Vault that has a content key stops the challenge for
+its KID; add <code>--cdm-only</code> to send a challenge for each DRM system.</p>
 <div class="language-shell highlight"><span class="filename">License with Widevine and PlayReady, no download</span><pre><span></span><code><span id="__span-45-1"><a id="__codelineno-45-1" name="__codelineno-45-1" href="#__codelineno-45-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--skip-dl<span class="w"> </span>--all-drm<span class="w"> </span>--export<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
 <p>The file name tells what the file holds, in the form

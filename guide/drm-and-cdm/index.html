@@ -3036,17 +3036,21 @@ mapping. If it cannot find a matching device, it fails with a clear message such
 to configure a device for each system. unshackle selects the right one per track
 automatically.</p>
 <h3 id="license-both-systems-with-all-drm">License both systems with <code>--all-drm</code><a class="headerlink" href="#license-both-systems-with-all-drm" title="Permanent link">&para;</a></h3>
-<p>By default a track licenses with one DRM system. <code>--all-drm</code> sends a challenge for
+<p>By default a track licenses with one DRM system. <code>--all-drm</code> gets the content keys for
 Widevine and for PlayReady on each track that offers both. Use it with <code>--skip-dl</code> and
 <code>--export</code> to keep the content keys and the DRM init data of both systems. The two
-systems can return different sets of KIDs, and unshackle keeps the content keys of both.</p>
+systems can list different sets of KIDs, and unshackle keeps the content keys of both.</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--skip-dl<span class="w"> </span>--all-drm<span class="w"> </span>--export<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
 <ul>
 <li>The <code>cdm</code> mapping must name a device for each system. A single device name, or <code>--cdm</code>,
   stops the run with an error that names the missing system.</li>
-<li>Each DRM system sends one challenge for a set of KIDs in a run. A content key in a
-  Key Vault does not stop the challenge, so <code>--vaults-only</code> is refused.</li>
+<li>A Key Vault is read first, as in a run without the flag. A DRM system sends a challenge
+  only for a KID that no Key Vault and no earlier track of the run gave a content key
+  for. When the first system returns all the KIDs of the second, the second sends no
+  challenge.</li>
+<li>With <code>--cdm-only</code>, unshackle does not read the Key Vaults, and each DRM system sends one
+  challenge for a set of KIDs in a run.</li>
 <li>A service with a Widevine licence function only gets the PlayReady challenge through that
   function. If its licence server refuses the challenge, that DRM system does not license.</li>
 <li>If one DRM system does not license, the title fails. With <code>--best-available</code> unshackle
@@ -3054,8 +3058,9 @@ systems can return different sets of KIDs, and unshackle keeps the content keys 
   unshackle does not send the challenge again for the same KIDs in that run.</li>
 <li>A track gets its DRM systems from the manifest. For a DASH track or a direct URL,
   unshackle also reads the init segment for a system that the manifest does not carry.</li>
-<li>The service gets a challenge from each DRM system for each set of KIDs. A licence server
-  that limits the request rate can answer <code>429</code>, and unshackle then tries again.</li>
+<li>With <code>--cdm-only</code>, the service gets a challenge from each DRM system for each set of
+  KIDs. A licence server that limits the request rate can answer <code>429</code>, and unshackle then
+  tries again.</li>
 </ul>
 <div class="admonition note">
 <p class="admonition-title">Where <code>--all-drm</code> licenses one system only</p>
