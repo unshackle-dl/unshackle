@@ -1717,8 +1717,6 @@ class dl:
             vaults_only = None
         else:
             vaults_only = not cdm_only
-        if all_drm and vaults_only:
-            raise click.ClickException("--all-drm sends licence requests, so it cannot be used with --vaults-only.")
 
         config.decryption = resolve_decryption(
             config.decryption_map, config.decryption, service.__class__.__name__.upper()
@@ -2898,7 +2896,7 @@ class dl:
                     service_session=service.session,
                 )
                 if title_all_drm:
-                    return partial(self.licence_all_drm, prepare, track, best_available)
+                    return partial(self.licence_all_drm, prepare, track, best_available, force=bool(cdm_only))
                 return prepare
 
             server_cdm_type = None
@@ -4441,7 +4439,10 @@ class dl:
         return cdm
 
     def licence_one_drm(self, prepare: Callable, drm: DRM_T, track_kid: Optional[UUID]) -> None:
-        """Send one challenge for the KIDs of this DRM, the first time a run sees them for its DRM system.
+        """Send one challenge for the KIDs of this DRM, also when the DRM or a vault has the content keys.
+
+        This is the ``--cdm-only`` path. The challenge goes out the first time a run sees the KIDs
+        for the DRM system.
 
         prepare_drm asks the CDM only for a KID with no content key, so the content keys the DRM
         holds are removed for the call and put back after it.
@@ -4469,12 +4470,14 @@ class dl:
         tolerate: bool,
         drm: DRM_T,
         track_kid: Optional[UUID] = None,
+        force: bool = False,
     ) -> None:
         """License the track with each DRM system it offers, not only the one the downloader selected.
 
-        Each DRM system sends one challenge for a set of KIDs in a run, also when a vault
-        has the content keys. A DRM system that fails stops the title. With ``tolerate`` it is a
-        warning, if the other DRM system gave the content key of the track.
+        A DRM system sends a challenge only for a KID that no vault and no earlier track gave a
+        content key for. With ``force``, each DRM system sends one challenge for a set of KIDs in
+        a run. A DRM system that fails stops the title. With ``tolerate`` it is a warning, if the
+        other DRM system gave the content key of the track.
         """
         if type(drm) not in (Widevine, PlayReady):
             prepare(drm, track_kid=track_kid)
@@ -4499,7 +4502,10 @@ class dl:
                 for target in targets:
                     kid = track_kid if target is drm or track_kid in target.kids else None
                     try:
-                        self.licence_one_drm(prepare, target, kid)
+                        if force:
+                            self.licence_one_drm(prepare, target, kid)
+                        else:
+                            prepare(target, track_kid=kid)
                     except Exception as e:
                         if not tolerate:
                             raise

@@ -80,12 +80,12 @@ def cmd() -> dl:
     return cmd
 
 
-def test_each_drm_system_licenses_although_a_content_key_is_held(cmd: dl) -> None:
+def test_cdm_only_licenses_each_drm_system_although_a_content_key_is_held(cmd: dl) -> None:
     wv, pr = widevine(), playready()
     wv.content_keys[KID] = VAULT_KEY
     prepare = Prepare()
 
-    cmd.licence_all_drm(prepare, SimpleNamespace(drm=[wv, pr]), False, wv, track_kid=KID)
+    cmd.licence_all_drm(prepare, SimpleNamespace(drm=[wv, pr]), False, wv, track_kid=KID, force=True)
 
     assert prepare.forced() == ["Widevine", "PlayReady"]
     assert all(held == {} for _, _, held in prepare.calls)
@@ -96,7 +96,7 @@ def test_a_second_track_with_the_same_kids_sends_no_request(cmd: dl) -> None:
     prepare = Prepare(fail=PlayReady)
     for _ in range(2):
         wv, pr = widevine(), playready()
-        cmd.licence_all_drm(prepare, SimpleNamespace(drm=[wv, pr]), True, wv, track_kid=KID)
+        cmd.licence_all_drm(prepare, SimpleNamespace(drm=[wv, pr]), True, wv, track_kid=KID, force=True)
 
     assert prepare.forced() == ["Widevine", "PlayReady"]
     assert len(prepare.calls) == 4
@@ -107,7 +107,7 @@ def test_a_drm_system_that_fails_stops_the_title(cmd: dl) -> None:
     wv.content_keys[KID] = VAULT_KEY
 
     with pytest.raises(ValueError, match="licence refused"):
-        cmd.licence_all_drm(Prepare(fail=Widevine), SimpleNamespace(drm=[wv, pr]), False, wv, track_kid=KID)
+        cmd.licence_all_drm(Prepare(fail=Widevine), SimpleNamespace(drm=[wv, pr]), False, wv, track_kid=KID, force=True)
 
     assert wv.content_keys == {KID: VAULT_KEY}
 
@@ -167,7 +167,7 @@ def test_a_playready_track_with_two_widevine_objects_licenses(cmd: dl) -> None:
 
     cmd.licence_all_drm(prepare, SimpleNamespace(drm=[pr, widevine(), widevine()]), False, pr, track_kid=KID)
 
-    assert prepare.forced() == ["PlayReady", "Widevine"]
+    assert [name for name, _, _ in prepare.calls] == ["PlayReady", "Widevine"]
 
 
 class RealPrepare:
@@ -206,7 +206,7 @@ class RealPrepare:
         drm.get_content_keys = get_content_keys
         return drm
 
-    def run(self, wv: Any, pr: Any) -> None:
+    def run(self, wv: Any, pr: Any, force: bool = False) -> None:
         table = Table.grid()
         table.add_row("")
         track = SimpleNamespace(drm=[wv, pr], id="track", height=None)
@@ -220,21 +220,21 @@ class RealPrepare:
             cdm_only=False,
             vaults_only=False,
         )
-        self.cmd.licence_all_drm(prepare, track, False, wv, track_kid=KID)
+        self.cmd.licence_all_drm(prepare, track, False, wv, track_kid=KID, force=force)
 
 
-def test_prepare_drm_licenses_each_drm_system_and_does_not_read_the_vault() -> None:
+def test_cdm_only_licenses_each_drm_system_and_does_not_read_the_vault() -> None:
     real = RealPrepare(vault={KID: VAULT_KEY})
     wv, pr = real.drm(widevine(), {KID: KEY}), real.drm(playready(), {KID: KEY})
 
-    real.run(wv, pr)
+    real.run(wv, pr, force=True)
 
     assert real.requests == ["Widevine", "PlayReady"]
     assert real.vault_queries == []
     assert wv.content_keys == {KID: KEY} and pr.content_keys == {KID: KEY}
     assert is_widevine_cdm(real.cmd.cdm)
 
-    real.run(real.drm(widevine(), {KID: KEY}), real.drm(playready(), {KID: KEY}))
+    real.run(real.drm(widevine(), {KID: KEY}), real.drm(playready(), {KID: KEY}), force=True)
 
     assert real.requests == ["Widevine", "PlayReady"]
 
@@ -249,10 +249,28 @@ def test_the_other_drm_system_can_return_a_different_set_of_kids() -> None:
     assert wv.content_keys == {KID: KEY, OTHER_KID: OTHER_KEY}
 
 
-def test_the_api_refuses_all_drm_with_vaults_only_or_one_device() -> None:
-    assert "cdm_only" in (validate_download_parameters({"all_drm": True, "cdm_only": False}) or "")
+def test_the_api_refuses_all_drm_with_one_device() -> None:
     assert "cdm" in (validate_download_parameters({"all_drm": True, "cdm": "device"}) or "")
     assert validate_download_parameters({"all_drm": True, "cdm_only": True}) is None
+    assert validate_download_parameters({"all_drm": True, "cdm_only": False}) is None
+
+
+def test_a_content_key_in_a_vault_stops_the_challenge_of_each_drm_system() -> None:
+    real = RealPrepare(vault={KID: VAULT_KEY})
+    wv, pr = real.drm(widevine(), {KID: KEY}), real.drm(playready(), {KID: KEY})
+
+    real.run(wv, pr)
+
+    assert real.requests == []
+    assert wv.content_keys == {KID: VAULT_KEY} and pr.content_keys == {KID: VAULT_KEY}
+
+
+def test_the_other_drm_system_licenses_only_for_a_kid_with_no_content_key() -> None:
+    real = RealPrepare()
+
+    real.run(real.drm(widevine(), {KID: KEY}), real.drm(playready(), {KID: KEY}))
+
+    assert real.requests == ["Widevine"]
 
 
 def test_the_init_segment_adds_the_drm_system_the_track_does_not_have(monkeypatch: pytest.MonkeyPatch) -> None:

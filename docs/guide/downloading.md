@@ -796,8 +796,9 @@ older unshackle `version: 2` files and unidl's own export files.
 unshackle dl --skip-dl --export EXAMPLE 81234567
 ```
 
-Add `--all-drm` to send a challenge for each DRM system the title offers. The export then
-holds the DRM init data of both.
+Add `--all-drm` to get the content keys of each DRM system the title offers. The export then
+holds the DRM init data of both. A Key Vault that has a content key stops the challenge for
+its KID; add `--cdm-only` to send a challenge for each DRM system.
 
 ```shell title="License with Widevine and PlayReady, no download"
 unshackle dl --skip-dl --all-drm --export EXAMPLE 81234567

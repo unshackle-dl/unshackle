@@ -194,7 +194,7 @@ order the service used, then renumbers the episodes into the order you asked for
 | `--cdm-only` / `--vaults-only` | Use only the CDM, or only Key Vaults, for key acquisition. |
 | `--cdm <name>` | Use the named CDM device from the `cdm` config mapping for this run, ignoring the service/default mapping. Over `--remote`, that device licenses the remote session, not the server CDM. |
 | `--skip-dl` | Skip the download but still retrieve keys. |
-| `--all-drm` | License each track with both Widevine and PlayReady. Needs a CDM for each DRM system. Not for use with `--vaults-only` or `--cdm`. |
+| `--all-drm` | License each track with both Widevine and PlayReady. Needs a CDM for each DRM system. Key Vaults are read first; `--cdm-only` sends a challenge for each system. Not for use with `--cdm`. |
 | `--export` | Export track info and keys to a `mediaexport` JSON file in the exports directory. |
 
 ### Network & proxy

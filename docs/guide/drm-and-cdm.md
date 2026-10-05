@@ -484,10 +484,10 @@ automatically.
 
 ### License both systems with `--all-drm`
 
-By default a track licenses with one DRM system. `--all-drm` sends a challenge for
+By default a track licenses with one DRM system. `--all-drm` gets the content keys for
 Widevine and for PlayReady on each track that offers both. Use it with `--skip-dl` and
 `--export` to keep the content keys and the DRM init data of both systems. The two
-systems can return different sets of KIDs, and unshackle keeps the content keys of both.
+systems can list different sets of KIDs, and unshackle keeps the content keys of both.
 
 ```shell
 unshackle dl --skip-dl --all-drm --export EXAMPLE 81234567
@@ -495,8 +495,12 @@ unshackle dl --skip-dl --all-drm --export EXAMPLE 81234567
 
 - The `cdm` mapping must name a device for each system. A single device name, or `--cdm`,
   stops the run with an error that names the missing system.
-- Each DRM system sends one challenge for a set of KIDs in a run. A content key in a
-  Key Vault does not stop the challenge, so `--vaults-only` is refused.
+- A Key Vault is read first, as in a run without the flag. A DRM system sends a challenge
+  only for a KID that no Key Vault and no earlier track of the run gave a content key
+  for. When the first system returns all the KIDs of the second, the second sends no
+  challenge.
+- With `--cdm-only`, unshackle does not read the Key Vaults, and each DRM system sends one
+  challenge for a set of KIDs in a run.
 - A service with a Widevine licence function only gets the PlayReady challenge through that
   function. If its licence server refuses the challenge, that DRM system does not license.
 - If one DRM system does not license, the title fails. With `--best-available` unshackle
@@ -504,8 +508,9 @@ unshackle dl --skip-dl --all-drm --export EXAMPLE 81234567
   unshackle does not send the challenge again for the same KIDs in that run.
 - A track gets its DRM systems from the manifest. For a DASH track or a direct URL,
   unshackle also reads the init segment for a system that the manifest does not carry.
-- The service gets a challenge from each DRM system for each set of KIDs. A licence server
-  that limits the request rate can answer `429`, and unshackle then tries again.
+- With `--cdm-only`, the service gets a challenge from each DRM system for each set of
+  KIDs. A licence server that limits the request rate can answer `429`, and unshackle then
+  tries again.
 
 !!! note "Where `--all-drm` licenses one system only"
     - A service that gets a different manifest for each DRM system. unshackle shows a

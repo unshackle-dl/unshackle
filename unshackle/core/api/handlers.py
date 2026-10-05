@@ -1835,8 +1835,6 @@ def validate_download_parameters(data: Dict[str, Any]) -> Optional[str]:
             return "output_dir must be a path under the server's downloads directory."
         data["output_dir"] = str(target)
 
-    if data.get("all_drm") and data.get("cdm_only") is False:
-        return "all_drm sends licence requests, so it cannot be used with cdm_only set to false."
     if data.get("all_drm") and data.get("cdm"):
         return "all_drm needs a CDM for each DRM system, so it cannot be used with cdm, which selects one device."
 

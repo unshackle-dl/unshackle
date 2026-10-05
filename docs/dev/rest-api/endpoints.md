@@ -444,7 +444,7 @@ Make a download job. It requires `service` and `title_id`. Every other field is 
 | `slow` | boolean/string | `null` | Randomized delay between downloads. |
 | `split_audio` | boolean | `null` | Separate files per audio codec. |
 | `skip_dl` | boolean | `false` | Only fetch keys, do not download. |
-| `all_drm` | boolean | `false` | License each track with both Widevine and PlayReady. Needs a CDM for each DRM system. The server refuses it with `cdm_only: false` and with `cdm`, which selects one device. |
+| `all_drm` | boolean | `false` | License each track with both Widevine and PlayReady. Needs a CDM for each DRM system. Key vaults are read first; `cdm_only: true` sends a challenge for each system. The server refuses it with `cdm`, which selects one device. |
 | `export` | boolean | `false` | Export manifest/keys/subs to JSON. |
 | `cdm_only` | boolean | `null` | Force CDM-only (`true`) or vault-only (`false`) key retrieval. |
 | `proxy` / `no_proxy` / `no_proxy_download` / `proxy_download` | string / bool / bool / string | `null` / `false` / `false` / `null` | Proxy controls. `proxy` and `proxy_download` must be full proxy URIs unless the API key has `server_proxy`. A Control D resolver, `controld://<resolver>@dns.controld.com`, counts as a full proxy URI: the server runs a forwarder for it. |
