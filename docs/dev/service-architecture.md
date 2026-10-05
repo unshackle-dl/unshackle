@@ -429,6 +429,11 @@ extracts the RPU with `dovi_tool`, and injects it onto the base layer, to make a
 track that carries both HDR10 metadata and the DV RPU. Both are automatic once the
 pipeline selects the right tracks. A service only needs to give accurate ranges.
 
+The fixup replaces the track file with a raw HEVC file. A raw HEVC file has no duration and
+FFmpeg cannot seek in it. When a hybrid base also gets the fixup, the pipeline keeps the
+container file of that track until its hybrid step is complete, and the hybrid step reads
+the container file.
+
 ## Request and HTTP session objects
 
 Everything a service does over the network flows through objects the base constructor

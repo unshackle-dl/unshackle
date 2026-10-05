@@ -232,8 +232,20 @@ class Hybrid:
                 self.log.warning("Could not probe video duration, skipping L5 crop detection")
                 return
 
-            duration_info = json.loads(result_duration.stdout)
-            duration = float(duration_info["format"]["duration"])
+            duration_value = json.loads(result_duration.stdout).get("format", {}).get("duration")
+            if duration_value is None:
+                log_event(
+                    "hybrid_level5",
+                    level="WARNING",
+                    message="Video has no container duration; RPU keeps the active area of the DV track",
+                    context={"input": str(input_video)},
+                )
+                self.log.warning(
+                    "Video has no container duration, skipping L5 crop detection. "
+                    "The RPU keeps the active area of the DV track."
+                )
+                return
+            duration = float(duration_value)
 
             result_streams = subprocess.run(
                 [

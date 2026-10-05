@@ -1,6 +1,7 @@
 """Unit tests for the Hybrid Level 6 path: the FFprobe HDR10 metadata probe and the
-rule that decides when the RPU L6 block gets overwritten. Nothing runs FFprobe or
-dovi_tool; the tests mock subprocess.run and the dovi wrappers."""
+rule that decides when the RPU L6 block gets overwritten. One test covers the Level 5
+duration probe. Nothing runs FFprobe or dovi_tool; the tests mock subprocess.run and
+the dovi wrappers."""
 
 from __future__ import annotations
 
@@ -63,6 +64,17 @@ def patch_probe_run(monkeypatch: pytest.MonkeyPatch, result: FakeCompleted) -> l
 
     monkeypatch.setattr(subprocess, "run", fake_run)
     return calls
+
+
+def test_level_5_skips_a_stream_with_no_duration(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """FFprobe gives a raw stream an empty format object with exit code 0."""
+    calls = patch_probe_run(monkeypatch, FakeCompleted(0, '{"format": {}}'))
+    hybrid = make_hybrid()
+
+    hybrid.level_5(tmp_path / "base.dv.hevc")
+
+    assert hybrid.rpu_file == "RPU.bin"
+    assert len(calls) == 1
 
 
 def probe_output(*side_data: dict) -> str:

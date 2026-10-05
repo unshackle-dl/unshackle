@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from rich.padding import Padding
 from rich.rule import Rule
@@ -83,18 +83,24 @@ class DVFixup:
         return fixed_hevc
 
 
-def apply_dv_fixup(video: "Video") -> None:
-    """Do the DV fixup on `video` if flagged as DV-composite. Updates `video.path` in place
-    and deletes the original source file so the standard mux cleanup handles the new path."""
+def apply_dv_fixup(video: "Video", keep_source: bool = False) -> Optional[Path]:
+    """Do the DV fixup on `video` if flagged as DV-composite and set `video.path` to the result.
+
+    Deletes the source file. With `keep_source`, returns its path for the caller to delete.
+    """
     if not getattr(video, "dv_compatible_bitstream", False):
-        return
+        return None
     if not video.path or not Path(video.path).exists():
-        return
+        return None
     original = Path(video.path)
     fixed = DVFixup(video).run()
-    if fixed != original:
-        video.path = fixed
-        original.unlink(missing_ok=True)
+    if fixed == original:
+        return None
+    video.path = fixed
+    if keep_source:
+        return original
+    original.unlink(missing_ok=True)
+    return None
 
 
 __all__ = ("DVFixup", "apply_dv_fixup")

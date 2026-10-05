@@ -210,6 +210,31 @@ def group_videos_by_variant(videos: list[Video], *, merge: bool) -> list[list[Vi
     return list(groups.values())
 
 
+def select_hybrid_bases(videos: Sequence[Video]) -> list[Video]:
+    """The HDR10 or HDR10+ track that is the hybrid base for each height, tallest first."""
+    bases: dict[int, Video] = {}
+    for video in sorted(
+        (v for v in videos if v.range in (Video.Range.HDR10P, Video.Range.HDR10)),
+        key=lambda v: v.height or 0,
+        reverse=True,
+    ):
+        bases.setdefault(video.height or 0, video)
+    return list(bases.values())
+
+
+def hybrid_source_tracks(base: Video, dv: Video, base_container: Optional[Path] = None) -> list[Video]:
+    """Copies of the base and DV tracks for the hybrid step, with the base on its container file.
+
+    The hybrid step reads the duration and seeks, and the raw stream from the DV fixup
+    permits neither.
+    """
+    tracks = [deepcopy(base), deepcopy(dv)]
+    tracks[0].path = base_container or base.path
+    for track in tracks:
+        track.needs_duration_fix = True
+    return tracks
+
+
 def title_wanted(candidate: Any, wanted: Collection[str]) -> bool:
     """Whether ``-w`` selects this title. A title type without selection keys is always kept.
 
@@ -3278,6 +3303,8 @@ class dl:
                     # Track hybrid-processing outputs explicitly so we can always clean them up,
                     # even if muxing fails early (e.g. SystemExit) before the normal delete loop.
                     hybrid_temp_paths: list[Path] = []
+                    hybrid_base_ids: set[str] = set()
+                    container_paths: dict[str, Path] = {}
 
                     def clone_tracks_for_audio(base_tracks: Tracks, audio_tracks: list[Audio]) -> Tracks:
                         task_tracks = Tracks()
@@ -3356,7 +3383,10 @@ class dl:
                     def mux_video_group(video_tracks: list[Optional[Video]]) -> None:
                         for video_track in video_tracks:
                             if video_track and video_track.dv_compatible_bitstream:
-                                apply_dv_fixup(video_track)
+                                container = apply_dv_fixup(video_track, keep_source=video_track.id in hybrid_base_ids)
+                                if container:
+                                    container_paths[video_track.id] = container
+                                    hybrid_temp_paths.append(container)
 
                         task_description = "Multiplexing"
                         # All tracks in a merged group share height/range/codec, so describe from the first.
@@ -3403,55 +3433,45 @@ class dl:
                                     standalone_groups: list[list[Optional[Video]]] = [
                                         list(g) for g in group_videos_by_variant(standalone_videos, merge=merge_video)
                                     ]
+                                    dv_tracks = [v for v in title.tracks.videos if v.range == Video.Range.DV]
+                                    hybrid_bases = select_hybrid_bases(title.tracks.videos) if dv_tracks else []
+                                    hybrid_base_ids.update(v.id for v in hybrid_bases)
+
                                     for group in sorted(standalone_groups, key=group_file_size, reverse=True):
                                         mux_video_group(group)
 
-                                    resolutions_processed = set()
-                                    base_tracks_list = sorted(
-                                        (
-                                            v
-                                            for v in title.tracks.videos
-                                            if v.range in (Video.Range.HDR10P, Video.Range.HDR10)
-                                        ),
-                                        key=lambda v: v.height,
-                                        reverse=True,
-                                    )
-                                    dv_tracks = [v for v in title.tracks.videos if v.range == Video.Range.DV]
+                                    for hdr10_track in hybrid_bases:
+                                        resolution = hdr10_track.height or 0
+                                        matching_dv = min(dv_tracks, key=lambda v: v.height)
+                                        container = container_paths.get(hdr10_track.id)
+                                        resolution_tracks = hybrid_source_tracks(hdr10_track, matching_dv, container)
 
-                                    for hdr10_track in base_tracks_list:
-                                        resolution = hdr10_track.height
-                                        if resolution in resolutions_processed:
-                                            continue
+                                        hybrid_filename = f"HDR10-DV-{resolution}p.hevc"
+                                        hybrid_output_path = config.directories.temp / hybrid_filename
+                                        hybrid_temp_paths.append(hybrid_output_path)
 
-                                        matching_dv = min(dv_tracks, key=lambda v: v.height) if dv_tracks else None
+                                        Hybrid(resolution_tracks, self.service, output_name=hybrid_filename)
 
-                                        if matching_dv:
-                                            resolutions_processed.add(resolution)
+                                        if container:
+                                            try:
+                                                container.unlink(missing_ok=True)
+                                            except PermissionError:
+                                                pass  # still in hybrid_temp_paths, so the final cleanup tries again
 
-                                            resolution_tracks = [deepcopy(hdr10_track), deepcopy(matching_dv)]
-                                            for track in resolution_tracks:
-                                                track.needs_duration_fix = True
+                                        task_description = f"Multiplexing Hybrid HDR10+DV {resolution}p"
+                                        task_tracks = (
+                                            Tracks(title.tracks) + title.tracks.chapters + title.tracks.attachments
+                                        )
 
-                                            hybrid_filename = f"HDR10-DV-{resolution}p.hevc"
-                                            hybrid_output_path = config.directories.temp / hybrid_filename
-                                            hybrid_temp_paths.append(hybrid_output_path)
+                                        hybrid_track = deepcopy(hdr10_track)
+                                        hybrid_track.id = f"hybrid_{hdr10_track.id}_{resolution}"
+                                        hybrid_track.path = hybrid_output_path
+                                        hybrid_track.range = Video.Range.DV
+                                        hybrid_track.needs_duration_fix = True
+                                        title.tracks.add(hybrid_track)
+                                        task_tracks.videos = [hybrid_track]
 
-                                            Hybrid(resolution_tracks, self.service, output_name=hybrid_filename)
-
-                                            task_description = f"Multiplexing Hybrid HDR10+DV {resolution}p"
-                                            task_tracks = (
-                                                Tracks(title.tracks) + title.tracks.chapters + title.tracks.attachments
-                                            )
-
-                                            hybrid_track = deepcopy(hdr10_track)
-                                            hybrid_track.id = f"hybrid_{hdr10_track.id}_{resolution}"
-                                            hybrid_track.path = hybrid_output_path
-                                            hybrid_track.range = Video.Range.DV
-                                            hybrid_track.needs_duration_fix = True
-                                            title.tracks.add(hybrid_track)
-                                            task_tracks.videos = [hybrid_track]
-
-                                            enqueue_mux_tasks(task_description, task_tracks, hybrid=True)
+                                        enqueue_mux_tasks(task_description, task_tracks, hybrid=True)
 
                                     console.print()
                                 else:
