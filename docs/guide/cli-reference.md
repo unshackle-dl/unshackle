@@ -83,7 +83,7 @@ unshackle dl [OPTIONS] SERVICE [SERVICE ARGS...]
 | `-c`, `--channels` | - | Audio channels; matches sub-layouts (5.1 ≈ 6.0). |
 | `-naa`, `--noatmos` | off | Exclude Dolby Atmos audio tracks. |
 | `--worst` | off | Pick the lowest bitrate within the requested quality. **Requires `-q`.** |
-| `--best-available`, `--warn-only` | off | Warn and continue when a requested resolution, range, or language is absent, instead of failing. |
+| `--best-available`, `--warn-only` | off | Warn and continue when a requested resolution, range, or language is absent, instead of failing. With `--all-drm`, also when one DRM system does not license. |
 | `-rvb`, `--real-video-bitrate` | off | Probe real media size for true video bitrates, overriding the manifest. |
 | `-rab`, `--real-audio-bitrate` | off | Same for audio (slower). |
 
@@ -194,6 +194,7 @@ order the service used, then renumbers the episodes into the order you asked for
 | `--cdm-only` / `--vaults-only` | Use only the CDM, or only Key Vaults, for key acquisition. |
 | `--cdm <name>` | Use the named CDM device from the `cdm` config mapping for this run, ignoring the service/default mapping. Over `--remote`, that device licenses the remote session, not the server CDM. |
 | `--skip-dl` | Skip the download but still retrieve keys. |
+| `--all-drm` | License each track with both Widevine and PlayReady. Needs a CDM for each DRM system. Not for use with `--vaults-only` or `--cdm`. |
 | `--export` | Export track info and keys to a `mediaexport` JSON file in the exports directory. |
 
 ### Network & proxy

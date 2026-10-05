@@ -10,7 +10,7 @@ import shutil
 import subprocess
 import sys
 import time
-from collections import Counter
+from collections import Counter, defaultdict
 from collections.abc import Iterable
 from concurrent import futures
 from concurrent.futures import ThreadPoolExecutor
@@ -42,10 +42,16 @@ from rich.tree import Tree
 
 from unshackle.core import __version__, binaries, providers
 from unshackle.core.cdm import DecryptLabsRemoteCDM
-from unshackle.core.cdm.detect import cdm_type_stub, is_playready_cdm, is_widevine_cdm
+from unshackle.core.cdm.detect import cdm_type_stub, is_playready_cdm, is_remote_cdm, is_widevine_cdm
 from unshackle.core.config import cdm_entry_names_device, config, resolve_cdm_name, resolve_decryption
 from unshackle.core.console import GradientPulseBarColumn, SyncLive, console, listing_panel
-from unshackle.core.constants import DOWNLOAD_CANCELLED, DOWNLOAD_LICENCE_ONLY, AnyTrack, context_settings
+from unshackle.core.constants import (
+    DOWNLOAD_ALL_DRM,
+    DOWNLOAD_CANCELLED,
+    DOWNLOAD_LICENCE_ONLY,
+    AnyTrack,
+    context_settings,
+)
 from unshackle.core.credential import Credential
 from unshackle.core.downloaders import default_max_workers, format_speed, parse_speed_limit, set_speed_limit
 from unshackle.core.drm import DRM_T, ClearKeyCENC, MonaLisa, PlayReady, Widevine, own_kids, verify
@@ -876,6 +882,12 @@ class dl:
         "--skip-dl", is_flag=True, default=False, help="Skip downloading while still retrieving the decryption keys."
     )
     @click.option(
+        "--all-drm",
+        is_flag=True,
+        default=False,
+        help="License each track with both Widevine and PlayReady. Needs a CDM for each DRM system.",
+    )
+    @click.option(
         "--export",
         is_flag=True,
         default=False,
@@ -1030,6 +1042,7 @@ class dl:
     VAULT_WRITER = ThreadPoolExecutor(1, thread_name_prefix="vault-writer")
     EXPORT_LOCK = Lock()
     LICENSE_KEY_CACHE: dict[UUID, str] = {}
+    ALL_DRM_LOCK = Lock()
 
     def __init__(
         self,
@@ -1526,9 +1539,16 @@ class dl:
         progress_sink: Optional[Callable[[dict[str, Any]], None]] = None,
         postscript: Sequence[str] = (),
         no_postscript: bool = False,
+        all_drm: bool = False,
         *_: Any,
         **__: Any,
     ) -> None:
+        if all_drm:
+            DOWNLOAD_ALL_DRM.set()
+        else:
+            DOWNLOAD_ALL_DRM.clear()
+        self.all_drm_attempted: defaultdict[type, set[UUID]] = defaultdict(set)
+        self.all_drm_warned: set[str] = set()
         if no_postscript:
             postscript = NO_POST_SCRIPTS
         if continue_downloads:
@@ -1697,6 +1717,8 @@ class dl:
             vaults_only = None
         else:
             vaults_only = not cdm_only
+        if all_drm and vaults_only:
+            raise click.ClickException("--all-drm sends licence requests, so it cannot be used with --vaults-only.")
 
         config.decryption = resolve_decryption(
             config.decryption_map, config.decryption, service.__class__.__name__.upper()
@@ -2863,7 +2885,7 @@ class dl:
             download_table.add_row(selected_tracks)
 
             def prepare_drm_for(track: AnyTrack) -> Callable:
-                return partial(
+                prepare = partial(
                     partial(self.prepare_drm, table=download_table),
                     track=track,
                     title=title,
@@ -2875,6 +2897,9 @@ class dl:
                     export=export_path,
                     service_session=service.session,
                 )
+                if title_all_drm:
+                    return partial(self.licence_all_drm, prepare, track, best_available)
+                return prepare
 
             server_cdm_type = None
             if getattr(self._remote_service, "_server_cdm", False):
@@ -2909,6 +2934,28 @@ class dl:
                                 f"Pre-selecting PlayReady CDM based on highest quality {highest_quality}p across all video tracks"
                             )
                             self.cdm = quality_based_cdm
+
+            title_all_drm = all_drm and not server_cdm_type
+            if all_drm and server_cdm_type and DOWNLOAD_ALL_DRM.is_set():
+                DOWNLOAD_ALL_DRM.clear()
+                self.log.warning("--all-drm is ignored: the server CDM licenses this session with one DRM system")
+            if title_all_drm:
+                heights = {track.height for track in title.tracks.videos if track.height} or {None}
+                for system, matches in (("Widevine", is_widevine_cdm), ("PlayReady", is_playready_cdm)):
+                    system_cdms = [self.cdm_for(system.lower(), height) for height in heights]
+                    if not all(system_cdm and matches(system_cdm) for system_cdm in system_cdms):
+                        hint = (
+                            "--cdm selects one device, so remove it."
+                            if self.cdm_override
+                            else f"Set cdm.{self.service}.{system.lower()} in the configuration."
+                        )
+                        raise click.ClickException(f"--all-drm needs a {system} CDM for {self.service}. {hint}")
+                    if is_remote_cdm(system_cdms[0]) and system not in self.all_drm_warned:
+                        self.all_drm_warned.add(system)
+                        self.log.warning(
+                            f"The {system} CDM is remote. It can answer from its own key cache "
+                            "and send no licence request."
+                        )
 
             if hasattr(service, "resolve_server_keys"):
                 service.resolve_server_keys(title)
@@ -4381,6 +4428,96 @@ class dl:
         fn = service.get_playready_license if drm_system == "playready" else service.get_widevine_license
         return fn(**declared_kwargs(fn, kwargs))
 
+    def cdm_for(self, system: str, quality: Optional[int] = None) -> Optional[object]:
+        """Get the CDM for one DRM system, ``widevine`` or ``playready``.
+
+        A quality key that names one device applies to both DRM systems. When that device is for
+        the other system, the ``widevine`` or ``playready`` config key selects the device.
+        """
+        matches = is_playready_cdm if system == "playready" else is_widevine_cdm
+        cdm = self.get_cdm(self.service, self.profile, drm=system, quality=quality)
+        if quality and not (cdm and matches(cdm)):
+            cdm = self.get_cdm(self.service, self.profile, drm=system)
+        return cdm
+
+    def licence_one_drm(self, prepare: Callable, drm: DRM_T, track_kid: Optional[UUID]) -> None:
+        """Send one challenge for the KIDs of this DRM, the first time a run sees them for its DRM system.
+
+        prepare_drm asks the CDM only for a KID with no content key, so the content keys the DRM
+        holds are removed for the call and put back after it.
+        """
+        kids = {*drm.kids, *([track_kid] if track_kid else [])}
+        attempted = self.all_drm_attempted[type(drm)]
+        if kids <= attempted:
+            prepare(drm, track_kid=track_kid)
+            return
+        with self.drm_lock(drm):
+            held = dict(drm.content_keys)
+            drm.content_keys.clear()
+        try:
+            prepare(drm, track_kid=track_kid, cdm_only=True, force=True)
+        finally:
+            attempted |= kids
+            with self.drm_lock(drm):
+                for held_kid, key in held.items():
+                    drm.content_keys.setdefault(held_kid, key)
+
+    def licence_all_drm(
+        self,
+        prepare: Callable,
+        track: AnyTrack,
+        tolerate: bool,
+        drm: DRM_T,
+        track_kid: Optional[UUID] = None,
+    ) -> None:
+        """License the track with each DRM system it offers, not only the one the downloader selected.
+
+        Each DRM system sends one challenge for a set of KIDs in a run, also when a vault
+        has the content keys. A DRM system that fails stops the title. With ``tolerate`` it is a
+        warning, if the other DRM system gave the content key of the track.
+        """
+        if type(drm) not in (Widevine, PlayReady):
+            prepare(drm, track_kid=track_kid)
+            return
+
+        other_type = PlayReady if type(drm) is Widevine else Widevine
+        others = [d for d in track.drm or [] if type(d) is other_type]
+        if other_type is PlayReady and len(others) > 1:
+            others[0].absorb(*others[1:])
+        if not others and other_type.__name__ not in self.all_drm_warned:
+            self.all_drm_warned.add(other_type.__name__)
+            self.log.warning(
+                f"A track does not offer {other_type.__name__}, so it licenses with "
+                f"{type(drm).__name__} only. This warning shows one time: {track}"
+            )
+
+        targets = [drm, *others[:1]]
+        error: Optional[Exception] = None
+        with self.ALL_DRM_LOCK:
+            loaded_cdm = self.cdm
+            try:
+                for target in targets:
+                    kid = track_kid if target is drm or track_kid in target.kids else None
+                    try:
+                        self.licence_one_drm(prepare, target, kid)
+                    except Exception as e:
+                        if not tolerate:
+                            raise
+                        self.log.warning(f"{type(target).__name__} licence failed for {track}: {e}")
+                        error = error or e
+
+                keys = {kid: key for target in targets for kid, key in target.content_keys.items()}
+                for target in targets:
+                    with self.drm_lock(target):
+                        for kid, key in keys.items():
+                            target.content_keys.setdefault(kid, key)
+            finally:
+                self.cdm = loaded_cdm
+
+        track_keys = getattr(drm, "content_keys", {})
+        if error and (not track_keys or (track_kid and track_kid not in track_keys)):
+            raise error
+
     def prepare_drm(
         self,
         drm: DRM_T,
@@ -4395,10 +4532,13 @@ class dl:
         vaults_only: bool = False,
         export: Optional[Path] = None,
         service_session: Optional[Any] = None,
+        force: bool = False,
     ) -> None:
         """
         Prepare the DRM by getting decryption data like KIDs, Keys, and such.
         The DRM object should be ready for decryption once this function ends.
+        ``force`` skips the content keys of earlier tracks in this run. The CDM then licenses
+        again for each KID the DRM holds no content key for.
         """
         if not drm:
             return
@@ -4548,7 +4688,7 @@ class dl:
         if not server_cdm:
             if isinstance(drm, Widevine):
                 if not is_widevine_cdm(self.cdm):
-                    widevine_cdm = self.get_cdm(self.service, self.profile, drm="widevine", quality=track_quality)
+                    widevine_cdm = self.cdm_for("widevine", track_quality)
                     if widevine_cdm and is_widevine_cdm(widevine_cdm):
                         if track_quality:
                             self.log.info(f"Switching to Widevine CDM for Widevine {track_quality}p content")
@@ -4561,7 +4701,7 @@ class dl:
 
             elif isinstance(drm, PlayReady):
                 if not is_playready_cdm(self.cdm):
-                    playready_cdm = self.get_cdm(self.service, self.profile, drm="playready", quality=track_quality)
+                    playready_cdm = self.cdm_for("playready", track_quality)
                     if playready_cdm and is_playready_cdm(playready_cdm):
                         if track_quality:
                             self.log.info(f"Switching to PlayReady CDM for PlayReady {track_quality}p content")
@@ -4613,7 +4753,7 @@ class dl:
 
                     is_track_kid = ["", "*"][kid == track_kid]
 
-                    cached_key = self.LICENSE_KEY_CACHE.get(kid)
+                    cached_key = None if force else self.LICENSE_KEY_CACHE.get(kid)
                     if cached_key:
                         drm.content_keys[kid] = cached_key
                         label = f"[text2]{kid.hex}:{cached_key}{is_track_kid} from cache"
@@ -4812,7 +4952,7 @@ class dl:
 
                     is_track_kid = ["", "*"][kid == track_kid]
 
-                    cached_key = self.LICENSE_KEY_CACHE.get(kid)
+                    cached_key = None if force else self.LICENSE_KEY_CACHE.get(kid)
                     if cached_key:
                         drm.content_keys[kid] = cached_key
                         label = f"[text2]{kid.hex}:{cached_key}{is_track_kid} from cache"

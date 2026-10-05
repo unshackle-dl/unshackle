@@ -482,6 +482,42 @@ Use the `cdm` mapping's [DRM-based selection](#advanced-selection-by-quality-drm
 to configure a device for each system. unshackle selects the right one per track
 automatically.
 
+### License both systems with `--all-drm`
+
+By default a track licenses with one DRM system. `--all-drm` sends a challenge for
+Widevine and for PlayReady on each track that offers both. Use it with `--skip-dl` and
+`--export` to keep the content keys and the DRM init data of both systems. The two
+systems can return different sets of KIDs, and unshackle keeps the content keys of both.
+
+```shell
+unshackle dl --skip-dl --all-drm --export EXAMPLE 81234567
+```
+
+- The `cdm` mapping must name a device for each system. A single device name, or `--cdm`,
+  stops the run with an error that names the missing system.
+- Each DRM system sends one challenge for a set of KIDs in a run. A content key in a
+  Key Vault does not stop the challenge, so `--vaults-only` is refused.
+- A service with a Widevine licence function only gets the PlayReady challenge through that
+  function. If its licence server refuses the challenge, that DRM system does not license.
+- If one DRM system does not license, the title fails. With `--best-available` unshackle
+  shows a warning and continues, if the other system gave the content key of the track.
+  unshackle does not send the challenge again for the same KIDs in that run.
+- A track gets its DRM systems from the manifest. For a DASH track or a direct URL,
+  unshackle also reads the init segment for a system that the manifest does not carry.
+- The service gets a challenge from each DRM system for each set of KIDs. A licence server
+  that limits the request rate can answer `429`, and unshackle then tries again.
+
+!!! note "Where `--all-drm` licenses one system only"
+    - A service that gets a different manifest for each DRM system. unshackle shows a
+      warning one time when a track offers one system only.
+    - A service that fetched its playback for one DRM system and refuses the other. That
+      system does not license, so the title fails unless you use `--best-available`.
+    - An HLS playlist that changes its `EXT-X-KEY` entries part-way: only the first set
+      licenses with the second system.
+    - A remote session that the server CDM licenses, and `unshackle import`. unshackle
+      shows a warning and ignores the flag.
+    - A remote CDM that stores content keys can answer without a challenge to the service.
+
 ## Keys, vaults, and caching
 
 Fetching a license is comparatively slow and, for some services, rate-limited.

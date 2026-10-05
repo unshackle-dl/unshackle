@@ -27,7 +27,7 @@ from requests import Session
 
 from unshackle.core import binaries
 from unshackle.core.config import config
-from unshackle.core.constants import DOWNLOAD_CANCELLED, DOWNLOAD_LICENCE_ONLY, AnyTrack
+from unshackle.core.constants import DOWNLOAD_ALL_DRM, DOWNLOAD_CANCELLED, DOWNLOAD_LICENCE_ONLY, AnyTrack
 from unshackle.core.drm import DRM_T, ClearKeyCENC, PlayReady, Widevine
 from unshackle.core.drm.segment_decrypt import SegmentDecrypter, can_use
 from unshackle.core.drm.verify import decrypt_track
@@ -395,8 +395,13 @@ class DASH:
             track.drm = manifest_drm
         else:
             track.drm = existing_drm
+            if DOWNLOAD_ALL_DRM.is_set():
+                track.drm = [
+                    *existing_drm,
+                    *(d for d in manifest_drm if not any(type(d) is type(e) for e in existing_drm)),
+                ]
 
-        if track.drm and track.drm_preference:
+        if track.drm and track.drm_preference and not DOWNLOAD_ALL_DRM.is_set():
             wanted = DRM_PREFERENCE_TYPES[track.drm_preference]
             preferred = [drm_obj for drm_obj in track.drm if isinstance(drm_obj, wanted)]
             if preferred:
@@ -478,6 +483,8 @@ class DASH:
 
         if not track.drm and init_data and isinstance(track, (Video, Audio)) and not binaries.FFProbe:
             log.warning("FFprobe was not found, so the init segment was not probed for a PSSH.")
+        elif DOWNLOAD_ALL_DRM.is_set() and init_data and binaries.FFProbe and isinstance(track, (Video, Audio)):
+            track.add_init_drm(init_data, cdm)
         elif not track.drm and init_data and isinstance(track, (Video, Audio)):
             prefers_playready = track.prefers_playready(cdm)
             if prefers_playready:

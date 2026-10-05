@@ -45,6 +45,23 @@ are `widevine` / `playready`. unshackle matches the quality keys first, but only
 height is known. If the value is still a dict after that, unshackle uses
 `widevine`/`playready` when present, or else the credential profile name, then `default`.
 
+A quality key can also hold a dict of `widevine` / `playready` devices, and so can the
+top-level `default` entry:
+
+```yaml
+cdm:
+  default:
+    widevine: chromecdm_l3
+    playready: sl2000
+  EXAMPLE1:
+    ">=1080": { widevine: android_l1, playready: sl3000 }
+    "<1080": { widevine: chromecdm_l3, playready: sl2000 }
+```
+
+A quality key that holds one device name applies to both DRM systems. When a track needs the
+other system, unshackle uses the `widevine` / `playready` config key of the entry. `dl --all-drm`
+needs a device for each system from one of these shapes.
+
 unshackle finds the resolved name in [`remote_cdm`](#remote_cdm) by `name` first. If no entry
 matches, unshackle loads it as a local device file, in this order: `<name>.prd` in
 `directories.prds`, `<name>.prd` in `directories.wvds`, then `<name>.wvd` in

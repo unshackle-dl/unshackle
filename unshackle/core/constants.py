@@ -3,6 +3,7 @@ from typing import TypeVar, Union
 
 DOWNLOAD_CANCELLED = Event()
 DOWNLOAD_LICENCE_ONLY = Event()
+DOWNLOAD_ALL_DRM = Event()
 
 
 class DownloadCancelled(Exception):

@@ -28,9 +28,9 @@ from pywidevine.pssh import PSSH as WV_PSSH
 from requests import Session
 
 from unshackle.core import binaries
-from unshackle.core.cdm.detect import is_playready_cdm, is_widevine_cdm
+from unshackle.core.cdm.detect import cdm_type_stub, is_playready_cdm, is_widevine_cdm
 from unshackle.core.config import config
-from unshackle.core.constants import DOWNLOAD_CANCELLED, DOWNLOAD_LICENCE_ONLY, AnyTrack
+from unshackle.core.constants import DOWNLOAD_ALL_DRM, DOWNLOAD_CANCELLED, DOWNLOAD_LICENCE_ONLY, AnyTrack
 from unshackle.core.drm import DRM_T, ClearKey, MonaLisa, PlayReady, Widevine
 from unshackle.core.drm.segment_decrypt import SegmentDecrypter, can_use
 from unshackle.core.drm.verify import decrypt_track
@@ -697,6 +697,8 @@ class HLS:
                             if hasattr(existing_drm, "content_keys") and existing_drm.content_keys:
                                 media_drm.content_keys.update(existing_drm.content_keys)
                     track.drm = [media_drm]
+                    if DOWNLOAD_ALL_DRM.is_set():
+                        track.drm += HLS.alternate_drm(media_keys, media_drm, session)
                     try:
                         if not license_widevine:
                             raise ValueError("license_widevine func must be supplied to use DRM")
@@ -1434,6 +1436,26 @@ class HLS:
         elif is_playready_cdm(cdm):
             return [k for k in keys if k.keyformat and k.keyformat.lower() in playready_keyformats]
         return keys
+
+    @staticmethod
+    def alternate_drm(
+        keys: list[Union[m3u8.model.SessionKey, m3u8.model.Key]],
+        chosen: DRM_T,
+        session: Optional[Union[Session, RnetSession]] = None,
+    ) -> list[DRM_T]:
+        """Build the Widevine or PlayReady DRM that the EXT-X-KEY entries offer next to ``chosen``.
+
+        Only an entry with the KEYFORMAT of the other DRM system counts, so unshackle requests no URI.
+        """
+        system = "widevine" if isinstance(chosen, PlayReady) else "playready"
+        other_keys = [k for k in HLS.filter_keys_for_cdm(keys, cdm_type_stub(system)) if k.method != "NONE"]
+        if not other_keys:
+            return []
+        try:
+            return [HLS.get_drm(other_keys[0], session)]
+        except Exception as e:
+            logging.getLogger("HLS").warning(f"Could not read the {system} EXT-X-KEY entry: {e}")
+            return []
 
     @staticmethod
     def get_track_kid_from_init(

@@ -947,6 +947,9 @@ async def download(request: web.Request) -> web.Response:
               skip_dl:
                 type: boolean
                 description: Skip downloading, only retrieve decryption keys (default - false)
+              all_drm:
+                type: boolean
+                description: License each track with both Widevine and PlayReady. Needs a CDM for each DRM system and cannot be used with `cdm` or with `cdm_only` set to false (default - false)
               export:
                 type: boolean
                 description: Export manifest, DRM init data, keys, and track info to a JSON file in the exports directory (default - false)

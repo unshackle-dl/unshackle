@@ -97,7 +97,7 @@ By default a missing requested resolution is an error. Two flags change that:
 
 | Flag | Behaviour |
 | --- | --- |
-| `--best-available` (`--warn-only`) | If the requested resolution(s) are not present, continue with the best that *is* available instead of failing. Also softens missing video/audio/subtitle languages and hybrid fallbacks. |
+| `--best-available` (`--warn-only`) | If the requested resolution(s) are not present, continue with the best that *is* available instead of failing. Also softens missing video/audio/subtitle languages and hybrid fallbacks, and with `--all-drm` a DRM system that does not license. |
 | `--worst` | Within the specified quality, pick the **lowest** bitrate rendition. **Requires `-q/--quality`.** |
 
 ```shell title="Never fail on a missing resolution"
@@ -662,6 +662,7 @@ Before committing to a long download, inspect what unshackle *would* do:
 | `--list` | List the tracks the service exposes for each title, then stop. No selection, no download. |
 | `--list-titles` | List every title the service returned, then stop. `-w`, `--latest-episode` and `--latest-episodes` are not applied to this listing. |
 | `--skip-dl` | Skip downloading but still acquire the decryption keys. |
+| `--all-drm` | License each track with both Widevine and PlayReady. See [Widevine and PlayReady on the same title](drm-and-cdm.md#widevine-and-playready-on-the-same-title). |
 
 ```shell title="See the track selection without downloading"
 unshackle dl -q 1080 -v H.265 -r HDR10 --list EXAMPLE 81234567
@@ -793,6 +794,13 @@ older unshackle `version: 2` files and unidl's own export files.
 
 ```shell title="Export track info and keys"
 unshackle dl --skip-dl --export EXAMPLE 81234567
+```
+
+Add `--all-drm` to send a challenge for each DRM system the title offers. The export then
+holds the DRM init data of both.
+
+```shell title="License with Widevine and PlayReady, no download"
+unshackle dl --skip-dl --all-drm --export EXAMPLE 81234567
 ```
 
 The file name tells what the file holds, in the form

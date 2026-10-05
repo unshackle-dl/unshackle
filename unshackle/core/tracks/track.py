@@ -21,7 +21,7 @@ from requests.adapters import HTTPAdapter, Retry
 from unshackle.core import binaries
 from unshackle.core.cdm.detect import is_playready_cdm, is_widevine_cdm
 from unshackle.core.config import config
-from unshackle.core.constants import DOWNLOAD_CANCELLED, DOWNLOAD_LICENCE_ONLY, DownloadCancelled
+from unshackle.core.constants import DOWNLOAD_ALL_DRM, DOWNLOAD_CANCELLED, DOWNLOAD_LICENCE_ONLY, DownloadCancelled
 from unshackle.core.downloaders import requests
 from unshackle.core.drm import DRM_T, ClearKeyCENC, PlayReady, Widevine
 from unshackle.core.drm.verify import decrypt_track
@@ -563,6 +563,31 @@ class Track:
             )
         self._drm_preference = value.lower()
 
+    def add_init_drm(self, init_data: Optional[bytes], cdm: Optional[object]) -> None:
+        """Add the Widevine and PlayReady DRM that the init segment carries and the track does not have.
+
+        A track with a different DRM type stays as it is. The DRM system that agrees with the CDM comes first.
+        """
+        log = logging.getLogger("track")
+        held: list[DRM_T] = list(self.drm or [])
+        if not init_data or any(type(d) not in (Widevine, PlayReady) for d in held):
+            return
+        for system in (PlayReady, Widevine) if self.prefers_playready(cdm) else (Widevine, PlayReady):
+            if any(type(d) is system for d in held):
+                continue
+            try:
+                held.append(system.from_init_data(init_data))
+            except (PlayReady.Exceptions.PSSHNotFound, Widevine.Exceptions.PSSHNotFound):
+                continue
+            except Exception as e:
+                if not held:
+                    raise
+                log.debug(f"Could not read the {system.__name__} PSSH of the init segment: {e}")
+        if held:
+            self.drm = held
+        else:
+            log.debug("No PlayReady or Widevine PSSH was found for this track, is it DRM free?")
+
     def prefers_playready(self, cdm: Optional[object]) -> bool:
         """Whether to try PlayReady before Widevine. The track's preference wins over the loaded CDM."""
         if self._drm_preference:
@@ -665,7 +690,13 @@ class Track:
                 manifest_parsers[self.descriptor].download_track(track=self, ctx=ctx)
             elif self.descriptor == self.Descriptor.URL:
                 try:
-                    if not self.drm and track_type in ("Video", "Audio"):
+                    if (
+                        DOWNLOAD_ALL_DRM.is_set()
+                        and track_type in ("Video", "Audio")
+                        and not {Widevine, PlayReady} <= {type(d) for d in self.drm or []}
+                    ):
+                        self.add_init_drm(self.get_init_segment(session=session), cdm)
+                    elif not self.drm and track_type in ("Video", "Audio"):
                         if self.prefers_playready(cdm):
                             try:
                                 self.drm = [PlayReady.from_track(self, session)]
