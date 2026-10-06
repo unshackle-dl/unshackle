@@ -93,6 +93,7 @@ from unshackle.core.utilities import (
     is_close_match,
     is_exact_match,
     keep_forced_subtitle,
+    kind_only_conflict,
     log_event,
     missing_required_langs,
     partition_exclusions,
@@ -757,6 +758,13 @@ class dl:
     )
     @click.option("-fs", "--forced-subs", is_flag=True, default=False, help="Include forced subtitle tracks.")
     @click.option(
+        "-fso",
+        "--forced-subs-only",
+        is_flag=True,
+        default=False,
+        help="Download forced subtitle tracks and no other subtitle tracks.",
+    )
+    @click.option(
         "-fsl",
         "--forced-s-lang",
         type=LANGUAGE_RANGE,
@@ -882,6 +890,13 @@ class dl:
         help="Do not download or mux attachments (cover art, subtitle fonts, and files the service attaches).",
     )
     @click.option("-ad", "--audio-description", is_flag=True, default=False, help="Download audio description tracks.")
+    @click.option(
+        "-ado",
+        "--audio-description-only",
+        is_flag=True,
+        default=False,
+        help="Download audio description tracks and no standard audio tracks.",
+    )
     @click.option(
         "--slow",
         type=SLOW_DELAY_RANGE,
@@ -1523,6 +1538,7 @@ class dl:
         require_video: list[str],
         require_subs: list[str],
         forced_subs: bool,
+        forced_subs_only: bool,
         forced_s_lang: list[str],
         exact_lang: bool,
         sub_format: Optional[Union[Subtitle.Codec, str]],
@@ -1537,6 +1553,7 @@ class dl:
         no_video: bool,
         no_attachments: bool,
         audio_description: bool,
+        audio_description_only: bool,
         slow: Optional[tuple[int, int]],
         list_: bool,
         list_titles: bool,
@@ -1639,7 +1656,27 @@ class dl:
                 if excludes and name in parent_params:
                     parent_params[name] = includes
 
-        if forced_s_lang or fsl_excl:
+        conflict = kind_only_conflict(
+            {
+                "audio_description_only": audio_description_only,
+                "forced_subs_only": forced_subs_only,
+                "no_audio": no_audio,
+                "no_subs": no_subs,
+                "video_only": video_only,
+                "audio_only": audio_only,
+                "subs_only": subs_only,
+                "chapters_only": chapters_only,
+            }
+        )
+        if conflict:
+            first, second = (f"--{name.replace('_', '-')}" for name in conflict)
+            self.log.error(f"{first} cannot be used with {second}: {second} drops the tracks that {first} selects.")
+            sys.exit(1)
+
+        if audio_description_only:
+            audio_description = True
+
+        if forced_s_lang or fsl_excl or forced_subs_only:
             # services read forced_subs from raw ctx params, so the implication must be pushed there too
             forced_subs = True
             if "all" in forced_s_lang:
@@ -2044,6 +2081,27 @@ class dl:
         post_script_last: dict[Any, dict[Path, dict[str, str]]] = {}
         post_script_folders: list[Path] = []
         post_script_sample: dict[str, str] = {}
+        wanted_total = sum(post_script_pending.values())
+
+        def settle_post_script_group(title: Any) -> None:
+            """Count one title of its group as done; send the season event after the last one."""
+            group_key = post_script_group(title)
+            post_script_pending[group_key] = post_script_pending.get(group_key, 1) - 1
+            if post_script_pending[group_key] <= 0:
+                for folder, context in post_script_last.get(group_key, {}).items():
+                    dispatch("success", "season", season_context(context, folder), postscript)
+
+        def skip_title(title: Any, reason: str) -> None:
+            """Skip a title that has no track of the kind an only flag selects.
+
+            A run with one title stops instead, because it has nothing else to download.
+            """
+            if wanted_total <= 1:
+                self.log.error(reason)
+                sys.exit(1)
+            self.log.warning(f"{reason} Skipping {title}")
+            if not no_mux:
+                settle_post_script_group(title)
 
         for i, title in enumerate(titles):
             v_lang, a_lang, s_lang, range_ = base_selection
@@ -2316,13 +2374,14 @@ class dl:
                 (
                     "audio",
                     require_audio if keep_audio else [],
-                    [a.language for a in title.tracks.audio] + embedded_audio_langs(title.tracks.videos, keep_videos),
+                    [a.language for a in title.tracks.audio if a.descriptive or not audio_description_only]
+                    + embedded_audio_langs(title.tracks.videos, keep_videos and not audio_description_only),
                 ),
                 ("video", require_video if keep_videos else [], [v.language for v in title.tracks.videos]),
                 (
                     "subtitle",
                     require_subs if keep_subtitles else [],
-                    [t.language for t in title.tracks.subtitles],
+                    [t.language for t in title.tracks.subtitles if t.forced or not forced_subs_only],
                 ),
             ):
                 missing_required = missing_required_langs(required, available, title.language, exact=exact_lang)
@@ -2749,7 +2808,17 @@ class dl:
                                 fsl_excl_r, [t.language for t in title.tracks.subtitles if t.forced], exact_lang
                             )
                             title.tracks.select_subtitles(lambda x: not (x.forced and str(x.language) in drop))
+                        if forced_subs_only:
+                            title.tracks.select_subtitles(lambda x: x.forced)
+                            if not title.tracks.subtitles:
+                                skip_title(title, "There's no forced subtitle track for the selected languages.")
+                                continue
 
+                if keep_audio and audio_description_only:
+                    title.tracks.select_audio(lambda x: x.descriptive)
+                    if not title.tracks.audio:
+                        skip_title(title, "There's no audio description track.")
+                        continue
                 # might have no audio tracks if part of the video, e.g. transport stream hls
                 if keep_audio and len(title.tracks.audio) > 0:
                     if not audio_description:
@@ -2818,7 +2887,10 @@ class dl:
                         if a_orig_token in audio_languages:
                             a_orig_token = None
 
-                        embedded_langs = embedded_audio_langs(title.tracks.videos, keep_videos)
+                        embedded_langs = embedded_audio_langs(
+                            title.tracks.videos, keep_videos and not audio_description_only
+                        )
+                        audio_noun = "audio description tracks" if audio_description_only else "audio tracks"
 
                         if not any(tok in processed_lang for tok in ("best", "all")):
                             missing_a_langs = find_missing_langs(
@@ -2832,17 +2904,17 @@ class dl:
                                     remaining = [tok for tok in processed_lang if tok not in missing_a_langs]
                                     if remaining:
                                         self.log.warning(
-                                            f"{missing_str} not found in audio tracks, "
+                                            f"{missing_str} not found in {audio_noun}, "
                                             f"continuing with: {as_requested(remaining, a_orig_token)}"
                                         )
                                         processed_lang = remaining
                                     else:
                                         self.log.error(
-                                            f"{missing_str} not found in audio tracks and no fallback available"
+                                            f"{missing_str} not found in {audio_noun} and no fallback available"
                                         )
                                         sys.exit(1)
                                 else:
-                                    self.log.error(missing_str + " not found in audio tracks")
+                                    self.log.error(f"{missing_str} not found in {audio_noun}")
                                     sys.exit(1)
 
                         title.tracks.audio = select_best_audio(
@@ -3700,11 +3772,7 @@ class dl:
                             post_script_folders.append(final_path.parent)
 
                 if not no_mux:
-                    group_key = post_script_group(title)
-                    post_script_pending[group_key] = post_script_pending.get(group_key, 1) - 1
-                    if post_script_pending[group_key] <= 0:
-                        for folder, context in post_script_last.get(group_key, {}).items():
-                            dispatch("success", "season", season_context(context, folder), postscript)
+                    settle_post_script_group(title)
 
                 title_dl_time = time_elapsed_since(dl_start_time)
                 downloaded_label = "Track" if isinstance(title, Song) else "Title"

@@ -438,8 +438,9 @@ server drops an unknown codec name. An empty array is a valid value and stays
 empty.
 
 The server does not forward the `dl` mode flags: `video_only`, `audio_only`,
-`subs_only`, `chapters_only`, `list_`, `skip_dl`, `sub_format` and
-`no_attachments`. A service that reads one of them to skip work fetches more on
+`subs_only`, `chapters_only`, `list_`, `skip_dl`, `sub_format`,
+`no_attachments`, `audio_description`, `audio_description_only` and
+`forced_subs_only`. A service that reads one of them to skip work fetches more on
 the server, but the result is the same.
 
 In a client-login session (not a server account), the server gives the service

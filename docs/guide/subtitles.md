@@ -74,6 +74,7 @@ Subtitle selection happens through `dl` flags. The most important is language se
 | `-sl`, `--s-lang` | Language(s) wanted for subtitles. Defaults to `all`. A `-` prefix excludes, e.g. `all,-es`. |
 | `--require-subs` | Require these languages to exist; if present, download **all** subtitles. Cannot be combined with `--s-lang`. |
 | `-fs`, `--forced-subs` | Include forced subtitle tracks (excluded by default). |
+| `-fso`, `--forced-subs-only` | Keep only forced subtitle tracks and drop the other subtitles; implies `-fs`. |
 | `-fsl`, `--forced-s-lang` | Language(s) wanted for forced subtitles; implies `-fs`. A `-` prefix excludes. |
 | `--exact-lang` | Exact language matching, with no regional variants. |
 | `-S`, `--subs-only` | Download only subtitle tracks. |
@@ -137,6 +138,17 @@ unshackle dl --s-lang all --forced-s-lang en EXAMPLE 81234567
 If you pass both flags, `-fsl` wins and keeps only forced tracks in its languages.
 It also understands `orig` (the title's original language) and `all` (every forced
 track, same as plain `-fs`).
+
+To download the forced tracks and no other subtitle, use `-fso` / `--forced-subs-only`.
+It implies `-fs`, and `--s-lang` and `-fsl` still select the languages:
+
+```shell title="Only the English forced track"
+unshackle dl --s-lang en --forced-subs-only EXAMPLE 81234567
+```
+
+`-fso` does not drop video or audio. Add `-S` for a subtitle-only download. A title with
+no forced track stops a run of one title. A run of more than one title skips that title
+with a warning.
 
 ## Track types: forced, SDH, and CC
 

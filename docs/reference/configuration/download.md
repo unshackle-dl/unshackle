@@ -43,6 +43,9 @@ Common config keys. This is a useful subset, and every `dl` flag works:
 | `sub_format` | str | *(unset)* | Convert subtitles to this format (`srt`, `vtt`, `original`, ...). |
 | `forced_subs` | bool | `false` | Include forced subtitle tracks. |
 | `forced_s_lang` | list | `[]` | Forced subtitle language(s); implies `forced_subs`. A `-` prefix excludes. |
+| `forced_subs_only` | bool | `false` | Keep only forced subtitle tracks; implies `forced_subs`. |
+| `audio_description` | bool | `false` | Include descriptive (audio-description) tracks. |
+| `audio_description_only` | bool | `false` | Keep only descriptive (audio-description) tracks. |
 | `no_subs` / `no_audio` / `no_chapters` / `no_attachments` | bool | `false` | Skip that track type. `no_attachments` also skips attaching subtitle fonts. |
 | `downloads` | int | `1` | Tracks downloaded concurrently. |
 | `workers` | int | *(downloader default)* | Threads per track. |

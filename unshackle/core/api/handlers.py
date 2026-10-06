@@ -33,7 +33,7 @@ from unshackle.core.proxies.resolve import initialize_proxy_providers, resolve_p
 from unshackle.core.services import Services
 from unshackle.core.titles import Episode, Movie, Song, Title_T
 from unshackle.core.tracks import Audio, Subtitle, Tracks, Video
-from unshackle.core.utilities import declared_kwargs
+from unshackle.core.utilities import declared_kwargs, kind_only_conflict
 from unshackle.core.utils.click_types import AUDIO_CODEC_LIST, SUBTITLE_CODEC, VIDEO_CODEC_LIST
 from unshackle.core.utils.collections import ci_get
 from unshackle.core.utils.redact import REDACTED, URL_USERINFO_RE, redact_all, redact_secrets, redact_text
@@ -64,6 +64,7 @@ DEFAULT_DOWNLOAD_PARAMS = {
     "require_video": [],
     "require_subs": [],
     "forced_subs": False,
+    "forced_subs_only": False,
     "forced_s_lang": [],
     "exact_lang": False,
     "sub_format": None,
@@ -77,6 +78,7 @@ DEFAULT_DOWNLOAD_PARAMS = {
     "no_video": False,
     "no_attachments": False,
     "audio_description": False,
+    "audio_description_only": False,
     "slow": None,
     "split_audio": None,
     "skip_dl": False,
@@ -1925,6 +1927,13 @@ def validate_download_parameters(data: Dict[str, Any]) -> Optional[str]:
         return "Cannot use both no_subs and subs_only"
     if data.get("no_audio") and data.get("audio_only"):
         return "Cannot use both no_audio and audio_only"
+    conflict = kind_only_conflict(data)
+    if conflict:
+        return f"Cannot use both {conflict[0]} and {conflict[1]}"
+
+    for key, default in DEFAULT_DOWNLOAD_PARAMS.items():
+        if isinstance(default, bool) and data.get(key) is not None and not isinstance(data[key], bool):
+            return f"{key} must be a boolean"
 
     for key in ("require_audio", "require_video", "require_subs"):
         value = data.get(key)

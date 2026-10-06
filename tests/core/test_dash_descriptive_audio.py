@@ -37,3 +37,13 @@ def test_non_descriptive_accessibility_values(scheme: str, value: str) -> None:
 
 def test_no_accessibility_element() -> None:
     assert DASH.is_descriptive(ET.fromstring("<AdaptationSet/>")) is False
+
+
+def test_descriptive_role_element() -> None:
+    # some manifests mark audio description with a Role and no Accessibility element
+    element = ET.fromstring(
+        '<AdaptationSet><Role schemeIdUri="urn:mpeg:dash:role:2011" value="description"/></AdaptationSet>'
+    )
+    assert DASH.is_descriptive(element) is True
+    main = ET.fromstring('<AdaptationSet><Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"/></AdaptationSet>')
+    assert DASH.is_descriptive(main) is False

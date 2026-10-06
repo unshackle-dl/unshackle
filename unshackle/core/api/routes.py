@@ -895,6 +895,9 @@ async def download(request: web.Request) -> web.Response:
               forced_subs:
                 type: boolean
                 description: Include forced subtitle tracks (default - false)
+              forced_subs_only:
+                type: boolean
+                description: Download forced subtitle tracks and no other subtitle tracks, implies forced_subs (default - false)
               forced_s_lang:
                 type: array
                 items:
@@ -936,6 +939,9 @@ async def download(request: web.Request) -> web.Response:
               audio_description:
                 type: boolean
                 description: Download audio description tracks (default - false)
+              audio_description_only:
+                type: boolean
+                description: Download audio description tracks and no standard audio tracks (default - false)
               slow:
                 oneOf:
                   - type: boolean

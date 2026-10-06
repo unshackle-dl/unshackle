@@ -1209,7 +1209,7 @@ class DASH:
                 ("urn:mpeg:dash:role:2011", "descriptive"),
                 ("urn:tva:metadata:cs:AudioPurposeCS:2007", "1"),
             )
-            for x in adaptation_set.findall("Accessibility")
+            for x in (*adaptation_set.findall("Accessibility"), *adaptation_set.findall("Role"))
         )
 
     @staticmethod

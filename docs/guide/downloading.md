@@ -416,6 +416,8 @@ video track counts. `--no-audio` and `--no-video` drop the matching requirement.
   `-fs`). Works independently of `--s-lang`, so `-sl all -fsl en` grabs every full
   subtitle but only the English forced track. It accepts exclusions too: `-fsl all,-es`
   keeps every forced subtitle except the Spanish one, and `-fsl -es` means the same.
+- `-fso` / `--forced-subs-only`: keep only the forced subtitle tracks and drop every
+  other subtitle (implies `-fs`). `--s-lang` and `-fsl` still select the languages.
 - `--sub-format`: set the output subtitle format, converting only when necessary.
   Accepts codec names/values and common aliases (`srt`, `vtt`, `ass`, `ssa`, `ttml`,
   and the other codec aliases), or the literal `original` to keep the source format.
@@ -637,8 +639,28 @@ Additional track-type flags:
 
 - `-ad` / `--audio-description`: include descriptive (audio-description) tracks, which
   unshackle drops by default.
+- `-ado` / `--audio-description-only`: keep only the descriptive tracks and drop the
+  standard audio. It does not need `-ad`. Add `-A` to download no video or subtitles.
 - `--skip-subtitle-errors`: if a subtitle fails to download, skip it and continue rather
   than aborting the whole title. Video and audio failures remain fatal.
+
+!!! note "The `-only` kind flags"
+    `-ado` and `-fso` each keep one kind of track inside its track type. They do not drop
+    the other track types: `-ado` still downloads the video, and `-fso` still downloads
+    video and audio. Add `-A` or `-S` for that.
+
+    - The language flags still apply. With the default `-l orig`, `-ado` fails when the
+      descriptive track is not in the original language. Select the language with `-al`.
+    - A flag that drops the same tracks is an error, for example `-ado` with `--no-audio`
+      or `-fso` with `-A`.
+    - A title with no track of that kind stops a run of one title. A run of more than one
+      title skips that title with a warning and continues.
+    - unshackle reads the kind from the manifest or from the service. A track that
+      neither of them marks as descriptive or forced does not match.
+
+```shell title="Audio description only, in English"
+unshackle dl -A -ado -al en EXAMPLE 81234567
+```
 
 ```shell title="Subtitles only"
 unshackle dl -S -sl en EXAMPLE 81234567

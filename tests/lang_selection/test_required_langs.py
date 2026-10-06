@@ -5,6 +5,7 @@ import inspect
 import pytest
 
 from unshackle.commands.dl import dl
+from unshackle.core.api import download_manager
 from unshackle.core.api.handlers import DEFAULT_DOWNLOAD_PARAMS
 from unshackle.core.utilities import missing_required_langs
 
@@ -102,15 +103,15 @@ def test_api_accepts_the_require_flags():
     )
 
 
-@pytest.mark.parametrize("key", ["require_audio", "require_video"])
-def test_api_reaches_dl_result(key, monkeypatch):
+@pytest.mark.parametrize(
+    "key,default",
+    [("require_audio", []), ("require_video", []), ("audio_description_only", False), ("forced_subs_only", False)],
+)
+def test_api_reaches_dl_result(key, default):
     # download_manager builds the dl.result kwargs by hand, so a missing key is a silent drop
-    import inspect as _inspect
-
-    from unshackle.core.api import download_manager
-
-    source = _inspect.getsource(download_manager)
-    assert f'{key}=params.get("{key}", [])' in source
+    assert DEFAULT_DOWNLOAD_PARAMS[key] == default
+    assert key in inspect.signature(dl.result).parameters
+    assert f'{key}=params.get("{key}", {default!r})' in inspect.getsource(download_manager)
 
 
 @pytest.mark.parametrize(

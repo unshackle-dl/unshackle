@@ -102,6 +102,7 @@ unshackle dl [OPTIONS] SERVICE [SERVICE ARGS...]
 | `--require-video` | - | Video langs that must exist. The title fails even with `--best-available`. Does not select tracks. |
 | `--require-subs` | - | Subtitle langs that must exist. Fails the title if one is missing. `--s-lang` still decides what to keep. |
 | `-fs`, `--forced-subs` | off | Include forced subtitle tracks. |
+| `-fso`, `--forced-subs-only` | off | Keep only forced subtitle tracks; drop the other subtitles. Implies `-fs`. |
 | `-fsl`, `--forced-s-lang` | none | Language(s) wanted for forced subtitles; implies `-fs`. A `-` prefix excludes. |
 | `--exact-lang` | off | Exact matching only: `-l es-419` matches `es-419`, not `es-ES`. Applies to selection and to sort order. |
 | `--sub-format` | - | Output subtitle format (`SRT`/`srt`, `VTT`/`webvtt`, `ASS`/`ssa`, `TTML`, `SMI`, ...), or `original` to keep the source format. |
@@ -139,6 +140,7 @@ Keep only certain track types, or skip certain track types.
 | Flag | Description |
 |---|---|
 | `-ad`, `--audio-description` | Include descriptive (audio-description) tracks. |
+| `-ado`, `--audio-description-only` | Keep only descriptive (audio-description) tracks; drop the standard audio. Does not need `-ad`. |
 | `--skip-subtitle-errors` | Skip a failed subtitle instead of aborting the title. Video/audio failures remain fatal. |
 
 ### Output, muxing & files

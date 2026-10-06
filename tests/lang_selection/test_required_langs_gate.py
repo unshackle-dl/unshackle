@@ -48,7 +48,7 @@ class TestGateWiring:
         assert "require_video if keep_videos else []" in self.source
 
     def test_gate_counts_audio_embedded_in_kept_video(self):
-        assert "embedded_audio_langs(title.tracks.videos, keep_videos)" in self.source
+        assert "embedded_audio_langs(title.tracks.videos, keep_videos and not audio_description_only)" in self.source
 
     def test_gate_honours_exact_lang(self):
         assert "missing_required_langs(required, available, title.language, exact=exact_lang)" in self.source
