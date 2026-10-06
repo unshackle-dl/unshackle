@@ -2336,6 +2336,17 @@ is the <a href="../../../dev/rest-api/">REST API</a> section. These are the conf
 <code>username</code> used as the log label for that API key (defaults to a truncated form of the API key).
 A user with no <code>playready_devices</code> config key gets no PlayReady access at all, not the global
 list.</p>
+<div class="admonition info">
+<p class="admonition-title">Reload <code>serve</code> settings without a restart</p>
+<p>Send <code>SIGHUP</code> to a running server (<code>systemctl reload</code> with
+<code>ExecReload=kill -HUP $MAINPID</code> in the unit) after you edit the file. The server reads
+the whole file again, globs the device directories again, and swaps in the new <code>users</code>,
+<code>tiers</code>, <code>services</code> and device lists in one step. Open CDM sessions and remote sessions
+continue; an API key you removed gets <code>401</code> on its next request. A file that does not parse
+or validate keeps the running settings and logs the reason. A change to <code>remote_only</code>,
+<code>services_refresh_interval</code>, the first PlayReady device, or any command-line flag needs
+a restart, and the log says so. Windows has no <code>SIGHUP</code>: restart the server there.</p>
+</div>
 <p><code>server_cdm</code> decides whether the server runs the CDM licensing for that API key. Set it to
 <code>true</code> to enable every service, or to a list of service tags to enable only those. It is <code>false</code>
 unless the entry sets it. For a service the API key does not cover, the server tells a remote
