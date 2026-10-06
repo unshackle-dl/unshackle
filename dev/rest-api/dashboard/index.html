@@ -1697,6 +1697,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#cdm-calls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CDM calls
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#keys" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2119,6 +2130,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#cdm-calls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CDM calls
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#keys" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2254,6 +2276,10 @@ dashboard UI that wants history must keep its own copy.</p>
 <td><code>{"seq": N, "records": [...]}</code>: the last 1000 log records. <code>?since=&lt;seq&gt;</code> returns only newer records; <code>?level=WARNING</code> sets the minimum level; <code>?logger=serve</code> keeps one logger and its children (<code>aiohttp.access</code> is the noisiest). <code>ts</code> is a Unix epoch in seconds.</td>
 </tr>
 <tr>
+<td><code>/api/dashboard/cdm-logs</code></td>
+<td><code>{"seq": N, "records": [...], "sessions": [...]}</code>: the last 5000 calls to the Widevine and PlayReady CDM device routes, and the open sessions of each device. <code>?since=&lt;seq&gt;</code> returns only newer records. See <a href="#cdm-calls">CDM calls</a>.</td>
+</tr>
+<tr>
 <td><code>/api/dashboard/sessions/{id}/logs</code></td>
 <td>One remote session's service log: <code>{"session_id", "last_seq", "records": [...]}</code>. Each record has <code>seq</code>, <code>ts</code>, <code>level</code>, <code>message</code>. <code>?since=&lt;seq&gt;</code> returns only newer records. 404 when the remote session is unknown.</td>
 </tr>
@@ -2341,16 +2367,90 @@ event - a request the remote session makes, or an auth transition. A log line on
 publishes nothing. Poll this route when <code>log_seq</code> changes, and on a timer while a drawer
 is open.</p>
 </div>
+<h2 id="cdm-calls">CDM calls<a class="headerlink" href="#cdm-calls" title="Permanent link">&para;</a></h2>
+<p>A server in <code>full</code> mode also mounts the Widevine CDM device routes at <code>/{device}/...</code> and the
+PlayReady ones at <code>/playready/{device}/...</code>. The server records each call to these routes in
+a 5000-record buffer of its own, apart from the log records of <code>/api/dashboard/logs</code>.</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>GET /api/dashboard/cdm-logs?since=1230
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>{"seq": 1231,
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a> "records": [{"seq": 1231, "ts": 1759750000.123, "drm": "widevine", "op": "get_license_challenge",
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>              "device": "chrome_l3", "key_id": "ab12cd34ef56", "user": "tier1",
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>              "session_id": "0a1b2c3d4e5f60718293a4b5c6d7e8f9",
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>              "status": 200, "ok": true, "error": null, "ms": 12.4}],
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a> "sessions": [{"drm": "widevine", "device": "chrome_l3", "key_id": "ab12cd34ef56", "user": "tier1",
+</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>               "open": 3, "max": 17}]}
+</span></code></pre></div>
+<p><code>since</code> and <code>seq</code> work as they do for <code>/api/dashboard/logs</code>: <code>records</code> holds the calls with a
+<code>seq</code> above <code>since</code>, oldest first. <code>seq</code> starts again at 1 when the server restarts, so a <code>seq</code>
+below your cursor means a restart: read again from 0.</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ts</code></td>
+<td>Unix epoch in seconds, when the call arrived.</td>
+</tr>
+<tr>
+<td><code>drm</code></td>
+<td><code>widevine</code>, or <code>playready</code> for a route below <code>/playready/</code>.</td>
+</tr>
+<tr>
+<td><code>op</code></td>
+<td><code>open</code>, <code>close</code>, <code>set_service_certificate</code>, <code>get_service_certificate</code>, <code>get_license_challenge</code>, <code>parse_license</code> or <code>get_keys</code>. The licence type or content key type that follows in the path is not part of it.</td>
+</tr>
+<tr>
+<td><code>device</code></td>
+<td>The device name from the path, cut at 255 characters.</td>
+</tr>
+<tr>
+<td><code>key_id</code>, <code>user</code></td>
+<td>The <code>id</code> and <code>label</code> of the caller's row in <code>/api/dashboard/keys</code>. Both are <code>anonymous</code> when the API key is missing or unknown.</td>
+</tr>
+<tr>
+<td><code>session_id</code></td>
+<td>The CDM session, lowercase hexadecimal, so the calls of one licence exchange group together. <code>null</code> when there is none, for example a refused <code>open</code>.</td>
+</tr>
+<tr>
+<td><code>status</code>, <code>ok</code></td>
+<td>The HTTP status of the reply. <code>ok</code> is <code>true</code> below 400.</td>
+</tr>
+<tr>
+<td><code>error</code></td>
+<td><code>null</code> when <code>ok</code>. Otherwise the <code>message</code> of the reply, cut at 300 characters. A handler that raised an error gives the error's class name only.</td>
+</tr>
+<tr>
+<td><code>ms</code></td>
+<td>Time the server took to answer, in milliseconds.</td>
+</tr>
+</tbody>
+</table>
+<p>A record never holds the API key, <code>init_data</code>, a challenge, a certificate, a licence body or a
+content key. A refused call is in the log too, a 401 for a missing or unknown API key included.</p>
+<p><code>sessions</code> is a snapshot at read time, not a history. It has one row for each device an API
+key has opened since the server started: <code>open</code> is the number of sessions open now, and <code>max</code>
+is the number of sessions the device permits at one time. A PlayReady session older than the
+library's session timeout does not count: the library drops it on the next <code>open</code>. The
+list is <code>[]</code> until the first <code>open</code>, and on a server that mounts no CDM device routes.</p>
+<div class="admonition note">
+<p class="admonition-title">Polled only</p>
+<p>The event stream does not carry these records. One licence exchange is five calls, and that
+volume would push <code>session</code> events out of the stream's history.</p>
+</div>
 <h2 id="keys">Keys<a class="headerlink" href="#keys" title="Permanent link">&para;</a></h2>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>GET /api/dashboard/keys
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>[{"id": "3ed054be9371", "role": "user", "label": "tier1", "services": ["EXAMPLE", "DEMO"],
-</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>  "server_cdm": false, "server_cdm_max_height": null, "server_accounts": false, "server_proxy": false,
-</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>  "tier": "bot", "rate_limit": 600, "window_used": 412,
-</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>  "requests": 41300, "rejected": 4, "bytes_out": 103079215104, "last_seen": 1756909188.2},
-</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a> {"id": "7c1d0f52a884", "role": "dashboard", "label": "dash…", "services": [],
-</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>  "server_cdm": false, "server_cdm_max_height": null, "server_accounts": false, "server_proxy": false,
-</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>  "tier": null, "rate_limit": null, "window_used": 0,
-</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>  "requests": 8140, "rejected": 0, "bytes_out": 41200311, "last_seen": 1756909350.9}]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>GET /api/dashboard/keys
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>[{"id": "3ed054be9371", "role": "user", "label": "tier1", "services": ["EXAMPLE", "DEMO"],
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>  "server_cdm": false, "server_cdm_max_height": null, "server_accounts": false, "server_proxy": false,
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>  "tier": "bot", "rate_limit": 600, "window_used": 412,
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>  "requests": 41300, "rejected": 4, "bytes_out": 103079215104, "last_seen": 1756909188.2},
+</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a> {"id": "7c1d0f52a884", "role": "dashboard", "label": "dash…", "services": [],
+</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>  "server_cdm": false, "server_cdm_max_height": null, "server_accounts": false, "server_proxy": false,
+</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>  "tier": null, "rate_limit": null, "window_used": 0,
+</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>  "requests": 8140, "rejected": 0, "bytes_out": 41200311, "last_seen": 1756909350.9}]
 </span></code></pre></div>
 <p><code>id</code> is a hash of the API key, so it stays stable across restarts and carries no key material.
 Two API keys with no <code>username</code> merge into one label in <code>requests_by_key</code> but stay separate
@@ -2415,14 +2515,14 @@ reads the rows here, which are unambiguous, and takes <code>anonymous</code> fro
 in more than one place still gets exactly one row.</p>
 <h3 id="rate-limits">Rate limits<a class="headerlink" href="#rate-limits" title="Permanent link">&para;</a></h3>
 <p>An API key over its limit gets <code>429</code> with a <code>Retry-After</code> header:</p>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nt">serve</span><span class="p">:</span>
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span><span class="nt">tiers</span><span class="p">:</span>
-</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">    </span><span class="nt">bot</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> rate_limit</span><span class="p">:</span><span class="w"> </span><span class="nv">600</span><span class="w"> </span><span class="p p-Indicator">}</span><span class="w">   </span><span class="c1"># requests per hour</span>
-</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">  </span><span class="nt">users</span><span class="p">:</span>
-</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="w">    </span><span class="s">"&lt;api</span><span class="nv"> </span><span class="s">key&gt;"</span><span class="p p-Indicator">:</span>
-</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="w">      </span><span class="nt">username</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">bot-relay</span>
-</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="w">      </span><span class="nt">tier</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">bot</span>
-</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="w">      </span><span class="c1"># rate_limit: 900        # optional, wins over the tier</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nt">serve</span><span class="p">:</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">  </span><span class="nt">tiers</span><span class="p">:</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">    </span><span class="nt">bot</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> rate_limit</span><span class="p">:</span><span class="w"> </span><span class="nv">600</span><span class="w"> </span><span class="p p-Indicator">}</span><span class="w">   </span><span class="c1"># requests per hour</span>
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">  </span><span class="nt">users</span><span class="p">:</span>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">    </span><span class="s">"&lt;api</span><span class="nv"> </span><span class="s">key&gt;"</span><span class="p p-Indicator">:</span>
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="w">      </span><span class="nt">username</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">bot-relay</span>
+</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="w">      </span><span class="nt">tier</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">bot</span>
+</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="w">      </span><span class="c1"># rate_limit: 900        # optional, wins over the tier</span>
 </span></code></pre></div>
 <p>The server keeps a fixed window, not a sliding one: it opens on the first request and resets
 an hour later. An API key with no tier and no override has no limit. A <code>tier</code> that names no
@@ -2430,11 +2530,11 @@ entry under <code>serve.tiers</code>, or a <code>rate_limit</code> that is not a
 server at startup, because the alternative is an API key that silently gets no limit. The rate
 limit never applies to the dashboard key, and never to <code>/api/health</code>.</p>
 <h2 id="services">Services<a class="headerlink" href="#services" title="Permanent link">&para;</a></h2>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>GET /api/dashboard/services
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>[{"tag": "EXAMPLE", "state": "staged", "error": null,
-</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>  "commit": "9cc230c98f13b83f6c6fe831595b9702d3ba2786", "staged_commit": "5f0aa17...",
-</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>  "staged_since": 1756908900.0, "sessions": 1, "jobs": 1,
-</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>  "aliases": ["EXMPL"], "geofence": ["US"], "geoblock": []}]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>GET /api/dashboard/services
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>[{"tag": "EXAMPLE", "state": "staged", "error": null,
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>  "commit": "9cc230c98f13b83f6c6fe831595b9702d3ba2786", "staged_commit": "5f0aa17...",
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>  "staged_since": 1756908900.0, "sessions": 1, "jobs": 1,
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>  "aliases": ["EXMPL"], "geofence": ["US"], "geoblock": []}]
 </span></code></pre></div>
 <p>The list holds only the services configured on this server:</p>
 <ol>
@@ -2461,10 +2561,10 @@ pull already happened, so <code>commit</code> (what runs now) and <code>staged_c
 for a service from a plain local directory rather than a git repo.</p>
 <p>Watch the <code>service</code> event rather than polling for the swap.</p>
 <h2 id="health">Health<a class="headerlink" href="#health" title="Permanent link">&para;</a></h2>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>GET /api/dashboard/health
-</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>{"generated_at": 1756909350.4, "status": "ok",
-</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a> "checks": [{"id": "ffmpeg", "label": "ffmpeg", "status": "ok",
-</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>             "detail": "7.1 · /usr/bin/ffmpeg", "ms": 4.1}]}
+<div class="language-text highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>GET /api/dashboard/health
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>{"generated_at": 1756909350.4, "status": "ok",
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a> "checks": [{"id": "ffmpeg", "label": "ffmpeg", "status": "ok",
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>             "detail": "7.1 · /usr/bin/ffmpeg", "ms": 4.1}]}
 </span></code></pre></div>
 <p>An instance can answer every request and still fail every download, because <code>mp4decrypt</code> is
 missing or a vault's credentials expired. This finds that before a job does.</p>
