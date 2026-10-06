@@ -47,6 +47,7 @@ All are `GET`.
 | `/api/dashboard/sessions` | Every live remote session: `id`, `owner` (username or masked key), `creator_ip`, `service`, `title_id`, `titles`, `tracks`, `title` (the display name of the title the client is on: the last one it asked tracks for, else the first resolved title), `auth_status`, `auth_error`, `server_account` (the server profile lent to the remote session, else `null`), `server_cdm` (`false` when the client's own device licenses the remote session), `server_cdm_max_height` (the tallest video the server CDM licenses live, else `null`), `client`, `actions`, `created_at` and `last_accessed` (ISO 8601) with `created_ts` and `last_accessed_ts` (Unix epoch, the same clock as log `ts`), `age_seconds`, `idle_seconds`, `log_seq`. `client` is whatever the remote client sent as `client` in its session create request. The CLI sends `version`, `code_hash` (the commit the client runs, `null` when its source cannot be read), `platform` and `argv`. `argv` is the command line the user ran: proxy and URL userinfo, secret query parameters and credential values become `***`, home and install paths shorten as in the logs, and the line is cut at 3000 characters. An older client sends less or nothing and the field is `{}`. `log_seq` is the last sequence number in the remote session's service log - poll `/api/dashboard/sessions/{id}/logs` when it changes. `actions` is the session's request log, newest last, capped at 500: `ts`, `method`, `action` (`titles`, `tracks`, `segments`, `license`, `prompt`, …), `query`, `status`, `ms`, `bytes_in`, `bytes_out`. |
 | `/api/dashboard/jobs` | Every download job with full detail, regardless of owner. Empty in `--remote-only` mode. |
 | `/api/dashboard/logs` | `{"seq": N, "records": [...]}`: the last 1000 log records. `?since=<seq>` returns only newer records; `?level=WARNING` sets the minimum level; `?logger=serve` keeps one logger and its children (`aiohttp.access` is the noisiest). `ts` is a Unix epoch in seconds. |
+| `/api/dashboard/cdm-logs` | `{"seq": N, "records": [...], "sessions": [...]}`: the last 5000 calls to the Widevine and PlayReady CDM device routes, and the open sessions of each device. `?since=<seq>` returns only newer records. See [CDM calls](#cdm-calls). |
 | `/api/dashboard/sessions/{id}/logs` | One remote session's service log: `{"session_id", "last_seq", "records": [...]}`. Each record has `seq`, `ts`, `level`, `message`. `?since=<seq>` returns only newer records. 404 when the remote session is unknown. |
 | `/api/dashboard/keys` | Every configured API key: what it may do and what it has done. One row per key in `serve.users`, plus `serve.api_secret` when it is set. |
 | `/api/dashboard/services` | Every service configured on this server and its load state, including the ones that failed to import. See [Services](#services) for what configured means. |
@@ -112,6 +113,52 @@ never keeps it alive or makes it look active.
     event - a request the remote session makes, or an auth transition. A log line on its own
     publishes nothing. Poll this route when `log_seq` changes, and on a timer while a drawer
     is open.
+
+## CDM calls
+
+A server in `full` mode also mounts the Widevine CDM device routes at `/{device}/...` and the
+PlayReady ones at `/playready/{device}/...`. The server records each call to these routes in
+a 5000-record buffer of its own, apart from the log records of `/api/dashboard/logs`.
+
+```
+GET /api/dashboard/cdm-logs?since=1230
+{"seq": 1231,
+ "records": [{"seq": 1231, "ts": 1759750000.123, "drm": "widevine", "op": "get_license_challenge",
+              "device": "chrome_l3", "key_id": "ab12cd34ef56", "user": "tier1",
+              "session_id": "0a1b2c3d4e5f60718293a4b5c6d7e8f9",
+              "status": 200, "ok": true, "error": null, "ms": 12.4}],
+ "sessions": [{"drm": "widevine", "device": "chrome_l3", "key_id": "ab12cd34ef56", "user": "tier1",
+               "open": 3, "max": 17}]}
+```
+
+`since` and `seq` work as they do for `/api/dashboard/logs`: `records` holds the calls with a
+`seq` above `since`, oldest first. `seq` starts again at 1 when the server restarts, so a `seq`
+below your cursor means a restart: read again from 0.
+
+| Field | Meaning |
+|-------|---------|
+| `ts` | Unix epoch in seconds, when the call arrived. |
+| `drm` | `widevine`, or `playready` for a route below `/playready/`. |
+| `op` | `open`, `close`, `set_service_certificate`, `get_service_certificate`, `get_license_challenge`, `parse_license` or `get_keys`. The licence type or content key type that follows in the path is not part of it. |
+| `device` | The device name from the path, cut at 255 characters. |
+| `key_id`, `user` | The `id` and `label` of the caller's row in `/api/dashboard/keys`. Both are `anonymous` when the API key is missing or unknown. |
+| `session_id` | The CDM session, lowercase hexadecimal, so the calls of one licence exchange group together. `null` when there is none, for example a refused `open`. |
+| `status`, `ok` | The HTTP status of the reply. `ok` is `true` below 400. |
+| `error` | `null` when `ok`. Otherwise the `message` of the reply, cut at 300 characters. A handler that raised an error gives the error's class name only. |
+| `ms` | Time the server took to answer, in milliseconds. |
+
+A record never holds the API key, `init_data`, a challenge, a certificate, a licence body or a
+content key. A refused call is in the log too, a 401 for a missing or unknown API key included.
+
+`sessions` is a snapshot at read time, not a history. It has one row for each device an API
+key has opened since the server started: `open` is the number of sessions open now, and `max`
+is the number of sessions the device permits at one time. A PlayReady session older than the
+library's session timeout does not count: the library drops it on the next `open`. The
+list is `[]` until the first `open`, and on a server that mounts no CDM device routes.
+
+!!! note "Polled only"
+    The event stream does not carry these records. One licence exchange is five calls, and that
+    volume would push `session` events out of the stream's history.
 
 ## Keys
 

@@ -21,6 +21,7 @@ from unshackle.core.api.handlers import (
     clear_cache_handler,
     clear_finished_download_jobs_handler,
     clear_temp_handler,
+    dashboard_cdm_logs_handler,
     dashboard_events_handler,
     dashboard_health_handler,
     dashboard_jobs_handler,
@@ -2645,6 +2646,91 @@ async def dashboard_logs(request: web.Request) -> web.Response:
 
 
 @api_handler
+async def dashboard_cdm_logs(request: web.Request) -> web.Response:
+    """
+    Dashboard: recent CDM calls and open CDM sessions.
+    ---
+    summary: Dashboard CDM call log
+    description: >
+      The last 5000 calls to the Widevine and PlayReady CDM device routes, one record for each
+      call, with a snapshot of the open sessions of each live Cdm. A record never holds an API
+      key, `init_data`, a challenge, a certificate, a licence body or a content key.
+      Poll with `since` set to the `seq` of the last reply. The server does not publish these
+      records on the event stream.
+    tags: [Dashboard]
+    parameters:
+      - name: since
+        in: query
+        required: false
+        schema:
+          type: integer
+        description: Return only records with seq greater than this value
+    responses:
+      '200':
+        description: Records plus the current seq and the open sessions
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                seq:
+                  type: integer
+                records:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      seq:
+                        type: integer
+                      ts:
+                        type: number
+                      drm:
+                        type: string
+                        enum: [widevine, playready]
+                      op:
+                        type: string
+                      device:
+                        type: string
+                      key_id:
+                        type: string
+                      user:
+                        type: string
+                      session_id:
+                        type: string
+                        nullable: true
+                      status:
+                        type: integer
+                      ok:
+                        type: boolean
+                      error:
+                        type: string
+                        nullable: true
+                      ms:
+                        type: number
+                sessions:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      drm:
+                        type: string
+                      device:
+                        type: string
+                      key_id:
+                        type: string
+                      user:
+                        type: string
+                      open:
+                        type: integer
+                      max:
+                        type: integer
+      '401':
+        description: Dashboard key missing or invalid
+    """
+    return await dashboard_cdm_logs_handler(request)
+
+
+@api_handler
 async def dashboard_session_logs(request: web.Request) -> web.Response:
     """
     Dashboard: one remote session's service log.
@@ -2986,6 +3072,7 @@ DASHBOARD_ROUTES: list[tuple[str, str, Handler, bool]] = [
     ("GET", DASHBOARD_PREFIX + "sessions", dashboard_sessions, True),
     ("GET", DASHBOARD_PREFIX + "jobs", dashboard_jobs, True),
     ("GET", DASHBOARD_PREFIX + "logs", dashboard_logs, True),
+    ("GET", DASHBOARD_PREFIX + "cdm-logs", dashboard_cdm_logs, True),
     ("GET", DASHBOARD_PREFIX + "keys", dashboard_keys, True),
     ("GET", DASHBOARD_PREFIX + "services", dashboard_services, True),
     ("GET", DASHBOARD_PREFIX + "health", dashboard_health, True),

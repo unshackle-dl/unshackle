@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import gzip
 import hashlib
+import json
 import logging
 import time
 from collections import Counter, deque
 from dataclasses import dataclass, field
-from typing import Any, Deque, Dict, List, Optional
+from functools import lru_cache
+from typing import Any, Deque, Dict, List, Optional, Tuple
 
 from aiohttp import web
 
@@ -17,6 +20,20 @@ from unshackle.core.config import config
 from unshackle.core.utils.redact import redact_secrets
 
 RATE_LIMIT_WINDOW = 3600.0
+CDM_OPS = frozenset(
+    {
+        "open",
+        "close",
+        "set_service_certificate",
+        "get_service_certificate",
+        "get_license_challenge",
+        "parse_license",
+        "get_keys",
+    }
+)
+CDM_ERROR_LIMIT = 300
+CDM_SESSION_ID_LIMIT = 64
+CDM_DEVICE_LIMIT = 255
 
 
 def _users() -> Dict[str, Any]:
@@ -215,40 +232,220 @@ async def stats_middleware(request: web.Request, handler: Any) -> web.StreamResp
     return response
 
 
-class RingLogHandler(logging.Handler):
-    """Keep the last N log records in memory and publish each one on the event bus."""
+class SeqRing:
+    """Keep the last N records in memory, each with a ``seq`` one above the record before it."""
 
-    def __init__(self, maxlen: int = 1000) -> None:
-        super().__init__()
+    def __init__(self, maxlen: int) -> None:
         self.records: Deque[Dict[str, Any]] = deque(maxlen=maxlen)
         self.seq = 0
 
-    def emit(self, record: logging.LogRecord) -> None:
-        """Buffer and publish one record; ``seq`` moves only after the append, as in ``EventBus``."""
+    def append(self, record: Dict[str, Any]) -> Dict[str, Any]:
+        """Buffer one record; ``seq`` moves only after the append, as in ``EventBus``."""
         seq = self.seq + 1
-        item = {
-            "seq": seq,
-            "ts": record.created,
-            "level": record.levelname,
-            "logger": record.name,
-            "msg": redact_secrets(self.format(record)),
-        }
+        item = {"seq": seq, **record}
         self.records.append(item)
         self.seq = seq
+        return item
+
+    def since(self, seq: int = 0) -> List[Dict[str, Any]]:
+        """The records after ``seq``, oldest first, from a copy: ``append()`` can run on a worker thread."""
+        return [r for r in self.records.copy() if r["seq"] > seq]
+
+
+class RingLogHandler(SeqRing, logging.Handler):
+    """Keep the last N log records in memory and publish each one on the event bus."""
+
+    def __init__(self, maxlen: int = 1000) -> None:
+        logging.Handler.__init__(self)
+        SeqRing.__init__(self, maxlen)
+
+    def emit(self, record: logging.LogRecord) -> None:
+        """Buffer and publish one record."""
+        item = self.append(
+            {
+                "ts": record.created,
+                "level": record.levelname,
+                "logger": record.name,
+                "msg": redact_secrets(self.format(record)),
+            }
+        )
         bus.publish("log", item)
 
     def since(self, seq: int = 0, level: Optional[str] = None, logger: Optional[str] = None) -> List[Dict[str, Any]]:
-        """Filter a copy of the records: ``emit()`` appends from worker threads."""
+        """The records after ``seq`` at or above ``level``, from ``logger`` or one of its children."""
         min_level = logging.getLevelName(level.upper()) if level else 0
         if not isinstance(min_level, int):
             min_level = 0
         return [
             r
-            for r in self.records.copy()
-            if r["seq"] > seq
-            and logging.getLevelName(r["level"]) >= min_level
+            for r in super().since(seq)
+            if logging.getLevelName(r["level"]) >= min_level
             and (not logger or r["logger"] == logger or r["logger"].startswith(logger + "."))
         ]
 
 
 ring = RingLogHandler()
+
+cdm_calls = SeqRing(maxlen=5000)
+
+
+@lru_cache(maxsize=None)
+def _cdm_op(pattern: str) -> Optional[Tuple[str, str]]:
+    """The ``(drm, op)`` of a route pattern, else None. Cached: the route table does not change."""
+    parts = pattern.strip("/").split("/")
+    drm = "widevine"
+    if parts[:1] == ["playready"]:
+        drm, parts = "playready", parts[1:]
+    if len(parts) < 2 or parts[0] != "{device}" or parts[1] not in CDM_OPS:
+        return None
+    return drm, parts[1]
+
+
+def _cdm_route(request: web.Request) -> Optional[Tuple[str, str]]:
+    """The ``(drm, op)`` of a CDM device route, else None.
+
+    Reads the matched route pattern, not the path, so a device name cannot pass for an operation
+    or for the ``/playready`` prefix.
+    """
+    resource = request.match_info.route.resource
+    return _cdm_op(resource.canonical) if resource is not None else None
+
+
+def _hex_id(value: Any) -> Optional[str]:
+    """``value`` in lowercase when it is a hexadecimal string of a plausible length, else None."""
+    if not isinstance(value, str) or not value or len(value) > CDM_SESSION_ID_LIMIT:
+        return None
+    try:
+        bytes.fromhex(value)
+    except ValueError:
+        return None
+    return value.lower()
+
+
+def _key_fields(secret_key: Optional[str]) -> Dict[str, str]:
+    """The ``key_id`` and ``user`` of an API key: the ``id`` and ``label`` of its ``stats.keys`` entry."""
+    key = configured_key(secret_key)
+    return {"key_id": key_id(key), "user": mask_key(key)}
+
+
+def _reply_json(response: Any) -> Dict[str, Any]:
+    """The JSON object a handler answered, or ``{}``. ``compression_middleware`` runs inside the
+    CDM log middleware, so the body can arrive as gzip."""
+    try:
+        body = response.body
+        if response.headers.get("Content-Encoding") == "gzip":
+            body = gzip.decompress(body)
+        data = json.loads(body)
+    except Exception:
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+async def _request_session_id(request: web.Request) -> Any:
+    """The ``session_id`` of the JSON request body, when the handler consumed it: aiohttp caches that read.
+
+    A body nobody read belongs to a call refused before the handler, a 401 or a 429. It stays
+    unread: reading it would spend time and memory on an unauthenticated caller, and wait on a
+    body that never finishes arriving.
+    """
+    if not request.content.at_eof():
+        return None
+    try:
+        body = await request.json()
+    except Exception:
+        return None
+    return body.get("session_id") if isinstance(body, dict) else None
+
+
+async def _cdm_record(request: web.Request, drm: str, op: str, outcome: Any) -> Dict[str, Any]:
+    """The record of one call. ``outcome`` is the response, or the exception the handler raised.
+
+    An exception that is not an HTTP one gives its class name only: its text can hold the
+    presented API key. The reply body is read only for a refusal and for the session id of an
+    ``open``, so a challenge, a licence or a content key never passes through here.
+    """
+    from unshackle.core.api.handlers import request_secret_key
+
+    reply: Dict[str, Any] = {}
+    if isinstance(outcome, web.StreamResponse):
+        status = outcome.status
+        if status >= 400 or op == "open":
+            reply = _reply_json(outcome)
+        message = reply.get("message")
+        error = message if isinstance(message, str) else outcome.reason
+    else:
+        status, error = 500, type(outcome).__name__
+    ok = status < 400
+    if op == "open":
+        data = reply.get("data") if ok else None
+        session_id = data.get("session_id") if isinstance(data, dict) else None
+    elif op == "close":
+        session_id = request.match_info.get("session_id")
+    else:
+        session_id = await _request_session_id(request)
+    return {
+        "drm": drm,
+        "op": op,
+        "device": request.match_info["device"][:CDM_DEVICE_LIMIT],
+        **_key_fields(request_secret_key(request)),
+        "session_id": _hex_id(session_id),
+        "status": status,
+        "ok": ok,
+        "error": None if ok else str(error)[:CDM_ERROR_LIMIT],
+    }
+
+
+async def _record_cdm_call(
+    request: web.Request, route: Tuple[str, str], ts: float, started: float, outcome: Any
+) -> None:
+    """Append one call to ``cdm_calls``. Logs a failure and does not raise it: it must never fail the CDM call."""
+    ms = round((time.perf_counter() - started) * 1000, 1)
+    try:
+        cdm_calls.append({"ts": ts, **await _cdm_record(request, *route, outcome), "ms": ms})
+    except Exception:
+        logging.getLogger("serve").debug("CDM call not recorded", exc_info=True)
+
+
+@web.middleware
+async def cdm_log_middleware(request: web.Request, handler: Any) -> web.StreamResponse:
+    """Record each call to a CDM device route in ``cdm_calls``.
+
+    Must run outside the serve authentication middleware, so the log holds a 401 too.
+    """
+    route = _cdm_route(request)
+    if route is None:
+        return await handler(request)
+    ts, started = time.time(), time.perf_counter()
+    try:
+        response = await handler(request)
+    except Exception as e:
+        await _record_cdm_call(request, route, ts, started, e)
+        raise
+    await _record_cdm_call(request, route, ts, started, response)
+    return response
+
+
+def cdm_sessions(app: web.Application) -> List[Dict[str, Any]]:
+    """One row per live Cdm object: its open session count and the most it allows.
+
+    Both CDM libraries refuse an ``open`` only above ``MAX_NUM_OF_SESSIONS``, so the true limit
+    is one more. A Cdm with a ``SESSION_TIMEOUT`` drops older sessions on its next ``open``,
+    so those do not count as open.
+    """
+    now = time.time()
+    rows: List[Dict[str, Any]] = []
+    for drm, owner in (("widevine", app), ("playready", app.get("playready_app"))):
+        cdms = owner.get("cdms") if owner is not None else None
+        for (secret_key, device), cdm in (cdms or {}).items():
+            sessions = getattr(cdm, "_Cdm__sessions", {}).values()
+            timeout = getattr(cdm, "SESSION_TIMEOUT", None)
+            rows.append(
+                {
+                    "drm": drm,
+                    "device": device,
+                    **_key_fields(secret_key),
+                    "open": len(sessions) if timeout is None else sum(now - s.opened_at <= timeout for s in sessions),
+                    "max": cdm.MAX_NUM_OF_SESSIONS + 1,
+                }
+            )
+    return rows

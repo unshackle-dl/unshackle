@@ -25,7 +25,14 @@ from unshackle.core.api.handlers import (
     server_cdm_max_height_error,
     validate_server_accounts,
 )
-from unshackle.core.api.stats import key_rate_limit, rate_limit_error, ring, stats, stats_middleware
+from unshackle.core.api.stats import (
+    cdm_log_middleware,
+    key_rate_limit,
+    rate_limit_error,
+    ring,
+    stats,
+    stats_middleware,
+)
 from unshackle.core.config import config
 from unshackle.core.console import console
 from unshackle.core.constants import context_settings
@@ -424,7 +431,13 @@ def serve(
 
             if no_key:
                 app = web.Application(
-                    middlewares=[cors_middleware, stats_middleware, dashboard_authentication, compression_middleware]
+                    middlewares=[
+                        cors_middleware,
+                        stats_middleware,
+                        cdm_log_middleware,
+                        dashboard_authentication,
+                        compression_middleware,
+                    ]
                 )
             else:
                 serve_auth = create_serve_authentication(serve_playready and bool(prd_devices))
@@ -432,6 +445,7 @@ def serve(
                     middlewares=[
                         cors_middleware,
                         stats_middleware,
+                        cdm_log_middleware,
                         dashboard_authentication,
                         serve_auth,
                         compression_middleware,
@@ -495,6 +509,7 @@ def serve(
                 app.router.add_route("*", "/playready", playready_ping)
 
                 app.add_subapp("/playready", playready_app)
+                app["playready_app"] = playready_app
                 log.info(f"PlayReady CDM endpoints available at http://{host}:{port}/playready/")
             elif serve_playready:
                 log.info("No PlayReady devices found, skipping PlayReady CDM endpoints")

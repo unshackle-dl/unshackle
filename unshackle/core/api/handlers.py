@@ -2342,17 +2342,34 @@ def _poll_cursor(before: int, items: List[Dict[str, Any]]) -> int:
     return max(before, items[-1]["seq"]) if items else before
 
 
+def _since(request: web.Request) -> int:
+    """The ``since`` cursor of a poll; 0 (everything) when it is missing or not a number."""
+    try:
+        return int(request.query.get("since", 0))
+    except ValueError:
+        return 0
+
+
 async def dashboard_logs_handler(request: web.Request) -> web.Response:
     """Recent log records; `since` (seq) and `level` filter the ring buffer."""
     from unshackle.core.api.stats import ring
 
-    try:
-        since = int(request.query.get("since", 0))
-    except ValueError:
-        since = 0
+    since = _since(request)
     before = ring.seq
     records = ring.since(since, request.query.get("level"), request.query.get("logger"))
     return web.json_response({"seq": _poll_cursor(before, records), "records": records})
+
+
+async def dashboard_cdm_logs_handler(request: web.Request) -> web.Response:
+    """CDM calls after `since` (seq), plus a snapshot of the open sessions of each live Cdm."""
+    from unshackle.core.api.stats import cdm_calls, cdm_sessions
+
+    since = _since(request)
+    before = cdm_calls.seq
+    records = cdm_calls.since(since)
+    return web.json_response(
+        {"seq": _poll_cursor(before, records), "records": records, "sessions": cdm_sessions(request.app)}
+    )
 
 
 async def dashboard_session_logs_handler(request: web.Request) -> web.Response:
@@ -2368,10 +2385,7 @@ async def dashboard_session_logs_handler(request: web.Request) -> web.Response:
     session = get_session_store().peek(session_id)
     if session is None:
         raise APIError(APIErrorCode.SESSION_NOT_FOUND, f"Remote session not found: {session_id}")
-    try:
-        since = int(request.query.get("since", 0))
-    except ValueError:
-        since = 0
+    since = _since(request)
     buffer = session.log_buffer
     before = buffer.last_seq if buffer else 0
     records = buffer.since(since) if buffer else []
