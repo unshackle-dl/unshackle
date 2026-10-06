@@ -336,7 +336,7 @@ includes an intelligent key-caching layer:
 remote_cdm:
   - name: decryptlabs
     type: decrypt_labs
-    device_name: L1        # ChromeCDM, L1, L2 (Widevine) or SL2, SL3 (PlayReady)
+    device_name: L1        # ChromeCDM, L1, L2, L3 (Widevine) or SL2, SL3 (PlayReady)
     # host: https://keyxtractor.decryptlabs.com   # optional, this is the default
     # secret: ...          # optional if decrypt_labs_api_key is set globally
 

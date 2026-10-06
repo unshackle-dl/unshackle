@@ -940,7 +940,7 @@ class CustomRemoteCDM:
             raise ValueError("No challenge available - call get_license_challenge first")
 
         if isinstance(license_message, str):
-            if self.is_playready and license_message.strip().startswith("<?xml"):
+            if self.is_playready and license_message.lstrip().startswith("<"):
                 license_message = license_message.encode("utf-8")
             else:
                 try:

@@ -114,7 +114,7 @@ class DecryptLabsRemoteCDM:
         Args:
             secret: Decrypt Labs API key (matches config format)
             host: Decrypt Labs API host URL (matches config format)
-            device_name: DRM system device name. Widevine takes ChromeCDM, L1 or L2, and PlayReady takes SL2 or SL3
+            device_name: DRM system device name. Widevine takes ChromeCDM, L1, L2 or L3, and PlayReady takes SL2 or SL3
             service_name: Service tag for content key caching and vault operations
             vaults: Vaults instance for local content key caching
             device_type: Device type (CHROME, ANDROID, PLAYREADY) - for compatibility
@@ -585,7 +585,7 @@ class DecryptLabsRemoteCDM:
             raise ValueError("No challenge available - call get_license_challenge first")
 
         if isinstance(license_message, str):
-            if self.is_playready and license_message.strip().startswith("<?xml"):
+            if self.is_playready and license_message.lstrip().startswith("<"):
                 license_message = license_message.encode("utf-8")
             else:
                 try:

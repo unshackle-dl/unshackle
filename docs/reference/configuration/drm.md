@@ -117,7 +117,7 @@ styles: `Device Type`/`device_type`, `System ID`/`system_id`, `Security Level`/`
 | Field | Default | Notes |
 |-------|---------|-------|
 | `host` | `https://keyxtractor.decryptlabs.com` | |
-| `device_name` | `ChromeCDM` | `ChromeCDM`, `L1`, `L2` (Widevine) or `SL2`, `SL3` (PlayReady) |
+| `device_name` | `ChromeCDM` | `ChromeCDM`, `L1`, `L2`, `L3` (Widevine) or `SL2`, `SL3` (PlayReady). The host decides which of these names it serves. |
 | `secret` | from [`decrypt_labs_api_key`](misc.md#external-api-keys) | Sent as the `decrypt-labs-api-key` header. An error is raised if neither is set. |
 | `system_id` | `26830` (Widevine), `0` (PlayReady) | |
 | `security_level` | Widevine `3`; PlayReady `2000` for `SL2`, else `3000` | |
