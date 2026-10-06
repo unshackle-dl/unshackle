@@ -87,15 +87,21 @@ def key_tier(key: Optional[str]) -> Optional[str]:
     return str(tier) if tier else None
 
 
-def key_rate_limit(key: Optional[str]) -> Optional[int]:
-    """Requests per hour allowed for a key: its own override, else its tier's, else unlimited."""
-    user = _user_config(key)
-    if user is None:
+def key_rate_limit(key: Optional[str], serve: Optional[Dict[str, Any]] = None) -> Optional[int]:
+    """Requests per hour allowed for a key: its own override, else its tier's, else unlimited.
+
+    ``serve`` reads a config block that is not yet the live one, as the reload validator does.
+    """
+    if serve is None:
+        serve = config.serve or {}
+    users = serve.get("users")
+    user = users.get(key) if isinstance(users, dict) and key else None
+    if not isinstance(user, dict):
         return None
     own = user.get("rate_limit")
     if isinstance(own, int) and own > 0:
         return own
-    tiers = (config.serve or {}).get("tiers")
+    tiers = serve.get("tiers")
     tier = tiers.get(user.get("tier")) if isinstance(tiers, dict) and user.get("tier") else None
     limit = tier.get("rate_limit") if isinstance(tier, dict) else None
     return limit if isinstance(limit, int) and limit > 0 else None

@@ -155,6 +155,16 @@ Each entry under `users` uses that user's API key as its name, and can set its o
 A user with no `playready_devices` config key gets no PlayReady access at all, not the global
 list.
 
+!!! info "Reload `serve` settings without a restart"
+    Send `SIGHUP` to a running server (`systemctl reload` with
+    `ExecReload=kill -HUP $MAINPID` in the unit) after you edit the file. The server reads
+    the whole file again, globs the device directories again, and swaps in the new `users`,
+    `tiers`, `services` and device lists in one step. Open CDM sessions and remote sessions
+    continue; an API key you removed gets `401` on its next request. A file that does not parse
+    or validate keeps the running settings and logs the reason. A change to `remote_only`,
+    `services_refresh_interval`, the first PlayReady device, or any command-line flag needs
+    a restart, and the log says so. Windows has no `SIGHUP`: restart the server there.
+
 `server_cdm` decides whether the server runs the CDM licensing for that API key. Set it to
 `true` to enable every service, or to a list of service tags to enable only those. It is `false`
 unless the entry sets it. For a service the API key does not cover, the server tells a remote
