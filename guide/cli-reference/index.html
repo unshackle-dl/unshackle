@@ -3134,6 +3134,11 @@
 <td>Include forced subtitle tracks.</td>
 </tr>
 <tr>
+<td><code>-fso</code>, <code>--forced-subs-only</code></td>
+<td>off</td>
+<td>Keep only forced subtitle tracks; drop the other subtitles. Implies <code>-fs</code>.</td>
+</tr>
+<tr>
 <td><code>-fsl</code>, <code>--forced-s-lang</code></td>
 <td>none</td>
 <td>Language(s) wanted for forced subtitles; implies <code>-fs</code>. A <code>-</code> prefix excludes.</td>
@@ -3232,6 +3237,10 @@ configuration file.</p>
 <tr>
 <td><code>-ad</code>, <code>--audio-description</code></td>
 <td>Include descriptive (audio-description) tracks.</td>
+</tr>
+<tr>
+<td><code>-ado</code>, <code>--audio-description-only</code></td>
+<td>Keep only descriptive (audio-description) tracks; drop the standard audio. Does not need <code>-ad</code>.</td>
 </tr>
 <tr>
 <td><code>--skip-subtitle-errors</code></td>

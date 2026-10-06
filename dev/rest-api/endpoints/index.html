@@ -3866,6 +3866,12 @@ ignore it safely. See <a href="../../creating-a-service/#split-episodes">Split e
 <td>Include forced subtitles.</td>
 </tr>
 <tr>
+<td><code>forced_subs_only</code></td>
+<td>boolean</td>
+<td><code>false</code></td>
+<td>Download forced subtitles and no other subtitle; implies <code>forced_subs</code>. Not valid with <code>no_subs</code>, <code>video_only</code>, <code>audio_only</code> or <code>chapters_only</code>.</td>
+</tr>
+<tr>
 <td><code>forced_s_lang</code></td>
 <td>string[]</td>
 <td><code>[]</code></td>
@@ -3900,6 +3906,12 @@ ignore it safely. See <a href="../../creating-a-service/#split-episodes">Split e
 <td>boolean</td>
 <td><code>false</code></td>
 <td>Download audio description.</td>
+</tr>
+<tr>
+<td><code>audio_description_only</code></td>
+<td>boolean</td>
+<td><code>false</code></td>
+<td>Download audio description and no standard audio. Not valid with <code>no_audio</code>, <code>video_only</code>, <code>subs_only</code> or <code>chapters_only</code>.</td>
 </tr>
 <tr>
 <td><code>slow</code></td>

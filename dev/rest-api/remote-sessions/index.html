@@ -2905,8 +2905,9 @@ the <code>dl</code> default for each absent or malformed value: <code>lang</code
 server drops an unknown codec name. An empty array is a valid value and stays
 empty.</p>
 <p>The server does not forward the <code>dl</code> mode flags: <code>video_only</code>, <code>audio_only</code>,
-<code>subs_only</code>, <code>chapters_only</code>, <code>list_</code>, <code>skip_dl</code>, <code>sub_format</code> and
-<code>no_attachments</code>. A service that reads one of them to skip work fetches more on
+<code>subs_only</code>, <code>chapters_only</code>, <code>list_</code>, <code>skip_dl</code>, <code>sub_format</code>,
+<code>no_attachments</code>, <code>audio_description</code>, <code>audio_description_only</code> and
+<code>forced_subs_only</code>. A service that reads one of them to skip work fetches more on
 the server, but the result is the same.</p>
 <p>In a client-login session (not a server account), the server gives the service
 the client's <code>profile</code> in <code>ctx.parent.params</code>, the same as a local run with that
