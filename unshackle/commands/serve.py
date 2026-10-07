@@ -54,6 +54,23 @@ class _MaskAccessKey(logging.Filter):
         return True
 
 
+def _install_session_store(app: web.Application) -> None:
+    """Start the remote session store's idle sweep with the app and stop it, bridges included, on cleanup."""
+    from unshackle.core.api.session_store import get_session_store
+
+    session_store = get_session_store()
+
+    async def start(_app: web.Application) -> None:
+        await session_store.start_cleanup_loop()
+
+    async def stop(_app: web.Application) -> None:
+        await session_store.cancel_all_bridges()
+        await session_store.stop_cleanup_loop()
+
+    app.on_startup.append(start)
+    app.on_cleanup.append(stop)
+
+
 def _install_service_refresh(app: web.Application) -> None:
     """Report service load issues, then periodically pull the service repos and hot-reload changed services."""
     from unshackle.core import services
@@ -298,6 +315,12 @@ def _install_config_reload(app: web.Application, *, no_key: bool, serve_widevine
 @click.option(
     "--api-only", is_flag=True, default=False, help="Serve only the REST API, not pywidevine/pyplayready CDM."
 )
+@click.option(
+    "--cdm-only",
+    is_flag=True,
+    default=False,
+    help="Serve only the pywidevine/pyplayready CDM endpoints (plus health and the dashboard), not the REST API.",
+)
 @click.option("--no-widevine", is_flag=True, default=False, help="Disable Widevine CDM endpoints.")
 @click.option("--no-playready", is_flag=True, default=False, help="Disable PlayReady CDM endpoints.")
 @click.option("--no-key", is_flag=True, default=False, help="Disable API key authentication (allows all requests).")
@@ -331,6 +354,7 @@ def serve(
     port: int,
     caddy: bool,
     api_only: bool,
+    cdm_only: bool,
     no_widevine: bool,
     no_playready: bool,
     no_key: bool,
@@ -408,6 +432,8 @@ def serve(
 
     if api_only and (no_widevine or no_playready):
         raise click.ClickException("Cannot use --api-only with --no-widevine or --no-playready.")
+    if cdm_only and (api_only or remote_only):
+        raise click.ClickException("Cannot use --cdm-only with --api-only or --remote-only.")
 
     if caddy:
         if not binaries.Caddy:
@@ -428,31 +454,34 @@ def serve(
         if remote_only:
             api_only = True
         stats.host, stats.port = host, port
-        stats.mode = "remote_only" if remote_only else "api_only" if api_only else "full"
+        stats.mode = "remote_only" if remote_only else "api_only" if api_only else "cdm_only" if cdm_only else "full"
         dashboard = bool(dashboard_key())
         if dashboard:
             log.info(f"Developer dashboard endpoints available at http://{host}:{port}/api/dashboard/")
         elif quiet:
             log.info("Developer dashboard disabled: set serve.dashboard.key in unshackle.yaml to enable it")
 
-        global_speed_limit = parse_speed_limit(config.serve.get("global_speed_limit"))
-        if global_speed_limit:
-            set_speed_limit(global_speed_limit, lock=True)
-            log.info(f"Global speed limit: {format_speed(global_speed_limit)} (shared by all jobs)")
+        if not cdm_only:
+            global_speed_limit = parse_speed_limit(config.serve.get("global_speed_limit"))
+            if global_speed_limit:
+                set_speed_limit(global_speed_limit, lock=True)
+                log.info(f"Global speed limit: {format_speed(global_speed_limit)} (shared by all jobs)")
 
-        global_services = config.serve.get("services")
-        if global_services:
-            log.info(f"Global service allowlist: {', '.join(global_services)}")
-        try:
-            server_accounts = validate_server_accounts()
-        except ValueError as e:
-            raise click.ClickException(str(e))
-        for tag in server_accounts:
-            regions = server_account_regions(tag) or {}
-            covered = list(regions.get("regions") or []) + (["global"] if regions.get("global") else [])
-            log.info(f"Server accounts for {tag}: {', '.join(covered)}")
-        if config.key_vaults and not any(v.get("type") == "SQLite" for v in config.key_vaults):
-            log.warning("No SQLite key vault configured: a content key a remote client proves wrong cannot be flagged")
+            global_services = config.serve.get("services")
+            if global_services:
+                log.info(f"Global service allowlist: {', '.join(global_services)}")
+            try:
+                server_accounts = validate_server_accounts()
+            except ValueError as e:
+                raise click.ClickException(str(e))
+            for tag in server_accounts:
+                regions = server_account_regions(tag) or {}
+                covered = list(regions.get("regions") or []) + (["global"] if regions.get("global") else [])
+                log.info(f"Server accounts for {tag}: {', '.join(covered)}")
+            if config.key_vaults and not any(v.get("type") == "SQLite" for v in config.key_vaults):
+                log.warning(
+                    "No SQLite key vault configured: a content key a remote client proves wrong cannot be flagged"
+                )
 
         serve_widevine = not api_only and not no_widevine
         serve_playready = not api_only and not no_playready
@@ -478,19 +507,7 @@ def serve(
             app["config"] = serve_config
             app["debug_api"] = debug_api
 
-            from unshackle.core.api.session_store import get_session_store
-
-            session_store = get_session_store()
-
-            async def start_session_cleanup(_app: web.Application) -> None:
-                await session_store.start_cleanup_loop()
-
-            async def stop_session_cleanup(_app: web.Application) -> None:
-                await session_store.cancel_all_bridges()
-                await session_store.stop_cleanup_loop()
-
-            app.on_startup.append(start_session_cleanup)
-            app.on_cleanup.append(stop_session_cleanup)
+            _install_session_store(app)
             _install_service_refresh(app)
             _install_config_reload(app, no_key=no_key, serve_widevine=serve_widevine, serve_playready=serve_playready)
 
@@ -571,20 +588,9 @@ def serve(
             app["config"] = serve_config
             app["debug_api"] = debug_api
 
-            from unshackle.core.api.session_store import get_session_store
-
-            session_store = get_session_store()
-
-            async def start_session_cleanup(_app: web.Application) -> None:
-                await session_store.start_cleanup_loop()
-
-            async def stop_session_cleanup(_app: web.Application) -> None:
-                await session_store.cancel_all_bridges()
-                await session_store.stop_cleanup_loop()
-
-            app.on_startup.append(start_session_cleanup)
-            app.on_cleanup.append(stop_session_cleanup)
-            _install_service_refresh(app)
+            if not cdm_only:
+                _install_session_store(app)
+                _install_service_refresh(app)
             _install_config_reload(app, no_key=no_key, serve_widevine=serve_widevine, serve_playready=serve_playready)
 
             if serve_widevine:
@@ -617,11 +623,13 @@ def serve(
             elif serve_playready:
                 log.info("No PlayReady devices found, skipping PlayReady CDM endpoints")
 
-            setup_routes(app, remote_only=remote_only, dashboard=dashboard)
+            setup_routes(app, remote_only=remote_only, dashboard=dashboard, cdm_only=cdm_only)
 
             if serve_widevine:
                 log.info(f"Widevine CDM endpoints available at http://{host}:{port}/{{device}}/open")
-            if remote_only:
+            if cdm_only:
+                log.info("REST API disabled (--cdm-only): only /api/health and the dashboard answer under /api/")
+            elif remote_only:
                 log.info(f"Remote service endpoints available at http://{host}:{port}/api/session/")
             else:
                 setup_swagger(app, dashboard=dashboard)

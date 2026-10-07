@@ -3081,15 +3081,19 @@ DASHBOARD_ROUTES: list[tuple[str, str, Handler, bool]] = [
 ]
 
 
-def setup_routes(app: web.Application, remote_only: bool = False, dashboard: bool = False) -> None:
+def setup_routes(
+    app: web.Application, remote_only: bool = False, dashboard: bool = False, cdm_only: bool = False
+) -> None:
     """Setup API routes. When remote_only=True, only the remote session endpoints operate.
-    When dashboard=True, this also registers the /api/dashboard/ routes."""
+    When cdm_only=True, only /api/health operates. When dashboard=True, this also registers
+    the /api/dashboard/ routes."""
     add: dict[str, Callable[..., Any]] = {
         "GET": app.router.add_get,
         "POST": app.router.add_post,
         "DELETE": app.router.add_delete,
     }
-    for method, path, handler, remote in ROUTES + (DASHBOARD_ROUTES if dashboard else []):
+    api_routes = [r for r in ROUTES if r[1] == "/api/health"] if cdm_only else ROUTES
+    for method, path, handler, remote in api_routes + (DASHBOARD_ROUTES if dashboard else []):
         if remote_only and not remote:
             continue
         add[method](path, handler)

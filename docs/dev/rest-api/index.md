@@ -63,6 +63,7 @@ The `serve` command accepts the following flags:
 | `-h`, `--host` | `127.0.0.1` | Address to bind to. Use `0.0.0.0` to accept connections from other machines. |
 | `-p`, `--port` | `8786` | Port to bind to. |
 | `--api-only` | off | Serve only the REST API, without the Widevine/PlayReady CDM HTTP endpoints. |
+| `--cdm-only` | off | Serve only the Widevine/PlayReady CDM HTTP endpoints, plus `/api/health` and the dashboard. No REST API, no remote sessions, no Swagger UI. Cannot be combined with `--api-only` or `--remote-only`. |
 | `--no-widevine` | off | Disable the Widevine CDM endpoints. Cannot be combined with `--api-only`. |
 | `--no-playready` | off | Disable the PlayReady CDM endpoints. Cannot be combined with `--api-only`. |
 | `--no-key` | off | Disable API-key authentication entirely; every request is allowed. |
@@ -100,6 +101,13 @@ The routes the server mounts depend on how you start the server:
     The server mounts only the remote-session subset of routes (health, services, search,
     and everything under `/api/session/*`). This mode implies `--api-only`, and the
     interactive Swagger UI is **not** mounted.
+
+=== "`--cdm-only`"
+
+    The server mounts only the pywidevine and pyplayready CDM endpoints. Under `/api/` it
+    answers `/api/health` and, when `serve.dashboard.key` is set, the dashboard. It does not
+    start the remote session store, the service refresh loop or the Swagger UI. Use it for a
+    CDM backend that a proxy reaches on its own hostname.
 
 ## Base URL
 

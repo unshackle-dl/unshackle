@@ -181,3 +181,11 @@ def test_good_rate_limit_config_starts(runner: CliRunner, monkeypatch: pytest.Mo
         {"tiers": {"bot": {"rate_limit": 600}}, "users": {"k": {"username": "bot", "tier": "bot"}}},
     )
     assert started, output
+
+
+def test_serve_cdm_only_with_remote_only_rejected(runner: CliRunner) -> None:
+    """`--cdm-only` is mutually exclusive with `--api-only` and `--remote-only`; the check runs before config."""
+    result = runner.invoke(serve, ["--cdm-only", "--remote-only"])
+    assert result.exit_code != 0
+    output = re.sub(r"\x1b\[[0-9;]*m", "", result.output or str(result.exception))
+    assert "Cannot use --cdm-only" in output

@@ -286,3 +286,13 @@ async def test_auth_middleware_accepts_known_key(make_app, aiohttp_client) -> No
     resp = await client.get("/api/session/nonexistent", headers={"X-Secret-Key": "good-key"})
     # Auth passed; handler then 404s the session; anything other than 401 is fine here.
     assert resp.status != 401
+
+
+def test_setup_routes_cdm_only_keeps_health_and_dashboard_only() -> None:
+    """A CDM-only server answers health and the dashboard under /api/, nothing else."""
+    app = web.Application()
+    setup_routes(app, dashboard=True, cdm_only=True)
+    paths = {path for _, path in collect_paths(app)}
+    assert "/api/health" in paths
+    assert any(path.startswith("/api/dashboard/") for path in paths)
+    assert all(path == "/api/health" or path.startswith("/api/dashboard/") for path in paths)
