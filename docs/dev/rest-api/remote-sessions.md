@@ -127,6 +127,9 @@ hood the client walks a remote session through its lifecycle.
       URI and runs its own forwarder for it. A bare region skips Control D, because its
       proxy is a forwarder on the client. See
       [Control D](../../guide/proxies-and-vpn.md#control-d)
+      The client also downloads playlists and segments through the same proxy,
+      as a local run does. `--no-proxy-download` and `--proxy-download` change
+      that for downloads only.
     - Track-selection hints (`range_`, `vcodec`, `quality`, `best_available`) so
       the server fetches the right manifests
     - Your language and audio codec selection (`-l`, `-vl`, `-al`, `-a`, `-fs`)

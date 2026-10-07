@@ -197,6 +197,13 @@ Get the list of titles behind a title ID, for example episodes or a movie, witho
 
 You can also pass service-specific CLI options as additional keys.
 
+#### Logins that need the user
+
+`search`, `list-titles` and `list-tracks` have no channel to the user. A login that asks for
+input or waits for an approval on another device fails at once with `AUTH_FAILED` on these
+endpoints. Complete that login in a download job or a remote session, then send the saved
+login with the request.
+
 #### Client cache on a remote-only server
 
 A `--remote-only` server keeps nothing that a client sends. When the request
@@ -556,7 +563,8 @@ Show download jobs, with optional filtering and sorting.
           "segments_total": 300,
           "speed": "5.2 MB/s",
           "skipped_subtitles": [],
-          "input_prompt": null
+          "input_prompt": null,
+          "notice": null
         }
       ]
     }
@@ -720,6 +728,10 @@ Answer the prompt that a running job waits on. A service can ask for input durin
 example an OTP code, a PIN, or a device-code confirmation. The job then shows the prompt in its
 `input_prompt` field and in its `progress` events. Show the prompt to the user and send the
 answer here.
+
+A job that waits for an approval on another device, such as a pair code login, shows the
+message in its `notice` field instead. A notice needs no answer: show it to the user and keep
+polling.
 
 === "Request"
 

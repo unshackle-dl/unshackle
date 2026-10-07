@@ -272,7 +272,11 @@ token = self.wait_for_approval(
 It raises `TimeoutError` after `timeout` seconds. Under `serve` mode it also stops
 when the client deletes the remote session, so the loop does not continue on the
 server with no client. The message goes out as a log line, so a remote
-session shows it, but a REST download job does not relay it as `input_prompt`.
+session shows it. A REST download job shows it in its `notice` field until the wait ends.
+
+The wait sees a cancel only between two `check` calls, so `check` must return within a few
+seconds. A `check` that reads a socket keeps the socket open across calls and returns `None`
+after each short idle wait.
 
 !!! warning "Make each token cache entry unique"
     The cache above uses `tokens_{device}_{profile}` on purpose. A token cache

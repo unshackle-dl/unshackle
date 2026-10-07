@@ -7,6 +7,7 @@ from enum import Enum
 import pytest
 
 from unshackle.core.remote_service import (
+    RemoteService,
     build_title,
     build_tracks,
     deserialize_audio,
@@ -563,11 +564,12 @@ class _SentCreate(Exception):
     pass
 
 
-def _sent_create_data(parent_params: dict, service_params: dict) -> dict:
+def _remote_service(parent_params: dict, service_params: dict) -> RemoteService:
+    """A RemoteService whose session create raises _SentCreate with the request body."""
     import logging
     from types import SimpleNamespace
 
-    from unshackle.core.remote_service import RemoteService
+    import requests
 
     def post(path: str, data: dict) -> dict:
         raise _SentCreate(data)
@@ -579,11 +581,32 @@ def _sent_create_data(parent_params: dict, service_params: dict) -> dict:
     svc._server_accounts = {"global": True}
     svc._server_cdm = True
     svc._service_params = service_params
+    svc._session = requests.Session()
     svc.log = logging.getLogger("test")
-    svc.client = SimpleNamespace(post=post)
+    svc.client = SimpleNamespace(post=post, server_url="https://server.example")
+    return svc
+
+
+def _sent_create_data(parent_params: dict, service_params: dict) -> dict:
+    with pytest.raises(_SentCreate) as exc:
+        _remote_service(parent_params, service_params).authenticate()
+    return exc.value.args[0]
+
+
+@pytest.mark.parametrize("no_proxy, expected", [(False, {"all": "http://proxy.example:8080"}), (True, {})])
+def test_the_client_session_downloads_through_the_proxy_it_sends(
+    monkeypatch: pytest.MonkeyPatch, no_proxy: bool, expected: dict
+) -> None:
+    """The client fetches playlists and segments itself, so --proxy must reach its own session too."""
+    from unshackle.core import remote_service
+
+    monkeypatch.setattr(remote_service, "resolve_remote_proxy_arg", lambda proxy: proxy)
+    monkeypatch.setattr("unshackle.core.utils.ip_info.get_ip_info", lambda *args, **kwargs: None)
+    svc = _remote_service({"no_proxy": no_proxy, "proxy": "http://proxy.example:8080"}, {})
     with pytest.raises(_SentCreate) as exc:
         svc.authenticate()
-    return exc.value.args[0]
+    assert dict(svc._session.proxies) == expected
+    assert exc.value.args[0].get("proxy") == (None if no_proxy else "http://proxy.example:8080")
 
 
 def test_dl_selection_travels_nested_and_a_service_option_cannot_override_it() -> None:

@@ -20,7 +20,7 @@ from aiohttp import web
 
 from unshackle.core.api.compression import safe_inflate
 from unshackle.core.api.errors import APIError, APIErrorCode, categorize_exception, handle_api_exception
-from unshackle.core.api.input_bridge import AuthStatus, InputBridge
+from unshackle.core.api.input_bridge import AuthStatus, InputBridge, NoUserBridge
 from unshackle.core.api.sanitize import MAX_SESSION_CACHE_KEYS, safe_cache_key, sanitize_log
 from unshackle.core.api.session_log import SessionLogBuffer, SessionLogMirror, capture_service_logs
 from unshackle.core.api.session_store import SessionStore
@@ -443,6 +443,7 @@ def setup_list_service(
     elif request_cache is not None:
         client_login = cookies is not None or credential is not None
         request_cache.attach(service_instance, data, normalized_service, request, client_login)
+    service_instance._input_bridge = NoUserBridge()
     service_instance.authenticate(cookies, credential)
     return service_instance
 
@@ -503,6 +504,7 @@ def run_service_search(
     elif request_cache is not None:
         client_login = cookies is not None or credential is not None
         request_cache.attach(service_instance, data, normalized_service, request, client_login)
+    service_instance._input_bridge = NoUserBridge()
     service_instance.authenticate(cookies, credential)
 
     results: List[Dict[str, Any]] = []

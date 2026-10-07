@@ -1375,7 +1375,8 @@ async def download_job_input(request: web.Request) -> web.Response:
     description: >
       Submit the answer to the prompt a running job waits on (an OTP code, a PIN, a device-code
       confirmation). The job shows the prompt in its `input_prompt` field and in its SSE `progress`
-      events. The job fails if nobody answers within the prompt timeout.
+      events. The job fails if nobody answers within the prompt timeout. A job that waits for an
+      approval on another device shows the message in its `notice` field, which takes no answer.
     parameters:
       - name: job_id
         in: path

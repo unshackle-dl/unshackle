@@ -490,6 +490,21 @@ def prompt_user(prompt: str) -> str:
     return console.input(body)
 
 
+_notice_handler: Optional[Callable[[Optional[str]], None]] = None
+
+
+def set_notice_handler(handler: Optional[Callable[[Optional[str]], None]]) -> None:
+    """Route every :func:`show_notice` call to *handler*, for a process whose log output no user reads."""
+    global _notice_handler
+    _notice_handler = handler
+
+
+def show_notice(message: Optional[str]) -> None:
+    """Give *message* to the notice handler, or None to clear it. Without a handler this does nothing."""
+    if _notice_handler is not None:
+        _notice_handler(message)
+
+
 __all__ = (
     "ComfyLogRenderer",
     "ComfyRichHandler",
@@ -501,5 +516,7 @@ __all__ = (
     "listing_table",
     "print_wide",
     "prompt_user",
+    "set_notice_handler",
     "set_prompt_handler",
+    "show_notice",
 )

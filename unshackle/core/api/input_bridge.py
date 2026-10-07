@@ -185,11 +185,11 @@ class InputBridge:
         self._picked_up.set()
         self._response_ready.set()
 
-    @property
-    def cancelled(self) -> bool:
-        """``True`` once the server cancelled the bridge, so a login loop must stop."""
+    def ensure_active(self) -> None:
+        """Raise RuntimeError once the server cancelled the bridge, so a login loop stops."""
         with self._lock:
-            return self._cancelled
+            if self._cancelled:
+                raise RuntimeError("Session was cancelled")
 
     @property
     def status(self) -> AuthStatus:
@@ -200,3 +200,19 @@ class InputBridge:
     def status(self, value: AuthStatus) -> None:
         with self._lock:
             self._status = value
+
+
+NO_USER_MESSAGE = (
+    "This login needs the user, and this request cannot reach the user. "
+    "Start a download job or a remote session to complete the authentication"
+)
+
+
+class NoUserBridge(InputBridge):
+    """Bridge for a request with no channel to the user: a login step that needs the user fails at once."""
+
+    def request_input(self, prompt: str, timeout: float = AUTH_INPUT_TIMEOUT) -> str:
+        raise RuntimeError(NO_USER_MESSAGE)
+
+    def ensure_active(self) -> None:
+        raise RuntimeError(NO_USER_MESSAGE)

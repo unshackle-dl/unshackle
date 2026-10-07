@@ -1020,6 +1020,9 @@ class RemoteService:
         if create_data.get("proxy") and is_loopback(create_data["proxy"]) and not is_loopback(self.client.server_url):
             # the local CLI resolves the proxy, so a local-only URI is useless to a server elsewhere
             raise click.ClickException("That proxy is on your machine, so --remote cannot use it.")
+        local_proxy = None if no_proxy else (proxy or create_data.get("proxy"))
+        if local_proxy:
+            self._session.proxies["all"] = local_proxy
 
         if not no_proxy and not proxy and client_region:
             create_data["client_region"] = client_region

@@ -126,6 +126,8 @@ class DownloadJob:
 
     # Prompt a service raised through prompt_user() and waits on; answered by submit_input().
     input_prompt: Optional[str] = None
+    # Message a service shows through show_notice() while it waits for an approval; needs no answer.
+    notice: Optional[str] = None
 
     # Subtitles skipped under skip_subtitle_errors (non-fatal). Each entry is a dl.SkippedSubtitle
     # dict (id / language / title) so a client can report which weren't available.
@@ -160,6 +162,7 @@ class DownloadJob:
             "speed": self.speed,
             "skipped_subtitles": self.skipped_subtitles,
             "input_prompt": self.input_prompt,
+            "notice": self.notice,
         }
 
         if include_full_details:
@@ -1109,6 +1112,8 @@ class DownloadQueueManager:
                                 job.speed = str(progress_data["speed"])
                             if "input_prompt" in progress_data:
                                 job.input_prompt = progress_data["input_prompt"]
+                            if "notice" in progress_data:
+                                job.notice = progress_data["notice"]
                             if progress_data.get("skipped_subtitles"):
                                 job.skipped_subtitles = progress_data["skipped_subtitles"]
                             if "progress" in progress_data:
@@ -1195,6 +1200,7 @@ class DownloadQueueManager:
 
             self._download_processes.pop(job.job_id, None)
             job.input_prompt = None
+            job.notice = None
 
             temp_paths = self._job_temp_files.pop(job.job_id, {})
             for path in temp_paths.values():

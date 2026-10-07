@@ -91,7 +91,8 @@ These are abstract. A service will not load unless it defines all three:
   bridge, the REST download job relay, or the rich console.
 - **`wait_for_approval(message, check, timeout, interval=3.0)`**: shows a message, then
   calls `check` until it returns a value. Use it for a login that the user approves on
-  another device, such as a pair code.
+  another device, such as a pair code. A remote-dl session shows the message as a log
+  line, and a REST download job shows it as the job's `notice`.
 - **Event callbacks**: `on_segment_downloaded`, `on_track_downloaded`,
   `on_track_decrypted`, `on_track_repacked`, `on_track_multiplex` let a service react to
   pipeline events (for example, MonaLisa decrypts each segment in `on_segment_downloaded`).

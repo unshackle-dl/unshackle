@@ -19,7 +19,7 @@ from rich.rule import Rule
 
 from unshackle.core.cacher import Cacher
 from unshackle.core.config import config
-from unshackle.core.console import console, prompt_user
+from unshackle.core.console import console, prompt_user, show_notice
 from unshackle.core.constants import AnyTrack
 from unshackle.core.credential import Credential
 from unshackle.core.drm import DRM_T
@@ -489,20 +489,25 @@ class Service(metaclass=ABCMeta):
         """Show ``message``, then call ``check`` until it returns a value.
 
         Use it for a login that the user approves on another device, such as a pair code.
-        ``check`` returns None while the approval is pending. Raises TimeoutError after
-        ``timeout`` seconds, and RuntimeError when the remote session no longer exists.
+        ``check`` returns None while the approval is pending, and must return within a few
+        seconds. Raises TimeoutError after ``timeout`` seconds, and RuntimeError when the
+        remote session no longer exists. A REST download job shows ``message`` as its ``notice``.
         """
         self.log.info(message)
+        show_notice(message)
         deadline = time.monotonic() + timeout
-        while True:
-            if self._input_bridge is not None and self._input_bridge.cancelled:
-                raise RuntimeError("Session was cancelled")
-            result = check()
-            if result is not None:
-                return result
-            if time.monotonic() + interval >= deadline:
-                raise TimeoutError(f"No approval within {timeout:.0f}s")
-            time.sleep(interval)
+        try:
+            while True:
+                if self._input_bridge is not None:
+                    self._input_bridge.ensure_active()
+                result = check()
+                if result is not None:
+                    return result
+                if time.monotonic() + interval >= deadline:
+                    raise TimeoutError(f"No approval within {timeout:.0f}s")
+                time.sleep(interval)
+        finally:
+            show_notice(None)
 
     def search(self) -> Generator[SearchResult, None, None]:
         """

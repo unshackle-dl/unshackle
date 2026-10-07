@@ -286,6 +286,30 @@ def test_worker_relays_a_prompt_and_reads_the_answer(monkeypatch: pytest.MonkeyP
     assert updates == [{"input_prompt": "Enter PIN"}, {"input_prompt": None}]
 
 
+def test_worker_relays_a_notice_as_progress(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A show_notice() message reaches the parent as ``notice`` progress, and None clears it."""
+    import os
+    import sys
+    from types import SimpleNamespace
+
+    from unshackle.core.api import download_worker
+    from unshackle.core.console import set_notice_handler, set_prompt_handler, show_notice
+
+    read_fd, write_fd = os.pipe()
+    monkeypatch.setattr(sys, "stdin", SimpleNamespace(fileno=lambda: read_fd))
+    updates: list[dict] = []
+
+    download_worker.relay_prompts(updates.append)
+    try:
+        show_notice("Enter pair code ABCD")
+        show_notice(None)
+    finally:
+        set_prompt_handler(None)
+        set_notice_handler(None)
+        os.close(write_fd)
+    assert updates == [{"notice": "Enter pair code ABCD"}, {"notice": None}]
+
+
 def test_a_prompt_discards_an_answer_sent_before_it(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """A late answer to an earlier prompt must not answer the next one; the timeout is not retryable."""
     import sys
@@ -418,6 +442,46 @@ async def test_a_repeated_prompt_reaches_an_event_listener(
     await asyncio.wait_for(answer_next_prompt("222222"), timeout=20)
     assert await asyncio.wait_for(run, timeout=20) == ["111111", "222222"]
     assert job.input_prompt is None
+
+
+async def test_a_notice_reaches_the_job_and_an_event_listener(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, manager: DownloadQueueManager
+) -> None:
+    """The job carries the worker's notice while the worker waits, and drops it at the end."""
+    import asyncio
+
+    from unshackle.core.api import download_manager
+
+    worker = tmp_path / "worker.py"
+    # The prompt holds the worker open until the test has seen the notice.
+    source = FAKE_PROMPT_WORKER.replace("import prompt_user", "import prompt_user, show_notice").replace(
+        'answers = [prompt_user("Enter OTP"), prompt_user("Enter OTP")]',
+        'show_notice("Enter pair code ABCD")\nanswers = [prompt_user("Continue")]',
+    )
+    assert source.count("show_notice") == 2, "FAKE_PROMPT_WORKER changed; update the replacements"
+    worker.write_text(source, encoding="utf-8")
+    spawn = asyncio.create_subprocess_exec
+
+    async def spawn_fake_worker(executable: str, *args: str, **kwargs: Any) -> Any:
+        return await spawn(executable, str(worker), *args[2:], **kwargs)
+
+    monkeypatch.setattr(download_manager.asyncio, "create_subprocess_exec", spawn_fake_worker)
+    job = manager.create_job("EXAMPLE", "t")
+    events = manager.subscribe(job.job_id)
+    run = asyncio.create_task(manager.run_download_async(job))
+
+    async def answer_after_notice() -> None:
+        while True:
+            event = await events.get()
+            if event and event["data"]["input_prompt"]:
+                assert event["data"]["notice"] == "Enter pair code ABCD"
+                assert job.to_dict()["notice"] == "Enter pair code ABCD"
+                assert manager.submit_input(job, "ok") is True
+                return
+
+    await asyncio.wait_for(answer_after_notice(), timeout=20)
+    assert await asyncio.wait_for(run, timeout=20) == ["ok"]
+    assert job.notice is None
 
 
 async def test_input_handler_rejects_bad_requests(
