@@ -2172,6 +2172,11 @@ how the <code>X-Secret-Key</code> header works.</p>
 <td>Serve only the REST API, without the Widevine/PlayReady CDM HTTP endpoints.</td>
 </tr>
 <tr>
+<td><code>--cdm-only</code></td>
+<td>off</td>
+<td>Serve only the Widevine/PlayReady CDM HTTP endpoints, plus <code>/api/health</code> and the dashboard. No REST API, no remote sessions, no Swagger UI. Cannot be combined with <code>--api-only</code> or <code>--remote-only</code>.</td>
+</tr>
+<tr>
 <td><code>--no-widevine</code></td>
 <td>off</td>
 <td>Disable the Widevine CDM endpoints. Cannot be combined with <code>--api-only</code>.</td>
@@ -2219,7 +2224,7 @@ TLS-terminating reverse proxy (Caddy, nginx) in front for anything internet-faci
 </div>
 <h3 id="server-modes">Server modes<a class="headerlink" href="#server-modes" title="Permanent link">&para;</a></h3>
 <p>The routes the server mounts depend on how you start the server:</p>
-<div class="tabbed-set tabbed-alternate" data-tabs="1:3"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Default (CDM + REST)</label><label for="__tabbed_1_2"><code>--api-only</code></label><label for="__tabbed_1_3"><code>--remote-only</code></label></div>
+<div class="tabbed-set tabbed-alternate" data-tabs="1:4"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><input id="__tabbed_1_4" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Default (CDM + REST)</label><label for="__tabbed_1_2"><code>--api-only</code></label><label for="__tabbed_1_3"><code>--remote-only</code></label><label for="__tabbed_1_4"><code>--cdm-only</code></label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
 <p>The server mounts both the pywidevine/pyplayready CDM endpoints and the full REST API.
@@ -2233,6 +2238,12 @@ Authentication uses the single configured API key (or none, with <code>--no-key<
 <p>The server mounts only the remote-session subset of routes (health, services, search,
 and everything under <code>/api/session/*</code>). This mode implies <code>--api-only</code>, and the
 interactive Swagger UI is <strong>not</strong> mounted.</p>
+</div>
+<div class="tabbed-block">
+<p>The server mounts only the pywidevine and pyplayready CDM endpoints. Under <code>/api/</code> it
+answers <code>/api/health</code> and, when <code>serve.dashboard.key</code> is set, the dashboard. It does not
+start the remote session store, the service refresh loop or the Swagger UI. Use it for a
+CDM backend that a proxy reaches on its own hostname.</p>
 </div>
 </div>
 </div>
