@@ -50,9 +50,7 @@ class SessionEntry:
     server_cdm_max_height: Optional[int] = None
     server_vault: bool = False  # a session the client's device licenses may still take keys from the server vault
     server_device: bool = False  # its service runs on the server's lent device, so keys come only from a vault
-    client_auth: bool = (
-        False  # the client sent its own cookies, credentials, or cache files, or answered a login prompt
-    )
+    client_auth: bool = False  # the login is the client's: it succeeded without a server account
     input_bridge: Optional[InputBridge] = None
     log_buffer: Optional[Any] = None  # SessionLogBuffer mirroring the service's self.log
     auth_status: AuthStatus = AuthStatus.AUTHENTICATED

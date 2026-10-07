@@ -221,11 +221,12 @@ def _run_session(monkeypatch, tmp_path, data, answer, server_account=False, fail
 @pytest.mark.parametrize(
     "data, answer, server_account, fail, expected",
     [
-        ({}, None, False, False, False),  # anonymous login through the server: stays the server's
+        ({}, None, False, False, True),  # no prompt: a pair code shown in the log, approved on another device
         ({}, "CODE", False, False, True),  # device code the client approved
         ({}, "CODE", False, True, False),  # answered, but the login failed
         ({}, "CODE", True, False, False),  # server account OTP answered by the client
         ({"cache": "tokens"}, None, False, False, True),  # client uploaded its own earlier login
+        ({}, None, True, False, False),  # server account
     ],
 )
 def test_client_auth_follows_login_provenance(monkeypatch, tmp_path, data, answer, server_account, fail, expected):

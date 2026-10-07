@@ -1,10 +1,11 @@
 import logging
+import time
 from abc import ABCMeta, abstractmethod
 from collections.abc import Callable, Generator
 from dataclasses import dataclass, field
 from http.cookiejar import CookieJar
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional, TypeVar, Union
 
 if TYPE_CHECKING:
     from unshackle.core.api.input_bridge import InputBridge
@@ -138,6 +139,9 @@ def sanitize_proxy_for_log(uri: Optional[str], mask_host: bool = False) -> Optio
     if not isinstance(uri, str):
         return str(uri)
     return mask_proxy(uri, mask_host=mask_host, allow_debug=False)
+
+
+T = TypeVar("T")
 
 
 class Service(metaclass=ABCMeta):
@@ -478,6 +482,27 @@ class Service(metaclass=ABCMeta):
         if self._input_bridge is not None:
             return self._input_bridge.request_input(prompt)
         return prompt_user(prompt)
+
+    def wait_for_approval(
+        self, message: str, check: Callable[[], Optional[T]], timeout: float, interval: float = 3.0
+    ) -> T:
+        """Show ``message``, then call ``check`` until it returns a value.
+
+        Use it for a login that the user approves on another device, such as a pair code.
+        ``check`` returns None while the approval is pending. Raises TimeoutError after
+        ``timeout`` seconds, and RuntimeError when the remote session no longer exists.
+        """
+        self.log.info(message)
+        deadline = time.monotonic() + timeout
+        while True:
+            if self._input_bridge is not None and self._input_bridge.cancelled:
+                raise RuntimeError("Session was cancelled")
+            result = check()
+            if result is not None:
+                return result
+            if time.monotonic() + interval >= deadline:
+                raise TimeoutError(f"No approval within {timeout:.0f}s")
+            time.sleep(interval)
 
     def search(self) -> Generator[SearchResult, None, None]:
         """

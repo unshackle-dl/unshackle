@@ -96,19 +96,6 @@ def test_status_setter() -> None:
     assert bridge.status is AuthStatus.AUTHENTICATED
 
 
-def test_answered_only_after_an_accepted_response() -> None:
-    bridge = InputBridge()
-    assert bridge.submit_response("early") is False
-    assert bridge.answered is False
-    worker = threading.Thread(target=bridge.request_input, args=("code?",))
-    worker.start()
-    while bridge.status != AuthStatus.PENDING_INPUT:
-        time.sleep(0.01)
-    assert bridge.submit_response("CODE") is True
-    worker.join(timeout=2)
-    assert bridge.answered is True
-
-
 def test_request_input_after_authentication_fails_fast() -> None:
     """The client stops polling for prompts once authenticated, so a later prompt must not wait for an answer."""
     bridge = InputBridge()

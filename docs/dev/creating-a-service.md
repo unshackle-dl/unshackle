@@ -256,6 +256,24 @@ REST download job shows it as `input_prompt`. Locally it routes through the
 shared Rich console (`prompt_user`) so the prompt renders correctly alongside
 progress and log output.
 
+For a login that the user approves on another device (a pair code, a QR code),
+use `self.wait_for_approval(message, check, timeout)`, never a hand-written
+loop. It shows the message, then calls `check` at each interval until `check`
+returns a value. `check` returns `None` while the approval is pending.
+
+```python
+token = self.wait_for_approval(
+    f"Open {self.config['endpoints']['pair']} and enter code {code}",
+    check=lambda: self.poll_pair_token(code),
+    timeout=expires_in,
+)
+```
+
+It raises `TimeoutError` after `timeout` seconds. Under `serve` mode it also stops
+when the client deletes the remote session, so the loop does not continue on the
+server with no client. The message goes out as a log line, so a remote
+session shows it, but a REST download job does not relay it as `input_prompt`.
+
 !!! warning "Make each token cache entry unique"
     The cache above uses `tokens_{device}_{profile}` on purpose. A token cache
     must include every dimension that changes the token (device, profile, or

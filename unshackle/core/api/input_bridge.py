@@ -49,7 +49,6 @@ class InputBridge:
     _response: Optional[str] = field(default=None, init=False, repr=False)
     _status: AuthStatus = field(default=AuthStatus.AUTHENTICATING, init=False)
     _cancelled: bool = field(default=False, init=False, repr=False)
-    _answered: bool = field(default=False, init=False, repr=False)
     _cdm_call: Optional[dict[str, Any]] = field(default=None, init=False, repr=False)
     _response_ready: threading.Event = field(default_factory=threading.Event, init=False, repr=False)
     _picked_up: threading.Event = field(default_factory=threading.Event, init=False, repr=False)
@@ -166,8 +165,6 @@ class InputBridge:
             if not self._awaiting_answer():
                 return False
             self._response = response
-            if self._cdm_call is None:
-                self._answered = True
         self._picked_up.set()
         self._response_ready.set()
         return True
@@ -189,10 +186,10 @@ class InputBridge:
         self._response_ready.set()
 
     @property
-    def answered(self) -> bool:
-        """``True`` once the bridge has accepted a response from the client."""
+    def cancelled(self) -> bool:
+        """``True`` once the server cancelled the bridge, so a login loop must stop."""
         with self._lock:
-            return self._answered
+            return self._cancelled
 
     @property
     def status(self) -> AuthStatus:

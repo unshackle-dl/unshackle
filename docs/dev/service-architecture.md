@@ -89,6 +89,9 @@ These are abstract. A service will not load unless it defines all three:
   `get_clearkey_license` (returns `None` by default). See [DRM hooks](#drm-hooks) below.
 - **`request_input(prompt)`**: prompts the user. It goes through the remote-dl input
   bridge, the REST download job relay, or the rich console.
+- **`wait_for_approval(message, check, timeout, interval=3.0)`**: shows a message, then
+  calls `check` until it returns a value. Use it for a login that the user approves on
+  another device, such as a pair code.
 - **Event callbacks**: `on_segment_downloaded`, `on_track_downloaded`,
   `on_track_decrypted`, `on_track_repacked`, `on_track_multiplex` let a service react to
   pipeline events (for example, MonaLisa decrypts each segment in `on_segment_downloaded`).

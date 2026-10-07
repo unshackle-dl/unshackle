@@ -356,7 +356,7 @@ class RequestCache:
     Such a server keeps nothing that a client sends, so the request runs on a cache directory
     of its own that the handler removes when the request ends, on success and on error. Before
     that, a client that logged in with its own cookies, credentials or cache gets the updated
-    files back, the same as when a remote session ends.
+    files back.
     """
 
     def __init__(self) -> None:
@@ -3559,7 +3559,7 @@ async def session_create_handler(data: Dict[str, Any], request: Optional[web.Req
         async def run_auth() -> None:
             try:
                 await asyncio.to_thread(service_instance.authenticate, cookies, credential)
-                if bridge.answered and not server_account:
+                if not server_account:
                     session.client_auth = True
                 session.auth_status = AuthStatus.AUTHENTICATED
                 bridge.status = AuthStatus.AUTHENTICATED
@@ -3647,10 +3647,9 @@ async def session_titles_handler(session_id: str, request: Optional[web.Request]
 def client_session_auth(session: Any) -> tuple[Dict[str, str], Dict[str, str]]:
     """The service session headers and cookies a remote client may receive.
 
-    Only a client that sent its own cookies or credentials gets them back. Otherwise (a server
-    account, or an anonymous login through the server's proxy) the cookie jar stays on the
-    server and the server drops the auth-bearing headers, so the client cannot reuse a login
-    the server paid for. A remote session on the server's lent device keeps its cookies (the client's account)
+    A client whose own login succeeded gets them back. For a server account the cookie jar
+    stays on the server and the server drops the auth-bearing headers, so the client cannot
+    reuse a login the server paid for. A remote session on the server's lent device keeps its cookies (the client's account)
     but drops those headers too.
     """
     svc_session = session.service_instance.session

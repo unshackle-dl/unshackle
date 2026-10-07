@@ -101,7 +101,7 @@ def test_the_client_refuses_a_challenge_for_the_other_drm_system() -> None:
     assert "not a playready device" in answer["error"]
 
 
-def test_a_cdm_call_after_authentication_leaves_the_status_and_client_auth_alone() -> None:
+def test_a_cdm_call_after_authentication_leaves_the_status_alone() -> None:
     bridge = InputBridge()
     bridge.status = AuthStatus.AUTHENTICATED
     result: list[dict] = []
@@ -118,7 +118,6 @@ def test_a_cdm_call_after_authentication_leaves_the_status_and_client_auth_alone
 
     assert result == [{"session": "s", "challenge": "Yw=="}]
     assert bridge.status is AuthStatus.AUTHENTICATED
-    assert bridge.answered is False
     assert bridge.get_pending_cdm_call() is None
 
 
