@@ -2662,7 +2662,10 @@ returns a value. <code>check</code> returns <code>None</code> while the approval
 <p>It raises <code>TimeoutError</code> after <code>timeout</code> seconds. Under <code>serve</code> mode it also stops
 when the client deletes the remote session, so the loop does not continue on the
 server with no client. The message goes out as a log line, so a remote
-session shows it, but a REST download job does not relay it as <code>input_prompt</code>.</p>
+session shows it. A REST download job shows it in its <code>notice</code> field until the wait ends.</p>
+<p>The wait sees a cancel only between two <code>check</code> calls, so <code>check</code> must return within a few
+seconds. A <code>check</code> that reads a socket keeps the socket open across calls and returns <code>None</code>
+after each short idle wait.</p>
 <div class="admonition warning">
 <p class="admonition-title">Make each token cache entry unique</p>
 <p>The cache above uses <code>tokens_{device}_{profile}</code> on purpose. A token cache

@@ -1665,6 +1665,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#logins-that-need-the-user" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Logins that need the user
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#client-cache-on-a-remote-only-server" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2558,6 +2569,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#logins-that-need-the-user" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Logins that need the user
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#client-cache-on-a-remote-only-server" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3401,6 +3423,11 @@
 </tbody>
 </table>
 <p>You can also pass service-specific CLI options as additional keys.</p>
+<h4 id="logins-that-need-the-user">Logins that need the user<a class="headerlink" href="#logins-that-need-the-user" title="Permanent link">&para;</a></h4>
+<p><code>search</code>, <code>list-titles</code> and <code>list-tracks</code> have no channel to the user. A login that asks for
+input or waits for an approval on another device fails at once with <code>AUTH_FAILED</code> on these
+endpoints. Complete that login in a download job or a remote session, then send the saved
+login with the request.</p>
 <h4 id="client-cache-on-a-remote-only-server">Client cache on a remote-only server<a class="headerlink" href="#client-cache-on-a-remote-only-server" title="Permanent link">&para;</a></h4>
 <p>A <code>--remote-only</code> server keeps nothing that a client sends. When the request
 does not use a server account, the server runs <code>search</code>, <code>list-titles</code> and
@@ -4200,10 +4227,11 @@ an HTTP caller would be remote code execution. You configure post-scripts only i
 </span><span id="__span-14-18"><a id="__codelineno-14-18" name="__codelineno-14-18" href="#__codelineno-14-18"></a><span class="w">      </span><span class="nt">"segments_total"</span><span class="p">:</span><span class="w"> </span><span class="mi">300</span><span class="p">,</span>
 </span><span id="__span-14-19"><a id="__codelineno-14-19" name="__codelineno-14-19" href="#__codelineno-14-19"></a><span class="w">      </span><span class="nt">"speed"</span><span class="p">:</span><span class="w"> </span><span class="s2">"5.2 MB/s"</span><span class="p">,</span>
 </span><span id="__span-14-20"><a id="__codelineno-14-20" name="__codelineno-14-20" href="#__codelineno-14-20"></a><span class="w">      </span><span class="nt">"skipped_subtitles"</span><span class="p">:</span><span class="w"> </span><span class="p">[],</span>
-</span><span id="__span-14-21"><a id="__codelineno-14-21" name="__codelineno-14-21" href="#__codelineno-14-21"></a><span class="w">      </span><span class="nt">"input_prompt"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span>
-</span><span id="__span-14-22"><a id="__codelineno-14-22" name="__codelineno-14-22" href="#__codelineno-14-22"></a><span class="w">    </span><span class="p">}</span>
-</span><span id="__span-14-23"><a id="__codelineno-14-23" name="__codelineno-14-23" href="#__codelineno-14-23"></a><span class="w">  </span><span class="p">]</span>
-</span><span id="__span-14-24"><a id="__codelineno-14-24" name="__codelineno-14-24" href="#__codelineno-14-24"></a><span class="p">}</span>
+</span><span id="__span-14-21"><a id="__codelineno-14-21" name="__codelineno-14-21" href="#__codelineno-14-21"></a><span class="w">      </span><span class="nt">"input_prompt"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span>
+</span><span id="__span-14-22"><a id="__codelineno-14-22" name="__codelineno-14-22" href="#__codelineno-14-22"></a><span class="w">      </span><span class="nt">"notice"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span>
+</span><span id="__span-14-23"><a id="__codelineno-14-23" name="__codelineno-14-23" href="#__codelineno-14-23"></a><span class="w">    </span><span class="p">}</span>
+</span><span id="__span-14-24"><a id="__codelineno-14-24" name="__codelineno-14-24" href="#__codelineno-14-24"></a><span class="w">  </span><span class="p">]</span>
+</span><span id="__span-14-25"><a id="__codelineno-14-25" name="__codelineno-14-25" href="#__codelineno-14-25"></a><span class="p">}</span>
 </span></code></pre></div>
 </div>
 </div>
@@ -4501,6 +4529,9 @@ an HTTP caller would be remote code execution. You configure post-scripts only i
 example an OTP code, a PIN, or a device-code confirmation. The job then shows the prompt in its
 <code>input_prompt</code> field and in its <code>progress</code> events. Show the prompt to the user and send the
 answer here.</p>
+<p>A job that waits for an approval on another device, such as a pair code login, shows the
+message in its <code>notice</code> field instead. A notice needs no answer: show it to the user and keep
+polling.</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="13:2"><input checked="checked" id="__tabbed_13_1" name="__tabbed_13" type="radio" /><input id="__tabbed_13_2" name="__tabbed_13" type="radio" /><div class="tabbed-labels"><label for="__tabbed_13_1">Request</label><label for="__tabbed_13_2">Response <code>200</code></label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
