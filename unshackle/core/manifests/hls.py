@@ -674,6 +674,17 @@ class HLS:
             log.error("Track's HLS playlist has no segments, expecting an invariant M3U8 playlist.")
             sys.exit(1)
 
+        unwanted_segments = [
+            segment for segment in master.segments if callable(track.OnSegmentFilter) and track.OnSegmentFilter(segment)
+        ]
+        hls_data = track.data.setdefault("hls", {})
+        if hls_data.get("unwanted_segments") and not unwanted_segments:
+            log.warning(
+                f"None of the {len(hls_data['unwanted_segments'])} segments that the export drops is in the "
+                f"playlist of {track.id}. The download keeps every segment."
+            )
+        hls_data["unwanted_segments"] = [s.absolute_uri for s in unwanted_segments]
+
         # Get session DRM as fallback but prefer media playlist keys for accurate KID matching
         if track.drm:
             session_drm = track.get_drm_for_cdm(cdm)
@@ -745,12 +756,20 @@ class HLS:
                 raise
 
         if DOWNLOAD_LICENCE_ONLY.is_set():
+            # a playlist can change its key part-way, and only the download loop licenses the later keys
+            licensed_keys = [initial_drm_key]
+            for segment in master.segments:
+                if not segment.keys or segment in unwanted_segments:
+                    continue
+                key = HLS.resolve_segment_key(segment.keys, cdm, track.drm_preference)
+                if key is None or key.method == "AES-128" or key in licensed_keys:
+                    continue
+                licensed_keys.append(key)
+                later_drm = HLS.get_drm(key, session)
+                if isinstance(later_drm, (Widevine, PlayReady)) and license_widevine:
+                    license_widevine(later_drm, track_kid=later_drm.kid)
             progress(downloaded="[yellow]SKIPPED")
             return
-
-        unwanted_segments = [
-            segment for segment in master.segments if callable(track.OnSegmentFilter) and track.OnSegmentFilter(segment)
-        ]
 
         # Downloaded segment files are named by post-filter index; map that back to the wanted
         # segment so the IV uses the absolute media sequence number, not the download index.
@@ -1152,9 +1171,6 @@ class HLS:
                             drm.content_keys.setdefault(prev_kid, prev_key)
                     encryption_data = (key, drm)
 
-            if DOWNLOAD_LICENCE_ONLY.is_set():
-                continue
-
             if is_last_segment:
                 # required as it won't end with EXT-X-DISCONTINUITY nor a new key
                 if encryption_data:
@@ -1164,9 +1180,6 @@ class HLS:
                 )
 
             progress(advance=1)
-
-        if DOWNLOAD_LICENCE_ONLY.is_set():
-            return
 
         def find_segments_recursively(directory: Path) -> list[Path]:
             """Find all segment files recursively in any directory structure created by downloaders."""

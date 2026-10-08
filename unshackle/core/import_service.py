@@ -18,7 +18,13 @@ from unshackle.core.constants import AnyTrack
 from unshackle.core.credential import Credential
 from unshackle.core.drm import drm_from_dict, real_kids
 from unshackle.core.manifests import DASH, HLS, ISM
-from unshackle.core.remote_service import RemoteService, build_title, match_track, resolve_proxy_arg
+from unshackle.core.remote_service import (
+    RemoteService,
+    build_title,
+    match_track,
+    resolve_proxy_arg,
+    segment_uri_filter,
+)
 from unshackle.core.titles import Episode, Movies, Series, Title_T, Titles_T, remap_titles
 from unshackle.core.tracks import Audio, Chapter, Chapters, Subtitle, Tracks, Video
 from unshackle.core.tracks.attachment import Attachment
@@ -409,6 +415,10 @@ class ImportService:
             drm = self.rebuild_drm(track_dict, title_id)
             if drm:
                 track.drm = drm
+            if track_dict.get("unwanted_segments"):
+                track.OnSegmentFilter = segment_uri_filter(track_dict["unwanted_segments"])
+                # HLS.download_track warns when none of these is in the playlist
+                track.data["hls"]["unwanted_segments"] = list(track_dict["unwanted_segments"])
             tracks.add(track, warn_only=True)
 
         if manifest_url and parser is None and not [*tracks.videos, *tracks.audio, *tracks.subtitles]:

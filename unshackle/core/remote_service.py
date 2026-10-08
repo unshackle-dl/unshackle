@@ -22,7 +22,7 @@ from enum import Enum
 from http.cookiejar import CookieJar
 from pathlib import Path
 from threading import Event, Lock, Thread
-from typing import Any, Callable, Dict, Iterator, Optional, Union
+from typing import Any, Callable, Dict, Iterable, Iterator, Optional, Union
 from uuid import UUID
 
 import click
@@ -465,6 +465,22 @@ def resolve_manifest_data(tracks: Tracks, manifests: list) -> None:
                 remote_track.drm = matched.drm
 
 
+def segment_uri_filter(uris: Iterable[Any]) -> Callable[[Any], bool]:
+    """Return an HLS ``OnSegmentFilter`` that drops the segments with these URIs.
+
+    A URI also matches without its query string, because a later fetch of the playlist can
+    sign the same segment with a new one.
+    """
+    exact = {str(u) for u in uris}
+    paths = {u.split("?")[0] for u in exact}
+
+    def segment_filter(segment: Any) -> bool:
+        uri = str(getattr(segment, "absolute_uri", "") or "")
+        return bool(exact) and (uri in exact or uri.split("?")[0] in paths)
+
+    return segment_filter
+
+
 def same_bitrate(local: Optional[int], remote: Optional[int]) -> bool:
     """Equal to the nearest kb/s. A server that predates ``bitrate_bps`` rounds to kb/s in transit."""
     if not local or not remote:
@@ -895,7 +911,7 @@ class RemoteService:
         self.client_licensed: set[str] = set()  # track ids this machine's device licenses by challenge relay
         self.server_vault_keys: Dict[UUID, str] = {}
         self.server_vault = ServerVault(self)
-        self._segment_filters: Dict[str, tuple[set[str], set[str]]] = {}
+        self._segment_filters: Dict[str, Callable[[Any], bool]] = {}
         self._log_seq = 0
         self._log_drain_lock = Lock()
         self._keepalive_stop = Event()
@@ -1407,14 +1423,9 @@ class RemoteService:
                 result = self.client.post_optional(
                     f"/api/session/{self._session_id}/segment_filter", {"track_id": track_id}
                 )
-                uris = [str(u) for u in (result.get("unwanted") or [])]
-                unwanted = (set(uris), {u.split("?")[0] for u in uris})
+                unwanted = segment_uri_filter(result.get("unwanted") or [])
                 self._segment_filters[track_id] = unwanted
-            exact, paths = unwanted
-            if not exact:
-                return False
-            uri = str(getattr(segment, "absolute_uri", "") or "")
-            return uri in exact or uri.split("?")[0] in paths
+            return unwanted(segment)
 
         return segment_filter
 

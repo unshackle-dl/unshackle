@@ -4064,7 +4064,12 @@ class dl:
                 doc.add(entry)
 
             tracks_map = entry.ext("unshackle").setdefault("tracks", {})
-            tracks_map.setdefault(str(track.id), track.to_dict())
+            track_dict = tracks_map.setdefault(str(track.id), track.to_dict())
+            unwanted = (track.data.get("hls") or {}).get("unwanted_segments")
+            if unwanted:
+                track_dict["unwanted_segments"] = unwanted
+            elif unwanted is not None:
+                track_dict.pop("unwanted_segments", None)
             # the row names the track's KIDs, so an import gives the track only their keys
             track_kids = [kid.hex for kid in own_kids(drm)] if drm is not None else []
             for row in entry.tracks:
