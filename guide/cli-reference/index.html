@@ -3495,6 +3495,7 @@ and keeps the service's numbering unchanged. Pick an order that covers the whole
 <div class="language-text highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>unshackle search [OPTIONS] SERVICE [QUERY...]
 </span></code></pre></div>
 <p>Each service defines its own query syntax. unshackle prints the results as a tree of titles with their service IDs. Feed an ID straight into <code>dl</code>.</p>
+<p>unshackle logs in to the service before the search. A service that declares a search with no login is the exception: unshackle then reads no cookies and no credentials, and <code>--profile</code> has no effect.</p>
 <table>
 <thead>
 <tr>

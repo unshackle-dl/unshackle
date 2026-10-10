@@ -2706,6 +2706,11 @@ Two kinds of members matter: <strong>class variables</strong> that give the deta
 <td>Accepted auth methods (<code>"cookies"</code> / <code>"credentials"</code>). When <code>None</code>, the REST <code>/services</code> endpoint infers them from <code>authenticate()</code>.</td>
 </tr>
 <tr>
+<td><code>ANONYMOUS_SEARCH</code></td>
+<td><code>bool</code></td>
+<td><code>search()</code> needs no login and no state from <code>authenticate()</code>. A search then skips the cookie load, <code>authenticate()</code> and the cookie save. Default <code>False</code>.</td>
+</tr>
+<tr>
 <td><code>ANIME</code></td>
 <td><code>bool</code></td>
 <td>The catalogue is anime, so metadata lookups prefer AniList. A title's own <code>anime</code> flag overrides it.</td>
@@ -2730,7 +2735,8 @@ Two kinds of members matter: <strong>class variables</strong> that give the deta
   <code>CookieJar</code> into <code>self.session.cookies</code> and stores <code>self.credential</code>. Override it to
   do a real login handshake.</li>
 <li><strong><code>search()</code></strong>: raises <code>NotImplementedError</code> by default. Write it so that the
-  <code>search</code> command can operate.</li>
+  <code>search</code> command can operate. unshackle calls <code>authenticate()</code> first, unless the
+  service sets <code>ANONYMOUS_SEARCH</code>.</li>
 <li><strong>DRM license hooks</strong>: <code>get_widevine_service_certificate</code>, <code>get_widevine_license</code>,
   <code>get_playready_license</code> (delegates to Widevine by default), and
   <code>get_clearkey_license</code> (returns <code>None</code> by default). See <a href="#drm-hooks">DRM hooks</a> below.</li>

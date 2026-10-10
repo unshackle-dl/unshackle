@@ -2467,6 +2467,11 @@ Click <code>cli</code> entry point plus three abstract methods.</p>
 <td>Auth methods accepted (<code>"cookies"</code> / <code>"credentials"</code>). When <code>None</code>, the REST <code>/services</code> endpoint infers them from <code>authenticate()</code>.</td>
 </tr>
 <tr>
+<td><code>ANONYMOUS_SEARCH</code></td>
+<td><code>bool</code></td>
+<td>Set <code>True</code> when <code>search()</code> needs no login and no state from <code>authenticate()</code>. A search then skips the cookie load, <code>authenticate()</code> and the cookie save. Default <code>False</code>.</td>
+</tr>
+<tr>
 <td><code>NO_SUBTITLES</code></td>
 <td><code>bool</code></td>
 <td>Set <code>True</code> on a service with no subtitle tracks to skip subtitle handling entirely.</td>
@@ -3015,6 +3020,13 @@ flagged, banned, or downgraded.</p>
 <code>on_segment_downloaded</code>, <code>on_track_downloaded</code>, <code>on_track_decrypted</code>,
 <code>on_track_repacked</code>, <code>on_track_multiplex</code>. Also override <code>search()</code> to yield
 <code>SearchResult</code> objects for <code>unshackle search</code>.</p>
+<div class="admonition warning">
+<p class="admonition-title">Set <code>ANONYMOUS_SEARCH</code> only for a search that needs no account</p>
+<p>With <code>ANONYMOUS_SEARCH = True</code>, <code>search()</code> operates on an HTTP session with no cookies, and
+<code>authenticate()</code> does not run. Set it only when the search results do not depend on the
+account, and when <code>search()</code> does its own setup. A <code>search()</code> that reads a token, a header
+or a region from <code>authenticate()</code> fails or gives results for the wrong region.</p>
+</div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">search</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Generator</span><span class="p">[</span><span class="n">SearchResult</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">]:</span>
 </span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a>    <span class="n">results</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">session</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">"endpoints"</span><span class="p">][</span><span class="s2">"search"</span><span class="p">],</span>
 </span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a>                               <span class="n">params</span><span class="o">=</span><span class="p">{</span><span class="s2">"q"</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">title</span><span class="p">})</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>

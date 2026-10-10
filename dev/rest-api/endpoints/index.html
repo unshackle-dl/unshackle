@@ -3150,12 +3150,13 @@
 </span><span id="__span-3-23"><a id="__codelineno-3-23" name="__codelineno-3-23" href="#__codelineno-3-23"></a><span class="w">      </span><span class="p">],</span>
 </span><span id="__span-3-24"><a id="__codelineno-3-24" name="__codelineno-3-24" href="#__codelineno-3-24"></a><span class="w">      </span><span class="nt">"needs_auth"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
 </span><span id="__span-3-25"><a id="__codelineno-3-25" name="__codelineno-3-25" href="#__codelineno-3-25"></a><span class="w">      </span><span class="nt">"has_search"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
-</span><span id="__span-3-26"><a id="__codelineno-3-26" name="__codelineno-3-26" href="#__codelineno-3-26"></a><span class="w">      </span><span class="nt">"has_drm"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
-</span><span id="__span-3-27"><a id="__codelineno-3-27" name="__codelineno-3-27" href="#__codelineno-3-27"></a><span class="w">      </span><span class="nt">"auth_methods"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"cookies"</span><span class="p">]</span>
-</span><span id="__span-3-28"><a id="__codelineno-3-28" name="__codelineno-3-28" href="#__codelineno-3-28"></a><span class="w">    </span><span class="p">}</span>
-</span><span id="__span-3-29"><a id="__codelineno-3-29" name="__codelineno-3-29" href="#__codelineno-3-29"></a><span class="w">  </span><span class="p">],</span>
-</span><span id="__span-3-30"><a id="__codelineno-3-30" name="__codelineno-3-30" href="#__codelineno-3-30"></a><span class="w">  </span><span class="nt">"load_errors"</span><span class="p">:</span><span class="w"> </span><span class="p">[]</span>
-</span><span id="__span-3-31"><a id="__codelineno-3-31" name="__codelineno-3-31" href="#__codelineno-3-31"></a><span class="p">}</span>
+</span><span id="__span-3-26"><a id="__codelineno-3-26" name="__codelineno-3-26" href="#__codelineno-3-26"></a><span class="w">      </span><span class="nt">"anonymous_search"</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span>
+</span><span id="__span-3-27"><a id="__codelineno-3-27" name="__codelineno-3-27" href="#__codelineno-3-27"></a><span class="w">      </span><span class="nt">"has_drm"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+</span><span id="__span-3-28"><a id="__codelineno-3-28" name="__codelineno-3-28" href="#__codelineno-3-28"></a><span class="w">      </span><span class="nt">"auth_methods"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"cookies"</span><span class="p">]</span>
+</span><span id="__span-3-29"><a id="__codelineno-3-29" name="__codelineno-3-29" href="#__codelineno-3-29"></a><span class="w">    </span><span class="p">}</span>
+</span><span id="__span-3-30"><a id="__codelineno-3-30" name="__codelineno-3-30" href="#__codelineno-3-30"></a><span class="w">  </span><span class="p">],</span>
+</span><span id="__span-3-31"><a id="__codelineno-3-31" name="__codelineno-3-31" href="#__codelineno-3-31"></a><span class="w">  </span><span class="nt">"load_errors"</span><span class="p">:</span><span class="w"> </span><span class="p">[]</span>
+</span><span id="__span-3-32"><a id="__codelineno-3-32" name="__codelineno-3-32" href="#__codelineno-3-32"></a><span class="p">}</span>
 </span></code></pre></div>
 </div>
 </div>
@@ -3210,6 +3211,10 @@
 <td>Whether the service supports <code>POST /api/search</code>.</td>
 </tr>
 <tr>
+<td><code>anonymous_search</code></td>
+<td>Whether <code>POST /api/search</code> operates with no login for this service. The server then ignores <code>credentials</code> and <code>cookies</code> on a search.</td>
+</tr>
+<tr>
 <td><code>has_drm</code></td>
 <td>Whether the service overrides a Widevine or PlayReady license hook.</td>
 </tr>
@@ -3247,6 +3252,7 @@
 </table>
 <h3 id="post-apisearch"><code>POST /api/search</code><a class="headerlink" href="#post-apisearch" title="Permanent link">&para;</a></h3>
 <p>Find titles in a service by query string. The service must have a <code>search()</code> method (see <code>has_search</code> above).</p>
+<p>For a service with <code>anonymous_search</code>, the server does not log in and ignores <code>credentials</code> and <code>cookies</code>. The server account check still applies.</p>
 <p><strong>Request body</strong></p>
 <table>
 <thead>
