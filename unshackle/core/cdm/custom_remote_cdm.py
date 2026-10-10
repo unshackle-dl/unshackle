@@ -988,7 +988,7 @@ class CustomRemoteCDM:
         if "vault_keys" in session:
             all_keys.extend(session["vault_keys"])
 
-        if "cached_keys" in session:
+        if session.get("cached_keys"):
             all_keys.extend(session["cached_keys"])
 
         for license_key in license_keys:
