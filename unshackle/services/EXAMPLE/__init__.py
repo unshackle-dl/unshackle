@@ -79,6 +79,9 @@ class EXAMPLE(Service):
     # ANIME: this catalogue is anime, so metadata lookups ask AniList first. Set it False (the
     # default) on a mixed catalogue and flag the anime titles individually in get_titles().
     ANIME = True
+    # ANONYMOUS_SEARCH: set True only when search() needs no login and no state from
+    # authenticate(). A search then skips the cookie load, authenticate() and the cookie save.
+    ANONYMOUS_SEARCH = False
     # VAULT_TAG: store/read keys under a different vault namespace than this service's tag.
     # Lets sibling services share one key vault. Omit to use the service's own tag.
     VAULT_TAG = "DIFFERENT_NAME"

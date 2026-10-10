@@ -96,12 +96,13 @@ def result(service: Service, profile: Optional[str] = None, **_: Any) -> None:
 
     service_tag = service.__class__.__name__
 
-    with console.status("Authenticating with Service...", spinner="dots"):
-        cookies = dl.get_cookie_jar(service_tag, profile)
-        credential = dl.get_credentials(service_tag, profile)
-        service.authenticate(cookies, credential)
-        if cookies or credential:
-            log.info("Authenticated with Service")
+    if not service.ANONYMOUS_SEARCH:
+        with console.status("Authenticating with Service...", spinner="dots"):
+            cookies = dl.get_cookie_jar(service_tag, profile)
+            credential = dl.get_credentials(service_tag, profile)
+            service.authenticate(cookies, credential)
+            if cookies or credential:
+                log.info("Authenticated with Service")
 
     search_results = Tree("Search Results", hide_root=True)
     with console.status("Searching...", spinner="dots"):
@@ -116,7 +117,7 @@ def result(service: Service, profile: Optional[str] = None, **_: Any) -> None:
             result_text += f"\n[bright_black]id: {result.id}[/]"
             search_results.add(result_text + "\n")
 
-    cookie_file = dl.get_cookie_path(service_tag, profile)
+    cookie_file = None if service.ANONYMOUS_SEARCH else dl.get_cookie_path(service_tag, profile)
     if cookie_file:
         dl.save_cookies(cookie_file, service.session.cookies)
 

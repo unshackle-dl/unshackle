@@ -66,6 +66,7 @@ Declared at the top of your service class, these are static descriptors:
 | `GEOBLOCK` | `tuple[str, ...]` | ISO region codes where the service refuses to work; every other region is allowed. Use it for a service that works worldwide except in its home market. |
 | `VAULT_TAG` | `Optional[str]` | Overrides the key-vault namespace; defaults to the service's own tag. |
 | `AUTH_METHODS` | `Optional[tuple[str, ...]]` | Accepted auth methods (`"cookies"` / `"credentials"`). When `None`, the REST `/services` endpoint infers them from `authenticate()`. |
+| `ANONYMOUS_SEARCH` | `bool` | `search()` needs no login and no state from `authenticate()`. A search then skips the cookie load, `authenticate()` and the cookie save. Default `False`. |
 | `ANIME` | `bool` | The catalogue is anime, so metadata lookups prefer AniList. A title's own `anime` flag overrides it. |
 | `DAILY` | `bool` | The catalogue is daily/date-based, so unshackle names episodes by air date. A title's own `daily` flag overrides it. |
 
@@ -83,7 +84,8 @@ These are abstract. A service will not load unless it defines all three:
   `CookieJar` into `self.session.cookies` and stores `self.credential`. Override it to
   do a real login handshake.
 - **`search()`**: raises `NotImplementedError` by default. Write it so that the
-  `search` command can operate.
+  `search` command can operate. unshackle calls `authenticate()` first, unless the
+  service sets `ANONYMOUS_SEARCH`.
 - **DRM license hooks**: `get_widevine_service_certificate`, `get_widevine_license`,
   `get_playready_license` (delegates to Widevine by default), and
   `get_clearkey_license` (returns `None` by default). See [DRM hooks](#drm-hooks) below.

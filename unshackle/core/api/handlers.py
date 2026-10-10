@@ -460,6 +460,8 @@ def run_service_search(
     The same preamble as :func:`setup_list_service`, without the service option extras,
     plus the search itself. Every step blocks on disk or network, so the caller runs the
     whole function in one worker thread and keeps the event loop free for other clients.
+
+    The server account check and its cache directory apply to an ``ANONYMOUS_SEARCH`` service too.
     """
 
     profile = client_profile(data)
@@ -473,7 +475,11 @@ def run_service_search(
         profile = None if account == "default" else account
 
     cdm = load_full_cdm(normalized_service, profile, data.get("cdm_type"))
-    cookies, credential = server_login_material(data, normalized_service, account, profile)
+    service_module = Services.load(normalized_service)
+    anonymous = getattr(service_module, "ANONYMOUS_SEARCH", False)
+    cookies, credential = (
+        (None, None) if anonymous else server_login_material(data, normalized_service, account, profile)
+    )
 
     parent_ctx = build_parent_ctx(
         profile,
@@ -484,7 +490,6 @@ def run_service_search(
         service_config,
         extra_params={"cookies_supplied": cookies is not None},
     )
-    service_module = Services.load(normalized_service)
 
     from click import ClickException
 
@@ -505,7 +510,8 @@ def run_service_search(
         client_login = cookies is not None or credential is not None
         request_cache.attach(service_instance, data, normalized_service, request, client_login)
     service_instance._input_bridge = NoUserBridge()
-    service_instance.authenticate(cookies, credential)
+    if not anonymous:
+        service_instance.authenticate(cookies, credential)
 
     results: List[Dict[str, Any]] = []
     try:

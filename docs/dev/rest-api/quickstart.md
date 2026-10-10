@@ -150,6 +150,7 @@ curl "$BASE/api/services" \
       "help": "EXAMPLE service documentation...",
       "needs_auth": true,
       "has_search": true,
+      "anonymous_search": false,
       "has_drm": true,
       "auth_methods": ["cookies", "credentials"],
       "cli_params": []

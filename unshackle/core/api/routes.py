@@ -388,6 +388,7 @@ async def services(request: web.Request) -> web.Response:
                 if client_config:
                     service_data["client_config"] = list(client_config)
                 service_data["has_search"] = getattr(service_module, "search", None) is not _BaseService.search
+                service_data["anonymous_search"] = bool(getattr(service_module, "ANONYMOUS_SEARCH", False))
                 service_data["has_drm"] = (
                     getattr(service_module, "get_widevine_license", None) is not _BaseService.get_widevine_license
                     or getattr(service_module, "get_playready_license", None) is not _BaseService.get_playready_license
@@ -435,7 +436,7 @@ async def search(request: web.Request) -> web.Response:
     Find titles from a service.
     ---
     summary: Find titles
-    description: Find titles by query string from a service
+    description: Find titles by query string from a service. A service that reports anonymous_search does the search with no login, and ignores credentials and cookies.
     requestBody:
       required: true
       content:

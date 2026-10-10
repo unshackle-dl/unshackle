@@ -145,6 +145,27 @@ async def test_server_account_uses_its_own_cache_and_returns_none(seen, tmp_path
 
 
 @pytest.mark.asyncio
+async def test_anonymous_search_skips_the_login_and_keeps_the_account_cache(seen, tmp_path, monkeypatch):
+    def search(self):
+        seen["search_cache_dir"] = self.cache.get("tokens").path.parent
+        return iter(())
+
+    def no_login_material(*args):
+        raise AssertionError("an anonymous search must not read login material")
+
+    handlers.Services.load("EXAMPLE").ANONYMOUS_SEARCH = True
+    monkeypatch.setattr(_CacheService, "search", search)
+    monkeypatch.setattr(handlers, "resolve_server_account", lambda *args: "acct")
+    monkeypatch.setattr(handlers, "server_login_material", no_login_material)
+    response = await handlers.search_handler({"service": "EXAMPLE", "query": "q", **CREDENTIALS})
+
+    assert json.loads(response.body)["results"] == []
+    assert "seeded" not in seen
+    assert seen["parent_params"]["cookies_supplied"] is False
+    assert seen["search_cache_dir"] == tmp_path / "_accounts" / "EXAMPLE" / "acct"
+
+
+@pytest.mark.asyncio
 async def test_full_mode_keeps_the_server_cache(seen, tmp_path, monkeypatch):
     monkeypatch.setattr(stats, "mode", "full")
     data = {"service": "EXAMPLE", "query": "q", "cache": client_cache(tmp_path, "old"), **CREDENTIALS}

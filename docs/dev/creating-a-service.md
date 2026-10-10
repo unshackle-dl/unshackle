@@ -100,6 +100,7 @@ Declared at class level to configure framework behaviour:
 | `GEOBLOCK` | `tuple[str, ...]` | IP region codes where the service refuses to work. Every other region is allowed. Default `()`. |
 | `VAULT_TAG` | `Optional[str]` | Overrides the key-vault namespace so sibling services can share one vault. Default `None` (use the service's own tag). |
 | `AUTH_METHODS` | `Optional[tuple[str, ...]]` | Auth methods accepted (`"cookies"` / `"credentials"`). When `None`, the REST `/services` endpoint infers them from `authenticate()`. |
+| `ANONYMOUS_SEARCH` | `bool` | Set `True` when `search()` needs no login and no state from `authenticate()`. A search then skips the cookie load, `authenticate()` and the cookie save. Default `False`. |
 | `NO_SUBTITLES` | `bool` | Set `True` on a service with no subtitle tracks to skip subtitle handling entirely. |
 | `ANIME` | `bool` | Set `True` when the catalogue is anime, so metadata lookups prefer AniList. A title's own `anime` flag overrides it. |
 | `DAILY` | `bool` | Set `True` when the catalogue is daily/date-based (talk shows, news, sports), so unshackle names episodes by air date. A title's own `daily` flag overrides it. |
@@ -608,6 +609,12 @@ Override any of these to react to pipeline stages (all no-ops by default):
 `on_segment_downloaded`, `on_track_downloaded`, `on_track_decrypted`,
 `on_track_repacked`, `on_track_multiplex`. Also override `search()` to yield
 `SearchResult` objects for `unshackle search`.
+
+!!! warning "Set `ANONYMOUS_SEARCH` only for a search that needs no account"
+    With `ANONYMOUS_SEARCH = True`, `search()` operates on an HTTP session with no cookies, and
+    `authenticate()` does not run. Set it only when the search results do not depend on the
+    account, and when `search()` does its own setup. A `search()` that reads a token, a header
+    or a region from `authenticate()` fails or gives results for the wrong region.
 
 ```python
 def search(self) -> Generator[SearchResult, None, None]:

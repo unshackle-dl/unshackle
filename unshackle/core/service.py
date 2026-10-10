@@ -158,6 +158,7 @@ class Service(metaclass=ABCMeta):
     GEOBLOCK: tuple[str, ...] = ()  # ip regions where the service refuses to work; everything else is allowed.
     ANIME: bool = False  # service catalogue is anime; metadata lookups prefer AniList. Title.anime overrides per title.
     DAILY: bool = False  # catalog is daily/date-based. episodes are named by air date. Title.daily overrides per title.
+    ANONYMOUS_SEARCH: bool = False  # search() needs no login; a search then skips cookies and authenticate().
     # vault namespace override; when set, key vault read/write uses this tag instead of the service's own.
     VAULT_TAG: Optional[str] = None
     # Auth methods the service accepts ("cookies"/"credentials"); when None the REST /services
@@ -456,7 +457,8 @@ class Service(metaclass=ABCMeta):
 
         This is effectively a login() function. Any API calls or object initializations
         needing to be made, should be made here. unshackle operates this method before
-        any of the following abstract functions.
+        any of the following abstract functions. The one exception is a search on a
+        Service that sets ``ANONYMOUS_SEARCH``, which does not operate this method.
 
         You should avoid storing or using the Credential outside this function.
         Make any calls you need for any Cookies, Tokens, or such, then use those.

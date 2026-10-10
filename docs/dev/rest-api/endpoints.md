@@ -98,6 +98,7 @@ Show the streaming services available on this server, filtered by your allowlist
           ],
           "needs_auth": true,
           "has_search": true,
+          "anonymous_search": false,
           "has_drm": true,
           "auth_methods": ["cookies"]
         }
@@ -120,6 +121,7 @@ Field notes:
 | `cli_params` | Array of parameter descriptors. Arguments have `{name, kind: "argument", required}`; options have `{name, kind: "option", opts, is_flag, default, help, type, multiple}` and, for choice options, a `choices` list. |
 | `needs_auth` | Whether the service overrides `authenticate()`. |
 | `has_search` | Whether the service supports `POST /api/search`. |
+| `anonymous_search` | Whether `POST /api/search` operates with no login for this service. The server then ignores `credentials` and `cookies` on a search. |
 | `has_drm` | Whether the service overrides a Widevine or PlayReady license hook. |
 | `pending_update` | Set to `true` while a service repository refresh waits for this service's jobs to finish before it swaps in the new code. Absent otherwise. |
 | `server_accounts` | Present when the server lends its own accounts for this service: `{regions: ["ca", "gb"], global: bool}`, the regions those accounts cover. A client sends no credentials, cookies, or cache for such a service. |
@@ -133,6 +135,8 @@ Field notes:
 ### `POST /api/search`
 
 Find titles in a service by query string. The service must have a `search()` method (see `has_search` above).
+
+For a service with `anonymous_search`, the server does not log in and ignores `credentials` and `cookies`. The server account check still applies.
 
 **Request body**
 

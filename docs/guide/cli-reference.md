@@ -240,6 +240,8 @@ unshackle search [OPTIONS] SERVICE [QUERY...]
 
 Each service defines its own query syntax. unshackle prints the results as a tree of titles with their service IDs. Feed an ID straight into `dl`.
 
+unshackle logs in to the service before the search. A service that declares a search with no login is the exception: unshackle then reads no cookies and no credentials, and `--profile` has no effect.
+
 | Option | Description |
 |---|---|
 | `-p`, `--profile` | Profile for credentials and cookies. |
