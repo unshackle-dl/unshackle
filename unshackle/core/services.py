@@ -15,6 +15,7 @@ import click
 
 from unshackle.core import binaries
 from unshackle.core.config import config
+from unshackle.core.constants import DEFAULT_SAMPLE
 from unshackle.core.service import Service
 from unshackle.core.service_repo import DirtyServiceRepo, head, is_repo_spec, refresh_repo, resolve_service_repo
 from unshackle.core.utilities import import_module_by_path
@@ -360,16 +361,17 @@ class Services(click.Group):
         super().format_help(ctx, formatter)
 
     def parse_args(self, ctx: click.Context, args: list[str]) -> list[str]:
-        """Preprocess ``--slow`` so it can take an optional range value before Click parses the arguments."""
+        """Preprocess ``--slow`` and ``--sample`` so each can take an optional range value before Click parses."""
+        defaults = {"--slow": "60-120", "--sample": "{}-{}".format(*DEFAULT_SAMPLE)}
         processed = []
         i = 0
         while i < len(args):
-            if args[i] == "--slow":
+            if args[i] in defaults:
                 if i + 1 < len(args) and re.match(r"^\d+-\d+$", args[i + 1]):
-                    processed.append(f"--slow={args[i + 1]}")
+                    processed.append(f"{args[i]}={args[i + 1]}")
                     i += 2
                 else:
-                    processed.append("--slow=60-120")
+                    processed.append(f"{args[i]}={defaults[args[i]]}")
                     i += 1
             else:
                 processed.append(args[i])

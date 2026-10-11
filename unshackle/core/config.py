@@ -193,6 +193,7 @@ class Config:
         # mask local base dirs (install root/venv/home) in logged paths; False shows full paths
         self.redact_paths: bool = kwargs.get("redact_paths", True)
         self.continue_downloads: bool = kwargs.get("continue_downloads", False)
+        self.sample: Optional[tuple[int, int]] = None
         self.post_scripts: list = kwargs.get("post_scripts") or []
 
         self.language_tags: dict = kwargs.get("language_tags") or {}

@@ -3,18 +3,23 @@ import html
 import logging
 import re
 import shutil
+import struct
 import subprocess
+from bisect import bisect_left, bisect_right
 from collections import defaultdict
 from copy import copy
 from dataclasses import dataclass
 from enum import Enum
 from functools import partial
 from pathlib import Path
-from typing import Any, Callable, Iterable, Optional, Union
+from typing import Any, Callable, Iterable, Optional, Sequence, Union
 from uuid import UUID
 from zlib import crc32
 
+import click
+from construct import ConstructError
 from langcodes import Language
+from pymp4.parser import Box
 from requests import Response, Session
 from requests.adapters import HTTPAdapter, Retry
 
@@ -364,6 +369,31 @@ def assert_fragments_decrypted(path: Path) -> None:
         )
 
 
+SAMPLE_PROBE_BYTES = 64 * 1024
+SAMPLE_PROBE_LIMIT = 8 * 1024 * 1024
+
+
+def parse_sidx(data: bytes, offset: int) -> tuple[int, list[tuple[int, int, int]]]:
+    """Read a ``sidx`` box that starts at byte ``offset`` of its file.
+
+    Returns the timescale and one (start time, first byte, last byte) for each subsegment. The list
+    is empty when the box is not a ``sidx`` or when it points at more indexes and not at media.
+    """
+    try:
+        box = Box.parse(data)
+    except ConstructError:
+        return 0, []
+    if box.type != b"sidx" or any(reference.reference_type != "MEDIA" for reference in box.references):
+        return 0, []
+    start, byte = box.earliest_presentation_time, offset + box.end + box.first_offset
+    subsegments: list[tuple[int, int, int]] = []
+    for reference in box.references:
+        subsegments.append((start, byte, byte + reference.referenced_size - 1))
+        start += reference.segment_duration
+        byte += reference.referenced_size
+    return box.timescale, subsegments
+
+
 @dataclass
 class DownloadContext:
     """Shared arguments passed to each manifest's ``download_track``."""
@@ -395,6 +425,8 @@ class Track:
         HLS = 2  # https://en.wikipedia.org/wiki/HTTP_Live_Streaming
         DASH = 3  # https://en.wikipedia.org/wiki/Dynamic_Adaptive_Streaming_over_HTTP
         ISM = 4  # https://learn.microsoft.com/en-us/silverlight/smooth-streaming
+
+    sample_tail = 0
 
     def __init__(
         self,
@@ -497,6 +529,77 @@ class Track:
 
         # TODO: Currently using OnFoo event naming, change to just segment_filter
         self.OnSegmentFilter: Optional[Callable] = None
+        self.sample_start: float = 0.0
+        self.sample_bytes: Optional[tuple[bytes, str]] = None
+
+    def sample_slice(
+        self, starts: Sequence[float], timescale: float = 1, window: Optional[tuple[int, int]] = None
+    ) -> slice:
+        """Return the slice of segments that hold ``window``, from the start time of each segment.
+
+        Sets ``sample_start`` to the start time of the first kept segment, in seconds. A video keeps
+        ``sample_tail`` segments after the window: mkvmerge ends the cut only at a video keyframe, and
+        with no such keyframe the audio and the subtitles continue to their own end.
+        """
+        self.sample_start = 0.0
+        if not window or not starts:
+            return slice(None)
+        low, high = (starts[0] + seconds * timescale for seconds in window)
+        if low > starts[-1] and len(starts) > 1:
+            raise click.ClickException(
+                "The title ends before the sample window starts. Use --sample START-END with an earlier window."
+            )
+        first = max(bisect_right(starts, low) - 1, 0)
+        self.sample_start = (starts[first] - starts[0]) / timescale
+        return slice(first, max(bisect_left(starts, high) + self.sample_tail, first + 1))
+
+    def sample_byte_range(self, session: Union[Session, "RnetSession"]) -> Optional[tuple[bytes, str]]:
+        """Find the bytes of a one-file track that hold the sample window.
+
+        Reads the start of the file for a ``sidx`` box. Returns the bytes before that box, which hold
+        the init data, and the byte range of the window. Returns None when the file has no such index.
+        """
+        if self.sample_bytes or not isinstance(self.url, str):
+            return self.sample_bytes
+        head = b""
+
+        def read_to(end: int) -> None:
+            nonlocal head
+            if end > len(head):
+                res = session.get(self.url, headers={"Range": f"bytes={len(head)}-{end - 1}"})
+                if res.ok:
+                    head += res.content
+
+        pos = 0
+        while pos < SAMPLE_PROBE_LIMIT:
+            if pos + 8 > len(head):
+                read_to(pos + SAMPLE_PROBE_BYTES)
+            if pos + 8 > len(head):
+                return None
+            size, kind = struct.unpack(">I4s", head[pos : pos + 8])
+            if size < 8:
+                return None
+            if kind != b"sidx":
+                pos += size
+                continue
+            read_to(pos + size)
+            timescale, subsegments = parse_sidx(head[pos : pos + size], pos)
+            if not subsegments:
+                return None
+            kept = subsegments[self.sample_slice([start for start, _, _ in subsegments], timescale, config.sample)]
+            self.sample_bytes = head[:pos], f"{kept[0][1]}-{kept[-1][2]}"
+            return self.sample_bytes
+        return None
+
+    def can_sample(self, session: Union[Session, "RnetSession"]) -> bool:
+        """Return False when a sample cannot cut this track, because it is one file with no segment index."""
+        if self.descriptor == self.Descriptor.URL:
+            return bool(self.sample_byte_range(session))
+        if self.descriptor == self.Descriptor.DASH:
+            from unshackle.core.manifests import DASH
+
+            return DASH.has_segment_timing(self)
+        return True
 
     def __repr__(self) -> str:
         return "{name}({items})".format(
@@ -741,8 +844,17 @@ class Track:
                     if DOWNLOAD_LICENCE_ONLY.is_set():
                         progress(downloaded="[yellow]SKIPPED")
                     else:
+                        sample_range = None
+                        if config.sample and track_type in ("Video", "Audio"):
+                            sample_range = self.sample_byte_range(dl_session)
+                            if not sample_range:
+                                raise click.ClickException(
+                                    "--sample cannot cut this track: it is one file with no segment index."
+                                )
                         for status_update in self.downloader(
-                            urls=self.url,
+                            urls=[{"url": self.url, "headers": {"Range": f"bytes={sample_range[1]}"}}]
+                            if sample_range
+                            else self.url,
                             output_dir=save_path.parent,
                             filename=save_path.name,
                             headers=dl_session.headers,
@@ -759,6 +871,14 @@ class Track:
                                 if downloaded and downloaded.endswith("/s"):
                                     status_update["downloaded"] = f"URL {downloaded}"
                                 progress(**status_update)
+
+                        if sample_range:
+                            media_path = save_path.with_name(f"{save_path.name}.media")
+                            save_path.replace(media_path)
+                            with save_path.open("wb") as joined, media_path.open("rb") as media:
+                                joined.write(sample_range[0])
+                                shutil.copyfileobj(media, joined)
+                            media_path.unlink()
 
                         self.path = save_path
                         events.emit(events.Types.TRACK_DOWNLOADED, track=self)

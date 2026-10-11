@@ -1005,6 +1005,14 @@ async def download(request: web.Request) -> web.Response:
               no_mux:
                 type: boolean
                 description: Do not mux tracks into a container file (default - false)
+              include_sample:
+                type: boolean
+                description: Also cut a 60 second sample from each muxed file into a Sample folder next to it (default - false)
+              sample:
+                oneOf:
+                  - type: boolean
+                  - type: string
+                description: Download a short sample and write it to a Sample folder. `true` for 60 seconds from 2 minutes in, or a `"START-END"` string in seconds (e.g., `"0-60"`) (default - null)
               workers:
                 type: integer
                 description: Max workers/threads per track download (default - None)

@@ -711,8 +711,22 @@ By default, `mkvmerge` muxes the tracks of a movie or an episode into a single M
 | Flag | Behaviour | Default source |
 | --- | --- | --- |
 | `--no-mux` | Do not mux; keep the individual track files. | - |
+| `--sample` | Download a short sample: 60 seconds from 2 minutes in, or `--sample START-END` for a window in seconds. | - |
+| `--include-sample` | Download the full title, then also cut a 60 second sample from each muxed file into a `Sample` folder. | - |
 | `--split-audio` | Write a separate output file per audio codec instead of merging all audio. | config `muxing.merge_audio` (on) |
 | `--merge-video` | Mux video tracks that share a height, range, and codec into one file, so only language varies inside a file. | config `muxing.merge_video` (off) |
+
+!!! note "`--sample` needs a segmented track"
+    `--sample` downloads only the segments that hold the window, and `mkvmerge` cuts the output
+    to the window. The cut starts at the first video keyframe in the window, so a sample can be
+    some seconds short. unshackle downloads each subtitle track in full and then keeps only the
+    cues of the window.
+
+    The run stops before the download starts in two conditions: a service gives a video or
+    audio track as one file with no segments and no segment index, or the title ends before the
+    window starts.
+
+    A sidecar subtitle file with `sidecar_format: original` stays whole.
 
 !!! note "Music is never muxed"
     A song skips the muxer. unshackle keeps the container that the service

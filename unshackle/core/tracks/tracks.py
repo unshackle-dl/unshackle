@@ -34,6 +34,7 @@ from unshackle.core.utilities import (
     valid_language,
 )
 from unshackle.core.utils.collections import as_list, flatten
+from unshackle.core.utils.subprocess import run_step
 
 MP4BOX_PROGRESS = re.compile(r"\((\d{1,3})/100\)")
 MP4BOX_OPEN_FAILED = re.compile(r"error while opening|Error opening file|Invalid IsoMedia File", re.I)
@@ -495,6 +496,11 @@ class Tracks:
                     selected.append(track)
         return selected
 
+    @property
+    def sample_base(self) -> float:
+        """The earliest ``sample_start`` of the video and audio tracks, which a sample mux uses as time zero."""
+        return min((t.sample_start for t in (*self.videos, *self.audio)), default=0.0)
+
     def _mux_mp4(
         self,
         title: str,
@@ -524,6 +530,7 @@ class Tracks:
         progress = progress or partial(lambda **kwargs: None)
 
         cl = [str(mp4box)]
+        sample_base = self.sample_base
         names: list[str] = []
         cleaned: list[Path] = []
         track_id = 0
@@ -557,7 +564,8 @@ class Tracks:
             elif candidate.exists():
                 candidate.unlink()
 
-            cl.extend(["-add", f"{source}:lang={track.language}"])
+            delay = round((track.sample_start - sample_base) * 1000) if config.sample else 0
+            cl.extend(["-add", f"{source}:lang={track.language}" + (f":delay={delay}" if delay else "")])
             name = "" if isinstance(track, Video) else (track.get_track_name() or "")
             if name:
                 names.extend(["-name", f"{track_id}={name}"])
@@ -568,7 +576,7 @@ class Tracks:
         cl.extend(names)
 
         chapters_path = None
-        if self.chapters:
+        if self.chapters and not config.sample:
             chapters_path = config.directories.temp / config.filenames.chapters.format(
                 title=sanitize_filename(title), random=f"{self.chapters.id}_{os.getpid()}_{threading.get_ident()}"
             )
@@ -632,6 +640,19 @@ class Tracks:
             returncode = p.wait()
             if returncode < 2 and any(MP4BOX_OPEN_FAILED.search(line) for line in errors):
                 returncode = 2
+            if config.sample and returncode == 0:
+                start, end = (seconds - sample_base for seconds in config.sample)
+                cut_path = output_path.with_suffix(".cut.mp4")
+                try:
+                    run_step(
+                        [mp4box, "-splitx", f"{start:.3f}:{end:.3f}", output_path, "-out", cut_path],
+                        output=cut_path,
+                        label="MP4Box sample cut",
+                    )
+                    os.replace(cut_path, output_path)
+                except RuntimeError as e:
+                    returncode = 2
+                    errors.append(f"MP4Box could not cut the sample window: {e}")
             mux_duration_ms = round((time.monotonic() - mux_start_time) * 1000, 1)
             output_size = output_path.stat().st_size if output_path.exists() else 0
 
@@ -729,6 +750,16 @@ class Tracks:
             "--no-date",  # remove dates from the output for security
         ]
 
+        sample_base = self.sample_base
+
+        def sample_sync(start: float) -> list[str]:
+            shift = round((start - sample_base) * 1000)
+            return ["--sync", f"0:{shift}"] if config.sample and shift else []
+
+        if config.sample:
+            start, end = (seconds - sample_base for seconds in config.sample)
+            cl.extend(["--split", f"parts:{start:.3f}s-{end:.3f}s"])
+
         if config.muxing.get("set_title", True):
             cl.extend(["--title", title])
 
@@ -782,6 +813,7 @@ class Tracks:
                 f"0:{vt.is_original_lang}",
                 "--compression",
                 "0:none",
+                *sample_sync(vt.sample_start),
             ]
 
             # Add FPS fix if needed (typically for hybrid mode to prevent sync issues)
@@ -839,6 +871,7 @@ class Tracks:
                     f"0:{at.is_original_lang}",
                     "--compression",
                     "0:none",
+                    *sample_sync(at.sample_start),
                     "(",
                     str(at.path),
                     ")",
@@ -872,6 +905,7 @@ class Tracks:
                         f"0:{st.is_original_lang}",
                         "--compression",
                         "0:none",
+                        *sample_sync(st.sample_start),
                         "(",
                         str(st.path),
                         ")",
@@ -883,6 +917,8 @@ class Tracks:
                 title=sanitize_filename(title), random=f"{self.chapters.id}_{os.getpid()}_{threading.get_ident()}"
             )
             self.chapters.dump(chapters_path, fallback_name=config.chapter_fallback_name)
+            if config.sample and sample_base:
+                cl.extend(["--chapter-sync", str(round(-sample_base * 1000))])
             cl.extend(["--chapter-charset", "UTF-8", "--chapters", str(chapters_path)])
         else:
             chapters_path = None

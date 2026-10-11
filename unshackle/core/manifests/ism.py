@@ -259,6 +259,7 @@ class ISM:
                     )
 
                 track_urls: list[str] = []
+                track_times: list[int] = []
                 fragment_time = 0
                 fragments = stream_index.findall("c")
                 # MS-SSTR UrlPattern; regex over str.format so {Bitrate}/{start_time}
@@ -276,6 +277,7 @@ class ISM:
                     first_time = int(fragments[0].get("t") or 0)
                     if first_time != 0:
                         track_urls.append(re.sub(r"\{start[ _]time\}", "0", url_template))
+                        track_times.append(first_time)
 
                 for idx, frag in enumerate(fragments):
                     fragment_time = int(frag.get("t", fragment_time))
@@ -292,6 +294,7 @@ class ISM:
                         duration_frag = (next_time - fragment_time) // repeat
                     for _ in range(repeat):
                         track_urls.append(re.sub(r"\{start[ _]time\}", str(fragment_time), url_template))
+                        track_times.append(fragment_time)
                         fragment_time += duration_frag
 
                 track_id = hashlib.md5(
@@ -312,6 +315,8 @@ class ISM:
                         "stream_index": stream_index,
                         "quality_level": ql,
                         "segments": track_urls,
+                        "segment_times": track_times,
+                        "timescale": int(stream_index.get("TimeScale") or self.manifest.get("TimeScale") or 10000000),
                     }
                 }
 
@@ -414,6 +419,9 @@ class ISM:
             session.proxies.update({"all": proxy})
 
         segments: list[str] = track.data["ism"]["segments"]
+        segment_times: list[int] = track.data["ism"].get("segment_times") or []
+        if segment_times:
+            segments = segments[track.sample_slice(segment_times, track.data["ism"]["timescale"], config.sample)]
 
         session_drm = None
         if track.drm:

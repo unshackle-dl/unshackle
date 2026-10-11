@@ -11,6 +11,7 @@ import subprocess
 import sys
 import time
 from contextlib import ExitStack, closing
+from itertools import accumulate
 from pathlib import Path
 from typing import Any, Optional, Union
 from urllib.parse import urljoin, urlparse
@@ -685,6 +686,12 @@ class HLS:
             )
         hls_data["unwanted_segments"] = [s.absolute_uri for s in unwanted_segments]
 
+        if config.sample:
+            content = [segment for segment in master.segments if segment not in unwanted_segments]
+            starts = list(accumulate((segment.duration or 0 for segment in content[:-1]), initial=0.0))
+            del content[track.sample_slice(starts, window=config.sample)]
+            unwanted_segments += content
+
         # Get session DRM as fallback but prefer media playlist keys for accurate KID matching
         if track.drm:
             session_drm = track.get_drm_for_cdm(cdm)
@@ -796,16 +803,16 @@ class HLS:
 
         range_offset = 0
         for segment in master.segments:
+            if segment.byterange:
+                byte_range = HLS.calculate_byte_range(segment.byterange, range_offset)
+                range_offset = int(byte_range.split("-")[1]) + 1
+            else:
+                byte_range = None
+
             if segment in unwanted_segments:
                 continue
 
             segment_durations.append(int(segment.duration))
-
-            if segment.byterange:
-                byte_range = HLS.calculate_byte_range(segment.byterange, range_offset)
-                range_offset = int(byte_range.split("-")[0])
-            else:
-                byte_range = None
 
             urls.append(
                 {

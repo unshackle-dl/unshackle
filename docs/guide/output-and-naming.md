@@ -330,6 +330,22 @@ A few muxing behaviors are automatic and not configurable:
 
 The `--no-mux` flag skips muxing entirely and writes the individual track files, each with a track-type suffix, into the same output/folder structure.
 
+## Sample files
+
+[`--sample`](cli-reference.md#output-muxing-files) and `--include-sample` write a sample into a
+`Sample` folder inside the output folder of the title. The sample keeps the filename of the
+title, with a `SAMPLE` tag at the end. The tag uses the separator of the output template.
+
+```text title="A movie with --include-sample"
+Some.Movie.2026.1080p.EXAMPLE.WEB-DL.H.264-TAG/
+├── Some.Movie.2026.1080p.EXAMPLE.WEB-DL.H.264-TAG.mkv
+└── Sample/
+    └── Some.Movie.2026.1080p.EXAMPLE.WEB-DL.H.264-TAG.SAMPLE.mkv
+```
+
+With `--sample`, the `Sample` folder holds the only output file. If the run makes no title
+folder, the `Sample` folder is in the downloads directory.
+
 ## Tags & group naming
 
 The release-group tag is the `-TAG` portion at the end of scene-style names, which the `{tag}` variable gives.

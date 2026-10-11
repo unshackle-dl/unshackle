@@ -20,6 +20,8 @@ from unshackle.core.utils.subprocess import log_tool_run
 
 
 class Video(Track):
+    sample_tail = 1
+
     class Codec(str, Enum):
         AVC = "H.264"
         HEVC = "H.265"

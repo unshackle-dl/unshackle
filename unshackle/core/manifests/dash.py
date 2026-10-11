@@ -34,7 +34,11 @@ from unshackle.core.drm.verify import decrypt_track
 from unshackle.core.events import events
 from unshackle.core.session import RnetSession
 from unshackle.core.tracks import Audio, DownloadContext, Subtitle, Tracks, Video, resume
-from unshackle.core.tracks.track import DRM_PREFERENCE_TYPES, assert_fragments_decrypted
+from unshackle.core.tracks.track import (
+    DRM_PREFERENCE_TYPES,
+    assert_fragments_decrypted,
+    parse_sidx,
+)
 from unshackle.core.utilities import is_close_match, log_event, try_ensure_utf8
 from unshackle.core.utils.redact import safe_display_url
 from unshackle.core.utils.xml import load_xml
@@ -458,6 +462,7 @@ class DASH:
                 track_url=track.url,
                 session=session,
                 probe_kid=period_idx == 0,
+                window=config.sample,
             )
 
             if period_idx == 0:
@@ -471,10 +476,18 @@ class DASH:
                     seen_segments.add(seg)
                     segments.append(seg)
             segment_durations.extend(p_durations)
+            # ponytail: a sample comes from the first content period only; map the window across
+            # periods if a manifest with a short first period needs it
+            if config.sample and segments:
+                break
 
         if not segments:
             log.error("Could not find a way to get segments from this MPD manifest.")
             log.debug(track.url)
+            sys.exit(1)
+
+        if config.sample and not segment_durations and not isinstance(track, Subtitle):
+            log.error("--sample cannot cut this track: the manifest gives it as one file with no segment index.")
             sys.exit(1)
 
         # TODO: Should we floor/ceil/round, or is int() ok?
@@ -533,7 +546,7 @@ class DASH:
         # When every segment is a byte range of one parent resource and init is its [0, len)
         # prefix, the whole resource is itself a valid MP4, so one direct download to save_path
         # replaces the per-segment files, init write and merge pass.
-        collapse_single_url = DASH.collapsible_single_url(
+        collapse_single_url = not config.sample and DASH.collapsible_single_url(
             isinstance(track, Subtitle),
             segments,
             len(init_data) if init_data is not None else None,
@@ -754,6 +767,26 @@ class DASH:
         progress(downloaded="Downloaded")
 
     @staticmethod
+    def find_segment_element(name: str, adaptation_set: Element, representation: Element) -> Optional[Element]:
+        """Find a segment description element on the representation, or else on its adaptation set."""
+        element = representation.find(name)
+        return element if element is not None else adaptation_set.find(name)
+
+    @staticmethod
+    def has_segment_timing(track: AnyTrack) -> bool:
+        """Return False when the manifest gives the track as one file with no index, so a sample cannot cut it."""
+        dash = track.data.get("dash") or {}
+        representation, adaptation_set = dash.get("representation"), dash.get("adaptation_set")
+        if representation is None or adaptation_set is None:
+            return True
+        segment_base = DASH.find_segment_element("SegmentBase", adaptation_set, representation)
+        return (
+            DASH.merge_segment_templates(adaptation_set, representation) is not None
+            or DASH.find_segment_element("SegmentList", adaptation_set, representation) is not None
+            or (segment_base is not None and bool(segment_base.get("indexRange")))
+        )
+
+    @staticmethod
     def collapsible_single_url(
         is_subtitle: bool,
         segments: list[tuple[str, Optional[str]]],
@@ -844,6 +877,7 @@ class DASH:
         track_url: str,
         session: Union[Session, RnetSession],
         probe_kid: bool = True,
+        window: Optional[tuple[int, int]] = None,
     ) -> tuple[
         Optional[bytes],
         list[tuple[str, Optional[str]]],
@@ -877,13 +911,9 @@ class DASH:
 
         segment_template = DASH.merge_segment_templates(adaptation_set, representation)
 
-        segment_list = representation.find("SegmentList")
-        if segment_list is None:
-            segment_list = adaptation_set.find("SegmentList")
+        segment_list = DASH.find_segment_element("SegmentList", adaptation_set, representation)
 
-        segment_base = representation.find("SegmentBase")
-        if segment_base is None:
-            segment_base = adaptation_set.find("SegmentBase")
+        segment_base = DASH.find_segment_element("SegmentBase", adaptation_set, representation)
 
         segments: list[tuple[str, Optional[str]]] = []
         segment_timescale: float = 0
@@ -930,6 +960,10 @@ class DASH:
                         segment_durations.append(current_time)
                         current_time += int(s.get("d"))
 
+                keep = track.sample_slice(segment_durations, segment_timescale, window) if window else slice(None)
+                start_number += keep.start or 0
+                segment_durations = segment_durations[keep]
+
                 if not end_number:
                     end_number = start_number + len(segment_durations) - 1
 
@@ -956,7 +990,11 @@ class DASH:
                     segment_count = math.ceil(period_duration / (segment_duration / segment_timescale))
                     end_number = start_number + segment_count - 1
 
-                for s in range(start_number, end_number + 1):
+                numbers = range(start_number, end_number + 1)
+                if window:
+                    starts = [n * segment_duration for n in range(len(numbers))]
+                    numbers = numbers[track.sample_slice(starts, segment_timescale, window)]
+                for s in numbers:
                     segments.append(
                         (
                             DASH.replace_fields(
@@ -994,6 +1032,10 @@ class DASH:
                 track_kid = track.get_key_id(init_data)
 
             segment_urls = segment_list.findall("SegmentURL")
+            list_duration = float(segment_list.get("duration") or 0)
+            if window and list_duration:
+                starts = [n * list_duration for n in range(len(segment_urls))]
+                segment_urls = segment_urls[track.sample_slice(starts, segment_timescale, window)]
             for segment_url in segment_urls:
                 media_url = segment_url.get("media")
                 if not media_url:
@@ -1022,7 +1064,20 @@ class DASH:
                 if total_size:
                     media_range = f"{len(init_data)}-{total_size}"
 
-            segments.append((rep_base_url, media_range))
+            subsegments: list[tuple[int, int, int]] = []
+            index_range = segment_base.get("indexRange")
+            if window and index_range and not isinstance(track, Subtitle):
+                res = session.get(url=rep_base_url, headers={"Range": f"bytes={index_range}"})
+                res.raise_for_status()
+                segment_timescale, subsegments = parse_sidx(res.content, int(index_range.split("-")[0]))
+
+            if subsegments:
+                segment_durations = [time for time, _, _ in subsegments]
+                keep = track.sample_slice(segment_durations, segment_timescale, window)
+                segment_durations = segment_durations[keep]
+                segments.extend((rep_base_url, f"{first}-{last}") for _, first, last in subsegments[keep])
+            else:
+                segments.append((rep_base_url, media_range))
         elif rep_base_url:
             segments.append((rep_base_url, None))
 

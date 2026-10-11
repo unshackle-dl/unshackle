@@ -92,6 +92,8 @@ DEFAULT_DOWNLOAD_PARAMS = {
     "no_folder": False,
     "no_source": False,
     "no_mux": False,
+    "sample": None,
+    "include_sample": False,
     "workers": None,
     "adaptive_workers": False,
     "download_processes": 1,
@@ -1830,6 +1832,16 @@ def validate_download_parameters(data: Dict[str, Any]) -> Optional[str]:
         client_profile(data)
     except APIError as e:
         return e.message
+
+    if data.get("sample") is not None:
+        from unshackle.core.utils.click_types import SAMPLE_RANGE
+
+        try:
+            SAMPLE_RANGE.convert(data["sample"], None, None)
+        except click.BadParameter:
+            return "sample must be true or a 'START-END' window in seconds, such as '60-120'."
+    if data.get("sample") and data.get("include_sample"):
+        return "sample and include_sample cannot be used together."
 
     # The serve user would create and write any directory a client names; keep it under downloads.
     if data.get("output_dir"):

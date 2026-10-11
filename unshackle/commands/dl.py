@@ -46,6 +46,7 @@ from unshackle.core.cdm.detect import cdm_type_stub, is_playready_cdm, is_remote
 from unshackle.core.config import cdm_entry_names_device, config, resolve_cdm_name, resolve_decryption
 from unshackle.core.console import GradientPulseBarColumn, SyncLive, console, listing_panel
 from unshackle.core.constants import (
+    DEFAULT_SAMPLE,
     DOWNLOAD_ALL_DRM,
     DOWNLOAD_CANCELLED,
     DOWNLOAD_LICENCE_ONLY,
@@ -107,6 +108,7 @@ from unshackle.core.utils.click_types import (
     AUDIO_CODEC_LIST,
     LANGUAGE_RANGE,
     QUALITY_LIST,
+    SAMPLE_RANGE,
     SEASON_RANGE,
     SLOW_DELAY_RANGE,
     SUBTITLE_CODEC,
@@ -118,7 +120,7 @@ from unshackle.core.utils.collections import ci_get, merge_dict
 from unshackle.core.utils.post_scripts import NO_POST_SCRIPTS, build_context, dispatch, season_context
 from unshackle.core.utils.redact import mask_proxy
 from unshackle.core.utils.selector import select_multiple
-from unshackle.core.utils.subprocess import ffmpeg_decodes, ffprobe
+from unshackle.core.utils.subprocess import ffmpeg_decodes, ffprobe, run_step
 from unshackle.core.vault import Vault
 from unshackle.core.vaults import Vaults
 
@@ -259,6 +261,19 @@ def latest_episode_keys(titles: Any, latest_episode: bool, latest_episodes: Opti
     return list(dict.fromkeys((ep.season, ep.number) for ep in titles))[-count:]
 
 
+SAMPLE_DIR = "Sample"
+
+
+def template_type(title: Any) -> str:
+    """Return the output template key of a title: ``series``, ``songs`` or ``movies``."""
+    return "series" if isinstance(title, Episode) else "songs" if isinstance(title, Song) else "movies"
+
+
+def sample_name(name: str, title: Any) -> str:
+    """Return ``name`` with a SAMPLE tag, joined with the separator of the output template of the title."""
+    return f"{name.rstrip()}{config.get_template_separator(template_type(title))}SAMPLE"
+
+
 def apply_enrich(title: Title_T, name: Optional[str], year: Optional[int], language: Optional[Language]) -> None:
     """Set the --enrich name, year and original language on a title. A song takes only the language.
 
@@ -322,6 +337,41 @@ def remux_music_tracks(title: Any, log: logging.Logger) -> None:
             track.to_music_container()
         except Exception as e:  # noqa: BLE001
             log.warning(f"Could not remux audio track {track.id} for music: {e}")
+
+
+def cut_music_sample(title: Any, window: tuple[int, int], log: logging.Logger) -> None:
+    """Cut each audio track of a Song to the sample window. A Song has no mux step that cuts it."""
+    if not isinstance(title, Song) or not binaries.FFMPEG:
+        return
+    for track in title.tracks.audio:
+        if not track.path or not track.path.exists():
+            continue
+        cut_path = track.path.with_stem(f"{track.path.stem}_cut")
+        try:
+            run_step(
+                [
+                    binaries.FFMPEG,
+                    "-v",
+                    "error",
+                    "-y",
+                    "-ss",
+                    f"{max(window[0] - track.sample_start, 0):.3f}",
+                    "-i",
+                    track.path,
+                    "-t",
+                    str(window[1] - window[0]),
+                    "-map",
+                    "0",
+                    "-c",
+                    "copy",
+                    cut_path,
+                ],
+                output=cut_path,
+                label="music sample cut",
+            )
+            os.replace(cut_path, track.path)
+        except RuntimeError as e:
+            log.warning(f"Could not cut audio track {track.id} to the sample window, so it holds whole segments: {e}")
 
 
 def apply_service_dl_overrides(ctx: click.Context, service_dl_config: dict[str, Any], log: logging.Logger) -> None:
@@ -973,6 +1023,19 @@ class dl:
     )
     @click.option("--no-mux", is_flag=True, default=False, help="Do not mux tracks into a container file.")
     @click.option(
+        "--sample",
+        type=SAMPLE_RANGE,
+        default=None,
+        help="Download a short sample and write it to a Sample folder. "
+        "Use --sample for 60 seconds from 2 minutes in, or --sample START-END (e.g., --sample 0-60) for a custom window.",
+    )
+    @click.option(
+        "--include-sample",
+        is_flag=True,
+        default=False,
+        help="Also cut a 60 second sample from each muxed file into a Sample folder next to it.",
+    )
+    @click.option(
         "--postscript",
         "postscript",
         type=str,
@@ -1566,6 +1629,8 @@ class dl:
         no_folder: bool,
         no_source: bool,
         no_mux: bool,
+        sample: Optional[tuple[int, int]],
+        include_sample: bool,
         workers: Optional[int],
         adaptive_workers: bool,
         download_processes: int,
@@ -1595,6 +1660,10 @@ class dl:
             postscript = NO_POST_SCRIPTS
         if continue_downloads:
             config.continue_downloads = True
+        config.sample = sample
+        if sample and include_sample:
+            raise click.ClickException("--sample and --include-sample cannot be used together.")
+        sample_dir = SAMPLE_DIR if sample else ""
         self.tmdb_searched = False
         self.search_source = None
         self.service_anime = bool(getattr(service, "ANIME", False))
@@ -3058,6 +3127,18 @@ class dl:
                     self.prefer_vault_keys(title)
                 self.cache_resolved_keys(title)
 
+            if sample and not skip_dl:
+                whole_files = [
+                    track
+                    for track in (*title.tracks.videos, *title.tracks.audio)
+                    if not track.can_sample(track.session or service.session)
+                ]
+                if whole_files:
+                    raise click.ClickException(
+                        f"--sample cannot cut {len(whole_files)} track(s) of {title}: "
+                        f"{self.service} gives each one as one file with no segment index."
+                    )
+
             dl_start_time = time.time()
 
             try:
@@ -3213,6 +3294,10 @@ class dl:
                             sub_conversions[(src, Subtitle.Codec.WebVTT.name)] = (
                                 sub_conversions.get((src, Subtitle.Codec.WebVTT.name), 0) + 1
                             )
+                    if sample:
+                        for subtitle in title.tracks.subtitles:
+                            if subtitle.path and subtitle.path.exists():
+                                subtitle.trim(*sample)
                     for (src, dst), count in sub_conversions.items():
                         log_event(
                             "subtitle_convert",
@@ -3340,6 +3425,8 @@ class dl:
                             self.log.warning(f"VUI normalization skipped for {track.id}: {e}")
 
                 remux_music_tracks(title, self.log)
+                if sample:
+                    cut_music_sample(title, sample, self.log)
 
                 muxed_paths = []
                 muxed_audio_codecs: dict[Path, Optional[Audio.Codec]] = {}
@@ -3522,6 +3609,11 @@ class dl:
                                         hybrid_output_path = config.directories.temp / hybrid_filename
                                         hybrid_temp_paths.append(hybrid_output_path)
 
+                                        if len({track.sample_start for track in resolution_tracks}) > 1:
+                                            raise click.ClickException(
+                                                "--sample cut the HDR10 and Dolby Vision tracks at different "
+                                                "points, so a hybrid of them would not line up."
+                                            )
                                         Hybrid(resolution_tracks, self.service, output_name=hybrid_filename)
 
                                         if container:
@@ -3579,6 +3671,8 @@ class dl:
                                     media_info = MediaInfo.parse(muxed_path) if muxed_path else None
                                     if media_info:
                                         base_filename = title.get_filename(media_info, show_service=not no_source)
+                                        if sample:
+                                            base_filename = sample_name(base_filename, title)
                                     else:
                                         base_filename = str(title)
 
@@ -3594,6 +3688,7 @@ class dl:
                                         sidecar_dir /= title.get_filename(
                                             media_info, show_service=not no_source, folder=True
                                         )
+                                    sidecar_dir /= sample_dir
                                     sidecar_targets.append((muxed_path, base_filename, sidecar_dir))
 
                                 with console.status("Saving subtitle sidecar files..."):
@@ -3674,11 +3769,14 @@ class dl:
                             media_info = MediaInfo.parse(sample_track.path)
                             final_dir /= title.get_filename(media_info, show_service=not no_source, folder=True)
 
+                    final_dir /= sample_dir
                     final_dir.mkdir(parents=True, exist_ok=True)
 
                     for track_path in muxed_paths:
                         media_info = MediaInfo.parse(track_path)
                         base_filename = title.get_filename(media_info, show_service=not no_source)
+                        if sample:
+                            base_filename = sample_name(base_filename, title)
 
                         track = next((t for t in title.tracks if t.path == track_path), None)
                         if track:
@@ -3710,6 +3808,8 @@ class dl:
                         media_info = MediaInfo.parse(muxed_path)
                         final_dir = self.output_dir or config.directories.downloads
                         final_filename = title.get_filename(media_info, show_service=not no_source)
+                        if sample:
+                            final_filename = sample_name(final_filename, title)
                         audio_codec_suffix = muxed_audio_codecs.get(muxed_path)
 
                         if not no_folder and (
@@ -3717,13 +3817,11 @@ class dl:
                             or (isinstance(title, Movie) and config.get_folder_template("movies"))
                         ):
                             final_dir /= title.get_filename(media_info, show_service=not no_source, folder=True)
+                        final_dir /= sample_dir
 
                         final_dir.mkdir(parents=True, exist_ok=True)
                         final_path = final_dir / f"{final_filename}{muxed_path.suffix}"
-                        template_type = (
-                            "series" if isinstance(title, Episode) else "songs" if isinstance(title, Song) else "movies"
-                        )
-                        sep = config.get_template_separator(template_type)
+                        sep = config.get_template_separator(template_type(title))
 
                         if final_path.exists() and audio_codec_suffix and append_audio_codec_suffix:
                             final_filename = f"{final_filename.rstrip()}{sep}{audio_codec_suffix.name}"
@@ -3754,6 +3852,8 @@ class dl:
                                 self.anime_hint(title),
                                 session=service.session,
                             )
+                        if include_sample:
+                            self.write_sample(final_path, title, media_info)
 
                         post_script_context = build_context(
                             title,
@@ -3806,6 +3906,32 @@ class dl:
         dl_time = time_elapsed_since(start_time)
 
         console.print(Padding(f"Processed all titles in [progress.elapsed]{dl_time}", (0, 5, 1, 5)))
+
+    def write_sample(self, source: Path, title: Title_T, media_info: MediaInfo) -> None:
+        """Cut a 60 second sample from a finished file into a ``Sample`` folder next to it.
+
+        The sample starts 2 minutes in. A file shorter than 3 minutes gives its middle 60 seconds.
+        """
+        duration = float(media_info.general_tracks[0].duration or 0) / 1000
+        start, end = DEFAULT_SAMPLE
+        length = end - start
+        if duration < end:
+            start = max(0.0, (duration - length) / 2)
+        output = source.parent / SAMPLE_DIR / f"{sample_name(source.stem, title)}{source.suffix}"
+        output.parent.mkdir(exist_ok=True)
+        returncode = subprocess.run(
+            [
+                str(binaries.MKVToolNix),
+                "-q",
+                "-o",
+                str(output),
+                "--split",
+                f"parts:{start:.3f}s-{start + length:.3f}s",
+                source,
+            ]
+        ).returncode
+        if returncode > 1 or not output.exists():
+            self.log.warning(f"mkvmerge wrote no sample for {source.name}")
 
     def anime_hint(self, title: Optional[Title_T] = None) -> bool:
         """Whether metadata lookups for this title should prefer AniList."""

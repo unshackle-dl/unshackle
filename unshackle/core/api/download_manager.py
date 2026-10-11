@@ -418,6 +418,15 @@ def perform_download(
     if params.get("export"):
         params["export"] = bool(params["export"])
 
+    sample_raw = params.get("sample")
+    if sample_raw is not None:
+        from unshackle.core.utils.click_types import SAMPLE_RANGE
+
+        try:
+            params["sample"] = SAMPLE_RANGE.convert(sample_raw, None, None)
+        except click.BadParameter as exc:
+            raise Exception(f"Invalid sample parameter: {exc}")
+
     slow_raw = params.get("slow")
     if slow_raw is not None and not isinstance(slow_raw, tuple):
         if isinstance(slow_raw, bool):
@@ -633,6 +642,8 @@ def perform_download(
                 no_folder=params.get("no_folder", False),
                 no_source=params.get("no_source", False),
                 no_mux=params.get("no_mux", False),
+                sample=params.get("sample"),
+                include_sample=params.get("include_sample", False),
                 workers=params.get("workers"),
                 adaptive_workers=params.get("adaptive_workers", False),
                 download_processes=params.get("download_processes", 1),

@@ -6,6 +6,7 @@ import click
 from click.shell_completion import CompletionItem
 from pywidevine.cdm import Cdm as WidevineCdm
 
+from unshackle.core.constants import DEFAULT_SAMPLE
 from unshackle.core.tracks.audio import Audio
 from unshackle.core.tracks.subtitle import Subtitle
 from unshackle.core.tracks.video import Video
@@ -505,6 +506,26 @@ class SlowDelayRange(click.ParamType):
         return (low, high)
 
 
+class SampleRange(click.ParamType):
+    """Parses a sample window string like '60-120' into a tuple of (start, end) seconds."""
+
+    name = "sample_range"
+
+    def convert(
+        self, value: Any, param: Optional[click.Parameter], ctx: Optional[click.Context]
+    ) -> Optional[tuple[int, int]]:
+        if isinstance(value, bool):
+            return DEFAULT_SAMPLE if value else None
+        if isinstance(value, (list, tuple)) and len(value) == 2:
+            value = f"{value[0]}-{value[1]}"
+
+        match = re.match(r"^(\d+)-(\d+)$", str(value))
+        if not match or int(match.group(1)) >= int(match.group(2)):
+            self.fail(f"'{value}' is not a valid sample window. Use format: START-END (e.g., 60-120)", param, ctx)
+
+        return (int(match.group(1)), int(match.group(2)))
+
+
 SEASON_RANGE = SeasonRange()
 LANGUAGE_RANGE = LanguageRange()
 QUALITY_LIST = QualityList()
@@ -512,3 +533,4 @@ AUDIO_CODEC_LIST = AudioCodecList(Audio.Codec)
 VIDEO_CODEC_LIST = MultipleVideoCodecChoice(Video.Codec)
 SUBTITLE_CODEC = SubtitleCodecChoice(Subtitle.Codec)
 SLOW_DELAY_RANGE = SlowDelayRange()
+SAMPLE_RANGE = SampleRange()

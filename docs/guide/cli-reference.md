@@ -153,6 +153,8 @@ Keep only certain track types, or skip certain track types.
 | `--no-folder` | Disable folder creation for TV shows. |
 | `--no-source` | Remove the source tag from the filename/path. |
 | `--no-mux` | Do not mux; keep individual track files. |
+| `--sample` | Download a short sample and write it with a `SAMPLE` tag on the filename in a `Sample` folder inside the output folder. Bare `--sample` = 60 seconds from 2 minutes in; `--sample 0-60` = a custom window in seconds. |
+| `--include-sample` | Download the full title, then also cut a 60 second sample from each muxed file into a `Sample` folder next to it. |
 | `--tag` | Group tag override. |
 | `--repack` | Add a `REPACK` tag to the filename. |
 | `--postscript` | Run a command after each output file, with `{variable}` placeholders substituted. Repeatable. Replaces the `post_scripts` config for this run. See [Post-scripts](../reference/configuration/post-scripts.md). |
