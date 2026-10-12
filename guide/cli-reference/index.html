@@ -3282,6 +3282,14 @@ configuration file.</p>
 <td>Do not mux; keep individual track files.</td>
 </tr>
 <tr>
+<td><code>--sample</code></td>
+<td>Download a short sample and write it with a <code>SAMPLE</code> tag on the filename in a <code>Sample</code> folder inside the output folder. Bare <code>--sample</code> = 60 seconds from 2 minutes in; <code>--sample 0-60</code> = a custom window in seconds.</td>
+</tr>
+<tr>
+<td><code>--include-sample</code></td>
+<td>Download the full title, then also cut a 60 second sample from each muxed file into a <code>Sample</code> folder next to it.</td>
+</tr>
+<tr>
 <td><code>--tag</code></td>
 <td>Group tag override.</td>
 </tr>

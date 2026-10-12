@@ -3995,6 +3995,18 @@ ignore it safely. See <a href="../../creating-a-service/#split-episodes">Split e
 <td>Output/mux controls.</td>
 </tr>
 <tr>
+<td><code>sample</code></td>
+<td>boolean/string</td>
+<td><code>null</code></td>
+<td>Download a short sample and write it with a <code>SAMPLE</code> tag on the filename in a <code>Sample</code> folder inside the output folder. <code>true</code> is 60 seconds from 2 minutes in; <code>"0-60"</code> is a window in seconds.</td>
+</tr>
+<tr>
+<td><code>include_sample</code></td>
+<td>boolean</td>
+<td><code>false</code></td>
+<td>Download the full title, then also cut a 60 second sample from each muxed file into a <code>Sample</code> folder next to it.</td>
+</tr>
+<tr>
 <td><code>workers</code></td>
 <td>int</td>
 <td><code>null</code></td>

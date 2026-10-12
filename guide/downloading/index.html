@@ -3896,6 +3896,16 @@ are always kept.</p>
 <td>-</td>
 </tr>
 <tr>
+<td><code>--sample</code></td>
+<td>Download a short sample: 60 seconds from 2 minutes in, or <code>--sample START-END</code> for a window in seconds.</td>
+<td>-</td>
+</tr>
+<tr>
+<td><code>--include-sample</code></td>
+<td>Download the full title, then also cut a 60 second sample from each muxed file into a <code>Sample</code> folder.</td>
+<td>-</td>
+</tr>
+<tr>
 <td><code>--split-audio</code></td>
 <td>Write a separate output file per audio codec instead of merging all audio.</td>
 <td>config <code>muxing.merge_audio</code> (on)</td>
@@ -3907,6 +3917,17 @@ are always kept.</p>
 </tr>
 </tbody>
 </table>
+<div class="admonition note">
+<p class="admonition-title"><code>--sample</code> needs a segmented track</p>
+<p><code>--sample</code> downloads only the segments that hold the window, and <code>mkvmerge</code> cuts the output
+to the window. The cut starts at the first video keyframe in the window, so a sample can be
+some seconds short. unshackle downloads each subtitle track in full and then keeps only the
+cues of the window.</p>
+<p>The run stops before the download starts in two conditions: a service gives a video or
+audio track as one file with no segments and no segment index, or the title ends before the
+window starts.</p>
+<p>A sidecar subtitle file with <code>sidecar_format: original</code> stays whole.</p>
+</div>
 <div class="admonition note">
 <p class="admonition-title">Music is never muxed</p>
 <p>A song skips the muxer. unshackle keeps the container that the service
