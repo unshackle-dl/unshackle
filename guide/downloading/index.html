@@ -3926,7 +3926,8 @@ cues of the window.</p>
 <p>The run stops before the download starts in two conditions: a service gives a video or
 audio track as one file with no segments and no segment index, or the title ends before the
 window starts.</p>
-<p>A sidecar subtitle file with <code>sidecar_format: original</code> stays whole.</p>
+<p>A sidecar subtitle file with <code>sidecar_format: original</code> is not trimmed. It holds the segments around the
+window, or the whole file when the track is one file.</p>
 </div>
 <div class="admonition note">
 <p class="admonition-title">Music is never muxed</p>

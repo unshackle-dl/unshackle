@@ -6486,7 +6486,9 @@ pycaption functions.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Keep every segment: <code>trim</code> cuts a subtitle by its cue times after the download.</p>
+        <p>Return the segments of <code>window</code> plus one segment on each side.</p>
+<p>Cue times in a segment are absolute, so <code>sample_start</code> stays zero and <code>trim</code> makes the cut.
+A track that ends before the window keeps only its last segment.</p>
 
 
     </div>
