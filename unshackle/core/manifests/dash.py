@@ -134,6 +134,7 @@ class DASH:
 
         if not res.ok:
             raise requests.ConnectionError("Failed to request the MPD document.", response=res)
+        res.encoding = res.encoding or "utf-8"
 
         log_event(
             "manifest_dash_fetch",
