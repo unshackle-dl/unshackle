@@ -379,7 +379,7 @@ def test_a_single_file_dash_track_is_cut_by_its_segment_index(monkeypatch: pytes
 
     requested.clear()
     _, whole, _, _, _ = DASH.get_period_segments(
-        period, aset, rep, tree, track, "https://example.com/main.mpd", session
+        period, aset, rep, tree, track, "https://example.com/main.mpd", session, probe_kid=False
     )
     assert len(whole) == 1 and not any("800-" in r for r in requested), "a full download does not read the index"
 
