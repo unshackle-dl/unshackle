@@ -726,7 +726,8 @@ By default, `mkvmerge` muxes the tracks of a movie or an episode into a single M
     audio track as one file with no segments and no segment index, or the title ends before the
     window starts.
 
-    A sidecar subtitle file with `sidecar_format: original` stays whole.
+    A sidecar subtitle file with `sidecar_format: original` is not trimmed. It holds the segments around the
+    window, or the whole file when the track is one file.
 
 !!! note "Music is never muxed"
     A song skips the muxer. unshackle keeps the container that the service

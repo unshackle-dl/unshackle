@@ -54,10 +54,19 @@ def test_a_video_keeps_one_segment_after_the_window() -> None:
     assert make_audio().sample_slice(STARTS, 1000, (0, 60)) == slice(0, 15)
 
 
-def test_a_subtitle_keeps_every_segment() -> None:
+def test_a_subtitle_keeps_one_segment_on_each_side_of_the_window() -> None:
     subtitle = Subtitle(id_="s", url="https://x/s", codec=Subtitle.Codec.WebVTT, language="en")
-    assert subtitle.sample_slice(STARTS, 1000, (62, 120)) == slice(None)
-    assert subtitle.sample_start == 0
+    video = make_video()
+    video.sample_tail = 0
+    keep = video.sample_slice(STARTS, 1000, (62, 120))
+    assert subtitle.sample_slice(STARTS, 1000, (62, 120)) == slice(keep.start - 1, keep.stop + 1)
+    assert subtitle.sample_start == 0, "cue times stay absolute, so the mux does not shift the track"
+    assert subtitle.sample_slice(STARTS, 1000, None) == slice(None)
+
+
+def test_a_subtitle_that_ends_before_the_window_keeps_its_last_segment() -> None:
+    subtitle = Subtitle(id_="s", url="https://x/s", codec=Subtitle.Codec.WebVTT, language="en")
+    assert subtitle.sample_slice([0, 4000], 1000, (120, 180)) == slice(0, None)
 
 
 def test_a_window_after_the_end_stops_the_run() -> None:
@@ -172,19 +181,19 @@ def served(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> str:
     server.shutdown()
 
 
-def test_an_hls_subtitle_downloads_whole_in_a_sample_run(
+def test_an_hls_subtitle_downloads_the_segments_around_the_window(
     tmp_path: Path, served: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    for n in range(4):
+    for n in range(8):
         (tmp_path / f"s{n}.vtt").write_text(
             f"WEBVTT\n\n00:00:{n * 10 + 1:02}.000 --> 00:00:{n * 10 + 2:02}.000\ncue {n}\n"
         )
     (tmp_path / "s.m3u8").write_text(
         "#EXTM3U\n#EXT-X-TARGETDURATION:10\n"
-        + "".join(f"#EXTINF:10.0,\ns{n}.vtt\n" for n in range(4))
+        + "".join(f"#EXTINF:10.0,\ns{n}.vtt\n" for n in range(8))
         + "#EXT-X-ENDLIST\n"
     )
-    monkeypatch.setattr(config, "sample", (12, 18))
+    monkeypatch.setattr(config, "sample", (32, 38))
     subtitle = Subtitle(
         id_="s", url=f"{served}/s.m3u8", codec=Subtitle.Codec.WebVTT, language="en", descriptor=Subtitle.Descriptor.HLS
     )
@@ -192,7 +201,8 @@ def test_an_hls_subtitle_downloads_whole_in_a_sample_run(
     subtitle.download(session=Session(), prepare_drm=lambda *a, **k: None, progress=lambda **k: None)
 
     text = subtitle.path.read_text()
-    assert all(f"cue {n}" in text for n in range(4))
+    assert [n for n in range(8) if f"cue {n}" in text] == [2, 3, 4]
+    assert "00:00:31.000 --> 00:00:32.000" in text, "cue times stay absolute"
 
 
 def test_subtitle_trim_keeps_the_cues_of_the_window_from_zero(tmp_path: Path) -> None:
