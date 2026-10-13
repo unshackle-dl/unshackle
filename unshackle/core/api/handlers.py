@@ -4327,7 +4327,7 @@ def ensure_track_drm(track: Any, session: Any = None, init_data: Optional[bytes]
             keys = [k for k in (playlist.keys or []) + (playlist.session_keys or []) if k is not None]
             for key in keys:
                 try:
-                    drm = HLS.get_drm(key)
+                    drm = HLS.get_drm_or_probe(key, playlist, track, probe_session=http)
                     if isinstance(drm, (Widevine, PlayReady)):
                         track.drm = [drm]
                         return

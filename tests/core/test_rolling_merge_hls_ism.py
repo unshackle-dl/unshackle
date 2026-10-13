@@ -21,6 +21,7 @@ from Cryptodome.Cipher import AES
 from Cryptodome.Util.Padding import pad
 from pywidevine.pssh import PSSH
 
+from tests.core.test_hls_kid_from_init import KEY_LINE, no_kid_pssh
 from tests.core.test_ism_init import piff_fragment
 from unshackle.core.config import config
 from unshackle.core.constants import DOWNLOAD_CANCELLED
@@ -264,3 +265,34 @@ def test_hls_aes128_keeps_post_merge(server, tmp_path, monkeypatch):
 
     plain, rolling = download_both_ways(HLS, make, tmp_path, monkeypatch, False)
     assert rolling == plain == INIT + b"".join(PARTS)
+
+
+def test_hls_rekey_takes_the_kid_from_the_init_segment_of_the_new_key(server, tmp_path, monkeypatch):
+    """Each key carries a PSSH with a content id and no Key ID, so only the init segment names the KID."""
+    later_kid = UUID(hex="22222222222222222222222222222222")
+    later_init = bytes(range(100, 200))
+    server.routes["/init2.mp4"] = later_init
+    no_decrypt(monkeypatch, hls_module)
+    monkeypatch.setattr(config, "merge_segments", False)
+
+    def key_line(content_id: bytes) -> str:
+        return KEY_LINE.format(pssh=no_kid_pssh(content_id))
+
+    track = hls_track(server, False)
+    lines = ["#EXTM3U", "#EXT-X-VERSION:7", "#EXT-X-TARGETDURATION:4", '#EXT-X-MAP:URI="init.mp4"', key_line(b"a")]
+    for i in range(len(PARTS)):
+        if i == 2:
+            lines += ["#EXT-X-DISCONTINUITY", '#EXT-X-MAP:URI="init2.mp4"', key_line(b"b")]
+        lines += ["#EXTINF:4.0,", f"part{i}.m4s"]
+    server.routes["/media.m3u8"] = "\n".join(lines + ["#EXT-X-ENDLIST"]).encode()
+    # the real probe needs FFprobe and a tenc box; the KID follows the init bytes the parser hands over
+    monkeypatch.setattr(
+        type(track), "get_key_id", lambda self, init_data=None, **kw: {later_init: later_kid}.get(init_data, KID)
+    )
+
+    licensed: list[UUID] = []
+    ctx = make_ctx(tmp_path, "rekey.mp4")
+    ctx.license_widevine = lambda drm, track_kid=None: licensed.append(track_kid)
+    HLS.download_track(track, ctx)
+
+    assert licensed == [KID, later_kid]
