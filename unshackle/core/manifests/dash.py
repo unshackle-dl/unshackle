@@ -1088,10 +1088,6 @@ class DASH:
 
         return init_data, segments, segment_timescale, segment_durations, track_kid
 
-    # Deprecated 5.5.0 shims for service repos still on the old underscored names; drop once they migrate.
-    _is_content_period = is_content_period
-    _get_period_segments = get_period_segments
-
     @staticmethod
     def get_attr(item: str, adaptation_set: Element, representation: Optional[Element] = None) -> Optional[Any]:
         """Helper to get a requested item from the Representation, otherwise from the AdaptationSet."""

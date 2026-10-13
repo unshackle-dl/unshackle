@@ -406,9 +406,6 @@ class Service(metaclass=ABCMeta):
 
         return all_tracks
 
-    # Deprecated 5.5.0 shim for service repos still on the old underscored name; drop once they migrate.
-    _get_tracks_for_variants = get_tracks_for_variants
-
     @staticmethod
     def get_session() -> requests.Session:
         """

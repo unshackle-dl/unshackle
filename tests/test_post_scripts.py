@@ -268,7 +268,7 @@ def test_season_context_blanks_every_episode_identity_field():
 
 def test_every_documented_variable_is_one_build_context_produces():
     """The variable tables in docs/reference/configuration/post-scripts.md must not drift from the code."""
-    from unshackle.core.titles.song import Song
+    from unshackle.core.titles.music import Song
 
     doc = Path(__file__).resolve().parents[1] / "docs" / "reference" / "configuration" / "post-scripts.md"
     documented = {
