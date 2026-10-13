@@ -130,11 +130,12 @@ packages = ["unshackle"]
 
 [tool.hatch.build.targets.sdist]
 include = [
-    "unshackle",
-    "CHANGELOG.md",
-    "README.md",
-    "LICENSE",
+    "/unshackle",
+    "/CHANGELOG.md",
+    "/README.md",
+    "/LICENSE",
 ]
+exclude = [".*/"]
 
 [tool.ruff]
 force-exclude = true
