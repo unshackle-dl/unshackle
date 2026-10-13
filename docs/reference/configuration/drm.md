@@ -45,6 +45,11 @@ are `widevine` / `playready`. unshackle matches the quality keys first, but only
 height is known. If the value is still a dict after that, unshackle uses
 `widevine`/`playready` when present, or else the credential profile name, then `default`.
 
+When an entry holds `widevine` and `playready`, their order sets which device unshackle loads
+first. A track that offers the two DRM systems licenses with that system. A track that offers
+only the other system uses the other device. A `widevine` / `playready` dict in a quality key
+does not set the order.
+
 A quality key can also hold a dict of `widevine` / `playready` devices, and so can the
 top-level `default` entry:
 

@@ -156,7 +156,8 @@ def load_full_cdm(service: str, profile: Optional[str], cdm_type: Optional[str] 
                 drm_key = {"wv": "widevine", "widevine": "widevine", "pr": "playready", "playready": "playready"}.get(
                     cdm_type.lower()
                 )
-            cdm_name = lower_keys.get(drm_key or "widevine") or lower_keys.get("playready")
+            first = next(key for key in lower_keys if key in ("widevine", "playready"))
+            cdm_name = lower_keys.get(drm_key or first) or lower_keys.get("playready")
         else:
             cdm_name = cdm_name.get(profile) or cdm_name.get("default") or ci_get(app_config.cdm, "default")
 

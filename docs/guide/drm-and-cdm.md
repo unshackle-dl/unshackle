@@ -495,6 +495,9 @@ unshackle dl --skip-dl --all-drm --export EXAMPLE 81234567
 
 - The `cdm` mapping must name a device for each system. A single device name, or `--cdm`,
   stops the run with an error that names the missing system.
+- The order of the `widevine` and `playready` config keys in the `cdm` entry sets the order
+  of the two systems, as in a run without the flag. Each track licenses first with the
+  system of the first config key.
 - A Key Vault is read first, as in a run without the flag. A DRM system sends a challenge
   only for a KID that no Key Vault and no earlier track of the run gave a content key
   for. When the first system returns all the KIDs of the second, the second sends no

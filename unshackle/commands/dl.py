@@ -5580,6 +5580,7 @@ class dl:
         """
         Get CDM for a specified service (either Local or Remote CDM).
         Now supports quality-based selection when the caller gives a quality.
+        With no ``drm``, an entry gives the DRM system that it lists first.
         Raises a ValueError if there is a problem getting a CDM.
         """
         # A per-request override (set by the REST API per job) takes precedence over the
@@ -5660,7 +5661,8 @@ class dl:
                             "pr": "playready",
                             "playready": "playready",
                         }.get(drm.lower())
-                    cdm_name = lower_keys.get(drm_key or "widevine") or lower_keys.get("playready")
+                    first = next(key for key in lower_keys if key in ("widevine", "playready"))
+                    cdm_name = lower_keys.get(drm_key or first) or lower_keys.get("playready")
                 else:
                     cdm_name = cdm_name.get(profile) or cdm_name.get("default") or ci_get(config.cdm, "default")
                 if not cdm_name:
