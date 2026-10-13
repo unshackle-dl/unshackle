@@ -31,6 +31,7 @@ from unshackle.core.constants import AUDIO_CODEC_MAP, DYNAMIC_RANGE_MAP, VIDEO_C
 from unshackle.core.providers.anilist import parse_anilist_ref
 from unshackle.core.proxies.resolve import initialize_proxy_providers, resolve_proxy
 from unshackle.core.services import Services
+from unshackle.core.session import utf8_text
 from unshackle.core.titles import Episode, Movie, Song, Title_T
 from unshackle.core.tracks import Audio, Subtitle, Tracks, Video
 from unshackle.core.utilities import declared_kwargs, kind_only_conflict
@@ -4327,7 +4328,7 @@ def ensure_track_drm(track: Any, session: Any = None, init_data: Optional[bytes]
             from unshackle.core.manifests import HLS
 
             http = getattr(track, "session", None) or session
-            playlist = m3u8.loads(http.get(track.url).text, uri=track.url) if http else m3u8.load(track.url)
+            playlist = m3u8.loads(utf8_text(http.get(track.url)), uri=track.url) if http else m3u8.load(track.url)
             keys = [k for k in (playlist.keys or []) + (playlist.session_keys or []) if k is not None]
             for key in keys:
                 try:
@@ -4807,14 +4808,11 @@ async def session_segment_filter_handler(
 
     def unwanted_segments() -> list[str]:
         import m3u8
-        import requests
 
         response = session.service_instance.session.get(track.url)
         if not getattr(response, "ok", True):
             raise ValueError(f"playlist request failed: {response.status_code}")
-        if isinstance(response, requests.Response):
-            response.encoding = response.encoding or "utf-8"
-        playlist = m3u8.loads(response.text, uri=str(track.url))
+        playlist = m3u8.loads(utf8_text(response), uri=str(track.url))
         return [segment.absolute_uri for segment in playlist.segments if segment_filter(segment)]
 
     try:

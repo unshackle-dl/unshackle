@@ -15,7 +15,7 @@ from typing import Any, Optional
 from urllib.parse import urlencode, urlparse, urlunparse
 
 import rnet
-from requests import HTTPError, Request
+from requests import HTTPError, Request, Response
 from requests.structures import CaseInsensitiveDict
 
 from unshackle.core.config import config
@@ -225,6 +225,18 @@ class RnetResponse:
             self._resp.close()
         except Exception:
             pass
+
+
+def utf8_text(res: Response | RnetResponse) -> str:
+    """Return the response text, decoded as UTF-8 unless the server sent a charset.
+
+    With no charset, requests assumes ISO-8859-1 for a `text/*` type and runs charset detection
+    on the full body for any other type. Use this only for a format that is UTF-8 by
+    specification, such as M3U8.
+    """
+    if isinstance(res, Response) and "charset" not in res.headers.get("content-type", "").lower():
+        res.encoding = "utf-8"
+    return res.text
 
 
 class RnetSessionHeaders(CaseInsensitiveDict):

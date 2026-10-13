@@ -37,7 +37,7 @@ from unshackle.core.drm.segment_decrypt import SegmentDecrypter, can_use
 from unshackle.core.drm.verify import decrypt_track
 from unshackle.core.events import events
 from unshackle.core.manifests.dash import RollingMerge
-from unshackle.core.session import RnetResponse, RnetSession
+from unshackle.core.session import RnetResponse, RnetSession, utf8_text
 from unshackle.core.tracks import Audio, DownloadContext, Subtitle, Tracks, Video, resume
 from unshackle.core.tracks.track import DRM_PREFERENCE_TYPES, assert_fragments_decrypted
 from unshackle.core.utilities import get_extension, is_close_match, log_event, try_ensure_utf8
@@ -81,17 +81,11 @@ class HLS:
 
         res = session.get(url, **args)
 
-        if isinstance(res, requests.Response):
-            if not res.ok:
-                raise requests.ConnectionError("Failed to request the M3U(8) document.", response=res)
-            res.encoding = res.encoding or "utf-8"
-            content = res.text
-        elif isinstance(res, RnetResponse):
-            if not res.ok:
-                raise requests.ConnectionError("Failed to request the M3U(8) document.", response=res)
-            content = res.text
-        else:
+        if not isinstance(res, (requests.Response, RnetResponse)):
             raise TypeError(f"Expected response to be a requests.Response or rnet.Response, not {type(res)}")
+        if not res.ok:
+            raise requests.ConnectionError("Failed to request the M3U(8) document.", response=res)
+        content = utf8_text(res)
 
         master = m3u8.loads(content, uri=url)
 
@@ -397,9 +391,7 @@ class HLS:
             session = Session()
 
         res = session.get(variant_url)
-        if isinstance(res, requests.Response):
-            res.encoding = res.encoding or "utf-8"
-        variant = m3u8.loads(res.text, uri=variant_url)
+        variant = m3u8.loads(utf8_text(res), uri=variant_url)
         if not variant.segments:
             return None
 
@@ -659,17 +651,13 @@ class HLS:
             master = m3u8.load(str(track.from_file))
         else:
             response = session.get(track.url)
-            if isinstance(response, requests.Response) or isinstance(response, RnetResponse):
-                if not response.ok:
-                    log.error(f"Failed to request the invariant M3U8 playlist: {response.status_code}")
-                    sys.exit(1)
-                if isinstance(response, requests.Response):
-                    response.encoding = response.encoding or "utf-8"
-                playlist_text = response.text
-            else:
+            if not isinstance(response, (requests.Response, RnetResponse)):
                 raise TypeError(f"Expected response to be a requests.Response or rnet.Response, not {type(response)}")
+            if not response.ok:
+                log.error(f"Failed to request the invariant M3U8 playlist: {response.status_code}")
+                sys.exit(1)
 
-            master = m3u8.loads(playlist_text, uri=track.url)
+            master = m3u8.loads(utf8_text(response), uri=track.url)
 
         if not master.segments:
             log.error("Track's HLS playlist has no segments, expecting an invariant M3U8 playlist.")
@@ -1385,8 +1373,7 @@ class HLS:
             if not value and data.uri:
                 if not session:
                     session = Session()
-                res = session.get(urljoin(manifest.base_uri or "", data.uri))
-                value = res.text
+                value = utf8_text(session.get(urljoin(manifest.base_uri or "", data.uri)))
 
             if not value:
                 continue

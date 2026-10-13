@@ -22,6 +22,7 @@ from unshackle.core.config import config
 from unshackle.core.console import console
 from unshackle.core.constants import AnyTrack
 from unshackle.core.drm import key_args as drm_key_args
+from unshackle.core.session import utf8_text
 from unshackle.core.utilities import get_boxes, log_event
 from unshackle.core.utils.subprocess import ffprobe
 
@@ -94,7 +95,7 @@ class Widevine:
 
         if track.descriptor == track.Descriptor.HLS:
             m3u_url = track.url
-            master = m3u8.loads(session.get(m3u_url).text, uri=m3u_url)
+            master = m3u8.loads(utf8_text(session.get(m3u_url)), uri=m3u_url)
             pssh_boxes.extend(
                 Box.parse(base64.b64decode(x.uri.split(",")[-1]))
                 for x in (master.session_keys or master.keys)

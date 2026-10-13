@@ -20,7 +20,7 @@ import click
 from construct import ConstructError
 from langcodes import Language
 from pymp4.parser import Box
-from requests import Response, Session
+from requests import Session
 from requests.adapters import HTTPAdapter, Retry
 
 from unshackle.core import binaries
@@ -31,7 +31,7 @@ from unshackle.core.downloaders import requests
 from unshackle.core.drm import DRM_T, ClearKeyCENC, PlayReady, Widevine
 from unshackle.core.drm.verify import decrypt_track
 from unshackle.core.events import events
-from unshackle.core.session import RnetSession
+from unshackle.core.session import RnetSession, utf8_text
 from unshackle.core.tracks import resume
 from unshackle.core.utilities import get_boxes, log_event, try_ensure_utf8
 from unshackle.core.utils.subprocess import ffprobe
@@ -1141,9 +1141,7 @@ class Track:
             session = getattr(self, "session", None) or Session()
 
             response = session.get(self.url)
-            if isinstance(response, Response):
-                response.encoding = response.encoding or "utf-8"
-            playlist = m3u8.loads(response.text, self.url)
+            playlist = m3u8.loads(utf8_text(response), self.url)
 
             drm_list = []
 

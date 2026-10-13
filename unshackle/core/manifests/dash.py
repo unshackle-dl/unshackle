@@ -19,7 +19,7 @@ from zlib import crc32
 
 import requests
 from langcodes import Language, tag_is_valid
-from lxml.etree import Element, ElementTree
+from lxml.etree import Element, ElementTree, XMLSyntaxError
 from pyplayready.system.pssh import PSSH as PR_PSSH
 from pywidevine.cdm import Cdm as WidevineCdm
 from pywidevine.pssh import PSSH
@@ -118,6 +118,7 @@ class DASH:
 
     @classmethod
     def from_url(cls, url: str, session: Optional[Union[Session, RnetSession]] = None, **args: Any) -> DASH:
+        """Fetch and parse an MPD. The XML declaration gives the encoding, then the HTTP charset."""
         if not url:
             raise requests.URLRequired("DASH manifest URL must be provided for relative path computations.")
         if not isinstance(url, str):
@@ -138,11 +139,15 @@ class DASH:
         log_event(
             "manifest_dash_fetch",
             level="DEBUG",
-            message=f"Fetched DASH manifest ({len(res.text)} bytes)",
-            context={"url": safe_display_url(url), "size": len(res.text)},
+            message=f"Fetched DASH manifest ({len(res.content)} bytes)",
+            context={"url": safe_display_url(url), "size": len(res.content)},
         )
 
-        return DASH.from_text(res.text, url)
+        try:
+            return cls(load_xml(res.content), url)
+        except XMLSyntaxError:
+            # no declaration and not UTF-8: only the HTTP charset can name the encoding
+            return cls.from_text(res.text, url)
 
     @classmethod
     def from_text(cls, text: str, url: str) -> DASH:

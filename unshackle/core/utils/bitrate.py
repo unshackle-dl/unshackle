@@ -13,7 +13,7 @@ from urllib.parse import urljoin
 from requests import Session
 
 from unshackle.core.binaries import FFProbe
-from unshackle.core.session import RnetSession
+from unshackle.core.session import RnetSession, utf8_text
 from unshackle.core.utils.subprocess import log_tool_run
 
 if TYPE_CHECKING:
@@ -320,7 +320,7 @@ def extract_hls(track: "Track", session: Union[Session, RnetSession]) -> list[Se
 
     playlist_url = track.url if isinstance(track.url, str) else track.url[0]
     res = session.get(playlist_url, timeout=PROBE_TIMEOUT)
-    playlist = m3u8.loads(res.text, uri=playlist_url)
+    playlist = m3u8.loads(utf8_text(res), uri=playlist_url)
 
     out: list[Segment] = []
     for segment in playlist.segments:
