@@ -17,7 +17,7 @@ from pywidevine.pssh import PSSH
 from rich.table import Table
 
 from unshackle.commands.dl import dl
-from unshackle.core.api.handlers import load_full_cdm, validate_download_parameters
+from unshackle.core.api.handlers import load_full_cdm, resolve_server_cdm, validate_download_parameters
 from unshackle.core.cdm.detect import cdm_type_stub, is_widevine_cdm
 from unshackle.core.drm import PlayReady, Widevine
 from unshackle.core.manifests import HLS
@@ -306,3 +306,22 @@ def test_the_first_drm_system_of_the_config_entry_loads_first(
     assert cmd.get_cdm("EXAMPLE") == expected
     assert load_full_cdm("EXAMPLE", None) == expected
     assert cmd.get_cdm("EXAMPLE", drm="widevine") == "wv_device"
+
+
+@pytest.mark.parametrize(
+    ("entry", "expected"),
+    [
+        ({"playready": "pr_device", "widevine": "wv_device"}, "playready"),
+        ({"widevine": "wv_device", "playready": "pr_device"}, "widevine"),
+    ],
+)
+def test_the_server_cdm_stub_is_the_first_drm_system_of_the_config_entry(
+    monkeypatch: pytest.MonkeyPatch, entry: dict, expected: str
+) -> None:
+    monkeypatch.setattr("unshackle.core.config.config.cdm", {"EXAMPLE": entry})
+    monkeypatch.setattr(
+        "unshackle.core.api.handlers.detect_cdm_type",
+        lambda name, _: "playready" if name == "pr_device" else "widevine",
+    )
+
+    assert is_widevine_cdm(resolve_server_cdm("EXAMPLE", None, None)) is (expected == "widevine")

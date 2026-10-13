@@ -48,7 +48,7 @@ height is known. If the value is still a dict after that, unshackle uses
 When an entry holds `widevine` and `playready`, their order sets which device unshackle loads
 first. A track that offers the two DRM systems licenses with that system. A track that offers
 only the other system uses the other device. A `widevine` / `playready` dict in a quality key
-does not set the order.
+does not set the order. The server CDM of a remote session follows the same order.
 
 A quality key can also hold a dict of `widevine` / `playready` devices, and so can the
 top-level `default` entry:

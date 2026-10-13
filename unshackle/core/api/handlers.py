@@ -3914,7 +3914,8 @@ def resolve_server_cdm(service: str, profile: Optional[str], cdm_type: Optional[
     Checks the server's own CDM config (``config.cdm[service]``) to
     determine the CDM type without loading the full CDM object. This
     makes sure that when you use ``server_cdm: true``, the server's CDM
-    determines device selection (e.g. PlayReady vs Widevine).
+    determines device selection (e.g. PlayReady vs Widevine). An entry with
+    ``widevine`` and ``playready`` gives the DRM system that it lists first.
 
     Falls back to a lightweight stub from *cdm_type* only if the configuration
     has no server CDM for the service.
@@ -3926,7 +3927,8 @@ def resolve_server_cdm(service: str, profile: Optional[str], cdm_type: Optional[
         if isinstance(cdm_name, dict):
             lower_keys = {k.lower(): v for k, v in cdm_name.items()}
             if {"widevine", "playready"} & lower_keys.keys():
-                cdm_name = lower_keys.get("playready") or lower_keys.get("widevine")
+                systems = [lower_keys[key] for key in lower_keys if key in ("widevine", "playready")]
+                cdm_name = next(filter(None, systems), None)
             else:
                 cdm_name = cdm_name.get("default") or next(iter(cdm_name.values()), None)
 
