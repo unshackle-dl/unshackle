@@ -500,6 +500,7 @@ def perform_download(
         "v_lang": params.get("v_lang", []),
         "a_lang": params.get("a_lang", []),
         "forced_subs": params.get("forced_subs", False),
+        "exact_lang": params.get("exact_lang", False),
     }
     # Hand-built context: record parameter sources so service dl overrides
     # apply to defaults but never clobber client-sent values.

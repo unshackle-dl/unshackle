@@ -3277,6 +3277,7 @@ def forwarded_dl_params(data: Dict[str, Any]) -> Dict[str, Any]:
         except click.BadParameter:
             log.warning(f"Ignoring unknown dl_params.acodec value: {sanitize_log(name)}")
     params["forced_subs"] = raw.get("forced_subs") is True
+    params["exact_lang"] = raw.get("exact_lang") is True
     return params
 
 

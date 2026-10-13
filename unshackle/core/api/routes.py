@@ -726,7 +726,7 @@ async def list_tracks(request: web.Request) -> web.Response:
               dl_params:
                 type: object
                 description: |
-                  The dl track selection (lang, v_lang, a_lang, acodec, forced_subs), in the same
+                  The dl track selection (lang, v_lang, a_lang, acodec, forced_subs, exact_lang), in the same
                   form as on `/api/session/create`. The service reads it from `ctx.parent.params`.
               credentials:
                 type: object
@@ -1829,6 +1829,9 @@ async def session_create(request: web.Request) -> web.Response:
                       type: string
                     default: []
                   forced_subs:
+                    type: boolean
+                    default: false
+                  exact_lang:
                     type: boolean
                     default: false
               server_cdm:

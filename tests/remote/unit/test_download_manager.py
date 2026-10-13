@@ -192,10 +192,17 @@ class _CapturedCtx(Exception):
 @pytest.mark.parametrize(
     ("params", "expected"),
     [
-        ({}, (["orig"], [], [], [], False)),
+        ({}, (["orig"], [], [], [], False, False)),
         (
-            {"lang": ["es-419"], "v_lang": ["en"], "a_lang": ["ja"], "acodec": "AAC,EC3", "forced_subs": True},
-            (["es-419"], ["en"], ["ja"], ["AAC", "EC3"], True),
+            {
+                "lang": ["es-419"],
+                "v_lang": ["en"],
+                "a_lang": ["ja"],
+                "acodec": "AAC,EC3",
+                "forced_subs": True,
+                "exact_lang": True,
+            },
+            (["es-419"], ["en"], ["ja"], ["AAC", "EC3"], True, True),
         ),
     ],
 )
@@ -224,7 +231,8 @@ def test_perform_download_puts_the_lang_selection_in_the_service_ctx(
 
     ctx = exc.value.args[0]
     p = ctx.params
-    assert (p["lang"], p["v_lang"], p["a_lang"], [c.name for c in p["acodec"]], p["forced_subs"]) == expected
+    selection = (p["lang"], p["v_lang"], p["a_lang"], [c.name for c in p["acodec"]], p["forced_subs"], p["exact_lang"])
+    assert selection == expected
 
 
 def test_perform_download_passes_latest_episodes_to_dl_result(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

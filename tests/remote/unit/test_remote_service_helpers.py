@@ -616,6 +616,7 @@ def test_dl_selection_travels_nested_and_a_service_option_cannot_override_it() -
         "a_lang": [],
         "acodec": [Audio.Codec.EC3],
         "forced_subs": True,
+        "exact_lang": True,
     }
     data = _sent_create_data(parent_params, {"lang": 3, "a_lang": "x"})
     assert data["dl_params"] == {
@@ -624,6 +625,7 @@ def test_dl_selection_travels_nested_and_a_service_option_cannot_override_it() -
         "a_lang": [],
         "acodec": ["EC3"],
         "forced_subs": True,
+        "exact_lang": True,
     }
     assert data["lang"] == 3
     assert data["service_params"] == {"lang": 3, "a_lang": "x"}

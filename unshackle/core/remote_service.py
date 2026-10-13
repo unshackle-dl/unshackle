@@ -1073,8 +1073,9 @@ class RemoteService:
             }
             if params.get("acodec") is not None:
                 dl_params["acodec"] = [c.name for c in params["acodec"]]
-            if "forced_subs" in params:
-                dl_params["forced_subs"] = bool(params["forced_subs"])
+            for key in ("forced_subs", "exact_lang"):
+                if key in params:
+                    dl_params[key] = bool(params[key])
             if dl_params:
                 create_data["dl_params"] = dl_params
 

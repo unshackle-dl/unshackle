@@ -432,11 +432,11 @@ object the dashboard shows as sent), and the track-selection hints `range_`, `vc
 
 `dl_params` holds the `dl` track selection: `lang`, `v_lang` and `a_lang`
 (arrays of language strings), `acodec` (an array of audio codec names, such as
-`EC3`), and `forced_subs` (boolean). The server gives these values to the
+`EC3`), and `forced_subs` and `exact_lang` (booleans). The server gives these values to the
 service in `ctx.parent.params`, never as service options, so a service option
 with the same name, such as an own `--lang`, does not get them. The server uses
 the `dl` default for each absent or malformed value: `lang` is `["orig"]`,
-`v_lang`, `a_lang` and `acodec` are `[]`, and `forced_subs` is `false`. The
+`v_lang`, `a_lang` and `acodec` are `[]`, and `forced_subs` and `exact_lang` are `false`. The
 server drops an unknown codec name. An empty array is a valid value and stays
 empty.
 
