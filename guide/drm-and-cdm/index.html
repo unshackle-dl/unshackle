@@ -3045,6 +3045,9 @@ systems can list different sets of KIDs, and unshackle keeps the content keys of
 <ul>
 <li>The <code>cdm</code> mapping must name a device for each system. A single device name, or <code>--cdm</code>,
   stops the run with an error that names the missing system.</li>
+<li>The order of the <code>widevine</code> and <code>playready</code> config keys in the <code>cdm</code> entry sets the order
+  of the two systems, as in a run without the flag. Each track licenses first with the
+  system of the first config key.</li>
 <li>A Key Vault is read first, as in a run without the flag. A DRM system sends a challenge
   only for a KID that no Key Vault and no earlier track of the run gave a content key
   for. When the first system returns all the KIDs of the second, the second sends no

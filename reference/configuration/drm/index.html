@@ -2165,6 +2165,10 @@ profile:</p>
 are <code>widevine</code> / <code>playready</code>. unshackle matches the quality keys first, but only when a video
 height is known. If the value is still a dict after that, unshackle uses
 <code>widevine</code>/<code>playready</code> when present, or else the credential profile name, then <code>default</code>.</p>
+<p>When an entry holds <code>widevine</code> and <code>playready</code>, their order sets which device unshackle loads
+first. A track that offers the two DRM systems licenses with that system. A track that offers
+only the other system uses the other device. A <code>widevine</code> / <code>playready</code> dict in a quality key
+does not set the order. The server CDM of a remote session follows the same order.</p>
 <p>A quality key can also hold a dict of <code>widevine</code> / <code>playready</code> devices, and so can the
 top-level <code>default</code> entry:</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nt">cdm</span><span class="p">:</span>
