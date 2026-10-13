@@ -240,8 +240,8 @@ def pick_windows(spans: list[tuple[float, float]], longest: float = 4.0) -> list
     A window starts at a fragment and runs on through the next fragments of the same KID, up
     to ``longest`` seconds, but never into a fragment of another KID or a clear one. A short
     window can decode noise without an error: the decoder often needs several frames to find it.
-    A wrong key fails on the first inter frame in every measured case, so ``longest`` buys
-    decoder frames, not certainty; every second of it is decoded in full for a right key.
+    ``longest`` buys decoder frames, not certainty; every second of it is decoded in full for
+    a right key.
     The last window ends where the KID's last run of fragments ends.
     """
     spans = sorted(span for span in spans if span[1] > span[0])  # a duplicated tfdt gives an empty span

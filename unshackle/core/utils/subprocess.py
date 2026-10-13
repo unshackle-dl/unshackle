@@ -56,6 +56,7 @@ FFMPEG_MISSING_REFERENCE = (
     "could not find ref with poc",
 )
 FFMPEG_CHECK_TIMEOUT = 120
+FFMPEG_CHECK_TAIL = 8  # seconds
 
 
 def ffmpeg_decodes(path: Path, start: Optional[float] = None, seconds: float = 3, video: Optional[bool] = None) -> bool:
@@ -66,13 +67,15 @@ def ffmpeg_decodes(path: Path, start: Optional[float] = None, seconds: float = 3
 
     With ``start``, the check decodes ``seconds`` from that time. An FFmpeg copy cuts the
     window first, so no sample after the window gets to the decoder. Without ``start``, the
-    check decodes the first seconds and the last 4 seconds, because a title can open with
+    check decodes the first seconds and the last seconds, because a title can open with
     a clear or separately keyed lead.
 
     Every frame is decoded, because an HEVC keyframe decrypted with a wrong key can decode
-    without an error. When a window starts inside a GOP and the only error is a missing
-    reference frame, the check decodes the keyframes of that window again and uses that
-    verdict. ``video=False`` skips that second pass.
+    without an error. A pass is not proof: HEVC noise can decode clean for seconds, most
+    often in small frames, so a longer window finds more wrong keys. When a window starts
+    inside a GOP and the only error is a missing reference frame, the check decodes the
+    keyframes of that window again and uses that verdict. ``video=False`` skips that second
+    pass.
 
     A file this FFmpeg build cannot judge counts as a pass, never as a wrong key, and so
     does a check that does not finish in time.
@@ -130,9 +133,10 @@ def ffmpeg_decodes(path: Path, start: Optional[float] = None, seconds: float = 3
             return decode(window, keyframes=True)
         return False
 
+    tail = ["-sseof", f"-{FFMPEG_CHECK_TAIL}", "-t", str(FFMPEG_CHECK_TAIL)]
     if start is not None:
         return decode(["-ss", f"{start:.6f}", "-t", f"{max(seconds - 0.5, seconds / 2):.6f}"], keyframes=False)
-    return decode(["-t", str(seconds)], keyframes=False) and decode(["-sseof", "-4", "-t", "4"], keyframes=False)
+    return decode(["-t", str(seconds)], keyframes=False) and decode(tail, keyframes=False)
 
 
 def ffprobe(uri: Union[bytes, Path]) -> dict:
