@@ -2907,8 +2907,10 @@ automatically.</p>
 needs no <code>year</code>.</p>
 <p>A <code>Song</code> also takes optional metadata keywords that the tagger and the naming templates
 read: <code>album_artist</code>, <code>release_type</code>, <code>total_tracks</code>, <code>total_discs</code>, <code>genre</code>,
-<code>explicit</code>, <code>isrc</code>, <code>upc</code>, <code>copyright</code>, <code>label</code>, <code>lyrics</code>, and <code>artwork_url</code>. Read the
-class for the current list.</p>
+<code>explicit</code>, <code>isrc</code>, <code>upc</code>, <code>copyright</code>, <code>label</code>, <code>lyrics</code>, <code>lyrics_suffix</code>, and
+<code>artwork_url</code>. Read the class for the current list. With <code>lyrics_suffix</code> (<code>".lrc"</code>,
+<code>".ttml"</code>), unshackle also saves <code>lyrics</code> beside the final audio file under that suffix.
+You can set these fields in <code>get_tracks()</code> too, and a remote client gets them back.</p>
 <p>The tagger also falls back to <code>Song.data</code> for fields the constructor did not get, such
 as the composer or a full release date. It reads the top level of that dict and a
 nested <code>metadata</code> sub-dict, with the nested keys winning, so either shape works.</p>
@@ -3198,13 +3200,20 @@ classes drive the CDM handshake and call the decryption backend. Your hook is on
 <h3 id="decrypting-a-cbcs-file-yourself">Decrypting a cbcs file yourself<a class="headerlink" href="#decrypting-a-cbcs-file-yourself" title="Permanent link">&para;</a></h3>
 <p>Some tracks cannot use the framework's decryption: a single cbcs file whose sample entries share
 a zero default KID, or a sample entry whose content key no CDM can license and only a separate
-process can use. For these, call <code>unshackle.core.drm.cbcs.decrypt_file(track.path, key_for)</code> from
-<code>on_track_downloaded</code>. Set no <code>drm</code> on the track, so the framework does not try to license it.</p>
-<p><code>key_for(track, entry)</code> gets the track layout and one protected <code>stsd</code> entry. It returns the
-16-byte content key, or a <code>cbcs.SampleDecrypter</code>. A <code>SampleDecrypter</code> gets the protected bytes of
-each sample of one fragment, cut to whole AES blocks, and returns plaintexts of the same lengths.
-It handles full-sample cbcs only, not pattern encryption. <code>decrypt_file</code> writes the plaintext
-back in place and removes the protection boxes, so the muxer reads a clear file.</p>
+process can use. For these, set no <code>drm</code> on the track and override two methods:</p>
+<ul>
+<li><code>decrypts_samples(track)</code> returns <code>True</code> for such a track.</li>
+<li><code>get_sample_decrypter(track, entry)</code> returns, for the 1-based <code>stsd</code> entry, the 16-byte
+  content key or a <code>cbcs.SampleDecrypter</code>. A <code>SampleDecrypter</code> gets the protected bytes of each sample of
+  one fragment, cut to whole AES blocks, and returns plaintexts of the same lengths. It handles
+  full-sample cbcs only, not pattern encryption.</li>
+</ul>
+<p>When the download of the track ends, unshackle calls <code>unshackle.core.drm.cbcs.decrypt_file</code>, and
+the progress row shows "Decrypting". Your <code>on_track_downloaded</code> runs before this and gets the
+encrypted file. <code>decrypt_file</code> writes the plaintext back in place and removes the
+protection boxes, so the muxer reads a clear file. In a remote session <code>get_sample_decrypter</code>
+runs on the server: the client sends the samples through the <code>samples</code> route, so a decrypter
+that needs a process on the server also works for a remote client.</p>
 <h3 id="how-unshackle-chooses-a-cdm-and-finds-keys">How unshackle chooses a CDM and finds keys<a class="headerlink" href="#how-unshackle-chooses-a-cdm-and-finds-keys" title="Permanent link">&para;</a></h3>
 <p>CDM selection is config-driven: the <code>cdm</code> map resolves a service tag (and optionally the
 track quality or DRM type) to a device name, which <code>load_cdm</code> instantiates as a local

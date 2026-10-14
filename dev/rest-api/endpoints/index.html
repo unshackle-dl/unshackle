@@ -2040,6 +2040,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#post-apisessionsession_idsamples" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/session/{session_id}/samples
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#post-apisessionsession_idlicense" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2937,6 +2948,17 @@
     <span class="md-ellipsis">
       
         POST /api/session/{session_id}/segment_filter
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-apisessionsession_idsamples" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/session/{session_id}/samples
       
     </span>
   </a>
@@ -4826,9 +4848,10 @@ answers the prompt within 10 minutes.</p>
 </span><span id="__span-30-4"><a id="__codelineno-30-4" name="__codelineno-30-4" href="#__codelineno-30-4"></a>POST /api/session/{id}/tracks   → tracks + chapters (with URLs) for one title
 </span><span id="__span-30-5"><a id="__codelineno-30-5" name="__codelineno-30-5" href="#__codelineno-30-5"></a>POST /api/session/{id}/segments → resolve segment URLs / DRM / headers per track
 </span><span id="__span-30-6"><a id="__codelineno-30-6" name="__codelineno-30-6" href="#__codelineno-30-6"></a>POST /api/session/{id}/segment_filter → HLS segments the service drops (ads, bumpers)
-</span><span id="__span-30-7"><a id="__codelineno-30-7" name="__codelineno-30-7" href="#__codelineno-30-7"></a>POST /api/session/{id}/license  → proxy or server-CDM DRM licensing
-</span><span id="__span-30-8"><a id="__codelineno-30-8" name="__codelineno-30-8" href="#__codelineno-30-8"></a>POST /api/session/{id}/keys/bad → report a server-vault content key that did not decrypt
-</span><span id="__span-30-9"><a id="__codelineno-30-9" name="__codelineno-30-9" href="#__codelineno-30-9"></a>DELETE /api/session/{id}        → tear down, harvest updated cache
+</span><span id="__span-30-7"><a id="__codelineno-30-7" name="__codelineno-30-7" href="#__codelineno-30-7"></a>POST /api/session/{id}/samples  → decrypt cbcs samples of a track on the server
+</span><span id="__span-30-8"><a id="__codelineno-30-8" name="__codelineno-30-8" href="#__codelineno-30-8"></a>POST /api/session/{id}/license  → proxy or server-CDM DRM licensing
+</span><span id="__span-30-9"><a id="__codelineno-30-9" name="__codelineno-30-9" href="#__codelineno-30-9"></a>POST /api/session/{id}/keys/bad → report a server-vault content key that did not decrypt
+</span><span id="__span-30-10"><a id="__codelineno-30-10" name="__codelineno-30-10" href="#__codelineno-30-10"></a>DELETE /api/session/{id}        → tear down, harvest updated cache
 </span></code></pre></div>
 <h3 id="slow-responses">Slow responses<a class="headerlink" href="#slow-responses" title="Permanent link">&para;</a></h3>
 <p>The <code>titles</code>, <code>tracks</code> and <code>license</code> routes can take minutes on a large catalogue. When the
@@ -5154,6 +5177,54 @@ A slow answer arrives as a <a href="#slow-responses">slow response</a>.</p>
 <td><code>500</code></td>
 <td><code>SERVICE_ERROR</code></td>
 <td>The playlist request or the filter failed.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="post-apisessionsession_idsamples"><code>POST /api/session/{session_id}/samples</code><a class="headerlink" href="#post-apisessionsession_idsamples" title="Permanent link">&para;</a></h3>
+<p>Decrypt the samples of a track that the service decrypts itself after the download. The tracks response lists those track IDs in <code>sample_decrypt_tracks</code>. The client downloads the file, then sends each <code>stsd</code> sample entry's samples here, and writes the plaintexts back in place. The query string names the track and the 1-based entry: <code>?track_id=a-1&amp;entry=2</code>.</p>
+<ul>
+<li>An empty body asks how the entry decrypts. The JSON response is <code>{ "key": "&lt;hex&gt;" }</code>, which the client then uses itself, or <code>{ "decrypter": true }</code>.</li>
+<li>An <code>application/octet-stream</code> body is a sample frame: a big-endian <code>uint32</code> count, one <code>uint32</code> length per sample, then the samples. Each sample is a ciphertext cut to whole AES blocks. The response is a frame of the same shape with the plaintexts in the same order.</li>
+</ul>
+<p>The client sends at most 8 MiB of samples per request, and the route accepts a body of up to 16 MiB. Binary frames keep the upload the size of the samples, and the server does not compress them. The route needs the <code>server_cdm</code> grant for the service, because the decrypter can use a process or an account of the server.</p>
+<table>
+<thead>
+<tr>
+<th>Status</th>
+<th>Error code</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>200</code></td>
+<td>-</td>
+<td>The content key, <code>decrypter</code>, or the plaintext frame.</td>
+</tr>
+<tr>
+<td><code>400</code></td>
+<td><code>INVALID_INPUT</code></td>
+<td>Missing <code>track_id</code>, a bad <code>entry</code>, a malformed frame, or a track the service does not decrypt.</td>
+</tr>
+<tr>
+<td><code>413</code></td>
+<td>-</td>
+<td>The body is larger than 16 MiB.</td>
+</tr>
+<tr>
+<td><code>403</code></td>
+<td><code>FORBIDDEN</code></td>
+<td>The API key has no <code>server_cdm</code> grant for the service.</td>
+</tr>
+<tr>
+<td><code>404</code></td>
+<td><code>TRACK_NOT_FOUND</code></td>
+<td>An unknown track ID was requested.</td>
+</tr>
+<tr>
+<td><code>500</code></td>
+<td><code>SERVICE_ERROR</code></td>
+<td>The service's decrypter failed.</td>
 </tr>
 </tbody>
 </table>
