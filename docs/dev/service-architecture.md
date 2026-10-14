@@ -414,6 +414,19 @@ You do not open CDM sessions or operate shaka-packager yourself. The `Widevine`/
 classes drive the CDM handshake and call the decryption backend. Your hook is only the
 "send this challenge, give me back the license" step.
 
+### Decrypting a cbcs file yourself
+
+Some tracks cannot use the framework's decryption: a single cbcs file whose sample entries share
+a zero default KID, or a sample entry whose content key no CDM can license and only a separate
+process can use. For these, call `unshackle.core.drm.cbcs.decrypt_file(track.path, key_for)` from
+`on_track_downloaded`. Set no `drm` on the track, so the framework does not try to license it.
+
+`key_for(track, entry)` gets the track layout and one protected `stsd` entry. It returns the
+16-byte content key, or a `cbcs.SampleDecrypter`. A `SampleDecrypter` gets the protected bytes of
+each sample of one fragment, cut to whole AES blocks, and returns plaintexts of the same lengths.
+It handles full-sample cbcs only, not pattern encryption. `decrypt_file` writes the plaintext
+back in place and removes the protection boxes, so the muxer reads a clear file.
+
 ### How unshackle chooses a CDM and finds keys
 
 CDM selection is config-driven: the `cdm` map resolves a service tag (and optionally the
