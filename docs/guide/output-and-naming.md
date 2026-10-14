@@ -269,9 +269,9 @@ unshackle writes lyrics when the service supplies them: a `LYRICS` Vorbis commen
 `USLT` frame for MP3, and a `©lyr` atom for M4A. Ogg uses the same `LYRICS` field as
 FLAC. unshackle does not write synchronized lyrics (`SYLT`).
 
-A service can also ask for a lyrics file beside the audio, for example
-`08.Get.Lucky.lrc` next to `08.Get.Lucky.m4a`. A music player reads the timed lines from
-it. The file also comes back to the client from a remote server.
+The embedded lyrics are plain text. A service can also save timed lyrics in a file beside
+the audio, for example `08.Get.Lucky.lrc` next to `08.Get.Lucky.m4a`. A music player reads
+the timed lines from that file. The file also comes back to the client from a remote server.
 
 A metadata fault does not stop the run. The file is already in place, so unshackle writes a
 warning and continues.

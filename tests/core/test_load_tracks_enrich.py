@@ -46,6 +46,6 @@ def test_a_song_takes_only_the_language():
 
 def test_a_song_takes_the_lyrics_set_in_get_tracks():
     song = Song(id_="song-0001", service=SERVICE, name="Track 1", artist="A", album="B", track=1, disc=1)
-    info = {"name": "Track 1", "lyrics": "[00:01.00]Line", "lyrics_suffix": ".lrc"}
+    info = {"name": "Track 1", "lyrics": "Line", "synced_lyrics": "[00:01.00]Line", "lyrics_suffix": ".lrc"}
     load_tracks(refreshing_service(info), song)
-    assert (song.lyrics, song.lyrics_suffix) == ("[00:01.00]Line", ".lrc")
+    assert (song.lyrics, song.synced_lyrics, song.lyrics_suffix) == ("Line", "[00:01.00]Line", ".lrc")

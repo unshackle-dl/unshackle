@@ -3867,9 +3867,9 @@ class dl:
                             )
                         if include_sample:
                             self.write_sample(final_path, title, media_info)
-                        if isinstance(title, Song) and title.lyrics and title.lyrics_suffix:
+                        if isinstance(title, Song) and title.synced_lyrics and title.lyrics_suffix:
                             lyrics_path = final_path.with_suffix(title.lyrics_suffix)
-                            lyrics_path.write_text(f"{title.lyrics}\n", encoding="utf-8")
+                            lyrics_path.write_text(f"{title.synced_lyrics}\n", encoding="utf-8")
                             sidecar_files.setdefault(muxed_path, []).append(lyrics_path)
                             self.log.info(f"Saved lyrics to {lyrics_path.name}")
 

@@ -28,6 +28,7 @@ SONG_FIELDS = (
     "copyright",
     "label",
     "lyrics",
+    "synced_lyrics",
     "lyrics_suffix",
     "artwork_url",
 )
@@ -59,9 +60,13 @@ class Song(Title):
         label: Optional[str] = None,
         lyrics: Optional[str] = None,
         artwork_url: Optional[str] = None,
+        synced_lyrics: Optional[str] = None,
         lyrics_suffix: Optional[str] = None,
     ) -> None:
-        """`lyrics_suffix` (".lrc", ".ttml") also saves `lyrics` beside the audio file with that suffix."""
+        """`lyrics` is the plain text the tagger embeds.
+
+        `synced_lyrics` (timed LRC or TTML) is saved beside the audio file with `lyrics_suffix` (".lrc", ".ttml").
+        """
         super().__init__(id_, service, language, data)
 
         if not name:
@@ -113,6 +118,8 @@ class Song(Title):
             raise TypeError(f"Expected lyrics to be a str, not {lyrics!r}")
         if artwork_url is not None and not isinstance(artwork_url, str):
             raise TypeError(f"Expected artwork_url to be a str, not {artwork_url!r}")
+        if synced_lyrics is not None and not isinstance(synced_lyrics, str):
+            raise TypeError(f"Expected synced_lyrics to be a str, not {synced_lyrics!r}")
         if lyrics_suffix is not None and not (isinstance(lyrics_suffix, str) and lyrics_suffix.startswith(".")):
             raise TypeError(f"Expected lyrics_suffix to be a str starting with '.', not {lyrics_suffix!r}")
 
@@ -160,6 +167,7 @@ class Song(Title):
         self.label = label
         self.lyrics = lyrics
         self.artwork_url = artwork_url
+        self.synced_lyrics = synced_lyrics.strip() if synced_lyrics else None
         self.lyrics_suffix = lyrics_suffix
 
     def __str__(self) -> str:

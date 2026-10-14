@@ -654,6 +654,7 @@ def build_title(info: Dict[str, Any], service_tag: str, fallback_id: str) -> Tit
             label=info.get("label"),
             lyrics=info.get("lyrics"),
             artwork_url=info.get("artwork_url"),
+            synced_lyrics=info.get("synced_lyrics"),
             lyrics_suffix=info.get("lyrics_suffix"),
         )
     else:
