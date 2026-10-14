@@ -410,6 +410,7 @@ The server mounts all these routes, even in `--remote-only` mode. Paths use the
 | `POST` | `/api/session/{id}/tracks` | Resolve tracks, manifests, chapters, headers/cookies for a title |
 | `POST` | `/api/session/{id}/segments` | Resolve per-segment/track download descriptors |
 | `POST` | `/api/session/{id}/segment_filter` | Unwanted HLS segment URIs for one track (ads, bumpers) |
+| `POST` | `/api/session/{id}/samples` | Decrypt the cbcs samples of a track the service decrypts itself |
 | `POST` | `/api/session/{id}/license` | DRM licensing (proxy or server CDM) |
 | `POST` | `/api/session/{id}/keys/bad` | Report a server-vault content key that did not decrypt |
 | `GET` | `/api/session/{id}/logs` | Drain the service's server-side log output |

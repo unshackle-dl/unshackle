@@ -58,11 +58,13 @@ from unshackle.core.api.handlers import (
     session_logs_handler,
     session_prompt_get_handler,
     session_prompt_post_handler,
+    session_samples_handler,
     session_segment_filter_handler,
     session_segments_handler,
     session_titles_handler,
     session_tracks_handler,
 )
+from unshackle.core.drm import cbcs
 from unshackle.core.services import Services
 from unshackle.core.update_checker import UpdateChecker
 from unshackle.core.utils.redact import redact_path
@@ -2123,6 +2125,54 @@ async def session_segment_filter(request: web.Request) -> web.Response:
 
 
 @api_handler
+async def session_samples(request: web.Request) -> web.Response:
+    """
+    Decrypt the samples of a track on the server.
+    ---
+    summary: Decrypt samples
+    description: >-
+      For a track the tracks response lists in sample_decrypt_tracks. An empty body asks how the
+      stsd entry decrypts: the JSON answer is its content key (hex) in key, or decrypter true. A
+      body of samples gets their plaintexts back in the same frame: a big-endian uint32 count,
+      one uint32 length per sample, then the samples, each ciphertext cut to whole AES blocks. The
+      body is application/octet-stream and is not in this schema, so the docs page cannot send it.
+      Needs the server_cdm grant for the service.
+    parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: track_id
+        in: query
+        required: true
+        schema:
+          type: string
+      - name: entry
+        in: query
+        required: true
+        description: "1-based stsd sample entry index"
+        schema:
+          type: integer
+    responses:
+      '200':
+        description: "JSON key (hex) or decrypter: true, or a sample frame of plaintexts in order"
+      '403':
+        description: The API key has no server_cdm grant for the service
+      '404':
+        description: Remote session or track not found
+    """
+    frame = await request.clone(client_max_size=2 * cbcs.SAMPLE_BATCH_BYTES).read()
+    return await session_samples_handler(
+        request.match_info["session_id"],
+        request.query.get("track_id", ""),
+        request.query.get("entry", ""),
+        frame,
+        request,
+    )
+
+
+@api_handler
 @heartbeat
 async def session_license(request: web.Request) -> web.Response:
     """
@@ -3071,6 +3121,7 @@ ROUTES: list[tuple[str, str, Handler, bool]] = [
     ("POST", "/api/session/{session_id}/tracks", session_tracks, True),
     ("POST", "/api/session/{session_id}/segments", session_segments, True),
     ("POST", "/api/session/{session_id}/segment_filter", session_segment_filter, True),
+    ("POST", "/api/session/{session_id}/samples", session_samples, True),
     ("POST", "/api/session/{session_id}/license", session_license, True),
     ("POST", "/api/session/{session_id}/keys/bad", session_bad_key, True),
     ("GET", "/api/session/{session_id}/logs", session_logs, True),

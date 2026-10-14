@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any, Optional, TypeVar, Union
 
 if TYPE_CHECKING:
     from unshackle.core.api.input_bridge import InputBridge
+    from unshackle.core.drm.cbcs import SampleDecrypter
 
 import click
 import m3u8
@@ -719,6 +720,20 @@ class Service(metaclass=ABCMeta):
         wants "Chapter {n}" style Chapter names (or similar) then they can use the config
         option `chapter_fallback_name`. For example, `"Chapter {i:02}"` for "Chapter 01".
         """
+
+    # Optional sample decryption
+
+    def decrypts_samples(self, track: AnyTrack) -> bool:
+        """Whether this service decrypts the cbcs file of `track` after the download, through `get_sample_decrypter`."""
+        return False
+
+    def get_sample_decrypter(self, track: AnyTrack, entry: int) -> Union[bytes, "SampleDecrypter"]:
+        """The content key, or a `cbcs.SampleDecrypter`, for `stsd` entry `entry` (1-based) of `track`.
+
+        unshackle calls this only for a track `decrypts_samples` names. A remote session runs it on the
+        server, so a decrypter that needs a local process works for remote clients too.
+        """
+        raise NotImplementedError(f"{self.__class__.__name__} does not decrypt samples")
 
     # Optional Event methods
 

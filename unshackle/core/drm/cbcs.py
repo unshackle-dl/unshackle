@@ -431,6 +431,28 @@ SampleDecrypter = Callable[[list[bytes]], list[bytes]]
 
 KeyResolver = Callable[[TrackLayout, SampleEntry], Union[bytes, SampleDecrypter]]
 
+SAMPLE_BATCH_BYTES = 8 * 1024 * 1024
+"""The most sample bytes one remote `pack_samples` frame carries; a larger single sample travels alone."""
+
+
+def pack_samples(samples: list[bytes]) -> bytes:
+    """Frame samples for transport: a big-endian count, one length per sample, then the samples."""
+    return struct.pack(f">I{len(samples)}I", len(samples), *map(len, samples)) + b"".join(samples)
+
+
+def unpack_samples(frame: bytes) -> list[bytes]:
+    """The samples of a `pack_samples` frame. Raises ValueError for a frame whose lengths do not add up."""
+    count = struct.unpack_from(">I", frame)[0] if len(frame) >= 4 else -1
+    offset = 4 + 4 * count
+    lengths = struct.unpack_from(f">{count}I", frame, 4) if 0 <= count and offset <= len(frame) else None
+    if lengths is None or offset + sum(lengths) != len(frame):
+        raise ValueError("The sample frame is truncated or its lengths do not match its size")
+    samples = []
+    for length in lengths:
+        samples.append(frame[offset : offset + length])
+        offset += length
+    return samples
+
 
 def decrypt_file(path: Path, key_for: KeyResolver) -> None:
     """Decrypt every cbcs fragment of `path` in place, with the content key `key_for` names per sample entry.
@@ -546,7 +568,7 @@ def _decrypt_with(decrypter: SampleDecrypter, buf: bytearray, span_start: int, f
             samples.append(runs)
     if not samples:
         return
-    ciphertexts = [b"".join(bytes(buf[start : start + length]) for start, length in runs) for runs in samples]
+    ciphertexts = [b"".join(buf[start : start + length] for start, length in runs) for runs in samples]
     plaintexts = decrypter(ciphertexts)
     if len(plaintexts) != len(ciphertexts):
         raise ValueError(f"The sample decrypter returned {len(plaintexts)} samples for {len(ciphertexts)}")

@@ -933,6 +933,7 @@ GET  /api/session/{id}/titles   → list titles
 POST /api/session/{id}/tracks   → tracks + chapters (with URLs) for one title
 POST /api/session/{id}/segments → resolve segment URLs / DRM / headers per track
 POST /api/session/{id}/segment_filter → HLS segments the service drops (ads, bumpers)
+POST /api/session/{id}/samples  → decrypt cbcs samples of a track on the server
 POST /api/session/{id}/license  → proxy or server-CDM DRM licensing
 POST /api/session/{id}/keys/bad → report a server-vault content key that did not decrypt
 DELETE /api/session/{id}        → tear down, harvest updated cache
@@ -1139,6 +1140,24 @@ Get the HLS segments a service drops (ads, bumpers, dub cards). The server runs 
 | `400` | `INVALID_INPUT` | Missing `track_id`. |
 | `404` | `TRACK_NOT_FOUND` | An unknown track ID was requested. |
 | `500` | `SERVICE_ERROR` | The playlist request or the filter failed. |
+
+### `POST /api/session/{session_id}/samples`
+
+Decrypt the samples of a track that the service decrypts itself after the download. The tracks response lists those track IDs in `sample_decrypt_tracks`. The client downloads the file, then sends each `stsd` sample entry's samples here, and writes the plaintexts back in place. The query string names the track and the 1-based entry: `?track_id=a-1&entry=2`.
+
+- An empty body asks how the entry decrypts. The JSON response is `{ "key": "<hex>" }`, which the client then uses itself, or `{ "decrypter": true }`.
+- An `application/octet-stream` body is a sample frame: a big-endian `uint32` count, one `uint32` length per sample, then the samples. Each sample is a ciphertext cut to whole AES blocks. The response is a frame of the same shape with the plaintexts in the same order.
+
+The client sends at most 8 MiB of samples per request, and the route accepts a body of up to 16 MiB. Binary frames keep the upload the size of the samples, and the server does not compress them. The route needs the `server_cdm` grant for the service, because the decrypter can use a process or an account of the server.
+
+| Status | Error code | Meaning |
+| --- | --- | --- |
+| `200` | - | The content key, `decrypter`, or the plaintext frame. |
+| `400` | `INVALID_INPUT` | Missing `track_id`, a bad `entry`, a malformed frame, or a track the service does not decrypt. |
+| `413` | - | The body is larger than 16 MiB. |
+| `403` | `FORBIDDEN` | The API key has no `server_cdm` grant for the service. |
+| `404` | `TRACK_NOT_FOUND` | An unknown track ID was requested. |
+| `500` | `SERVICE_ERROR` | The service's decrypter failed. |
 
 ### `POST /api/session/{session_id}/license`
 

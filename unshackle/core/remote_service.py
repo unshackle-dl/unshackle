@@ -23,6 +23,7 @@ from http.cookiejar import CookieJar
 from pathlib import Path
 from threading import Event, Lock, Thread
 from typing import Any, Callable, Dict, Iterable, Iterator, Optional, Union
+from urllib.parse import urlencode
 from uuid import UUID
 
 import click
@@ -37,6 +38,7 @@ from unshackle.core.config import config
 from unshackle.core.console import console, prompt_user
 from unshackle.core.constants import AnyTrack
 from unshackle.core.credential import Credential
+from unshackle.core.drm import cbcs
 from unshackle.core.proxies.resolve import is_loopback
 from unshackle.core.session import MAX_BACKOFF
 from unshackle.core.titles import Title_T, Titles_T, remap_titles
@@ -110,13 +112,20 @@ class RemoteClient:
         data: Optional[Dict[str, Any]] = None,
         optional: bool = False,
         expect: tuple[str, ...] = (),
+        body: Optional[bytes] = None,
     ) -> Dict[str, Any]:
-        """Send one request and return its JSON body; an error outside ``expect`` exits, one inside it returns."""
+        """Send one request and return its JSON body; an error outside ``expect`` exits, one inside it returns.
+
+        A raw ``body`` goes as ``application/octet-stream``, and a binary answer comes back under ``"body"``.
+        """
         url = f"{self.server_url}{endpoint}"
+        payload: Dict[str, Any] = (
+            {"json": data} if body is None else {"data": body, "headers": {"Content-Type": "application/octet-stream"}}
+        )
         while True:
             try:
                 with self.in_flight(endpoint):
-                    resp = getattr(self.session, method)(url, json=data, timeout=self.timeout)
+                    resp = getattr(self.session, method)(url, timeout=self.timeout, **payload)
             except requests.ConnectionError as e:
                 if isinstance(e.args[0] if e.args else None, urllib3.exceptions.ReadTimeoutError):
                     log.error(
@@ -137,6 +146,8 @@ class RemoteClient:
             if resp.status_code == 401 and self.next_auth_header():
                 continue
             break
+        if resp.status_code < 400 and "octet-stream" in resp.headers.get("Content-Type", ""):
+            return {"body": resp.content}
         try:
             detail = resp.json()
         except ValueError:
@@ -184,6 +195,20 @@ def enum_get(enum_cls: type[Enum], name: Optional[str], default: Any = None) -> 
         return enum_cls[name]
     except KeyError:
         return default
+
+
+def sample_batches(samples: list[bytes]) -> Iterator[list[bytes]]:
+    """Split samples into consecutive batches of at most cbcs.SAMPLE_BATCH_BYTES (a larger sample goes alone)."""
+    batch: list[bytes] = []
+    size = 0
+    for sample in samples:
+        if batch and size + len(sample) > cbcs.SAMPLE_BATCH_BYTES:
+            yield batch
+            batch, size = [], 0
+        batch.append(sample)
+        size += len(sample)
+    if batch:
+        yield batch
 
 
 def base_track_kwargs(data: Dict[str, Any]) -> Dict[str, Any]:
@@ -913,6 +938,7 @@ class RemoteService:
         self.server_vault_keys: Dict[UUID, str] = {}
         self.server_vault = ServerVault(self)
         self._segment_filters: Dict[str, Callable[[Any], bool]] = {}
+        self._sample_decrypt_tracks: set[str] = set()
         self._log_seq = 0
         self._log_drain_lock = Lock()
         self._keepalive_stop = Event()
@@ -1308,7 +1334,9 @@ class RemoteService:
 
         One poller serves every concurrent request, and the local CDM sessions close when the last one ends.
         """
-        if not endpoint.startswith(f"/api/session/{self._session_id}/") or endpoint.endswith(("/prompt", "/logs")):
+        if not endpoint.startswith(f"/api/session/{self._session_id}/") or endpoint.partition("?")[0].endswith(
+            ("/prompt", "/logs", "/samples")
+        ):
             yield
             return
         with self._cdm_lock:
@@ -1407,6 +1435,7 @@ class RemoteService:
                 "falling back to the local CDM"
             )
         self._server_cdm_type = result.get("server_cdm_type", "widevine")
+        self._sample_decrypt_tracks.update(result.get("sample_decrypt_tracks") or [])
 
         for track in [*tracks.videos, *tracks.audio, *tracks.subtitles]:
             if track.descriptor == Track.Descriptor.HLS:
@@ -1416,6 +1445,25 @@ class RemoteService:
         self._chapters_by_title[title_id] = result.get("chapters", [])
 
         return tracks
+
+    def decrypts_samples(self, track: AnyTrack) -> bool:
+        return str(track.id) in self._sample_decrypt_tracks
+
+    def get_sample_decrypter(self, track: AnyTrack, entry: int) -> Union[bytes, cbcs.SampleDecrypter]:
+        """Ask the server how `entry` decrypts. A decrypter sends the samples to the server in batches."""
+        endpoint = f"/api/session/{self._session_id}/samples?{urlencode({'track_id': str(track.id), 'entry': entry})}"
+        answer = self.client.request("post", endpoint, body=b"")
+        if answer.get("key"):
+            return bytes.fromhex(answer["key"])
+
+        def decrypt(samples: list[bytes]) -> list[bytes]:
+            plaintexts: list[bytes] = []
+            for batch in sample_batches(samples):
+                frame = self.client.request("post", endpoint, body=cbcs.pack_samples(batch))["body"]
+                plaintexts.extend(cbcs.unpack_samples(frame))
+            return plaintexts
+
+        return decrypt
 
     def remote_segment_filter(self, track_id: str) -> Callable[[Any], bool]:
         """The server's ``OnSegmentFilter`` result for one HLS track, fetched on first use.

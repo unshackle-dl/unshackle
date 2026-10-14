@@ -55,7 +55,7 @@ from unshackle.core.constants import (
 )
 from unshackle.core.credential import Credential
 from unshackle.core.downloaders import default_max_workers, format_speed, parse_speed_limit, set_speed_limit
-from unshackle.core.drm import DRM_T, ClearKeyCENC, MonaLisa, PlayReady, Widevine, own_kids, verify
+from unshackle.core.drm import DRM_T, ClearKeyCENC, MonaLisa, PlayReady, Widevine, cbcs, own_kids, verify
 from unshackle.core.events import events
 from unshackle.core.export_name import ExportNamer, move_export, plural, season_episodes, title_label
 from unshackle.core.providers.anilist import parse_anilist_ref
@@ -3156,6 +3156,19 @@ class dl:
                             download_processes=download_processes,
                             progress=tracks_progress_callables[i],
                         )
+                        if (
+                            track.path
+                            and service.decrypts_samples(track)
+                            and not DOWNLOAD_CANCELLED.is_set()
+                            and not DOWNLOAD_LICENCE_ONLY.is_set()
+                        ):
+                            progress = tracks_progress_callables[i]
+                            progress(downloaded="Decrypting", completed=0, total=None)
+                            cbcs.decrypt_file(
+                                track.path, lambda _l, entry: service.get_sample_decrypter(track, entry.index)
+                            )
+                            assert_fragments_decrypted(track.path)
+                            progress(downloaded="Decrypted", completed=100, total=100)
                         # DRM-free and HLS-ClearKey tracks never reach prepare_drm, so export here.
                         # drm=None on purpose: licensed tracks already recorded their DRM/keys
                         # in prepare_drm, and write_export merges via setdefault.

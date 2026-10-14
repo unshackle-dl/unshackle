@@ -205,6 +205,7 @@ request and response in full.
 | `POST` | `/api/session/{session_id}/tracks` | Tracks (with URLs) for a chosen title. |
 | `POST` | `/api/session/{session_id}/segments` | Per-track segment/download details. |
 | `POST` | `/api/session/{session_id}/segment_filter` | Server-side HLS segment filter results for one track. |
+| `POST` | `/api/session/{session_id}/samples` | Server-side cbcs sample decryption for one track. |
 | `POST` | `/api/session/{session_id}/license` | Proxy or server-side DRM licensing. |
 | `POST` | `/api/session/{session_id}/keys/bad` | Report a server-vault content key that did not decrypt. |
 | `GET` | `/api/session/{session_id}/logs` | Drain the service's server-side log output. |

@@ -418,14 +418,20 @@ classes drive the CDM handshake and call the decryption backend. Your hook is on
 
 Some tracks cannot use the framework's decryption: a single cbcs file whose sample entries share
 a zero default KID, or a sample entry whose content key no CDM can license and only a separate
-process can use. For these, call `unshackle.core.drm.cbcs.decrypt_file(track.path, key_for)` from
-`on_track_downloaded`. Set no `drm` on the track, so the framework does not try to license it.
+process can use. For these, set no `drm` on the track and override two methods:
 
-`key_for(track, entry)` gets the track layout and one protected `stsd` entry. It returns the
-16-byte content key, or a `cbcs.SampleDecrypter`. A `SampleDecrypter` gets the protected bytes of
-each sample of one fragment, cut to whole AES blocks, and returns plaintexts of the same lengths.
-It handles full-sample cbcs only, not pattern encryption. `decrypt_file` writes the plaintext
-back in place and removes the protection boxes, so the muxer reads a clear file.
+- `decrypts_samples(track)` returns `True` for such a track.
+- `get_sample_decrypter(track, entry)` returns, for the 1-based `stsd` entry, the 16-byte
+  content key or a `cbcs.SampleDecrypter`. A `SampleDecrypter` gets the protected bytes of each sample of
+  one fragment, cut to whole AES blocks, and returns plaintexts of the same lengths. It handles
+  full-sample cbcs only, not pattern encryption.
+
+When the download of the track ends, unshackle calls `unshackle.core.drm.cbcs.decrypt_file`, and
+the progress row shows "Decrypting". Your `on_track_downloaded` runs before this and gets the
+encrypted file. `decrypt_file` writes the plaintext back in place and removes the
+protection boxes, so the muxer reads a clear file. In a remote session `get_sample_decrypter`
+runs on the server: the client sends the samples through the `samples` route, so a decrypter
+that needs a process on the server also works for a remote client.
 
 ### How unshackle chooses a CDM and finds keys
 
