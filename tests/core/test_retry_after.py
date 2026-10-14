@@ -6,7 +6,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from unshackle.core.session import RnetSession
+from unshackle.core.providers.imdb import IMDBProvider
+from unshackle.core.service import Service
+from unshackle.core.session import MAX_BACKOFF, RnetSession
 
 
 @pytest.fixture
@@ -67,3 +69,15 @@ def test_exponential_backoff_without_retry_after(session):
 
 def test_no_response_still_backs_off(session):
     assert session.get_sleep_time(None, 30) == session.max_backoff
+
+
+def test_service_session_caps_retry_after():
+    retry = Service.get_session().get_adapter("https://example.invalid/").max_retries
+    assert retry.respect_retry_after_header
+    assert retry.retry_after_max == MAX_BACKOFF
+
+
+def test_provider_session_gives_up_on_a_rate_limit():
+    retry = IMDBProvider().session.get_adapter("https://example.invalid/").max_retries
+    assert not retry.respect_retry_after_header
+    assert 429 not in retry.status_forcelist

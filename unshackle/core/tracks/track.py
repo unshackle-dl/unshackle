@@ -31,7 +31,7 @@ from unshackle.core.downloaders import requests
 from unshackle.core.drm import DRM_T, ClearKeyCENC, PlayReady, Widevine
 from unshackle.core.drm.verify import decrypt_track
 from unshackle.core.events import events
-from unshackle.core.session import RnetSession, utf8_text
+from unshackle.core.session import MAX_BACKOFF, RnetSession, utf8_text
 from unshackle.core.tracks import resume
 from unshackle.core.utilities import get_boxes, log_event, try_ensure_utf8
 from unshackle.core.utils.subprocess import ffprobe
@@ -78,7 +78,12 @@ def direct_session(session: Union[Session, "RnetSession"], proxy: Optional[str] 
     new.mount(
         "https://",
         HTTPAdapter(
-            max_retries=Retry(total=5, backoff_factor=0.2, status_forcelist=[429, 500, 502, 503, 504]),
+            max_retries=Retry(
+                total=5,
+                backoff_factor=0.2,
+                status_forcelist=[429, 500, 502, 503, 504],
+                retry_after_max=MAX_BACKOFF,
+            ),
             pool_maxsize=64,
             pool_block=True,
         ),
