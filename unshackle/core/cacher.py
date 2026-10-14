@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+import time
 import zlib
-from datetime import datetime, timedelta
+from datetime import datetime
 from os import stat_result
 from pathlib import Path
 from typing import Any, Optional, Union
@@ -12,6 +13,9 @@ import jwt
 from unshackle.core.config import config
 
 EXP_T = Union[datetime, str, int, float]
+
+# A number below this is seconds until expiration; at or above it, a unix timestamp (2001-09-09 onwards).
+ABSOLUTE_TIMESTAMP_MIN = 1_000_000_000
 
 
 class Cacher:
@@ -45,7 +49,8 @@ class Cacher:
 
     @property
     def expired(self) -> bool:
-        return self.expiration and self.expiration < datetime.now()
+        """Compare as unix time: wall-clock comparison is wrong for an hour at each DST change."""
+        return bool(self.expiration and self.expiration.timestamp() < time.time())
 
     def get(self, key: str, version: int = 1) -> Cacher:
         """
@@ -66,7 +71,9 @@ class Cacher:
                     f"The checksum of the Cache payload mismatched. Checksum: {checksum} !== Calculated: {calculated}"
                 )
             cache.data = data["data"]
-            cache.expiration = data["expiration"]
+            # The pickled `expiration` is local wall-clock and only right in the zone that wrote it.
+            expires_at = data.get("expires_at")
+            cache.expiration = datetime.fromtimestamp(expires_at) if expires_at is not None else data["expiration"]
             cache.version = data["version"]
             if cache.version != version:
                 raise ValueError(
@@ -84,15 +91,20 @@ class Cacher:
         """
         self.data = data
 
-        if not expiration:
+        if expiration is None:
             try:
                 expiration = jwt.decode(self.data, options={"verify_signature": False})["exp"]
             except jwt.DecodeError:
                 pass
 
-        self.expiration = self.resolve_datetime(expiration) if expiration else None
+        self.expiration = self.resolve_datetime(expiration) if expiration is not None else None
 
-        payload = {"data": self.data, "expiration": self.expiration, "version": self.version}
+        payload = {
+            "data": self.data,
+            "expiration": self.expiration,
+            "expires_at": self.expiration.timestamp() if self.expiration else None,
+            "version": self.version,
+        }
         payload["crc32"] = zlib.crc32(jsonpickle.dumps(payload).encode("utf8"))
 
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -110,46 +122,26 @@ class Cacher:
     @staticmethod
     def resolve_datetime(timestamp: EXP_T) -> datetime:
         """
-        Change a Datetime or a Timestamp in one of several formats to an absolute Datetime.
+        Change an expiration in one of several formats to a naive local datetime.
 
-        Examples:
-            >>> now = datetime.now()
-            datetime.datetime(2022, 6, 27, 9, 49, 13, 657208)
-            >>> iso8601 = now.isoformat()
-            '2022-06-27T09:49:13.657208'
-            >>> Cacher.resolve_datetime(iso8601)
-            datetime.datetime(2022, 6, 27, 9, 49, 13, 657208)
-            >>> Cacher.resolve_datetime(iso8601 + "Z")
-            datetime.datetime(2022, 6, 27, 9, 49, 13, 657208)
-            >>> Cacher.resolve_datetime(3600)
-            datetime.datetime(2022, 6, 27, 10, 52, 50, 657208)
-            >>> Cacher.resolve_datetime('3600')
-            datetime.datetime(2022, 6, 27, 10, 52, 51, 657208)
-            >>> Cacher.resolve_datetime(7800.113)
-            datetime.datetime(2022, 6, 27, 11, 59, 13, 770208)
-
-        In the int/float examples you may notice that it did not return now + 3600 seconds
-        but rather something a bit more than that. This is because the 3600 seconds start at
-        the moment the function operates, not at the `now` variable.
+        A datetime or an ISO 8601 string is taken as given, and one with a UTC offset
+        (or a final `Z`) is converted to local time. A number is a unix timestamp, in
+        seconds or 13-digit milliseconds, or the seconds until expiration when it is
+        smaller than `ABSOLUTE_TIMESTAMP_MIN`. A numeric string is read as a number.
         """
-        if isinstance(timestamp, datetime):
-            return timestamp
         if isinstance(timestamp, str):
-            if timestamp.endswith("Z"):
-                # fromisoformat doesn't accept the final Z
-                timestamp = timestamp.split("Z")[0]
             try:
-                return datetime.fromisoformat(timestamp)
+                timestamp = datetime.fromisoformat(timestamp)
             except ValueError:
-                timestamp = float(timestamp)
+                timestamp = float(str(timestamp))
+        if isinstance(timestamp, datetime):
+            # naive local time is the one form every consumer of `expiration` can do arithmetic with
+            return timestamp.astimezone().replace(tzinfo=None) if timestamp.tzinfo else timestamp
         try:
-            if len(str(int(timestamp))) == 13:  # JS-style timestamp
+            if len(str(abs(int(timestamp)))) == 13:  # JS-style timestamp
                 timestamp /= 1000
-            timestamp = datetime.fromtimestamp(timestamp)
-        except ValueError:
+            if timestamp < ABSOLUTE_TIMESTAMP_MIN:
+                timestamp += time.time()
+            return datetime.fromtimestamp(timestamp)
+        except (ValueError, OverflowError, OSError):
             raise ValueError(f"Unrecognized Timestamp value {timestamp!r}")
-        if timestamp < datetime.now():
-            # timestamp is likely an amount of seconds til expiration
-            # or, it's an already expired timestamp which is unlikely
-            timestamp = timestamp + timedelta(seconds=datetime.now().timestamp())
-        return timestamp
