@@ -34,6 +34,7 @@ from unshackle.core.proxies.resolve import initialize_proxy_providers, resolve_p
 from unshackle.core.services import Services
 from unshackle.core.session import utf8_text
 from unshackle.core.titles import Episode, Movie, Song, Title_T
+from unshackle.core.titles.music import SONG_FIELDS
 from unshackle.core.tracks import Audio, Subtitle, Tracks, Video
 from unshackle.core.utilities import declared_kwargs, kind_only_conflict
 from unshackle.core.utils.click_types import AUDIO_CODEC_LIST, SUBTITLE_CODEC, VIDEO_CODEC_LIST
@@ -1158,24 +1159,7 @@ def serialize_title(title: Title_T) -> Dict[str, Any]:
         if getattr(title, "daily", None) is not None:
             result["daily"] = title.daily
     if is_song:
-        for field in (
-            "artist",
-            "album",
-            "track",
-            "disc",
-            "album_artist",
-            "release_type",
-            "total_tracks",
-            "total_discs",
-            "genre",
-            "explicit",
-            "isrc",
-            "upc",
-            "copyright",
-            "label",
-            "lyrics",
-            "artwork_url",
-        ):
+        for field in SONG_FIELDS:
             result[field] = getattr(title, field, None)
     if isinstance(title, (Episode, Movie)) and getattr(title, "anime", None) is not None:
         result["anime"] = title.anime

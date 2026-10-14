@@ -12,6 +12,27 @@ from unshackle.core.titles.title import Title
 from unshackle.core.utilities import sanitize_filename
 from unshackle.core.utils.template_formatter import TemplateFormatter, detect_spacer
 
+SONG_FIELDS = (
+    "artist",
+    "album",
+    "track",
+    "disc",
+    "album_artist",
+    "release_type",
+    "total_tracks",
+    "total_discs",
+    "genre",
+    "explicit",
+    "isrc",
+    "upc",
+    "copyright",
+    "label",
+    "lyrics",
+    "lyrics_suffix",
+    "artwork_url",
+)
+"""The `Song` attributes a remote session sends, beyond the fields every title has."""
+
 
 class Song(Title):
     def __init__(
@@ -38,7 +59,9 @@ class Song(Title):
         label: Optional[str] = None,
         lyrics: Optional[str] = None,
         artwork_url: Optional[str] = None,
+        lyrics_suffix: Optional[str] = None,
     ) -> None:
+        """`lyrics_suffix` (".lrc", ".ttml") also saves `lyrics` beside the audio file with that suffix."""
         super().__init__(id_, service, language, data)
 
         if not name:
@@ -90,6 +113,8 @@ class Song(Title):
             raise TypeError(f"Expected lyrics to be a str, not {lyrics!r}")
         if artwork_url is not None and not isinstance(artwork_url, str):
             raise TypeError(f"Expected artwork_url to be a str, not {artwork_url!r}")
+        if lyrics_suffix is not None and not (isinstance(lyrics_suffix, str) and lyrics_suffix.startswith(".")):
+            raise TypeError(f"Expected lyrics_suffix to be a str starting with '.', not {lyrics_suffix!r}")
 
         name = name.strip()
         artist = artist.strip()
@@ -135,6 +160,7 @@ class Song(Title):
         self.label = label
         self.lyrics = lyrics
         self.artwork_url = artwork_url
+        self.lyrics_suffix = lyrics_suffix
 
     def __str__(self) -> str:
         return "{artist} - {album} ({year}) / {track:02}. {name}".format(

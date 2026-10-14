@@ -44,7 +44,7 @@ from unshackle.core.session import MAX_BACKOFF
 from unshackle.core.titles import Title_T, Titles_T, remap_titles
 from unshackle.core.titles.episode import Episode, Series
 from unshackle.core.titles.movie import Movie, Movies
-from unshackle.core.titles.music import Album, Song
+from unshackle.core.titles.music import SONG_FIELDS, Album, Song
 from unshackle.core.tracks import Audio, Chapter, Chapters, Subtitle, Tracks, Video
 from unshackle.core.tracks.attachment import Attachment
 from unshackle.core.tracks.track import Track
@@ -599,7 +599,7 @@ def apply_title_fields(title: Title_T, info: Dict[str, Any]) -> None:
     elif info.get("name"):
         title.name = info["name"]
 
-    for key in ("anime", "daily"):
+    for key in ("anime", "daily", *(SONG_FIELDS if isinstance(title, Song) else ())):
         if info.get(key) is not None:
             setattr(title, key, info[key])
 
@@ -654,6 +654,7 @@ def build_title(info: Dict[str, Any], service_tag: str, fallback_id: str) -> Tit
             label=info.get("label"),
             lyrics=info.get("lyrics"),
             artwork_url=info.get("artwork_url"),
+            lyrics_suffix=info.get("lyrics_suffix"),
         )
     else:
         raise click.ClickException(

@@ -197,8 +197,10 @@ Each subclass adds its own required fields on top of `id_` and `service`:
 
     A `Song` also takes optional metadata keywords that the tagger and the naming templates
     read: `album_artist`, `release_type`, `total_tracks`, `total_discs`, `genre`,
-    `explicit`, `isrc`, `upc`, `copyright`, `label`, `lyrics`, and `artwork_url`. Read the
-    class for the current list.
+    `explicit`, `isrc`, `upc`, `copyright`, `label`, `lyrics`, `lyrics_suffix`, and
+    `artwork_url`. Read the class for the current list. With `lyrics_suffix` (`".lrc"`,
+    `".ttml"`), unshackle also saves `lyrics` beside the final audio file under that suffix.
+    You can set these fields in `get_tracks()` too, and a remote client gets them back.
 
     The tagger also falls back to `Song.data` for fields the constructor did not get, such
     as the composer or a full release date. It reads the top level of that dict and a
