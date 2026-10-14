@@ -1694,6 +1694,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#decrypting-a-cbcs-file-yourself" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Decrypting a cbcs file yourself
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#how-unshackle-chooses-a-cdm-and-finds-keys" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2551,6 +2562,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#decrypting-a-cbcs-file-yourself" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Decrypting a cbcs file yourself
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#how-unshackle-chooses-a-cdm-and-finds-keys" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3173,6 +3195,16 @@ needs:</p>
 <p>You do not open CDM sessions or operate shaka-packager yourself. The <code>Widevine</code>/<code>PlayReady</code>
 classes drive the CDM handshake and call the decryption backend. Your hook is only the
 "send this challenge, give me back the license" step.</p>
+<h3 id="decrypting-a-cbcs-file-yourself">Decrypting a cbcs file yourself<a class="headerlink" href="#decrypting-a-cbcs-file-yourself" title="Permanent link">&para;</a></h3>
+<p>Some tracks cannot use the framework's decryption: a single cbcs file whose sample entries share
+a zero default KID, or a sample entry whose content key no CDM can license and only a separate
+process can use. For these, call <code>unshackle.core.drm.cbcs.decrypt_file(track.path, key_for)</code> from
+<code>on_track_downloaded</code>. Set no <code>drm</code> on the track, so the framework does not try to license it.</p>
+<p><code>key_for(track, entry)</code> gets the track layout and one protected <code>stsd</code> entry. It returns the
+16-byte content key, or a <code>cbcs.SampleDecrypter</code>. A <code>SampleDecrypter</code> gets the protected bytes of
+each sample of one fragment, cut to whole AES blocks, and returns plaintexts of the same lengths.
+It handles full-sample cbcs only, not pattern encryption. <code>decrypt_file</code> writes the plaintext
+back in place and removes the protection boxes, so the muxer reads a clear file.</p>
 <h3 id="how-unshackle-chooses-a-cdm-and-finds-keys">How unshackle chooses a CDM and finds keys<a class="headerlink" href="#how-unshackle-chooses-a-cdm-and-finds-keys" title="Permanent link">&para;</a></h3>
 <p>CDM selection is config-driven: the <code>cdm</code> map resolves a service tag (and optionally the
 track quality or DRM type) to a device name, which <code>load_cdm</code> instantiates as a local
