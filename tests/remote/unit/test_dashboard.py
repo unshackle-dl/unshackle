@@ -6,7 +6,6 @@ import asyncio
 import logging
 import sys
 import threading
-import time
 from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
 
@@ -354,9 +353,11 @@ async def test_status_reports_no_session_limit(aiohttp_client, dashboard_cfg, mo
     assert body["max_sessions"] is None
 
 
-async def test_dashboard_health(aiohttp_client, dashboard_cfg) -> None:
+async def test_dashboard_health(aiohttp_client, dashboard_cfg, monkeypatch) -> None:
     from unshackle.core.api import handlers
 
+    monkeypatch.setattr(config, "key_vaults", [])
+    monkeypatch.setattr(config, "proxy_providers", {})
     handlers._health_cache.clear()
     client = await aiohttp_client(make_app())
     body = await (await client.get("/api/dashboard/health", headers={"X-Secret-Key": "dash-secret"})).json()
@@ -617,10 +618,12 @@ async def test_health_probe_timeout_reports_what_finished(aiohttp_client, dashbo
     """A vault that accepts the connection then stalls must not hang the panel forever."""
     from unshackle.core.api import handlers
 
+    released = threading.Event()
+
     def stalling_probe(checks=None):
         checks = [] if checks is None else checks
         checks.append({"id": "ffmpeg", "label": "ffmpeg", "status": "ok", "detail": "7.1", "ms": 1.0})
-        time.sleep(6)  # the stalled vault; the deadline fires long before this returns
+        released.wait(6)  # the stalled vault; the deadline fires long before this returns
         checks.append({"id": "never", "label": "never", "status": "ok", "detail": "", "ms": 0.0})
         return checks
 
@@ -629,7 +632,10 @@ async def test_health_probe_timeout_reports_what_finished(aiohttp_client, dashbo
     monkeypatch.setattr(handlers, "HEALTH_PROBE_TIMEOUT", 1.0)
 
     client = await aiohttp_client(make_app())
-    body = await (await client.get("/api/dashboard/health", headers={"X-Secret-Key": "dash-secret"})).json()
+    try:
+        body = await (await client.get("/api/dashboard/health", headers={"X-Secret-Key": "dash-secret"})).json()
+    finally:
+        released.set()  # an interpreter exit joins the probe thread, so do not leave it asleep
 
     ids = [c["id"] for c in body["checks"]]
     assert "ffmpeg" in ids, "the probe that finished before the deadline must survive"

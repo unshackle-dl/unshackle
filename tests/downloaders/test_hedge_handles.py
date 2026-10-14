@@ -25,7 +25,7 @@ SLOW_INDEX = 4
 FAST_BODY = b"F" * 4096
 SLOW_BODY = b"S" * 40960
 TRICKLE_CHUNK = 2048
-TRICKLE_DELAY = 0.05
+TRICKLE_DELAY = 0.5
 
 
 class _Handler(BaseHTTPRequestHandler):
@@ -82,7 +82,7 @@ def test_hedge_loser_releases_handles_before_merge(tmp_path, trickle_server, mon
         slow_hits = trickle_server.counts[f"/seg/{SLOW_INDEX}"]
     assert slow_hits == 2, "hedge never fired; the race under test was not exercised"
 
-    # the batch must not stall draining the loser's stream (trickle alone takes ~1s)
+    # the batch must not stall draining the loser's stream (trickle alone takes ~10s)
     assert wall < 5
 
     for i in range(SEGMENTS):

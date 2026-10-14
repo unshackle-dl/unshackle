@@ -80,6 +80,7 @@ class FakeService:
 def run(monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture, episodes: dict, **flags: Any) -> Any:
     """Return the Selected ids, the exit code, or None for a run that completes."""
     monkeypatch.setattr(Tracks, "tree", lambda self, *a, **k: (_ for _ in ()).throw(Selected(self)))
+    monkeypatch.setattr("unshackle.core.providers.search_metadata", lambda *a, **k: None)
     cmd = Harness.__new__(Harness)
     cmd.log = logging.getLogger("test_kind_only")
     cmd.service = "FAKE"

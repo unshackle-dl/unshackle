@@ -99,6 +99,7 @@ test = [
     "pytest>=8.3.0,<9",
     "pytest-asyncio>=0.24.0,<1",
     "pytest-aiohttp>=1.0.5,<2",
+    "pytest-xdist>=3.6.0,<4",
     "responses>=0.25.0,<1",
     "PyYAML>=6.0.1,<7",
 ]
@@ -121,6 +122,8 @@ filterwarnings = [
     "ignore::bs4.XMLParsedAsHTMLWarning",
 ]
 addopts = "-ra --strict-markers"
+# dumps every thread's stack for a test that hangs; the CI job timeout alone leaves no trace
+faulthandler_timeout = 120
 
 [tool.hatch.metadata]
 allow-direct-references = true

@@ -121,7 +121,7 @@ uv run pytest tests/remote -v --live
 Run only fast unit tests:
 
 ```powershell
-uv run pytest tests/remote -m "unit and not slow"
+uv run pytest tests/remote -n auto -m "unit and not slow"
 ```
 
 ## Adding a new service to e2e

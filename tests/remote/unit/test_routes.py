@@ -233,13 +233,7 @@ async def test_cors_preflight_returns_headers(make_app, aiohttp_client) -> None:
     assert "X-Secret-Key" in resp.headers["Access-Control-Allow-Headers"]
 
 
-async def test_health_endpoint_responds_ok(make_app, aiohttp_client, monkeypatch: pytest.MonkeyPatch) -> None:
-    from unshackle.core.api import routes as routes_mod
-
-    async def no_update(_):
-        return None
-
-    monkeypatch.setattr(routes_mod.UpdateChecker, "check_for_updates", no_update)
+async def test_health_endpoint_responds_ok(make_app, aiohttp_client) -> None:
     app = make_app(remote_only=True)
     client = await aiohttp_client(app)
     resp = await client.get("/api/health")
@@ -249,14 +243,7 @@ async def test_health_endpoint_responds_ok(make_app, aiohttp_client, monkeypatch
     assert "version" in body
 
 
-async def test_health_bypasses_api_key_auth_middleware(make_app, aiohttp_client, monkeypatch) -> None:
-    from unshackle.core.api import routes as routes_mod
-
-    async def no_update(_):
-        return None
-
-    monkeypatch.setattr(routes_mod.UpdateChecker, "check_for_updates", no_update)
-
+async def test_health_bypasses_api_key_auth_middleware(make_app, aiohttp_client) -> None:
     app = make_app(remote_only=True, with_auth_middleware=True)
     client = await aiohttp_client(app)
     resp = await client.get("/api/health")

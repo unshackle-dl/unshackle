@@ -91,9 +91,21 @@ def test_bucket_holds_aggregate_rate_across_threads():
     for t in threads:
         t.join()
     achieved = sum(totals) / (time.monotonic() - start)
-    # exceeding the limit is a real failure; undershoot is scheduler noise on a loaded box
+    # exceeding the limit is a real failure; undershoot is scheduler noise on a loaded box, so no lower bound
     assert achieved <= rate * 1.1
-    assert achieved >= rate * 0.5
+
+
+def test_bucket_refills_at_the_rate(monkeypatch):
+    """On a simulated clock the throughput is exact, so a slow refill fails like a fast one."""
+    clock = [0.0]
+    monkeypatch.setattr(requests_downloader, "time", SimpleNamespace(monotonic=lambda: clock[0]))
+    monkeypatch.setattr(
+        requests_downloader, "DOWNLOAD_CANCELLED", SimpleNamespace(wait=lambda s: clock.__setitem__(0, clock[0] + s))
+    )
+    bucket = TokenBucket(1_000)
+    for _ in range(50):
+        bucket.consume(100)
+    assert clock[0] == pytest.approx(5.0)
 
 
 def test_bucket_chunk_larger_than_capacity_does_not_deadlock(monkeypatch):
