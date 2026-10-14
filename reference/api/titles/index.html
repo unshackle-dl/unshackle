@@ -2819,8 +2819,9 @@ takes every part. A dated episode also answers to its ISO air date.
 </span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a>    <span class="n">label</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
 </span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a>    <span class="n">lyrics</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
 </span><span id="__span-0-23"><a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a>    <span class="n">artwork_url</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a>    <span class="n">lyrics_suffix</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-25"><a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a><span class="p">)</span>
+</span><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a>    <span class="n">synced_lyrics</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-25"><a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a>    <span class="n">lyrics_suffix</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-26"><a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a><span class="p">)</span>
 </span></code></pre></div>
 
     <div class="doc doc-contents ">
@@ -2829,7 +2830,8 @@ takes every part. A dated episode also answers to its ISO air date.
 
 
 
-        <p><code>lyrics_suffix</code> (".lrc", ".ttml") also saves <code>lyrics</code> beside the audio file with that suffix.</p>
+        <p><code>lyrics</code> is the plain text the tagger embeds.</p>
+<p><code>synced_lyrics</code> (timed LRC or TTML) is saved beside the audio file with <code>lyrics_suffix</code> (".lrc", ".ttml").</p>
 
 
 

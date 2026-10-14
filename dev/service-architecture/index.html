@@ -2907,9 +2907,11 @@ automatically.</p>
 needs no <code>year</code>.</p>
 <p>A <code>Song</code> also takes optional metadata keywords that the tagger and the naming templates
 read: <code>album_artist</code>, <code>release_type</code>, <code>total_tracks</code>, <code>total_discs</code>, <code>genre</code>,
-<code>explicit</code>, <code>isrc</code>, <code>upc</code>, <code>copyright</code>, <code>label</code>, <code>lyrics</code>, <code>lyrics_suffix</code>, and
-<code>artwork_url</code>. Read the class for the current list. With <code>lyrics_suffix</code> (<code>".lrc"</code>,
-<code>".ttml"</code>), unshackle also saves <code>lyrics</code> beside the final audio file under that suffix.
+<code>explicit</code>, <code>isrc</code>, <code>upc</code>, <code>copyright</code>, <code>label</code>, <code>lyrics</code>, <code>synced_lyrics</code>,
+<code>lyrics_suffix</code>, and <code>artwork_url</code>. Read the class for the current list. Give <code>lyrics</code> as
+plain text: the tagger embeds it as is. With <code>synced_lyrics</code> (timed LRC or TTML) and
+<code>lyrics_suffix</code> (<code>".lrc"</code>, <code>".ttml"</code>), unshackle also saves the timed lyrics beside the
+final audio file under that suffix.
 You can set these fields in <code>get_tracks()</code> too, and a remote client gets them back.</p>
 <p>The tagger also falls back to <code>Song.data</code> for fields the constructor did not get, such
 as the composer or a full release date. It reads the top level of that dict and a
