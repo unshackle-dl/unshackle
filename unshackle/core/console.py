@@ -4,10 +4,13 @@ import logging
 import math
 import shutil
 import sys
+import unicodedata
 from datetime import datetime
+from functools import lru_cache
 from types import ModuleType
 from typing import IO, Any, Callable, Iterable, List, Literal, Mapping, Optional, TextIO, Union
 
+import rich.cells
 from rich import box
 from rich._log_render import FormatTimeCallable, LogRender
 from rich.color import Color, blend_rgb
@@ -413,6 +416,18 @@ def force_utf8_streams() -> None:
 
 
 force_utf8_streams()
+
+_rich_cell_size = rich.cells.get_character_cell_size
+
+
+@lru_cache(maxsize=4096)
+def _cell_size(character: str, *args: str) -> int:
+    """Count a spacing combining mark (Mc, e.g. Devanagari ि) as one cell, as terminals draw it; Rich's table says 0."""
+    return 1 if unicodedata.category(character) == "Mc" else _rich_cell_size(character, *args)
+
+
+rich.cells.get_character_cell_size = _cell_size
+rich.cells.cached_cell_len.cache_clear()
 
 console = ComfyConsole(
     log_time=False,
