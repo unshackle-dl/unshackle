@@ -205,34 +205,36 @@ def partition_exclusions(tokens: Optional[Sequence[str]]) -> tuple[list[str], li
     return includes, excludes
 
 
-def excluded_language_tags(
-    excludes: Sequence[str],
+def matched_language_tags(
+    tokens: Sequence[str],
     available: Sequence[Union[str, Language, None]],
     exact: bool = False,
+    *,
+    every_variant: bool = False,
 ) -> set[str]:
     """
-    The language tags out of `available` that the exclusion tokens remove.
+    The language tags out of `available` that any of the tokens asks for.
 
-    Matches through matching_languages so an exclusion drops exactly the tracks the same
-    token would select, including its exact-mode string preference. Untagged tracks are
-    never excluded.
+    Matches through matching_languages. An exclusion passes every_variant, so "-es" drops
+    every Spanish track. Untagged tracks never match.
     """
-    return {tag for token in excludes for tag in matching_languages(token, available, exact)}
+    return {tag for token in tokens for tag in matching_languages(token, available, exact, every_variant=every_variant)}
 
 
-def keep_forced_subtitle(
-    forced: bool,
-    language: Union[str, Language],
-    forced_s_lang: Sequence[str],
-    exact: bool = False,
-) -> bool:
-    """The -fsl filter: non-forced tracks always pass, forced tracks only when they match forced_s_lang."""
-    if not forced:
-        return True
-    if not forced_s_lang:
-        return False
-    match_func = is_exact_match if exact else is_close_match
-    return match_func(language, forced_s_lang)
+def plain_subtitle_tags(tokens: Sequence[str], subtitles: Sequence[Any], exact: bool = False) -> set[str]:
+    """
+    The non-forced subtitle tags the -sl tokens select.
+
+    Each token is matched against the plain tracks before the SDH ones, so an SDH track cannot win
+    the string-equal preference over the plain variant: -sl en with plain en-US and SDH en takes
+    en-US. An SDH track then joins when it is the same variant as a chosen tag.
+    """
+    plain = [x.language for x in subtitles if not x.forced and not x.sdh]
+    sdh = [x.language for x in subtitles if not x.forced and x.sdh]
+    tags: set[str] = set()
+    for token in tokens:
+        tags |= matching_languages(token, plain, exact) or matching_languages(token, sdh, exact)
+    return tags | {str(lang) for lang in sdh if tags and matching_languages(lang, list(tags), exact=True)}
 
 
 def kind_only_conflict(params: Mapping[str, Any]) -> Optional[tuple[str, str]]:
@@ -296,9 +298,8 @@ def find_missing_langs(
     exact: bool = False,
 ) -> list[str]:
     """Return the requested language tokens that match no available language."""
-    match_func = is_exact_match if exact else is_close_match
     skip = {"all", "best", "orig"}
-    return [tok for tok in requested if tok not in skip and not match_func(tok, available)]
+    return [tok for tok in requested if tok not in skip and not matching_languages(tok, available, exact)]
 
 
 def missing_required_langs(
@@ -315,7 +316,7 @@ def missing_required_langs(
     token ("-fr") asks for a language to be absent, so it is never a required language.
     """
     wanted, _ = partition_exclusions(list(required))
-    return find_missing_langs(resolve_sort_langs(wanted, original), available, exact=exact)
+    return find_missing_langs(resolve_sort_langs(wanted, original, exact=exact), available, exact=exact)
 
 
 def as_requested(tokens: Sequence[str], orig_token: Optional[str]) -> str:
@@ -327,40 +328,65 @@ def matching_languages(
     language: Union[str, Language],
     available: Sequence[Union[str, Language, None]],
     exact: bool = False,
+    *,
+    every_variant: bool = False,
 ) -> set[str]:
     """
     The languages out of `available` that `language` asks for, by the rules Tracks.by_language uses.
 
-    In exact mode CLDR tag distance is not sufficient on its own: it rates a base language and
-    its "paradigm" regional variant as the same language (distance 0 for en/en-US, pt/pt-BR), so
-    it cannot separate en-US from en. Follow RFC 4647 Lookup: prefer the string-equal tag, and
-    fall back to the distance rating only when no such tag is present (for example, zh matches
-    cmn).
+    A tag asks for the variant it means. A tag with a region (en-US, es-419) gets only that
+    variant. A bare tag gets the variant it implies (pt means pt-BR, es means es-ES) and, when
+    the title has none, every regional form, unless exact or the caller sets every_variant,
+    which always returns every form. A ServiceTag falls back the same way, from its own tag. The meant variant follows RFC 4647 Lookup: the string-equal
+    tag, else CLDR distance 0 (zh matches cmn, en-US matches en). Distance alone cannot do it,
+    because it rates a base language and its paradigm variant (en/en-US) the same.
     """
     tags = {str(x) for x in available if x}
     try:
-        want = Language.get(str(language)).to_tag().casefold()
+        requested = Language.get(str(language))
     except LanguageTagError:
         # e.g. a config typo in language_priority; an unparseable tag matches nothing
         return set()
-    if not exact:
-        return {tag for tag in tags if is_close_match(language, [tag])}
+    want = requested.to_tag().casefold()
+    variants: set[str] = set()
+    if not exact and (isinstance(language, ServiceTag) or not requested.territory):
+        variants = {tag for tag in tags if is_close_match(language, [tag])}
+        if every_variant:
+            return variants
     string_equal = {tag for tag in tags if Language.get(tag).to_tag().casefold() == want}
-    return string_equal or {tag for tag in tags if is_exact_match(language, [tag])}
+    return string_equal or {tag for tag in tags if is_exact_match(language, [tag])} or variants
 
 
-def resolve_sort_langs(tokens: Sequence[str], original: Optional[Union[str, Language]] = None) -> list[str]:
+class ServiceTag(str):
+    """A language the service supplied, such as the title language "orig" becomes.
+
+    matching_languages takes its own variant first and falls back to the close regional forms,
+    because the service, not the user, chose its region.
     """
-    Prepare language tokens for a Tracks.sort_* by_language argument.
 
-    "orig" becomes the title language. This function drops it when the title has none.
-    "all" and "best" pass through, because the sort methods find them among the tracks. The
-    result keeps the first position of each language and drops later repeats.
+
+def original_tag(language: Union[str, Language], exact: bool = False) -> str:
+    """The tag to match a service-supplied language with: a ServiceTag, or the plain tag in exact mode."""
+    return str(language) if exact else ServiceTag(str(language))
+
+
+def resolve_sort_langs(
+    tokens: Sequence[str], original: Optional[Union[str, Language]] = None, *, exact: bool = False
+) -> list[str]:
+    """
+    Resolve language tokens for selection, exclusion and the Tracks.sort_* by_language argument.
+
+    "orig" becomes the title language through original_tag. This function drops it when the
+    title has none. "all" and "best" pass through, because the sort methods find them among
+    the tracks. The result keeps the first position of each language and drops later repeats.
     """
     resolved: list[str] = []
     for token in tokens:
-        language = str(original) if token == "orig" else str(token)
-        if token == "orig" and not original:
+        if token != "orig":
+            language = str(token)
+        elif original:
+            language = original_tag(original, exact)
+        else:
             continue
         if language not in resolved:
             resolved.append(language)

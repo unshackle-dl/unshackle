@@ -36,7 +36,7 @@ from unshackle.core.session import utf8_text
 from unshackle.core.titles import Episode, Movie, Song, Title_T
 from unshackle.core.titles.music import SONG_FIELDS
 from unshackle.core.tracks import Audio, Subtitle, Tracks, Video
-from unshackle.core.utilities import declared_kwargs, kind_only_conflict
+from unshackle.core.utilities import declared_kwargs, kind_only_conflict, original_tag
 from unshackle.core.utils.click_types import AUDIO_CODEC_LIST, SUBTITLE_CODEC, VIDEO_CODEC_LIST
 from unshackle.core.utils.collections import ci_get
 from unshackle.core.utils.redact import REDACTED, URL_USERINFO_RE, redact_all, redact_secrets, redact_text
@@ -1429,20 +1429,13 @@ def serialize_video_track(track: Video, include_url: bool = False) -> Dict[str, 
 def original_audio_ids(tracks: List[Audio], title: Title_T) -> set:
     """Return the ids of the audio tracks 'orig' resolves to, empty when the title has no language.
 
-    This defers to Tracks.by_language so the flag agrees with the downloader. It asks
-    exact mode first because CLDR rates a base tag and its paradigm regional variant as
-    the same language, and only the RFC 4647 preference picks one ('en' over 'en-US'
-    when both exist, 'pt-BR' over 'pt-PT' for a 'pt' title). The fuzzy fallback then
-    catches the non-paradigm regionals exact mode drops, such as an 'es' title that
-    carries only 'es-419'.
+    This defers to Tracks.by_language through original_tag, as 'orig' does, so the flag agrees
+    with the downloader: the title's own variant first, else its close regional forms.
     """
     language = getattr(title, "language", None)
     if not language:
         return set()
-    matches = Tracks.by_language(tracks, [str(language)], exact_match=True) or Tracks.by_language(
-        tracks, [str(language)]
-    )
-    return {t.id for t in matches}
+    return {t.id for t in Tracks.by_language(tracks, [original_tag(language)])}
 
 
 def serialize_audio_track(track: Audio, include_url: bool = False, is_original: bool = False) -> Dict[str, Any]:

@@ -909,7 +909,7 @@ async def download(request: web.Request) -> web.Response:
                 description: Languages wanted for forced subtitles, implies forced_subs (a '-' prefix excludes) (default - [])
               exact_lang:
                 type: boolean
-                description: Use exact language matching (no variants) (default - false)
+                description: A language tag without a region never falls back to another variant; a tag with a region is always exact (default - false)
               sub_format:
                 type: string
                 description: Output subtitle format such as SRT or VTT, or "original" to keep the source format (default - None)

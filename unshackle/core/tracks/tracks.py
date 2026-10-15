@@ -30,6 +30,7 @@ from unshackle.core.utilities import (
     is_close_match,
     log_event,
     matching_languages,
+    original_tag,
     sanitize_filename,
     valid_language,
 )
@@ -270,12 +271,14 @@ class Tracks:
         self.videos.sort(key=lambda x: (x.height or 0, float(x.bitrate or 0.0)), reverse=True)
         for language in reversed(by_language or []):
             if str(language) in ("all", "best"):
-                language = next((x.language for x in self.videos if x.is_original_lang), "")
+                language = self._original_language(self.videos, exact_match)
             if not language:
                 continue
-            wanted = matching_languages(language, [x.language for x in self.videos], exact_match)
+            langs = [x.language for x in self.videos]
+            wanted = matching_languages(language, langs, exact_match)
+            related = matching_languages(language, langs, exact_match, every_variant=True)
             self.videos.sort(key=lambda x: str(x.language))
-            self.videos.sort(key=lambda x: str(x.language) not in wanted)
+            self.videos.sort(key=lambda x: (str(x.language) not in related, str(x.language) not in wanted))
 
     def sort_audio(
         self,
@@ -298,11 +301,13 @@ class Tracks:
         self.audio.sort(key=lambda x: x.descriptive)
         for language in reversed(by_language or []):
             if str(language) in ("all", "best"):
-                language = next((x.language for x in self.audio if x.is_original_lang), "")
+                language = self._original_language(self.audio, exact_match)
             if not language:
                 continue
-            wanted = matching_languages(language, [x.language for x in self.audio], exact_match)
-            self.audio.sort(key=lambda x: str(x.language) not in wanted)
+            langs = [x.language for x in self.audio]
+            wanted = matching_languages(language, langs, exact_match)
+            related = matching_languages(language, langs, exact_match, every_variant=True)
+            self.audio.sort(key=lambda x: (str(x.language) not in related, str(x.language) not in wanted))
 
     def sort_subtitles(
         self,
@@ -365,11 +370,13 @@ class Tracks:
             by_type()
         for language in reversed(by_language or []):
             if str(language) in ("all", "best"):
-                language = next((x.language for x in self.subtitles if x.is_original_lang), "")
+                language = self._original_language(self.subtitles, exact_match)
             if not language:
                 continue
-            wanted = matching_languages(language, [x.language for x in self.subtitles], exact_match)
-            self.subtitles.sort(key=lambda x: str(x.language) in wanted, reverse=True)
+            langs = [x.language for x in self.subtitles]
+            wanted = matching_languages(language, langs, exact_match)
+            related = matching_languages(language, langs, exact_match, every_variant=True)
+            self.subtitles.sort(key=lambda x: (str(x.language) not in related, str(x.language) not in wanted))
 
     def select_video(self, x: Callable[[Video], bool]) -> None:
         self.videos = list(filter(x, self.videos))
@@ -495,6 +502,23 @@ class Tracks:
                     seen_ids.add(track.id)
                     selected.append(track)
         return selected
+
+    @staticmethod
+    def _original_language(tracks: Sequence[AnyTrack], exact: bool) -> str:
+        """The language "all" and "best" sort first: the original-language track's, through original_tag."""
+        language = next((x.language for x in tracks if x.is_original_lang), None)
+        return original_tag(language, exact) if language else ""
+
+    @staticmethod
+    def first_match_index(tracks: Sequence[AnyTrack], language: Optional[str]) -> Optional[int]:
+        """The index of the first track that `language` asks for, matched against every track at once.
+
+        Matching the whole list lets the RFC 4647 string preference pick en-US over en.
+        """
+        if not language:
+            return None
+        wanted = matching_languages(language, [t.language for t in tracks])
+        return next((idx for idx, t in enumerate(tracks) if str(t.language) in wanted), None)
 
     @property
     def sample_base(self) -> float:
@@ -769,26 +793,11 @@ class Tracks:
         preferred_audio_lang = valid_language(default_language.get("audio"))
         preferred_subtitle_lang = valid_language(default_language.get("subtitle"))
 
-        preferred_video_idx: Optional[int] = None
-        if preferred_video_lang:
-            preferred_video_idx = next(
-                (idx for idx, v in enumerate(self.videos) if is_close_match(v.language, [preferred_video_lang])),
-                None,
-            )
-
-        preferred_audio_idx: Optional[int] = None
-        if preferred_audio_lang:
-            preferred_audio_idx = next(
-                (idx for idx, a in enumerate(self.audio) if is_close_match(a.language, [preferred_audio_lang])),
-                None,
-            )
-
-        preferred_subtitle_idx: Optional[int] = None
-        if preferred_subtitle_lang and not skip_subtitles:
-            preferred_subtitle_idx = next(
-                (idx for idx, s in enumerate(self.subtitles) if is_close_match(s.language, [preferred_subtitle_lang])),
-                None,
-            )
+        preferred_video_idx = self.first_match_index(self.videos, preferred_video_lang)
+        preferred_audio_idx = self.first_match_index(self.audio, preferred_audio_lang)
+        preferred_subtitle_idx = (
+            None if skip_subtitles else self.first_match_index(self.subtitles, preferred_subtitle_lang)
+        )
 
         for i, vt in enumerate(self.videos):
             if not vt.path or not vt.path.exists():

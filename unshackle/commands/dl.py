@@ -85,19 +85,19 @@ from unshackle.core.utilities import (
     as_requested,
     declared_kwargs,
     embedded_audio_langs,
-    excluded_language_tags,
     find_font_with_fallbacks,
     find_missing_langs,
     get_debug_logger,
     get_system_fonts,
     init_debug_logger,
-    is_close_match,
-    is_exact_match,
-    keep_forced_subtitle,
     kind_only_conflict,
     log_event,
+    matched_language_tags,
+    matching_languages,
     missing_required_langs,
+    original_tag,
     partition_exclusions,
+    plain_subtitle_tags,
     resolve_sort_langs,
     suggest_font_packages,
     time_elapsed_since,
@@ -825,7 +825,7 @@ class dl:
         "--exact-lang",
         is_flag=True,
         default=False,
-        help="Use exact language matching (no variants). With this flag, -l es-419 matches ONLY es-419, not es-ES or other variants.",
+        help="A language tag without a region selects only the variant it means and never falls back to another: -l es does not select es-419. A tag with a region, such as es-419, is always exact.",
     )
     @click.option(
         "--proxy",
@@ -2122,8 +2122,11 @@ class dl:
                             t for t in audio if t.language == language and (codec is None or t.codec == codec)
                         ]
                     else:
-                        pool = [t for t in audio if codec is None or t.codec == codec]
-                        candidates = Tracks.by_language(pool, [language], per_language=0, exact_match=exact_lang)
+                        # match against every codec at once, so the variant a tag means does not depend on codec
+                        tags = matching_languages(language, [t.language for t in audio], exact_lang)
+                        candidates = [
+                            t for t in audio if str(t.language) in tags and (codec is None or t.codec == codec)
+                        ]
                     if not candidates:
                         continue
                     if audio_description:
@@ -2333,16 +2336,13 @@ class dl:
                         level="INFO", operation="get_tracks", service=self.service, context=tracks_info
                     )
 
-            # strip SDH subs to non-SDH if no equivalent same-lang non-SDH is available
-            # uses a loose check, e.g, wont strip en-US SDH sub if a non-SDH en-GB is available
-            # Check if automatic SDH stripping is enabled in config
+            # a plain track covers an SDH track only when it is the same variant, as -sl selects them,
+            # so en-US SDH is stripped next to a plain en-GB: -sl en-US would otherwise keep only the SDH
             if config.subtitle.get("strip_sdh", True):
+                plain_langs = [x.language for x in title.tracks.subtitles if not x.sdh and not x.forced]
                 for subtitle in title.tracks.subtitles:
-                    if subtitle.sdh and not any(
-                        is_close_match(subtitle.language, [x.language])
-                        for x in title.tracks.subtitles
-                        if not x.sdh and not x.forced
-                    ):
+                    if subtitle.sdh and not matching_languages(subtitle.language, plain_langs, exact=True):
+                        plain_langs.append(subtitle.language)
                         non_sdh_sub = deepcopy(subtitle)
                         non_sdh_sub.id += "_stripped"
                         non_sdh_sub.sdh = False
@@ -2377,16 +2377,20 @@ class dl:
                 subtitle_priority = config.subtitle.get("language_priority") or []
 
                 title.tracks.sort_videos(
-                    by_language=resolve_sort_langs(v_lang or lang, title.language),
+                    by_language=resolve_sort_langs(v_lang or lang, title.language, exact=exact_lang),
                     exact_match=exact_lang,
                 )
                 title.tracks.sort_audio(
-                    by_language=resolve_sort_langs([*audio_priority, *(a_lang or lang)], title.language),
+                    by_language=resolve_sort_langs(
+                        [*audio_priority, *(a_lang or lang)], title.language, exact=exact_lang
+                    ),
                     codec_priority=config.audio.get("codec_priority"),
                     exact_match=exact_lang,
                 )
                 title.tracks.sort_subtitles(
-                    by_language=resolve_sort_langs([*subtitle_priority, *(s_lang or [])], title.language),
+                    by_language=resolve_sort_langs(
+                        [*subtitle_priority, *(s_lang or [])], title.language, exact=exact_lang
+                    ),
                     type_priority=config.subtitle.get("type_priority"),
                     group_by=config.subtitle.get("group_by"),
                     exact_match=exact_lang,
@@ -2468,22 +2472,10 @@ class dl:
                 title.tracks.chapters = []
 
             with console.status("Selecting tracks...", spinner="dots"):
-
-                def resolve_excludes(excludes: list[str], _title: Title_T = title) -> list[str]:
-                    """Change 'orig' to this title's language. An 'orig' with no language excludes nothing."""
-                    resolved: list[str] = []
-                    for token in excludes:
-                        value = str(_title.language) if token == "orig" else token
-                        if token == "orig" and not _title.language:
-                            continue
-                        if value not in resolved:
-                            resolved.append(value)
-                    return resolved
-
-                video_excl_r = resolve_excludes(video_excl)
-                audio_excl_r = resolve_excludes(audio_excl)
-                s_excl_r = resolve_excludes(s_lang_excl)
-                fsl_excl_r = resolve_excludes(fsl_excl)
+                video_excl_r = resolve_sort_langs(video_excl, title.language, exact=exact_lang)
+                audio_excl_r = resolve_sort_langs(audio_excl, title.language, exact=exact_lang)
+                s_excl_r = resolve_sort_langs(s_lang_excl, title.language, exact=exact_lang)
+                fsl_excl_r = resolve_sort_langs(fsl_excl, title.language, exact=exact_lang)
 
                 if isinstance(title, (Movie, Episode)):
                     if keep_videos and vcodec:
@@ -2531,8 +2523,8 @@ class dl:
                             sys.exit(1)
 
                     if keep_videos and video_excl_r:
-                        drop = excluded_language_tags(
-                            video_excl_r, [t.language for t in title.tracks.videos], exact_lang
+                        drop = matched_language_tags(
+                            video_excl_r, [t.language for t in title.tracks.videos], exact_lang, every_variant=True
                         )
                         title.tracks.select_video(lambda x: str(x.language) not in drop)
                         if not title.tracks.videos:
@@ -2545,22 +2537,15 @@ class dl:
                         "best" in effective_video_lang or "all" in effective_video_lang or len(video_languages) > 1
                     )
                     if keep_videos and video_languages and "all" not in video_languages:
-                        processed_video_lang = []
+                        processed_video_lang = resolve_sort_langs(video_languages, title.language, exact=exact_lang)
                         v_orig_token: Optional[str] = None
-                        for language in video_languages:
-                            if language == "orig":
-                                if title.language:
-                                    orig_lang = str(title.language)
-                                    v_orig_token = orig_lang
-                                    if orig_lang not in processed_video_lang:
-                                        processed_video_lang.append(orig_lang)
-                                else:
-                                    self.log.warning(
-                                        "Original language not available for title, skipping 'orig' selection for video"
-                                    )
+                        if "orig" in video_languages:
+                            if title.language:
+                                v_orig_token = original_tag(title.language, exact_lang)
                             else:
-                                if language not in processed_video_lang:
-                                    processed_video_lang.append(language)
+                                self.log.warning(
+                                    "Original language not available for title, skipping 'orig' selection for video"
+                                )
                         if v_orig_token in video_languages:
                             v_orig_token = None
                         missing_v_langs = find_missing_langs(
@@ -2810,21 +2795,19 @@ class dl:
                                 self.log.error(msg_detail)
                                 sys.exit(1)
 
-                    fsl = [t for t in forced_s_lang if t != "orig"]
-                    if "orig" in forced_s_lang and title.language:
-                        fsl.append(str(title.language))
+                    fsl = resolve_sort_langs(forced_s_lang, title.language, exact=exact_lang)
                     if keep_subtitles and s_excl_r:
                         # applies to forced subs too: an excluded language is unwanted in any form
-                        drop = excluded_language_tags(
-                            s_excl_r, [t.language for t in title.tracks.subtitles], exact_lang
+                        drop = matched_language_tags(
+                            s_excl_r, [t.language for t in title.tracks.subtitles], exact_lang, every_variant=True
                         )
                         title.tracks.select_subtitles(lambda x: str(x.language) not in drop)
                     if keep_subtitles and s_lang and "all" not in s_lang:
-                        match_func = is_exact_match if exact_lang else is_close_match
-
+                        s_lang = resolve_sort_langs(s_lang, title.language, exact=exact_lang)
+                        # the pool selection draws from: forced tracks count only when -fs keeps them
                         missing_langs = find_missing_langs(
                             s_lang,
-                            [sub.language for sub in title.tracks.subtitles],
+                            [sub.language for sub in title.tracks.subtitles if forced_subs or not sub.forced],
                             exact=exact_lang,
                         )
                         if missing_langs:
@@ -2840,21 +2823,21 @@ class dl:
                                     self.log.warning(
                                         f"{missing_str} not found in subtitle tracks, continuing without subtitles"
                                     )
-                                    title.tracks.select_subtitles(
-                                        lambda x: (
-                                            x.forced and keep_forced_subtitle(x.forced, x.language, fsl, exact_lang)
-                                        )
+                                    fsl_tags = matched_language_tags(
+                                        fsl, [x.language for x in title.tracks.subtitles if x.forced], exact_lang
                                     )
+                                    title.tracks.select_subtitles(lambda x: x.forced and str(x.language) in fsl_tags)
                             else:
                                 self.log.error(missing_str + " not found in subtitle tracks")
                                 sys.exit(1)
 
                         if s_lang and title.tracks.subtitles:
+                            plain_tags = plain_subtitle_tags(s_lang, title.tracks.subtitles, exact_lang)
+                            forced_tags = matched_language_tags(
+                                [*s_lang, *fsl], [x.language for x in title.tracks.subtitles if x.forced], exact_lang
+                            )
                             title.tracks.select_subtitles(
-                                lambda x: (
-                                    match_func(x.language, s_lang)
-                                    or bool(x.forced and fsl and match_func(x.language, fsl))
-                                )
+                                lambda x: str(x.language) in (forced_tags if x.forced else plain_tags)
                             )
                             if not title.tracks.subtitles and not best_available:
                                 self.log.error(f"There's no {s_lang} Subtitle Track...")
@@ -2863,9 +2846,10 @@ class dl:
                     if keep_subtitles:
                         # fsl, not forced_s_lang: unresolvable orig must keep all forced, not drop them
                         if fsl:
-                            title.tracks.select_subtitles(
-                                lambda x: keep_forced_subtitle(x.forced, x.language, fsl, exact_lang)
+                            fsl_tags = matched_language_tags(
+                                fsl, [x.language for x in title.tracks.subtitles if x.forced], exact_lang
                             )
+                            title.tracks.select_subtitles(lambda x: not x.forced or str(x.language) in fsl_tags)
                             if not any(x.forced for x in title.tracks.subtitles):
                                 self.log.warning(
                                     f"No forced subtitle tracks matched --forced-s-lang ({', '.join(forced_s_lang)})"
@@ -2873,8 +2857,11 @@ class dl:
                         elif not forced_subs:
                             title.tracks.select_subtitles(lambda x: not x.forced)
                         if fsl_excl_r:
-                            drop = excluded_language_tags(
-                                fsl_excl_r, [t.language for t in title.tracks.subtitles if t.forced], exact_lang
+                            drop = matched_language_tags(
+                                fsl_excl_r,
+                                [t.language for t in title.tracks.subtitles if t.forced],
+                                exact_lang,
+                                every_variant=True,
                             )
                             title.tracks.select_subtitles(lambda x: not (x.forced and str(x.language) in drop))
                         if forced_subs_only:
@@ -2928,8 +2915,8 @@ class dl:
                             self.log.error(f"No Audio Track in {abitrate_min}-{abitrate_max}kbps range...")
                             sys.exit(1)
                     if audio_excl_r:
-                        drop = excluded_language_tags(
-                            audio_excl_r, [t.language for t in title.tracks.audio], exact_lang
+                        drop = matched_language_tags(
+                            audio_excl_r, [t.language for t in title.tracks.audio], exact_lang, every_variant=True
                         )
                         title.tracks.select_audio(lambda x: str(x.language) not in drop)
                         if not title.tracks.audio:
@@ -2937,22 +2924,13 @@ class dl:
                             sys.exit(1)
                     audio_languages = a_lang or lang
                     if audio_languages:
-                        processed_lang = []
+                        processed_lang = resolve_sort_langs(audio_languages, title.language, exact=exact_lang)
                         a_orig_token: Optional[str] = None
-                        for language in audio_languages:
-                            if language == "orig":
-                                if title.language:
-                                    orig_lang = str(title.language)
-                                    a_orig_token = orig_lang
-                                    if orig_lang not in processed_lang:
-                                        processed_lang.append(orig_lang)
-                                else:
-                                    self.log.warning(
-                                        "Original language not available for title, skipping 'orig' selection"
-                                    )
+                        if "orig" in audio_languages:
+                            if title.language:
+                                a_orig_token = original_tag(title.language, exact_lang)
                             else:
-                                if language not in processed_lang:
-                                    processed_lang.append(language)
+                                self.log.warning("Original language not available for title, skipping 'orig' selection")
                         if a_orig_token in audio_languages:
                             a_orig_token = None
 

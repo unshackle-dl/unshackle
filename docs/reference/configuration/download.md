@@ -219,13 +219,15 @@ subtitle:
 
     unshackle removes nothing, unlike `-sl`, which drops every subtitle language it does not name.
 
-    Use `orig` in the list for the title's original language. A base tag also covers its
-    regional forms, so `en` sorts `en-US` and `en-GB`, but `zh` does **not** cover
-    `zh-Hant`, which you must name. The sort ignores entries that match no track, and it
-    ignores entries that are not valid language tags.
+    Use `orig` in the list for the title's original language. A base tag puts the variant it
+    means first and its other regional forms after it, so `en` sorts `en-US` and then
+    `en-GB`, but `zh` does **not** cover `zh-Hant`, which you must name. A tag with a region sorts only that variant, so
+    `[en-US]` puts `en-US` before `en-GB`. The sort ignores entries that match no track, and
+    it ignores entries that are not valid language tags.
 
-    `--exact-lang` applies here too: with it, `en` sorts only `en`, and `en-US` falls to
-    the alphabetical tail with the rest. Name each tag you want when you use that flag.
+    `--exact-lang` applies here too: with it, `en` sorts only the variant it means, and
+    `en-GB` falls to the alphabetical tail with the rest. Name each tag you want when you use
+    that flag.
 
 !!! note "`type_priority` picks the default subtitle only with `muxing.default_language`"
     At mux time the `default` flag goes to every forced subtitle whose language matches the
@@ -277,7 +279,7 @@ Matroska (MKV) muxing options.
 | Sub-key | Type | Default | Description |
 |---------|------|---------|-------------|
 | `set_title` | bool | `true` | Write a human-readable title into the MKV container. |
-| `default_language` | dict | `{}` | Force which language is flagged *default* per track type, e.g. `{audio: en, subtitle: en}`. |
+| `default_language` | dict | `{}` | Force which language is flagged *default* per track type, e.g. `{audio: en, subtitle: en}`. A tag with a region, such as `en-US`, matches only that variant. |
 | `merge_audio` | bool | `true` | Merge all audio into one file. `--split-audio` on the CLI flips this off. |
 | `merge_video` | bool | `false` | Merge video tracks that share height, range, and codec into one file, so only language varies inside a file. `--merge-video` on the CLI flips this on. |
 | `concurrency` | int | `4` | How many mkvmerge processes run at the same time when a title muxes more than one output file (one per video variant or audio codec). Each process uses one CPU core, so this shortens the mux step on an SSD. Set it to `1` on a hard disk, where parallel writes are slower. |
@@ -308,7 +310,8 @@ Language-tag remapping and the rule engine behind the `{lang_tag}` filename vari
 
 Each language condition takes one language tag or a list of them. A list matches when **any**
 entry matches, except `subs_contain_all`, which needs them all. An entry that is not a valid
-language tag (for example `japanese`) never matches. `dual`, `multi` and `dubbed` take a bare
+language tag (for example `japanese`) never matches. A tag with a region matches only that
+variant, so `audio: es-419` does not match `es-ES` audio. `dual`, `multi` and `dubbed` take a bare
 `true` or `false`, not a quoted string. unshackle skips a rule with a condition name it does
 not know, or with any other value in a boolean condition. It logs a warning in each of these
 cases and tries the next rule.

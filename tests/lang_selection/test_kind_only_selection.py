@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import inspect
 import logging
-from typing import Any, cast
+from typing import Any, Optional, cast
 
 import pytest
 
@@ -77,7 +77,13 @@ class FakeService:
         raise AttributeError(name)
 
 
-def run(monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture, episodes: dict, **flags: Any) -> Any:
+def run(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    episodes: dict,
+    service: Optional[FakeService] = None,
+    **flags: Any,
+) -> Any:
     """Return the Selected ids, the exit code, or None for a run that completes."""
     monkeypatch.setattr(Tracks, "tree", lambda self, *a, **k: (_ for _ in ()).throw(Selected(self)))
     monkeypatch.setattr("unshackle.core.providers.search_metadata", lambda *a, **k: None)
@@ -96,7 +102,7 @@ def run(monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture, episo
     kwargs.update(flags)
     caplog.set_level(logging.WARNING, logger="test_kind_only")
     try:
-        cmd.result(cast(Service, FakeService(episodes)), **kwargs)
+        cmd.result(cast(Service, service or FakeService(episodes)), **kwargs)
     except Selected as sel:
         return sel.ids
     except SystemExit as exc:

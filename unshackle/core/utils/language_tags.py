@@ -7,9 +7,8 @@ from collections.abc import Mapping as MappingABC
 from typing import Any, Mapping, Optional, Sequence
 
 from langcodes import Language
-from langcodes.tag_parser import LanguageTagError
 
-from unshackle.core.utilities import is_close_match
+from unshackle.core.utilities import matching_languages, valid_language
 
 log = logging.getLogger(__name__)
 
@@ -116,13 +115,9 @@ def _as_list(value: Any) -> list[Any]:
 
 
 def _matches(lang: Any, languages: Sequence[Language]) -> bool:
-    """Return True when the rule language closely matches one of the track languages.
+    """Return True when the rule language matches one of the track languages, as a -l token would.
 
     A rule value that is not a valid language tag counts as no match. The filename is built
     after the mux, so a typo in the config must not discard a finished download.
     """
-    try:
-        return is_close_match(lang, list(languages))
-    except LanguageTagError as e:
-        log.warning("Language tag rule value %r is not a valid language tag, treating as no match: %s", lang, e)
-        return False
+    return bool(valid_language(lang) and matching_languages(lang, languages))

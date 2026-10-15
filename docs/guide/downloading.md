@@ -315,9 +315,9 @@ unshackle dl -l en,-es -vl ja EXAMPLE 81234567
 !!! note "Rules for exclusion tokens"
     - `orig` becomes the title's own original language, so `-sl -orig` drops the
       subtitles in that language.
-    - `--exact-lang` applies to exclusions with the same matching rules as selection:
-      `-es` removes exactly the tracks that `es` would select. Without it, `-es` also
-      removes `es-419` and `es-ES`.
+    - An exclusion without a region removes every regional form: `-es` removes `es-419`
+      and `es-ES`. An exclusion with a region removes only that variant: `-es-419` removes
+      only `es-419`. With `--exact-lang`, `-es` removes only the variant `es` means.
     - Tracks with no language tag are never excluded.
     - unshackle rejects `-all`. Name the languages you do not want instead.
     - The comma form is the documented style. `-sl -es` also works, but a shell can read
@@ -345,9 +345,28 @@ See [`subtitle.language_priority`](../reference/configuration/download.md#subtit
 
 ### Exact vs fuzzy matching
 
-By default language matching is fuzzy: `-l en` also accepts `en-US`, `en-GB`, and the
-other regional forms (up to a small distance). Pass `--exact-lang` when only an exact
-match is acceptable: with it, `-l es-419` selects only `es-419`, not `es-ES`.
+A tag without a region asks for the variant it means: `pt` is Brazilian Portuguese, `es` is
+Spanish from Spain, and `en` is US English. With `pt-PT` and `pt-BR` tracks, `-l pt`
+selects `pt-BR`. If the title has no such variant, the tag takes every regional form, so
+`-l es` on a title with only `es-419` selects `es-419`.
+
+A tag with a region asks for that variant only: `-l es-419` selects `es-419`, never `es-ES`
+or `es-MX`. If the service has no `es-419` track, unshackle reports `es-419 not found` and
+stops. With `--best-available`, it continues with the other languages.
+
+A track without a region matches only the region its language implies. `en` is US English
+and `pt` is Brazilian Portuguese, so `-l en-US` accepts a track tagged `en`, but `-l en-GB`
+and `-l pt-PT` do not accept `en` or `pt`. To take any English track, write `en`.
+
+`--exact-lang` turns off that fallback: a tag without a region then selects only the
+variant it means, so `-l es` does not select `es-419`.
+
+`orig` is the title language that the service gives. It selects that exact variant first,
+so a `fr-CA` title takes `fr-CA` audio over `fr-FR`. When the title has no track in that
+variant, `orig` takes the closest regional form, unless you pass `--exact-lang`.
+
+An exclusion without a region removes every regional form: `-es` drops `es-ES` and `es-419`.
+See the [exclusion rules](#excluding-languages) for `--exact-lang`.
 
 !!! tip "The `all` and `best` tokens"
     For audio, the tokens `all` and `best` bypass the usual one-track-per-language pick

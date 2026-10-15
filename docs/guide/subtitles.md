@@ -76,7 +76,7 @@ Subtitle selection happens through `dl` flags. The most important is language se
 | `-fs`, `--forced-subs` | Include forced subtitle tracks (excluded by default). |
 | `-fso`, `--forced-subs-only` | Keep only forced subtitle tracks and drop the other subtitles; implies `-fs`. |
 | `-fsl`, `--forced-s-lang` | Language(s) wanted for forced subtitles; implies `-fs`. A `-` prefix excludes. |
-| `--exact-lang` | Exact language matching, with no regional variants. |
+| `--exact-lang` | A tag without a region never falls back to another variant: `es` does not match `es-419`. |
 | `-S`, `--subs-only` | Download only subtitle tracks. |
 | `-ns`, `--no-subs` | Do not download subtitle tracks at all. |
 | `--sub-format` | Output subtitle format / conversion target (see [conversion](#converting-subtitle-formats)). |
@@ -91,16 +91,17 @@ To narrow it down, pass a comma-separated list of language tags:
 unshackle dl --s-lang en,es EXAMPLE 81234567
 ```
 
-Language matching is fuzzy by default: `en` matches `en-US`, `en-GB`, and similar
-variants. If a requested language is missing but others were found, unshackle continues
-with whatever remains and tells you which languages it dropped.
-
-For strict matching, where `es-419` matches only `es-419` and never `es-ES`, add
-`--exact-lang`:
+A tag without a region selects the variant it means, such as `en-US` for `en`, and every
+regional form only when the title has no such variant. A tag with a region matches only
+that variant:
 
 ```shell title="Only Latin-American Spanish, no other Spanish variants"
-unshackle dl --s-lang es-419 --exact-lang EXAMPLE 'https://www.example.com/...'
+unshackle dl --s-lang es-419 EXAMPLE 'https://www.example.com/...'
 ```
+
+If a requested language is missing, unshackle stops with an error. With `--best-available`,
+it continues with the languages it found and tells you which ones it dropped. See
+[exact vs fuzzy matching](downloading.md#exact-vs-fuzzy-matching) for the full rules.
 
 ### Requiring languages before downloading
 
@@ -193,10 +194,11 @@ can make a clean non-SDH version for you by stripping the hearing-impaired cues:
 sound effects, speaker labels, music notes, and similar. This is on by default and
 controlled by the [`strip_sdh`](#subtitle-configuration) config key.
 
-The check is deliberately loose: if a close-enough plain track already exists (for
-example an `en-GB` non-SDH track when the SDH track is `en-US`), no stripped copy is
-created. When a stripped copy *is* created, the original SDH track is kept as well, so
-you end up with both.
+The check uses the same [matching rules](downloading.md#exact-vs-fuzzy-matching) as
+`--s-lang`. A plain track covers an SDH track only when it is the same variant: `en` and
+`en-US` cover each other, but a plain `en-GB` track does not stop a stripped `en` or `en-US`
+copy. When unshackle creates a stripped
+copy, it keeps the original SDH track as well, so you end up with both.
 
 The [`sdh_method`](#subtitle-configuration) config key selects the stripping engine
 itself. The default (`auto`) prefers the `subby` cleaner for SRT, falls back to

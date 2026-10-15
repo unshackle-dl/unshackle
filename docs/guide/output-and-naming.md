@@ -116,7 +116,7 @@ Every variable below is valid in both output and folder templates. unshackle tak
 | `lang_tag` | Result of your `language_tags` rules, if configured | `MULTi` |
 
 !!! note "How `language_tags` rules match"
-    unshackle tries the rules in order, but language comparison is **fuzzy**: a rule condition of `en` matches `en-US`, `en-GB`, and any other `en-*` form. Within a single rule, **all** conditions must match (AND logic) for it to apply. The first rule that fully matches wins. If none match, unshackle removes `{lang_tag?}` from the filename cleanly.
+    unshackle tries the rules in order, and they compare languages with the same [matching rules](downloading.md#exact-vs-fuzzy-matching) as `-l`: a rule condition of `en` matches `en-US`, `en-GB`, and any other `en-*` form, but `es-419` matches only `es-419`. Within a single rule, **all** conditions must match (AND logic) for it to apply. The first rule that fully matches wins. If none match, unshackle removes `{lang_tag?}` from the filename cleanly.
 
 ### Episode-specific
 

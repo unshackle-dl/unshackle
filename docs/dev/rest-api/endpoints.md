@@ -448,7 +448,7 @@ Make a download job. It requires `service` and `title_id`. Every other field is 
 | `forced_subs` | boolean | `false` | Include forced subtitles. |
 | `forced_subs_only` | boolean | `false` | Download forced subtitles and no other subtitle; implies `forced_subs`. Not valid with `no_subs`, `video_only`, `audio_only` or `chapters_only`. |
 | `forced_s_lang` | string[] | `[]` | Forced subtitle language(s); implies `forced_subs`. |
-| `exact_lang` | boolean | `false` | Exact language matching. |
+| `exact_lang` | boolean | `false` | A language tag without a region never falls back to another variant. A tag with a region is always exact. |
 | `sub_format` | string | `null` | Output subtitle format. |
 | `video_only` / `audio_only` / `subs_only` / `chapters_only` | boolean | `false` | Track-type restriction (at most one). |
 | `no_subs` / `no_audio` / `no_chapters` / `no_video` / `no_attachments` | boolean | `false` | Skip a track type. |

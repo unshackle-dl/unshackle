@@ -104,7 +104,7 @@ unshackle dl [OPTIONS] SERVICE [SERVICE ARGS...]
 | `-fs`, `--forced-subs` | off | Include forced subtitle tracks. |
 | `-fso`, `--forced-subs-only` | off | Keep only forced subtitle tracks; drop the other subtitles. Implies `-fs`. |
 | `-fsl`, `--forced-s-lang` | none | Language(s) wanted for forced subtitles; implies `-fs`. A `-` prefix excludes. |
-| `--exact-lang` | off | Exact matching only: `-l es-419` matches `es-419`, not `es-ES`. Applies to selection and to sort order. |
+| `--exact-lang` | off | A tag without a region selects only the variant it means and never falls back to another: `-l es` does not select `es-419`. A tag with a region, such as `es-419`, is always exact. Applies to selection and to sort order. |
 | `--sub-format` | - | Output subtitle format (`SRT`/`srt`, `VTT`/`webvtt`, `ASS`/`ssa`, `TTML`, `SMI`, ...), or `original` to keep the source format. |
 
 !!! tip "These flags select languages, they do not order them"

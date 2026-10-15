@@ -30,6 +30,9 @@ class FakeTitle:
         # them and the flag still matches what a default 'orig' download selects
         (["es"], ["es-419"], ["es-419"]),
         (["fr"], ["fr-CA"], ["fr-CA"]),
+        # the service chose the title's region, so a different region still counts
+        (["en-US"], ["en-GB"], ["en-GB"]),
+        (["zh-HK"], ["zh-Hant", "zh-Hans"], ["zh-Hant"]),
         # alias
         (["zh"], ["cmn"], ["cmn"]),
         # nothing in the original language, and no language on the title at all

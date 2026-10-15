@@ -114,7 +114,7 @@ def test_language_grouping_still_honours_type_priority_and_sections(tracks: Trac
 
 
 def test_language_grouping_keeps_regional_variants_adjacent_through_sections() -> None:
-    # "en" floats en-GB and en-US as one block, so each exact tag keeps its variants
+    # "en" floats en-US (the variant it means) and then en-GB, and each tag keeps its variants
     t = Tracks()
     t.add(
         [
@@ -129,11 +129,11 @@ def test_language_grouping_keeps_regional_variants_adjacent_through_sections() -
     )
     t.sort_subtitles(by_language=["en"], group_by="language")
     assert shape(t) == [
+        ("en-US", "normal"),
+        ("en-US", "sdh"),
         ("en-GB", "forced"),
         ("en-GB", "normal"),
         ("en-GB", "sdh"),
-        ("en-US", "normal"),
-        ("en-US", "sdh"),
         ("fi", "normal"),
         ("fi", "sdh"),
     ]
@@ -172,7 +172,15 @@ def test_priority_overlapping_entries_are_harmless() -> None:
     t = Tracks()
     t.add([sub("ar"), sub("en-GB"), sub("en-US"), sub("es"), sub("ja")])
     t.sort_subtitles(by_language=["en", "en-US", "es"], group_by="language")
-    assert langs(t) == ["en-GB", "en-US", "es", "ar", "ja"]
+    assert langs(t) == ["en-US", "en-GB", "es", "ar", "ja"]
+
+
+@pytest.mark.parametrize("group_by", ["language", "type"])
+def test_a_regional_priority_outranks_its_sibling(group_by: str) -> None:
+    t = Tracks()
+    t.add([sub("en-GB"), sub("en-US"), sub("fr")])
+    t.sort_subtitles(by_language=["en-US"], group_by=group_by)
+    assert langs(t) == ["en-US", "en-GB", "fr"]
 
 
 def test_no_priority_leaves_order_unchanged(many: Tracks) -> None:
@@ -223,3 +231,38 @@ def test_unparseable_priority_entry_is_ignored(many: Tracks, exact: bool) -> Non
     # a config typo in language_priority must not crash the sort
     many.sort_subtitles(by_language=["en", "engrish", "f", ""], group_by="language", exact_match=exact)
     assert langs(many) == ["en", "ar", "bg", "es", "fr", "ja"]
+
+
+def test_a_bare_audio_priority_sorts_the_meant_variant_then_its_other_forms() -> None:
+    from unshackle.core.tracks import Audio
+
+    t = Tracks()
+    t.add(
+        [
+            Audio(id_=lang, url=f"https://x/{lang}", language=lang, codec=Audio.Codec.AAC, bitrate=bitrate)
+            for lang, bitrate in (("en", 3), ("es-419", 2), ("es-ES", 1))
+        ]
+    )
+    t.sort_audio(by_language=["es"])
+    assert [str(a.language) for a in t.audio] == ["es-ES", "es-419", "en"]
+
+
+def test_all_sorts_the_original_track_then_its_other_regional_forms() -> None:
+    from unshackle.core.tracks import Audio
+
+    t = Tracks()
+    t.add(
+        [
+            Audio(
+                id_=lang,
+                url=f"https://x/{lang}",
+                language=lang,
+                codec=Audio.Codec.AAC,
+                bitrate=bitrate,
+                is_original_lang=orig,
+            )
+            for lang, bitrate, orig in (("en", 3, False), ("fr-FR", 2, False), ("fr-CA", 1, True))
+        ]
+    )
+    t.sort_audio(by_language=["all"])
+    assert [str(a.language) for a in t.audio] == ["fr-CA", "fr-FR", "en"]

@@ -46,10 +46,12 @@ def test_orig_resolves_to_the_title_language():
     assert missing_required_langs(["orig"], ["en"], None) == []
 
 
-def test_exact_lang_separates_a_regional_variant_from_its_base():
+def test_a_regional_tag_never_matches_another_region():
     assert missing_required_langs(["en-US"], ["en-US"], exact=True) == []
     assert missing_required_langs(["en-US"], ["en-GB"], exact=True) == ["en-US"]
-    assert missing_required_langs(["en-US"], ["en-GB"]) == []
+    assert missing_required_langs(["en-US"], ["en-GB"]) == ["en-US"]
+    # 'orig' is the service's tag, so its region does not narrow the match
+    assert missing_required_langs(["orig"], ["en-GB"], "en-US") == []
 
 
 def test_all_and_best_tokens_require_nothing():
@@ -150,3 +152,8 @@ def test_all_three_require_flags_share_one_gate():
     for kind in ("audio", "video", "subtitle"):
         assert f'"{kind}",' in source
     assert "missing_required_langs(required, available, title.language, exact=exact_lang)" in source
+
+
+def test_exact_lang_turns_off_the_bare_tag_fallback():
+    assert missing_required_langs(["en"], ["en-GB"]) == []
+    assert missing_required_langs(["en"], ["en-GB"], exact=True) == ["en"]
