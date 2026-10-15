@@ -80,3 +80,18 @@ def test_get_ip_info_collects_connection_errors_only(monkeypatch):
     errors: list[Exception] = []
     assert ip_info.get_ip_info(SimpleNamespace(proxies={"all": "http://127.0.0.1:9"}), errors=errors) is None
     assert [str(e) for e in errors] == ["refused"]
+
+
+def test_require_skips_provider_missing_field(monkeypatch):
+    lite = {"country": "ca", "timezone": ""}
+    full = {"country": "ca", "timezone": "America/Edmonton"}
+    monkeypatch.setattr(
+        ip_info, "build_providers", lambda: [("lite", lambda s: dict(lite)), ("full", lambda s: dict(full))]
+    )
+    monkeypatch.setattr(
+        ip_info,
+        "Cacher",
+        lambda *a: SimpleNamespace(get=lambda k: SimpleNamespace(data=None, expired=True, set=lambda *a, **k: None)),
+    )
+    assert ip_info.get_ip_info(object())["_provider"] == "lite"
+    assert ip_info.get_ip_info(object(), require=("timezone",))["timezone"] == "America/Edmonton"
