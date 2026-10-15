@@ -2772,7 +2772,7 @@ For an episode with no on-screen name, <code>{episode_name?}</code> and its adja
 </table>
 <div class="admonition note">
 <p class="admonition-title">How <code>language_tags</code> rules match</p>
-<p>unshackle tries the rules in order, but language comparison is <strong>fuzzy</strong>: a rule condition of <code>en</code> matches <code>en-US</code>, <code>en-GB</code>, and any other <code>en-*</code> form. Within a single rule, <strong>all</strong> conditions must match (AND logic) for it to apply. The first rule that fully matches wins. If none match, unshackle removes <code>{lang_tag?}</code> from the filename cleanly.</p>
+<p>unshackle tries the rules in order, and they compare languages with the same <a href="../downloading/#exact-vs-fuzzy-matching">matching rules</a> as <code>-l</code>: a rule condition of <code>en</code> matches <code>en-US</code>, <code>en-GB</code>, and any other <code>en-*</code> form, but <code>es-419</code> matches only <code>es-419</code>. Within a single rule, <strong>all</strong> conditions must match (AND logic) for it to apply. The first rule that fully matches wins. If none match, unshackle removes <code>{lang_tag?}</code> from the filename cleanly.</p>
 </div>
 <h3 id="episode-specific">Episode-specific<a class="headerlink" href="#episode-specific" title="Permanent link">&para;</a></h3>
 <table>

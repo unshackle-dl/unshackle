@@ -2851,6 +2851,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#unshackle.core.tracks.Tracks.first_match_index" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;first_match_index
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#unshackle.core.tracks.Tracks.mux" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4053,6 +4064,17 @@
     <span class="md-ellipsis">
       
         <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;flag_hybrid_ingredients
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unshackle.core.tracks.Tracks.first_match_index" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;first_match_index
       
     </span>
   </a>
@@ -7684,6 +7706,31 @@ HDR10+.</p>
         <p>Mark tracks selected only as hybrid ingredients so the standalone mux loop skips them.</p>
 <p>A track that the caller also selected as an explicit deliverable (same track in both
 selections) stays unflagged, and the standalone mux loop muxes it alongside the hybrid.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="unshackle.core.tracks.Tracks.first_match_index" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">first_match_index</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-staticmethod"><code>staticmethod</code></small>
+  </span>
+
+<a href="#unshackle.core.tracks.Tracks.first_match_index" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">first_match_index</span><span class="p">(</span><span class="n">tracks</span><span class="p">,</span> <span class="n">language</span><span class="p">)</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>The index of the first track that <code>language</code> asks for, matched against every track at once.</p>
+<p>Matching the whole list lets the RFC 4647 string preference pick en-US over en.</p>
 
 
     </div>

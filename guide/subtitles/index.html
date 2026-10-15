@@ -2597,7 +2597,7 @@ format-appropriate clean-up to make a single, valid file:</p>
 </tr>
 <tr>
 <td><code>--exact-lang</code></td>
-<td>Exact language matching, with no regional variants.</td>
+<td>A tag without a region never falls back to another variant: <code>es</code> does not match <code>es-419</code>.</td>
 </tr>
 <tr>
 <td><code>-S</code>, <code>--subs-only</code></td>
@@ -2622,13 +2622,14 @@ format-appropriate clean-up to make a single, valid file:</p>
 To narrow it down, pass a comma-separated list of language tags:</p>
 <div class="language-shell highlight"><span class="filename">English and Spanish subtitles only</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--s-lang<span class="w"> </span>en,es<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
-<p>Language matching is fuzzy by default: <code>en</code> matches <code>en-US</code>, <code>en-GB</code>, and similar
-variants. If a requested language is missing but others were found, unshackle continues
-with whatever remains and tells you which languages it dropped.</p>
-<p>For strict matching, where <code>es-419</code> matches only <code>es-419</code> and never <code>es-ES</code>, add
-<code>--exact-lang</code>:</p>
-<div class="language-shell highlight"><span class="filename">Only Latin-American Spanish, no other Spanish variants</span><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--s-lang<span class="w"> </span>es-419<span class="w"> </span>--exact-lang<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="s1">'https://www.example.com/...'</span>
+<p>A tag without a region selects the variant it means, such as <code>en-US</code> for <code>en</code>, and every
+regional form only when the title has no such variant. A tag with a region matches only
+that variant:</p>
+<div class="language-shell highlight"><span class="filename">Only Latin-American Spanish, no other Spanish variants</span><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--s-lang<span class="w"> </span>es-419<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="s1">'https://www.example.com/...'</span>
 </span></code></pre></div>
+<p>If a requested language is missing, unshackle stops with an error. With <code>--best-available</code>,
+it continues with the languages it found and tells you which ones it dropped. See
+<a href="../downloading/#exact-vs-fuzzy-matching">exact vs fuzzy matching</a> for the full rules.</p>
 <h3 id="requiring-languages-before-downloading">Requiring languages before downloading<a class="headerlink" href="#requiring-languages-before-downloading" title="Permanent link">&para;</a></h3>
 <p><code>--require-subs</code> is a gate rather than a filter. It downloads <strong>all</strong> available
 subtitles, but only if every language you name is present. If any is missing, the title
@@ -2699,10 +2700,11 @@ CCExtractor tool on your <code>PATH</code>.</p>
 can make a clean non-SDH version for you by stripping the hearing-impaired cues:
 sound effects, speaker labels, music notes, and similar. This is on by default and
 controlled by the <a href="#subtitle-configuration"><code>strip_sdh</code></a> config key.</p>
-<p>The check is deliberately loose: if a close-enough plain track already exists (for
-example an <code>en-GB</code> non-SDH track when the SDH track is <code>en-US</code>), no stripped copy is
-created. When a stripped copy <em>is</em> created, the original SDH track is kept as well, so
-you end up with both.</p>
+<p>The check uses the same <a href="../downloading/#exact-vs-fuzzy-matching">matching rules</a> as
+<code>--s-lang</code>. A plain track covers an SDH track only when it is the same variant: <code>en</code> and
+<code>en-US</code> cover each other, but a plain <code>en-GB</code> track does not stop a stripped <code>en</code> or <code>en-US</code>
+copy. When unshackle creates a stripped
+copy, it keeps the original SDH track as well, so you end up with both.</p>
 <p>The <a href="#subtitle-configuration"><code>sdh_method</code></a> config key selects the stripping engine
 itself. The default (<code>auto</code>) prefers the <code>subby</code> cleaner for SRT, falls back to
 SubtitleEdit when you install it, and otherwise uses the built-in <code>filter-subs</code>

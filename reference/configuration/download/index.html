@@ -2596,12 +2596,14 @@ controls the order inside each language.</p>
 </tbody>
 </table>
 <p>unshackle removes nothing, unlike <code>-sl</code>, which drops every subtitle language it does not name.</p>
-<p>Use <code>orig</code> in the list for the title's original language. A base tag also covers its
-regional forms, so <code>en</code> sorts <code>en-US</code> and <code>en-GB</code>, but <code>zh</code> does <strong>not</strong> cover
-<code>zh-Hant</code>, which you must name. The sort ignores entries that match no track, and it
-ignores entries that are not valid language tags.</p>
-<p><code>--exact-lang</code> applies here too: with it, <code>en</code> sorts only <code>en</code>, and <code>en-US</code> falls to
-the alphabetical tail with the rest. Name each tag you want when you use that flag.</p>
+<p>Use <code>orig</code> in the list for the title's original language. A base tag puts the variant it
+means first and its other regional forms after it, so <code>en</code> sorts <code>en-US</code> and then
+<code>en-GB</code>, but <code>zh</code> does <strong>not</strong> cover <code>zh-Hant</code>, which you must name. A tag with a region sorts only that variant, so
+<code>[en-US]</code> puts <code>en-US</code> before <code>en-GB</code>. The sort ignores entries that match no track, and
+it ignores entries that are not valid language tags.</p>
+<p><code>--exact-lang</code> applies here too: with it, <code>en</code> sorts only the variant it means, and
+<code>en-GB</code> falls to the alphabetical tail with the rest. Name each tag you want when you use
+that flag.</p>
 </div>
 <div class="admonition note">
 <p class="admonition-title"><code>type_priority</code> picks the default subtitle only with <code>muxing.default_language</code></p>
@@ -2666,7 +2668,7 @@ bitrate alone, with those same Atmos/descriptive rules still applied.</p>
 <td><code>default_language</code></td>
 <td>dict</td>
 <td><code>{}</code></td>
-<td>Force which language is flagged <em>default</em> per track type, e.g. <code>{audio: en, subtitle: en}</code>.</td>
+<td>Force which language is flagged <em>default</em> per track type, e.g. <code>{audio: en, subtitle: en}</code>. A tag with a region, such as <code>en-US</code>, matches only that variant.</td>
 </tr>
 <tr>
 <td><code>merge_audio</code></td>
@@ -2730,7 +2732,8 @@ bitrate alone, with those same Atmos/descriptive rules still applied.</p>
 </table>
 <p>Each language condition takes one language tag or a list of them. A list matches when <strong>any</strong>
 entry matches, except <code>subs_contain_all</code>, which needs them all. An entry that is not a valid
-language tag (for example <code>japanese</code>) never matches. <code>dual</code>, <code>multi</code> and <code>dubbed</code> take a bare
+language tag (for example <code>japanese</code>) never matches. A tag with a region matches only that
+variant, so <code>audio: es-419</code> does not match <code>es-ES</code> audio. <code>dual</code>, <code>multi</code> and <code>dubbed</code> take a bare
 <code>true</code> or <code>false</code>, not a quoted string. unshackle skips a rule with a condition name it does
 not know, or with any other value in a boolean condition. It logs a warning in each of these
 cases and tries the next rule.</p>

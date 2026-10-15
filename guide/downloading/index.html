@@ -3471,9 +3471,9 @@ only exclusions adds them to the ones from <code>-l</code>.</p>
 <ul>
 <li><code>orig</code> becomes the title's own original language, so <code>-sl -orig</code> drops the
   subtitles in that language.</li>
-<li><code>--exact-lang</code> applies to exclusions with the same matching rules as selection:
-  <code>-es</code> removes exactly the tracks that <code>es</code> would select. Without it, <code>-es</code> also
-  removes <code>es-419</code> and <code>es-ES</code>.</li>
+<li>An exclusion without a region removes every regional form: <code>-es</code> removes <code>es-419</code>
+  and <code>es-ES</code>. An exclusion with a region removes only that variant: <code>-es-419</code> removes
+  only <code>es-419</code>. With <code>--exact-lang</code>, <code>-es</code> removes only the variant <code>es</code> means.</li>
 <li>Tracks with no language tag are never excluded.</li>
 <li>unshackle rejects <code>-all</code>. Name the languages you do not want instead.</li>
 <li>The comma form is the documented style. <code>-sl -es</code> also works, but a shell can read
@@ -3495,9 +3495,23 @@ works the same way, but the languages you leave out keep their bitrate and codec
 alphabetical one.</p>
 <p>See <a href="../../reference/configuration/download/#subtitle"><code>subtitle.language_priority</code></a> for the details.</p>
 <h3 id="exact-vs-fuzzy-matching">Exact vs fuzzy matching<a class="headerlink" href="#exact-vs-fuzzy-matching" title="Permanent link">&para;</a></h3>
-<p>By default language matching is fuzzy: <code>-l en</code> also accepts <code>en-US</code>, <code>en-GB</code>, and the
-other regional forms (up to a small distance). Pass <code>--exact-lang</code> when only an exact
-match is acceptable: with it, <code>-l es-419</code> selects only <code>es-419</code>, not <code>es-ES</code>.</p>
+<p>A tag without a region asks for the variant it means: <code>pt</code> is Brazilian Portuguese, <code>es</code> is
+Spanish from Spain, and <code>en</code> is US English. With <code>pt-PT</code> and <code>pt-BR</code> tracks, <code>-l pt</code>
+selects <code>pt-BR</code>. If the title has no such variant, the tag takes every regional form, so
+<code>-l es</code> on a title with only <code>es-419</code> selects <code>es-419</code>.</p>
+<p>A tag with a region asks for that variant only: <code>-l es-419</code> selects <code>es-419</code>, never <code>es-ES</code>
+or <code>es-MX</code>. If the service has no <code>es-419</code> track, unshackle reports <code>es-419 not found</code> and
+stops. With <code>--best-available</code>, it continues with the other languages.</p>
+<p>A track without a region matches only the region its language implies. <code>en</code> is US English
+and <code>pt</code> is Brazilian Portuguese, so <code>-l en-US</code> accepts a track tagged <code>en</code>, but <code>-l en-GB</code>
+and <code>-l pt-PT</code> do not accept <code>en</code> or <code>pt</code>. To take any English track, write <code>en</code>.</p>
+<p><code>--exact-lang</code> turns off that fallback: a tag without a region then selects only the
+variant it means, so <code>-l es</code> does not select <code>es-419</code>.</p>
+<p><code>orig</code> is the title language that the service gives. It selects that exact variant first,
+so a <code>fr-CA</code> title takes <code>fr-CA</code> audio over <code>fr-FR</code>. When the title has no track in that
+variant, <code>orig</code> takes the closest regional form, unless you pass <code>--exact-lang</code>.</p>
+<p>An exclusion without a region removes every regional form: <code>-es</code> drops <code>es-ES</code> and <code>es-419</code>.
+See the <a href="#excluding-languages">exclusion rules</a> for <code>--exact-lang</code>.</p>
 <div class="admonition tip">
 <p class="admonition-title">The <code>all</code> and <code>best</code> tokens</p>
 <p>For audio, the tokens <code>all</code> and <code>best</code> bypass the usual one-track-per-language pick
