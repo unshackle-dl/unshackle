@@ -19,6 +19,7 @@ import logging
 import re
 import subprocess
 import time
+from itertools import pairwise
 from pathlib import Path
 from typing import Optional, Protocol
 
@@ -114,6 +115,8 @@ def subtitleedit_args(
     return args
 
 
+SUBSTATION: frozenset[Codec] = frozenset({Codec.SubStationAlpha, Codec.SubStationAlphav4})
+
 # Styled SubStation formats flattened to SRT lose positioning/colours/italics.
 # Never performed automatically, only when the user explicitly forces a target format.
 LOSSY_DOWNCONVERTS: frozenset[tuple[Codec, Codec]] = frozenset(
@@ -155,10 +158,7 @@ class SubtitleEditBackend:
         return source in self.reads and target in self.writes
 
     def rank(self, source: Codec, target: Codec) -> int:
-        if source in (Codec.SubStationAlpha, Codec.SubStationAlphav4) and target in (
-            Codec.TimedTextMarkupLang,
-            Codec.WebVTT,
-        ):
+        if source in SUBSTATION and target in (Codec.TimedTextMarkupLang, Codec.WebVTT):
             return 3
         return 0
 
@@ -183,7 +183,7 @@ class SubtitleEditBackend:
         # SE5 names the output <input-stem>.<format-ext>, which may differ from our target
         # suffix (e.g. timedtext1.0 -> .ttml). Normalise it onto `out`.
         if not out.exists():
-            produced = next((p for p in src.parent.glob(f"{src.stem}.*") if p not in (src, out)), None)
+            produced = next((p for p in out.parent.glob(f"{src.stem}.*") if p not in (src, out)), None)
             if produced is None:
                 raise FileNotFoundError(f"SubtitleEdit produced no output for {src.name} -> {target.name}")
             produced.replace(out)
@@ -203,7 +203,7 @@ class Pysubs2Backend:
 
     def rank(self, source: Codec, target: Codec) -> int:
         # Preferred reader for styled SubStation sources; solid general fallback otherwise.
-        return 1 if source in (Codec.SubStationAlpha, Codec.SubStationAlphav4) else 2
+        return 1 if source in SUBSTATION else 2
 
     def convert(self, source: Codec, src: Path, target: Codec, out: Path) -> None:
         subs = pysubs2.load(str(src), encoding="utf-8-sig")
@@ -327,6 +327,26 @@ def finalize(sub: Subtitle, target: Codec, out: Path) -> Path:
     return out
 
 
+def time_sorted_copy(src: Path) -> Optional[Path]:
+    """
+    Copy an SSA/ASS file with its events in start-time order, or return None when it is already in order.
+
+    Layered sign events are often out of time order, and SubtitleEdit and the pysubs2 SRT writer keep file order.
+    The source stays as it is, because ASS draws the events of one layer in file order.
+    """
+    try:
+        subs = pysubs2.load(str(src), encoding="utf-8-sig")
+    except (pysubs2.exceptions.Pysubs2Error, UnicodeDecodeError, ValueError) as e:
+        log.debug(f"Cannot read {src.name} to sort it by start time, converting it unsorted: {e}")
+        return None
+    if all(a.start <= b.start for a, b in pairwise(subs.events)):
+        return None
+    subs.sort()
+    copy = src.with_name(f"{src.stem}.sorted{src.suffix}")
+    subs.save(str(copy), format_=subs.format, encoding="utf-8")
+    return copy
+
+
 def run_conversion(sub: Subtitle, target: Codec, *, pin: Optional[str] = None, forced: bool = False) -> Path:
     """
     Convert ``sub`` to ``target`` using the best available backend, falling back through the
@@ -356,16 +376,21 @@ def run_conversion(sub: Subtitle, target: Codec, *, pin: Optional[str] = None, f
         raise NotImplementedError(f"Cannot convert {source.name} to {target.name}.")
 
     out = src.with_suffix(f".{target.value.lower()}")
+    sorted_src = time_sorted_copy(src) if source in SUBSTATION and target not in SUBSTATION else None
     last_exc: Optional[Exception] = None
-    for backend in chain:
-        try:
-            backend.convert(source, src, target, out)
-        except Exception as e:
-            last_exc = e
-            log.debug(f"Subtitle backend {backend.name} failed ({source.name}->{target.name}): {e}")
-            continue
-        if target in PLAIN_TEXT_TARGETS:
-            decode_entities(out)
-        return finalize(sub, target, out)
+    try:
+        for backend in chain:
+            try:
+                backend.convert(source, sorted_src or src, target, out)
+            except Exception as e:
+                last_exc = e
+                log.debug(f"Subtitle backend {backend.name} failed ({source.name}->{target.name}): {e}")
+                continue
+            if target in PLAIN_TEXT_TARGETS:
+                decode_entities(out)
+            return finalize(sub, target, out)
+    finally:
+        if sorted_src:
+            sorted_src.unlink(missing_ok=True)
 
     raise RuntimeError(f"All subtitle backends failed for {source.name}->{target.name}") from last_exc

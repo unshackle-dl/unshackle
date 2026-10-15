@@ -247,6 +247,11 @@ unshackle dl --sub-format original EXAMPLE 'https://www.example.com/...'
 Conversion only runs when the source format differs from the target, so
 `--sub-format srt` on a track that is already SRT is a no-op.
 
+When unshackle converts SSA/ASS to a format that is not SSA/ASS, it writes the cues in
+start-time order. SSA/ASS files often list layered sign events out of time order. The
+SSA/ASS source file keeps its order, because the order of events on one layer sets the
+order in which they are drawn.
+
 !!! warning "Down-converting styled subtitles is lossy"
     Converting styled SSA/ASS subtitles to SRT throws away positioning, colours, and
     italics. unshackle never does this automatically. It only happens when you

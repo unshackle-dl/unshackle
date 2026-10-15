@@ -49,6 +49,14 @@ Dialogue: 0,0:00:03.00,0:00:04.00,Default,,0,0,0,,World
 """
 
 
+LAYERED_ASS_SAMPLE = ASS_SAMPLE.replace(
+    "Dialogue: 0,0:00:01.00", "Dialogue: 1,0:00:05.00,0:00:06.00,Default,,0,0,0,,Sign\nDialogue: 0,0:00:01.00"
+)
+
+# Read before the autouse fixture below hides it.
+INSTALLED_SUBTITLEEDIT = binaries.SubtitleEdit
+
+
 @pytest.fixture(autouse=True)
 def no_subtitleedit(monkeypatch):
     """Default every test to a SubtitleEdit-less environment; tests opt in when needed."""
@@ -145,6 +153,30 @@ def test_ass_to_srt_converts_when_forced(tmp_path, monkeypatch):
     assert out.suffix == ".srt"
     assert cue_count(out) == 2
     assert "{\\" not in out.read_text("utf8")  # override tags stripped
+
+
+@pytest.mark.parametrize("target", [Codec.SubRip, Codec.WebVTT])
+@pytest.mark.parametrize("backend", ["pysubs2", "subtitleedit"])
+def test_layered_ass_converts_in_start_time_order(tmp_path, monkeypatch, backend, target):
+    if backend == "subtitleedit":
+        if not INSTALLED_SUBTITLEEDIT:
+            pytest.skip("SubtitleEdit is not installed")
+        monkeypatch.setattr(binaries, "SubtitleEdit", INSTALLED_SUBTITLEEDIT)
+    monkeypatch.setattr("unshackle.core.config.config.subtitle", {"conversion_method": backend}, raising=False)
+    sub = make_sub(tmp_path, "x.ass", LAYERED_ASS_SAMPLE, Codec.SubStationAlphav4)
+    out = sub.convert(target, forced=True)
+    starts = re.findall(r"(\d+:\d\d:\d\d[.,]\d{3}) -->", out.read_text("utf-8-sig"))
+    assert len(starts) == 3
+    assert starts == sorted(starts)
+    assert [p.name for p in tmp_path.iterdir()] == [out.name]  # sorted copy removed
+
+
+def test_ass_to_ssa_keeps_file_order(tmp_path, monkeypatch):
+    monkeypatch.setattr("unshackle.core.config.config.subtitle", {}, raising=False)
+    sub = make_sub(tmp_path, "x.ass", LAYERED_ASS_SAMPLE, Codec.SubStationAlphav4)
+    out = sub.convert(Codec.SubStationAlpha, forced=True)
+    text = out.read_text("utf8")
+    assert text.index("Sign") < text.index("Hello")
 
 
 def test_webvtt_to_srt_conversion(tmp_path, monkeypatch):
