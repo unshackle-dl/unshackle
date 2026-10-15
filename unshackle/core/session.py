@@ -835,19 +835,15 @@ class RnetSession:
                 if response.status_code not in self.status_forcelist:
                     return response
                 last_exception = HTTPError(f"Received status code: {response.status_code}", response=response)
-                self.log.warning(
-                    f"{response.status_code} {response.reason}({urlparse(url).path}). Retrying... "
-                    f"({attempt + 1}/{max_retries})"
-                )
+                failure = f"{response.status_code} {response.reason}"
 
             except self.catch_exceptions as e:
                 last_exception = e
                 response = None
-                self.log.warning(
-                    f"{e.__class__.__name__}({urlparse(url).path}). Retrying... ({attempt + 1}/{max_retries})"
-                )
+                failure = e.__class__.__name__
 
             if attempt < max_retries:
+                self.log.warning(f"{failure}({urlparse(url).path}). Retrying... ({attempt + 1}/{max_retries})")
                 if sleep_duration := self.get_sleep_time(response, attempt + 1):
                     if sleep_duration > 0:
                         time.sleep(sleep_duration)
