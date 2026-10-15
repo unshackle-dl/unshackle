@@ -1,7 +1,9 @@
 import logging
+import threading
 import time
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Optional, Union
 from uuid import UUID
 
 import pytest
@@ -231,18 +233,31 @@ def test_kv_copy_never_moves_the_flag_table(tmp_path: Path) -> None:
 def test_retry_takes_the_next_parallel_answer_without_a_new_request(tmp_path: Path) -> None:
     from tests.core.test_vaults_lookup import FakeVault
 
+    started, release = threading.Event(), threading.Event()
+
+    class Fast(FakeVault):
+        def get_key(self, kid: Union[UUID, str], service: str) -> Optional[str]:
+            # answer only once the slow query runs, or the pool shutdown cancels it before it starts
+            started.wait(5)
+            return super().get_key(kid, service)
+
+    class Slow(FakeVault):
+        def get_key(self, kid: Union[UUID, str], service: str) -> Optional[str]:
+            started.set()
+            release.wait(5)
+            return super().get_key(kid, service)
+
     local = SQLite("local", tmp_path / "local.db")
-    # the fast answer must land after the slow query has started, or the pool shutdown cancels
-    # the slow query before it runs and it never reaches candidates; a loaded CI runner can take
-    # tens of milliseconds to start the second worker thread
-    fast = FakeVault("fast", BAD, delay=0.1)
-    slow = FakeVault("slow", GOOD, delay=0.3)
+    fast, slow = Fast("fast", BAD), Slow("slow", GOOD)
     vaults = Vaults("SVC")
     vaults.vaults = [local, fast, slow]
 
     assert vaults.get_key(KID) == (BAD, fast)
     vaults.flag_bad_key(KID, BAD)
-    time.sleep(0.5)  # the slow answer lands in candidates after the first call returned
+    release.set()  # the slow answer lands in candidates after the first call returned
+    deadline = time.monotonic() + 5
+    while len(vaults.candidates.get(KID, [])) < 2 and time.monotonic() < deadline:
+        time.sleep(0.01)
     assert vaults.get_key(KID) == (GOOD, slow)
     assert fast.calls == 1 and slow.calls == 1
 
