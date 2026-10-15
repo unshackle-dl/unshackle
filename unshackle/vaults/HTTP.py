@@ -4,8 +4,10 @@ from typing import Iterator, Optional, Union
 from uuid import UUID
 
 from requests import Session
+from requests.adapters import HTTPAdapter
 
 from unshackle.core import __version__
+from unshackle.core.session import POOL_MAX_SIZE
 from unshackle.core.vault import Vault
 
 
@@ -60,6 +62,9 @@ class HTTP(Vault):
         self.batch_insert = True
         self.current_title = None
         self.session = Session()
+        adapter = HTTPAdapter(pool_connections=POOL_MAX_SIZE, pool_maxsize=POOL_MAX_SIZE)
+        self.session.mount("https://", adapter)
+        self.session.mount("http://", adapter)
         self.session.headers.update({"User-Agent": f"unshackle v{__version__}"})
         self.api_session_id = None
 
