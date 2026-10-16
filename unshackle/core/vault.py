@@ -10,7 +10,6 @@ from urllib3.util.retry import Retry
 from unshackle.core import __version__
 from unshackle.core.session import POOL_MAX_SIZE
 
-
 RATE_LIMIT_RETRIES = 3
 
 

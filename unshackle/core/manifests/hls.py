@@ -1610,7 +1610,9 @@ class HLS:
         try:
             return HLS.get_drm(key, session)
         except Widevine.Exceptions.KIDNotFound:
-            kid = HLS.get_track_kid_from_init(master, track, probe_session or session or run_proxy.fallback_session(), init_section)
+            kid = HLS.get_track_kid_from_init(
+                master, track, probe_session or session or run_proxy.fallback_session(), init_section
+            )
             if not kid:
                 raise
             return HLS.get_drm(key, session, kid=kid)
