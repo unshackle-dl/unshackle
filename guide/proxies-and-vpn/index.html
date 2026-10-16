@@ -2829,7 +2829,9 @@ not go through the proxy:</p>
 detection. The request still goes: unshackle only warns. Report the message, with the
 file and line, to the service maintainer.</p>
 <p>A request to your own machine or to your local network gives no warning. This includes a
-private IP address such as <code>192.168.1.50</code>, and a <code>.local</code>, <code>.lan</code> or <code>.home.arpa</code> host name.</p>
+private IP address such as <code>192.168.1.50</code>, and a <code>.local</code>, <code>.lan</code> or <code>.home.arpa</code> host name.
+A request to the <code>host</code> of a remote CDM in <code>remote_cdm</code> also gives no warning. The CDM API
+sees your own IP, but the service does not.</p>
 <p>A <code>socks5://</code> proxy makes the DNS lookup of each host on your machine and gives no warning.
 Use <code>socks5h://</code> to make the proxy do the DNS lookups too.</p>
 <h2 id="basic-static-proxies">Basic (static proxies)<a class="headerlink" href="#basic-static-proxies" title="Permanent link">&para;</a></h2>
