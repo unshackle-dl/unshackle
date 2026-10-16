@@ -134,6 +134,13 @@ def fallback_session() -> requests.Session:
     return session
 
 
+def cdm_hosts() -> set[str]:
+    """The hosts of the remote CDMs in the config: a CDM API of the user, which a service calls direct."""
+    from unshackle.core.config import config
+
+    return {hostname(str(x.get("host") or x.get("Host") or "")) for x in config.remote_cdm}
+
+
 def is_local(host: str) -> bool:
     """True for this machine and the local network, which never see the internet IP of the user."""
     if host in ("localhost", "localhost.", "localhost.localdomain"):
@@ -177,7 +184,7 @@ def check(host: Any, frame: Optional[FrameType]) -> None:
     if isinstance(host, bytes):
         host = host.decode(errors="replace")
     host = str(host or "").lower().strip("[]")
-    if not host or is_local(host) or host in proxy_hosts:
+    if not host or is_local(host) or host in proxy_hosts or host in cdm_hosts():
         return
     found = find_service(frame, through_core=False)
     if not found:

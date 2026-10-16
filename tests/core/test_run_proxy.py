@@ -84,6 +84,16 @@ def test_proxy_and_local_hosts_do_not_warn(caplog, host):
     assert leaks(caplog) == []
 
 
+def test_remote_cdm_host_does_not_warn(caplog, monkeypatch):
+    """A service calls its remote CDM itself, so no core frame ends the walk; the CDM API is not the service."""
+    from unshackle.core.config import config
+
+    monkeypatch.setattr(config, "remote_cdm", [{"name": "pr", "host": "https://cdm.example/playready"}])
+    with caplog.at_level(logging.WARNING):
+        lookup("cdm.example")
+    assert leaks(caplog) == []
+
+
 @pytest.mark.parametrize("host", ["8.8.8.8", "2606:4700:4700::1111", "api.example"])
 def test_public_hosts_warn(caplog, host):
     with caplog.at_level(logging.WARNING):

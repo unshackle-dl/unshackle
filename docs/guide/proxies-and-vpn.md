@@ -198,6 +198,8 @@ file and line, to the service maintainer.
 
 A request to your own machine or to your local network gives no warning. This includes a
 private IP address such as `192.168.1.50`, and a `.local`, `.lan` or `.home.arpa` host name.
+A request to the `host` of a remote CDM in `remote_cdm` also gives no warning. The CDM API
+sees your own IP, but the service does not.
 
 A `socks5://` proxy makes the DNS lookup of each host on your machine and gives no warning.
 Use `socks5h://` to make the proxy do the DNS lookups too.
