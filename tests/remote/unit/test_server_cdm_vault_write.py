@@ -33,6 +33,9 @@ class FakeVaults:
     def __len__(self):
         return 1
 
+    def held_locally(self, kid, key):
+        return False
+
     def get_key(self, kid):
         return self.held.get(kid), self.vault_used
 

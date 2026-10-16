@@ -55,7 +55,7 @@ from unshackle.core.constants import (
 )
 from unshackle.core.credential import Credential
 from unshackle.core.downloaders import default_max_workers, format_speed, parse_speed_limit, set_speed_limit
-from unshackle.core.drm import DRM_T, ClearKeyCENC, MonaLisa, PlayReady, Widevine, cbcs, own_kids, verify
+from unshackle.core.drm import DRM_T, ClearKeyCENC, MonaLisa, PlayReady, Widevine, cbcs, own_kids, real_kids, verify
 from unshackle.core.events import events
 from unshackle.core.export_name import ExportNamer, move_export, plural, season_episodes, title_label
 from unshackle.core.providers.anilist import parse_anilist_ref
@@ -4555,13 +4555,21 @@ class dl:
         poisoned row; the server key waits as the next candidate. A server CDM key is trusted
         like a local CDM key: it goes to the run cache and the vaults, and a retry after a
         flagged vault key takes it before any vault. A server vault key is unproven, so it
-        waits in ``Vaults.candidates`` and gets the same check when its turn comes.
+        waits in ``Vaults.candidates`` and gets the same check when its turn comes. Only the KIDs
+        the DRM names are looked up, each once, so sibling keys add no remote vault requests.
         """
         server_vault_keys = getattr(self._remote_service, "server_vault_keys", {})
+        looked_up: dict[UUID, tuple[Optional[str], Any]] = {}
         for track in title.tracks:
             for drm in getattr(track, "drm", None) or []:
-                for kid, server_key in list(getattr(drm, "content_keys", {}).items()):
-                    vault_key, vault = self.vaults.get_key(kid)
+                content_keys = getattr(drm, "content_keys", {})
+                named = set(real_kids(drm) or content_keys)
+                for kid, server_key in list(content_keys.items()):
+                    if kid not in named:
+                        continue
+                    if kid not in looked_up:
+                        looked_up[kid] = self.vaults.get_key(kid)
+                    vault_key, vault = looked_up[kid]
                     if not vault_key or vault_key == server_key:
                         continue
                     drm.content_keys[kid] = vault_key
@@ -4579,10 +4587,10 @@ class dl:
         """Cache the keys a batch licence or an import put on the tracks.
 
         Both fill track.drm before any prepare_drm call, so this is the only point where those
-        keys can still reach the local vaults.
+        keys can still reach the local vaults. A content key a local vault already holds is not pushed again.
         """
         server_vault_keys = getattr(getattr(self, "_remote_service", None), "server_vault_keys", {})
-        keys = {
+        resolved = {
             kid: key
             for track in title.tracks
             for drm in (getattr(track, "drm", None) or [])
@@ -4591,6 +4599,7 @@ class dl:
             and server_vault_keys.get(kid) != key
             and self.vaults.sources.get(kid, (None,))[0] != key
         }
+        keys = {kid: key for kid, key in resolved.items() if not self.vaults.held_locally(kid, key)}
         if keys:
             self.LICENSE_KEY_CACHE.update(keys)
             self.flush_vault_writes([partial(self.cache_keys_to_vaults, keys)])

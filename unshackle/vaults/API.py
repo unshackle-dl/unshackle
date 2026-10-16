@@ -1,12 +1,9 @@
 from typing import Iterator, Optional, Union
 from uuid import UUID
 
-from requests import Response, Session
-from requests.adapters import HTTPAdapter
+from requests import HTTPError, Response
 
-from unshackle.core import __version__
-from unshackle.core.session import POOL_MAX_SIZE
-from unshackle.core.vault import Vault
+from unshackle.core.vault import RateLimited, Vault, vault_session
 
 
 class API(Vault):
@@ -24,11 +21,7 @@ class API(Vault):
         super().__init__(name, no_push)
         self.uri = uri.rstrip("/")
         self.timeout = timeout
-        self.session = Session()
-        adapter = HTTPAdapter(pool_connections=POOL_MAX_SIZE, pool_maxsize=POOL_MAX_SIZE)
-        self.session.mount("https://", adapter)
-        self.session.mount("http://", adapter)
-        self.session.headers.update({"User-Agent": f"unshackle v{__version__}"})
+        self.session = vault_session(timeout)
         self.session.headers.update({"Authorization": f"Bearer {token}"})
 
         if headers:
@@ -44,6 +37,8 @@ class API(Vault):
             timeout=self.timeout,
             allow_redirects=False,
         )
+        if response.status_code == 429:
+            raise Exceptions.TooManyRequests(f"Vault {self.name} rate limited the lookup")
         response.raise_for_status()
         data = response.json()
 
@@ -176,10 +171,12 @@ class API(Vault):
                         batch_size = 1
                     continue
 
+                if response.status_code == 429:
+                    raise Exceptions.TooManyRequests(f"Vault {self.name} rate limited the push")
                 response.raise_for_status()
                 data = response.json()
-            except Exception:
-                # JSON decode error or connection issue - try smaller batch
+            except (ValueError, HTTPError):
+                # an HTTP error or a broken JSON reply - try smaller batch
                 if batch_size > 1:
                     if batch_size > 100:
                         batch_size -= 100
@@ -281,7 +278,7 @@ class Exceptions:
     class AuthRejected(Exception):
         """Authentication Error Occurred, is your token valid? Do you have permission to make this call?"""
 
-    class TooManyRequests(Exception):
+    class TooManyRequests(RateLimited):
         """Rate Limited. Sent too many requests in a given amount of time."""
 
     class PageInvalid(Exception):

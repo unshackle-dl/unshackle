@@ -170,3 +170,51 @@ def test_resolve_server_keys_does_not_warn_for_clear_tracks(monkeypatch):
     svc.resolve_server_keys(SimpleNamespace(tracks=Tracks([video_track, audio_track])))
 
     assert warnings == ["Server CDM returned no content keys for track v-1"]
+
+
+def resolve(manifest_drm, drm_type="widevine"):
+    """Run resolve_server_keys for one track the server answers with its own key and a sibling."""
+    svc = remote_service()
+    svc.log = SimpleNamespace(warning=lambda *a, **k: None, debug=lambda *a, **k: None)
+    svc._server_cdm = True
+    svc.drain_server_logs = lambda: None
+    keys = {CDM_KID.hex: "bb" * 16, KID.hex: "aa" * 16}
+    svc.client = SimpleNamespace(post=lambda ep, data: {"keys": {"v-1": keys}, "drm_type": drm_type})
+    track = SimpleNamespace(id="v-1", drm=manifest_drm)
+
+    class Tracks(list):
+        videos = [track]
+        audio: list = []
+
+    svc.resolve_server_keys(SimpleNamespace(tracks=Tracks([track])))
+    assert set(track.drm[0].content_keys) == {KID, CDM_KID}
+    return track.drm[0]
+
+
+def test_resolve_server_keys_names_only_the_manifest_kids():
+    """Sibling keys in the licence stay content keys but are not KIDs the track names."""
+    from pywidevine.pssh import PSSH
+
+    from unshackle.core.drm import Widevine
+
+    widevine = Widevine(pssh=PSSH.new(system_id=PSSH.SystemId.Widevine, key_ids=[KID]))
+    assert resolve([widevine]).kids == [KID]
+
+    playready = RemoteService.create_drm_stub("playready", [KID.hex])
+    assert resolve([playready], "playready").kids == [KID]
+
+
+def test_resolve_server_keys_names_every_kid_without_manifest_drm():
+    assert set(resolve(None).kids) == {KID, CDM_KID}
+
+
+def test_reconstruct_drm_keeps_the_default_kid_of_a_pssh_without_kids():
+    from pywidevine.pssh import PSSH
+
+    from unshackle.core.drm import real_kids
+    from unshackle.core.remote_service import reconstruct_drm
+
+    content_id_only = PSSH.new(system_id=PSSH.SystemId.Widevine, init_data=b"\x22\x03abc")
+    (drm,) = reconstruct_drm([{"type": "widevine", "pssh": content_id_only.dumps(), "kids": [str(KID)]}])
+
+    assert real_kids(drm) == [KID]

@@ -38,7 +38,7 @@ from unshackle.core.config import config
 from unshackle.core.console import console, prompt_user
 from unshackle.core.constants import AnyTrack
 from unshackle.core.credential import Credential
-from unshackle.core.drm import cbcs
+from unshackle.core.drm import cbcs, real_kids
 from unshackle.core.proxies.resolve import is_loopback
 from unshackle.core.session import MAX_BACKOFF
 from unshackle.core.titles import Title_T, Titles_T, remap_titles
@@ -303,7 +303,8 @@ def reconstruct_drm(drm_list: Optional[list]) -> list:
                 from unshackle.core.drm import Widevine
 
                 wv_pssh = WidevinePSSH(pssh_str)
-                result.append(Widevine(pssh=wv_pssh))
+                kids = drm_info.get("kids")
+                result.append(Widevine(pssh=wv_pssh, kid=kids[0] if kids and not wv_pssh.key_ids else None))
             elif drm_type == "playready":
                 import base64 as b64
 
@@ -1542,9 +1543,9 @@ class RemoteService:
                         self.log.warning(f"Server CDM returned no content keys for track {track.id}")
                     continue
 
-                kid_list = list(track_keys.keys())
+                named = {kid.hex for drm in track.drm or [] for kid in real_kids(drm)} & track_keys.keys()
                 track_drm_type = drm_types_by_track.get(str(track.id), server_drm_type)
-                drm_obj = self.create_drm_stub(track_drm_type, kid_list)
+                drm_obj = self.create_drm_stub(track_drm_type, sorted(named) or list(track_keys))
                 for kid_hex, key_hex in track_keys.items():
                     drm_obj.content_keys[UUID(hex=kid_hex)] = key_hex
                 track.drm = [drm_obj]

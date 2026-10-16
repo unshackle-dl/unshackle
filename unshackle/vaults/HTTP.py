@@ -3,12 +3,7 @@ from enum import Enum
 from typing import Iterator, Optional, Union
 from uuid import UUID
 
-from requests import Session
-from requests.adapters import HTTPAdapter
-
-from unshackle.core import __version__
-from unshackle.core.session import POOL_MAX_SIZE
-from unshackle.core.vault import Vault
+from unshackle.core.vault import RateLimited, Vault, vault_session
 
 
 class InsertResult(Enum):
@@ -61,11 +56,7 @@ class HTTP(Vault):
         self.api_mode = api_mode.lower()
         self.batch_insert = True
         self.current_title = None
-        self.session = Session()
-        adapter = HTTPAdapter(pool_connections=POOL_MAX_SIZE, pool_maxsize=POOL_MAX_SIZE)
-        self.session.mount("https://", adapter)
-        self.session.mount("http://", adapter)
-        self.session.headers.update({"User-Agent": f"unshackle v{__version__}"})
+        self.session = vault_session(timeout)
         self.api_session_id = None
 
         if self.api_mode == "decrypt_labs":
@@ -97,6 +88,9 @@ class HTTP(Vault):
         if r.status_code == 404:
             return {"status": "not_found"}
 
+        if r.status_code == 429:
+            raise RateLimited(f"Vault {self.name} rate limited the request")
+
         if not r.ok:
             try:
                 detail = r.json().get("message") or r.reason.title()
@@ -124,11 +118,8 @@ class HTTP(Vault):
             kid = kid.hex
 
         if self.api_mode == "decrypt_labs":
+            response = self.session.post(self.url, json={"service": service.lower(), "kid": kid}, timeout=self.timeout)
             try:
-                request_payload = {"service": service.lower(), "kid": kid}
-
-                response = self.session.post(self.url, json=request_payload, timeout=self.timeout)
-
                 if not response.ok:
                     return None
 
@@ -186,7 +177,7 @@ class HTTP(Vault):
                     elif isinstance(key_entry, dict):
                         if key_entry.get("kid") == kid:
                             return key_entry.get("key")
-            except Exception as e:
+            except ValueError as e:
                 print(f"Failed to get key ({e.__class__.__name__}: {e})")
                 return None
             return None
@@ -300,8 +291,6 @@ class HTTP(Vault):
                 except ValueError as e:
                     if "unknown" in str(e).lower() and "method" in str(e).lower():
                         self.batch_insert = False
-                except Exception:
-                    pass
             for kid, key in processed_kid_keys.items():
                 try:
                     response = self.request(
@@ -317,7 +306,7 @@ class HTTP(Vault):
                         continue
                     if response.get("inserted", False):
                         inserted_count += 1
-                except Exception as e:
+                except ValueError as e:
                     failures.append(e)
             if failures and len(failures) == len(processed_kid_keys):
                 raise failures[-1]

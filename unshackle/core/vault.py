@@ -2,6 +2,46 @@ from abc import ABCMeta, abstractmethod
 from typing import Iterator, Optional, Union
 from uuid import UUID
 
+from requests import ConnectionError as RequestsConnectionError
+from requests import Session, Timeout
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+
+from unshackle.core import __version__
+from unshackle.core.session import POOL_MAX_SIZE
+
+
+class RateLimited(Exception):
+    """The vault still answered 429 after the retries."""
+
+
+UNREACHABLE = (RequestsConnectionError, Timeout, ConnectionError, TimeoutError)
+
+
+def vault_session(timeout: float) -> Session:
+    """An HTTP session for a remote vault that retries a 429 and nothing else.
+
+    A 429 means the request was not processed, so a POST is safe to send again. A connect or read
+    failure is not retried: a lookup waits on every remote vault, so a retry multiplies the timeout.
+    """
+    retry = Retry(
+        total=3,
+        connect=0,
+        read=0,
+        other=0,
+        backoff_factor=0.5,
+        status_forcelist=[429],
+        allowed_methods=None,
+        retry_after_max=int(timeout),
+        raise_on_status=False,
+    )
+    session = Session()
+    adapter = HTTPAdapter(pool_connections=POOL_MAX_SIZE, pool_maxsize=POOL_MAX_SIZE, max_retries=retry)
+    session.mount("https://", adapter)
+    session.mount("http://", adapter)
+    session.headers.update({"User-Agent": f"unshackle v{__version__}"})
+    return session
+
 
 class Vault(metaclass=ABCMeta):
     # a vault on this machine; Vaults.get_key tries these first, before the network ones

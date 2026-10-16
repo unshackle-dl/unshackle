@@ -10,11 +10,14 @@ import pytest
 
 from unshackle.commands import dl as dl_module
 from unshackle.commands.dl import dl
+from unshackle.core.vault import RateLimited, vault_session
 from unshackle.core.vaults import Vaults
-from unshackle.vaults.API import API
+from unshackle.vaults.API import API, Exceptions
+from unshackle.vaults.HTTP import HTTP
 from unshackle.vaults.SQLite import SQLite
 
 KID = UUID("11111111-2222-3333-4444-555555555555")
+SIBLING = UUID("99999999-2222-3333-4444-555555555555")
 BAD = "aa" * 16
 GOOD = "bb" * 16
 
@@ -630,3 +633,100 @@ def test_api_vault_reports_the_pair_upstream(monkeypatch: pytest.MonkeyPatch, ca
     vaults.flag_bad_key(KID, BAD)
     vaults.unflag_bad_key(KID, BAD)
     assert not caplog.records
+
+
+def test_prefer_vault_keys_queries_each_named_kid_once() -> None:
+    asked: list[UUID] = []
+    cmd = dl.__new__(dl)
+    cmd.vaults = SimpleNamespace(get_key=lambda kid: asked.append(kid) or (None, None))
+    cmd._remote_service = SimpleNamespace(server_vault_keys={})
+    video, audio = (SimpleNamespace(kids=[KID], content_keys={KID: GOOD, SIBLING: BAD}) for _ in range(2))
+
+    cmd.prefer_vault_keys(SimpleNamespace(tracks=[SimpleNamespace(drm=[video]), SimpleNamespace(drm=[audio])]))
+
+    assert asked == [KID]
+
+
+def test_cache_resolved_keys_skips_a_key_a_local_vault_holds(tmp_path: Path) -> None:
+    local = SQLite("local", tmp_path / "local.db")
+    local.add_key("SVC", SIBLING, BAD)
+    cmd = dl.__new__(dl)
+    cmd.vaults = Vaults("SVC")
+    cmd.vaults.vaults = [local]
+    cmd._remote_service = SimpleNamespace(server_vault_keys={})
+    pushed: list[dict] = []
+    cmd.flush_vault_writes = lambda writes: pushed.extend(w.args[0] for w in writes)
+    dl.LICENSE_KEY_CACHE.clear()
+    drm = SimpleNamespace(kids=[KID], content_keys={KID: GOOD, SIBLING: BAD})
+
+    cmd.cache_resolved_keys(SimpleNamespace(tracks=[SimpleNamespace(drm=[drm])]))
+
+    assert pushed == [{KID: GOOD}]
+
+
+def test_api_vault_does_not_shrink_the_batch_on_429(monkeypatch: pytest.MonkeyPatch) -> None:
+    api = API("vault", "https://vault.example/", "tok")
+    posts: list[str] = []
+    limited = SimpleNamespace(status_code=429)
+    monkeypatch.setattr(api.session, "post", lambda url, **kw: posts.append(url) or limited)
+
+    with pytest.raises(Exceptions.TooManyRequests):
+        api.add_keys("SVC", {KID: GOOD})
+
+    assert len(posts) == 1
+
+
+def test_http_vault_does_not_fall_back_to_single_inserts_on_429(monkeypatch: pytest.MonkeyPatch) -> None:
+    vault = HTTP("vault", "https://vault.example/", password="tok", api_mode="json")
+    posts: list[str] = []
+    limited = SimpleNamespace(status_code=429, ok=False)
+    monkeypatch.setattr(vault.session, "post", lambda url, **kw: posts.append(url) or limited)
+
+    with pytest.raises(RateLimited):
+        vault.add_keys("SVC", {KID: GOOD, SIBLING: BAD})
+
+    assert len(posts) == 1
+
+
+def test_vault_session_retries_429_but_not_a_dead_vault() -> None:
+    retry = vault_session(10).get_adapter("https://vault.example").max_retries
+    assert retry.status_forcelist == [429]
+    assert (retry.connect, retry.read, retry.other) == (0, 0, 0)
+
+
+def test_an_unreachable_vault_costs_one_attempt_per_run(monkeypatch: pytest.MonkeyPatch) -> None:
+    import requests
+
+    def down(url: str, **kw: object) -> None:
+        calls.append(url)
+        raise requests.ConnectTimeout("no answer")
+
+    calls: list[str] = []
+    api = API("api", "https://api.example/", "tok")
+    http = HTTP("http", "https://http.example/", password="tok", api_mode="json")
+    for vault in (api, http):
+        monkeypatch.setattr(vault.session, "get", down)
+        monkeypatch.setattr(vault.session, "post", down)
+        with pytest.raises(requests.ConnectTimeout):
+            vault.add_keys("SVC", {KID: GOOD, SIBLING: BAD})
+    assert len(calls) == 2  # no batch step-down, no single-key fallback
+
+    calls.clear()
+    vaults = Vaults("SVC")
+    vaults.vaults = [api]
+    assert vaults.get_key(KID) == (None, None)
+    assert vaults.get_key(SIBLING) == (None, None)
+    assert vaults.add_keys({KID: GOOD}) == 0
+    assert calls == ["https://api.example/svc/" + KID.hex]
+
+
+def test_a_vault_still_rate_limited_is_not_used_again(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[str] = []
+    api = API("api", "https://api.example/", "tok")
+    monkeypatch.setattr(api.session, "get", lambda url, **kw: calls.append(url) or SimpleNamespace(status_code=429))
+    vaults = Vaults("SVC")
+    vaults.vaults = [api]
+
+    assert vaults.get_key(KID) == (None, None)
+    assert vaults.get_key(SIBLING) == (None, None)
+    assert calls == ["https://api.example/svc/" + KID.hex]

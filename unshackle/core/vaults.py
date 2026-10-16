@@ -8,7 +8,7 @@ from uuid import UUID
 
 from unshackle.core.config import config
 from unshackle.core.utilities import get_debug_logger, import_module_by_path
-from unshackle.core.vault import Vault
+from unshackle.core.vault import UNREACHABLE, RateLimited, Vault
 
 log = logging.getLogger(__name__)
 
@@ -29,6 +29,7 @@ class Vaults:
         self.flagged: set[tuple[Union[UUID, str], str]] = set()
         self.candidates: dict[Union[UUID, str], list[tuple[str, Vault]]] = {}
         self.warned: set[tuple[str, Union[UUID, str], str]] = set()
+        self.unreachable: set[Vault] = set()
 
     def __iter__(self) -> Iterator[Vault]:
         return iter(self.vaults)
@@ -70,7 +71,7 @@ class Vaults:
         and the first one with the content key wins.
         """
         local = [v for v in self.vaults if v.local]
-        remote = [v for v in self.vaults if not v.local]
+        remote = [v for v in self.live() if not v.local]
         for vault in local:
             key = self.query_vault(vault, kid)
             if key:
@@ -123,6 +124,7 @@ class Vaults:
             return None
         except Exception as e:
             log.warning(f"Failed to get key from Vault '{vault.name}': {e}")
+            self.mark_unreachable(vault, e)
             if dl:
                 dl.log_vault_query(
                     vault.name,
@@ -160,7 +162,7 @@ class Vaults:
         """
         self.flagged.add((kid, key))
         source = self.sources.pop(kid, None)
-        for vault in self.vaults:
+        for vault in self.live():
             if not vault.local and (source is None or vault is not source[1]):
                 continue
             try:
@@ -171,7 +173,7 @@ class Vaults:
     def unflag_bad_key(self, kid: Union[UUID, str], key: str) -> None:
         """Remove a flag from every Vault."""
         self.flagged.discard((kid, key))
-        for vault in self.vaults:
+        for vault in self.live():
             try:
                 vault.unflag_bad_key(kid, key)
             except Exception as e:
@@ -183,7 +185,7 @@ class Vaults:
         This method pushes to all Vaults at the same time, so one unreachable Vault costs only its
         own timeout and does not delay the others.
         """
-        vaults = [vault for vault in self.vaults if vault != excluding and not vault.no_push]
+        vaults = [v for v in self.live() if v != excluding and not v.no_push]
         if not vaults:
             return 0
         with ThreadPoolExecutor(len(vaults), thread_name_prefix="vault-push") as pool:
@@ -201,6 +203,7 @@ class Vaults:
             return 0
         except Exception as e:
             log.warning(f"Failed to add key to Vault '{vault.name}': {e}")
+            self.mark_unreachable(vault, e)
             if dl:
                 dl.log_vault_query(vault.name, "add_key", kid=str(kid), success=False, error=e)
             return 0
@@ -214,7 +217,7 @@ class Vaults:
         This method pushes to all Vaults at the same time, so one unreachable Vault costs only its
         own timeout and does not delay the others.
         """
-        vaults = [vault for vault in self.vaults if not vault.no_push]
+        vaults = [vault for vault in self.live() if not vault.no_push]
         if not vaults:
             return 0
         with ThreadPoolExecutor(len(vaults), thread_name_prefix="vault-push") as pool:
@@ -229,7 +232,23 @@ class Vaults:
             return 0
         except Exception as e:
             log.warning(f"Failed to add keys to Vault '{vault.name}': {e}")
+            self.mark_unreachable(vault, e)
             return 0
+
+    def live(self) -> list[Vault]:
+        """The vaults this run still uses."""
+        return [vault for vault in self.vaults if vault not in self.unreachable]
+
+    def held_locally(self, kid: Union[UUID, str], key: str) -> bool:
+        """True when a local vault already holds this KID:KEY."""
+        return any(self.query_vault(vault, kid) == key for vault in self.vaults if vault.local)
+
+    def mark_unreachable(self, vault: Vault, error: Exception) -> None:
+        """Skip a vault that is down or still rate limited for the rest of the run, so it costs one
+        timeout, not one per KID."""
+        if isinstance(error, (RateLimited, *UNREACHABLE)) and vault not in self.unreachable:
+            self.unreachable.add(vault)
+            log.warning(f"Vault '{vault.name}' is unavailable, so this run does not use it again")
 
 
 __all__ = ("Vaults",)

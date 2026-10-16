@@ -56,3 +56,9 @@ key_vaults:
 Timeout in seconds for vault operations. Injected automatically into any backend whose
 constructor accepts a `timeout` parameter (a per-vault `timeout` still wins). The `MySQL` backend
 uses it as the default `connect_timeout`.
+
+The `API` and `HTTP` backends send a request again up to 3 times when the vault answers
+`429 Too Many Requests`. They wait the `Retry-After` time, but never longer than this timeout.
+A connection failure or a timeout is not tried again. The run does not use a vault again after a
+connection failure, a timeout, or a `429` that continues after the retries, so a vault that is
+down costs one timeout per run.
