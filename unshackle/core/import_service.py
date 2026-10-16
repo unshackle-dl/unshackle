@@ -765,6 +765,12 @@ class ImportService:
             "license through a CDM: export the title again with the tracks you need selected."
         )
 
+    def decrypts_samples(self, track: AnyTrack) -> bool:
+        return False
+
+    def get_sample_decrypter(self, track: AnyTrack, entry: int) -> bytes:
+        raise NotImplementedError("An import does not decrypt samples")
+
     def on_segment_downloaded(self, track: AnyTrack, segment: Any) -> None:
         pass
 
