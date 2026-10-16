@@ -11,8 +11,14 @@ from unshackle.core import __version__
 from unshackle.core.session import POOL_MAX_SIZE
 
 
+RATE_LIMIT_RETRIES = 3
+
+
 class RateLimited(Exception):
     """The vault still answered 429 after the retries."""
+
+    def __init__(self, message: str = f"still rate limited after {RATE_LIMIT_RETRIES} retries"):
+        super().__init__(message)
 
 
 UNREACHABLE = (RequestsConnectionError, Timeout, ConnectionError, TimeoutError)
@@ -25,11 +31,11 @@ def vault_session(timeout: float) -> Session:
     failure is not retried: a lookup waits on every remote vault, so a retry multiplies the timeout.
     """
     retry = Retry(
-        total=3,
+        total=RATE_LIMIT_RETRIES,
         connect=0,
         read=0,
         other=0,
-        backoff_factor=0.5,
+        backoff_factor=1,
         status_forcelist=[429],
         allowed_methods=None,
         retry_after_max=int(timeout),

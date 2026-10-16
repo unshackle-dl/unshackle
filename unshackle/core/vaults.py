@@ -248,7 +248,7 @@ class Vaults:
         timeout, not one per KID."""
         if isinstance(error, (RateLimited, *UNREACHABLE)) and vault not in self.unreachable:
             self.unreachable.add(vault)
-            log.warning(f"Vault '{vault.name}' is unavailable, so this run does not use it again")
+            log.warning(f"Skipping Vault '{vault.name}' for the rest of this run")
 
 
 __all__ = ("Vaults",)

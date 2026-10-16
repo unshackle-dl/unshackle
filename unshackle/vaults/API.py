@@ -38,7 +38,7 @@ class API(Vault):
             allow_redirects=False,
         )
         if response.status_code == 429:
-            raise Exceptions.TooManyRequests(f"Vault {self.name} rate limited the lookup")
+            raise Exceptions.TooManyRequests()
         response.raise_for_status()
         data = response.json()
 
@@ -172,7 +172,7 @@ class API(Vault):
                     continue
 
                 if response.status_code == 429:
-                    raise Exceptions.TooManyRequests(f"Vault {self.name} rate limited the push")
+                    raise Exceptions.TooManyRequests()
                 response.raise_for_status()
                 data = response.json()
             except (ValueError, HTTPError):

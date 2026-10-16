@@ -89,7 +89,7 @@ class HTTP(Vault):
             return {"status": "not_found"}
 
         if r.status_code == 429:
-            raise RateLimited(f"Vault {self.name} rate limited the request")
+            raise RateLimited()
 
         if not r.ok:
             try:
