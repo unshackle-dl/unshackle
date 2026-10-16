@@ -2799,7 +2799,7 @@ up the objects your methods rely on:</p>
 </tr>
 <tr>
 <td><code>self.session</code></td>
-<td>A ready-to-use HTTP session (headers, retries, and proxy applied).</td>
+<td>A ready-to-use HTTP session (headers, retries, and proxy applied). Send every request through it: with a proxy active, a request from service code that does not go through the proxy logs a warning. A separate HTTP session that goes direct on purpose sets <code>proxy_exempt = True</code>.</td>
 </tr>
 <tr>
 <td><code>self.cache</code></td>
