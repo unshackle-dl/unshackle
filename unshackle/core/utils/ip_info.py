@@ -7,6 +7,7 @@ from typing import Any, Callable, Optional
 import requests
 
 from unshackle.core.cacher import Cacher
+from unshackle.core.utils import run_proxy
 
 CACHE_KEY = "ip_info_v4"
 CACHE_TTL = 86400  # 24 hours
@@ -113,7 +114,7 @@ def lookup_session(source: Optional[requests.Session]) -> requests.Session:
     if proxies:
         proxy = proxies.get("all") or proxies.get("https") or proxies.get("http")
         if proxy:
-            sess.trust_env = False
+            run_proxy.pin(sess)
             sess.proxies.update({"http": proxy, "https": proxy})
     return sess
 

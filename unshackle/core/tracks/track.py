@@ -34,6 +34,7 @@ from unshackle.core.events import events
 from unshackle.core.session import MAX_BACKOFF, RnetSession, utf8_text
 from unshackle.core.tracks import resume
 from unshackle.core.utilities import get_boxes, log_event, try_ensure_utf8
+from unshackle.core.utils import run_proxy
 from unshackle.core.utils.subprocess import ffprobe
 
 DRM_PREFERENCE_TYPES: dict[str, Union[type[Widevine], type[PlayReady]]] = {
@@ -48,8 +49,7 @@ def direct_session(session: Union[Session, "RnetSession"], proxy: Optional[str] 
     """requests.Session with copied headers/cookies and no proxy, or only ``proxy`` when given."""
     new = Session()
     if proxy:
-        # requests lets HTTP(S)_PROXY override session proxies, so the env must be ignored for a chosen proxy
-        new.trust_env = False
+        run_proxy.pin(new)
         new.proxies = {"http": proxy, "https": proxy}
     headers = getattr(session, "headers", None)
     if headers is not None:
@@ -418,7 +418,7 @@ class DownloadContext:
         """Return the HTTP session, or a new ``Session`` if none was set."""
         session = self.session
         if not session:
-            session = Session()
+            session = run_proxy.fallback_session()
         elif not isinstance(session, (Session, RnetSession)):
             raise TypeError(f"Expected session to be a {Session} or {RnetSession}, not {session!r}")
         return session
@@ -1143,7 +1143,7 @@ class Track:
             from pywidevine.cdm import Cdm as WidevineCdm
             from pywidevine.pssh import PSSH as WV_PSSH
 
-            session = getattr(self, "session", None) or Session()
+            session = getattr(self, "session", None) or run_proxy.fallback_session()
 
             response = session.get(self.url)
             playlist = m3u8.loads(utf8_text(response), self.url)
@@ -1220,7 +1220,7 @@ class Track:
             url = self.url
 
         if not session:
-            session = Session()
+            session = run_proxy.fallback_session()
 
         content_length = maximum_size
 

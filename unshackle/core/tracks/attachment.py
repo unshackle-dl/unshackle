@@ -13,6 +13,7 @@ import requests
 from unshackle.core.config import config
 from unshackle.core.constants import DOWNLOAD_LICENCE_ONLY
 from unshackle.core.session import RnetSession
+from unshackle.core.utils import run_proxy
 
 AnySession = Union[requests.Session, RnetSession]
 
@@ -110,7 +111,7 @@ class Attachment:
 
         from unshackle.core.tracks.track import direct_session
 
-        session = session or self.session or requests.Session()
+        session = session or self.session or run_proxy.fallback_session()
         if no_proxy_download:
             if any(session.proxies.values()):
                 session = direct_session(session)

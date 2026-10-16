@@ -40,6 +40,7 @@ from unshackle.core.tracks.track import (
     parse_sidx,
 )
 from unshackle.core.utilities import is_close_match, log_event, try_ensure_utf8
+from unshackle.core.utils import run_proxy
 from unshackle.core.utils.redact import safe_display_url
 from unshackle.core.utils.xml import load_xml
 
@@ -125,7 +126,7 @@ class DASH:
             raise TypeError(f"Expected url to be a {str}, not {url!r}")
 
         if not session:
-            session = Session()
+            session = run_proxy.fallback_session()
         elif not isinstance(session, (Session, RnetSession)):
             raise TypeError(f"Expected session to be a {Session} or {RnetSession}, not {session!r}")
 
@@ -481,8 +482,6 @@ class DASH:
                     seen_segments.add(seg)
                     segments.append(seg)
             segment_durations.extend(p_durations)
-            # ponytail: a sample comes from the first content period only; map the window across
-            # periods if a manifest with a short first period needs it
             if config.sample and segments:
                 break
 

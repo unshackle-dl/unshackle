@@ -14,6 +14,7 @@ from requests import Session
 
 from unshackle.core.session import RnetSession
 from unshackle.core.utilities import log_event
+from unshackle.core.utils import run_proxy
 
 log = logging.getLogger(__name__)
 
@@ -124,7 +125,7 @@ class ClearKey:
             raise ValueError("No URI in M3U Key, unable to get Key.")
 
         if not session:
-            session = Session()
+            session = run_proxy.fallback_session()
 
         if not session.headers.get("User-Agent"):
             # commonly needed default for HLS playlists

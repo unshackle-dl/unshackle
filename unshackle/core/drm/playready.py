@@ -27,6 +27,7 @@ from unshackle.core.constants import AnyTrack
 from unshackle.core.drm import key_args as drm_key_args
 from unshackle.core.session import utf8_text
 from unshackle.core.utilities import get_boxes, log_event
+from unshackle.core.utils import run_proxy
 from unshackle.core.utils.subprocess import ffprobe
 
 
@@ -172,7 +173,7 @@ class PlayReady:
     @classmethod
     def from_track(cls, track: AnyTrack, session: Optional[Session] = None) -> PlayReady:
         if not session:
-            session = Session()
+            session = run_proxy.fallback_session()
             session.headers.update(config.headers)
 
         kid: Optional[UUID] = None

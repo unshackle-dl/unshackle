@@ -28,6 +28,7 @@ from rich import filesize
 
 from unshackle.core.constants import DOWNLOAD_CANCELLED, DownloadCancelled
 from unshackle.core.utilities import get_debug_logger, get_extension
+from unshackle.core.utils import run_proxy
 
 MAX_ATTEMPTS = 5
 RETRY_WAIT = 2
@@ -1215,6 +1216,7 @@ def build_session_spec(session: Optional[Any]) -> Optional[dict[str, Any]]:
             "headers": dict(session.headers),
             "cookies": session.cookies,  # RequestsCookieJar pickles cleanly
             "proxies": dict(session.proxies),
+            "trust_env": session.trust_env,
             "params": copy(session.params),
             "verify": session.verify,
             "cert": session.cert,
@@ -1260,6 +1262,7 @@ def rebuild_session(spec: dict[str, Any], max_workers: int) -> Optional[Any]:
             rs.cookies.update(spec["cookies"])
         if spec.get("proxies"):
             rs.proxies.update(spec["proxies"])
+        rs.trust_env = spec.get("trust_env", True)
         if spec.get("params"):
             rs.params = spec["params"]
         rs.verify = spec.get("verify", True)
@@ -1649,6 +1652,7 @@ def requests(
             session.cookies.update(cookies)
         if proxy:
             session.proxies.update({"all": proxy})
+            run_proxy.pin(session)
         adapter = HTTPAdapter(pool_connections=max_workers, pool_maxsize=max_workers, pool_block=True)
         session.mount("https://", adapter)
         session.mount("http://", adapter)

@@ -30,6 +30,7 @@ from unshackle.core.titles import Episode, Movies, Series, Title_T, Titles_T, re
 from unshackle.core.tracks import Audio, Chapter, Chapters, Subtitle, Tracks, Video
 from unshackle.core.tracks.attachment import Attachment
 from unshackle.core.tracks.track import Track
+from unshackle.core.utils import run_proxy
 
 log = logging.getLogger("import")
 E = TypeVar("E", bound=Enum)
@@ -299,6 +300,7 @@ class ImportService:
 
         if proxy:
             session.proxies.update({"all": proxy})
+            run_proxy.pin(session)
             if not explicit:
                 log.info(f"No --proxy given; using export region '{region}' via your proxy provider.")
         return session

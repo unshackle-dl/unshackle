@@ -14,6 +14,7 @@ import requests
 from unshackle.core import binaries
 from unshackle.core.proxies.proxy import Proxy
 from unshackle.core.utilities import get_country_code, get_country_name, get_debug_logger, log_event
+from unshackle.core.utils import run_proxy
 from unshackle.core.utils.ip_info import get_ip_info
 
 gluetun_instances: list["Gluetun"] = []
@@ -1128,6 +1129,7 @@ class Gluetun(Proxy):
         session = requests.Session()
         try:
             session.proxies = {"http": proxy_url, "https": proxy_url}
+            run_proxy.pin(session)
 
             for attempt in range(max_retries):
                 try:

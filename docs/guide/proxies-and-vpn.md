@@ -176,6 +176,32 @@ because geolocation data can be out of date.
 
 Over the REST API, the server returns this failure to the client as `INVALID_PROXY`.
 
+### System proxy and environment variables
+
+`--proxy` takes priority over the `HTTP_PROXY` and `HTTPS_PROXY` environment variables
+and over the Windows system proxy. unshackle still reads a `REQUESTS_CA_BUNDLE` or
+`CURL_CA_BUNDLE` certificate bundle, so a local debugging proxy with its own certificate
+authority continues to work. Without `--proxy`, unshackle uses the system proxy.
+
+### Requests outside the proxy
+
+With a proxy active, unshackle logs a warning when service code sends a request that does
+not go through the proxy:
+
+```text
+A request to api.example.com did not go through the proxy, so api.example.com sees your own IP (EXAMPLE/__init__.py:120)
+```
+
+The host in the message sees your own IP address, and a service can treat that as proxy
+detection. The request still goes: unshackle only warns. Report the message, with the
+file and line, to the service maintainer.
+
+A request to your own machine or to your local network gives no warning. This includes a
+private IP address such as `192.168.1.50`, and a `.local`, `.lan` or `.home.arpa` host name.
+
+A `socks5://` proxy makes the DNS lookup of each host on your machine and gives no warning.
+Use `socks5h://` to make the proxy do the DNS lookups too.
+
 ## Basic (static proxies)
 
 The `Basic` proxy provider is pure static configuration, with no accounts and no network
@@ -867,6 +893,19 @@ The returned proxy is HTTPS on **port 443**.
     `resolve_remote_proxy_arg()`. It changes a `controld:` query to a `controld://`
     resolver for the server with `get_remote_proxy()`, and it removes Control D from a bare
     query, because a loopback forwarder is of no use to a server on another machine.
+
+!!! note "Keeping service requests on the proxy (developers)"
+    `unshackle/core/utils/run_proxy.py` holds the proxy rules for service traffic:
+
+    - `pin(session)` stops environment and system proxies from overriding the proxy of a
+      requests HTTP session, and keeps the environment CA bundle. Call it on each requests
+      HTTP session that gets a proxy.
+    - `fallback_session()` gives a core helper with no HTTP session (a manifest parser, a DRM
+      class) a session on the proxy of the service that called it.
+    - An audit hook on `socket.getaddrinfo` and on `socket.connect` to a host name, and a
+      check in `RnetSession.request`, warn about requests from service code that do not use
+      the proxy. A service sets
+      `proxy_exempt = True` on an HTTP session that goes direct on purpose.
 
 !!! note "Implementing a new provider (developers)"
     Every proxy provider subclasses `unshackle.core.proxies.proxy.Proxy` and has three

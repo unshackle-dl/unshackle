@@ -191,6 +191,19 @@ def test_requests_spec_carries_verify() -> None:
     assert rebuilt.verify is False
 
 
+def test_requests_spec_carries_trust_env() -> None:
+    """A proxied session ignores env proxies, so a child must not let HTTPS_PROXY win again."""
+    rs = Session()
+    rs.trust_env = False
+
+    spec = build_session_spec(rs)
+    assert spec is not None
+    rebuilt = rebuild_session(pickle.loads(pickle.dumps(spec)), 1)
+    assert rebuilt is not None
+
+    assert rebuilt.trust_env is False
+
+
 def test_requests_spec_carries_params() -> None:
     """Services hold an auth token in session.params; without it every segment request is unauthed."""
     rs = Session()

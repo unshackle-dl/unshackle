@@ -114,7 +114,7 @@ up the objects your methods rely on:
 |---|---|
 | `self.config` | The per-service config slice (see [Request and HTTP session objects](#request-and-http-session-objects)). |
 | `self.log` | A `logging.Logger` named after your class. |
-| `self.session` | A ready-to-use HTTP session (headers, retries, and proxy applied). |
+| `self.session` | A ready-to-use HTTP session (headers, retries, and proxy applied). Send every request through it: with a proxy active, a request from service code that does not go through the proxy logs a warning. A separate HTTP session that goes direct on purpose sets `proxy_exempt = True`. |
 | `self.cache` | A generic key/value `Cacher` namespaced to the service. |
 | `self.title_cache` | A region- and account-aware `TitleCacher`. |
 | `self.cache_dir` | `config.directories.cache / <ServiceName>`. |

@@ -17,6 +17,7 @@ from unshackle.core import binaries
 from unshackle.core.config import config
 from unshackle.core.console import console
 from unshackle.core.utilities import log_event
+from unshackle.core.utils import run_proxy
 
 
 def b64url_encode_nopad(data: bytes) -> str:
@@ -114,7 +115,7 @@ class ClearKeyCENC:
 
         if response is None and self.laurl:
             if not session:
-                session = Session()
+                session = run_proxy.fallback_session()
                 session.headers.update(config.headers)
             r = session.post(self.laurl, data=challenge, headers={"Content-Type": "application/json"})
             r.raise_for_status()

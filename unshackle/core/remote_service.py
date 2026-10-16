@@ -48,6 +48,7 @@ from unshackle.core.titles.music import SONG_FIELDS, Album, Song
 from unshackle.core.tracks import Audio, Chapter, Chapters, Subtitle, Tracks, Video
 from unshackle.core.tracks.attachment import Attachment
 from unshackle.core.tracks.track import Track
+from unshackle.core.utils import run_proxy
 from unshackle.core.utils.collections import ci_get
 from unshackle.core.utils.redact import redact_path, redact_text, safe_display_url
 from unshackle.core.vault import Vault
@@ -1074,6 +1075,7 @@ class RemoteService:
         local_proxy = None if no_proxy else (proxy or create_data.get("proxy"))
         if local_proxy:
             self._session.proxies["all"] = local_proxy
+            run_proxy.pin(self._session)
 
         if not no_proxy and not proxy and client_region:
             create_data["client_region"] = client_region

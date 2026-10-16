@@ -42,6 +42,7 @@ from unshackle.core.titles import Title_T, Titles_T, remap_titles
 from unshackle.core.tracks import Chapters, Tracks
 from unshackle.core.tracks.video import Video
 from unshackle.core.utilities import declared_kwargs
+from unshackle.core.utils import run_proxy
 from unshackle.core.utils.ip_info import get_ip_info, verify_proxy_exit
 from unshackle.core.utils.redact import mask_proxy
 
@@ -299,6 +300,8 @@ class Service(metaclass=ABCMeta):
 
             if proxy:
                 self.session.proxies.update({"all": proxy})
+                if isinstance(self.session, requests.Session):
+                    run_proxy.pin(self.session)
                 # Don't set Proxy-Authorization manually: both rnet (Proxy.all) and
                 # requests authenticate from the credentials embedded in the proxy URL.
                 # A manual header here was malformed (no "Basic " scheme) and broke
@@ -321,6 +324,8 @@ class Service(metaclass=ABCMeta):
                 except Exception as e:
                     self.log.debug(f"Failed to get cached IP info: {e}")
                     self.current_region = None
+
+        run_proxy.watch(type(self), run_proxy.proxy_of(self.session))
 
     @classmethod
     def is_region_allowed(cls, region: Optional[str]) -> bool:

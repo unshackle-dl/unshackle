@@ -606,6 +606,7 @@ def test_the_client_session_downloads_through_the_proxy_it_sends(
     with pytest.raises(_SentCreate) as exc:
         svc.authenticate()
     assert dict(svc._session.proxies) == expected
+    assert svc._session.trust_env is no_proxy  # a proxied session ignores HTTP(S)_PROXY
     assert exc.value.args[0].get("proxy") == (None if no_proxy else "http://proxy.example:8080")
 
 

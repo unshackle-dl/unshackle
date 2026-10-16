@@ -6,6 +6,7 @@ import http
 import logging
 import math
 import random
+import sys
 import time
 from collections.abc import Iterator, MutableMapping
 from datetime import datetime, timezone
@@ -19,6 +20,7 @@ from requests import HTTPError, Request, Response
 from requests.structures import CaseInsensitiveDict
 
 from unshackle.core.config import config
+from unshackle.core.utils import run_proxy
 
 # rnet's only distinguishing role is TLS fingerprinting; retry, backoff,
 # pooling, and timeouts must match the plain-requests path. Both RnetSession
@@ -584,10 +586,7 @@ class RnetSession:
         ):
             if key in session_kwargs:
                 client_kwargs[key] = session_kwargs.pop(key)
-        if "proxy" in session_kwargs:
-            proxy_url = session_kwargs.pop("proxy")
-            if proxy_url:
-                client_kwargs["proxies"] = [rnet.Proxy.all(proxy_url)]
+        proxy_url = session_kwargs.pop("proxy", None)
 
         client_kwargs["cookie_store"] = True
 
@@ -602,6 +601,7 @@ class RnetSession:
         self.headers = RnetSessionHeaders(self)
         self.cookies = RnetCookieAdapter(None, self)
         self.proxies = RnetProxyDict(self)
+        self.proxy_exempt = False  # True: this HTTP session goes direct on purpose, so the proxy check skips it
 
         if "headers" in session_kwargs:
             self.headers.update(session_kwargs.pop("headers"))
@@ -609,6 +609,8 @@ class RnetSession:
             self.cookies.update(session_kwargs.pop("cookies"))
         if "proxies" in session_kwargs:
             self.proxies.update(session_kwargs.pop("proxies"))
+        if proxy_url:
+            self.proxies.update({"all": proxy_url})
 
     @property
     def impersonate_name(self) -> Optional[str]:
@@ -778,6 +780,11 @@ class RnetSession:
         url = self.build_url(url, kwargs.pop("params", None))
 
         parsed_origin = urlparse(url)
+        if run_proxy.watched and not self.proxy_exempt and not self._client_kwargs.get("proxies"):
+            try:
+                run_proxy.check(parsed_origin.hostname, sys._getframe(1))
+            except Exception:  # nosec B110 - the proxy check only warns, it must never fail a request
+                pass
         if parsed_origin.scheme and parsed_origin.netloc:
             self._origins.add(f"{parsed_origin.scheme}://{parsed_origin.netloc}")
 

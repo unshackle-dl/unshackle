@@ -36,6 +36,7 @@ from unshackle.core.session import RnetSession
 from unshackle.core.tracks import Audio, DownloadContext, Subtitle, Track, Tracks, Video, resume
 from unshackle.core.tracks.track import assert_fragments_decrypted
 from unshackle.core.utilities import log_event, try_ensure_utf8
+from unshackle.core.utils import run_proxy
 from unshackle.core.utils.redact import safe_display_url
 from unshackle.core.utils.xml import load_xml
 
@@ -60,7 +61,7 @@ class ISM:
         if not url:
             raise requests.URLRequired("ISM manifest URL must be provided")
         if not session:
-            session = Session()
+            session = run_proxy.fallback_session()
         elif not isinstance(session, (Session, RnetSession)):
             raise TypeError(f"Expected session to be a {Session} or {RnetSession}, not {session!r}")
         res = session.get(url, **kwargs)
