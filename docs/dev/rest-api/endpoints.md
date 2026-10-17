@@ -471,6 +471,7 @@ Make a download job. It requires `service` and `title_id`. Every other field is 
 | `downloads` | int | `1` | Concurrent tracks. |
 | `worst` | boolean | `false` | Lowest bitrate within quality. |
 | `best_available` | boolean | `false` | Fall back to best available. With `all_drm`, a DRM system that does not license is a warning. |
+| `generate_dv` | boolean | `false` | With `HYBRID` in `range`, make Dolby Vision from the HDR10+ metadata when a title has no DV track. Needs `hdr10plus_tool` on the server. Without `HYBRID` in `range`, the request returns `400`. |
 | `repack` | boolean | `false` | Add REPACK tag. |
 | `tag` | string | `null` | Release group tag. |
 | `tmdb_id` / `imdb_id` / `tvdb_id` / `anilist_id` | - | `null` | External ID overrides. Each resolves its metadata directly instead of by a title search, and is used for tagging. Set `enrich` to also take the title, year and original language. Give at most one of `tmdb_id`, `imdb_id` and `tvdb_id`, since unshackle resolves the others from it. Sending two returns `400`. `anilist_id` still combines with one of them. `tmdb_id` and `tvdb_id` must be positive integers, `imdb_id` must look like `tt1375666`, and `anilist_id` must be a positive integer or a string like `mal:12345`, or the request returns `400`. An ID whose provider is unconfigured, such as `tmdb_id` with no `tmdb_api_key`, fails the job rather than returning `400`. `anilist_id` needs no API key. |

@@ -440,14 +440,17 @@ class Tracks:
                 video.hybrid_base_only = True
 
     def select_hybrid(self, tracks, quality, worst: bool = False):
-        # Prefer HDR10+ over HDR10 as the base layer (preserves dynamic metadata)
+        # Prefer HDR10+ over HDR10 as the base layer (preserves dynamic metadata).
+        # Only an HEVC base qualifies, because dovi_tool injects the RPU into an HEVC stream.
         base_ranges = (Video.Range.HDR10P, Video.Range.HDR10)
         base_tracks = []
         for range_type in base_ranges:
             base_tracks = [
                 v
                 for v in tracks
-                if v.range == range_type and (v.height in quality or (v.width and int(v.width * 9 / 16) in quality))
+                if v.range == range_type
+                and v.codec in (Video.Codec.HEVC, None)
+                and (v.height in quality or (v.width and int(v.width * 9 / 16) in quality))
             ]
             if base_tracks:
                 break

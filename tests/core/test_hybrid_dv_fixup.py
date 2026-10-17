@@ -20,7 +20,9 @@ pytestmark = pytest.mark.unit
 def fake_video(tmp_path: Path, track_id: str, range_: Video.Range, height: int = 2160) -> Any:
     path = tmp_path / f"{track_id}.mp4"
     path.write_bytes(b"x")
-    return SimpleNamespace(id=track_id, path=path, height=height, range=range_, dv_compatible_bitstream=True)
+    return SimpleNamespace(
+        id=track_id, path=path, height=height, range=range_, codec=Video.Codec.HEVC, dv_compatible_bitstream=True
+    )
 
 
 @pytest.fixture

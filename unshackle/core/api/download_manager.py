@@ -495,6 +495,7 @@ def perform_download(
         "vcodec": params.get("vcodec", []),
         "range_": params.get("range", [Video.Range.SDR]),
         "best_available": params.get("best_available", False),
+        "generate_dv": params.get("generate_dv", False),
         # services read these here, not from dl.result(), to pick the manifests they fetch
         "acodec": params.get("acodec") or [],
         "lang": params.get("lang", ["orig"]),
@@ -659,6 +660,7 @@ def perform_download(
                 downloads=params.get("downloads", 1),
                 worst=params.get("worst", False),
                 best_available=params.get("best_available", False),
+                generate_dv=params.get("generate_dv", False),
                 split_audio=params.get("split_audio"),
                 progress_sink=progress_callback,
             )

@@ -1,10 +1,9 @@
 import json
 import logging
 import os
-import random
 import re
 import subprocess
-import sys
+from collections import Counter
 from concurrent import futures
 from pathlib import Path
 from typing import Optional
@@ -18,6 +17,97 @@ from unshackle.core.console import console
 from unshackle.core.utilities import log_event
 from unshackle.core.utils import dovi
 from unshackle.core.utils.subprocess import run_step
+
+# HDR10+ histogram slots that form the maxRGB distribution, as (DistributionIndex, fraction of pixels).
+# Index 99 holds the 99.98% percentile. Index 5 (a luminance-Y value) and index 10 (the share of pixels
+# at or under 100 nits) are not part of the distribution.
+# config.generate_dv_mode values: unshackle's L1 with the CM v2.9 or the CM v4.0 avg floor, or dovi_tool's own L1.
+GENERATE_DV_MODES = ("v29", "v40", "legacy")
+
+HDR10PLUS_PERCENTILES = ((1, 0.01), (25, 0.25), (50, 0.5), (75, 0.75), (90, 0.9), (95, 0.95), (99, 0.9998))
+
+
+def nits_to_pq(nits: float) -> float:
+    """SMPTE ST 2084 inverse EOTF, as a 12-bit code value (0-4095)."""
+    m1, m2, c1, c2, c3 = 0.1593017578125, 78.84375, 0.8359375, 18.8515625, 18.6875
+    y = (max(nits, 0.0) / 10000) ** m1
+    return 4095 * ((c1 + c2 * y) / (1 + c3 * y)) ** m2
+
+
+def hdr10plus_mean_pq(values: dict[int, float], active_fraction: float = 1.0) -> Optional[float]:
+    """Mean PQ code of the maxRGB distribution in one HDR10+ histogram, or None if a slot is missing.
+
+    Dolby Vision L1 avg is a mean of PQ-coded maxRGB over the active area. HDR10+ AverageMaxRGB is a
+    linear mean over the whole frame, so the mean comes from the percentiles instead. The darkest
+    ``1 - active_fraction`` of the pixels are the letterbox bars, and the mean leaves them out. A scene
+    whose 1st percentile is above black has no bars, so its whole frame counts.
+    """
+    if any(index not in values for index, _ in HDR10PLUS_PERCENTILES):
+        return None
+    if values[1] > 0:
+        active_fraction = 1.0
+    knots = [(0.0, nits_to_pq(values[1]))]
+    knots += [(fraction, nits_to_pq(values[index])) for index, fraction in HDR10PLUS_PERCENTILES]
+    knots.append((1.0, knots[-1][1]))
+
+    low = 1.0 - active_fraction
+    area = 0.0
+    for (x1, y1), (x2, y2) in zip(knots, knots[1:]):
+        if x2 <= low:
+            continue
+        if x1 < low:
+            y1 += (y2 - y1) * (low - x1) / (x2 - x1)
+            x1 = low
+        area += (x2 - x1) * (y1 + y2) / 2
+    return area / active_fraction
+
+
+def hdr10plus_shots(metadata: dict, active_fraction: float = 1.0) -> list[dict]:
+    """One dovi_tool generator shot with L1 metadata per HDR10+ scene.
+
+    Each scene keeps its own cut. max_pq is the histogram peak, as in dovi_tool's default peak source,
+    without index 10: that slot is the share of pixels at or under 100 nits, not a brightness, and would
+    put a near-black scene at 10 nits. Index 5, the 99.99% luminance, stays: against decoded pixels it
+    tracked the true peak better than index 99 alone. MaxScl is the peak when the histogram is empty.
+    A scene whose histogram has no complete distribution falls back to dovi_tool's average,
+    PQ(AverageMaxRGB), capped at max_pq.
+    """
+    scenes = metadata["SceneInfo"]
+    summary = metadata["SceneInfoSummary"]
+    first_frames = summary["SceneFirstFrameIndex"]
+    offset = first_frames[0]
+
+    shots = []
+    fallbacks = 0
+    for first_frame, length in zip(first_frames, summary["SceneFrameNumbers"]):
+        start = first_frame - offset
+        luminance = scenes[start]["LuminanceParameters"]
+        distribution = luminance["LuminanceDistributions"]
+        values = {
+            index: value / 10
+            for index, value in zip(distribution["DistributionIndex"], distribution["DistributionValues"])
+        }
+        peaks = [value for index, value in values.items() if index != 10]
+        max_pq = nits_to_pq(max(peaks or [v / 10 for v in luminance["MaxScl"]]))
+        avg_pq = hdr10plus_mean_pq(values, active_fraction)
+        if avg_pq is None:
+            fallbacks += 1
+            avg_pq = min(nits_to_pq(luminance["AverageRGB"] / 10), max_pq)
+        shots.append(
+            {
+                "start": start,
+                "duration": length,
+                "metadata_blocks": [{"Level1": {"min_pq": 0, "max_pq": round(max_pq), "avg_pq": round(avg_pq)}}],
+            }
+        )
+    if fallbacks:
+        log_event(
+            "hybrid_convert_hdr10plus",
+            level="DEBUG",
+            message="HDR10+ scenes without a full histogram use PQ(AverageMaxRGB) for L1 avg",
+            context={"scenes": fallbacks, "total": len(shots)},
+        )
+    return shots
 
 
 class Hybrid:
@@ -80,40 +170,55 @@ class Hybrid:
             console.status("Already Injected")
             return
 
-        for video in videos:
-            save_path = video.path
-            if not save_path or not os.path.exists(save_path):
-                raise ValueError(f"Video track {video.id} was not downloaded or path not found: {save_path}")
+        try:
+            for video in videos:
+                save_path = video.path
+                if not save_path or not os.path.exists(save_path):
+                    raise ValueError(f"Video track {video.id} was not downloaded or path not found: {save_path}")
 
-            if video.range == Video.Range.HDR10:
-                self.extract_stream(save_path, "HDR10")
-            elif video.range == Video.Range.HDR10P:
-                self.extract_stream(save_path, "HDR10")
-                self.hdr_type = "HDR10+"
-            elif video.range == Video.Range.DV:
-                if not os.path.isfile(config.directories.temp / "DV.hevc"):
-                    self.extract_stream(save_path, "DV")
+                if video.range == Video.Range.HDR10:
+                    self.extract_stream(save_path, "HDR10")
+                elif video.range == Video.Range.HDR10P:
+                    self.extract_stream(save_path, "HDR10")
+                    self.hdr_type = "HDR10+"
+                elif video.range == Video.Range.DV:
+                    if not os.path.isfile(config.directories.temp / "DV.hevc"):
+                        self.extract_stream(save_path, "DV")
 
-        if self.hdr10plus_to_dv:
-            hdr10p_video = next(v for v in videos if v.range == Video.Range.HDR10P)
-            self.extract_hdr10plus(hdr10p_video)
-            self.convert_hdr10plus_to_dv()
-        else:
-            dv_video = next(v for v in videos if v.range == Video.Range.DV)
-            self.extract_rpu(dv_video)
-            if os.path.isfile(config.directories.temp / "RPU_UNT.bin"):
-                self.rpu_file = "RPU_UNT.bin"
-                # Mode 3 conversion already done during extraction when not untouched
-            elif os.path.isfile(config.directories.temp / "RPU.bin"):
-                # RPU already extracted with mode 3
-                pass
+            base_video = next((v for v in videos if v.range in (Video.Range.HDR10, Video.Range.HDR10P)), None)
+            area = self.detect_active_area(base_video.path) if base_video and base_video.path else None
 
-        self.level_6()
-        base_video = next((v for v in videos if v.range in (Video.Range.HDR10, Video.Range.HDR10P)), None)
-        if base_video and base_video.path:
-            self.level_5(base_video.path)
+            if self.hdr10plus_to_dv:
+                # a base that failed earlier in this title can leave its edited RPUs, which level_5/level_6 reuse
+                for stale in ("RPU_L5.bin", "RPU_L6.bin"):
+                    Path.unlink(config.directories.temp / stale, missing_ok=True)
+                hdr10p_video = next(v for v in videos if v.range == Video.Range.HDR10P)
+                self.extract_hdr10plus(hdr10p_video)
+                self.convert_hdr10plus_to_dv(area[1] if area else 1.0)
+            else:
+                dv_video = next(v for v in videos if v.range == Video.Range.DV)
+                self.extract_rpu(dv_video)
+                if os.path.isfile(config.directories.temp / "RPU_UNT.bin"):
+                    self.rpu_file = "RPU_UNT.bin"
+                    # Mode 3 conversion already done during extraction when not untouched
+                elif os.path.isfile(config.directories.temp / "RPU.bin"):
+                    # RPU already extracted with mode 3
+                    pass
 
-        self.injecting()
+            self.level_6()
+            if area:
+                self.level_5(area[0])
+
+            self.injecting()
+        finally:
+            # The title goes on after a failed resolution, and level_5 reuses an RPU_L5.bin it finds,
+            # so the files of this resolution's crop must not outlive it.
+            for own in ("HDR10.hevc", "RPU_L5.bin", "L5.json", "L6.json"):
+                Path.unlink(config.directories.temp / own, missing_ok=True)
+            if self.hdr10plus_to_dv:
+                # The RPU comes from this base's own HDR10+, so the next resolution must not reuse it.
+                Path.unlink(config.directories.temp / "RPU.bin", missing_ok=True)
+                Path.unlink(config.directories.temp / "RPU_L6.bin", missing_ok=True)
 
         log_event(
             "hybrid_complete",
@@ -131,10 +236,6 @@ class Hybrid:
         if self.source == ("itunes" or "appletvplus"):
             Path.unlink(config.directories.temp / "hdr10.mkv")
             Path.unlink(config.directories.temp / "dv.mkv")
-        Path.unlink(config.directories.temp / "HDR10.hevc", missing_ok=True)
-        Path.unlink(config.directories.temp / "RPU_L5.bin", missing_ok=True)
-        Path.unlink(config.directories.temp / "L5.json", missing_ok=True)
-        Path.unlink(config.directories.temp / "L6.json", missing_ok=True)
 
     def extract_stream(self, save_path, type_):
         output = Path(config.directories.temp / f"{type_}.hevc")
@@ -152,8 +253,7 @@ class Hybrid:
                 message=f"Failed extracting {type_} stream",
                 context={"type": type_, "input": str(save_path), "output": str(output), "error": str(e)},
             )
-            self.log.error(f"x Failed extracting {type_} stream")
-            sys.exit(1)
+            raise ValueError(f"Failed extracting {type_} stream")
 
         log_event(
             "hybrid_extract_stream",
@@ -199,8 +299,8 @@ class Hybrid:
             success=True,
         )
 
-    def level_5(self, input_video):
-        """Make Level 5 active area metadata through crop detection on the HDR10 track.
+    def level_5(self, crop: tuple[int, int, int, int]) -> None:
+        """Write the active area of the HDR10 track, as (left, top, right, bottom), to Level 5.
 
         This resolves mismatches where DV has no black bars but HDR10 does (or vice versa)
         by telling the display the correct active area.
@@ -209,136 +309,7 @@ class Hybrid:
             self.rpu_file = "RPU_L5.bin"
             return
 
-        ffprobe_bin = str(FFProbe) if FFProbe else "ffprobe"
-        ffmpeg_bin = str(FFMPEG) if FFMPEG else "ffmpeg"
-
-        with console.status("Detecting active area (crop detection)...", spinner="dots"):
-            result_duration = subprocess.run(
-                [ffprobe_bin, "-v", "error", "-show_entries", "format=duration", "-of", "json", str(input_video)],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-            )
-
-            if result_duration.returncode != 0:
-                log_event(
-                    "hybrid_level5",
-                    level="WARNING",
-                    message="Could not probe video duration",
-                    context={"returncode": result_duration.returncode, "stderr": (result_duration.stderr or "")},
-                )
-                self.log.warning("Could not probe video duration, skipping L5 crop detection")
-                return
-
-            duration_value = json.loads(result_duration.stdout).get("format", {}).get("duration")
-            if duration_value is None:
-                log_event(
-                    "hybrid_level5",
-                    level="WARNING",
-                    message="Video has no container duration; RPU keeps the active area of the DV track",
-                    context={"input": str(input_video)},
-                )
-                self.log.warning(
-                    "Video has no container duration, skipping L5 crop detection. "
-                    "The RPU keeps the active area of the DV track."
-                )
-                return
-            duration = float(duration_value)
-
-            result_streams = subprocess.run(
-                [
-                    ffprobe_bin,
-                    "-v",
-                    "error",
-                    "-select_streams",
-                    "v:0",
-                    "-show_entries",
-                    "stream=width,height",
-                    "-of",
-                    "json",
-                    str(input_video),
-                ],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-            )
-
-            if result_streams.returncode != 0:
-                log_event(
-                    "hybrid_level5",
-                    level="WARNING",
-                    message="Could not probe video resolution",
-                    context={"returncode": result_streams.returncode, "stderr": (result_streams.stderr or "")},
-                )
-                self.log.warning("Could not probe video resolution, skipping L5 crop detection")
-                return
-
-            stream_info = json.loads(result_streams.stdout)
-            original_width = int(stream_info["streams"][0]["width"])
-            original_height = int(stream_info["streams"][0]["height"])
-
-            random_times = sorted(random.uniform(0, duration) for _ in range(10))
-
-            def sample_crop(t: float) -> Optional[tuple[int, int, int, int]]:
-                result_cropdetect = subprocess.run(
-                    [
-                        ffmpeg_bin,
-                        "-y",
-                        "-nostdin",
-                        "-loglevel",
-                        "info",
-                        "-ss",
-                        f"{t:.2f}",
-                        "-i",
-                        str(input_video),
-                        "-vf",
-                        "cropdetect=round=2",
-                        "-vframes",
-                        "4",
-                        "-f",
-                        "null",
-                        "-",
-                    ],
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    text=True,
-                    encoding="utf-8",
-                    errors="replace",
-                )
-
-                # cropdetect outputs crop=w:h:x:y
-                crop_match = re.search(
-                    r"crop=(\d+):(\d+):(\d+):(\d+)",
-                    (result_cropdetect.stdout or "") + (result_cropdetect.stderr or ""),
-                )
-                if not crop_match:
-                    return None
-                w, h = int(crop_match.group(1)), int(crop_match.group(2))
-                x, y = int(crop_match.group(3)), int(crop_match.group(4))
-                return (x, y, original_width - w - x, original_height - h - y)
-
-            with futures.ThreadPoolExecutor(max_workers=len(random_times)) as pool:
-                crop_results = [crop for crop in pool.map(sample_crop, random_times) if crop]
-
-        if not crop_results:
-            log_event(
-                "hybrid_level5",
-                level="WARNING",
-                message="No crop data detected, skipping L5",
-                context={"samples": len(random_times)},
-            )
-            self.log.warning("No crop data detected, skipping L5")
-            return
-
-        crop_counts = {}
-        for crop in crop_results:
-            crop_counts[crop] = crop_counts.get(crop, 0) + 1
-        most_common = max(crop_counts, key=crop_counts.get)
-        left, top, right, bottom = most_common
+        left, top, right, bottom = crop
 
         l5_json = {
             "active_area": {
@@ -373,13 +344,160 @@ class Hybrid:
             "hybrid_level5",
             level="DEBUG",
             message="Edited RPU Level 5 active area",
+            context={"crop": {"left": left, "right": right, "top": top, "bottom": bottom}},
+            success=True,
+        )
+        self.rpu_file = "RPU_L5.bin"
+
+    def detect_active_area(self, input_video: Path) -> Optional[tuple[tuple[int, int, int, int], float]]:
+        """The picture's crop as (left, top, right, bottom) and its share of the frame, or None.
+
+        None also when the picture is under 40% of the frame: cropdetect on dark samples can report a tiny
+        picture, which would be wrong in L5 and would divide the HDR10+ conversion's mean by a tiny share.
+        """
+        ffprobe_bin = str(FFProbe) if FFProbe else "ffprobe"
+        ffmpeg_bin = str(FFMPEG) if FFMPEG else "ffmpeg"
+
+        with console.status("Detecting active area (crop detection)...", spinner="dots"):
+            result_duration = subprocess.run(
+                [ffprobe_bin, "-v", "error", "-show_entries", "format=duration", "-of", "json", str(input_video)],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+            )
+
+            if result_duration.returncode != 0:
+                log_event(
+                    "hybrid_level5",
+                    level="WARNING",
+                    message="Could not probe video duration",
+                    context={"returncode": result_duration.returncode, "stderr": (result_duration.stderr or "")},
+                )
+                self.log.warning("Could not probe video duration, skipping crop detection")
+                return None
+
+            duration_value = json.loads(result_duration.stdout).get("format", {}).get("duration")
+            if duration_value is None:
+                log_event(
+                    "hybrid_level5",
+                    level="WARNING",
+                    message="Video has no container duration; RPU keeps the active area of the DV track",
+                    context={"input": str(input_video)},
+                )
+                self.log.warning(
+                    "Video has no container duration, skipping crop detection. "
+                    "The RPU keeps the active area of the DV track."
+                )
+                return None
+            duration = float(duration_value)
+
+            result_streams = subprocess.run(
+                [
+                    ffprobe_bin,
+                    "-v",
+                    "error",
+                    "-select_streams",
+                    "v:0",
+                    "-show_entries",
+                    "stream=width,height",
+                    "-of",
+                    "json",
+                    str(input_video),
+                ],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+            )
+
+            if result_streams.returncode != 0:
+                log_event(
+                    "hybrid_level5",
+                    level="WARNING",
+                    message="Could not probe video resolution",
+                    context={"returncode": result_streams.returncode, "stderr": (result_streams.stderr or "")},
+                )
+                self.log.warning("Could not probe video resolution, skipping crop detection")
+                return None
+
+            stream_info = json.loads(result_streams.stdout)
+            original_width = int(stream_info["streams"][0]["width"])
+            original_height = int(stream_info["streams"][0]["height"])
+
+            sample_times = [duration * (i + 0.5) / 10 for i in range(10)]
+
+            def sample_crop(t: float) -> Optional[tuple[int, int, int, int]]:
+                result_cropdetect = subprocess.run(
+                    [
+                        ffmpeg_bin,
+                        "-y",
+                        "-nostdin",
+                        "-loglevel",
+                        "info",
+                        "-ss",
+                        f"{t:.2f}",
+                        "-i",
+                        str(input_video),
+                        "-vf",
+                        "cropdetect=round=2",
+                        # cropdetect skips its first 2 frames and only ever grows the picture, so 12 frames
+                        # give each sample 10 evaluated ones
+                        "-vframes",
+                        "12",
+                        "-f",
+                        "null",
+                        "-",
+                    ],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                )
+
+                # cropdetect prints crop=w:h:x:y per frame and settles over the frames, so the last line counts
+                crop_matches = re.findall(
+                    r"crop=(\d+):(\d+):(\d+):(\d+)",
+                    (result_cropdetect.stdout or "") + (result_cropdetect.stderr or ""),
+                )
+                if not crop_matches:
+                    return None
+                w, h, x, y = map(int, crop_matches[-1])
+                return (x, y, original_width - w - x, original_height - h - y)
+
+            with futures.ThreadPoolExecutor(max_workers=len(sample_times)) as pool:
+                crop_results = [crop for crop in pool.map(sample_crop, sample_times) if crop]
+
+        if not crop_results:
+            log_event(
+                "hybrid_level5",
+                level="WARNING",
+                message="No crop data detected",
+                context={"samples": len(sample_times)},
+            )
+            self.log.warning("No crop data detected, skipping the active area")
+            return None
+
+        left, top, right, bottom = Counter(crop_results).most_common(1)[0][0]
+        fraction = (
+            (original_width - left - right) * (original_height - top - bottom) / (original_width * original_height)
+        )
+        if fraction < 0.4:
+            self.log.warning("The detected picture is under 40% of the frame, skipping the active area")
+            return None
+        log_event(
+            "hybrid_level5",
+            level="DEBUG",
+            message="Detected active area",
             context={
                 "crop": {"left": left, "right": right, "top": top, "bottom": bottom},
                 "samples": len(crop_results),
             },
-            success=True,
         )
-        self.rpu_file = "RPU_L5.bin"
+        return (left, top, right, bottom), fraction
 
     @staticmethod
     def sanitize_l6(
@@ -537,7 +655,6 @@ class Hybrid:
                 "hdr_type": self.hdr_type,
                 "rpu_file": self.rpu_file,
                 "output": self.hevc_file,
-                "drop_hdr10plus": self.hdr10plus_to_dv,
             },
             success=True,
         )
@@ -574,6 +691,8 @@ class Hybrid:
 
         file_size = os.path.getsize(config.directories.temp / self.hdr10plus_file)
         if file_size == 0:
+            # left in place, the next resolution would take the empty file for its metadata
+            Path.unlink(config.directories.temp / self.hdr10plus_file, missing_ok=True)
             log_event(
                 "hybrid_extract_hdr10plus",
                 level="ERROR",
@@ -655,51 +774,83 @@ class Hybrid:
 
         return max_mdl, min_mdl, max_cll, max_fall
 
-    def convert_hdr10plus_to_dv(self):
-        """Convert HDR10+ metadata to Dolby Vision RPU"""
-        if os.path.isfile(config.directories.temp / "RPU.bin"):
-            return
+    def convert_hdr10plus_to_dv(self, active_fraction: float = 1.0) -> None:
+        """Generate a Dolby Vision RPU with one shot per HDR10+ scene.
 
-        with console.status("Converting HDR10+ metadata to Dolby Vision...", spinner="dots"):
-            max_mdl, min_mdl, max_cll, max_fall = self.probe_hdr_metadata()
-            max_mdl, min_mdl, max_cll, max_fall = self.sanitize_l6(max_mdl, min_mdl, max_cll, max_fall)
-
-            extra_metadata = {
-                "cm_version": "V29",
-                "length": 0,  # dovi_tool will figure this out
-                "level6": {
-                    "max_display_mastering_luminance": max_mdl,
-                    "min_display_mastering_luminance": min_mdl,
-                    "max_content_light_level": max_cll,
-                    "max_frame_average_light_level": max_fall,
-                },
-            }
-
-            with open(config.directories.temp / "extra.json", "w") as f:
-                json.dump(extra_metadata, f, indent=2)
-
+        By default unshackle builds the L1 of each shot itself (see hdr10plus_shots), because dovi_tool's
+        --hdr10plus-json sets L1 avg from the linear AverageMaxRGB and so makes most scenes too bright.
+        config.generate_dv_mode picks the L1 avg floor: v29 (about 2.4 nits, closest to the pixels) or v40
+        (about 10 nits, as in studio CM v4.0 RPUs). legacy hands the HDR10+ JSON to dovi_tool instead.
+        """
+        mode = config.generate_dv_mode
+        if mode not in GENERATE_DV_MODES:
+            raise ValueError(f"generate_dv_mode must be one of {', '.join(GENERATE_DV_MODES)}, not {mode!r}")
+        hdr10plus_path = config.directories.temp / self.hdr10plus_file
+        config_path = config.directories.temp / "generate.json"
         try:
-            dovi.generate_from_hdr10plus(
-                config.directories.temp / "extra.json",
-                config.directories.temp / self.hdr10plus_file,
-                config.directories.temp / "RPU.bin",
-                label="dovi_tool generate",
-            )
-        except RuntimeError as e:
-            log_event(
-                "hybrid_convert_hdr10plus",
-                level="ERROR",
-                message="Failed converting HDR10+ to Dolby Vision",
-                context={"error": str(e)},
-            )
-            raise ValueError("Failed converting HDR10+ to Dolby Vision")
+            with console.status("Converting HDR10+ metadata to Dolby Vision...", spinner="dots"):
+                with open(hdr10plus_path, encoding="utf-8") as f:
+                    metadata = json.load(f)
+                profile = metadata.get("JSONInfo", {}).get("HDR10plusProfile")
+                shots = hdr10plus_shots(metadata, active_fraction)
+                # one entry per frame: a feature film is hundreds of MB of objects, freed before dovi_tool runs
+                del metadata
+
+                max_mdl, min_mdl, max_cll, max_fall = self.probe_hdr_metadata()
+                max_mdl, min_mdl, max_cll, max_fall = self.sanitize_l6(max_mdl, min_mdl, max_cll, max_fall)
+                generator_config = {
+                    "cm_version": "V29",
+                    "level6": {
+                        "max_display_mastering_luminance": max_mdl,
+                        "min_display_mastering_luminance": min_mdl,
+                        "max_content_light_level": max_cll,
+                        "max_frame_average_light_level": max_fall,
+                    },
+                }
+                if mode == "legacy":
+                    generator_config["length"] = 0  # dovi_tool takes the length from the HDR10+ JSON
+                else:
+                    generator_config["shots"] = shots
+                if mode == "v40":
+                    generator_config["l1_avg_pq_cm_version"] = "V40"
+                with open(config_path, "w", encoding="utf-8") as f:
+                    json.dump(generator_config, f)
+
+            if profile == "A":
+                self.log.warning(
+                    "The HDR10+ metadata is Profile A, which is often less reliable than Profile B. "
+                    "Check the Dolby Vision result before you keep it."
+                )
+
+            try:
+                dovi.generate(
+                    config_path,
+                    config.directories.temp / "RPU.bin",
+                    hdr10plus_json=hdr10plus_path if mode == "legacy" else None,
+                    label="dovi_tool generate",
+                )
+            except RuntimeError as e:
+                log_event(
+                    "hybrid_convert_hdr10plus",
+                    level="ERROR",
+                    message="Failed converting HDR10+ to Dolby Vision",
+                    context={"error": str(e)},
+                )
+                raise ValueError("Failed converting HDR10+ to Dolby Vision")
+        finally:
+            config_path.unlink(missing_ok=True)
+            hdr10plus_path.unlink(missing_ok=True)
 
         log_event(
             "hybrid_convert_hdr10plus",
             level="DEBUG",
-            message="Converted HDR10+ metadata to Dolby Vision Profile 8",
+            message="Converted HDR10+ metadata to Dolby Vision Profile 8.1",
+            context={
+                "shots": len(shots),
+                "mode": mode,
+                "hdr10plus_profile": profile,
+                "active_fraction": round(active_fraction, 3),
+            },
             success=True,
         )
-
-        Path.unlink(config.directories.temp / "extra.json")
-        Path.unlink(config.directories.temp / self.hdr10plus_file)
+        self.log.info(f"Dolby Vision generated from HDR10+ metadata ({len(shots)} scenes, {mode})")

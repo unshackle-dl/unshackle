@@ -1213,6 +1213,8 @@ class RemoteService:
                 create_data["quality"] = list(quality)
             if self.ctx.parent.params.get("best_available"):
                 create_data["best_available"] = True
+            if self.ctx.parent.params.get("generate_dv"):
+                create_data["generate_dv"] = True
             # Services pick the manifests to fetch from these. They go in their own
             # object: flat, a service option with the same name would take them (or override them).
             # An empty list is sent as-is, because only an absent key falls back to the dl default.

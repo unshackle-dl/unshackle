@@ -156,7 +156,14 @@ class TrackRequest:
     codecs: list[Video.Codec] = []            # empty == accept any codec
     ranges: list[Video.Range] = [Video.Range.SDR]
     best_available: bool = False
+    generate_dv: bool = False                 # --generate-dv: make Dolby Vision from HDR10+
 ```
+
+!!! note "`generate_dv` and a hand-made HYBRID"
+    A service that fetches the HYBRID variants itself (HDR10 and DV) must also fetch
+    HDR10P when `track_request.generate_dv` is set and the title has no DV track.
+    The conversion needs an HEVC HDR10+ track as its base.
+    `get_tracks_for_variants` does this for you.
 
 !!! note "Read the request, don't second-guess the user"
     Services may narrow `track_request` for hard technical constraints (e.g.

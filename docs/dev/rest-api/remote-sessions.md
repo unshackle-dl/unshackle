@@ -130,8 +130,8 @@ hood the client walks a remote session through its lifecycle.
       The client also downloads playlists and segments through the same proxy,
       as a local run does. `--no-proxy-download` and `--proxy-download` change
       that for downloads only.
-    - Track-selection hints (`range_`, `vcodec`, `quality`, `best_available`) so
-      the server fetches the right manifests
+    - Track-selection hints (`range_`, `vcodec`, `quality`, `best_available`,
+      `generate_dv`) so the server fetches the right manifests
     - Your language and audio codec selection (`-l`, `-vl`, `-al`, `-a`, `-fs`)
       in a `dl_params` object. Some services fetch one manifest
       for each audio language, and pick the languages from these values
@@ -428,7 +428,7 @@ The server mounts all these routes, even in `--remote-only` mode. Paths use the
 answers CDM calls), `cdm_system_id` and `cdm_device_type` (Widevine only), `service_config`
 (the identity config keys the service lists in `client_config`), `client` (a freeform identity
 object the dashboard shows as sent), and the track-selection hints `range_`, `vcodec`,
-`quality`, `best_available`, plus arbitrary service CLI options
+`quality`, `best_available`, `generate_dv`, plus arbitrary service CLI options
 (`additionalProperties: true`).
 
 `dl_params` holds the `dl` track selection: `lang`, `v_lang` and `a_lang`

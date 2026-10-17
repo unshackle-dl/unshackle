@@ -95,6 +95,19 @@ def test_select_hybrid_base_picks_highest_bitrate_then_worst_flips() -> None:
     assert ids(worst) == {"hdr10p-2160-lo", "dv-360"}
 
 
+def test_select_hybrid_skips_a_base_that_is_not_hevc() -> None:
+    """dovi_tool injects into HEVC, so a higher-bitrate AV1 base is not a hybrid ingredient."""
+    tracks = [
+        make_video(
+            "hdr10p-2160-av1", range_=Video.Range.HDR10P, height=2160, bitrate=30_000_000, codec=Video.Codec.AV1
+        ),
+        make_video("hdr10p-2160", range_=Video.Range.HDR10P, height=2160, bitrate=20_000_000, codec=Video.Codec.HEVC),
+        make_video("dv-360", range_=Video.Range.DV, height=360, bitrate=1_000_000, codec=Video.Codec.HEVC),
+    ]
+    chosen = list(filter(Tracks().select_hybrid(tracks, [2160]), tracks))
+    assert ids(chosen) == {"hdr10p-2160", "dv-360"}
+
+
 def test_select_hybrid_no_dv_selects_only_base() -> None:
     H = Video.Codec.HEVC
     tracks = [make_video("hdr10p-2160", range_=Video.Range.HDR10P, height=2160, bitrate=20_000_000, codec=H)]

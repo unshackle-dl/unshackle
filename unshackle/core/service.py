@@ -126,6 +126,7 @@ class TrackRequest:
     codecs: list[Video.Codec] = field(default_factory=list)
     ranges: list[Video.Range] = field(default_factory=lambda: [Video.Range.SDR])
     best_available: bool = False
+    generate_dv: bool = False
 
 
 def sanitize_proxy_for_log(uri: Optional[str], mask_host: bool = False) -> Optional[str]:
@@ -194,10 +195,12 @@ class Service(metaclass=ABCMeta):
         vcodec = ctx.parent.params.get("vcodec") if ctx.parent else None
         range_ = ctx.parent.params.get("range_") if ctx.parent else None
         best_available = ctx.parent.params.get("best_available", False) if ctx.parent else False
+        generate_dv = ctx.parent.params.get("generate_dv", False) if ctx.parent else False
         self.track_request = TrackRequest(
             codecs=list(vcodec) if vcodec else [],
             ranges=list(range_) if range_ else [Video.Range.SDR],
             best_available=bool(best_available),
+            generate_dv=bool(generate_dv),
         )
 
         whose = "the server's" if ctx.parent and ctx.parent.params.get("served") else "your"
@@ -353,7 +356,8 @@ class Service(metaclass=ABCMeta):
         The fetch_fn signature should be: (title, codec, range_) -> Tracks
 
         For HYBRID range, this helper calls fetch_fn with HDR10 and DV separately,
-        then merges the DV video tracks into the HDR10 result.
+        then merges the DV video tracks into the HDR10 result. With no DV and
+        ``generate_dv`` requested, it merges the HDR10P video tracks instead.
 
         Args:
             title: The title to process.
@@ -386,11 +390,19 @@ class Service(metaclass=ABCMeta):
                             all_tracks.add(video, warn_only=True)
 
                     try:
-                        dv_tracks = fetch_fn(title, codec=codec_val, range_=Video.Range.DV)
-                        for video in dv_tracks.videos:
-                            all_tracks.add(video, warn_only=True)
+                        dv_videos = fetch_fn(title, codec=codec_val, range_=Video.Range.DV).videos
                     except (ValueError, SystemExit):
                         self.log.info(" - No DolbyVision manifest available for HYBRID")
+                        dv_videos = []
+                    has_hdr10p = any(v.range == Video.Range.HDR10P for v in all_tracks.videos)
+                    if not dv_videos and self.track_request.generate_dv and not has_hdr10p:
+                        # the HDR10 request may not return HDR10+, which the conversion needs as its base
+                        try:
+                            dv_videos = fetch_fn(title, codec=codec_val, range_=Video.Range.HDR10P).videos
+                        except (ValueError, SystemExit):
+                            self.log.info(" - No HDR10+ manifest available for HYBRID")
+                    for video in dv_videos:
+                        all_tracks.add(video, warn_only=True)
             else:
                 for codec_val in codecs:
                     try:

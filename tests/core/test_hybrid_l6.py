@@ -66,14 +66,11 @@ def patch_probe_run(monkeypatch: pytest.MonkeyPatch, result: FakeCompleted) -> l
     return calls
 
 
-def test_level_5_skips_a_stream_with_no_duration(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_crop_detection_skips_a_stream_with_no_duration(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """FFprobe gives a raw stream an empty format object with exit code 0."""
     calls = patch_probe_run(monkeypatch, FakeCompleted(0, '{"format": {}}'))
-    hybrid = make_hybrid()
 
-    hybrid.level_5(tmp_path / "base.dv.hevc")
-
-    assert hybrid.rpu_file == "RPU.bin"
+    assert make_hybrid().detect_active_area(tmp_path / "base.dv.hevc") is None
     assert len(calls) == 1
 
 
@@ -207,11 +204,11 @@ def test_level_5_returns_early_when_the_cropped_rpu_exists(monkeypatch: pytest.M
     (tmp_path / "RPU_L5.bin").write_bytes(b"")
 
     def boom(*args: Any, **kwargs: Any) -> None:
-        raise AssertionError("level_5 must not run ffprobe when RPU_L5.bin is already there")
+        raise AssertionError("level_5 must not run dovi_tool when RPU_L5.bin is already there")
 
-    monkeypatch.setattr(subprocess, "run", boom)
+    monkeypatch.setattr(hybrid_mod.dovi, "editor", boom)
 
     obj = make_hybrid()
-    obj.level_5(tmp_path / "HDR10.hevc")
+    obj.level_5((0, 276, 0, 276))
 
     assert obj.rpu_file == "RPU_L5.bin"

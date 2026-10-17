@@ -1083,6 +1083,11 @@ async def download(request: web.Request) -> web.Response:
                 description: >-
                   Continue with best available if requested quality unavailable (default - false).
                   An API key with a server_cdm_max_height for the service cannot set it.
+              generate_dv:
+                type: boolean
+                description: >-
+                  With HYBRID in range, make Dolby Vision from the HDR10+ metadata when a title has no
+                  Dolby Vision track (default - false). Needs hdr10plus_tool on the server.
               worst:
                 type: boolean
                 description: Select the lowest bitrate track within the specified quality. Requires `quality` (default - false)

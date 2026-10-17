@@ -80,6 +80,7 @@ unshackle dl [OPTIONS] SERVICE [SERVICE ARGS...]
 | `-vb-range`, `--vbitrate-range` | - | Video bitrate range in kbps, e.g. `6000-7000`; picks highest within. Mutually exclusive with `--vbitrate`. |
 | `-ab-range`, `--abitrate-range` | - | Audio bitrate range in kbps, e.g. `128-256`. Mutually exclusive with `--abitrate`. |
 | `-r`, `--range` | `SDR` | Colour range(s): `SDR`, `HLG`, `HDR10`, `HDR10P` (HDR10+), `DV`, `HYBRID`. |
+| `--generate-dv` | off | With `-r HYBRID`, make Dolby Vision from the HDR10+ metadata when a title has no Dolby Vision track. Needs `hdr10plus_tool`. See [Dolby Vision from HDR10+](downloading.md#dolby-vision-from-hdr10). |
 | `-c`, `--channels` | - | Audio channels; matches sub-layouts (5.1 ≈ 6.0). |
 | `-naa`, `--noatmos` | off | Exclude Dolby Atmos audio tracks. |
 | `--worst` | off | Pick the lowest bitrate within the requested quality. **Requires `-q`.** |

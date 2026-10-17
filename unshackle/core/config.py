@@ -199,6 +199,7 @@ class Config:
         self.language_tags: dict = kwargs.get("language_tags") or {}
         self.tag_rules: list = kwargs.get("tag_rules") or []
         self.dual_multi_mode: str = (kwargs.get("dual_multi_mode") or "strict").lower()
+        self.generate_dv_mode: str = str(kwargs.get("generate_dv_mode") or "v29").lower()
         self.output_template: dict = kwargs.get("output_template") or {}
         folder_cfg = self.output_template.pop("folder", "")
         self.folder_template: str = ""

@@ -127,18 +127,19 @@ def info_frame(rpu: Path, frame: int = 0) -> dict:
         raise RuntimeError(f"dovi_tool info returned invalid JSON: {e}")
 
 
-def generate_from_hdr10plus(
-    extra_json: Path,
-    hdr10plus_json: Path,
+def generate(
+    config_json: Path,
     output: Path,
     *,
-    status: Optional[str] = "Generating DV RPU from HDR10+ metadata...",
+    hdr10plus_json: Optional[Path] = None,
+    status: Optional[str] = "Generating DV RPU...",
     label: str = "dovi_tool generate",
 ) -> bytes:
-    """Assemble a DV RPU from extracted HDR10+ metadata + an extra JSON descriptor."""
+    """Build a DV RPU from a dovi_tool generator config, and from hdr10plus_tool JSON when given."""
     tool = require_dovi_tool()
+    extra = ["--hdr10plus-json", hdr10plus_json] if hdr10plus_json else []
     return run_step(
-        [tool, "generate", "-j", extra_json, "--hdr10plus-json", hdr10plus_json, "-o", output],
+        [tool, "generate", "-j", config_json, *extra, "-o", output],
         status=status,
         output=output,
         label=label,
@@ -166,5 +167,5 @@ __all__ = (
     "editor",
     "info_summary",
     "info_frame",
-    "generate_from_hdr10plus",
+    "generate",
 )

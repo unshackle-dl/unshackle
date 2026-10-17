@@ -52,6 +52,7 @@ Common config keys. This is a useful subset, and every `dl` flag works:
 | `speed_limit` | str | *(unlimited)* | Total download speed cap across all downloads combined, e.g. `500k`, `5M`, `1.5G` or plain bytes/sec. Values are bytes, not bits (`5M` = 5.0 MB/s). |
 | `slow` | str | *(unset)* | Inter-title delay, e.g. `"20-40"`. |
 | `best_available` | bool | `false` | Warn instead of failing when a requested resolution, range, or language is missing, or when one DRM system does not license under `--all-drm`. The CLI flag is `--best-available`, also spelled `--warn-only`. |
+| `generate_dv` | bool | `false` | With `-r HYBRID`, make Dolby Vision from the HDR10+ metadata when a title has no DV track. Needs `hdr10plus_tool`. See [Dolby Vision from HDR10+](../../guide/downloading.md#dolby-vision-from-hdr10). |
 | `proxy` | str | *(unset)* | Default proxy URI or 2-letter country. |
 | `no_folder` | bool | `false` | Do not create a per-title folder. |
 
@@ -368,3 +369,24 @@ dual_multi_mode: strict
 !!! note "Dialects count as one language"
     Regional variants of the same base language (e.g. `en-US` and `en-GB`) collapse to a single
     language in both modes, so they never trigger `{dual}` on their own.
+
+## `generate_dv_mode`
+
+- **Type:** `str` &nbsp;·&nbsp; **Default:** `v29`
+
+How [`--generate-dv`](../../guide/downloading.md#dolby-vision-from-hdr10) sets the Level 1 brightness
+values of the Dolby Vision it makes from HDR10+. All modes make one shot per HDR10+ scene and keep the
+same peak and letterbox area. They differ in the scene average, which the TV uses to tone-map.
+
+| Mode | Scene average |
+|------|---------------|
+| `v29` (default) | unshackle's average from the HDR10+ brightness distribution, at least about 2.4 nits. Closest to the pixels. |
+| `v40` | The same average, at least about 10 nits, as in studio Dolby Vision (CM v4.0). Dark scenes read brighter than `v29`. |
+| `legacy` | The `dovi_tool generate --hdr10plus-json` average. Most scenes read brighter than the pixels. |
+
+```yaml
+generate_dv_mode: v29
+```
+
+The setting applies on the machine that runs the hybrid step: the client for a remote download, the
+server for a REST API job.

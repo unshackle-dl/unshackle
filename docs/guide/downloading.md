@@ -149,13 +149,53 @@ unshackle dl -q 2160 -r HDR10,DV EXAMPLE '...'
     `-r HYBRID` makes a single hybrid track by injecting the Dolby Vision RPU
     metadata onto an HDR10/HDR10+ base layer with **dovi_tool**.
     It requires the `dovi_tool` binary, resolved from unshackle's `binaries/` folder,
-    the `binaries` folder of your user data directory, or your `PATH`. The normal case is a DV track plus an HDR10 or HDR10+ base. With HDR10+
-    and no DV, unshackle converts the HDR10+ metadata to DV instead, which also needs
-    `hdr10plus_tool`. With no DV and no HDR10+, the title fails.
-    When HDR10+ is present, unshackle prefers it over HDR10 as the base layer.
+    the `binaries` folder of your user data directory, or your `PATH`. A hybrid needs a DV track plus an HDR10 or
+    HDR10+ base. With no DV track, the title fails, unless you add `--generate-dv` (see below).
+    When HDR10+ is present, unshackle prefers it over HDR10 as the base layer. The base must be
+    HEVC; a title whose HDR10/HDR10+ tracks are all in another codec fails before it downloads.
+    If the hybrid step fails for one resolution, unshackle logs an error, skips that resolution
+    and goes on with the other resolutions of the title. When no hybrid file at all was made,
+    the title fails.
 
     To keep an HDR10+ deliverable *alongside* the hybrid, request both ranges:
     `-r HYBRID,HDR10P`. `-r HYBRID` on its own muxes only the merged hybrid.
+
+#### Dolby Vision from HDR10+
+
+When a title has HDR10+ but no DV track, `-r HYBRID --generate-dv` makes a Dolby Vision
+Profile 8.1 track from the HDR10+ metadata. It needs `hdr10plus_tool` as well as `dovi_tool`.
+When a title has a DV track, unshackle uses that track and ignores the flag. When it has none,
+the flag also makes unshackle ask the service for its HDR10+ tracks.
+
+```shell title="Generate Dolby Vision from HDR10+, and keep the HDR10+ file too"
+unshackle dl -q 2160 -r HYBRID,HDR10P --generate-dv EXAMPLE '...'
+```
+
+Each HDR10+ scene becomes one Dolby Vision shot, with its own scene cut and its own Level 1
+brightness values (peak and average). unshackle calculates the average itself, as a PQ mean of
+the HDR10+ brightness distribution without the letterbox bars. A scene with no black pixels keeps
+its whole frame, so a title that changes aspect ratio is also correct. The `dovi_tool generate
+--hdr10plus-json` average makes most scenes too bright.
+
+The [`generate_dv_mode`](../reference/configuration/download.md#generate_dv_mode) setting in
+`unshackle.yaml` changes how the average is set: `v29` (default), `v40` for the 10-nit floor of studio
+Dolby Vision, or `legacy` for the `dovi_tool` average.
+
+!!! warning "Generated Dolby Vision is not studio Dolby Vision"
+    - There are no colourist trims (Level 2 and Level 8). The TV does all the tone mapping
+      from the Level 1 values.
+    - Dolby Vision does not let the average go below about 2.4 nits (10 nits with
+      `generate_dv_mode: v40`), so a very dark scene reads a little brighter than its pixels.
+    - The HDR10+ tone-mapping curve (Profile B) has no Dolby Vision equivalent. The HDR10+
+      metadata stays in the file, so an HDR10+ TV still reads it.
+    - The result can be no better than the HDR10+ metadata. Profile A metadata is often less
+      reliable than Profile B, and unshackle shows a warning for Profile A.
+    - A TV or player that supports both formats almost always picks Dolby Vision. On such a
+      TV, the generated Dolby Vision replaces the original HDR10+. To keep the original, also
+      request `HDR10P`, as in the example above.
+
+    An HDR10 track that a service labels HDR10 but that carries HDR10+ metadata does not
+    convert. Only a track with the `HDR10P` range does.
 
 ## Bitrate selection
 

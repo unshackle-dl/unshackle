@@ -108,6 +108,7 @@ DEFAULT_DOWNLOAD_PARAMS = {
     "downloads": 1,
     "worst": False,
     "best_available": False,
+    "generate_dv": False,
     "repack": False,
     "tag": None,
     "tmdb_id": None,
@@ -2289,14 +2290,20 @@ def validate_download_parameters(data: Dict[str, Any]) -> Optional[str]:
         if value is not None and (not isinstance(value, list) or not all(isinstance(v, str) for v in value)):
             return f"{key} must be an array of language strings"
 
-    if "range" in data and data["range"]:
-        # "HDR10P" is the canonical range value ("+" is awkward in scripts); "HDR10+" stays valid.
-        valid_ranges = ["SDR", "HDR10", "HDR10P", "DV", "HLG", "HYBRID"]
-        accepted = {*valid_ranges, "HDR10+"}
-        values = data["range"] if isinstance(data["range"], list) else [data["range"]]
-        for r in values:
-            if r.upper() not in accepted:
-                return f"Invalid range value: {r}. Must be one of: {', '.join(valid_ranges)}"
+    ranges = data.get("range") or []
+    ranges = ranges if isinstance(ranges, list) else [ranges]
+    # "HDR10P" is the canonical range value ("+" is awkward in scripts); "HDR10+" stays valid.
+    valid_ranges = ["SDR", "HDR10", "HDR10P", "DV", "HLG", "HYBRID"]
+    accepted = {*valid_ranges, "HDR10+"}
+    for r in ranges:
+        if r.upper() not in accepted:
+            return f"Invalid range value: {r}. Must be one of: {', '.join(valid_ranges)}"
+    if data.get("generate_dv"):
+        # a request without a range runs with the serve: default range
+        job_ranges = ranges or (config.serve or {}).get("range") or []
+        job_ranges = job_ranges if isinstance(job_ranges, list) else [job_ranges]
+        if not any(str(r).upper() == "HYBRID" for r in job_ranges):
+            return "generate_dv needs HYBRID in range."
 
     return None
 
@@ -3574,6 +3581,7 @@ SESSION_TRANSPORT_KEYS = {
     "vcodec",
     "quality",
     "best_available",
+    "generate_dv",
     "dl_params",
 }
 
@@ -3758,6 +3766,7 @@ def create_service_instance(
         "vcodec": vcodec_values,
         "quality": data.get("quality"),
         "best_available": data.get("best_available", False),
+        "generate_dv": data.get("generate_dv", False),
         **forwarded_dl_params(data),
     }
 
