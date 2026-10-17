@@ -146,6 +146,7 @@ def test_drain_server_logs_reemits_and_advances_seq() -> None:
     svc._session_id = "abc"
     svc._log_seq = 0
     svc._log_drain_lock = threading.Lock()
+    svc._recent_logs = []
     svc.log = logging.getLogger("test-drain-reemit")
 
     class StubClient:

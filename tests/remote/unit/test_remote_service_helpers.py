@@ -600,7 +600,7 @@ def test_the_client_session_downloads_through_the_proxy_it_sends(
     """The client fetches playlists and segments itself, so --proxy must reach its own session too."""
     from unshackle.core import remote_service
 
-    monkeypatch.setattr(remote_service, "resolve_remote_proxy_arg", lambda proxy: proxy)
+    monkeypatch.setattr(remote_service, "resolve_remote_proxy_arg", lambda proxy, providers=None: proxy)
     monkeypatch.setattr("unshackle.core.utils.ip_info.get_ip_info", lambda *args, **kwargs: None)
     svc = _remote_service({"no_proxy": no_proxy, "proxy": "http://proxy.example:8080"}, {})
     with pytest.raises(_SentCreate) as exc:

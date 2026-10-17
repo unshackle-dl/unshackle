@@ -454,8 +454,9 @@ def perform_download(
             season_range = SeasonRange()
             params["wanted"] = season_range.parse_tokens(*wanted_raw)
 
-    service_config_path = Services.get_path(service) / config.filenames.config
-    if service_config_path.exists():
+    remote = params.get("remote")
+    service_config_path = None if remote else Services.get_path(service) / config.filenames.config
+    if service_config_path and service_config_path.exists():
         service_config = yaml.safe_load(service_config_path.read_text(encoding="utf8"))
     else:
         service_config = {}
@@ -465,7 +466,7 @@ def perform_download(
 
     ctx = click.Context(dl_command.cli)
     ctx.invoked_subcommand = service
-    from unshackle.core.api.handlers import load_full_cdm
+    from unshackle.core.api.handlers import load_full_cdm, relay_label
 
     cdm = load_full_cdm(service, params.get("profile"), params.get("cdm_type"))
     ctx.obj = ContextData(config=service_config, cdm=cdm, proxy_providers=[], profile=params.get("profile"))
@@ -501,6 +502,10 @@ def perform_download(
         "a_lang": params.get("a_lang", []),
         "forced_subs": params.get("forced_subs", False),
         "exact_lang": params.get("exact_lang", False),
+        # dl skips the local service config and guards the proxy for a remote_services server
+        "remote": bool(remote),
+        "server": remote,
+        "client_argv": f"{relay_label(params)} download job {job_id}",
     }
     # Hand-built context: record parameter sources so service dl overrides
     # apply to defaults but never clobber client-sent values.
@@ -539,47 +544,49 @@ def perform_download(
             config.credentials[service] = svc_creds = {}
         svc_creds[params.get("profile") or "default"] = params["credential"]
 
-    service_module = Services.load(service)
+    service_ctx = click.Context(click.Command(service), parent=ctx, obj=ctx.obj)
+    if remote:
+        from unshackle.core.remote_service import make_remote_service
 
-    try:
-        import inspect
+        service_instance = make_remote_service(service_ctx, remote, service, title_id, params)
+    else:
+        service_module = Services.load(service)
 
-        service_init_params = inspect.signature(service_module.__init__).parameters
+        try:
+            import inspect
 
-        service_ctx = click.Context(click.Command(service))
-        service_ctx.parent = ctx
-        service_ctx.obj = ctx.obj
+            service_init_params = inspect.signature(service_module.__init__).parameters
 
-        service_kwargs = {}
+            service_kwargs = {}
 
-        if "title" in service_init_params:
-            service_kwargs["title"] = title_id
+            if "title" in service_init_params:
+                service_kwargs["title"] = title_id
 
-        for key, value in params.items():
-            if key in service_init_params and key not in ["service", "title_id", "profile", "service_params"]:
-                service_kwargs[key] = value
-        service_params = params.get("service_params")
-        if isinstance(service_params, dict):
-            for key, value in service_params.items():
-                if key in service_init_params and key != "title":
+            for key, value in params.items():
+                if key in service_init_params and key not in ["service", "title_id", "profile", "service_params"]:
                     service_kwargs[key] = value
+            service_params = params.get("service_params")
+            if isinstance(service_params, dict):
+                for key, value in service_params.items():
+                    if key in service_init_params and key != "title":
+                        service_kwargs[key] = value
 
-        for param_name, param_info in service_init_params.items():
-            if param_name not in service_kwargs and param_name not in ["self", "ctx"]:
-                if param_info.default is inspect.Parameter.empty:
-                    if param_name == "movie":
-                        service_kwargs[param_name] = "/movies/" in title_id
-                    elif param_name == "meta_lang":
-                        service_kwargs[param_name] = None
-                    else:
-                        log.warning(f"Unknown required parameter '{param_name}' for service {service}, using None")
-                        service_kwargs[param_name] = None
+            for param_name, param_info in service_init_params.items():
+                if param_name not in service_kwargs and param_name not in ["self", "ctx"]:
+                    if param_info.default is inspect.Parameter.empty:
+                        if param_name == "movie":
+                            service_kwargs[param_name] = "/movies/" in title_id
+                        elif param_name == "meta_lang":
+                            service_kwargs[param_name] = None
+                        else:
+                            log.warning(f"Unknown required parameter '{param_name}' for service {service}, using None")
+                            service_kwargs[param_name] = None
 
-        service_instance = service_module(service_ctx, **service_kwargs)
+            service_instance = service_module(service_ctx, **service_kwargs)
 
-    except Exception as exc:  # noqa: BLE001 - propagate meaningful failure
-        log.error(f"Failed to create service instance: {exc}")
-        raise
+        except Exception as exc:  # noqa: BLE001 - propagate meaningful failure
+            log.error(f"Failed to create service instance: {exc}")
+            raise
 
     original_download_dir = config.directories.downloads
 

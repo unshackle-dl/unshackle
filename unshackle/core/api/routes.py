@@ -45,6 +45,9 @@ from unshackle.core.api.handlers import (
     prioritize_download_job_handler,
     profiles_handler,
     refresh_services_handler,
+    remote_login_input_handler,
+    remote_logins_handler,
+    remote_services_info,
     retry_download_job_handler,
     search_handler,
     server_account_regions,
@@ -212,6 +215,16 @@ async def services(request: web.Request) -> web.Response:
     ---
     summary: Show services
     description: Get all available streaming services with their details
+    parameters:
+      - name: remote
+        in: query
+        required: false
+        schema:
+          type: string
+        description: >
+          A remote_services server name. Lists that server's services instead of this server's, each
+          with `remote` set to the name. Pass the name as `remote` to search, list-titles, list-tracks and
+          download to run the service through that server; the download itself still runs here.
     responses:
       '200':
         description: List of services
@@ -302,6 +315,9 @@ async def services(request: web.Request) -> web.Response:
         allowed = get_allowed_services(request)
         if allowed is not None:
             service_tags = [t for t in service_tags if t in allowed]
+        if remote := request.query.get("remote"):
+            remote_info = await asyncio.to_thread(remote_services_info, remote, allowed)
+            return web.json_response({"services": remote_info, "load_errors": []})
         services_info = []
 
         for tag in service_tags:
@@ -449,6 +465,14 @@ async def search(request: web.Request) -> web.Response:
               - service
               - query
             properties:
+              remote:
+                type: string
+                description: >
+                  A remote_services server name from GET /api/config. The service runs through that
+                  server (login, titles, tracks, licences); a download still runs on this server.
+              client_name:
+                type: string
+                description: Names this client on the remote server's dashboard, as serve (client_name)
               service:
                 type: string
                 description: Service tag
@@ -558,6 +582,14 @@ async def list_titles(request: web.Request) -> web.Response:
               - service
               - title_id
             properties:
+              remote:
+                type: string
+                description: >
+                  A remote_services server name from GET /api/config. The service runs through that
+                  server (login, titles, tracks, licences); a download still runs on this server.
+              client_name:
+                type: string
+                description: Names this client on the remote server's dashboard, as serve (client_name)
               service:
                 type: string
                 description: Service tag
@@ -713,6 +745,14 @@ async def list_tracks(request: web.Request) -> web.Response:
               - service
               - title_id
             properties:
+              remote:
+                type: string
+                description: >
+                  A remote_services server name from GET /api/config. The service runs through that
+                  server (login, titles, tracks, licences); a download still runs on this server.
+              client_name:
+                type: string
+                description: Names this client on the remote server's dashboard, as serve (client_name)
               service:
                 type: string
                 description: Service tag
@@ -800,6 +840,14 @@ async def download(request: web.Request) -> web.Response:
               - service
               - title_id
             properties:
+              remote:
+                type: string
+                description: >
+                  A remote_services server name from GET /api/config. The service runs through that
+                  server (login, titles, tracks, licences); a download still runs on this server.
+              client_name:
+                type: string
+                description: Names this client on the remote server's dashboard, as serve (client_name)
               service:
                 type: string
                 description: Service tag
@@ -1507,6 +1555,11 @@ async def server_config(request: web.Request) -> web.Response:
                           description: List of permitted CDM device names, true, or null
                         allow_job_credentials:
                           type: boolean
+                    remote_services:
+                      type: array
+                      items:
+                        type: string
+                      description: remote_services server names; their url and api_key stay on the server
                     directories:
                       type: object
                       properties:
@@ -3090,6 +3143,88 @@ async def dashboard_events(request: web.Request) -> web.StreamResponse:
     return await dashboard_events_handler(request)
 
 
+@api_handler
+async def remote_logins(request: web.Request) -> web.Response:
+    """
+    Remote logins in progress.
+    ---
+    summary: Remote logins in progress
+    description: >
+      The caller's list calls that wait on a remote_services server's login, each with the remote
+      server, service and title, and `notice`: what the login shows the user while it waits on them,
+      such as a URL and pair code to enter on another device, or null. Poll it alongside a remote
+      list-titles, list-tracks or search call; a download job carries the same text as its `notice`.
+    responses:
+      '200':
+        description: Logins in progress
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                logins:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      remote:
+                        type: string
+                      service:
+                        type: string
+                      id:
+                        type: string
+                        description: Answer its prompt at POST /api/remote/logins/{id}/input
+                      title_id:
+                        type: string
+                      prompt:
+                        type: string
+                        nullable: true
+                        description: What the login asks the user (an OTP, a PIN), or null
+                      notice:
+                        type: string
+                        nullable: true
+    """
+    return await remote_logins_handler(request)
+
+
+@api_handler
+async def remote_login_input(request: web.Request) -> web.Response:
+    """
+    Answer a remote login's prompt.
+    ---
+    summary: Answer a remote login's prompt
+    description: Send the answer to the prompt (an OTP, a PIN) a remote login a list call waits on is asking.
+    parameters:
+      - name: login_id
+        in: path
+        required: true
+        schema:
+          type: string
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [response]
+            properties:
+              response:
+                type: string
+    responses:
+      '200':
+        description: Answer accepted
+      '404':
+        description: No such remote login for this API key
+      '409':
+        description: The login is not asking anything
+    """
+    try:
+        data = await request.json()
+    except Exception as e:
+        raise APIError(APIErrorCode.INVALID_INPUT, "Invalid JSON request body", details={"error": str(e)}) from e
+    return await remote_login_input_handler(request.match_info["login_id"], data, request)
+
+
 # Single source of truth for all API routes. `remote` marks endpoints exposed in
 # --remote-only server mode; full mode registers every route. Both setup_routes and
 # setup_swagger derive from this table so the live routes and the docs cannot drift.
@@ -3116,6 +3251,8 @@ ROUTES: list[tuple[str, str, Handler, bool]] = [
     ("POST", "/api/maintenance/clear-temp", maintenance_clear_temp, False),
     ("POST", "/api/maintenance/refresh-services", maintenance_refresh_services, False),
     ("GET", "/api/env/check", env_check, False),
+    ("GET", "/api/remote/logins", remote_logins, False),
+    ("POST", "/api/remote/logins/{login_id}/input", remote_login_input, False),
     ("POST", "/api/session/create", session_create, True),
     ("GET", "/api/session/{session_id}/titles", session_titles, True),
     ("POST", "/api/session/{session_id}/tracks", session_tracks, True),

@@ -6,11 +6,15 @@ import logging
 import os
 import re
 import tempfile
+import threading
 import time
+import uuid
 import zlib
 from collections import Counter
 from contextlib import suppress
+from dataclasses import dataclass, field
 from datetime import date as date_
+from functools import partial
 from http.cookiejar import CookieJar, MozillaCookieJar
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Optional, cast
@@ -404,6 +408,329 @@ class RequestCache:
 
     def cleanup(self) -> None:
         SessionStore.cleanup_cache_dir(self.tag)
+
+
+def remote_list(name: Any) -> list[dict]:
+    """The services of a configured ``remote_services`` server; an APIError for an unknown or unreachable one."""
+    from unshackle.core.api.stats import stats
+    from unshackle.core.remote_service import remote_service_list
+
+    if stats.mode == "remote_only":
+        raise APIError(APIErrorCode.INVALID_PARAMETERS, "A remote-only server does not relay to other servers")
+    if not isinstance(name, str) or name not in (config.remote_services or {}):
+        raise APIError(APIErrorCode.INVALID_PARAMETERS, f"Unknown remote server: {sanitize_log(str(name))}")
+    services = remote_service_list(name)
+    if services is None:
+        raise APIError(APIErrorCode.SERVICE_UNAVAILABLE, f"Remote server '{name}' is unreachable")
+    return services
+
+
+def remote_server(data: Dict[str, Any], request: Optional[web.Request] = None) -> Optional[tuple[str, dict]]:
+    """The ``remote_services`` server and service a request names in ``remote``, as the CLI resolves it and the
+    caller's key allows it; None for a local service. Blocks on the remote list."""
+    from unshackle.core.remote_service import find_remote_service
+
+    name = data.get("remote")
+    if not name:
+        return None
+    service = data.get("service")
+    info = find_remote_service(remote_list(name), str(service or ""))
+    allowed = get_allowed_services(request)
+    if info is None or (allowed is not None and info["tag"] not in allowed):
+        raise APIError(
+            APIErrorCode.INVALID_SERVICE,
+            f"Remote server '{name}' does not offer {sanitize_log(str(service))}",
+            details={"service": service, "remote": name},
+        )
+    return name, info
+
+
+def geofence_proxy(data: Dict[str, Any], info: dict, request: Optional[web.Request] = None) -> Dict[str, Any]:
+    """``{"proxy": region}`` for a geofenced remote service the request sends no proxy for; else {}.
+
+    The remote counterpart of a local service's geofence auto-proxy, under the same ``server_proxy`` gate.
+    """
+    if data.get("proxy") or data.get("no_proxy") or not server_proxy_allowed(request):
+        return {}
+    blocked = {str(r).lower() for r in info.get("geoblock") or []}
+    fence = [str(r).lower() for r in info.get("geofence") or [] if r and str(r).lower() not in blocked]
+    return {"proxy": fence[0]} if fence else {}
+
+
+async def relay_target(
+    data: Dict[str, Any], request: Optional[web.Request] = None
+) -> tuple[Optional[str], Optional[dict], Dict[str, Any]]:
+    """``(server, info, data)`` for a request naming ``remote``, ``data`` carrying the resolved tag and any
+    geofence proxy; ``(None, None, data)`` for a local one."""
+    if not data.get("remote"):
+        return None, None, data
+    server, info = await asyncio.to_thread(remote_server, data, request)
+    return server, info, {**data, "service": info["tag"], **geofence_proxy(data, info, request)}
+
+
+def relay_label(data: Dict[str, Any]) -> str:
+    """How the remote server's dashboard names this relay: the REST client's own ``client_name``, if it sent one."""
+    name = data.get("client_name")
+    return f"serve ({name[:64] if isinstance(name, str) and name.strip() else 'REST API'})"
+
+
+def relay_error(exc: Any, service: str) -> APIError:
+    """The APIError for a RemoteError: the remote server's own reason, not a bare exit."""
+    return APIError(APIErrorCode.SERVICE_ERROR, exc.message, details={"service": service, "remote_code": exc.kind})
+
+
+def setup_remote_service(
+    data: Dict[str, Any], server: str, profile: Optional[str], title_id: str, request: Optional[web.Request] = None
+) -> Any:
+    """Open and authenticate a remote session and fetch its titles; the caller must close() it."""
+    from unshackle.core.remote_service import RemoteError, make_remote_service
+
+    # the same server_proxy gate a local service gets: without it the providers stay empty
+    proxy_param, providers = resolve_handler_proxy(data, data["service"], request)
+    parent_ctx = build_parent_ctx(
+        profile,
+        None,
+        proxy_param,
+        data.get("no_proxy", False),
+        providers,
+        {},
+        extra_params={"profile": profile, "client_argv": relay_label(data)},
+    )
+    ctx = click.Context(click.Command(data["service"]), parent=parent_ctx, obj=parent_ctx.obj)
+    # this process is long-lived and serves local services too, so the remote's overrides stay out of config
+    service_instance = make_remote_service(ctx, server, data["service"], title_id, data, apply_overrides=False)
+    login = RemoteLogin(caller_key(request), server, data["service"], title_id, service_instance)
+    service_instance._input_bridge = login.bridge
+    _remote_logins[login.id] = login
+    try:
+        service_instance.authenticate()
+        service_instance.get_titles()
+    except BaseException as exc:
+        service_instance.close()
+        if isinstance(exc, RemoteError):
+            raise relay_error(exc, data["service"]) from None
+        raise
+    finally:
+        _remote_logins.pop(login.id, None)
+    return service_instance
+
+
+@dataclass(eq=False)
+class RemoteLogin:
+    """A remote login a list call is waiting on, so a client can show its pair code or answer its prompt.
+
+    Its bridge is the RemoteService's input bridge: an OTP the remote asks for waits there for the answer a
+    client sends to ``POST /api/remote/logins/{id}/input``, as a download job's prompt waits for its own.
+    """
+
+    owner: str
+    remote: str
+    service: str
+    title_id: str
+    instance: Any
+    id: str = field(default_factory=lambda: uuid.uuid4().hex)
+    bridge: InputBridge = field(default_factory=InputBridge)
+
+
+_remote_logins: Dict[str, RemoteLogin] = {}
+
+
+async def remote_logins_handler(request: web.Request) -> web.Response:
+    """Answer the request for the caller's remote logins in progress, each with its prompt and notice."""
+    owner, admin = caller_key(request), is_admin(request)
+    logins = [
+        {
+            "id": login.id,
+            "remote": login.remote,
+            "service": login.service,
+            "title_id": login.title_id,
+            "prompt": login.bridge.get_pending_prompt(),
+            "notice": login.instance.auth_notice,
+        }
+        for login in list(_remote_logins.values())
+        if admin or login.owner == owner
+    ]
+    return web.json_response({"logins": logins})
+
+
+async def remote_login_input_handler(login_id: str, data: Dict[str, Any], request: web.Request) -> web.Response:
+    """Answer the prompt (an OTP, a PIN) a remote login a list call waits on is asking."""
+    login = _remote_logins.get(login_id)
+    if login is None or not (is_admin(request) or login.owner == caller_key(request)):
+        raise APIError(APIErrorCode.NOT_FOUND, "Remote login not found", details={"login_id": login_id})
+    response = data.get("response")
+    if response is None:
+        raise APIError(APIErrorCode.INVALID_INPUT, "Missing required field: response")
+    if not login.bridge.submit_response(str(response)):
+        raise APIError(APIErrorCode.CONFLICT, "This remote login is not asking anything")
+    return web.json_response({"status": "accepted"})
+
+
+REMOTE_SESSION_IDLE = 120.0
+
+
+@dataclass
+class RemoteLease:
+    """One pooled remote session: a title's episodes all list through it instead of one login each.
+
+    Only the event loop touches the pool, so it needs no thread lock; blocking work runs in threads.
+    """
+
+    key: tuple
+    lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    service: Any = None
+    error: Optional[Exception] = None
+    busy: int = 0
+    used: float = 0.0
+    dead: bool = False
+
+
+_remote_pool: Dict[tuple, RemoteLease] = {}
+_remote_sweeper: Optional["asyncio.Task[None]"] = None
+
+
+def remote_pool_key(data: Dict[str, Any], server: str, info: dict, profile: Optional[str], title_id: str) -> tuple:
+    """What opens a remote session; requests that differ only in episode selection share one."""
+    from unshackle.core.remote_service import remote_service_params
+
+    options = json.dumps(remote_service_params(info, data), sort_keys=True, default=str)
+    return (server, data["service"], title_id, profile, data.get("proxy"), bool(data.get("no_proxy")), options)
+
+
+def close_remote_services(services: List[Any]) -> None:
+    for service in services:
+        with suppress(Exception, SystemExit):
+            service.close()
+
+
+async def sweep_remote_pool() -> None:
+    """Close pooled remote sessions idle for REMOTE_SESSION_IDLE; their keepalive would hold them open forever."""
+    while True:
+        await asyncio.sleep(REMOTE_SESSION_IDLE / 4)
+        now = time.monotonic()
+        idle = [lease for lease in _remote_pool.values() if not lease.busy and now - lease.used > REMOTE_SESSION_IDLE]
+        for lease in idle:
+            del _remote_pool[lease.key]
+        if idle:
+            await asyncio.to_thread(close_remote_services, [lease.service for lease in idle if lease.service])
+        if not _remote_pool:
+            return
+
+
+def reset_remote_pool() -> None:
+    """Drop the cached remote lists and every pooled session, for a config reload that may change a server.
+
+    Runs on the event loop, so the closes, each a blocking DELETE, go to a thread.
+    """
+    from unshackle.core.remote_service import reset_remote_lists
+
+    reset_remote_lists()
+    leases = list(_remote_pool.values())
+    _remote_pool.clear()
+    for lease in leases:
+        lease.dead = True
+    idle = [lease.service for lease in leases if lease.service is not None and not lease.busy]
+    if idle:
+        threading.Thread(target=close_remote_services, args=(idle,), name="remote-pool-reset", daemon=True).start()
+
+
+async def lease_remote_service(
+    data: Dict[str, Any],
+    server: str,
+    info: dict,
+    profile: Optional[str],
+    title_id: str,
+    request: Optional[web.Request] = None,
+    fresh_titles: bool = False,
+) -> RemoteLease:
+    """A pooled lease on an authenticated RemoteService with its titles fetched; return it with release_remote_service.
+
+    ``fresh_titles`` drops the title list a reused session cached, so a relist sees a newly released episode.
+    """
+    global _remote_sweeper
+    if _remote_sweeper is None or _remote_sweeper.done():
+        _remote_sweeper = asyncio.get_running_loop().create_task(sweep_remote_pool())
+    key = remote_pool_key(data, server, info, profile, title_id)
+    lease = _remote_pool.setdefault(key, RemoteLease(key))
+    lease.busy += 1
+    try:
+        # concurrent first requests for a title wait here, on the loop, for one login instead of each opening one
+        async with lease.lock:
+            if lease.error is not None:
+                raise lease.error
+            if lease.service is None:
+                lease.service = await asyncio.to_thread(setup_remote_service, data, server, profile, title_id, request)
+            elif fresh_titles:
+                lease.service._titles = None
+    except BaseException as exc:
+        if isinstance(exc, Exception):
+            lease.error = exc
+        lease.busy -= 1
+        if _remote_pool.get(key) is lease:
+            del _remote_pool[key]
+        raise
+    return lease
+
+
+async def release_remote_service(lease: RemoteLease) -> None:
+    """Return a lease. A broken session left the pool already and closes when its last holder returns it."""
+    lease.busy -= 1
+    lease.used = time.monotonic()
+    if lease.dead and _remote_pool.get(lease.key) is lease:
+        del _remote_pool[lease.key]
+    if lease.dead and not lease.busy and lease.service is not None:
+        await asyncio.to_thread(close_remote_services, [lease.service])
+
+
+async def remote_call(lease: RemoteLease, method: Callable[..., Any], *args: Any) -> Any:
+    """Run a blocking RemoteService call in a thread, answering a RemoteError with the remote's reason."""
+    from unshackle.core.remote_service import RemoteError
+
+    try:
+        return await asyncio.to_thread(method, *args)
+    except RemoteError as exc:
+        # one episode the remote cannot list must not cost the whole title its session
+        lease.dead = lease.dead or exc.session_broke
+        raise relay_error(exc, lease.service.service_tag) from None
+
+
+async def leased_titles(
+    data: Dict[str, Any],
+    server: str,
+    info: dict,
+    profile: Optional[str],
+    title_id: str,
+    request: Optional[web.Request],
+    fresh_titles: bool,
+) -> tuple[RemoteLease, Any]:
+    """Lease a remote session and get its titles, once more on a new session when the pooled one broke.
+
+    The caller releases the returned lease; on an error this releases it itself.
+    """
+    for attempt in (1, 2):
+        lease = await lease_remote_service(data, server, info, profile, title_id, request, fresh_titles)
+        try:
+            return lease, await remote_call(lease, lease.service.get_titles)
+        except BaseException:
+            await release_remote_service(lease)
+            if attempt == 2 or not lease.dead:
+                raise
+    raise AssertionError("unreachable")
+
+
+def remote_services_info(name: str, allowed: Optional[List[str]]) -> List[Dict[str, Any]]:
+    """The services of one ``remote_services`` server, each marked with that server's name in ``remote``."""
+    return [{**svc, "remote": name} for svc in remote_list(name) if allowed is None or svc.get("tag") in allowed]
+
+
+def remote_search(server: str, service: str, query: str) -> Dict[str, Any]:
+    """Run a search on a ``remote_services`` server with this server's key for it."""
+    from unshackle.core.remote_service import RemoteError, remote_client
+
+    try:
+        return remote_client(server).post("/api/search", {"service": service, "query": query})
+    except RemoteError as exc:
+        raise relay_error(exc, service) from None
 
 
 def setup_list_service(
@@ -1529,6 +1856,10 @@ async def search_handler(data: Dict[str, Any], request: Optional[web.Request] = 
     if not query:
         raise APIError(APIErrorCode.INVALID_PARAMETERS, "Missing required 'query' field")
 
+    remote = await asyncio.to_thread(remote_server, data, request) if data.get("remote") else None
+    if remote:
+        return web.json_response(await asyncio.to_thread(remote_search, remote[0], remote[1]["tag"], query))
+
     # get_tag echoes an unknown tag back, so it can never be falsy; validate_service
     # is the check that actually resolves the service directory and the allowlist.
     normalized_service = validate_service(service_tag, request)
@@ -1554,7 +1885,8 @@ async def list_titles_handler(data: Dict[str, Any], request: Optional[web.Reques
     title_id = data.get("title_id")
     profile = client_profile(data)
 
-    normalized_service = validate_service(service_tag, request)
+    server, info, data = await relay_target(data, request)
+    normalized_service = info["tag"] if info else validate_service(service_tag, request)
     if not normalized_service:
         raise APIError(
             APIErrorCode.INVALID_SERVICE,
@@ -1563,11 +1895,16 @@ async def list_titles_handler(data: Dict[str, Any], request: Optional[web.Reques
         )
 
     request_cache = RequestCache()
+    lease = None
     try:
-        service_instance = await asyncio.to_thread(
-            setup_list_service, data, normalized_service, profile, title_id, request, request_cache
-        )
-        titles = await asyncio.to_thread(service_instance.get_titles)
+        if server:
+            lease, titles = await leased_titles(data, server, info, profile, title_id, request, True)
+            service_instance = lease.service
+        else:
+            service_instance = await asyncio.to_thread(
+                setup_list_service, data, normalized_service, profile, title_id, request, request_cache
+            )
+            titles = await asyncio.to_thread(service_instance.get_titles)
 
         title_list = [stamp_service_flags(serialize_title(t), service_instance) for t in listed_titles(titles)]
 
@@ -1584,6 +1921,8 @@ async def list_titles_handler(data: Dict[str, Any], request: Optional[web.Reques
             debug_mode=debug_mode,
         )
     finally:
+        if lease is not None:
+            await release_remote_service(lease)
         request_cache.cleanup()
 
 
@@ -1594,7 +1933,8 @@ async def list_tracks_handler(data: Dict[str, Any], request: Optional[web.Reques
     title_id = data.get("title_id")
     profile = client_profile(data)
 
-    normalized_service = validate_service(service_tag, request)
+    server, info, data = await relay_target(data, request)
+    normalized_service = info["tag"] if info else validate_service(service_tag, request)
     if not normalized_service:
         raise APIError(
             APIErrorCode.INVALID_SERVICE,
@@ -1603,11 +1943,18 @@ async def list_tracks_handler(data: Dict[str, Any], request: Optional[web.Reques
         )
 
     request_cache = RequestCache()
+    lease = None
     try:
-        service_instance = await asyncio.to_thread(
-            setup_list_service, data, normalized_service, profile, title_id, request, request_cache
-        )
-        titles = await asyncio.to_thread(service_instance.get_titles)
+        if server:
+            lease, titles = await leased_titles(data, server, info, profile, title_id, request, False)
+            service_instance = lease.service
+            call: Callable[..., Any] = partial(remote_call, lease)
+        else:
+            service_instance = await asyncio.to_thread(
+                setup_list_service, data, normalized_service, profile, title_id, request, request_cache
+            )
+            call = asyncio.to_thread
+            titles = await call(service_instance.get_titles)
 
         wanted_param = data.get("wanted")
         season = data.get("season")
@@ -1686,7 +2033,7 @@ async def list_tracks_handler(data: Dict[str, Any], request: Optional[web.Reques
 
                     for title in sorted_titles:
                         try:
-                            tracks = await asyncio.to_thread(service_instance.get_tracks, title)
+                            tracks = await call(service_instance.get_tracks, title)
                             video_tracks = sorted(tracks.videos, key=lambda t: t.bitrate or 0, reverse=True)
                             audio_tracks = sorted(tracks.audio, key=lambda t: t.bitrate or 0, reverse=True)
 
@@ -1733,7 +2080,7 @@ async def list_tracks_handler(data: Dict[str, Any], request: Optional[web.Reques
         else:
             first_title = titles
 
-        tracks = await asyncio.to_thread(service_instance.get_tracks, first_title)
+        tracks = await call(service_instance.get_tracks, first_title)
 
         video_tracks = sorted(tracks.videos, key=lambda t: t.bitrate or 0, reverse=True)
         audio_tracks = sorted(tracks.audio, key=lambda t: t.bitrate or 0, reverse=True)
@@ -1759,6 +2106,8 @@ async def list_tracks_handler(data: Dict[str, Any], request: Optional[web.Reques
             debug_mode=debug_mode,
         )
     finally:
+        if lease is not None:
+            await release_remote_service(lease)
         request_cache.cleanup()
 
 
@@ -2044,7 +2393,8 @@ async def download_handler(data: Dict[str, Any], request: Optional[web.Request] 
     service_tag = data.get("service")
     title_id = data.get("title_id")
 
-    normalized_service = validate_service(service_tag, request)
+    server, info, data = await relay_target(data, request)
+    normalized_service = info["tag"] if info else validate_service(service_tag, request)
     if not normalized_service:
         raise APIError(
             APIErrorCode.INVALID_SERVICE,
@@ -2061,12 +2411,13 @@ async def download_handler(data: Dict[str, Any], request: Optional[web.Request] 
         )
 
     try:
-        service_module = Services.load(normalized_service)
+        service_module = None if server else Services.load(normalized_service)
         service_specific_defaults = {}
 
         # Skip None defaults here: this dict overlays into job params; injecting
         # None for keys like `profile` would clobber serve-config overrides.
         # Missing required __init__ params are handled in download_manager.perform_download.
+        # A remote service applies its own defaults on the remote server.
         if hasattr(service_module, "cli") and hasattr(service_module.cli, "params"):
             for param in service_module.cli.params:
                 if hasattr(param, "name") and param.default is not None and not isinstance(param.default, enum.Enum):
@@ -2827,8 +3178,11 @@ async def retry_download_job_handler(job_id: str, request: Optional[web.Request]
             )
 
         # Re-apply creation-time gates so retry cannot bypass the caller's service allowlist
-        # or currently-disabled cdm_overrides / allow_job_credentials config.
-        if not validate_service(job.service, request):
+        # or currently-disabled cdm_overrides / allow_job_credentials config. A remote job is checked
+        # against its remote server, which must still be configured and offer the service.
+        if job.parameters.get("remote"):
+            await asyncio.to_thread(remote_server, {**job.parameters, "service": job.service}, request)
+        elif not validate_service(job.service, request):
             raise APIError(
                 APIErrorCode.INVALID_SERVICE,
                 f"Invalid or unavailable service: {job.service}",
@@ -3000,6 +3354,8 @@ async def server_config_handler(request: Optional[web.Request] = None) -> web.Re
                 or None,
             },
             "services": service_tags,
+            # names only: url and api_key stay on the server
+            "remote_services": list(config.remote_services or {}),
         }
         # Server-local absolute paths are useless to a remote client and name the host layout.
         if is_admin(request):

@@ -351,8 +351,6 @@ def check_load_errors() -> None:
 class Services(click.Group):
     """Lazy-loaded command group of project services."""
 
-    remote_services_cache: list[dict] | None = None
-
     def format_help(self, ctx: click.Context, formatter: click.HelpFormatter) -> None:
         """Name the commands panel ``Services``, because this group's commands are services."""
         config = getattr(formatter, "config", None)
@@ -446,24 +444,12 @@ class Services(click.Group):
 
     @staticmethod
     def fetch_remote_services(ctx: click.Context) -> list[dict] | None:
-        """Fetch the service list from the remote server (cached per process)."""
-        if Services.remote_services_cache is not None:
-            return Services.remote_services_cache
-        try:
-            from unshackle.core.remote_service import RemoteClient, resolve_server
+        """Fetch the service list from the remote server (cached); None when it is unreachable."""
+        from unshackle.core.remote_service import remote_service_list, resolve_server
 
-            server_name = ctx.params.get("server")
-            server_url, api_key, services_config = resolve_server(server_name)
-            client = RemoteClient(
-                server_url, api_key, services_config.get("_auth_headers"), services_config.get("_timeout")
-            )
-            result = client.get("/api/services")
-            Services.remote_services_cache = result.get("services", [])
-            return Services.remote_services_cache
-        except click.ClickException:
-            raise
-        except Exception:
-            return None
+        server_name = ctx.params.get("server")
+        resolve_server(server_name)  # a bad --server raises its ClickException, not "unreachable"
+        return remote_service_list(server_name)
 
     @staticmethod
     def make_remote_command(name: str, ctx: click.Context) -> click.Command:
@@ -478,12 +464,9 @@ class Services(click.Group):
             # Resolve against the remote server's tags and aliases, not the local tables: the
             # two drift apart as soon as either side's services change. Tags win over aliases,
             # as in local get_tag.
-            lowered = name.lower()
-            svc_info = next((svc for svc in services if str(svc.get("tag", "")).lower() == lowered), None)
-            if svc_info is None:
-                svc_info = next(
-                    (svc for svc in services if lowered in (str(a).lower() for a in svc.get("aliases") or [])), None
-                )
+            from unshackle.core.remote_service import find_remote_service
+
+            svc_info = find_remote_service(services, name)
             if svc_info is None:
                 if services:
                     available = ", ".join(sorted(svc["tag"] for svc in services))
@@ -507,14 +490,10 @@ class Services(click.Group):
         @click.argument("title", type=str, required=bool(title_arg.get("required", True)) if title_arg else True)
         @click.pass_context
         def remote_cli(ctx: click.Context, title: str, **kwargs: object) -> object:
-            from unshackle.core.remote_service import RemoteService, resolve_server
+            from unshackle.core.remote_service import make_remote_service
 
             server_name = ctx.parent.params.get("server") if ctx.parent else None
-            server_url, api_key, services_config = resolve_server(server_name)
-            services_config["_server_accounts"] = svc_info.get("server_accounts") if svc_info else None
-            services_config["_client_config"] = svc_info.get("client_config") if svc_info else None
-            service_params = {k: v for k, v in kwargs.items() if v is not None and v is not False}
-            return RemoteService(ctx, tag, title, server_url, api_key, services_config, service_params=service_params)
+            return make_remote_service(ctx, server_name, tag, title, {"service_params": kwargs})
 
         if cli_params:
             for param in cli_params:
