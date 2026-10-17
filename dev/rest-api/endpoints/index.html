@@ -4066,6 +4066,12 @@ ignore it safely. See <a href="../../creating-a-service/#split-episodes">Split e
 <td>Fall back to best available. With <code>all_drm</code>, a DRM system that does not license is a warning.</td>
 </tr>
 <tr>
+<td><code>generate_dv</code></td>
+<td>boolean</td>
+<td><code>false</code></td>
+<td>With <code>HYBRID</code> in <code>range</code>, make Dolby Vision from the HDR10+ metadata when a title has no DV track. Needs <code>hdr10plus_tool</code> on the server. Without <code>HYBRID</code> in <code>range</code>, the request returns <code>400</code>.</td>
+</tr>
+<tr>
 <td><code>repack</code></td>
 <td>boolean</td>
 <td><code>false</code></td>

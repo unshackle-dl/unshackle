@@ -2566,7 +2566,15 @@ fetching tracks:</p>
 </span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>    <span class="n">codecs</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Video</span><span class="o">.</span><span class="n">Codec</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>            <span class="c1"># empty == accept any codec</span>
 </span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>    <span class="n">ranges</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Video</span><span class="o">.</span><span class="n">Range</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="n">Video</span><span class="o">.</span><span class="n">Range</span><span class="o">.</span><span class="n">SDR</span><span class="p">]</span>
 </span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>    <span class="n">best_available</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>    <span class="n">generate_dv</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>                 <span class="c1"># --generate-dv: make Dolby Vision from HDR10+</span>
 </span></code></pre></div>
+<div class="admonition note">
+<p class="admonition-title"><code>generate_dv</code> and a hand-made HYBRID</p>
+<p>A service that fetches the HYBRID variants itself (HDR10 and DV) must also fetch
+HDR10P when <code>track_request.generate_dv</code> is set and the title has no DV track.
+The conversion needs an HEVC HDR10+ track as its base.
+<code>get_tracks_for_variants</code> does this for you.</p>
+</div>
 <div class="admonition note">
 <p class="admonition-title">Read the request, don't second-guess the user</p>
 <p>Services may narrow <code>track_request</code> for hard technical constraints (e.g.

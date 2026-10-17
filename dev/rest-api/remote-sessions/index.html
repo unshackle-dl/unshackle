@@ -2536,8 +2536,8 @@ server does not have to prompt:</p>
   The client also downloads playlists and segments through the same proxy,
   as a local run does. <code>--no-proxy-download</code> and <code>--proxy-download</code> change
   that for downloads only.</li>
-<li>Track-selection hints (<code>range_</code>, <code>vcodec</code>, <code>quality</code>, <code>best_available</code>) so
-  the server fetches the right manifests</li>
+<li>Track-selection hints (<code>range_</code>, <code>vcodec</code>, <code>quality</code>, <code>best_available</code>,
+  <code>generate_dv</code>) so the server fetches the right manifests</li>
 <li>Your language and audio codec selection (<code>-l</code>, <code>-vl</code>, <code>-al</code>, <code>-a</code>, <code>-fs</code>)
   in a <code>dl_params</code> object. Some services fetch one manifest
   for each audio language, and pick the languages from these values</li>
@@ -2901,7 +2901,7 @@ from a browser origin, not when you want only the local HTTP API.</p>
 answers CDM calls), <code>cdm_system_id</code> and <code>cdm_device_type</code> (Widevine only), <code>service_config</code>
 (the identity config keys the service lists in <code>client_config</code>), <code>client</code> (a freeform identity
 object the dashboard shows as sent), and the track-selection hints <code>range_</code>, <code>vcodec</code>,
-<code>quality</code>, <code>best_available</code>, plus arbitrary service CLI options
+<code>quality</code>, <code>best_available</code>, <code>generate_dv</code>, plus arbitrary service CLI options
 (<code>additionalProperties: true</code>).</p>
 <p><code>dl_params</code> holds the <code>dl</code> track selection: <code>lang</code>, <code>v_lang</code> and <code>a_lang</code>
 (arrays of language strings), <code>acodec</code> (an array of audio codec names, such as

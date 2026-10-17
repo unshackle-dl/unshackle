@@ -2835,8 +2835,10 @@ See <a href="../../guide/proxies-and-vpn/">Proxies and VPN</a>.</p>
 <p class="admonition-title"><code>TrackRequest</code></p>
 <p><code>self.track_request</code> is a small dataclass built from the CLI: <code>codecs</code>
 (from <code>--vcodec</code>, empty means "accept any"), <code>ranges</code> (from <code>--range</code>, default
-<code>[Video.Range.SDR]</code>), and <code>best_available</code>. Use it in <code>get_tracks</code> to decide which
-variants to fetch.</p>
+<code>[Video.Range.SDR]</code>), <code>best_available</code>, and <code>generate_dv</code> (from <code>--generate-dv</code>).
+Use it in <code>get_tracks</code> to decide which variants to fetch. A service that fetches
+the HYBRID variants itself must also fetch HDR10P when <code>generate_dv</code> is set and
+the title has no DV track, because the conversion needs an HEVC HDR10+ base.</p>
 </div>
 <h2 id="titles-and-the-title-hierarchy">Titles and the <code>Title</code> hierarchy<a class="headerlink" href="#titles-and-the-title-hierarchy" title="Permanent link">&para;</a></h2>
 <p><code>get_titles()</code> returns a <strong>title collection</strong>, one of the <code>Titles_T</code> types. Each

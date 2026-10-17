@@ -2167,6 +2167,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#unshackle.core.tracks.Hybrid.detect_active_area" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;detect_active_area
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#unshackle.core.tracks.Hybrid.sanitize_l6" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3380,6 +3391,17 @@
     <span class="md-ellipsis">
       
         <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;level_5
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unshackle.core.tracks.Hybrid.detect_active_area" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;detect_active_area
       
     </span>
   </a>
@@ -5360,14 +5382,36 @@ If no DV track is available but HDR10+ is present, it will convert HDR10+ to DV.
 
 
 <a href="#unshackle.core.tracks.Hybrid.level_5" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">level_5</span><span class="p">(</span><span class="n">input_video</span><span class="p">)</span>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">level_5</span><span class="p">(</span><span class="n">crop</span><span class="p">)</span>
 </span></code></pre></div>
 
     <div class="doc doc-contents ">
 
-        <p>Make Level 5 active area metadata through crop detection on the HDR10 track.</p>
+        <p>Write the active area of the HDR10 track, as (left, top, right, bottom), to Level 5.</p>
 <p>This resolves mismatches where DV has no black bars but HDR10 does (or vice versa)
 by telling the display the correct active area.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="unshackle.core.tracks.Hybrid.detect_active_area" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">detect_active_area</span>
+
+
+<a href="#unshackle.core.tracks.Hybrid.detect_active_area" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">detect_active_area</span><span class="p">(</span><span class="n">input_video</span><span class="p">)</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>The picture's crop as (left, top, right, bottom) and its share of the frame, or None.</p>
+<p>None also when the picture is under 40% of the frame: cropdetect on dark samples can report a tiny
+picture, which would be wrong in L5 and would divide the HDR10+ conversion's mean by a tiny share.</p>
 
 
     </div>
@@ -5473,12 +5517,16 @@ MaxCLL. A value of 0 means "unknown", and this method keeps it as-is.</p>
 
 
 <a href="#unshackle.core.tracks.Hybrid.convert_hdr10plus_to_dv" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">convert_hdr10plus_to_dv</span><span class="p">()</span>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">convert_hdr10plus_to_dv</span><span class="p">(</span><span class="n">active_fraction</span><span class="o">=</span><span class="mf">1.0</span><span class="p">)</span>
 </span></code></pre></div>
 
     <div class="doc doc-contents ">
 
-        <p>Convert HDR10+ metadata to Dolby Vision RPU</p>
+        <p>Generate a Dolby Vision RPU with one shot per HDR10+ scene.</p>
+<p>By default unshackle builds the L1 of each shot itself (see hdr10plus_shots), because dovi_tool's
+--hdr10plus-json sets L1 avg from the linear AverageMaxRGB and so makes most scenes too bright.
+config.generate_dv_mode picks the L1 avg floor: v29 (about 2.4 nits, closest to the pixels) or v40
+(about 10 nits, as in studio CM v4.0 RPUs). legacy hands the HDR10+ JSON to dovi_tool instead.</p>
 
 
     </div>

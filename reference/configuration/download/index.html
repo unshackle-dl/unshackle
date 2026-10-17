@@ -1195,6 +1195,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#generate_dv_mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        generate_dv_mode
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -2140,6 +2151,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#generate_dv_mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        generate_dv_mode
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -2347,6 +2369,12 @@ default. In other words, config only fills in options you did not set on the com
 <td>bool</td>
 <td><code>false</code></td>
 <td>Warn instead of failing when a requested resolution, range, or language is missing, or when one DRM system does not license under <code>--all-drm</code>. The CLI flag is <code>--best-available</code>, also spelled <code>--warn-only</code>.</td>
+</tr>
+<tr>
+<td><code>generate_dv</code></td>
+<td>bool</td>
+<td><code>false</code></td>
+<td>With <code>-r HYBRID</code>, make Dolby Vision from the HDR10+ metadata when a title has no DV track. Needs <code>hdr10plus_tool</code>. See <a href="../../../guide/downloading/#dolby-vision-from-hdr10">Dolby Vision from HDR10+</a>.</td>
 </tr>
 <tr>
 <td><code>proxy</code></td>
@@ -2822,6 +2850,39 @@ release yourself, in place of the fixed <code>DUAL</code>, <code>MULTi</code> an
 <p>Regional variants of the same base language (e.g. <code>en-US</code> and <code>en-GB</code>) collapse to a single
 language in both modes, so they never trigger <code>{dual}</code> on their own.</p>
 </div>
+<h2 id="generate_dv_mode"><code>generate_dv_mode</code><a class="headerlink" href="#generate_dv_mode" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Type:</strong> <code>str</code> &nbsp;·&nbsp; <strong>Default:</strong> <code>v29</code></li>
+</ul>
+<p>How <a href="../../../guide/downloading/#dolby-vision-from-hdr10"><code>--generate-dv</code></a> sets the Level 1 brightness
+values of the Dolby Vision it makes from HDR10+. All modes make one shot per HDR10+ scene and keep the
+same peak and letterbox area. They differ in the scene average, which the TV uses to tone-map.</p>
+<table>
+<thead>
+<tr>
+<th>Mode</th>
+<th>Scene average</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>v29</code> (default)</td>
+<td>unshackle's average from the HDR10+ brightness distribution, at least about 2.4 nits. Closest to the pixels.</td>
+</tr>
+<tr>
+<td><code>v40</code></td>
+<td>The same average, at least about 10 nits, as in studio Dolby Vision (CM v4.0). Dark scenes read brighter than <code>v29</code>.</td>
+</tr>
+<tr>
+<td><code>legacy</code></td>
+<td>The <code>dovi_tool generate --hdr10plus-json</code> average. Most scenes read brighter than the pixels.</td>
+</tr>
+</tbody>
+</table>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="nt">generate_dv_mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">v29</span>
+</span></code></pre></div>
+<p>The setting applies on the machine that runs the hybrid step: the client for a remote download, the
+server for a REST API job.</p>
 
 
 
