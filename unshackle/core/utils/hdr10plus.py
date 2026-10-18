@@ -184,7 +184,7 @@ def probe_hdr10plus(
         with ThreadPoolExecutor(max_workers=min(workers, len(tracks))) as executor:
             return dict(zip(map(id, tracks), executor.map(probe, tracks)))
 
-    plans = []
+    plans: list[tuple[list["Video"], list["Video"], list["Video"]]] = []
     for candidates in ladders:
         if len(candidates) <= 4 or len({(v.width, v.height) for v in candidates}) < len(candidates):
             plans.append((candidates, candidates, []))
