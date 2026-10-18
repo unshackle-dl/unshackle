@@ -3316,7 +3316,8 @@ the title fails.</p>
 <p>When a title has HDR10+ but no DV track, <code>-r HYBRID --generate-dv</code> makes a Dolby Vision
 Profile 8.1 track from the HDR10+ metadata. It needs <code>hdr10plus_tool</code> as well as <code>dovi_tool</code>.
 When a title has a DV track, unshackle uses that track and ignores the flag. When it has none,
-the flag also makes unshackle ask the service for its HDR10+ tracks.</p>
+the flag also makes unshackle ask the service for its HDR10+ tracks. A track that the service labels HDR10 but
+that carries HDR10+ metadata also qualifies (see <a href="../../reference/configuration/download/#hdr10plus_probe"><code>hdr10plus_probe</code></a>).</p>
 <div class="language-shell highlight"><span class="filename">Generate Dolby Vision from HDR10+, and keep the HDR10+ file too</span><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-q<span class="w"> </span><span class="m">2160</span><span class="w"> </span>-r<span class="w"> </span>HYBRID,HDR10P<span class="w"> </span>--generate-dv<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="s1">'...'</span>
 </span></code></pre></div>
 <p>Each HDR10+ scene becomes one Dolby Vision shot, with its own scene cut and its own Level 1

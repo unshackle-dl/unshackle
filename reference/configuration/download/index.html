@@ -1196,6 +1196,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#hdr10plus_probe" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        hdr10plus_probe
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#generate_dv_mode" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2152,6 +2163,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#hdr10plus_probe" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        hdr10plus_probe
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#generate_dv_mode" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2850,6 +2872,47 @@ release yourself, in place of the fixed <code>DUAL</code>, <code>MULTi</code> an
 <p>Regional variants of the same base language (e.g. <code>en-US</code> and <code>en-GB</code>) collapse to a single
 language in both modes, so they never trigger <code>{dual}</code> on their own.</p>
 </div>
+<h2 id="hdr10plus_probe"><code>hdr10plus_probe</code><a class="headerlink" href="#hdr10plus_probe" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Type:</strong> <code>bool</code> &nbsp;·&nbsp; <strong>Default:</strong> <code>true</code></li>
+</ul>
+<p>Find the HDR10+ tracks that a service labels as HDR10. Before unshackle lists or selects tracks, it
+reads the first fragment of HEVC HDR10 tracks from DASH, HLS fMP4 and one-file sources. A track
+whose first frame carries HDR10+ (SMPTE ST 2094-40) metadata becomes <code>HDR10P</code>. Then <code>-r HDR10P</code>,
+<code>--list</code> and <a href="../../../guide/downloading/#dolby-vision-from-hdr10"><code>--generate-dv</code></a> use it.</p>
+<p>When two HDR10 tracks have the same resolution, they can be an HDR10 encode and an HDR10+ encode
+side by side, so unshackle probes every track. When each track has its own resolution, unshackle
+probes the two highest and the two lowest bitrates first:</p>
+<table>
+<thead>
+<tr>
+<th>Result</th>
+<th>Action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>All four carry HDR10+</td>
+<td>Every HDR10 track of the title becomes <code>HDR10P</code>.</td>
+</tr>
+<tr>
+<td>Some carry HDR10+</td>
+<td>The title has HDR10 and HDR10+ encodes side by side, so unshackle probes every track.</td>
+</tr>
+<tr>
+<td>None carry HDR10+</td>
+<td>Every track stays <code>HDR10</code>.</td>
+</tr>
+</tbody>
+</table>
+<p>A probe that fails, or a fragment whose metadata is encrypted, keeps the label from the service.
+unshackle does not probe ISM tracks. Each probe makes one to three small requests: the 64 KiB
+fragment, plus the playlist of an HLS track or the header of a one-file track. The probes run in
+parallel, with no more at a time than <code>--workers</code> (or <code>dl.workers</code>) sets for a track download.</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="nt">hdr10plus_probe</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span></code></pre></div>
+<p>A remote server probes its tracks before it sends them, so the setting on the server applies to
+remote downloads and to the REST API.</p>
 <h2 id="generate_dv_mode"><code>generate_dv_mode</code><a class="headerlink" href="#generate_dv_mode" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong>Type:</strong> <code>str</code> &nbsp;·&nbsp; <strong>Default:</strong> <code>v29</code></li>
@@ -2879,7 +2942,7 @@ same peak and letterbox area. They differ in the scene average, which the TV use
 </tr>
 </tbody>
 </table>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="nt">generate_dv_mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">v29</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="nt">generate_dv_mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">v29</span>
 </span></code></pre></div>
 <p>The setting applies on the machine that runs the hybrid step: the client for a remote download, the
 server for a REST API job.</p>
