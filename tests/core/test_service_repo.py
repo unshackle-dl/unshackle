@@ -228,14 +228,14 @@ def test_refresh_reports_discarded_local_edits(monkeypatch, tmp_path):
 
     def run(args, **kw):
         if "diff" in args and "--name-only" in args:
-            return subprocess.CompletedProcess(args, 0, b"CR/__init__.py\n", b"")  # local edit present
+            return subprocess.CompletedProcess(args, 0, b"EXAMPLE/__init__.py\n", b"")  # local edit present
         if "rev-parse" in args:
             return subprocess.CompletedProcess(args, 0, b"samehead\n", b"")  # upstream did not advance
         return subprocess.CompletedProcess(args, 0, b"", b"")  # fetch/reset/diff
 
     monkeypatch.setattr(service_repo.subprocess, "run", run)
     _, changes = service_repo.refresh_repo("a/b")
-    assert changes == ["!CR"]
+    assert changes == ["!EXAMPLE"]
 
 
 def test_changed_services_up_to_date(monkeypatch):

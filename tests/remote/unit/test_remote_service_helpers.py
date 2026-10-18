@@ -320,7 +320,7 @@ def test_load_cache_files_wiring(tmp_path, monkeypatch) -> None:
 
 
 def test_load_cache_files_forwards_nested_keys(tmp_path, monkeypatch) -> None:
-    """A service that keeps its cache in subfolders (NF: session_web/<sha1>.json) must have
+    """A service that keeps its cache in subfolders (session_web/<sha1>.json) must have
     those files forwarded under the Cacher key, and the credential filter must still apply
     to the basename of a nested file."""
     import base64

@@ -12,7 +12,7 @@ from unshackle.core.api.handlers import load_client_cookies
 COOKIE_FILE = "\n".join(
     [
         "# Netscape HTTP Cookie File",
-        "\t".join([".primevideo.com", "TRUE", "/", "TRUE", "2000000000", "session-id", "123-456"]),
+        "\t".join([".example.com", "TRUE", "/", "TRUE", "2000000000", "session-id", "123-456"]),
         "",
     ]
 )

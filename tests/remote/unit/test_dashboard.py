@@ -136,12 +136,12 @@ def test_ring_masks_host_paths_and_secrets_in_records() -> None:
     logger = logging.getLogger("test.ring.redact")
     logger.setLevel(logging.INFO)
     logger.addHandler(ring)
-    logger.error(f'File "{root}/unshackle/services/HMAX/__init__.py" 404: https://api.x/y?token=abc')
+    logger.error(f'File "{root}/unshackle/services/EXAMPLE/__init__.py" 404: https://api.x/y?token=abc')
     logger.removeHandler(ring)
 
     msg = ring.records[-1]["msg"]
     assert root not in msg
-    assert "<unshackle>/unshackle/services/HMAX" in msg
+    assert "<unshackle>/unshackle/services/EXAMPLE" in msg
     assert "token=abc" not in msg
     assert "https://api.x/y" in msg
     assert ring.since(0, logger="test") and not ring.since(0, logger="other")

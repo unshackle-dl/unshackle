@@ -15,7 +15,7 @@ dl:
   a_lang: [yes]
   require_subs: no
   require_audio: [no]
-  AMZN:
+  EXAMPLE:
     lang: no
 muxing:
   default_language:
@@ -43,7 +43,7 @@ def test_bool_shaped_tags_survive_every_language_key(tmp_path: Path) -> None:
     assert config.dl["a_lang"] == ["yes"]
     assert config.dl["require_subs"] == "no"
     assert config.dl["require_audio"] == ["no"]
-    assert config.dl["AMZN"]["lang"] == "no"
+    assert config.dl["EXAMPLE"]["lang"] == "no"
     assert config.muxing["default_language"]["audio"] == "no"
     assert config.audio["language_priority"] == ["no", "da"]
 

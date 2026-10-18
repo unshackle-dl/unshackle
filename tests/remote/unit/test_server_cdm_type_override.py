@@ -69,14 +69,14 @@ def _wv_drm():
 
 def _session(track):
     # handle_single_server_cdm looks config.cdm up by the service class name, so the fake needs the tag as its name
-    service = type("PCOK", (SimpleNamespace,), {})(
+    service = type("EXAMPLE", (SimpleNamespace,), {})(
         get_widevine_service_certificate=lambda **k: None,
         get_widevine_license=lambda **k: b"",
         get_playready_license=lambda **k: b"",
     )
     return SimpleNamespace(
         lock=asyncio.Lock(),
-        service_tag="PCOK",
+        service_tag="EXAMPLE",
         service_instance=service,
         served_keys={},
         tracks=SimpleNamespace(get={"vid": track}.get),
@@ -170,7 +170,10 @@ async def test_quality_keyed_mapping_resolves_to_the_device_it_loads(env, monkey
     monkeypatch.setattr(
         handlers.config,
         "cdm",
-        {"PCOK": {"<=1080": "wv_tier", ">1080": {"widevine": "wv_tier", "playready": "pr_tier"}}, "default": "pr_dev"},
+        {
+            "EXAMPLE": {"<=1080": "wv_tier", ">1080": {"widevine": "wv_tier", "playready": "pr_tier"}},
+            "default": "pr_dev",
+        },
         raising=False,
     )
 
@@ -183,7 +186,9 @@ async def test_quality_keyed_mapping_resolves_to_the_device_it_loads(env, monkey
 
 async def test_both_systems_mapped_follow_the_client(env, monkeypatch):
     """A mapping with a device per system settles nothing, so the client's choice goes first."""
-    monkeypatch.setattr(handlers.config, "cdm", {"PCOK": {"widevine": "wv_dev", "playready": "pr_dev"}}, raising=False)
+    monkeypatch.setattr(
+        handlers.config, "cdm", {"EXAMPLE": {"widevine": "wv_dev", "playready": "pr_dev"}}, raising=False
+    )
 
     track = SimpleNamespace(id="vid", drm=[_pr_drm(), _wv_drm()])
     body = await _license(monkeypatch, track, {"drm_type": "widevine"})
@@ -192,7 +197,7 @@ async def test_both_systems_mapped_follow_the_client(env, monkeypatch):
 
 
 async def test_no_candidate_header_is_a_client_error(env, monkeypatch):
-    monkeypatch.setattr(handlers.config, "cdm", {"PCOK": "pr_dev"}, raising=False)
+    monkeypatch.setattr(handlers.config, "cdm", {"EXAMPLE": "pr_dev"}, raising=False)
 
     track = SimpleNamespace(id="vid", drm=[_wv_drm()])
     with pytest.raises(APIError, match="No PSSH on track"):
@@ -201,7 +206,7 @@ async def test_no_candidate_header_is_a_client_error(env, monkeypatch):
 
 async def test_track_preference_goes_first_when_the_server_has_that_device(env, monkeypatch):
     """A track that prefers PlayReady licenses with PlayReady even on a Widevine-mapped server."""
-    monkeypatch.setattr(handlers.config, "cdm", {"PCOK": {"widevine": "wv_dev", "default": "pr_dev"}}, raising=False)
+    monkeypatch.setattr(handlers.config, "cdm", {"EXAMPLE": {"widevine": "wv_dev", "default": "pr_dev"}}, raising=False)
 
     track = SimpleNamespace(id="vid", drm=[_pr_drm(), _wv_drm()], drm_preference="pr")
     body = await _license(monkeypatch, track, {"drm_type": "widevine"})
@@ -212,7 +217,7 @@ async def test_track_preference_goes_first_when_the_server_has_that_device(env, 
 
 async def test_track_preference_falls_back_with_a_warning(env, monkeypatch, caplog):
     """With no PlayReady device the preference cannot be met: Widevine licenses and the client hears why."""
-    monkeypatch.setattr(handlers.config, "cdm", {"PCOK": "wv_dev"}, raising=False)
+    monkeypatch.setattr(handlers.config, "cdm", {"EXAMPLE": "wv_dev"}, raising=False)
 
     track = SimpleNamespace(id="vid", drm=[_pr_drm(), _wv_drm()], drm_preference="pr")
     with caplog.at_level("WARNING", logger=handlers.log.name):

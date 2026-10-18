@@ -11,8 +11,8 @@ from unshackle.core.config import config
 
 SERVICES = [
     {
-        "tag": "AMZN",
-        "aliases": ["amazon"],
+        "tag": "EXAMPLE",
+        "aliases": ["sample"],
         "cli_params": [{"kind": "option", "name": "extras"}, {"kind": "argument", "name": "title"}],
     }
 ]
@@ -20,7 +20,7 @@ INFO = SERVICES[0]
 
 
 class FakeRemote:
-    service_tag = "AMZN"
+    service_tag = "EXAMPLE"
 
     def __init__(self) -> None:
         self.closed = False
@@ -47,7 +47,7 @@ def lease(data, **extra):
     return handlers.lease_remote_service({**data, **extra}, "srv", INFO, None, "show")
 
 
-DATA = {"service": "AMZN", "title_id": "show", "remote": "srv"}
+DATA = {"service": "EXAMPLE", "title_id": "show", "remote": "srv"}
 
 
 async def test_concurrent_leases_share_one_session(pool):
@@ -89,17 +89,17 @@ def remote_config(monkeypatch):
 
 
 def test_remote_server_resolves_case_and_aliases(remote_config):
-    assert handlers.remote_server({"remote": "srv", "service": "amzn"}) == ("srv", INFO)
-    assert handlers.remote_server({"remote": "srv", "service": "Amazon"}) == ("srv", INFO)
-    assert handlers.remote_server({"service": "AMZN"}) is None
+    assert handlers.remote_server({"remote": "srv", "service": "example"}) == ("srv", INFO)
+    assert handlers.remote_server({"remote": "srv", "service": "Sample"}) == ("srv", INFO)
+    assert handlers.remote_server({"service": "EXAMPLE"}) is None
 
 
 @pytest.mark.parametrize(
     "data, code",
     [
-        ({"remote": "nope", "service": "AMZN"}, APIErrorCode.INVALID_PARAMETERS),
-        ({"remote": ["srv"], "service": "AMZN"}, APIErrorCode.INVALID_PARAMETERS),
-        ({"remote": "srv", "service": "NF"}, APIErrorCode.INVALID_SERVICE),
+        ({"remote": "nope", "service": "EXAMPLE"}, APIErrorCode.INVALID_PARAMETERS),
+        ({"remote": ["srv"], "service": "EXAMPLE"}, APIErrorCode.INVALID_PARAMETERS),
+        ({"remote": "srv", "service": "OTHER"}, APIErrorCode.INVALID_SERVICE),
     ],
 )
 def test_remote_server_rejects(remote_config, data, code):
@@ -109,31 +109,31 @@ def test_remote_server_rejects(remote_config, data, code):
 
 
 def test_remote_server_applies_the_allowlist_and_reports_an_unreachable_server(remote_config, monkeypatch):
-    monkeypatch.setattr(handlers, "get_allowed_services", lambda request=None: ["NF"])
+    monkeypatch.setattr(handlers, "get_allowed_services", lambda request=None: ["OTHER"])
     with pytest.raises(APIError) as e:
-        handlers.remote_server({"remote": "srv", "service": "AMZN"})
+        handlers.remote_server({"remote": "srv", "service": "EXAMPLE"})
     assert e.value.error_code == APIErrorCode.INVALID_SERVICE
 
     monkeypatch.setattr(remote_service, "remote_service_list", lambda name: None)
     with pytest.raises(APIError) as e:
-        handlers.remote_server({"remote": "srv", "service": "AMZN"})
+        handlers.remote_server({"remote": "srv", "service": "EXAMPLE"})
     assert e.value.error_code == APIErrorCode.SERVICE_UNAVAILABLE
 
 
 def test_make_remote_service_passes_only_cli_options(remote_config, monkeypatch):
     built = {}
-    monkeypatch.setattr(remote_service, "resolve_server", lambda name: ("https://srv", "k", {"AMZN": {"x": 1}}))
+    monkeypatch.setattr(remote_service, "resolve_server", lambda name: ("https://srv", "k", {"EXAMPLE": {"x": 1}}))
     monkeypatch.setattr(remote_service, "RemoteService", lambda *a, **kw: built.update(args=a, **kw))
 
     remote_service.make_remote_service(
-        None, "srv", "AMZN", "id", {"service_params": {"extras": "y", "service": "DSNP", "proxy": "x"}}, False
+        None, "srv", "EXAMPLE", "id", {"service_params": {"extras": "y", "service": "OTHER", "proxy": "x"}}, False
     )
     assert built["service_params"] == {"extras": "y"}
-    assert "AMZN" not in built["args"][5]  # apply_overrides=False keeps the remote's overrides out
+    assert "EXAMPLE" not in built["args"][5]  # apply_overrides=False keeps the remote's overrides out
 
-    remote_service.make_remote_service(None, "srv", "AMZN", "id", {"extras": "z", "service": "DSNP", "quality": 1})
+    remote_service.make_remote_service(None, "srv", "EXAMPLE", "id", {"extras": "z", "service": "OTHER", "quality": 1})
     assert built["service_params"] == {"extras": "z"}
-    assert built["args"][5]["AMZN"] == {"x": 1}
+    assert built["args"][5]["EXAMPLE"] == {"x": 1}
 
 
 def test_remote_error_carries_its_reason_and_exits_a_cli_run():
@@ -145,8 +145,8 @@ def test_remote_error_carries_its_reason_and_exits_a_cli_run():
 
 def test_a_geofenced_remote_service_gets_its_first_allowed_region_as_proxy(monkeypatch):
     monkeypatch.setattr(handlers, "server_proxy_allowed", lambda request=None: True)
-    fenced = {"tag": "PCOK", "geofence": ["US", "ca"], "geoblock": ["us"]}
-    assert handlers.geofence_proxy({}, {"tag": "PCOK", "geofence": ["US", "ca"]}) == {"proxy": "us"}
+    fenced = {"tag": "EXAMPLE", "geofence": ["US", "ca"], "geoblock": ["us"]}
+    assert handlers.geofence_proxy({}, {"tag": "EXAMPLE", "geofence": ["US", "ca"]}) == {"proxy": "us"}
     assert handlers.geofence_proxy({}, fenced) == {"proxy": "ca"}
     assert handlers.geofence_proxy({"proxy": "gb"}, fenced) == {}
     assert handlers.geofence_proxy({"no_proxy": True}, fenced) == {}
@@ -194,7 +194,7 @@ async def test_a_remote_login_prompt_waits_for_its_owners_answer(monkeypatch):
     class Remote:
         auth_notice = None
 
-    login = handlers.RemoteLogin("owner", "srv", "DSNP", "show", Remote())
+    login = handlers.RemoteLogin("owner", "srv", "OTHER", "show", Remote())
     monkeypatch.setattr(handlers, "_remote_logins", {login.id: login})
     monkeypatch.setattr(handlers, "is_admin", lambda request: False)
     caller = {"key": "owner"}

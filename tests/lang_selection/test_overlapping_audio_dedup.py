@@ -48,8 +48,7 @@ DISTINCT_PAIRS = [
 ]
 
 # A full real-world audio language set for one title, the kind of mix a streaming manifest ships,
-# which must resolve 1:1 with no collision or loss. Tags are drawn from published streaming
-# language references (Warner Bros. Discovery / Netflix) and include regional and script variants.
+# which must resolve 1:1 with no collision or loss. Tags include regional and script variants.
 REAL_WORLD_AUDIO_LANGS = [
     "ar",
     "ar-EG",

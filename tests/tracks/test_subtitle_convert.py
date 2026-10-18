@@ -310,7 +310,7 @@ def test_sdh_stripping_ass_without_subtitleedit_content_matches_codec(tmp_path, 
     assert "door creaks" not in text  # bracketed effect removed
 
 
-# Segmented fVTT (wvtt) / fTTML (stpp) ship from DASH/HLS as fragmented MP4 (e.g. HBO Max). The
+# Segmented fVTT (wvtt) / fTTML (stpp) ship from DASH/HLS as fragmented MP4. The
 # downloader concatenates init + media segments into one file; parse() reads the MP4 boxes directly.
 
 FIXTURES = pathlib.Path(__file__).parent / "fixtures"

@@ -38,7 +38,7 @@ def test_safe_cache_key_accepts_plain_filename():
 
 
 def test_safe_cache_key_accepts_nested_key_and_normalises_separators():
-    # A Cacher key with a subdirectory, as NF uses ("session_web/<sha1>"), keeps its
+    # A Cacher key with a subdirectory ("session_web/<sha1>") keeps its
     # posix form; a backslash from a Windows peer names the same nested file.
     assert safe_cache_key("session_web/abc") == "session_web/abc"
     assert safe_cache_key("MSL/a/b") == "MSL/a/b"

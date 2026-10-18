@@ -390,7 +390,7 @@ def test_only_the_kid_whose_window_fails_is_flagged(tmp_path: Path, monkeypatch:
     lead = UUID(int=7)
     local = SQLite("local", tmp_path / "local.db")
     poisoned = Remote("poisoned", tmp_path / "poisoned.db")
-    poisoned.add_key("SVC", lead, BAD)  # the same wrong key under both KIDs, as the NF title had
+    poisoned.add_key("SVC", lead, BAD)  # the same wrong key under both KIDs
     poisoned.add_key("SVC", KID, BAD)
     other = Remote("other", tmp_path / "other.db")
     other.add_key("SVC", KID, GOOD)
