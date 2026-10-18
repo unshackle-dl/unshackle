@@ -40,5 +40,15 @@ class SearchResult:
         self.label = label
         self.url = url
 
+    def to_dict(self) -> dict[str, Union[str, int, None]]:
+        """The result as the REST API returns it."""
+        return {
+            "id": self.id,
+            "title": self.title,
+            "description": self.description,
+            "label": self.label,
+            "url": self.url,
+        }
+
 
 __all__ = ("SearchResult",)

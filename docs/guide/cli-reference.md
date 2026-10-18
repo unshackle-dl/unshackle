@@ -250,12 +250,15 @@ unshackle logs in to the service before the search. A service that declares a se
 | `-p`, `--profile` | Profile for credentials and cookies. |
 | `--proxy` | Proxy URI, country or location code, or `provider:region` (e.g. `controld:ca`). |
 | `--no-proxy` | Force-disable all proxy use. |
+| `--remote` | Search on a remote unshackle server. The server logs in to the service. unshackle sends it your credentials, cookies and cache for the profile, and saves the cache that the server sends back. A service that searches with no login gets none of them. |
+| `--server` | Name a remote server from the `remote_services` config. |
 
 !!! example
     ```shell
     unshackle search EXAMPLE "My Show"
     unshackle search -p myprofile EXAMPLE "Another Show"
     unshackle search --proxy nordvpn:ca SERVICE "query"
+    unshackle search --remote --server my_server SERVICE "query"
     ```
 
 ---

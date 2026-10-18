@@ -481,11 +481,11 @@ def relay_error(exc: Any, service: str) -> APIError:
     return APIError(APIErrorCode.SERVICE_ERROR, exc.message, details={"service": service, "remote_code": exc.kind})
 
 
-def setup_remote_service(
+def relay_service(
     data: Dict[str, Any], server: str, profile: Optional[str], title_id: str, request: Optional[web.Request] = None
 ) -> Any:
-    """Open and authenticate a remote session and fetch its titles; the caller must close() it."""
-    from unshackle.core.remote_service import RemoteError, make_remote_service
+    """A RemoteService for ``data["service"]`` on a ``remote_services`` server, with this server's login files."""
+    from unshackle.core.remote_service import make_remote_service
 
     # the same server_proxy gate a local service gets: without it the providers stay empty
     proxy_param, providers = resolve_handler_proxy(data, data["service"], request)
@@ -500,7 +500,16 @@ def setup_remote_service(
     )
     ctx = click.Context(click.Command(data["service"]), parent=parent_ctx, obj=parent_ctx.obj)
     # this process is long-lived and serves local services too, so the remote's overrides stay out of config
-    service_instance = make_remote_service(ctx, server, data["service"], title_id, data, apply_overrides=False)
+    return make_remote_service(ctx, server, data["service"], title_id, data, apply_overrides=False)
+
+
+def setup_remote_service(
+    data: Dict[str, Any], server: str, profile: Optional[str], title_id: str, request: Optional[web.Request] = None
+) -> Any:
+    """Open and authenticate a remote session and fetch its titles; the caller must close() it."""
+    from unshackle.core.remote_service import RemoteError
+
+    service_instance = relay_service(data, server, profile, title_id, request)
     login = RemoteLogin(caller_key(request), server, data["service"], title_id, service_instance)
     service_instance._input_bridge = login.bridge
     _remote_logins[login.id] = login
@@ -725,14 +734,21 @@ def remote_services_info(name: str, allowed: Optional[List[str]]) -> List[Dict[s
     return [{**svc, "remote": name} for svc in remote_list(name) if allowed is None or svc.get("tag") in allowed]
 
 
-def remote_search(server: str, service: str, query: str) -> Dict[str, Any]:
-    """Run a search on a ``remote_services`` server with this server's key for it."""
-    from unshackle.core.remote_service import RemoteError, remote_client
+def remote_search(
+    data: Dict[str, Any], server: str, query: str, request: Optional[web.Request] = None
+) -> Dict[str, Any]:
+    """Run a search on a ``remote_services`` server, sending this server's login files as ``search --remote`` does."""
+    from unshackle.core.remote_service import RemoteError
 
+    service_instance = relay_service(data, server, client_profile(data), query, request)
     try:
-        return remote_client(server).post("/api/search", {"service": service, "query": query})
+        results = [result.to_dict() for result in service_instance.search()]
     except RemoteError as exc:
-        raise relay_error(exc, service) from None
+        raise relay_error(exc, data["service"]) from None
+    finally:
+        service_instance.session.close()
+        service_instance.client.session.close()
+    return {"results": results, "count": len(results)}
 
 
 def setup_list_service(
@@ -851,15 +867,7 @@ def run_service_search(
     results: List[Dict[str, Any]] = []
     try:
         for result in service_instance.search():
-            results.append(
-                {
-                    "id": result.id,
-                    "title": result.title,
-                    "description": result.description,
-                    "label": result.label,
-                    "url": result.url,
-                }
-            )
+            results.append(result.to_dict())
     except NotImplementedError:
         raise APIError(
             APIErrorCode.SERVICE_ERROR,
@@ -1861,7 +1869,8 @@ async def search_handler(data: Dict[str, Any], request: Optional[web.Request] = 
 
     remote = await asyncio.to_thread(remote_server, data, request) if data.get("remote") else None
     if remote:
-        return web.json_response(await asyncio.to_thread(remote_search, remote[0], remote[1]["tag"], query))
+        data = {**data, "service": remote[1]["tag"]}
+        return web.json_response(await asyncio.to_thread(remote_search, data, remote[0], query, request))
 
     # get_tag echoes an unknown tag back, so it can never be falsy; validate_service
     # is the check that actually resolves the service directory and the allowlist.

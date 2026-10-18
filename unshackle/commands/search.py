@@ -39,8 +39,29 @@ from unshackle.core.utils.redact import mask_proxy
     help="Proxy URI to use. If a 2-letter country is provided, it will try get a proxy from the config.",
 )
 @click.option("--no-proxy", is_flag=True, default=False, help="Force disable all proxy use.")
+@click.option(
+    "--remote",
+    is_flag=True,
+    default=False,
+    is_eager=True,
+    help="Search on a remote unshackle server instead of with local service code.",
+)
+@click.option(
+    "--server",
+    type=str,
+    default=None,
+    is_eager=True,
+    help="Name of the remote server from remote_services config (if multiple configured).",
+)
 @click.pass_context
-def search(ctx: click.Context, no_proxy: bool, profile: Optional[str] = None, proxy: Optional[str] = None):
+def search(
+    ctx: click.Context,
+    no_proxy: bool,
+    profile: Optional[str] = None,
+    proxy: Optional[str] = None,
+    remote: bool = False,
+    server: Optional[str] = None,
+):
     if not ctx.invoked_subcommand:
         raise ValueError("A subcommand to invoke was not specified, the main code cannot continue.")
 
@@ -52,14 +73,14 @@ def search(ctx: click.Context, no_proxy: bool, profile: Optional[str] = None, pr
     if profile:
         log.info(f"Using profile: '{profile}'")
 
-    with console.status("Loading Service Config...", spinner="dots"):
-        service_config_path = Services.get_path(service) / config.filenames.config
-        if service_config_path.exists():
-            service_config = yaml.safe_load(service_config_path.read_text(encoding="utf8"))
-            log.info("Service Config loaded")
-        else:
-            service_config = {}
-        merge_dict(config.services.get(service), service_config)
+    service_config: dict = {}
+    if not remote:
+        with console.status("Loading Service Config...", spinner="dots"):
+            service_config_path = Services.get_path(service) / config.filenames.config
+            if service_config_path.exists():
+                service_config = yaml.safe_load(service_config_path.read_text(encoding="utf8"))
+                log.info("Service Config loaded")
+    merge_dict(config.services.get(service), service_config)
 
     proxy_providers: list[Proxy] = []
     if no_proxy:
@@ -91,12 +112,12 @@ def search(ctx: click.Context, no_proxy: bool, profile: Optional[str] = None, pr
 
 
 @search.result_callback()
-def result(service: Service, profile: Optional[str] = None, **_: Any) -> None:
+def result(service: Service, profile: Optional[str] = None, remote: bool = False, **_: Any) -> None:
     log = logging.getLogger("search")
 
     service_tag = service.__class__.__name__
 
-    if not service.ANONYMOUS_SEARCH:
+    if not remote and not service.ANONYMOUS_SEARCH:
         with console.status("Authenticating with Service...", spinner="dots"):
             cookies = dl.get_cookie_jar(service_tag, profile)
             credential = dl.get_credentials(service_tag, profile)
@@ -117,7 +138,7 @@ def result(service: Service, profile: Optional[str] = None, **_: Any) -> None:
             result_text += f"\n[bright_black]id: {result.id}[/]"
             search_results.add(result_text + "\n")
 
-    cookie_file = None if service.ANONYMOUS_SEARCH else dl.get_cookie_path(service_tag, profile)
+    cookie_file = None if remote or service.ANONYMOUS_SEARCH else dl.get_cookie_path(service_tag, profile)
     if cookie_file:
         dl.save_cookies(cookie_file, service.session.cookies)
 

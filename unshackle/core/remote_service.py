@@ -41,6 +41,7 @@ from unshackle.core.constants import AnyTrack
 from unshackle.core.credential import Credential
 from unshackle.core.drm import cbcs, real_kids
 from unshackle.core.proxies.resolve import is_loopback
+from unshackle.core.search_result import SearchResult
 from unshackle.core.session import MAX_BACKOFF
 from unshackle.core.titles import Title_T, Titles_T, remap_titles
 from unshackle.core.titles.episode import Episode, Series
@@ -852,6 +853,7 @@ def make_remote_service(
     info = next((s for s in remote_service_list(server_name) or [] if s.get("tag") == service_tag), {})
     services_config["_server_accounts"] = info.get("server_accounts")
     services_config["_client_config"] = info.get("client_config")
+    services_config["_anonymous_search"] = info.get("anonymous_search")
     params = remote_service_params(info, data)
     return RemoteService(ctx, service_tag, title_id, url, api_key, services_config, service_params=params)
 
@@ -1099,6 +1101,7 @@ class RemoteService:
         self._server_device = False
         self._local_vaults_only = False
         self._server_accounts: Optional[dict] = services_config.get("_server_accounts")
+        self._anonymous_search = bool(services_config.get("_anonymous_search"))
         # read before apply_service_config merges the server's values into the same section
         own = config.services.get(service_tag) or {}
         self._client_config = {k: own[k] for k in services_config.get("_client_config") or [] if k in own}
@@ -1144,6 +1147,43 @@ class RemoteService:
     def title(self) -> str:
         return self.title_id
 
+    def search(self) -> Iterator[SearchResult]:
+        """Search on the server, which logs in to the service itself with the login material sent here."""
+        params = self.ctx.parent.params if self.ctx.parent else {}
+        profile = params.get("profile")
+        data: Dict[str, Any] = {"service": self.service_tag, "query": self.title_id}
+        if profile:
+            data["profile"] = profile
+        if not self._anonymous_search:
+            data.update(self.client_login(profile))
+        if params.get("no_proxy"):
+            data["no_proxy"] = True
+        elif params.get("proxy"):
+            data["proxy"] = resolve_remote_proxy_arg(params["proxy"], getattr(self.ctx.obj, "proxy_providers", None))
+            self.require_reachable_proxy(data["proxy"])
+        response = self.client.post("/api/search", data)
+        self.save_returned_cache(response.get("cache") or {}, profile)
+        for result in response.get("results") or []:
+            yield SearchResult(
+                result["id"], result["title"], result.get("description"), result.get("label"), result.get("url")
+            )
+
+    def client_login(self, profile: Optional[str]) -> Dict[str, Any]:
+        """The credentials, cookies and cache to send, or nothing when the server manages the account."""
+        if self._server_accounts is not None:
+            return {}
+        fields = {
+            "credentials": load_credentials_for_transport(self.service_tag, profile),
+            "cookies": load_cookies_for_transport(self.service_tag, profile),
+            "cache": self.load_cache_files(profile),
+        }
+        return {k: v for k, v in fields.items() if v}
+
+    def require_reachable_proxy(self, proxy: Optional[str]) -> None:
+        """Refuse a proxy on this machine when the server is elsewhere: the server cannot reach it."""
+        if proxy and is_loopback(proxy) and not is_loopback(self.client.server_url):
+            raise click.ClickException("That proxy is on your machine, so --remote cannot use it.")
+
     def authenticate(self, cookies: Optional[CookieJar] = None, credential: Optional[Credential] = None) -> None:
         self.credential = credential
         profile = self.ctx.parent.params.get("profile") if self.ctx.parent else None
@@ -1153,13 +1193,7 @@ class RemoteService:
         create_data: Dict[str, Any] = {"service": self.service_tag, "title_id": self.title_id}
 
         if self._server_accounts is None:
-            credentials = load_credentials_for_transport(self.service_tag, profile)
-            if credentials:
-                create_data["credentials"] = credentials
-
-            cookies_text = load_cookies_for_transport(self.service_tag, profile)
-            if cookies_text:
-                create_data["cookies"] = cookies_text
+            create_data.update(self.client_login(profile))
         else:
             self.credential = None
             self.log.info(
@@ -1199,9 +1233,7 @@ class RemoteService:
                 country = re.match(r"^(?:[a-z]+:)?([a-z]{2})\d*$", query, re.IGNORECASE)
                 if country:
                     create_data["proxy_region"] = country.group(1).lower()
-        if create_data.get("proxy") and is_loopback(create_data["proxy"]) and not is_loopback(self.client.server_url):
-            # the local CLI resolves the proxy, so a local-only URI is useless to a server elsewhere
-            raise click.ClickException("That proxy is on your machine, so --remote cannot use it.")
+        self.require_reachable_proxy(create_data.get("proxy"))
         local_proxy = None if no_proxy else (proxy or create_data.get("proxy"))
         if local_proxy:
             self._session.proxies["all"] = local_proxy
@@ -1281,10 +1313,6 @@ class RemoteService:
                 create_data["cdm_device_type"] = device_type
             if self._client_config:
                 create_data["service_config"] = self._client_config
-
-        cache_data = self.load_cache_files(profile) if self._server_accounts is None else None
-        if cache_data:
-            create_data["cache"] = cache_data
 
         from unshackle.core import __code_hash__, __version__
 
