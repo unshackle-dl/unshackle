@@ -2912,6 +2912,28 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#unshackle.core.tracks.Video.carries_hdr10plus" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;carries_hdr10plus
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unshackle.core.tracks.Video.finished_hybrid" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;finished_hybrid
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#unshackle.core.tracks.Video.range_label" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2947,6 +2969,39 @@
         
       </ul>
     </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unshackle.core.tracks.Video.dv_fourccs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;dv_fourccs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unshackle.core.tracks.Video.has_dv_codec" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;has_dv_codec
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unshackle.core.tracks.Video.is_dv_composite" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;is_dv_composite
+      
+    </span>
+  </a>
   
 </li>
         
@@ -4165,6 +4220,28 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#unshackle.core.tracks.Video.carries_hdr10plus" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;carries_hdr10plus
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unshackle.core.tracks.Video.finished_hybrid" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;finished_hybrid
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#unshackle.core.tracks.Video.range_label" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4200,6 +4277,39 @@
         
       </ul>
     </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unshackle.core.tracks.Video.dv_fourccs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;dv_fourccs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unshackle.core.tracks.Video.has_dv_codec" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;has_dv_codec
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unshackle.core.tracks.Video.is_dv_composite" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;is_dv_composite
+      
+    </span>
+  </a>
   
 </li>
         
@@ -7813,13 +7923,17 @@ A <code>native_hybrid</code> track is the hybrid itself, so it stays unflagged t
 
 
 <a href="#unshackle.core.tracks.Tracks.select_hybrid" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">select_hybrid</span><span class="p">(</span><span class="n">tracks</span><span class="p">,</span> <span class="n">quality</span><span class="p">,</span> <span class="n">worst</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">select_hybrid</span><span class="p">(</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">tracks</span><span class="p">,</span> <span class="n">quality</span><span class="p">,</span> <span class="n">worst</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">generate_dv</span><span class="o">=</span><span class="kc">False</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="p">)</span>
 </span></code></pre></div>
 
     <div class="doc doc-contents ">
 
         <p>A filter for the hybrid ingredients of each resolution. It sets <code>native_hybrid</code> on every track.</p>
-<p>A DV track that carries HDR10+ is already a hybrid, so its resolution takes that track and no base.</p>
+<p>A track that already carries DV and an HDR10 or HDR10+ base (DV+HDR10P, HDR10+DV, HDR10P+DV) is a finished
+hybrid, so its resolution takes that track and no base. One that carries HDR10+ comes first. The other
+resolutions get a base only when a DV track can give it an RPU, or with <code>generate_dv</code>.</p>
 
 
     </div>
@@ -8212,6 +8326,54 @@ skip some checks or assume a value. Give as much information as possible.</p>
 
 
 
+<h3 id="unshackle.core.tracks.Video.carries_hdr10plus" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <span class="doc doc-object-name doc-attribute-name">carries_hdr10plus</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-property"><code>property</code></small>
+  </span>
+
+<a href="#unshackle.core.tracks.Video.carries_hdr10plus" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">carries_hdr10plus</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Whether the track carries HDR10+, as its range or, on a DV track, found by the HDR10+ probe.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h3 id="unshackle.core.tracks.Video.finished_hybrid" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <span class="doc doc-object-name doc-attribute-name">finished_hybrid</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-property"><code>property</code></small>
+  </span>
+
+<a href="#unshackle.core.tracks.Video.finished_hybrid" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">finished_hybrid</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Whether the track already carries DV and an HDR10 or HDR10+ base, so <code>-r HYBRID</code> needs no build.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
 <h3 id="unshackle.core.tracks.Video.range_label" class="doc doc-heading">
 <code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <span class="doc doc-object-name doc-attribute-name">range_label</span>
 
@@ -8226,7 +8388,7 @@ skip some checks or assume a value. Give as much information as possible.</p>
 
     <div class="doc doc-contents ">
 
-        <p>The range name, with <code>+HDR10P</code> on a DV track that also carries HDR10+.</p>
+        <p>The range that <code>-r</code> selects the track by, then any second format it carries: HDR10+DV, DV+HDR10P.</p>
 
     </div>
 
@@ -8320,6 +8482,78 @@ FFmpeg's AVColorPrimaries/AVColorTransferCharacteristic enums.</p>
 
 </div>
 
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="unshackle.core.tracks.Video.dv_fourccs" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">dv_fourccs</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-staticmethod"><code>staticmethod</code></small>
+  </span>
+
+<a href="#unshackle.core.tracks.Video.dv_fourccs" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">dv_fourccs</span><span class="p">(</span><span class="n">codecs</span><span class="p">)</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>The Dolby Vision fourccs in a codecs list (comma or space separated, <code>/brand</code> suffixes allowed).</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="unshackle.core.tracks.Video.has_dv_codec" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">has_dv_codec</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-staticmethod"><code>staticmethod</code></small>
+  </span>
+
+<a href="#unshackle.core.tracks.Video.has_dv_codec" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">has_dv_codec</span><span class="p">(</span><span class="n">codecs</span><span class="p">)</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Whether a codecs list names a Dolby Vision codec.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="unshackle.core.tracks.Video.is_dv_composite" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">is_dv_composite</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-staticmethod"><code>staticmethod</code></small>
+  </span>
+
+<a href="#unshackle.core.tracks.Video.is_dv_composite" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">is_dv_composite</span><span class="p">(</span><span class="n">codec</span><span class="p">,</span> <span class="n">codecs</span><span class="p">,</span> <span class="n">supplemental_codecs</span><span class="p">)</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Whether an HEVC track names DV only in its supplemental codecs: DV profile 8 on an HDR10, SDR or HLG base.</p>
+
+
+    </div>
+
+</div>
 
 <div class="doc doc-object doc-function">
 
