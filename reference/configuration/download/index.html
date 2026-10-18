@@ -2880,6 +2880,10 @@ language in both modes, so they never trigger <code>{dual}</code> on their own.<
 reads the first fragment of HEVC HDR10 tracks from DASH, HLS fMP4 and one-file sources. A track
 whose first frame carries HDR10+ (SMPTE ST 2094-40) metadata becomes <code>HDR10P</code>. Then <code>-r HDR10P</code>,
 <code>--list</code> and <a href="../../../guide/downloading/#dolby-vision-from-hdr10"><code>--generate-dv</code></a> use it.</p>
+<p>unshackle also probes HEVC Dolby Vision tracks. A DV track that carries HDR10+ keeps its <code>DV</code>
+range, so <code>-r DV</code> selects it, and <code>--list</code> shows it as <code>DV+HDR10P</code>. <code>-r HYBRID</code> uses it as the
+<a href="../../../guide/downloading/#colour-range">hybrid</a> of its resolution, with no base track. The
+HDR10 tracks and the DV tracks of a title are sampled as two separate sets.</p>
 <p>When two HDR10 tracks have the same resolution, they can be an HDR10 encode and an HDR10+ encode
 side by side, so unshackle probes every track. When each track has its own resolution, unshackle
 probes the two highest and the two lowest bitrates first:</p>

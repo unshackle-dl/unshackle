@@ -2862,6 +2862,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#unshackle.core.tracks.Tracks.select_hybrid" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;select_hybrid
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#unshackle.core.tracks.Tracks.first_match_index" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2899,6 +2910,17 @@
   
     <nav class="md-nav" aria-label=" Video">
       <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#unshackle.core.tracks.Video.range_label" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;range_label
+      
+    </span>
+  </a>
+  
+</li>
         
           <li class="md-nav__item">
   <a href="#unshackle.core.tracks.Video.Range" class="md-nav__link">
@@ -4093,6 +4115,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#unshackle.core.tracks.Tracks.select_hybrid" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;select_hybrid
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#unshackle.core.tracks.Tracks.first_match_index" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4130,6 +4163,17 @@
   
     <nav class="md-nav" aria-label=" Video">
       <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#unshackle.core.tracks.Video.range_label" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;range_label
+      
+    </span>
+  </a>
+  
+</li>
         
           <li class="md-nav__item">
   <a href="#unshackle.core.tracks.Video.Range" class="md-nav__link">
@@ -7753,7 +7797,29 @@ HDR10+.</p>
 
         <p>Mark tracks selected only as hybrid ingredients so the standalone mux loop skips them.</p>
 <p>A track that the caller also selected as an explicit deliverable (same track in both
-selections) stays unflagged, and the standalone mux loop muxes it alongside the hybrid.</p>
+selections) stays unflagged, and the standalone mux loop muxes it alongside the hybrid.
+A <code>native_hybrid</code> track is the hybrid itself, so it stays unflagged too.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="unshackle.core.tracks.Tracks.select_hybrid" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">select_hybrid</span>
+
+
+<a href="#unshackle.core.tracks.Tracks.select_hybrid" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">select_hybrid</span><span class="p">(</span><span class="n">tracks</span><span class="p">,</span> <span class="n">quality</span><span class="p">,</span> <span class="n">worst</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>A filter for the hybrid ingredients of each resolution. It sets <code>native_hybrid</code> on every track.</p>
+<p>A DV track that carries HDR10+ is already a hybrid, so its resolution takes that track and no base.</p>
 
 
     </div>
@@ -7976,8 +8042,9 @@ share a video list must pass distinct paths to avoid clobbering each other.</p>
 </span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="n">scan_type</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
 </span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>    <span class="n">closed_captions</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
 </span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>    <span class="n">dv_compatible_bitstream</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
-</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>    <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
-</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="p">)</span>
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>    <span class="n">hdr10plus</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>    <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="p">)</span>
 </span></code></pre></div>
 
     <div class="doc doc-contents ">
@@ -8102,6 +8169,22 @@ All strings will be cast to either a number or float.</p>
                   <code>None</code>
             </td>
           </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>hdr10plus</code>
+            </td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The DV track also carries HDR10+ metadata. The HDR10+ probe sets it.</p>
+              </div>
+            </td>
+            <td>
+                  <code>False</code>
+            </td>
+          </tr>
       </tbody>
     </table>
         <p>Note: If codec, bitrate, width, height, or fps is not specified, unshackle can
@@ -8124,6 +8207,30 @@ skip some checks or assume a value. Give as much information as possible.</p>
 
 
 
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h3 id="unshackle.core.tracks.Video.range_label" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <span class="doc doc-object-name doc-attribute-name">range_label</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-property"><code>property</code></small>
+  </span>
+
+<a href="#unshackle.core.tracks.Video.range_label" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">range_label</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>The range name, with <code>+HDR10P</code> on a DV track that also carries HDR10+.</p>
+
+    </div>
+
+</div>
 
 
 

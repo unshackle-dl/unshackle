@@ -3309,6 +3309,10 @@ HEVC; a title whose HDR10/HDR10+ tracks are all in another codec fails before it
 If the hybrid step fails for one resolution, unshackle logs an error, skips that resolution
 and goes on with the other resolutions of the title. When no hybrid file at all was made,
 the title fails.</p>
+<p>A DV track that carries HDR10+ (<code>DV+HDR10P</code> in <code>--list</code>) is already a hybrid. At a resolution
+that has one, <code>-r HYBRID</code> selects the DV+HDR10P track with the highest bitrate (the lowest with
+<code>--worst</code>) and muxes it as it is, with no base track and no dovi_tool step. The other
+resolutions get a hybrid that unshackle makes.</p>
 <p>To keep an HDR10+ deliverable <em>alongside</em> the hybrid, request both ranges:
 <code>-r HYBRID,HDR10P</code>. <code>-r HYBRID</code> on its own muxes only the merged hybrid.</p>
 </div>
