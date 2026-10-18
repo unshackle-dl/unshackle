@@ -193,7 +193,7 @@ the remote client's `-q` when the remote session starts:
   The service sees the DRM system and security level of the client's device. A client with no
   local CDM gets a `SERVER_CDM_CAPPED` error.
 - A download job must pass a `quality` at or below the limit, and must not set `best_available` or
-  a `HYBRID` range. `HYBRID` always keeps the lowest Dolby Vision track, at any quality. A job with
+  a `HYBRID` range. `HYBRID` can keep the lowest Dolby Vision track, at any quality. A job with
   no `quality`, with a higher one, with `best_available`, or with `HYBRID` gets a `SERVER_CDM_CAPPED`
   error. The server checks the values the job runs with, after it applies the service defaults
   and the `serve:` download defaults.

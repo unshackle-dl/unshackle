@@ -157,6 +157,11 @@ unshackle dl -q 2160 -r HDR10,DV EXAMPLE '...'
     and goes on with the other resolutions of the title. When no hybrid file at all was made,
     the title fails.
 
+    A DV track that carries HDR10+ (`DV+HDR10P` in `--list`) is already a hybrid. At a resolution
+    that has one, `-r HYBRID` selects the DV+HDR10P track with the highest bitrate (the lowest with
+    `--worst`) and muxes it as it is, with no base track and no dovi_tool step. The other
+    resolutions get a hybrid that unshackle makes.
+
     To keep an HDR10+ deliverable *alongside* the hybrid, request both ranges:
     `-r HYBRID,HDR10P`. `-r HYBRID` on its own muxes only the merged hybrid.
 

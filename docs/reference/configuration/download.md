@@ -380,7 +380,8 @@ whose first frame carries HDR10+ (SMPTE ST 2094-40) metadata becomes `HDR10P`. T
 `--list` and [`--generate-dv`](../../guide/downloading.md#dolby-vision-from-hdr10) use it.
 
 unshackle also probes HEVC Dolby Vision tracks. A DV track that carries HDR10+ keeps its `DV`
-range, so `-r DV` and `-r HYBRID` select it as before, and `--list` shows it as `DV+HDR10P`. The
+range, so `-r DV` selects it, and `--list` shows it as `DV+HDR10P`. `-r HYBRID` uses it as the
+[hybrid](../../guide/downloading.md#colour-range) of its resolution, with no base track. The
 HDR10 tracks and the DV tracks of a title are sampled as two separate sets.
 
 When two HDR10 tracks have the same resolution, they can be an HDR10 encode and an HDR10+ encode

@@ -640,8 +640,14 @@ def test_a_remote_session_puts_the_flag_in_the_service_ctx(monkeypatch: pytest.M
     assert seen["ctx"].params["generate_dv"] is to_dv
 
 
-def video(id_: str, range_: Video.Range, height: int = 2160, codec: Optional[Video.Codec] = Video.Codec.HEVC) -> Any:
-    return SimpleNamespace(id=id_, height=height, range=range_, codec=codec)
+def video(
+    id_: str,
+    range_: Video.Range,
+    height: int = 2160,
+    codec: Optional[Video.Codec] = Video.Codec.HEVC,
+    native_hybrid: bool = False,
+) -> Any:
+    return SimpleNamespace(id=id_, height=height, range=range_, codec=codec, native_hybrid=native_hybrid)
 
 
 def test_hybrid_fails_with_neither_a_base_nor_dv() -> None:
@@ -734,3 +740,13 @@ def test_the_flag_without_dv_takes_only_hdr10plus_bases() -> None:
 
 def test_no_dv_and_no_flag_gives_no_bases() -> None:
     assert hybrid_plan([video("h", Video.Range.HDR10), video("p", Video.Range.HDR10P)], False) == ([], None)
+
+
+def test_a_native_hybrid_passes_the_gate_and_takes_no_base_at_its_resolution() -> None:
+    videos = [video("dvp2160", Video.Range.DV, native_hybrid=True), video("h1080", Video.Range.HDR10, 1080)]
+    assert hybrid_gate_failure(videos[:1], False) is None
+
+    bases, dv = hybrid_plan(videos + [video("p2160", Video.Range.HDR10P)], False)
+
+    assert [v.id for v in bases] == ["h1080"]
+    assert dv is not None and dv.id == "dvp2160"

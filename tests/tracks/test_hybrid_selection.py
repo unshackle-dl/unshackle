@@ -115,6 +115,49 @@ def test_select_hybrid_no_dv_selects_only_base() -> None:
     assert ids(chosen) == {"hdr10p-2160"}
 
 
+def dv_hdr10p(track_id: str, height: int, bitrate: int) -> Video:
+    video = make_video(track_id, range_=Video.Range.DV, height=height, bitrate=bitrate, codec=Video.Codec.HEVC)
+    video.hdr10plus = True
+    return video
+
+
+def test_select_hybrid_takes_the_highest_dv_hdr10p_track_over_a_base_and_the_lowest_dv() -> None:
+    H = Video.Codec.HEVC
+    tracks = [
+        dv_hdr10p("dvp-2160-hi", 2160, 26_000_000),
+        dv_hdr10p("dvp-2160-lo", 2160, 21_000_000),
+        make_video("hdr10-2160", range_=Video.Range.HDR10, height=2160, bitrate=24_000_000, codec=H),
+        dv_hdr10p("dvp-360", 360, 700_000),
+    ]
+    assert ids(list(filter(Tracks().select_hybrid(tracks, [2160]), tracks))) == {"dvp-2160-hi"}
+    assert ids(list(filter(Tracks().select_hybrid(tracks, [2160], worst=True), tracks))) == {"dvp-2160-lo"}
+
+
+def test_select_hybrid_builds_a_hybrid_only_where_no_dv_track_carries_hdr10p() -> None:
+    H = Video.Codec.HEVC
+    tracks = [
+        dv_hdr10p("dvp-2160", 2160, 26_000_000),
+        make_video("hdr10-1080", range_=Video.Range.HDR10, height=1080, bitrate=8_000_000, codec=H),
+        make_video("dv-360", range_=Video.Range.DV, height=360, bitrate=1_000_000, codec=H),
+    ]
+    chosen = list(filter(Tracks().select_hybrid(tracks, [2160, 1080]), tracks))
+    assert ids(chosen) == {"dvp-2160", "hdr10-1080", "dv-360"}
+
+    Tracks.flag_hybrid_ingredients(chosen, [])
+    assert {t.id for t in chosen if t.hybrid_base_only} == {"hdr10-1080", "dv-360"}
+
+
+def test_a_dv_hdr10p_track_used_only_for_its_rpu_stays_an_ingredient() -> None:
+    H = Video.Codec.HEVC
+    tracks = [
+        make_video("hdr10-1080", range_=Video.Range.HDR10, height=1080, bitrate=8_000_000, codec=H),
+        dv_hdr10p("dvp-360", 360, 700_000),
+    ]
+    chosen = list(filter(Tracks().select_hybrid(tracks, [1080]), tracks))
+    Tracks.flag_hybrid_ingredients(chosen, [])
+    assert all(t.hybrid_base_only for t in chosen) and ids(chosen) == {"hdr10-1080", "dvp-360"}
+
+
 def test_merge_dedups_shared_ingredient_and_deliverable() -> None:
     H = Video.Codec.HEVC
     dv = make_video("dv-1080", range_=Video.Range.DV, height=1080, bitrate=9_000_000, codec=H)

@@ -303,6 +303,7 @@ class Video(Track):
         self.dv_compatible_bitstream = dv_compatible_bitstream
         self.hdr10plus = hdr10plus
         self.hybrid_base_only = False
+        self.native_hybrid = False
 
     def to_dict(self) -> dict[str, Any]:
         data = super().to_dict()

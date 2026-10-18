@@ -235,6 +235,8 @@ def select_hybrid_bases(videos: Sequence[Video]) -> list[Video]:
 
 def hybrid_gate_failure(videos: Sequence[Video], generate_dv: bool) -> Optional[tuple[str, str]]:
     """The (message, detail) that stops HYBRID for these selected videos, or None when it can go on."""
+    if any(v.native_hybrid for v in videos):
+        return None
     hdr_tracks = [v for v in videos if v.range in (Video.Range.HDR10, Video.Range.HDR10P)]
     base_tracks = [v for v in hdr_tracks if v.codec in (Video.Codec.HEVC, None)]
     dv_tracks = [v for v in videos if v.range == Video.Range.DV]
@@ -270,10 +272,16 @@ def hybrid_gate_failure(videos: Sequence[Video], generate_dv: bool) -> Optional[
 def hybrid_plan(videos: Sequence[Video], generate_dv: bool) -> tuple[list[Video], Optional[Video]]:
     """The hybrid bases and the DV track to pair with them.
 
-    With no DV track, only HDR10+ bases qualify, and only with ``--generate-dv``.
+    With no DV track, only HDR10+ bases qualify, and only with ``--generate-dv``. A resolution with a
+    DV track that carries HDR10+ gets no base: that track is its hybrid.
     """
     dv_tracks = [v for v in videos if v.range == Video.Range.DV]
-    base_pool = [v for v in videos if dv_tracks or (generate_dv and v.range == Video.Range.HDR10P)]
+    native_heights = {v.height for v in videos if v.native_hybrid}
+    base_pool = [
+        v
+        for v in videos
+        if v.height not in native_heights and (dv_tracks or (generate_dv and v.range == Video.Range.HDR10P))
+    ]
     matching_dv = min(dv_tracks, key=lambda v: v.height or 0) if dv_tracks else None
     return select_hybrid_bases(base_pool), matching_dv
 
@@ -2759,18 +2767,14 @@ class dl:
                             title.tracks.videos, non_hybrid_ranges
                         )
 
-                        if not effective_quality:
+                        hybrid_quality = effective_quality
+                        if not hybrid_quality:
                             best_resolution = max((v.height for v in hybrid_candidate_tracks), default=None)
-                            if best_resolution:
-                                hybrid_filter = title.tracks.select_hybrid(
-                                    hybrid_candidate_tracks, [best_resolution], worst=worst
-                                )
-                                hybrid_selected = list(filter(hybrid_filter, hybrid_candidate_tracks))
-                            else:
-                                hybrid_selected = []
-                        else:
+                            hybrid_quality = [best_resolution] if best_resolution else []
+                        hybrid_selected = []
+                        if hybrid_quality:
                             hybrid_filter = title.tracks.select_hybrid(
-                                hybrid_candidate_tracks, effective_quality, worst=worst
+                                hybrid_candidate_tracks, hybrid_quality, worst=worst
                             )
                             hybrid_selected = list(filter(hybrid_filter, hybrid_candidate_tracks))
 
@@ -3666,6 +3670,9 @@ class dl:
                                     hybrid_bases, matching_dv = hybrid_plan(title.tracks.videos, generate_dv)
                                     hybrid_base_ids.update(v.id for v in hybrid_bases)
                                     hybrids_made = 0
+                                    for video in (v for v in original_videos if v.native_hybrid):
+                                        self.log.info(f"The {video.height}p DV track carries HDR10+: it is the hybrid")
+                                        hybrids_made += 1
 
                                     for group in sorted(standalone_groups, key=group_file_size, reverse=True):
                                         mux_video_group(group)
