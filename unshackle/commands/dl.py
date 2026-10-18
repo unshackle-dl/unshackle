@@ -2597,10 +2597,13 @@ class dl:
                     if keep_videos and range_:
                         # Special handling for HYBRID - don't filter, keep all HDR10 and DV tracks
                         if Video.Range.HYBRID not in range_:
+                            dv_has_hdr10p = any(x.hdr10plus for x in title.tracks.videos)
                             title.tracks.select_video(lambda x: x.range in range_)
                             missing_ranges = [r for r in range_ if not any(x.range == r for x in title.tracks.videos)]
                             for color_range in missing_ranges:
                                 self.log.warning(f"Skipping {color_range.name} video tracks as none are available.")
+                            if Video.Range.HDR10P in missing_ranges and dv_has_hdr10p:
+                                self.log.warning("A DV track carries HDR10+: use -r DV or -r HYBRID.")
                             if not title.tracks.videos:
                                 self.log.error(f"There's no {', '.join(r.name for r in range_)} Video Track...")
                                 sys.exit(1)

@@ -549,7 +549,11 @@ def same_bitrate(local: Optional[int], remote: Optional[int]) -> bool:
 
 
 def match_track(remote_track: Track, local_tracks: list) -> Optional[Track]:
-    """Find the locally-parsed track that matches a remote track by ID or by attributes."""
+    """Find the locally-parsed track that matches a remote track by ID or by attributes.
+
+    HDR10 matches HDR10P, because the server's HDR10+ probe relabels a track that the local re-parse calls HDR10.
+    """
+    hdr10_ranges = {Video.Range.HDR10, Video.Range.HDR10P}
     remote_id = str(remote_track.id)
     for lt in local_tracks:
         if str(lt.id) == remote_id:
@@ -564,7 +568,7 @@ def match_track(remote_track: Track, local_tracks: list) -> Optional[Track]:
             if (
                 lt.width == remote_track.width
                 and lt.height == remote_track.height
-                and lt.range == remote_track.range
+                and (lt.range == remote_track.range or {lt.range, remote_track.range} == hdr10_ranges)
                 and same_bitrate(lt.bitrate, remote_track.bitrate)
             ):
                 return lt
