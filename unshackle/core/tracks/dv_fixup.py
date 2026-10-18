@@ -1,8 +1,8 @@
 """
-DV exposure for HLS composite HEVC streams.
+DV exposure for HLS and DASH composite HEVC streams.
 
-Some services deliver DV Profile 8.1 in a track whose primary CODECS is plain
-hvc1, with DV advertised only in SUPPLEMENTAL-CODECS. The fMP4 carries valid DV RPU NALs
+Some services deliver DV Profile 8.1 in a track whose primary codec is plain
+hvc1, with DV advertised only in HLS SUPPLEMENTAL-CODECS or DASH @supplementalCodecs. The fMP4 carries valid DV RPU NALs
 but the container does not signal DV, so muxing the MP4 directly produces an MKV that
 MediaInfo and DV-capable TVs see as plain HDR10/HDR10+.
 

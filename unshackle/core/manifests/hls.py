@@ -222,28 +222,19 @@ class HLS:
         tracks = Tracks()
 
         supplemental_codecs = self.supplemental_codecs_by_uri()
-        dv_supp_prefixes = ("dva1", "dvav", "dvhe", "dvh1")
 
         for playlist in self.manifest.playlists:
+            video_codec: Optional[Video.Codec] = None
             try:
                 # TODO: Any better way to figure out the primary track type?
                 if playlist.stream_info.codecs:
-                    Video.Codec.from_codecs(playlist.stream_info.codecs)
+                    video_codec = Video.Codec.from_codecs(playlist.stream_info.codecs)
             except ValueError:
                 primary_track_type = Audio
             else:
                 primary_track_type = Video
 
-            primary_codecs = (playlist.stream_info.codecs or "").lower()
-            primary_has_dv = any(codec.split(".")[0] in dv_supp_prefixes for codec in primary_codecs.split(","))
-
-            supp_codecs_str = supplemental_codecs.get(playlist.uri, "")
-            supp_dv_codec: Optional[str] = None
-            for codec in supp_codecs_str.lower().split(","):
-                token = codec.strip().split("/")[0]
-                if token.split(".")[0] in dv_supp_prefixes:
-                    supp_dv_codec = token
-                    break
+            primary_has_dv = Video.has_dv_codec(playlist.stream_info.codecs)
 
             video_range = (
                 Video.Range.DV if primary_has_dv else Video.Range.from_m3u_range_tag(playlist.stream_info.video_range)
@@ -252,7 +243,9 @@ class HLS:
             # a DV codec. Range stays whatever VIDEO-RANGE signaled (HDR10/HLG/SDR); DVFixup will
             # restore DV signaling post-download. HDR10+ SEI in an HDR10 track is found later by the
             # core HDR10+ probe.
-            dv_compatible_bitstream = primary_track_type is Video and not primary_has_dv and supp_dv_codec is not None
+            dv_compatible_bitstream = primary_track_type is Video and Video.is_dv_composite(
+                video_codec, playlist.stream_info.codecs, supplemental_codecs.get(playlist.uri)
+            )
 
             tracks.add(
                 primary_track_type(
@@ -293,7 +286,9 @@ class HLS:
             joc = 0
             if media.type == "AUDIO":
                 track_type = Audio
-                codec = HLS.select_audio_codec(audio_codecs_by_group_id.get(media.group_id), media.uri)
+                codec: Union[Audio.Codec, Subtitle.Codec, None] = HLS.select_audio_codec(
+                    audio_codecs_by_group_id.get(media.group_id), media.uri
+                )
                 if media.channels and media.channels.endswith("/JOC"):
                     joc = int(media.channels.split("/JOC")[0])
                     media.channels = "5.1"
@@ -354,11 +349,11 @@ class HLS:
             try:
                 probe = HLS.probe_ts_info(video.url, self.session)
                 if probe:
-                    width, height, codec = probe
+                    width, height, probed_codec = probe
                     if not has_resolution:
                         video.width, video.height = width, height
                     if not has_codec:
-                        video.codec = codec
+                        video.codec = probed_codec
             # best-effort probe over network + ffprobe; the track stays usable without it
             except Exception as e:
                 logging.getLogger("HLS").debug(f"TS probe failed for {video.url}: {e!r}")

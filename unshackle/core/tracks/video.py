@@ -338,10 +338,45 @@ class Video(Track):
             hdr10plus=data.get("hdr10plus", False),
         )
 
+    @staticmethod
+    def dv_fourccs(codecs: Optional[str]) -> set[str]:
+        """The Dolby Vision fourccs in a codecs list (comma or space separated, ``/brand`` suffixes allowed)."""
+        fourccs = {token.split("/")[0].split(".")[0] for token in re.split(r"[\s,]+", (codecs or "").lower())}
+        return fourccs & {"dva1", "dvav", "dvhe", "dvh1"}
+
+    @staticmethod
+    def has_dv_codec(codecs: Optional[str]) -> bool:
+        """Whether a codecs list names a Dolby Vision codec."""
+        return bool(Video.dv_fourccs(codecs))
+
+    @staticmethod
+    def is_dv_composite(
+        codec: Optional[Video.Codec], codecs: Optional[str], supplemental_codecs: Optional[str]
+    ) -> bool:
+        """Whether an HEVC track names DV only in its supplemental codecs: DV profile 8 on an HDR10, SDR or HLG base."""
+        return (
+            codec == Video.Codec.HEVC
+            and not Video.has_dv_codec(codecs)
+            and bool(Video.dv_fourccs(supplemental_codecs) & {"dvh1", "dvhe"})
+        )
+
+    @property
+    def carries_hdr10plus(self) -> bool:
+        """Whether the track carries HDR10+, as its range or, on a DV track, found by the HDR10+ probe."""
+        return self.hdr10plus or self.range == Video.Range.HDR10P
+
+    @property
+    def finished_hybrid(self) -> bool:
+        """Whether the track already carries DV and an HDR10 or HDR10+ base, so ``-r HYBRID`` needs no build."""
+        if self.range == Video.Range.DV:
+            return self.hdr10plus
+        return self.dv_compatible_bitstream and self.range in (Video.Range.HDR10, Video.Range.HDR10P)
+
     @property
     def range_label(self) -> str:
-        """The range name, with ``+HDR10P`` on a DV track that also carries HDR10+."""
-        return self.range.name + ("+HDR10P" if self.hdr10plus else "")
+        """The range that ``-r`` selects the track by, then any second format it carries: HDR10+DV, DV+HDR10P."""
+        label = self.range.name + ("+HDR10P" if self.hdr10plus else "")
+        return f"{label}+DV" if self.dv_compatible_bitstream and self.range != Video.Range.DV else label
 
     def __str__(self) -> str:
         return " | ".join(

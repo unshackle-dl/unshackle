@@ -80,6 +80,7 @@ from unshackle.core.tracks.attachment import Attachment
 from unshackle.core.tracks.dv_fixup import apply_dv_fixup
 from unshackle.core.tracks.hybrid import Hybrid
 from unshackle.core.tracks.track import assert_fragments_decrypted, has_encrypted_sample_entry
+from unshackle.core.tracks.tracks import at_resolution
 from unshackle.core.utilities import (
     apply_original_language,
     as_requested,
@@ -273,7 +274,7 @@ def hybrid_plan(videos: Sequence[Video], generate_dv: bool) -> tuple[list[Video]
     """The hybrid bases and the DV track to pair with them.
 
     With no DV track, only HDR10+ bases qualify, and only with ``--generate-dv``. A resolution with a
-    DV track that carries HDR10+ gets no base: that track is its hybrid.
+    finished hybrid (``native_hybrid``) gets no base: that track is its hybrid.
     """
     dv_tracks = [v for v in videos if v.range == Video.Range.DV]
     native_heights = {v.height for v in videos if v.native_hybrid}
@@ -2715,7 +2716,7 @@ class dl:
                                 effective_quality = []
                             else:
                                 hybrid_filter = title.tracks.select_hybrid(
-                                    hybrid_candidate_tracks, quality, worst=worst
+                                    hybrid_candidate_tracks, quality, worst=worst, generate_dv=generate_dv
                                 )
                                 hybrid_selected = list(filter(hybrid_filter, hybrid_candidate_tracks))
 
@@ -2777,9 +2778,12 @@ class dl:
                         hybrid_selected = []
                         if hybrid_quality:
                             hybrid_filter = title.tracks.select_hybrid(
-                                hybrid_candidate_tracks, hybrid_quality, worst=worst
+                                hybrid_candidate_tracks, hybrid_quality, worst=worst, generate_dv=generate_dv
                             )
                             hybrid_selected = list(filter(hybrid_filter, hybrid_candidate_tracks))
+                            for res in hybrid_quality:
+                                if not any(at_resolution(v, res) for v in hybrid_selected):
+                                    self.log.warning(f"Skipping {res}p: nothing at that resolution can make a hybrid")
 
                         non_hybrid_selected: list[Video] = []
                         if non_hybrid_ranges and non_hybrid_tracks:
@@ -2840,7 +2844,9 @@ class dl:
 
                     if keep_videos and any(r == Video.Range.HYBRID for r in range_):
                         gate_failure = hybrid_gate_failure(title.tracks.videos, generate_dv)
-                        if not gate_failure and not any(v.range == Video.Range.DV for v in title.tracks.videos):
+                        if not gate_failure and not any(
+                            v.range == Video.Range.DV or v.native_hybrid for v in title.tracks.videos
+                        ):
                             self.log.info("No Dolby Vision track: Dolby Vision will be generated from HDR10+")
 
                         if gate_failure:
@@ -3674,7 +3680,9 @@ class dl:
                                     hybrid_base_ids.update(v.id for v in hybrid_bases)
                                     hybrids_made = 0
                                     for video in (v for v in original_videos if v.native_hybrid):
-                                        self.log.info(f"The {video.height}p DV track carries HDR10+: it is the hybrid")
+                                        self.log.info(
+                                            f"The {video.height}p {video.range_label} track is already the hybrid"
+                                        )
                                         hybrids_made += 1
 
                                     for group in sorted(standalone_groups, key=group_file_size, reverse=True):

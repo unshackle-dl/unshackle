@@ -454,7 +454,8 @@ the API surface.
 ### Dolby Vision and hybrid
 
 Two DV mechanisms sit on top of the track model. **DV fixup** re-exposes DV signalling on
-HLS streams that carry a valid DV RPU but advertise plain HEVC (`dv_compatible_bitstream`).
+HLS and DASH streams that carry a valid DV RPU but advertise plain HEVC, with DV only in the
+supplemental codecs (`dv_compatible_bitstream`). `--list` shows such a track as `HDR10+DV` or `HDR10P+DV`.
 **Hybrid** processing (`Video.Range.HYBRID`) selects an HDR10(+) base and a DV donor,
 extracts the RPU with `dovi_tool`, and injects it onto the base layer, to make a single
 track that carries both HDR10 metadata and the DV RPU. Both are automatic once the

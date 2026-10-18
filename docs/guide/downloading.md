@@ -145,6 +145,21 @@ unshackle dl -v hevc,avc EXAMPLE 81234567
 unshackle dl -q 2160 -r HDR10,DV EXAMPLE '...'
 ```
 
+`--list` labels a track that carries a second format as `<range>+<format>`:
+
+- The first part is the range that `-r` selects the track by.
+- The second part is the format that the track also carries.
+- The `+` only joins the two parts. unshackle writes HDR10+ as `HDR10P`, so `HDR10+DV` is HDR10 with
+  Dolby Vision, not HDR10+ with Dolby Vision.
+
+| Label | Track | Selected by |
+| --- | --- | --- |
+| `DV+HDR10P` | A Dolby Vision track that also carries HDR10+ | `-r DV` |
+| `HDR10+DV` | An HDR10 track whose frames also carry a Dolby Vision profile 8 RPU | `-r HDR10` |
+| `HDR10P+DV` | An HDR10+ track whose frames also carry a Dolby Vision profile 8 RPU | `-r HDR10P` |
+
+The output file of a track with a Dolby Vision profile 8 RPU plays as Dolby Vision on a DV screen.
+
 !!! warning "HYBRID requires dovi_tool"
     `-r HYBRID` makes a single hybrid track by injecting the Dolby Vision RPU
     metadata onto an HDR10/HDR10+ base layer with **dovi_tool**.
@@ -157,10 +172,11 @@ unshackle dl -q 2160 -r HDR10,DV EXAMPLE '...'
     and goes on with the other resolutions of the title. When no hybrid file at all was made,
     the title fails.
 
-    A DV track that carries HDR10+ (`DV+HDR10P` in `--list`) is already a hybrid. At a resolution
-    that has one, `-r HYBRID` selects the DV+HDR10P track with the highest bitrate (the lowest with
-    `--worst`) and muxes it as it is, with no base track and no dovi_tool step. The other
-    resolutions get a hybrid that unshackle makes.
+    A track that is `DV+HDR10P`, `HDR10+DV` or `HDR10P+DV` in `--list` already carries Dolby Vision and an HDR10
+    or HDR10+ base, so it is already a hybrid. At a resolution that has one, `-r HYBRID` selects it
+    and muxes it as it is, with no base track and no dovi_tool step. A track that carries HDR10+
+    comes first, then the highest bitrate (the lowest with `--worst`). The other resolutions get a
+    hybrid that unshackle makes.
 
     To keep an HDR10+ deliverable *alongside* the hybrid, request both ranges:
     `-r HYBRID,HDR10P`. `-r HYBRID` on its own muxes only the merged hybrid.
