@@ -1744,10 +1744,11 @@ def serialize_video_track(track: Video, include_url: bool = False) -> Dict[str, 
         "resolution": f"{track.width}x{track.height}" if track.width and track.height else None,
         "fps": track.fps if track.fps else None,
         "range": range_name,
-        "range_display": DYNAMIC_RANGE_MAP.get(range_name, range_name),
+        "range_display": DYNAMIC_RANGE_MAP.get(range_name, range_name) + ("+HDR10P" if track.hdr10plus else ""),
         "scan_type": enum_name(track.scan_type) if track.scan_type else None,
         "closed_captions": list(getattr(track, "closed_captions", None) or []),
         "dv_compatible_bitstream": bool(getattr(track, "dv_compatible_bitstream", False)),
+        "hdr10plus": bool(getattr(track, "hdr10plus", False)),
     }
     result.update(serialize_track_common(track))
     if include_url and hasattr(track, "url") and track.url:

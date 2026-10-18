@@ -281,6 +281,7 @@ def deserialize_video(data: Dict[str, Any]) -> Video:
         scan_type=enum_get(Video.ScanType, data.get("scan_type")),
         closed_captions=data.get("closed_captions") or None,
         dv_compatible_bitstream=bool(data.get("dv_compatible_bitstream", False)),
+        hdr10plus=bool(data.get("hdr10plus", False)),
     )
 
 

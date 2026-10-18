@@ -146,26 +146,27 @@ def probe_hdr10plus(
     workers: int,
     on_start: Optional[Callable[[], None]] = None,
 ) -> None:
-    """Relabel HEVC HDR10 tracks whose first sample carries HDR10+ SEI as HDR10P.
+    """Relabel HEVC HDR10 tracks whose first sample carries HDR10+ SEI as HDR10P, and flag such DV tracks.
 
-    A ladder with one track per resolution is sampled at both ends first. Two tracks at one resolution
-    can be an HDR10 and an HDR10+ encode side by side, so such a ladder is probed whole. The rules are
-    in the ``hdr10plus_probe`` section of docs/reference/configuration/download.md. A failed probe never
-    changes a label. ``workers`` caps the probes in flight, and ``on_start`` runs once before the first.
+    A DV track keeps its DV range and gets ``hdr10plus`` set, so selection and hybrid pairing are unchanged.
+    HDR10 and DV are separate ladders. A ladder with one track per resolution is sampled at both ends
+    first. Two tracks at one resolution can be an HDR10 and an HDR10+ encode side by side, so such a
+    ladder is probed whole. The rules are in the ``hdr10plus_probe`` section of
+    docs/reference/configuration/download.md. A failed probe never changes a label. ``workers`` caps the
+    probes in flight, and ``on_start`` runs once before the first.
     """
     from unshackle.core.tracks import Video
 
-    candidates = sorted(
-        (v for v in videos if v.range == Video.Range.HDR10 and v.codec == Video.Codec.HEVC),
-        key=lambda v: v.bitrate or 0,
-        reverse=True,
-    )
-    if candidates and on_start:
+    ladders = [
+        sorted(
+            (v for v in videos if v.range == range_ and v.codec == Video.Codec.HEVC),
+            key=lambda v: v.bitrate or 0,
+            reverse=True,
+        )
+        for range_ in (Video.Range.HDR10, Video.Range.DV)
+    ]
+    if any(ladders) and on_start:
         on_start()
-    if len(candidates) <= 4 or len({(v.width, v.height) for v in candidates}) < len(candidates):
-        samples, rest = candidates, []
-    else:
-        samples, rest = candidates[:2] + candidates[-2:], candidates[2:-2]
 
     def probe(video: "Video") -> Optional[bool]:
         try:
@@ -177,18 +178,38 @@ def probe_hdr10plus(
         log.debug(f"{video.id}: HDR10+ probe {found}")
         return found
 
-    def probe_all(tracks: list["Video"]) -> list[Optional[bool]]:
+    def probe_all(tracks: list["Video"]) -> dict[int, Optional[bool]]:
         if not tracks:
-            return []
+            return {}
         with ThreadPoolExecutor(max_workers=min(workers, len(tracks))) as executor:
-            return list(executor.map(probe, tracks))
+            return dict(zip(map(id, tracks), executor.map(probe, tracks)))
 
-    results = probe_all(samples)
-    if any(results) and not all(results):
-        samples, results = samples + rest, results + probe_all(rest)
-    hits = candidates if all(results) else [v for v, found in zip(samples, results) if found]
-    for video in hits:
-        video.range = Video.Range.HDR10P
+    plans = []
+    for candidates in ladders:
+        if len(candidates) <= 4 or len({(v.width, v.height) for v in candidates}) < len(candidates):
+            plans.append((candidates, candidates, []))
+        else:
+            plans.append((candidates, candidates[:2] + candidates[-2:], candidates[2:-2]))
+
+    # one round for the samples of every ladder, then one for the rest of each mixed ladder
+    found = probe_all([v for _, samples, _ in plans for v in samples])
+    found.update(
+        probe_all(
+            [
+                v
+                for _, samples, rest in plans
+                if any(found[id(s)] for s in samples) and not all(found[id(s)] for s in samples)
+                for v in rest
+            ]
+        )
+    )
+    for candidates, samples, _ in plans:
+        hits = candidates if all(found[id(s)] for s in samples) else [v for v in candidates if found.get(id(v))]
+        for video in hits:
+            if video.range == Video.Range.DV:
+                video.hdr10plus = True
+            else:
+                video.range = Video.Range.HDR10P
 
 
 def probed_tracks(

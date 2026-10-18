@@ -233,6 +233,7 @@ class Video(Track):
         scan_type: Optional[Video.ScanType] = None,
         closed_captions: Optional[list[dict[str, Any]]] = None,
         dv_compatible_bitstream: bool = False,
+        hdr10plus: bool = False,
         **kwargs: Any,
     ) -> None:
         """
@@ -251,6 +252,7 @@ class Video(Track):
             fps: A number, float, or string representing the frames/s of the video.
                 Strings may represent numbers, floats, or a fraction (num/den).
                 All strings will be cast to either a number or float.
+            hdr10plus: The DV track also carries HDR10+ metadata. The HDR10+ probe sets it.
 
         Note: If codec, bitrate, width, height, or fps is not specified, unshackle can
         skip some checks or assume a value. Give as much information as possible.
@@ -299,6 +301,7 @@ class Video(Track):
         self.closed_captions: list[dict[str, Any]] = closed_captions or []
         self.needs_duration_fix = False
         self.dv_compatible_bitstream = dv_compatible_bitstream
+        self.hdr10plus = hdr10plus
         self.hybrid_base_only = False
 
     def to_dict(self) -> dict[str, Any]:
@@ -313,6 +316,7 @@ class Video(Track):
                 "fps": str(self.fps) if self.fps else None,
                 "scan_type": self.scan_type.name if self.scan_type else None,
                 "dv_compatible_bitstream": self.dv_compatible_bitstream,
+                "hdr10plus": self.hdr10plus,
             }
         )
         return data
@@ -330,7 +334,13 @@ class Video(Track):
             fps=data.get("fps"),
             scan_type=Video.ScanType[data["scan_type"]] if data.get("scan_type") else None,
             dv_compatible_bitstream=data.get("dv_compatible_bitstream", False),
+            hdr10plus=data.get("hdr10plus", False),
         )
+
+    @property
+    def range_label(self) -> str:
+        """The range name, with ``+HDR10P`` on a DV track that also carries HDR10+."""
+        return self.range.name + ("+HDR10P" if self.hdr10plus else "")
 
     def __str__(self) -> str:
         return " | ".join(
@@ -338,7 +348,7 @@ class Video(Track):
                 bool,
                 [
                     "VID",
-                    "[" + (", ".join(filter(bool, [self.codec.value if self.codec else None, self.range.name]))) + "]",
+                    "[" + (", ".join(filter(bool, [self.codec.value if self.codec else None, self.range_label]))) + "]",
                     str(self.language),
                     ", ".join(
                         filter(

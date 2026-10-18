@@ -379,6 +379,10 @@ reads the first fragment of HEVC HDR10 tracks from DASH, HLS fMP4 and one-file s
 whose first frame carries HDR10+ (SMPTE ST 2094-40) metadata becomes `HDR10P`. Then `-r HDR10P`,
 `--list` and [`--generate-dv`](../../guide/downloading.md#dolby-vision-from-hdr10) use it.
 
+unshackle also probes HEVC Dolby Vision tracks. A DV track that carries HDR10+ keeps its `DV`
+range, so `-r DV` and `-r HYBRID` select it as before, and `--list` shows it as `DV+HDR10P`. The
+HDR10 tracks and the DV tracks of a title are sampled as two separate sets.
+
 When two HDR10 tracks have the same resolution, they can be an HDR10 encode and an HDR10+ encode
 side by side, so unshackle probes every track. When each track has its own resolution, unshackle
 probes the two highest and the two lowest bitrates first:

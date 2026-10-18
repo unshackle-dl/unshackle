@@ -45,10 +45,11 @@ def test_encrypted_or_truncated_bytes_prove_nothing() -> None:
     assert fragment_has_hdr10plus(b"\x47" * 188) is None
 
 
-def hevc(track_id: str, height: int, bitrate: int = 1) -> Any:
+def hevc(track_id: str, height: int, bitrate: int = 1, range_: Video.Range = Video.Range.HDR10) -> Any:
     return SimpleNamespace(
         id=track_id,
-        range=Video.Range.HDR10,
+        range=range_,
+        hdr10plus=False,
         codec=Video.Codec.HEVC,
         width=height * 16 // 9,
         height=height,
@@ -61,6 +62,13 @@ def ladder(
     monkeypatch: pytest.MonkeyPatch, pattern: str, heights: list[int] | None = None
 ) -> tuple[list[Any], list[str]]:
     """HEVC HDR10 tracks, highest bitrate first; '+' marks the ones whose fragment carries HDR10+."""
+    heights = heights or [2160 - 100 * i for i in range(len(pattern))]
+    videos = [hevc(f"v{i}{mark}", height, 100 - i) for i, (mark, height) in enumerate(zip(pattern, heights))]
+    return videos, probe(monkeypatch, videos)
+
+
+def probe(monkeypatch: pytest.MonkeyPatch, videos: list[Any]) -> list[str]:
+    """Run the probe with a fake fragment: a track id that ends in '+' carries HDR10+. Returns the probed ids."""
     probed: list[str] = []
 
     def fake_fragment(video: Any, session: Any) -> bytes:
@@ -69,10 +77,8 @@ def ladder(
 
     monkeypatch.setattr(hdr10plus, "first_fragment", fake_fragment)
     monkeypatch.setattr(hdr10plus, "fragment_has_hdr10plus", lambda data: data == b"+")
-    heights = heights or [2160 - 100 * i for i in range(len(pattern))]
-    videos = [hevc(f"v{i}{mark}", height, 100 - i) for i, (mark, height) in enumerate(zip(pattern, heights))]
     hdr10plus.probe_hdr10plus(videos, None, log=logging.getLogger("test"), workers=4)  # type: ignore[arg-type]
-    return videos, probed
+    return probed
 
 
 def ranges(videos: list[Any]) -> str:
@@ -101,6 +107,24 @@ def test_two_encodes_at_one_resolution_are_all_probed(monkeypatch: pytest.Monkey
     videos, probed = ladder(monkeypatch, "++-++", heights=[2160, 1440, 1080, 1080, 720])
     assert ranges(videos) == "++-++"
     assert len(probed) == 5
+
+
+def test_a_dv_ladder_keeps_its_range_and_is_sampled_apart_from_hdr10(monkeypatch: pytest.MonkeyPatch) -> None:
+    hdr = [hevc(f"h{i}-", 2160 - 100 * i, 100 - i) for i in range(6)]
+    dv = [hevc(f"d{i}+", 2160 - 100 * i, 100 - i, Video.Range.DV) for i in range(6)]
+    assert len(probe(monkeypatch, hdr + dv)) == 8
+    assert ranges(hdr) == "------"
+    assert all(v.range == Video.Range.DV and v.hdr10plus for v in dv)
+
+
+def test_a_dv_track_with_hdr10plus_lists_as_dv_plus_hdr10p() -> None:
+    video = Video(
+        url="https://x/v.mp4", language="en", codec=Video.Codec.HEVC, range_=Video.Range.DV, width=3840, height=2160
+    )
+    assert "[H.265, DV]" in str(video)
+    video.hdr10plus = True
+    assert "[H.265, DV+HDR10P]" in str(video)
+    assert Video.from_dict(video.to_dict()).hdr10plus
 
 
 def test_on_start_runs_only_when_there_is_a_track_to_probe(monkeypatch: pytest.MonkeyPatch) -> None:
