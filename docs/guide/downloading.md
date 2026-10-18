@@ -165,7 +165,8 @@ unshackle dl -q 2160 -r HDR10,DV EXAMPLE '...'
 When a title has HDR10+ but no DV track, `-r HYBRID --generate-dv` makes a Dolby Vision
 Profile 8.1 track from the HDR10+ metadata. It needs `hdr10plus_tool` as well as `dovi_tool`.
 When a title has a DV track, unshackle uses that track and ignores the flag. When it has none,
-the flag also makes unshackle ask the service for its HDR10+ tracks.
+the flag also makes unshackle ask the service for its HDR10+ tracks. A track that the service labels HDR10 but
+that carries HDR10+ metadata also qualifies (see [`hdr10plus_probe`](../reference/configuration/download.md#hdr10plus_probe)).
 
 ```shell title="Generate Dolby Vision from HDR10+, and keep the HDR10+ file too"
 unshackle dl -q 2160 -r HYBRID,HDR10P --generate-dv EXAMPLE '...'

@@ -376,11 +376,6 @@ class EXAMPLE(Service):
             # The manifest can't always be trusted for range - stamp what we asked for.
             video.range = range_
 
-            # HDR10+ is a BITSTREAM feature the manifest often labels as plain HDR10.
-            # If this service is known to ship HDR10+ SEI, flip it so mediainfo agrees.
-            if range_ == Video.Range.HDR10P:
-                video.range = Video.Range.HDR10P
-
             # DV-composite: a stream carrying DV RPU NALs inside a container that only
             # signals HEVC. Setting this flag makes DVFixup round-trip the bitstream
             # through dovi_tool so the muxed MKV is recognised as Dolby Vision.

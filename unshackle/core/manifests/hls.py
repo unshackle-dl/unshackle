@@ -250,8 +250,8 @@ class HLS:
             )
             # DV-composite track: primary codec is plain HEVC but SUPPLEMENTAL-CODECS advertises
             # a DV codec. Range stays whatever VIDEO-RANGE signaled (HDR10/HLG/SDR); DVFixup will
-            # restore DV signaling post-download. Services that know their encoder embeds HDR10+
-            # SEI must override `range` themselves.
+            # restore DV signaling post-download. HDR10+ SEI in an HDR10 track is found later by the
+            # core HDR10+ probe.
             dv_compatible_bitstream = primary_track_type is Video and not primary_has_dv and supp_dv_codec is not None
 
             tracks.add(

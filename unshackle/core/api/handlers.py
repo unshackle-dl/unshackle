@@ -43,6 +43,7 @@ from unshackle.core.tracks import Audio, Subtitle, Tracks, Video
 from unshackle.core.utilities import declared_kwargs, kind_only_conflict, original_tag
 from unshackle.core.utils.click_types import AUDIO_CODEC_LIST, SUBTITLE_CODEC, VIDEO_CODEC_LIST
 from unshackle.core.utils.collections import ci_get
+from unshackle.core.utils.hdr10plus import probed_tracks
 from unshackle.core.utils.redact import REDACTED, URL_USERINFO_RE, redact_all, redact_secrets, redact_text
 
 log = logging.getLogger("api")
@@ -2034,7 +2035,7 @@ async def list_tracks_handler(data: Dict[str, Any], request: Optional[web.Reques
 
                     for title in sorted_titles:
                         try:
-                            tracks = await call(service_instance.get_tracks, title)
+                            tracks = await call(probed_tracks, service_instance, title)
                             video_tracks = sorted(tracks.videos, key=lambda t: t.bitrate or 0, reverse=True)
                             audio_tracks = sorted(tracks.audio, key=lambda t: t.bitrate or 0, reverse=True)
 
@@ -2081,7 +2082,7 @@ async def list_tracks_handler(data: Dict[str, Any], request: Optional[web.Reques
         else:
             first_title = titles
 
-        tracks = await call(service_instance.get_tracks, first_title)
+        tracks = await call(probed_tracks, service_instance, first_title)
 
         video_tracks = sorted(tracks.videos, key=lambda t: t.bitrate or 0, reverse=True)
         audio_tracks = sorted(tracks.audio, key=lambda t: t.bitrate or 0, reverse=True)
@@ -4091,7 +4092,7 @@ async def session_tracks_handler(
         service_instance = session.service_instance
         async with session.lock:
             try:
-                tracks = await asyncio.to_thread(service_instance.get_tracks, title)
+                tracks = await asyncio.to_thread(probed_tracks, service_instance, title)
             finally:
                 session.touch()
 

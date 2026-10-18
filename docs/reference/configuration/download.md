@@ -370,6 +370,37 @@ dual_multi_mode: strict
     Regional variants of the same base language (e.g. `en-US` and `en-GB`) collapse to a single
     language in both modes, so they never trigger `{dual}` on their own.
 
+## `hdr10plus_probe`
+
+- **Type:** `bool` &nbsp;·&nbsp; **Default:** `true`
+
+Find the HDR10+ tracks that a service labels as HDR10. Before unshackle lists or selects tracks, it
+reads the first fragment of HEVC HDR10 tracks from DASH, HLS fMP4 and one-file sources. A track
+whose first frame carries HDR10+ (SMPTE ST 2094-40) metadata becomes `HDR10P`. Then `-r HDR10P`,
+`--list` and [`--generate-dv`](../../guide/downloading.md#dolby-vision-from-hdr10) use it.
+
+When two HDR10 tracks have the same resolution, they can be an HDR10 encode and an HDR10+ encode
+side by side, so unshackle probes every track. When each track has its own resolution, unshackle
+probes the two highest and the two lowest bitrates first:
+
+| Result | Action |
+|--------|--------|
+| All four carry HDR10+ | Every HDR10 track of the title becomes `HDR10P`. |
+| Some carry HDR10+ | The title has HDR10 and HDR10+ encodes side by side, so unshackle probes every track. |
+| None carry HDR10+ | Every track stays `HDR10`. |
+
+A probe that fails, or a fragment whose metadata is encrypted, keeps the label from the service.
+unshackle does not probe ISM tracks. Each probe makes one to three small requests: the 64 KiB
+fragment, plus the playlist of an HLS track or the header of a one-file track. The probes run in
+parallel, with no more at a time than `--workers` (or `dl.workers`) sets for a track download.
+
+```yaml
+hdr10plus_probe: true
+```
+
+A remote server probes its tracks before it sends them, so the setting on the server applies to
+remote downloads and to the REST API.
+
 ## `generate_dv_mode`
 
 - **Type:** `str` &nbsp;·&nbsp; **Default:** `v29`

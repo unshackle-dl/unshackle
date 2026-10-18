@@ -200,6 +200,9 @@ class Config:
         self.tag_rules: list = kwargs.get("tag_rules") or []
         self.dual_multi_mode: str = (kwargs.get("dual_multi_mode") or "strict").lower()
         self.generate_dv_mode: str = str(kwargs.get("generate_dv_mode") or "v29").lower()
+        self.hdr10plus_probe: bool = kwargs.get("hdr10plus_probe", True)
+        if not isinstance(self.hdr10plus_probe, bool):
+            raise SystemExit(f"ERROR: hdr10plus_probe must be true or false, not {self.hdr10plus_probe!r}")
         self.output_template: dict = kwargs.get("output_template") or {}
         folder_cfg = self.output_template.pop("folder", "")
         self.folder_template: str = ""

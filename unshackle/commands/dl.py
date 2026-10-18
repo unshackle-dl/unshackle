@@ -117,6 +117,7 @@ from unshackle.core.utils.click_types import (
     MultipleChoice,
 )
 from unshackle.core.utils.collections import ci_get, merge_dict
+from unshackle.core.utils.hdr10plus import probed_tracks
 from unshackle.core.utils.post_scripts import NO_POST_SCRIPTS, build_context, dispatch, season_context
 from unshackle.core.utils.redact import mask_proxy
 from unshackle.core.utils.selector import select_multiple
@@ -369,9 +370,11 @@ def load_tracks(
     name: Optional[str] = None,
     year: Optional[int] = None,
     language: Optional[Language] = None,
+    workers: Optional[int] = None,
+    on_probe: Optional[Callable[[], None]] = None,
 ) -> None:
     """Load the tracks and chapters of a title, then apply the --enrich name, year and language again."""
-    title.tracks.add(service.get_tracks(title), warn_only=True)
+    title.tracks.add(probed_tracks(service, title, workers=workers, on_probe=on_probe), warn_only=True)
     title.tracks.chapters = service.get_chapters(title)
     apply_enrich(title, name, year, language)
 
@@ -2370,9 +2373,18 @@ class dl:
                 events.subscribe(events.Types.TRACK_MULTIPLEX, service.on_track_multiplex)
 
             tracks_label = "Getting Remote Tracks..." if self.is_remote else "Getting Tracks..."
-            with console.status(tracks_label, spinner="dots"):
+            tracks_spinner = Spinner("dots", text=tracks_label)
+            with SyncLive(Padding(tracks_spinner, (0, 5)), console=console, refresh_per_second=12.5, transient=True):
                 try:
-                    load_tracks(service, title, name=enrich_title, year=enrich_year, language=enrich_lang)
+                    load_tracks(
+                        service,
+                        title,
+                        name=enrich_title,
+                        year=enrich_year,
+                        language=enrich_lang,
+                        workers=workers,
+                        on_probe=lambda: tracks_spinner.update(text="Probing HDR10 tracks for HDR10+..."),
+                    )
                 except Exception as e:
                     if self.debug_logger:
                         self.debug_logger.log_error(

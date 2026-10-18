@@ -497,13 +497,16 @@ audio, add hand-built subtitles or an `Attachment` (e.g. cover art). Do *not*
 filter for resolution/bitrate. See `fetch_dash_manifest` in the EXAMPLE service
 for a thorough demonstration.
 
-!!! note "Flip HDR10 → HDR10+ by hand when you know the platform embeds it"
-    HDR10+ is a **bitstream (SEI)** feature. The HLS parser intentionally does
-    not sniff it from the bitstream, so a manifest that embeds HDR10+ SEI but labels
-    the variant plain HDR10 will parse as HDR10. The label is the only signal
-    the parser has, and it is wrong. Only the service author knows the platform
-    embeds HDR10+, so it is on you to correct `video.range` to HDR10+ here for
-    those services.
+!!! note "HDR10+ in tracks labelled HDR10"
+    HDR10+ is a **bitstream (SEI)** feature, and many manifests label an HDR10+
+    variant as plain HDR10. Before unshackle lists or selects tracks, the
+    [`hdr10plus_probe`](../reference/configuration/download.md#hdr10plus_probe)
+    reads the first fragment of each HEVC HDR10 track and changes `video.range` to
+    HDR10+ when the fragment carries HDR10+ metadata. Set `video.range` yourself
+    only when the probe cannot read the fragment, for example an ISM track whose
+    SEI is encrypted, or when the platform gives a reliable signal of its own.
+    If the playback API has no HDR10+ value, request HDR10 for an HDR10+ request
+    and let the probe relabel the tracks.
 
 !!! warning "`get_tracks` is your only chance to capture license inputs"
     The license callbacks (`get_widevine_license` and the others) fire **much later**, in
