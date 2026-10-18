@@ -4877,6 +4877,8 @@ class dl:
                     return not drm.content_keys or bool(track_kid and track_kid not in drm.content_keys)
 
                 if missing_track_key():
+                    from unshackle.core.remote_service import RemoteError
+
                     try:
                         licence(
                             drm_system="playready" if drm.__class__.__name__ == "PlayReady" else "widevine",
@@ -4884,7 +4886,7 @@ class dl:
                         )
                     except click.ClickException:
                         raise
-                    except Exception as e:
+                    except (Exception, RemoteError) as e:
                         self.log.debug(f"Server CDM licence with an empty challenge failed: {e!r}")
 
                 server_vault_keys = {} if cdm_only else getattr(svc_for_cdm, "server_vault_keys", {})

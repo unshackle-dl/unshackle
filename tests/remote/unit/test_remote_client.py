@@ -85,6 +85,42 @@ def test_4xx_raises_systemexit_with_logged_error(client: RemoteClient, caplog: p
     assert "no such session" in caplog.text
 
 
+PROXY_502 = "<html><head><title>unshackle.dev | 502: Bad gateway</title></head></html>"
+
+
+@responses.activate
+def test_proxy_502_page_is_retried_once(client: RemoteClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("unshackle.core.remote_service.time.sleep", lambda _s: None)
+    url = "http://srv:8786/api/session/abc/license"
+    responses.add(responses.POST, url, body=PROXY_502, status=502, content_type="text/html")
+    responses.add(responses.POST, url, json={"keys": {}}, status=200)
+    assert client.post("/api/session/abc/license", {}) == {"keys": {}}
+    assert len(responses.calls) == 2
+
+
+@responses.activate
+def test_second_proxy_502_page_exits(client: RemoteClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("unshackle.core.remote_service.time.sleep", lambda _s: None)
+    url = "http://srv:8786/api/session/abc/license"
+    responses.add(responses.POST, url, body=PROXY_502, status=502, content_type="text/html")
+    with pytest.raises(SystemExit):
+        client.post("/api/session/abc/license", {})
+    assert len(responses.calls) == 2
+
+
+@responses.activate
+def test_server_json_503_is_not_retried(client: RemoteClient) -> None:
+    responses.add(
+        responses.GET,
+        "http://srv:8786/api/services",
+        json={"error_code": "SERVICE_UNAVAILABLE", "message": "busy"},
+        status=503,
+    )
+    with pytest.raises(SystemExit):
+        client.get("/api/services")
+    assert len(responses.calls) == 1
+
+
 @responses.activate
 def test_401_falls_back_to_next_auth_header(client: RemoteClient) -> None:
     seen: list[tuple[str | None, str | None]] = []

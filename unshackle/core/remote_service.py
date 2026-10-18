@@ -144,6 +144,7 @@ class RemoteClient:
         payload: Dict[str, Any] = (
             {"json": data} if body is None else {"data": body, "headers": {"Content-Type": "application/octet-stream"}}
         )
+        gateway_retried = False
         while True:
             try:
                 with self.in_flight(endpoint):
@@ -159,6 +160,16 @@ class RemoteClient:
                 raise self.timed_out(endpoint) from None
             # servers differ on which header carries the key, so retry the rest before giving up
             if resp.status_code == 401 and self.next_auth_header():
+                continue
+            # a proxy HTML page, not the server's JSON, means a dropped tunnel stream, which one retry gets past
+            if (
+                resp.status_code in (502, 503, 504)
+                and not gateway_retried
+                and "json" not in resp.headers.get("Content-Type", "")
+            ):
+                gateway_retried = True
+                log.debug(f"HTTP {resp.status_code} from the proxy in front of the server on {endpoint}, retrying once")
+                time.sleep(1)
                 continue
             break
         if resp.status_code < 400 and "octet-stream" in resp.headers.get("Content-Type", ""):
@@ -1870,7 +1881,7 @@ class RemoteService:
                                 for kid_hex, key_hex in keys.items():
                                     drm_obj.content_keys[UUID(hex=kid_hex)] = key_hex
                         return challenge
-                except Exception as e:
+                except (Exception, RemoteError) as e:
                     self.log.warning("server_cdm license failed: %s", e)
             else:
                 self.log.warning(f"Track {track.id} has no PSSH to send to the server CDM")
