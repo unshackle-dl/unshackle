@@ -1714,6 +1714,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#making-a-service-remote-by-default" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Making a service remote by default
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2208,6 +2219,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#making-a-service-remote-by-default" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Making a service remote by default
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2500,13 +2522,27 @@ not the default.</p>
 </div>
 <h3 id="selecting-a-server">Selecting a server<a class="headerlink" href="#selecting-a-server" title="Permanent link">&para;</a></h3>
 <p>If you configure exactly one server, unshackle uses it implicitly:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>EXAMPLE<span class="w"> </span>0ABCDEF
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--remote<span class="w"> </span>EXAMPLE<span class="w"> </span>0ABCDEF
 </span></code></pre></div>
 <p>If you configure <strong>more than one</strong> server, you must pick one with <code>--server</code>:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--server<span class="w"> </span>my_server<span class="w"> </span>EXAMPLE<span class="w"> </span>0ABCDEF
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--remote<span class="w"> </span>--server<span class="w"> </span>my_server<span class="w"> </span>EXAMPLE<span class="w"> </span>0ABCDEF
 </span></code></pre></div>
 <p>With no <code>remote_services</code> configured at all, unshackle raises a clear error telling
 you to add the block shown above.</p>
+<h3 id="making-a-service-remote-by-default">Making a service remote by default<a class="headerlink" href="#making-a-service-remote-by-default" title="Permanent link">&para;</a></h3>
+<p>To run a service on the server without <code>--remote</code>, set <code>remote</code> in the
+<a href="../../../reference/configuration/services/#services"><code>services</code></a> block, not in the
+<code>services</code> sub-dict of <code>remote_services</code>. Add <code>server</code> to select one of several servers:</p>
+<div class="language-yaml highlight"><span class="filename">unshackle.yaml (client)</span><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nt">services</span><span class="p">:</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span><span class="nt">EXAMPLE</span><span class="p">:</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">    </span><span class="nt">dl</span><span class="p">:</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">      </span><span class="nt">remote</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">      </span><span class="nt">server</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my_server</span>
+</span></code></pre></div>
+<p><code>unshackle dl EXAMPLE 0ABCDEF</code> and <code>unshackle search EXAMPLE "query"</code> then run on
+<code>my_server</code>. A <code>--server</code> on the command line overrides the configured server. The global
+<code>dl: remote: true</code> makes every <code>dl</code> run remote, but it has no effect on <code>search</code>.
+The REST API ignores both settings: a job runs remote only when its request asks for it.</p>
 <hr />
 <h2 id="what-happens-during-a-download">What happens during a download<a class="headerlink" href="#what-happens-during-a-download" title="Permanent link">&para;</a></h2>
 <p>From your point of view the command looks like an ordinary download. Under the
@@ -2568,7 +2604,7 @@ runs in the background on the server.</p>
 server's auth flow asks for input, the remote session enters <code>pending_input</code>. The
 client polls, displays the prompt to you locally, collects your answer, and
 sends it back. The server's auth thread resumes with your response.</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>Enter the 6-digit code sent to your email: 483920
+<div class="language-text highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>Enter the 6-digit code sent to your email: 483920
 </span></code></pre></div>
 <p>A client older than the <code>service_params</code> change sends service options as
 flat body keys only. A flat key that shares a name with a transport field
@@ -2776,9 +2812,9 @@ you time to enter an interactive code without the remote session vanishing
 mid-prompt.</p>
 </div>
 <p>The TTL and max-session limits are read from server config:</p>
-<div class="language-yaml highlight"><span class="filename">unshackle.yaml (server)</span><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nt">serve</span><span class="p">:</span>
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span><span class="nt">session_ttl</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">300</span><span class="w">     </span><span class="c1"># seconds a session may sit idle</span>
-</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">  </span><span class="nt">max_sessions</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">100</span><span class="w">    </span><span class="c1"># cap on concurrent sessions</span>
+<div class="language-yaml highlight"><span class="filename">unshackle.yaml (server)</span><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nt">serve</span><span class="p">:</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">  </span><span class="nt">session_ttl</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">300</span><span class="w">     </span><span class="c1"># seconds a session may sit idle</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">  </span><span class="nt">max_sessions</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">100</span><span class="w">    </span><span class="c1"># cap on concurrent sessions</span>
 </span></code></pre></div>
 <hr />
 <h2 id="security-properties-worth-knowing">Security properties worth knowing<a class="headerlink" href="#security-properties-worth-knowing" title="Permanent link">&para;</a></h2>
@@ -2924,8 +2960,8 @@ the client sends and gets back belong to that profile. A service can also use
 the name to select per-profile entries in the server's service config, such as
 a per-profile ESN.</p>
 <p>The response returns <strong>before</strong> authentication finishes:</p>
-<div class="language-json highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="p">{</span><span class="w"> </span><span class="nt">"session_id"</span><span class="p">:</span><span class="w"> </span><span class="s2">"...uuid4..."</span><span class="p">,</span><span class="w"> </span><span class="nt">"service"</span><span class="p">:</span><span class="w"> </span><span class="s2">"EXAMPLE"</span><span class="p">,</span><span class="w"> </span><span class="nt">"status"</span><span class="p">:</span><span class="w"> </span><span class="s2">"authenticating"</span><span class="p">,</span>
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">  </span><span class="nt">"server_cdm"</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span><span class="w"> </span><span class="nt">"server_cdm_max_height"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span><span class="w"> </span><span class="nt">"server_vault"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span><span class="w"> </span><span class="nt">"server_device"</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="w"> </span><span class="p">}</span>
+<div class="language-json highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="p">{</span><span class="w"> </span><span class="nt">"session_id"</span><span class="p">:</span><span class="w"> </span><span class="s2">"...uuid4..."</span><span class="p">,</span><span class="w"> </span><span class="nt">"service"</span><span class="p">:</span><span class="w"> </span><span class="s2">"EXAMPLE"</span><span class="p">,</span><span class="w"> </span><span class="nt">"status"</span><span class="p">:</span><span class="w"> </span><span class="s2">"authenticating"</span><span class="p">,</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">  </span><span class="nt">"server_cdm"</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span><span class="w"> </span><span class="nt">"server_cdm_max_height"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span><span class="w"> </span><span class="nt">"server_vault"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span><span class="w"> </span><span class="nt">"server_device"</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="w"> </span><span class="p">}</span>
 </span></code></pre></div>
 <p><code>server_vault</code> tells the client that the server vault serves a remote session its own device
 licenses. <code>server_device</code> tells it that the service runs on the server's device, so every
@@ -2953,11 +2989,11 @@ layer.</p>
   <code>AUTHENTICATING</code> / <code>PENDING_INPUT</code> sessions in the store.</li>
 </ul>
 <p><code>GET /api/session/{id}/prompt</code> returns one of:</p>
-<div class="language-json highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="p">{</span><span class="w"> </span><span class="nt">"status"</span><span class="p">:</span><span class="w"> </span><span class="s2">"authenticated"</span><span class="w"> </span><span class="p">}</span>
-</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="p">{</span><span class="w"> </span><span class="nt">"status"</span><span class="p">:</span><span class="w"> </span><span class="s2">"authenticating"</span><span class="w"> </span><span class="p">}</span>
-</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="p">{</span><span class="w"> </span><span class="nt">"status"</span><span class="p">:</span><span class="w"> </span><span class="s2">"pending_input"</span><span class="p">,</span><span class="w"> </span><span class="nt">"prompt"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Enter code: "</span><span class="w"> </span><span class="p">}</span>
-</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="p">{</span><span class="w"> </span><span class="nt">"status"</span><span class="p">:</span><span class="w"> </span><span class="s2">"pending_input"</span><span class="p">,</span><span class="w"> </span><span class="nt">"prompt"</span><span class="p">:</span><span class="w"> </span><span class="s2">"..."</span><span class="p">,</span><span class="w"> </span><span class="nt">"cdm_call"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"op"</span><span class="p">:</span><span class="w"> </span><span class="s2">"challenge"</span><span class="p">,</span><span class="w"> </span><span class="nt">"drm"</span><span class="p">:</span><span class="w"> </span><span class="s2">"widevine"</span><span class="p">,</span><span class="w"> </span><span class="nt">"init_data"</span><span class="p">:</span><span class="w"> </span><span class="s2">"..."</span><span class="p">,</span><span class="w"> </span><span class="nt">"license_type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"OFFLINE"</span><span class="p">,</span><span class="w"> </span><span class="nt">"privacy_mode"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span><span class="w"> </span><span class="nt">"service_certificate"</span><span class="p">:</span><span class="w"> </span><span class="s2">"..."</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="p">}</span>
-</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="p">{</span><span class="w"> </span><span class="nt">"status"</span><span class="p">:</span><span class="w"> </span><span class="s2">"failed"</span><span class="p">,</span><span class="w"> </span><span class="nt">"error"</span><span class="p">:</span><span class="w"> </span><span class="s2">"...message..."</span><span class="w"> </span><span class="p">}</span>
+<div class="language-json highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="p">{</span><span class="w"> </span><span class="nt">"status"</span><span class="p">:</span><span class="w"> </span><span class="s2">"authenticated"</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="p">{</span><span class="w"> </span><span class="nt">"status"</span><span class="p">:</span><span class="w"> </span><span class="s2">"authenticating"</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="p">{</span><span class="w"> </span><span class="nt">"status"</span><span class="p">:</span><span class="w"> </span><span class="s2">"pending_input"</span><span class="p">,</span><span class="w"> </span><span class="nt">"prompt"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Enter code: "</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="p">{</span><span class="w"> </span><span class="nt">"status"</span><span class="p">:</span><span class="w"> </span><span class="s2">"pending_input"</span><span class="p">,</span><span class="w"> </span><span class="nt">"prompt"</span><span class="p">:</span><span class="w"> </span><span class="s2">"..."</span><span class="p">,</span><span class="w"> </span><span class="nt">"cdm_call"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"op"</span><span class="p">:</span><span class="w"> </span><span class="s2">"challenge"</span><span class="p">,</span><span class="w"> </span><span class="nt">"drm"</span><span class="p">:</span><span class="w"> </span><span class="s2">"widevine"</span><span class="p">,</span><span class="w"> </span><span class="nt">"init_data"</span><span class="p">:</span><span class="w"> </span><span class="s2">"..."</span><span class="p">,</span><span class="w"> </span><span class="nt">"license_type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"OFFLINE"</span><span class="p">,</span><span class="w"> </span><span class="nt">"privacy_mode"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span><span class="w"> </span><span class="nt">"service_certificate"</span><span class="p">:</span><span class="w"> </span><span class="s2">"..."</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="p">{</span><span class="w"> </span><span class="nt">"status"</span><span class="p">:</span><span class="w"> </span><span class="s2">"failed"</span><span class="p">,</span><span class="w"> </span><span class="nt">"error"</span><span class="p">:</span><span class="w"> </span><span class="s2">"...message..."</span><span class="w"> </span><span class="p">}</span>
 </span></code></pre></div>
 <p>A <code>cdm_call</code> comes first, in any auth state. The client answers it with a JSON object in
 <code>response</code>: <code>{"session": "...", "challenge": "&lt;base64&gt;"}</code> for <code>challenge</code>,
@@ -3042,7 +3078,7 @@ returns <code>{ "status": "accepted" }</code>. A post with no pending prompt is 
 </table>
 <h3 id="per-session-cache-namespacing">Per-session cache namespacing<a class="headerlink" href="#per-session-cache-namespacing" title="Permanent link">&para;</a></h3>
 <p>The <code>create</code> handler builds a <code>Cacher</code> namespaced as:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>_sessions/&lt;pbkdf2_hmac(sha256, X-Secret-Key, "unshackle-session-ns", 100000)[:12]&gt;/&lt;session_id&gt;/&lt;service&gt;
+<div class="language-text highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>_sessions/&lt;pbkdf2_hmac(sha256, X-Secret-Key, "unshackle-session-ns", 100000)[:12]&gt;/&lt;session_id&gt;/&lt;service&gt;
 </span></code></pre></div>
 <p>The handler writes forwarded <code>cache</code> files into that directory before authentication.
 On <code>DELETE</code>, when the login belongs to the client (<code>client_auth</code>) and the remote
@@ -3051,13 +3087,13 @@ with zlib and base64-encoding, <strong>excluding</strong> <code>titles_*</code> 
 under a <code>cache</code> field, so the client can keep refreshed tokens. Each cache key
 is the file path relative to that directory, with <code>/</code> separators and no <code>.json</code>
 suffix, which is the <code>Cacher</code> cache key the service reads it with:</p>
-<div class="language-json highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="p">{</span>
-</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="w">  </span><span class="nt">"status"</span><span class="p">:</span><span class="w"> </span><span class="s2">"ok"</span><span class="p">,</span>
-</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="w">  </span><span class="nt">"cache"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="w">    </span><span class="nt">"tokens"</span><span class="p">:</span><span class="w"> </span><span class="s2">"...base64(zlib(bytes))..."</span><span class="p">,</span>
-</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="w">    </span><span class="nt">"session_web/&lt;sha1&gt;"</span><span class="p">:</span><span class="w"> </span><span class="s2">"...base64(zlib(bytes))..."</span>
-</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="w">  </span><span class="p">}</span>
-</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="p">}</span>
+<div class="language-json highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="p">{</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="w">  </span><span class="nt">"status"</span><span class="p">:</span><span class="w"> </span><span class="s2">"ok"</span><span class="p">,</span>
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">  </span><span class="nt">"cache"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="w">    </span><span class="nt">"tokens"</span><span class="p">:</span><span class="w"> </span><span class="s2">"...base64(zlib(bytes))..."</span><span class="p">,</span>
+</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="w">    </span><span class="nt">"session_web/&lt;sha1&gt;"</span><span class="p">:</span><span class="w"> </span><span class="s2">"...base64(zlib(bytes))..."</span>
+</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="w">  </span><span class="p">}</span>
+</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="p">}</span>
 </span></code></pre></div>
 <p>Both sides reject a cache key with a drive letter, a root, a <code>..</code> segment, an empty
 segment, or more than 8 segments before it becomes a path, so a peer cannot write
@@ -3066,14 +3102,14 @@ outside the cache directory. Both sides also refuse a <code>cache</code> map wit
 existing file as a directory, and logs a warning.</p>
 <h3 id="remote-session-info-response">Remote session info response<a class="headerlink" href="#remote-session-info-response" title="Permanent link">&para;</a></h3>
 <p><code>GET /api/session/{id}</code>:</p>
-<div class="language-json highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="p">{</span>
-</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="w">  </span><span class="nt">"session_id"</span><span class="p">:</span><span class="w"> </span><span class="s2">"..."</span><span class="p">,</span>
-</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">  </span><span class="nt">"service"</span><span class="p">:</span><span class="w"> </span><span class="s2">"EXAMPLE"</span><span class="p">,</span>
-</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="w">  </span><span class="nt">"valid"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
-</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="w">  </span><span class="nt">"expires_in"</span><span class="p">:</span><span class="w"> </span><span class="mi">300</span><span class="p">,</span>
-</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="w">  </span><span class="nt">"track_count"</span><span class="p">:</span><span class="w"> </span><span class="mi">12</span><span class="p">,</span>
-</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="w">  </span><span class="nt">"title_count"</span><span class="p">:</span><span class="w"> </span><span class="mi">40</span>
-</span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="p">}</span>
+<div class="language-json highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="p">{</span>
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="w">  </span><span class="nt">"session_id"</span><span class="p">:</span><span class="w"> </span><span class="s2">"..."</span><span class="p">,</span>
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="w">  </span><span class="nt">"service"</span><span class="p">:</span><span class="w"> </span><span class="s2">"EXAMPLE"</span><span class="p">,</span>
+</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="w">  </span><span class="nt">"valid"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="w">  </span><span class="nt">"expires_in"</span><span class="p">:</span><span class="w"> </span><span class="mi">300</span><span class="p">,</span>
+</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="w">  </span><span class="nt">"track_count"</span><span class="p">:</span><span class="w"> </span><span class="mi">12</span><span class="p">,</span>
+</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="w">  </span><span class="nt">"title_count"</span><span class="p">:</span><span class="w"> </span><span class="mi">40</span>
+</span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a><span class="p">}</span>
 </span></code></pre></div>
 <div class="admonition warning">
 <p class="admonition-title"><code>expires_in</code> is the configured TTL, not time remaining</p>

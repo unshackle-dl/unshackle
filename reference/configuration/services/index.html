@@ -2108,7 +2108,10 @@
 <li><strong><code>title_map</code></strong>: an exact-match rename map applied to fetched titles (source name →
   desired name), so a service that names a title differently from your library still matches.</li>
 <li><strong><code>dl</code></strong>: per-service download defaults, using the same keys as the global
-  <a href="../download/#dl"><code>dl</code></a> block.</li>
+  <a href="../download/#dl"><code>dl</code></a> block. Set <code>remote: true</code> to send the <code>dl</code> and <code>search</code> runs of that
+  service to a <a href="#remote_services">remote server</a> without <code>--remote</code>. Add <code>server</code> to select one of
+  several servers. A <code>--server</code> on the command line overrides it. A REST API job ignores both keys.
+  See <a href="../../../dev/rest-api/remote-sessions/#making-a-service-remote-by-default">making a service remote by default</a>.</li>
 </ul>
 <p>Individual services may read any additional keys they define. unshackle hands the merged result
 (the service's own <code>config.yaml</code> with this block layered on top) to the service as <code>self.config</code>.</p>
