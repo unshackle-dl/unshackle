@@ -114,7 +114,8 @@ services:
 ```
 
 `unshackle dl EXAMPLE 0ABCDEF` and `unshackle search EXAMPLE "query"` then run on
-`my_server`. A `--server` on the command line overrides the configured server. The global
+`my_server`. A `--server` on the command line overrides the configured server, and `--local`
+runs the local service code for that run. The global
 `dl: remote: true` makes every `dl` run remote, but it has no effect on `search`.
 The REST API ignores both settings: a job runs remote only when its request asks for it.
 

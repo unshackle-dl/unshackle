@@ -1218,11 +1218,10 @@ class dl:
         help="With -r HYBRID, make Dolby Vision from the HDR10+ metadata when a title has no Dolby Vision track.",
     )
     @click.option(
-        "--remote",
-        is_flag=True,
+        "--remote/--local",
         default=False,
         is_eager=True,
-        help="Use a remote unshackle server instead of local service code.",
+        help="Use a remote unshackle server instead of local service code. --local overrides a remote: true config.",
     )
     @click.option(
         "--server",

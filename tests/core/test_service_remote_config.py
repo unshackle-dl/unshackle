@@ -64,8 +64,9 @@ def test_service_remote_routes_to_remote_command(
         ({"EXAMPLE": {"dl": {"remote": True, "server": "box"}}}, ["--server", "other"], None, ("remote", "other")),
         ({"EXAMPLE": {"dl": {"remote": False}}}, [], {"remote": True}, ("local", None)),
         ({"EXAMPLE": {"dl": {"remote": "false"}}}, [], None, ("local", None)),
+        ({"EXAMPLE": {"dl": {"remote": True}}}, ["--local"], {"remote": True}, ("local", None)),
     ],
-    ids=["other-service", "cli-server-wins", "service-false-beats-global", "quoted-false-is-cast"],
+    ids=["other-service", "cli-server-wins", "service-false-beats-global", "quoted-false-is-cast", "cli-local-wins"],
 )
 def test_routing_precedence(
     monkeypatch: pytest.MonkeyPatch,

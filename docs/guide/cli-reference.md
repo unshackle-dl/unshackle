@@ -211,6 +211,7 @@ order the service used, then renumbers the episodes into the order you asked for
 | `--no-proxy-download` | Bypass the proxy for **all downloads** (manifest, licence, and auth stay proxied). |
 | `--proxy-download` | Use a different proxy for **all downloads**, in the same forms as `--proxy` (manifest, licence, and auth stay on `--proxy`). |
 | `--remote` | Use a remote unshackle server. |
+| `--local` | Use the local service code, also when the config sets `remote: true`. |
 | `--server` | Name a remote server from the `remote_services` config. |
 
 ### Concurrency, caching & listing
@@ -251,6 +252,7 @@ unshackle logs in to the service before the search. A service that declares a se
 | `--proxy` | Proxy URI, country or location code, or `provider:region` (e.g. `controld:ca`). |
 | `--no-proxy` | Force-disable all proxy use. |
 | `--remote` | Search on a remote unshackle server. The server logs in to the service. unshackle sends it your credentials, cookies and cache for the profile, and saves the cache that the server sends back. A service that searches with no login gets none of them. |
+| `--local` | Search with the local service code, also when the config sets `remote: true` for the service. |
 | `--server` | Name a remote server from the `remote_services` config. |
 
 !!! example

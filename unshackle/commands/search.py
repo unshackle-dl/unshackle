@@ -40,11 +40,10 @@ from unshackle.core.utils.redact import mask_proxy
 )
 @click.option("--no-proxy", is_flag=True, default=False, help="Force disable all proxy use.")
 @click.option(
-    "--remote",
-    is_flag=True,
+    "--remote/--local",
     default=False,
     is_eager=True,
-    help="Search on a remote unshackle server instead of with local service code.",
+    help="Search on a remote unshackle server instead of with local service code. --local overrides a remote: true config.",
 )
 @click.option(
     "--server",
