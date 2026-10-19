@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 import click
+from click.core import ParameterSource
 
 from unshackle.core import binaries
 from unshackle.core.config import config
@@ -19,6 +20,7 @@ from unshackle.core.constants import DEFAULT_SAMPLE
 from unshackle.core.service import Service
 from unshackle.core.service_repo import DirtyServiceRepo, head, is_repo_spec, refresh_repo, resolve_service_repo
 from unshackle.core.utilities import import_module_by_path
+from unshackle.core.utils.collections import ci_get
 from unshackle.core.utils.redact import redact_path
 
 log = logging.getLogger("services")
@@ -348,6 +350,9 @@ def check_load_errors() -> None:
         raise click.ClickException(f"Failed to load {len(LOAD_ERRORS)} service(s):\n{joined}")
 
 
+ROUTING_PARAMS = ("remote", "server")
+
+
 class Services(click.Group):
     """Lazy-loaded command group of project services."""
 
@@ -384,7 +389,7 @@ class Services(click.Group):
         """
         remote = ctx.params.get("remote") or (ctx.parent and ctx.parent.params.get("remote"))
         if remote:
-            remote_services = Services.fetch_remote_services(ctx)
+            remote_services = Services.fetch_remote_services(ctx.params.get("server"))
             if remote_services is not None:
                 return [s["tag"] for s in remote_services]
             tags = Services.get_tags()
@@ -401,13 +406,13 @@ class Services(click.Group):
         check_load_errors()
         tag = Services.get_tag(name)
 
-        import_file = ctx.params.get("import_file") or (ctx.parent and ctx.parent.params.get("import_file"))
-        if import_file:
+        if Services.is_import(ctx):
             return Services.make_import_command(tag, ctx)
 
-        remote = ctx.params.get("remote") or (ctx.parent and ctx.parent.params.get("remote"))
+        routing = Services.routing(ctx, tag)
+        remote = routing.get("remote") or (ctx.parent and ctx.parent.params.get("remote"))
         if remote:
-            return Services.make_remote_command(name, ctx)
+            return Services.make_remote_command(name, routing.get("server"))
 
         try:
             service = Services.load(tag)
@@ -429,6 +434,49 @@ class Services(click.Group):
 
         raise click.ClickException(f"Service '{tag}' has no 'cli' method configured.")
 
+    def resolve_command(
+        self, ctx: click.Context, args: list[str]
+    ) -> tuple[str | None, click.Command | None, list[str]]:
+        """Resolve the service, then store its routing in ``ctx.params`` for the callback.
+
+        ``get_command`` has already computed it, but help and shell completion call ``get_command`` on its own,
+        so only this path may store it.
+        """
+        cmd_name, cmd, rest = super().resolve_command(ctx, args)
+        if cmd_name:
+            ctx.params.update(Services.routing(ctx, Services.get_tag(cmd_name)))
+        return cmd_name, cmd, rest
+
+    @staticmethod
+    def is_import(ctx: click.Context) -> bool:
+        return bool(ctx.params.get("import_file") or (ctx.parent and ctx.parent.params.get("import_file")))
+
+    @staticmethod
+    def routing(ctx: click.Context, tag: str) -> dict[str, Any]:
+        """The ``remote`` and ``server`` values for one service: CLI/env, then ``services.<TAG>.dl``, then defaults.
+
+        Built from the parameter sources, never read back from ``ctx.params``: help and shell completion resolve
+        every service on one context, so a value stored for one service must not route the next one.
+        An import never routes.
+        """
+        if Services.is_import(ctx):
+            return {}
+        service_dl = (ci_get(config.services, tag) or {}).get("dl") or {}
+        routing: dict[str, Any] = {}
+        for param in ctx.command.params:
+            name = param.name
+            if name not in ROUTING_PARAMS or name not in ctx.params:
+                continue
+            if ctx.get_parameter_source(name) not in (ParameterSource.DEFAULT, ParameterSource.DEFAULT_MAP):
+                routing[name] = ctx.params[name]
+                continue
+            value = service_dl.get(name)
+            try:
+                routing[name] = param.type_cast_value(ctx, param.get_default(ctx) if value is None else value)
+            except click.BadParameter as e:
+                raise click.ClickException(f"services.{tag}.dl.{name}: {e.format_message()}") from e
+        return routing
+
     @staticmethod
     def docstring_help(doc: str) -> str:
         """Format a service docstring for Click help, one \\b per paragraph so Click keeps the layout.
@@ -443,20 +491,19 @@ class Services(click.Group):
         return "\n\n".join([first] + [f"\b\n{p}" for p in rest])
 
     @staticmethod
-    def fetch_remote_services(ctx: click.Context) -> list[dict] | None:
+    def fetch_remote_services(server_name: str | None) -> list[dict] | None:
         """Fetch the service list from the remote server (cached); None when it is unreachable."""
         from unshackle.core.remote_service import remote_service_list, resolve_server
 
-        server_name = ctx.params.get("server")
         resolve_server(server_name)  # a bad --server raises its ClickException, not "unreachable"
         return remote_service_list(server_name)
 
     @staticmethod
-    def make_remote_command(name: str, ctx: click.Context) -> click.Command:
+    def make_remote_command(name: str, server_name: str | None) -> click.Command:
         """Make a Click command for a remote service, with the options the remote server gives."""
         # A failed fetch (None) means the remote server was unreachable, not that the name is
         # invalid - fall through to a bare stub so `-h` keeps working offline.
-        services = Services.fetch_remote_services(ctx)
+        services = Services.fetch_remote_services(server_name)
         if services is None:
             svc_info = None
             tag = Services.get_tag(name)
@@ -492,7 +539,6 @@ class Services(click.Group):
         def remote_cli(ctx: click.Context, title: str, **kwargs: object) -> object:
             from unshackle.core.remote_service import make_remote_service
 
-            server_name = ctx.parent.params.get("server") if ctx.parent else None
             return make_remote_service(ctx, server_name, tag, title, {"service_params": kwargs})
 
         if cli_params:

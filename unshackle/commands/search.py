@@ -20,7 +20,7 @@ from unshackle.core.proxies.resolve import REGION, describe_proxy, load_proxy_pr
 from unshackle.core.service import Service
 from unshackle.core.services import Services
 from unshackle.core.utils.click_types import ContextData
-from unshackle.core.utils.collections import merge_dict
+from unshackle.core.utils.collections import ci_get, merge_dict
 from unshackle.core.utils.redact import mask_proxy
 
 
@@ -80,7 +80,7 @@ def search(
             if service_config_path.exists():
                 service_config = yaml.safe_load(service_config_path.read_text(encoding="utf8"))
                 log.info("Service Config loaded")
-    merge_dict(config.services.get(service), service_config)
+    merge_dict(ci_get(config.services, service), service_config)
 
     proxy_providers: list[Proxy] = []
     if no_proxy:

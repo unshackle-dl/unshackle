@@ -13,7 +13,10 @@ Per-service configuration, keyed by the canonical service tag (for example `EXAM
 - **`title_map`**: an exact-match rename map applied to fetched titles (source name →
   desired name), so a service that names a title differently from your library still matches.
 - **`dl`**: per-service download defaults, using the same keys as the global
-  [`dl`](download.md#dl) block.
+  [`dl`](download.md#dl) block. Set `remote: true` to send the `dl` and `search` runs of that
+  service to a [remote server](#remote_services) without `--remote`. Add `server` to select one of
+  several servers. A `--server` on the command line overrides it. A REST API job ignores both keys.
+  See [making a service remote by default](../../dev/rest-api/remote-sessions.md#making-a-service-remote-by-default).
 
 Individual services may read any additional keys they define. unshackle hands the merged result
 (the service's own `config.yaml` with this block layered on top) to the service as `self.config`.

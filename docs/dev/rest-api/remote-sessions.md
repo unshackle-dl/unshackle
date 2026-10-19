@@ -87,17 +87,36 @@ remote_services:
 If you configure exactly one server, unshackle uses it implicitly:
 
 ```bash
-unshackle dl EXAMPLE 0ABCDEF
+unshackle dl --remote EXAMPLE 0ABCDEF
 ```
 
 If you configure **more than one** server, you must pick one with `--server`:
 
 ```bash
-unshackle dl --server my_server EXAMPLE 0ABCDEF
+unshackle dl --remote --server my_server EXAMPLE 0ABCDEF
 ```
 
 With no `remote_services` configured at all, unshackle raises a clear error telling
 you to add the block shown above.
+
+### Making a service remote by default
+
+To run a service on the server without `--remote`, set `remote` in the
+[`services`](../../reference/configuration/services.md#services) block, not in the
+`services` sub-dict of `remote_services`. Add `server` to select one of several servers:
+
+```yaml title="unshackle.yaml (client)"
+services:
+  EXAMPLE:
+    dl:
+      remote: true
+      server: my_server
+```
+
+`unshackle dl EXAMPLE 0ABCDEF` and `unshackle search EXAMPLE "query"` then run on
+`my_server`. A `--server` on the command line overrides the configured server. The global
+`dl: remote: true` makes every `dl` run remote, but it has no effect on `search`.
+The REST API ignores both settings: a job runs remote only when its request asks for it.
 
 ---
 
