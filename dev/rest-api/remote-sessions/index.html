@@ -2540,7 +2540,8 @@ you to add the block shown above.</p>
 </span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">      </span><span class="nt">server</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my_server</span>
 </span></code></pre></div>
 <p><code>unshackle dl EXAMPLE 0ABCDEF</code> and <code>unshackle search EXAMPLE "query"</code> then run on
-<code>my_server</code>. A <code>--server</code> on the command line overrides the configured server. The global
+<code>my_server</code>. A <code>--server</code> on the command line overrides the configured server, and <code>--local</code>
+runs the local service code for that run. The global
 <code>dl: remote: true</code> makes every <code>dl</code> run remote, but it has no effect on <code>search</code>.
 The REST API ignores both settings: a job runs remote only when its request asks for it.</p>
 <hr />

@@ -3431,6 +3431,10 @@ and keeps the service's numbering unchanged. Pick an order that covers the whole
 <td>Use a remote unshackle server.</td>
 </tr>
 <tr>
+<td><code>--local</code></td>
+<td>Use the local service code, also when the config sets <code>remote: true</code>.</td>
+</tr>
+<tr>
 <td><code>--server</code></td>
 <td>Name a remote server from the <code>remote_services</code> config.</td>
 </tr>
@@ -3532,6 +3536,10 @@ and keeps the service's numbering unchanged. Pick an order that covers the whole
 <tr>
 <td><code>--remote</code></td>
 <td>Search on a remote unshackle server. The server logs in to the service. unshackle sends it your credentials, cookies and cache for the profile, and saves the cache that the server sends back. A service that searches with no login gets none of them.</td>
+</tr>
+<tr>
+<td><code>--local</code></td>
+<td>Search with the local service code, also when the config sets <code>remote: true</code> for the service.</td>
 </tr>
 <tr>
 <td><code>--server</code></td>
