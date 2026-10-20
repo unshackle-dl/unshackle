@@ -5627,11 +5627,18 @@ class dl:
     @staticmethod
     def load_cookie_file(cookie_file: Path) -> MozillaCookieJar:
         """Load a Netscape cookie file with every expiry blanked, so no layer drops an expired cookie."""
-        cookie_jar = MozillaCookieJar(cookie_file)
-        cookie_data = html.unescape(cookie_file.read_text("utf-8-sig")).splitlines(keepends=False)
+        cookie_jar = dl.parse_cookie_text(cookie_file.read_text("utf-8-sig"), str(cookie_file))
+        cookie_jar.filename = str(cookie_file)
+        return cookie_jar
+
+    @staticmethod
+    def parse_cookie_text(text: str, source: str) -> MozillaCookieJar:
+        """Parse Netscape cookie text the way :meth:`load_cookie_file` does; ``source`` names it in errors."""
+        cookie_jar = MozillaCookieJar()
+        cookie_data = html.unescape(text).splitlines(keepends=False)
         head = next((line.lstrip() for line in cookie_data if line.strip()), "")
         if head[:1] in ("[", "{"):
-            raise ValueError(f"{cookie_file} is a JSON export; export it again in Netscape format")
+            raise ValueError(f"{source} is a JSON export; export it again in Netscape format")
         for i, line in enumerate(cookie_data):
             body = line.lstrip()
             prefix = "#HttpOnly_" if body.startswith("#HttpOnly_") else ""
@@ -5642,14 +5649,14 @@ class dl:
             if len(line_data) == 6:
                 line_data.append("")
             if len(line_data) != 7:
-                raise ValueError(f"{cookie_file} line {i + 1} is not a Netscape cookie row: {line!r}")
+                raise ValueError(f"{source} line {i + 1} is not a Netscape cookie row: {line!r}")
             line_data[4] = ""
             line_data[1] = str(line_data[0].startswith(".")).upper()
             cookie_data[i] = prefix + "\t".join(line_data)
         cookie_data.insert(0, "# Netscape HTTP Cookie File")
-        cookie_jar._really_load(StringIO("\n".join(cookie_data)), str(cookie_file), True, True)  # type: ignore[attr-defined]
+        cookie_jar._really_load(StringIO("\n".join(cookie_data)), source, True, True)  # type: ignore[attr-defined]
         if not len(cookie_jar):
-            raise ValueError(f"{cookie_file} holds no cookies; export it again in Netscape format")
+            raise ValueError(f"{source} holds no cookies; export it again in Netscape format")
         return cookie_jar
 
     @staticmethod

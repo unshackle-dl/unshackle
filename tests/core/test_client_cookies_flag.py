@@ -29,6 +29,14 @@ def test_load_client_cookies_reads_a_transport_blob():
     assert [(c.name, c.value) for c in jar] == [("session-id", "123-456")]
 
 
+def test_load_client_cookies_reads_what_local_dl_reads():
+    """A file with no Netscape header, space-separated rows and an HttpOnly prefix loads as it does locally."""
+    text = "#HttpOnly_.example.com TRUE / TRUE 2000000000 session-id 123-456\n"
+    jar = load_client_cookies(transport_blob(text))
+    assert jar is not None
+    assert [(c.name, c.value) for c in jar] == [("session-id", "123-456")]
+
+
 def test_load_client_cookies_without_a_blob():
     assert load_client_cookies(None) is None
     assert load_client_cookies("") is None

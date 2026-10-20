@@ -3,9 +3,7 @@ import base64
 import enum
 import json
 import logging
-import os
 import re
-import tempfile
 import threading
 import time
 import uuid
@@ -15,7 +13,7 @@ from contextlib import suppress
 from dataclasses import dataclass, field
 from datetime import date as date_
 from functools import partial
-from http.cookiejar import CookieJar, MozillaCookieJar
+from http.cookiejar import CookieJar
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Optional, cast
 
@@ -1146,24 +1144,18 @@ def server_account_cookies(service: str, profile: Optional[str]) -> Any:
 def load_client_cookies(cookie_text: Any) -> Optional[CookieJar]:
     """Read the cookie jar a client sent with its request, or None when it sent none.
 
-    The client sends a Netscape cookie file compressed and base64 encoded, and
-    ``MozillaCookieJar`` reads from a path only, so the text goes through a temp file.
+    The client sends a Netscape cookie file compressed and base64 encoded. It is parsed
+    the way local ``dl`` parses a cookie file, so a file that works locally also works
+    over ``--remote``.
     """
+    from unshackle.commands.dl import dl
+
     if not cookie_text or not isinstance(cookie_text, str):
         return None
 
     try:
-        cookie_str = safe_inflate(base64.b64decode(cookie_text)).decode("utf-8")
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False, encoding="utf-8") as f:
-            f.write(cookie_str)
-            tmp_path = f.name
-        try:
-            jar = MozillaCookieJar(tmp_path)
-            jar.load(ignore_discard=True, ignore_expires=True)
-            return jar
-        finally:
-            with suppress(OSError):
-                os.unlink(tmp_path)
+        cookie_str = safe_inflate(base64.b64decode(cookie_text)).decode("utf-8-sig")
+        return dl.parse_cookie_text(cookie_str, "client cookies")
     except (ValueError, zlib.error, OSError) as e:
         raise APIError(APIErrorCode.INVALID_INPUT, f"cookies is not a compressed Netscape cookie file: {e}")
 
