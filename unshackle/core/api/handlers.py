@@ -39,7 +39,7 @@ from unshackle.core.titles import Episode, Movie, Song, Title_T
 from unshackle.core.titles.music import SONG_FIELDS
 from unshackle.core.tracks import Audio, Subtitle, Tracks, Video
 from unshackle.core.utilities import declared_kwargs, kind_only_conflict, original_tag
-from unshackle.core.utils.click_types import AUDIO_CODEC_LIST, SUBTITLE_CODEC, VIDEO_CODEC_LIST
+from unshackle.core.utils.click_types import AUDIO_CODEC_LIST, QUALITY_LIST, SUBTITLE_CODEC, VIDEO_CODEC_LIST
 from unshackle.core.utils.collections import ci_get
 from unshackle.core.utils.hdr10plus import probed_tracks
 from unshackle.core.utils.redact import REDACTED, URL_USERINFO_RE, redact_all, redact_secrets, redact_text
@@ -2218,13 +2218,20 @@ def validate_download_parameters(data: Dict[str, Any]) -> Optional[str]:
         if not isinstance(data["abitrate"], int) or data["abitrate"] <= 0:
             return "abitrate must be a positive integer"
 
-    if "vbitrate_range" in data and data["vbitrate_range"] is not None:
-        if not isinstance(data["vbitrate_range"], str) or "-" not in data["vbitrate_range"]:
-            return "vbitrate_range must be a string in 'MIN-MAX' format (e.g., '6000-7000')"
+    for prefix, example in (("v", "6000-7000"), ("a", "128-256")):
+        value = data.get(f"{prefix}bitrate_range")
+        if value and data.get(f"{prefix}bitrate") is not None:
+            return f"Cannot use both {prefix}bitrate and {prefix}bitrate_range"
+        if value is not None and (not isinstance(value, str) or not re.fullmatch(r"\s*\d+\s*-\s*\d+\s*", value)):
+            return f"{prefix}bitrate_range must be a string in 'MIN-MAX' format (e.g., '{example}')"
 
-    if "abitrate_range" in data and data["abitrate_range"] is not None:
-        if not isinstance(data["abitrate_range"], str) or "-" not in data["abitrate_range"]:
-            return "abitrate_range must be a string in 'MIN-MAX' format (e.g., '128-256')"
+    if data.get("quality") is not None:
+        try:
+            heights = QUALITY_LIST.convert(data["quality"])
+        except click.BadParameter as e:
+            return f"Invalid quality: {e.message}"
+        if any(height <= 0 for height in heights):
+            return "quality heights must be above 0"
 
     if "channels" in data and data["channels"] is not None:
         if not isinstance(data["channels"], (int, float)) or data["channels"] <= 0:

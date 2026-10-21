@@ -18,7 +18,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 from unshackle.core.api.events import bus, publish_service_event
 from unshackle.core.api.sanitize import sanitize_log
-from unshackle.core.utils.click_types import AUDIO_CODEC_LIST, VIDEO_CODEC_LIST
+from unshackle.core.utils.click_types import AUDIO_CODEC_LIST, QUALITY_LIST, VIDEO_CODEC_LIST
 from unshackle.core.utils.redact import REDACTED, URL_USERINFO_RE, redact_path, redact_text
 
 log = logging.getLogger("download_manager")
@@ -409,6 +409,8 @@ def perform_download(
     if params.get("acodec"):
         params["acodec"] = AUDIO_CODEC_LIST.convert(params["acodec"])
 
+    params["quality"] = QUALITY_LIST.convert(params["quality"]) if params.get("quality") else []
+
     range_raw = params.get("range")
     if range_raw:
         if isinstance(range_raw, str):
@@ -484,6 +486,7 @@ def perform_download(
         "proxy_download": params.get("proxy_download"),
         "profile": params.get("profile"),
         "cdm_name": params.get("cdm"),
+        "cdm_only": params.get("cdm_only"),
         "all_drm": params.get("all_drm", False),
         "repack": params.get("repack", False),
         "tag": params.get("tag"),

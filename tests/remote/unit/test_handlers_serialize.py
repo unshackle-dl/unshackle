@@ -279,8 +279,12 @@ def test_validate_download_params_accepts_defaults() -> None:
         ({"sub_format": "doc"}, "Invalid sub_format"),
         ({"vbitrate": -1}, "vbitrate"),
         ({"abitrate": "no"}, "abitrate"),
-        ({"vbitrate_range": "no-dash-but-letters"}, None),
-        ({"vbitrate_range": "nope"}, "MIN-MAX"),
+        ({"vbitrate_range": "no-dash-but-letters"}, "MIN-MAX"),
+        ({"vbitrate": 5000, "vbitrate_range": "1-2"}, "vbitrate and vbitrate_range"),
+        ({"abitrate": 128, "abitrate_range": "96-256"}, "abitrate and abitrate_range"),
+        ({"abitrate_range": "1-2-3"}, "MIN-MAX"),
+        ({"quality": "4k"}, "Invalid quality"),
+        ({"quality": [0]}, "above 0"),
         ({"channels": -3}, "channels"),
         ({"workers": 0}, "workers"),
         ({"downloads": 0}, "downloads"),
@@ -295,7 +299,6 @@ def test_validate_download_params_accepts_defaults() -> None:
 def test_validate_download_params_errors(data: dict, fragment) -> None:
     result = validate_download_parameters(data)
     if fragment is None:
-        # A dash-containing string is valid syntactically per current rule
         assert result is None
     else:
         assert result is not None
@@ -311,8 +314,6 @@ def test_validate_download_params_accepts_valid_values() -> None:
                 "sub_format": "VTT",
                 "vbitrate": 6000,
                 "abitrate": 128,
-                "vbitrate_range": "6000-7000",
-                "abitrate_range": "96-192",
                 "channels": 5.1,
                 "workers": 8,
                 "downloads": 2,
@@ -321,6 +322,11 @@ def test_validate_download_params_accepts_valid_values() -> None:
         )
         is None
     )
+
+
+@pytest.mark.parametrize("vrange", ["6000-7000", "7000-6000", " 6000 - 7000 "])
+def test_validate_download_params_accepts_valid_bitrate_ranges(vrange: str) -> None:
+    assert validate_download_parameters({"vbitrate_range": vrange, "abitrate_range": "96-192"}) is None
 
 
 async def test_search_missing_service_raises_invalid_input() -> None:
