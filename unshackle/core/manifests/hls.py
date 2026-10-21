@@ -22,7 +22,6 @@ import m3u8
 import requests
 from langcodes import Language, tag_is_valid
 from m3u8 import M3U8
-from pyplayready.cdm import Cdm as PlayReadyCdm
 from pyplayready.system.pssh import PSSH as PR_PSSH
 from pywidevine.cdm import Cdm as WidevineCdm
 from pywidevine.pssh import PSSH as WV_PSSH
@@ -1399,7 +1398,7 @@ class HLS:
                     and key.keyformat.lower()
                     in {
                         WidevineCdm.urn,
-                        PlayReadyCdm,
+                        f"urn:uuid:{PR_PSSH.SYSTEM_ID}",
                         "com.microsoft.playready",
                     }
                 ):
