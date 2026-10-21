@@ -2569,10 +2569,14 @@ server does not have to prompt:</p>
   <code>controld://&lt;resolver&gt;@dns.controld.com</code>. The server counts it as a full proxy
   URI and runs its own forwarder for it. A bare region skips Control D, because its
   proxy is a forwarder on the client. See
-  <a href="../../../guide/proxies-and-vpn/#control-d">Control D</a>
+  <a href="../../../guide/proxies-and-vpn/#control-d">Control D</a>.
   The client also downloads playlists and segments through the same proxy,
   as a local run does. <code>--no-proxy-download</code> and <code>--proxy-download</code> change
   that for downloads only.</li>
+<li>A <code>--local-proxy</code> goes as <code>tunnel:&lt;id&gt;</code>. The client opens
+  <code>GET /api/tunnel</code> first, and the server replaces the ID with a loopback SOCKS5
+  proxy that relays to the client's own connection. See
+  <a href="../../../guide/proxies-and-vpn/#send-the-servers-requests-through-your-machine">Send the server's requests through your machine</a>.</li>
 <li>Track-selection hints (<code>range_</code>, <code>vcodec</code>, <code>quality</code>, <code>best_available</code>,
   <code>generate_dv</code>) so the server fetches the right manifests</li>
 <li>Your language and audio codec selection (<code>-l</code>, <code>-vl</code>, <code>-al</code>, <code>-a</code>, <code>-fs</code>)
@@ -2833,6 +2837,11 @@ mid-prompt.</p>
   gets a persistent per-account cache instead, so the account's tokens outlive the
   remote session. The server and the client both refuse a forwarded cache file that is not
   JSON or that names a type other than a date or time, and the service then authenticates again.</li>
+<li><strong>A tunnel belongs to its API key.</strong> The server accepts <code>tunnel:&lt;id&gt;</code> only from the API key
+  that opened the tunnel. Its SOCKS5 proxy listens on loopback only, and it needs a username and
+  password for that tunnel, so a raw <code>socks5h://127.0.0.1:&lt;port&gt;</code> proxy from a client fails.</li>
+<li><strong>Only the client dials.</strong> The server ignores a request from the client to open a
+  connection, so a tunnel never gives a client access to the server's network.</li>
 <li><strong>The server redacts secrets in logs.</strong> It redacts remote session IDs, service tags,
   and other user values before it writes them to the log.</li>
 </ul>
@@ -2868,6 +2877,16 @@ from a browser origin, not when you want only the local HTTP API.</p>
 <td><code>POST</code></td>
 <td><code>/api/session/create</code></td>
 <td>Build + authenticate a service instance; returns a session ID immediately</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/tunnel</code></td>
+<td>WebSocket that relays the connections of a <code>tunnel:&lt;id&gt;</code> proxy to the client; <code>?id=</code> reconnects</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/tunnel/check?id=</code></td>
+<td>Exit IP address and lookup time through the caller's tunnel, for <code>unshackle tunnel-test</code></td>
 </tr>
 <tr>
 <td><code>GET</code></td>

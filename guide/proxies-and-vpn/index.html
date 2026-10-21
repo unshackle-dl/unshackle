@@ -923,6 +923,45 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#send-the-servers-requests-through-your-machine" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Send the server's requests through your machine
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Send the server&#39;s requests through your machine">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#test-it-first" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Test it first
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#how-the-tunnel-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How the tunnel works
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2402,6 +2441,45 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#send-the-servers-requests-through-your-machine" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Send the server's requests through your machine
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Send the server&#39;s requests through your machine">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#test-it-first" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Test it first
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#how-the-tunnel-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How the tunnel works
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2669,7 +2747,7 @@ the config keys inside it map directly onto that proxy provider's settings. See 
 file lives and how unshackle loads it.</p>
 </div>
 <h2 id="the-proxy-flag">The <code>--proxy</code> flag<a class="headerlink" href="#the-proxy-flag" title="Permanent link">&para;</a></h2>
-<p>Four options on the <code>dl</code> command control proxying at download time:</p>
+<p>Five options on the <code>dl</code> command control proxying at download time:</p>
 <table>
 <thead>
 <tr>
@@ -2681,6 +2759,10 @@ file lives and how unshackle loads it.</p>
 <tr>
 <td><code>--proxy</code></td>
 <td>The proxy to use. Either an explicit URI, or a query that unshackle resolves against your configured providers.</td>
+</tr>
+<tr>
+<td><code>--local-proxy</code></td>
+<td>With <code>--remote</code>, send the server's service requests through your machine's own connection. Works with no other proxy option. See <a href="#send-the-servers-requests-through-your-machine">Send the server's requests through your machine</a>.</td>
 </tr>
 <tr>
 <td><code>--no-proxy</code></td>
@@ -2834,6 +2916,63 @@ A request to the <code>host</code> of a remote CDM in <code>remote_cdm</code> al
 sees your own IP, but the service does not.</p>
 <p>A <code>socks5://</code> proxy makes the DNS lookup of each host on your machine and gives no warning.
 Use <code>socks5h://</code> to make the proxy do the DNS lookups too.</p>
+<h3 id="send-the-servers-requests-through-your-machine">Send the server's requests through your machine<a class="headerlink" href="#send-the-servers-requests-through-your-machine" title="Permanent link">&para;</a></h3>
+<p>With <code>--remote</code>, the server sends the service requests, and they leave from the server's own
+connection. Add <code>--local-proxy</code> to send them through your machine's connection instead:</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--remote<span class="w"> </span>--local-proxy<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+</span></code></pre></div>
+<p>A VPN app that covers your whole machine then also covers the server's requests, so the
+service sees your VPN's IP address. <code>--local-proxy</code> needs <code>--remote</code> (or a service with
+<code>remote: true</code>), and it works with no other proxy option: unshackle stops if you also give
+<code>--proxy</code>, <code>--no-proxy</code>, <code>--proxy-download</code> or <code>--no-proxy-download</code>. A proxy option from the <code>dl</code>
+config defaults does not count: <code>--local-proxy</code> turns it off for the run.</p>
+<p>A <code>--proxy</code> on <code>localhost</code> or a loopback address, such as the local port of a VPN app, stops a
+<code>--remote</code> run with <code>That proxy is on your machine, so --remote cannot use it</code>. Connect the VPN
+app for the whole machine, then use <code>--local-proxy</code> without <code>--proxy</code>.</p>
+<h4 id="test-it-first">Test it first<a class="headerlink" href="#test-it-first" title="Permanent link">&para;</a></h4>
+<p><code>unshackle tunnel-test</code> checks the route before a real run. Add <code>--server &lt;name&gt;</code> to test a
+server other than the default one:</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>unshackle<span class="w"> </span>tunnel-test
+</span></code></pre></div>
+<p>It does three steps, and it stops at the first one that fails:</p>
+<ol>
+<li>It looks up the IP address that your machine exits from.</li>
+<li>It opens a tunnel to the server.</li>
+<li>It makes the server look up its exit IP address through the tunnel. That address must be
+   the same as in step 1, or in the same country when one lookup used IPv4 and the other IPv6.
+   It fails when the lookup left from the server's own address. It also shows how long one
+   lookup takes.</li>
+</ol>
+<h4 id="how-the-tunnel-works">How the tunnel works<a class="headerlink" href="#how-the-tunnel-works" title="Permanent link">&para;</a></h4>
+<ol>
+<li>The client opens a WebSocket on the server, on the same host and port as the other
+   remote session requests. Only a client opens a tunnel. The server never connects to
+   a host for a client, so a tunnel gives no access to the server's network.</li>
+<li>The server gives the service a SOCKS5 proxy on its loopback address, with a username and
+   password for that tunnel only. Another API key cannot use it.</li>
+<li>The server sends each connection that the service opens through the tunnel. The client
+   connects to the host and relays the bytes.</li>
+</ol>
+<p>The client logs <code>The server sends its requests through your connection on this machine</code>. You
+do not configure ports: the server picks a free one, and your
+machine opens none, because the client opens the connection to the server. A NAT router, a
+firewall, or a Cloudflare tunnel in front of the server does not stop it.</p>
+<p>The service traffic stays encrypted from the server to the service, so the client relays only
+encrypted bytes. The client refuses to connect to <code>localhost</code>, and to a host name or IP address
+that resolves only to a loopback, private or link-local address, so the server cannot reach
+your local network.</p>
+<div class="admonition note">
+<p class="admonition-title">Each request crosses the tunnel twice</p>
+<p>A request from the server goes to your machine and then to the service, so it takes
+longer than a request that the server sends directly. The segments do not go through the
+tunnel: the client downloads them as before.</p>
+</div>
+<p>A service that uses a server account does not work with <code>--local-proxy</code>, because the server
+logs in with its own account. If the tunnel drops, the client connects again, and a new request
+from the server waits up to 10 seconds for it. A request that was in progress when the tunnel
+dropped fails. The server closes a tunnel when its client has not connected for 60 seconds, and
+the client then stops with <code>The tunnel to the server closed</code>. An API key can have 4 tunnels
+open at once.</p>
 <h2 id="basic-static-proxies">Basic (static proxies)<a class="headerlink" href="#basic-static-proxies" title="Permanent link">&para;</a></h2>
 <p>The <code>Basic</code> proxy provider is pure static configuration, with no accounts and no network
 calls. You record proxy URLs under each country code, and unshackle serves them back
@@ -2841,12 +2980,12 @@ when you query that country. This is the right choice when you already have prox
 seller, your own servers, or a corporate gateway).</p>
 <p>Under each two-letter country code you can put either a single proxy string or a list of
 them:</p>
-<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nt">proxy_providers</span><span class="p">:</span>
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">  </span><span class="nt">basic</span><span class="p">:</span>
-</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">    </span><span class="nt">us</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http://user:pass@1.2.3.4:8080</span>
-</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">    </span><span class="nt">de</span><span class="p">:</span>
-</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http://a.example:8080</span>
-</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">socks5://b.example:1080</span>
+<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="nt">proxy_providers</span><span class="p">:</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="w">  </span><span class="nt">basic</span><span class="p">:</span>
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">    </span><span class="nt">us</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http://user:pass@1.2.3.4:8080</span>
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">    </span><span class="nt">de</span><span class="p">:</span>
+</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http://a.example:8080</span>
+</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">socks5://b.example:1080</span>
 </span></code></pre></div>
 <p><strong>Query forms:</strong></p>
 <table>
@@ -2874,7 +3013,7 @@ them:</p>
 <li>unshackle normalises each URL (a missing scheme defaults to <code>http</code>) and validates it,
   so it rejects a malformed URI up front and does not fail mid-download.</li>
 </ul>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--proxy<span class="w"> </span>de2<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--proxy<span class="w"> </span>de2<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
 <h2 id="control-d">Control D<a class="headerlink" href="#control-d" title="Permanent link">&para;</a></h2>
 <p><a href="https://controld.com">Control D</a> is a DNS service, not a proxy. It answers the hostnames
@@ -2902,11 +3041,11 @@ proxy provider.</p>
   Create it in the dashboard under <em>API</em>. If you set <em>Allowed IPs</em> on the token, include
   the address of each machine that runs unshackle with it.</li>
 </ul>
-<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="nt">proxy_providers</span><span class="p">:</span>
-</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="w">  </span><span class="nt">controld</span><span class="p">:</span>
-</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">    </span><span class="nt">token</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">api.xxxxxxxxxxxx</span><span class="w">     </span><span class="c1"># a Write API token, from the Control D dashboard</span>
+<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="nt">proxy_providers</span><span class="p">:</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="w">  </span><span class="nt">controld</span><span class="p">:</span>
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">    </span><span class="nt">token</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">api.xxxxxxxxxxxx</span><span class="w">     </span><span class="c1"># a Write API token, from the Control D dashboard</span>
 </span></code></pre></div>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--proxy<span class="w"> </span>controld:ca<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--proxy<span class="w"> </span>controld:ca<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
 <p>The token is the only required key. You do not need to create a profile or an endpoint,
 or to give a <code>profile</code> and <code>resolver</code>: unshackle creates an <code>unshackle-&lt;region&gt;</code> profile
@@ -2949,15 +3088,15 @@ every <code>controld</code> config key.</p>
 <li>The endpoint named <code>unshackle-&lt;region&gt;</code> on your account, made by an earlier run.</li>
 <li>
 <p>A profile from your config that this process does not use yet. These are optional:</p>
-<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="nt">proxy_providers</span><span class="p">:</span>
-</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="w">  </span><span class="nt">controld</span><span class="p">:</span>
-</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">    </span><span class="nt">token</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">api.xxxxxxxxxxxx</span>
-</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="w">    </span><span class="nt">profile</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">abcd123</span><span class="w">        </span><span class="c1"># a profile kept for unshackle, and nothing else</span>
-</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="w">    </span><span class="nt">resolver</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">efgh456</span><span class="w">       </span><span class="c1"># the resolver ID of an endpoint using that profile</span>
-</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="w">    </span><span class="nt">profiles</span><span class="p">:</span><span class="w">               </span><span class="c1"># more pairs, in the same shape</span>
-</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">profile</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ijkl789</span>
-</span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="w">        </span><span class="nt">resolver</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">mnop012</span>
-</span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="w">    </span><span class="nt">max_profiles</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">4</span><span class="w">         </span><span class="c1"># the most profiles unshackle uses, yours included (default 4)</span>
+<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="nt">proxy_providers</span><span class="p">:</span>
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="w">  </span><span class="nt">controld</span><span class="p">:</span>
+</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="w">    </span><span class="nt">token</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">api.xxxxxxxxxxxx</span>
+</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="w">    </span><span class="nt">profile</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">abcd123</span><span class="w">        </span><span class="c1"># a profile kept for unshackle, and nothing else</span>
+</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="w">    </span><span class="nt">resolver</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">efgh456</span><span class="w">       </span><span class="c1"># the resolver ID of an endpoint using that profile</span>
+</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="w">    </span><span class="nt">profiles</span><span class="p">:</span><span class="w">               </span><span class="c1"># more pairs, in the same shape</span>
+</span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">profile</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ijkl789</span>
+</span><span id="__span-12-8"><a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a><span class="w">        </span><span class="nt">resolver</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">mnop012</span>
+</span><span id="__span-12-9"><a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a><span class="w">    </span><span class="nt">max_profiles</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">4</span><span class="w">         </span><span class="c1"># the most profiles unshackle uses, yours included (default 4)</span>
 </span></code></pre></div>
 <p>The resolver ID is the last part of the endpoint's DoH URL,
 <code>https://dns.controld.com/&lt;resolver&gt;</code>. You can also give the full URL.</p>
@@ -3098,11 +3237,11 @@ to <code>/dev/net/tun</code> to bring up the tunnel. unshackle requests both aut
 <h3 id="query-format">Query format<a class="headerlink" href="#query-format" title="Permanent link">&para;</a></h3>
 <p>Gluetun uses a nested selector: the proxy provider prefix picks Gluetun, and the rest names the
 <strong>VPN provider</strong> and the <strong>region</strong>.</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>gluetun:&lt;vpn-provider&gt;:&lt;region&gt;
+<div class="language-text highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>gluetun:&lt;vpn-provider&gt;:&lt;region&gt;
 </span></code></pre></div>
-<div class="language-shell highlight"><span class="filename">A Windscribe US exit via Gluetun</span><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--proxy<span class="w"> </span>gluetun:windscribe:us<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+<div class="language-shell highlight"><span class="filename">A Windscribe US exit via Gluetun</span><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--proxy<span class="w"> </span>gluetun:windscribe:us<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
-<div class="language-shell highlight"><span class="filename">A NordVPN Germany exit via Gluetun</span><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--proxy<span class="w"> </span>gluetun:nordvpn:de<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+<div class="language-shell highlight"><span class="filename">A NordVPN Germany exit via Gluetun</span><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--proxy<span class="w"> </span>gluetun:nordvpn:de<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
 <p>After unshackle strips the leading <code>gluetun:</code>, the proxy provider receives exactly
 <code>provider:region</code>. It must be two colon-separated parts, and anything else is an error.
@@ -3112,36 +3251,36 @@ unshackle normalises friendly names to Gluetun's identifiers (for example <code>
 <h3 id="configuration">Configuration<a class="headerlink" href="#configuration" title="Permanent link">&para;</a></h3>
 <p>Each VPN provider you want to use gets an entry under <code>providers:</code>, carrying its VPN type,
 credentials, and how your region aliases map onto Gluetun's server selectors.</p>
-<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="nt">proxy_providers</span><span class="p">:</span>
-</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="w">  </span><span class="nt">gluetun</span><span class="p">:</span>
-</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="w">    </span><span class="nt">providers</span><span class="p">:</span>
-</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="w">      </span><span class="nt">windscribe</span><span class="p">:</span>
-</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="w">        </span><span class="nt">vpn_type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">wireguard</span>
-</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="w">        </span><span class="nt">credentials</span><span class="p">:</span>
-</span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="w">          </span><span class="nt">private_key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">YOUR_WIREGUARD_PRIVATE_KEY</span>
-</span><span id="__span-14-8"><a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a><span class="w">          </span><span class="nt">addresses</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">YOUR_WIREGUARD_ADDRESS</span>
-</span><span id="__span-14-9"><a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a><span class="w">          </span><span class="nt">preshared_key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">YOUR_PRESHARED_KEY</span>
-</span><span id="__span-14-10"><a id="__codelineno-14-10" name="__codelineno-14-10" href="#__codelineno-14-10"></a><span class="w">        </span><span class="nt">server_countries</span><span class="p">:</span>
-</span><span id="__span-14-11"><a id="__codelineno-14-11" name="__codelineno-14-11" href="#__codelineno-14-11"></a><span class="w">          </span><span class="nt">us</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">US</span>
-</span><span id="__span-14-12"><a id="__codelineno-14-12" name="__codelineno-14-12" href="#__codelineno-14-12"></a><span class="w">          </span><span class="nt">uk</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">GB</span>
-</span><span id="__span-14-13"><a id="__codelineno-14-13" name="__codelineno-14-13" href="#__codelineno-14-13"></a><span class="w">        </span><span class="nt">server_cities</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{}</span>
-</span><span id="__span-14-14"><a id="__codelineno-14-14" name="__codelineno-14-14" href="#__codelineno-14-14"></a><span class="w">        </span><span class="nt">server_hostnames</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{}</span>
-</span><span id="__span-14-15"><a id="__codelineno-14-15" name="__codelineno-14-15" href="#__codelineno-14-15"></a><span class="w">        </span><span class="nt">extra_env</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{}</span>
-</span><span id="__span-14-16"><a id="__codelineno-14-16" name="__codelineno-14-16" href="#__codelineno-14-16"></a><span class="w">      </span><span class="nt">nordvpn</span><span class="p">:</span>
-</span><span id="__span-14-17"><a id="__codelineno-14-17" name="__codelineno-14-17" href="#__codelineno-14-17"></a><span class="w">        </span><span class="nt">vpn_type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">wireguard</span>
-</span><span id="__span-14-18"><a id="__codelineno-14-18" name="__codelineno-14-18" href="#__codelineno-14-18"></a><span class="w">        </span><span class="nt">credentials</span><span class="p">:</span>
-</span><span id="__span-14-19"><a id="__codelineno-14-19" name="__codelineno-14-19" href="#__codelineno-14-19"></a><span class="w">          </span><span class="nt">private_key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">YOUR_WIREGUARD_PRIVATE_KEY</span>
-</span><span id="__span-14-20"><a id="__codelineno-14-20" name="__codelineno-14-20" href="#__codelineno-14-20"></a><span class="w">        </span><span class="nt">server_countries</span><span class="p">:</span>
-</span><span id="__span-14-21"><a id="__codelineno-14-21" name="__codelineno-14-21" href="#__codelineno-14-21"></a><span class="w">          </span><span class="nt">us</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">US</span>
-</span><span id="__span-14-22"><a id="__codelineno-14-22" name="__codelineno-14-22" href="#__codelineno-14-22"></a><span class="w">          </span><span class="nt">de</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">DE</span>
-</span><span id="__span-14-23"><a id="__codelineno-14-23" name="__codelineno-14-23" href="#__codelineno-14-23"></a>
-</span><span id="__span-14-24"><a id="__codelineno-14-24" name="__codelineno-14-24" href="#__codelineno-14-24"></a><span class="w">    </span><span class="c1"># Global settings (all optional)</span>
-</span><span id="__span-14-25"><a id="__codelineno-14-25" name="__codelineno-14-25" href="#__codelineno-14-25"></a><span class="w">    </span><span class="nt">base_port</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">8888</span>
-</span><span id="__span-14-26"><a id="__codelineno-14-26" name="__codelineno-14-26" href="#__codelineno-14-26"></a><span class="w">    </span><span class="nt">auto_cleanup</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
-</span><span id="__span-14-27"><a id="__codelineno-14-27" name="__codelineno-14-27" href="#__codelineno-14-27"></a><span class="w">    </span><span class="nt">container_prefix</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">unshackle-gluetun</span>
-</span><span id="__span-14-28"><a id="__codelineno-14-28" name="__codelineno-14-28" href="#__codelineno-14-28"></a><span class="w">    </span><span class="nt">auth_user</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">null</span>
-</span><span id="__span-14-29"><a id="__codelineno-14-29" name="__codelineno-14-29" href="#__codelineno-14-29"></a><span class="w">    </span><span class="nt">auth_password</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">null</span>
-</span><span id="__span-14-30"><a id="__codelineno-14-30" name="__codelineno-14-30" href="#__codelineno-14-30"></a><span class="w">    </span><span class="nt">verify_ip</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="nt">proxy_providers</span><span class="p">:</span>
+</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="w">  </span><span class="nt">gluetun</span><span class="p">:</span>
+</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="w">    </span><span class="nt">providers</span><span class="p">:</span>
+</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="w">      </span><span class="nt">windscribe</span><span class="p">:</span>
+</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a><span class="w">        </span><span class="nt">vpn_type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">wireguard</span>
+</span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a><span class="w">        </span><span class="nt">credentials</span><span class="p">:</span>
+</span><span id="__span-16-7"><a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a><span class="w">          </span><span class="nt">private_key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">YOUR_WIREGUARD_PRIVATE_KEY</span>
+</span><span id="__span-16-8"><a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a><span class="w">          </span><span class="nt">addresses</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">YOUR_WIREGUARD_ADDRESS</span>
+</span><span id="__span-16-9"><a id="__codelineno-16-9" name="__codelineno-16-9" href="#__codelineno-16-9"></a><span class="w">          </span><span class="nt">preshared_key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">YOUR_PRESHARED_KEY</span>
+</span><span id="__span-16-10"><a id="__codelineno-16-10" name="__codelineno-16-10" href="#__codelineno-16-10"></a><span class="w">        </span><span class="nt">server_countries</span><span class="p">:</span>
+</span><span id="__span-16-11"><a id="__codelineno-16-11" name="__codelineno-16-11" href="#__codelineno-16-11"></a><span class="w">          </span><span class="nt">us</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">US</span>
+</span><span id="__span-16-12"><a id="__codelineno-16-12" name="__codelineno-16-12" href="#__codelineno-16-12"></a><span class="w">          </span><span class="nt">uk</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">GB</span>
+</span><span id="__span-16-13"><a id="__codelineno-16-13" name="__codelineno-16-13" href="#__codelineno-16-13"></a><span class="w">        </span><span class="nt">server_cities</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{}</span>
+</span><span id="__span-16-14"><a id="__codelineno-16-14" name="__codelineno-16-14" href="#__codelineno-16-14"></a><span class="w">        </span><span class="nt">server_hostnames</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{}</span>
+</span><span id="__span-16-15"><a id="__codelineno-16-15" name="__codelineno-16-15" href="#__codelineno-16-15"></a><span class="w">        </span><span class="nt">extra_env</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{}</span>
+</span><span id="__span-16-16"><a id="__codelineno-16-16" name="__codelineno-16-16" href="#__codelineno-16-16"></a><span class="w">      </span><span class="nt">nordvpn</span><span class="p">:</span>
+</span><span id="__span-16-17"><a id="__codelineno-16-17" name="__codelineno-16-17" href="#__codelineno-16-17"></a><span class="w">        </span><span class="nt">vpn_type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">wireguard</span>
+</span><span id="__span-16-18"><a id="__codelineno-16-18" name="__codelineno-16-18" href="#__codelineno-16-18"></a><span class="w">        </span><span class="nt">credentials</span><span class="p">:</span>
+</span><span id="__span-16-19"><a id="__codelineno-16-19" name="__codelineno-16-19" href="#__codelineno-16-19"></a><span class="w">          </span><span class="nt">private_key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">YOUR_WIREGUARD_PRIVATE_KEY</span>
+</span><span id="__span-16-20"><a id="__codelineno-16-20" name="__codelineno-16-20" href="#__codelineno-16-20"></a><span class="w">        </span><span class="nt">server_countries</span><span class="p">:</span>
+</span><span id="__span-16-21"><a id="__codelineno-16-21" name="__codelineno-16-21" href="#__codelineno-16-21"></a><span class="w">          </span><span class="nt">us</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">US</span>
+</span><span id="__span-16-22"><a id="__codelineno-16-22" name="__codelineno-16-22" href="#__codelineno-16-22"></a><span class="w">          </span><span class="nt">de</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">DE</span>
+</span><span id="__span-16-23"><a id="__codelineno-16-23" name="__codelineno-16-23" href="#__codelineno-16-23"></a>
+</span><span id="__span-16-24"><a id="__codelineno-16-24" name="__codelineno-16-24" href="#__codelineno-16-24"></a><span class="w">    </span><span class="c1"># Global settings (all optional)</span>
+</span><span id="__span-16-25"><a id="__codelineno-16-25" name="__codelineno-16-25" href="#__codelineno-16-25"></a><span class="w">    </span><span class="nt">base_port</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">8888</span>
+</span><span id="__span-16-26"><a id="__codelineno-16-26" name="__codelineno-16-26" href="#__codelineno-16-26"></a><span class="w">    </span><span class="nt">auto_cleanup</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span><span id="__span-16-27"><a id="__codelineno-16-27" name="__codelineno-16-27" href="#__codelineno-16-27"></a><span class="w">    </span><span class="nt">container_prefix</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">unshackle-gluetun</span>
+</span><span id="__span-16-28"><a id="__codelineno-16-28" name="__codelineno-16-28" href="#__codelineno-16-28"></a><span class="w">    </span><span class="nt">auth_user</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">null</span>
+</span><span id="__span-16-29"><a id="__codelineno-16-29" name="__codelineno-16-29" href="#__codelineno-16-29"></a><span class="w">    </span><span class="nt">auth_password</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">null</span>
+</span><span id="__span-16-30"><a id="__codelineno-16-30" name="__codelineno-16-30" href="#__codelineno-16-30"></a><span class="w">    </span><span class="nt">verify_ip</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
 </span></code></pre></div>
 <p><strong>Per-provider keys:</strong></p>
 <table>
@@ -3318,22 +3457,22 @@ device-login flow, obtains proxy-capable locations from Express's API, and retur
 authenticated HTTPS proxy. The device login runs once. After that, the cached refresh
 token keeps you signed in headlessly.</p>
 <p>Enable it and do a download interactively once:</p>
-<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="nt">proxy_providers</span><span class="p">:</span>
-</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="w">  </span><span class="nt">expressvpn</span><span class="p">:</span>
-</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="w">    </span><span class="nt">enable</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="nt">proxy_providers</span><span class="p">:</span>
+</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="w">  </span><span class="nt">expressvpn</span><span class="p">:</span>
+</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="w">    </span><span class="nt">enable</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
 </span></code></pre></div>
 <p>With <code>enable: true</code> and an interactive terminal, unshackle prints a code and a URL to
 enter it at. Once you approve it, unshackle caches the tokens and reuses them
 automatically, so later runs need no terminal. ExpressVPN also <strong>auto-loads</strong> once its token cache exists, so you can
 drop <code>enable</code> after the first login, but you can keep a YAML block to pin regions or
 servers:</p>
-<div class="language-yaml highlight"><span class="filename">unshackle.yaml (optional)</span><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="nt">proxy_providers</span><span class="p">:</span>
-</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="w">  </span><span class="nt">expressvpn</span><span class="p">:</span>
-</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="w">    </span><span class="nt">region_map</span><span class="p">:</span>
-</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="w">      </span><span class="nt">us</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ny-02</span><span class="w">       </span><span class="c1"># prefer New York, server 02 for the US</span>
-</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a><span class="w">      </span><span class="nt">gb</span><span class="p">:</span><span class="w">             </span><span class="c1"># empty = smart random location</span>
-</span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a><span class="w">    </span><span class="nt">server_map</span><span class="p">:</span>
-</span><span id="__span-16-7"><a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a><span class="w">      </span><span class="nt">myserver</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">usny-newyork-2</span>
+<div class="language-yaml highlight"><span class="filename">unshackle.yaml (optional)</span><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="nt">proxy_providers</span><span class="p">:</span>
+</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="w">  </span><span class="nt">expressvpn</span><span class="p">:</span>
+</span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a><span class="w">    </span><span class="nt">region_map</span><span class="p">:</span>
+</span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a><span class="w">      </span><span class="nt">us</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ny-02</span><span class="w">       </span><span class="c1"># prefer New York, server 02 for the US</span>
+</span><span id="__span-18-5"><a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a><span class="w">      </span><span class="nt">gb</span><span class="p">:</span><span class="w">             </span><span class="c1"># empty = smart random location</span>
+</span><span id="__span-18-6"><a id="__codelineno-18-6" name="__codelineno-18-6" href="#__codelineno-18-6"></a><span class="w">    </span><span class="nt">server_map</span><span class="p">:</span>
+</span><span id="__span-18-7"><a id="__codelineno-18-7" name="__codelineno-18-7" href="#__codelineno-18-7"></a><span class="w">      </span><span class="nt">myserver</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">usny-newyork-2</span>
 </span></code></pre></div>
 <p><strong>Default file location:</strong></p>
 <table>
@@ -3393,13 +3532,13 @@ token is never briefly world-readable.</p>
 <p>NordVPN uses your <strong>Service Credentials</strong>, not your normal NordVPN login. Make them
 from the <a href="https://my.nordaccount.com/dashboard/nordvpn/">NordVPN dashboard</a> under manual
 setup. They are a long random username/password pair, not your email and password.</p>
-<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="nt">proxy_providers</span><span class="p">:</span>
-</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="w">  </span><span class="nt">nordvpn</span><span class="p">:</span>
-</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="w">    </span><span class="nt">username</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">YOUR_SERVICE_USERNAME</span>
-</span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="w">    </span><span class="nt">password</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">YOUR_SERVICE_PASSWORD</span>
-</span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a><span class="w">    </span><span class="nt">server_map</span><span class="p">:</span><span class="w">                </span><span class="c1"># optional: pin specific server IDs</span>
-</span><span id="__span-17-6"><a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a><span class="w">      </span><span class="nt">us</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1234</span>
-</span><span id="__span-17-7"><a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a><span class="w">      </span><span class="nt">us:seattle</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">5678</span>
+<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="nt">proxy_providers</span><span class="p">:</span>
+</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="w">  </span><span class="nt">nordvpn</span><span class="p">:</span>
+</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="w">    </span><span class="nt">username</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">YOUR_SERVICE_USERNAME</span>
+</span><span id="__span-19-4"><a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a><span class="w">    </span><span class="nt">password</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">YOUR_SERVICE_PASSWORD</span>
+</span><span id="__span-19-5"><a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a><span class="w">    </span><span class="nt">server_map</span><span class="p">:</span><span class="w">                </span><span class="c1"># optional: pin specific server IDs</span>
+</span><span id="__span-19-6"><a id="__codelineno-19-6" name="__codelineno-19-6" href="#__codelineno-19-6"></a><span class="w">      </span><span class="nt">us</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1234</span>
+</span><span id="__span-19-7"><a id="__codelineno-19-7" name="__codelineno-19-7" href="#__codelineno-19-7"></a><span class="w">      </span><span class="nt">us:seattle</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">5678</span>
 </span></code></pre></div>
 <p><strong>Required keys:</strong> <code>username</code>, <code>password</code>. unshackle validates them up front: the
 combined username and password must be exactly 48 alphanumeric characters (case-insensitive), and
@@ -3444,7 +3583,7 @@ country-code confusion that <code>uk</code> invites.</p>
 </table>
 <p>The returned proxy is HTTPS on <strong>port 89</strong> (NordVPN disabled its plain-HTTP proxies on
 port 80 in 2021).</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--proxy<span class="w"> </span>nordvpn:us:seattle<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--proxy<span class="w"> </span>nordvpn:us:seattle<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
 <h2 id="proton-vpn">Proton VPN<a class="headerlink" href="#proton-vpn" title="Permanent link">&para;</a></h2>
 <p>Proton VPN supports two authentication methods, and unshackle can work with either. Note
@@ -3455,9 +3594,9 @@ that free Proton accounts work, but Proton limits them to its free-tier exit cou
 <p>Proton's TV device-login flow gives a self-sustaining, refreshable sign-in. This is
 the only method that can refresh itself headlessly, so it keeps working without
 re-exporting anything. Enable it and do a download interactively once:</p>
-<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="nt">proxy_providers</span><span class="p">:</span>
-</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="w">  </span><span class="nt">protonvpn</span><span class="p">:</span>
-</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="w">    </span><span class="nt">enable</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="nt">proxy_providers</span><span class="p">:</span>
+</span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a><span class="w">  </span><span class="nt">protonvpn</span><span class="p">:</span>
+</span><span id="__span-21-3"><a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a><span class="w">    </span><span class="nt">enable</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
 </span></code></pre></div>
 <p>With <code>enable: true</code> and an interactive terminal, unshackle prints a code and asks you
 to enter it at <a href="https://account.proton.me/vpn/tv/code">account.proton.me/vpn/tv/code</a>.
@@ -3552,8 +3691,8 @@ binary is missing, the proxy provider raises an error that tells you to install 
 <p>The <code>hola-proxy</code> GitHub repository is no longer online, so build the binary with Go. The
 Go module proxy still has the source for version 1.18.2. <code>go install</code> puts the binary in
 <code>$(go env GOPATH)/bin</code>, which must be on your <code>PATH</code>.</p>
-<div class="language-shell highlight"><span class="filename">Build hola-proxy, then query a country</span><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>go<span class="w"> </span>install<span class="w"> </span>github.com/Snawoot/hola-proxy@v1.18.2
-</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--proxy<span class="w"> </span>hola:us<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+<div class="language-shell highlight"><span class="filename">Build hola-proxy, then query a country</span><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>go<span class="w"> </span>install<span class="w"> </span>github.com/Snawoot/hola-proxy@v1.18.2
+</span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--proxy<span class="w"> </span>hola:us<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
 <p><strong>Query forms:</strong> a two-letter country code (e.g. <code>us</code>, <code>gb</code>). unshackle asks <code>hola-proxy</code>
 for available proxies in that country and picks one at random, returning an HTTP proxy.</p>
@@ -3567,13 +3706,13 @@ Hola currently uses only datacenter proxies.</p>
 <h2 id="surfshark">Surfshark<a class="headerlink" href="#surfshark" title="Permanent link">&para;</a></h2>
 <p>Surfshark, like NordVPN, uses <strong>Service Credentials</strong> rather than your login. Make
 them from the <a href="https://my.surfshark.com/vpn/manual-setup/main/openvpn">Surfshark manual-setup page</a>.</p>
-<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="nt">proxy_providers</span><span class="p">:</span>
-</span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a><span class="w">  </span><span class="nt">surfsharkvpn</span><span class="p">:</span>
-</span><span id="__span-21-3"><a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a><span class="w">    </span><span class="nt">username</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">YOUR_SERVICE_USERNAME</span>
-</span><span id="__span-21-4"><a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a><span class="w">    </span><span class="nt">password</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">YOUR_SERVICE_PASSWORD</span>
-</span><span id="__span-21-5"><a id="__codelineno-21-5" name="__codelineno-21-5" href="#__codelineno-21-5"></a><span class="w">    </span><span class="nt">server_map</span><span class="p">:</span><span class="w">                </span><span class="c1"># optional: region -&gt; server name</span>
-</span><span id="__span-21-6"><a id="__codelineno-21-6" name="__codelineno-21-6" href="#__codelineno-21-6"></a><span class="w">      </span><span class="nt">us</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">us-dal</span>
-</span><span id="__span-21-7"><a id="__codelineno-21-7" name="__codelineno-21-7" href="#__codelineno-21-7"></a><span class="w">      </span><span class="nt">us:seattle</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">us-sea</span>
+<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="nt">proxy_providers</span><span class="p">:</span>
+</span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a><span class="w">  </span><span class="nt">surfsharkvpn</span><span class="p">:</span>
+</span><span id="__span-23-3"><a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a><span class="w">    </span><span class="nt">username</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">YOUR_SERVICE_USERNAME</span>
+</span><span id="__span-23-4"><a id="__codelineno-23-4" name="__codelineno-23-4" href="#__codelineno-23-4"></a><span class="w">    </span><span class="nt">password</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">YOUR_SERVICE_PASSWORD</span>
+</span><span id="__span-23-5"><a id="__codelineno-23-5" name="__codelineno-23-5" href="#__codelineno-23-5"></a><span class="w">    </span><span class="nt">server_map</span><span class="p">:</span><span class="w">                </span><span class="c1"># optional: region -&gt; server name</span>
+</span><span id="__span-23-6"><a id="__codelineno-23-6" name="__codelineno-23-6" href="#__codelineno-23-6"></a><span class="w">      </span><span class="nt">us</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">us-dal</span>
+</span><span id="__span-23-7"><a id="__codelineno-23-7" name="__codelineno-23-7" href="#__codelineno-23-7"></a><span class="w">      </span><span class="nt">us:seattle</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">us-sea</span>
 </span></code></pre></div>
 <p><strong>Required keys:</strong> <code>username</code>, <code>password</code>, validated with the same 48-character rule as
 NordVPN (combined username+password must be 48 alphanumeric characters, case-insensitive, no <code>@</code>).
@@ -3615,13 +3754,13 @@ proxy provider earlier in the order, and a bare <code>us:seattle</code> does not
 <p>Windscribe uses <strong>Service Credentials</strong> from its
 <a href="https://windscribe.com/getconfig/openvpn">OpenVPN config page</a>. unshackle only makes
 sure that a username and a password are present (there is no 48-character rule).</p>
-<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="nt">proxy_providers</span><span class="p">:</span>
-</span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a><span class="w">  </span><span class="nt">windscribevpn</span><span class="p">:</span>
-</span><span id="__span-22-3"><a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a><span class="w">    </span><span class="nt">username</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">YOUR_SERVICE_USERNAME</span>
-</span><span id="__span-22-4"><a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a><span class="w">    </span><span class="nt">password</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">YOUR_SERVICE_PASSWORD</span>
-</span><span id="__span-22-5"><a id="__codelineno-22-5" name="__codelineno-22-5" href="#__codelineno-22-5"></a><span class="w">    </span><span class="nt">server_map</span><span class="p">:</span><span class="w">                       </span><span class="c1"># optional: alias -&gt; hostname</span>
-</span><span id="__span-22-6"><a id="__codelineno-22-6" name="__codelineno-22-6" href="#__codelineno-22-6"></a><span class="w">      </span><span class="nt">us</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">us-east.totallyacdn.com</span>
-</span><span id="__span-22-7"><a id="__codelineno-22-7" name="__codelineno-22-7" href="#__codelineno-22-7"></a><span class="w">      </span><span class="nt">us:seattle</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">us-seattle.totallyacdn.com</span>
+<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="nt">proxy_providers</span><span class="p">:</span>
+</span><span id="__span-24-2"><a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a><span class="w">  </span><span class="nt">windscribevpn</span><span class="p">:</span>
+</span><span id="__span-24-3"><a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a><span class="w">    </span><span class="nt">username</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">YOUR_SERVICE_USERNAME</span>
+</span><span id="__span-24-4"><a id="__codelineno-24-4" name="__codelineno-24-4" href="#__codelineno-24-4"></a><span class="w">    </span><span class="nt">password</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">YOUR_SERVICE_PASSWORD</span>
+</span><span id="__span-24-5"><a id="__codelineno-24-5" name="__codelineno-24-5" href="#__codelineno-24-5"></a><span class="w">    </span><span class="nt">server_map</span><span class="p">:</span><span class="w">                       </span><span class="c1"># optional: alias -&gt; hostname</span>
+</span><span id="__span-24-6"><a id="__codelineno-24-6" name="__codelineno-24-6" href="#__codelineno-24-6"></a><span class="w">      </span><span class="nt">us</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">us-east.totallyacdn.com</span>
+</span><span id="__span-24-7"><a id="__codelineno-24-7" name="__codelineno-24-7" href="#__codelineno-24-7"></a><span class="w">      </span><span class="nt">us:seattle</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">us-seattle.totallyacdn.com</span>
 </span></code></pre></div>
 <p><strong>Required keys:</strong> <code>username</code>, <code>password</code>. <code>server_map</code> optionally maps a region (or
 <code>region:city</code>) directly to a hostname.</p>
