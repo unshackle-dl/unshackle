@@ -25,7 +25,8 @@ A structured error is always a JSON object with `status` set to the literal stri
 {
   "status": "error",
   "error_code": "INVALID_PARAMETERS",
-  "message": "vcodec must be one of: H264, H265, ...",
+  "message": "vcodec must be one of: H264, H265, ... (ref 7f3a2c)",
+  "ref": "7f3a2c",
   "timestamp": "2026-07-03T12:34:56.789012+00:00",
   "details": { "field": "vcodec" },
   "retryable": true,
@@ -40,7 +41,8 @@ A structured error is always a JSON object with `status` set to the literal stri
 |---|---|---|---|
 | `status` | string | Yes | Always the literal `"error"`. Lets a client distinguish an error body from a success body at a glance. |
 | `error_code` | string | Yes | A stable, machine-readable code from the [catalogue below](#error-code-catalogue). Match on this, not on `message`. |
-| `message` | string | Yes | A human-readable description of what went wrong. Wording may change between versions, so do not parse it. |
+| `message` | string | Yes | A human-readable description of what went wrong, followed by `(ref <ref>)`. Wording may change between versions, so do not parse it. |
+| `ref` | string | Yes | A short random reference for this one error. The server logs it with the request, so an operator can find the record from a user's report. |
 | `timestamp` | string | Yes | ISO 8601 timestamp (UTC) of when the error response was built. |
 | `details` | object | Only when non-empty | Structured, error-specific context (for example the invalid field, a list of available titles, or the set of currently active jobs). |
 | `retryable` | boolean | Only when `true` | Present and set to `true` when retrying the same request may succeed later (network blips, rate limiting, transient outages). Absent otherwise. |
@@ -51,6 +53,17 @@ A structured error is always a JSON object with `status` set to the literal stri
     as a coarse fallback for anything you do not recognise. The two are consistent:
     every code maps to a default status (see the catalogue), and the pairing is
     stable across releases.
+
+### Find an error from its `ref`
+
+For each error response, the server logs one `WARNING` line on the `api` logger:
+
+```text
+Error ref 7f3a2c: SERVICE_ERROR 422 POST /api/session/<id>/license service=EXAMPLE user=alice: Licence request failed: ...
+```
+
+Search the server log for `Error ref <ref>`. The handler's traceback, when there is one,
+is directly above that line. The [developer dashboard](dashboard.md) log view also shows it.
 
 ### The `details` object
 

@@ -7,6 +7,7 @@ and optional debug information for the unshackle REST API.
 
 from __future__ import annotations
 
+import secrets
 import traceback
 from datetime import datetime, timezone
 from enum import Enum
@@ -114,6 +115,9 @@ def build_error_response(
     """
     Assemble a structured JSON error response.
 
+    Each error gets a short ``ref``, also appended to ``message`` so that every client prints it.
+    The stats middleware logs the ref with the request, so a reported ref finds the server-side record.
+
     Args:
         error: APIError or generic Exception to convert to response
         debug_mode: Whether to include technical debug information
@@ -135,10 +139,12 @@ def build_error_response(
         http_status = 500
         retryable = False
 
+    ref = secrets.token_hex(3)
     response_data: dict[str, Any] = {
         "status": "error",
         "error_code": error_code,
-        "message": message,
+        "message": f"{message} (ref {ref})",
+        "ref": ref,
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
@@ -161,7 +167,9 @@ def build_error_response(
 
         response_data["debug_info"] = debug_info
 
-    return web.json_response(response_data, status=http_status)
+    response = web.json_response(response_data, status=http_status)
+    response["error"] = {"code": error_code, "ref": ref, "message": message}
+    return response
 
 
 def categorize_exception(

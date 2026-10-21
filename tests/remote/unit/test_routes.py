@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from collections import Counter, defaultdict
 
 import pytest
 from aiohttp import web
@@ -132,7 +133,7 @@ async def test_api_handler_maps_apierror(aiohttp_client) -> None:
     body = await resp.json()
     assert body["status"] == "error"
     assert body["error_code"] == "NOT_FOUND"
-    assert body["message"] == "nope"
+    assert body["message"] == f"nope (ref {body['ref']})"
     assert body["details"] == {"x": 1}
 
 
@@ -180,6 +181,7 @@ async def test_heartbeat_late_error_counts_as_rejected(aiohttp_client, monkeypat
 
     monkeypatch.setattr(routes, "HEARTBEAT_INTERVAL", 0.05)
     monkeypatch.setattr(stats, "keys", {})
+    monkeypatch.setattr(stats, "errors", defaultdict(Counter))
 
     @heartbeat
     async def slow_fail(request: web.Request) -> web.Response:
@@ -195,6 +197,33 @@ async def test_heartbeat_late_error_counts_as_rejected(aiohttp_client, monkeypat
     sent = len(await resp.read())
     (entry,) = stats.keys.values()
     assert resp.status == 200 and entry.rejected == 1 and entry.bytes_out >= sent > 0
+    assert stats.errors == {"-": {"SERVICE_ERROR": 1}}
+
+
+@pytest.mark.parametrize(("service", "counted_as"), [("EXAMPLE", "EXAMPLE"), ("NOT_INSTALLED", "-")])
+async def test_error_is_counted_by_service_and_logged_with_its_ref(
+    aiohttp_client, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture, service: str, counted_as: str
+) -> None:
+    """A gzipped error still reaches the stats: counted under an installed service only, and logged with its ref."""
+    from unshackle.core.api.stats import stats, stats_middleware
+
+    monkeypatch.setattr(stats, "errors", defaultdict(Counter))
+
+    @api_handler
+    async def fail(request: web.Request) -> web.Response:
+        await request.json()
+        raise APIError(APIErrorCode.SERVICE_ERROR, "denied", details={"pad": "x" * 300})
+
+    app = web.Application(middlewares=[stats_middleware, compression_middleware])
+    app["debug_api"] = False
+    app.router.add_post("/fail", fail)
+    client = await aiohttp_client(app)
+
+    resp = await client.post("/fail", json={"service": service}, headers={"Accept-Encoding": "gzip"})
+    body = await resp.json()
+    assert resp.headers["Content-Encoding"] == "gzip"
+    assert stats.errors == {counted_as: {"SERVICE_ERROR": 1}}
+    assert f"Error ref {body['ref']}: SERVICE_ERROR 422 POST /fail service={counted_as}" in caplog.text
 
 
 async def test_heartbeat_client_disconnect_is_quiet(

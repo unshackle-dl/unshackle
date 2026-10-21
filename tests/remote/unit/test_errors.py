@@ -73,7 +73,7 @@ def test_build_error_response_from_api_error() -> None:
     body = _body(resp)
     assert body["status"] == "error"
     assert body["error_code"] == "SESSION_NOT_FOUND"
-    assert body["message"] == "no such session"
+    assert body["message"] == f"no such session (ref {body['ref']})"
     assert body["details"] == {"session_id": "abc"}
     assert "retryable" not in body
     assert "debug_info" not in body
@@ -91,7 +91,7 @@ def test_build_error_response_from_generic_exception() -> None:
     assert resp.status == 500
     body = _body(resp)
     assert body["error_code"] == "INTERNAL_ERROR"
-    assert body["message"] == "oops"
+    assert body["message"] == f"oops (ref {body['ref']})"
 
 
 def test_build_error_response_debug_mode_includes_traceback() -> None:
@@ -188,6 +188,6 @@ def test_error_contract_apierror_passthrough_full_shape() -> None:
     assert resp.status == 429
     body = _body(resp)
     assert body["error_code"] == "RATE_LIMITED"
-    assert body["message"] == "slow down"
+    assert body["message"] == f"slow down (ref {body['ref']})"
     assert body["details"] == {"retry_after": 5}
     assert body["retryable"] is True

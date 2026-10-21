@@ -61,4 +61,4 @@ def test_compresses_large_json_when_accepted() -> None:
     assert resp.headers.get("Content-Encoding") == "gzip"
     decompressed = gzip.decompress(resp.body)
     assert json.loads(decompressed) == big
-    assert resp.headers["Content-Length"] == str(len(resp.body))
+    assert resp.content_length == len(resp.body)

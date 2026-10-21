@@ -7,7 +7,7 @@ import hashlib
 import json
 import logging
 import time
-from collections import Counter, deque
+from collections import Counter, defaultdict, deque
 from dataclasses import dataclass, field
 from functools import lru_cache
 from typing import Any, Deque, Dict, List, Optional, Tuple
@@ -143,6 +143,7 @@ class ServerStats:
     requests_total: int = 0
     requests_rejected: int = 0
     keys: Dict[str, KeyStats] = field(default_factory=dict)
+    errors: Dict[str, Counter] = field(default_factory=lambda: defaultdict(Counter))  # service -> error_code -> count
 
     def key_stats(self, key: Optional[str]) -> KeyStats:
         """The counters for an API key, created on first sight."""
@@ -194,6 +195,7 @@ class ServerStats:
             "requests_total": self.requests_total,
             "requests_rejected": self.requests_rejected,
             "requests_by_key": dict(self.requests_by_key),
+            "errors": {service: dict(codes) for service, codes in self.errors.items()},
         }
 
 
@@ -203,16 +205,18 @@ stats = ServerStats()
 @web.middleware
 async def stats_middleware(request: web.Request, handler: Any) -> web.StreamResponse:
     from unshackle.core.api.handlers import request_secret_key
+    from unshackle.core.api.sanitize import sanitize_log
 
     stats.requests_total += 1
     started = time.perf_counter()
     response = await handler(request)
     status = response.get("late_status", response.status)
     bytes_out = getattr(response, "content_length", None) or response.body_length
+    key = None if status == 401 else configured_key(request_secret_key(request))
     if status == 401:
         stats.requests_rejected += 1
     else:
-        entry = stats.key_stats(configured_key(request_secret_key(request)))
+        entry = stats.key_stats(key)
         entry.requests += 1
         entry.last_seen = time.time()
         entry.bytes_out += bytes_out
@@ -235,7 +239,31 @@ async def stats_middleware(request: web.Request, handler: Any) -> web.StreamResp
                 "bytes_out": bytes_out,
             },
         )
+    error = response.get("error")
+    if error:
+        service = await _request_service(request, session_id)
+        stats.errors[service][error["code"]] += 1
+        logging.getLogger("api").warning(
+            f"Error ref {error['ref']}: {error['code']} {status} {request.method} {sanitize_log(request.path)} "
+            f"service={service} user={sanitize_log(mask_key(key))}: {sanitize_log(error['message'])}"
+        )
     return response
+
+
+async def _request_service(request: web.Request, session_id: Optional[str]) -> str:
+    """The installed service tag a request is for, from its remote session or its JSON body; ``-`` if none.
+
+    Only an installed tag counts, so a caller cannot grow ``stats.errors`` with made-up names.
+    """
+    from unshackle.core.api.session_store import get_session_store
+    from unshackle.core.services import Services
+
+    entry = get_session_store().peek(session_id) if session_id else None
+    service = entry.service_tag if entry is not None else (await _consumed_json(request)).get("service")
+    if not isinstance(service, str):
+        return "-"
+    tag = Services.get_tag(service)
+    return tag if tag in Services.get_tags() else "-"
 
 
 class SeqRing:
@@ -347,20 +375,20 @@ def _reply_json(response: Any) -> Dict[str, Any]:
     return data if isinstance(data, dict) else {}
 
 
-async def _request_session_id(request: web.Request) -> Any:
-    """The ``session_id`` of the JSON request body, when the handler consumed it: aiohttp caches that read.
+async def _consumed_json(request: web.Request) -> Dict[str, Any]:
+    """The JSON object of the request body when the handler consumed it (aiohttp caches that read), else ``{}``.
 
     A body nobody read belongs to a call refused before the handler, a 401 or a 429. It stays
     unread: reading it would spend time and memory on an unauthenticated caller, and wait on a
     body that never finishes arriving.
     """
     if not request.content.at_eof():
-        return None
+        return {}
     try:
         body = await request.json()
     except Exception:
-        return None
-    return body.get("session_id") if isinstance(body, dict) else None
+        return {}
+    return body if isinstance(body, dict) else {}
 
 
 async def _cdm_record(request: web.Request, drm: str, op: str, outcome: Any) -> Dict[str, Any]:
@@ -388,7 +416,7 @@ async def _cdm_record(request: web.Request, drm: str, op: str, outcome: Any) -> 
     elif op == "close":
         session_id = request.match_info.get("session_id")
     else:
-        session_id = await _request_session_id(request)
+        session_id = (await _consumed_json(request)).get("session_id")
     return {
         "drm": drm,
         "op": op,

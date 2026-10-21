@@ -49,12 +49,6 @@ async def compression_middleware(request: web.Request, handler) -> web.StreamRes
     if not level:
         return response
 
-    compressed = gzip.compress(body, compresslevel=level)
-    headers = dict(response.headers)
-    headers["Content-Encoding"] = "gzip"
-    headers["Content-Length"] = str(len(compressed))
-    return web.Response(
-        body=compressed,
-        status=response.status,
-        headers=headers,
-    )
+    response.body = gzip.compress(body, compresslevel=level)
+    response.headers["Content-Encoding"] = "gzip"
+    return response

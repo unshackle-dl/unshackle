@@ -147,6 +147,7 @@ def heartbeat(handler: Handler) -> Handler:
             log.exception(f"Error in {request.path}")
             result = handle_api_exception(e, debug_mode=debug_mode)
         response["late_status"] = result.status
+        response["error"] = result.get("error")
         body = result.body if isinstance(result, web.Response) else None
         await response.write(bytes(body) if isinstance(body, (bytes, bytearray)) else b"{}")
         await response.write_eof()
@@ -2581,8 +2582,8 @@ async def dashboard_status(request: web.Request) -> web.Response:
     ---
     summary: Dashboard server status
     description: >
-      Version, uptime, bind address, mode, request counters per API key, and counts of
-      services, remote sessions and jobs. Every /api/dashboard/ route needs
+      Version, uptime, bind address, mode, request counters per API key, error counts by
+      service and error code, and counts of services, remote sessions and jobs. Every /api/dashboard/ route needs
       `serve.dashboard.key` in X-Secret-Key; a user key never passes, and the routes do not
       exist without a dashboard key.
     tags: [Dashboard]
