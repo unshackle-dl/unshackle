@@ -2914,7 +2914,8 @@ and endpoint on your account the first time it needs one, and uses it again on t
 run. Give <code>profile</code> and <code>resolver</code> only to use a profile that you made yourself (see
 <a href="#how-unshackle-chooses-a-profile">How unshackle chooses a profile</a>).</p>
 <p>The returned proxy is HTTP on loopback,
-<code>http://127.0.0.1:{port}</code>. The locations themselves are read from Control D at startup
+<code>http://127.0.0.1:{port}</code>. The log shows the location and a masked resolver ID, for example
+<code>Using ControlD Proxy (YUL - Montreal): abcd***@dns.controld.com</code>. The locations themselves are read from Control D at startup
 (107 of them across 68 countries, at the time of writing), so there is nothing to list:</p>
 <table>
 <thead>
