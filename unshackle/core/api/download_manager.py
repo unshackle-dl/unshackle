@@ -735,6 +735,9 @@ class DownloadQueueManager:
 
     def create_job(self, service: str, title_id: str, owner_key: Optional[str] = None, **parameters) -> DownloadJob:
         """Make a new download job and add it to the queue."""
+        from unshackle.core.api.session_store import refuse_while_draining
+
+        refuse_while_draining()
         job_id = str(uuid.uuid4())
         job = DownloadJob(
             job_id=job_id,

@@ -558,11 +558,12 @@ def test_session_create_writes_nested_cache_and_skips_colliding_keys(tmp_path, m
         "create_service_instance",
         lambda *args, **kwargs: (SimpleNamespace(log=logging.getLogger("Svc")), None, None),
     )
+    monkeypatch.setattr("unshackle.core.api.session_store.refuse_while_draining", lambda: None)
     monkeypatch.setattr("unshackle.core.api.session_store.get_session_store", lambda: (_ for _ in ()).throw(Stop()))
 
     cache = {"x": blob('"flat"'), "x.json/y": blob('"collides"'), "MSL/keys.v2": blob('"dotted"')}
     response = asyncio.run(handlers.session_create_handler({"service": "TESTSVC", "title_id": "t", "cache": cache}))
-    assert response.status == 500  # the Stop stand-in fired after the cache write
+    assert response.status == 422  # the Stop stand-in fired after the cache write
 
     written = {p.name: p.read_text() for p in tmp_path.rglob("*.json") if p.is_file()}
     assert written == {"x.json": '"flat"', "keys.v2.json": '"dotted"'}

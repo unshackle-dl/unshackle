@@ -24,6 +24,11 @@ from unshackle.core.tracks import Track
 
 log = logging.getLogger("api.session")
 
+DRAIN_WARNING = (
+    "This server restarts for an update when the open downloads finish. "
+    "This download continues. Start new downloads after the restart."
+)
+
 
 @dataclass
 class SessionEntry:
@@ -129,6 +134,7 @@ class SessionStore:
         self._sessions: Dict[str, SessionEntry] = {}
         self._lock = asyncio.Lock()
         self._cleanup_task: Optional[asyncio.Task] = None
+        self.draining = False
 
     @property
     def ttl(self) -> int:
@@ -322,6 +328,21 @@ class SessionStore:
         """Snapshot of every live session."""
         return list(self._sessions.values())
 
+    def start_drain(self) -> None:
+        """Refuse new sessions and jobs until the restart, and warn each open session through its service log."""
+        if self.draining:
+            return
+        self.draining = True
+        log.warning(f"Draining: new sessions and jobs are refused, {len(self._sessions)} session(s) open")
+        for entry in self._sessions.values():
+            if entry.log_buffer is not None:
+                entry.log_buffer.append(logging.WARNING, DRAIN_WARNING)
+
+    def stop_drain(self) -> None:
+        if self.draining:
+            self.draining = False
+            log.warning("Drain cancelled: new sessions and jobs are accepted again")
+
     @property
     def session_count(self) -> int:
         """Number of active sessions."""
@@ -329,6 +350,19 @@ class SessionStore:
 
 
 session_store: Optional[SessionStore] = None
+
+
+def refuse_while_draining() -> None:
+    """Raise SERVER_DRAINING for a new session or job once the operator has started a drain."""
+    from unshackle.core.api.errors import APIError, APIErrorCode
+
+    if get_session_store().draining:
+        raise APIError(
+            APIErrorCode.SERVER_DRAINING,
+            "This server restarts for an update and does not start new sessions or downloads now. "
+            "Try again in a few minutes.",
+            retryable=True,
+        )
 
 
 def get_session_store() -> SessionStore:

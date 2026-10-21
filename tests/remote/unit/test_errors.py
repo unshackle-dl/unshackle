@@ -40,20 +40,21 @@ def test_api_error_default_http_status_per_code() -> None:
         APIErrorCode.TRACK_NOT_FOUND: 404,
         APIErrorCode.CONFLICT: 409,
         APIErrorCode.RATE_LIMITED: 429,
-        APIErrorCode.INTERNAL_ERROR: 500,
-        APIErrorCode.DOWNLOAD_ERROR: 500,
-        APIErrorCode.WORKER_ERROR: 500,
+        APIErrorCode.INTERNAL_ERROR: 422,
+        APIErrorCode.DOWNLOAD_ERROR: 422,
+        APIErrorCode.WORKER_ERROR: 422,
         APIErrorCode.SERVICE_ERROR: 422,
         APIErrorCode.DRM_ERROR: 422,
-        APIErrorCode.NETWORK_ERROR: 503,
-        APIErrorCode.SERVICE_UNAVAILABLE: 503,
+        APIErrorCode.NETWORK_ERROR: 424,
+        APIErrorCode.SERVICE_UNAVAILABLE: 424,
+        APIErrorCode.SERVER_DRAINING: 409,
     }
     # Lock that the cases above are the *complete* live set; a new/removed code trips this.
     assert {c.name for c in cases} == {c.name for c in APIErrorCode}
     for code, expected in cases.items():
         assert APIError(code, "x").http_status == expected, code
-    # the edge proxy replaces a 502 or 504 body, so no code may default to either
-    assert not {502, 504} & set(cases.values())
+    # the edge proxy can replace a 5xx body, so no code may default to one
+    assert all(status < 500 for status in cases.values())
 
 
 def test_api_error_explicit_http_status_overrides_default() -> None:
@@ -88,7 +89,7 @@ def test_build_error_response_retryable_flag() -> None:
 
 def test_build_error_response_from_generic_exception() -> None:
     resp = build_error_response(RuntimeError("oops"))
-    assert resp.status == 500
+    assert resp.status == 422
     body = _body(resp)
     assert body["error_code"] == "INTERNAL_ERROR"
     assert body["message"] == f"oops (ref {body['ref']})"
@@ -161,15 +162,15 @@ def test_handle_api_exception_categorizes_generic() -> None:
     "exc, status, code, retryable",
     [
         (Exception("Invalid credentials provided"), 401, "AUTH_FAILED", False),
-        (Exception("Connection refused"), 503, "NETWORK_ERROR", True),
-        (TimeoutError("read timeout"), 503, "NETWORK_ERROR", True),
+        (Exception("Connection refused"), 424, "NETWORK_ERROR", True),
+        (TimeoutError("read timeout"), 424, "NETWORK_ERROR", True),
         (Exception("Not available in your region"), 403, "GEOFENCE", False),
         (Exception("Title not found"), 404, "NOT_FOUND", False),
         (Exception("HTTP 429 too many requests"), 429, "RATE_LIMITED", True),
         (Exception("DRM license fetch failed"), 422, "DRM_ERROR", False),
-        (Exception("503 service unavailable"), 503, "SERVICE_UNAVAILABLE", True),
+        (Exception("503 service unavailable"), 424, "SERVICE_UNAVAILABLE", True),
         (ValueError("malformed body"), 400, "INVALID_INPUT", False),
-        (RuntimeError("totally novel failure xyz"), 500, "INTERNAL_ERROR", False),
+        (RuntimeError("totally novel failure xyz"), 422, "INTERNAL_ERROR", False),
     ],
 )
 def test_error_contract_generic_exception(exc: Exception, status: int, code: str, retryable: bool) -> None:
@@ -191,3 +192,29 @@ def test_error_contract_apierror_passthrough_full_shape() -> None:
     assert body["message"] == f"slow down (ref {body['ref']})"
     assert body["details"] == {"retry_after": 5}
     assert body["retryable"] is True
+
+
+async def test_outer_middleware_never_answers_5xx(aiohttp_client) -> None:
+    from aiohttp import web
+
+    from unshackle.core.api.routes import no_5xx_middleware
+
+    async def broken(request: web.Request) -> web.Response:
+        raise KeyError(request.headers["X-Secret-Key"])
+
+    async def subapp_500(_request: web.Request) -> web.Response:
+        return web.json_response({"status": 500, "message": "device error"}, status=500)
+
+    app = web.Application(middlewares=[no_5xx_middleware])
+    app.router.add_get("/broken", broken)
+    app.router.add_get("/subapp", subapp_500)
+    client = await aiohttp_client(app)
+
+    resp = await client.get("/broken", headers={"X-Secret-Key": "leaky-key"})
+    assert resp.status == 422
+    body = await resp.json()
+    assert body["error_code"] == "INTERNAL_ERROR" and "leaky-key" not in json.dumps(body)
+
+    resp = await client.get("/subapp")
+    assert resp.status == 422 and (await resp.json())["message"] == "device error"
+    assert (await client.get("/missing")).status == 404

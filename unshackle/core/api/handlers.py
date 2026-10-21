@@ -2716,8 +2716,25 @@ async def dashboard_status_handler(request: web.Request) -> web.Response:
             "max_sessions": store.max_sessions,
             "session_ttl": store.ttl,
             "jobs": dict(jobs),
+            "draining": store.draining,
         }
     )
+
+
+async def dashboard_drain_start_handler(request: web.Request) -> web.Response:
+    """Start a drain before a restart; answer with the status body."""
+    from unshackle.core.api.session_store import get_session_store
+
+    get_session_store().start_drain()
+    return await dashboard_status_handler(request)
+
+
+async def dashboard_drain_stop_handler(request: web.Request) -> web.Response:
+    """Cancel the drain; answer with the status body."""
+    from unshackle.core.api.session_store import get_session_store
+
+    get_session_store().stop_drain()
+    return await dashboard_status_handler(request)
 
 
 async def dashboard_sessions_handler(request: web.Request) -> web.Response:
@@ -3857,8 +3874,9 @@ async def session_create_handler(data: Dict[str, Any], request: Optional[web.Req
     remote session on the server with the authenticated service instance, fetches all
     titles and tracks, and returns everything the client needs for track selection.
     """
-    from unshackle.core.api.session_store import get_session_store
+    from unshackle.core.api.session_store import get_session_store, refuse_while_draining
 
+    refuse_while_draining()
     service_tag = data.get("service")
     title_id = data.get("title_id")
     profile = client_profile(data)
@@ -5691,12 +5709,12 @@ async def tunnel_check_handler(request: web.Request) -> web.Response:
         try:
             info = await asyncio.to_thread(verify_proxy_exit, session)
         except ConnectionError as e:
-            raise APIError(APIErrorCode.INVALID_PROXY, str(e), http_status=502)
+            raise APIError(APIErrorCode.INVALID_PROXY, str(e), http_status=424)
     if not info:
         raise APIError(
             APIErrorCode.INVALID_PROXY,
             "The server could not look up an IP address through the tunnel.",
-            http_status=502,
+            http_status=424,
         )
     ms = round((time.perf_counter() - started) * 1000)
     return web.json_response({"ip": info.get("ip"), "country": info.get("country"), "ms": ms})

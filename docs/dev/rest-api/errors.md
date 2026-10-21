@@ -100,14 +100,15 @@ When it is absent, assume the request will keep failing until you change somethi
 
 Every code below is a member of the `APIErrorCode` enumeration. The **Status** column
 is the default HTTP status the server returns for that code. A handler can override
-the status in special cases (for example, a network error is always forced to `503`),
-but the defaults hold for the overwhelming majority of responses.
+the status in special cases, but the defaults hold for the overwhelming majority of responses.
+
+The server never answers with a `5xx` status. A proxy such as Cloudflare can replace the
+body of a `5xx` with its own page, and the JSON error is then lost. Server-side failures
+use `422`, and the ones that a retry can fix use `424`. Read `error_code` to tell them apart.
+A `5xx` that a client receives comes from a proxy in front of the server, for example
+while the server restarts.
 
 ### Client errors (4xx)
-
-`SERVICE_ERROR` and `DRM_ERROR` are upstream failures, but they use `422`, not `502`.
-A proxy such as Cloudflare replaces the body of a `502` or `504` with its own page, and
-the JSON error is then lost.
 
 | Code | Status | Meaning |
 |---|---|---|
@@ -125,6 +126,7 @@ the JSON error is then lost.
 | `SESSION_NOT_FOUND` | 404 | The remote-dl session does not exist or has expired. |
 | `TRACK_NOT_FOUND` | 404 | A referenced track ID is not present in the remote session. |
 | `CONFLICT` | 409 | The target resource is in a state that disallows the action (retrying a running job, prioritising a non-queued job, clearing cache during an active download). |
+| `SERVER_DRAINING` | 409 | The server is about to restart and starts no new remote session or download job. Open work continues. Retryable after the restart. |
 | `SERVICE_ERROR` | 422 | The streaming service's API returned an error, or the service does not support the requested operation. |
 | `DRM_ERROR` | 422 | DRM or license acquisition failed. |
 | `RATE_LIMITED` | 429 | The streaming service is rate-limiting requests. Retryable. |
@@ -138,19 +140,20 @@ the JSON error is then lost.
     the window is fixed, so an early retry only spends the next window. See
     [Authentication](authentication.md#rate-limit-rejections).
 
-### Server errors (5xx)
+### Server errors (422 and 424)
 
 | Code | Status | Meaning |
 |---|---|---|
-| `INTERNAL_ERROR` | 500 | An unexpected server-side error. This is the fallback for any exception the server could not categorise. |
-| `DOWNLOAD_ERROR` | 500 | The download process itself failed. |
-| `WORKER_ERROR` | 500 | The download worker subprocess errored out. |
-| `NETWORK_ERROR` | 503 | A network connectivity problem (connection, timeout, DNS, TLS). Retryable. |
-| `SERVICE_UNAVAILABLE` | 503 | The service is temporarily unavailable or under maintenance. Retryable. |
+| `INTERNAL_ERROR` | 422 | An unexpected server-side error. This is the fallback for any exception the server could not categorise, and for an exception that no handler caught. |
+| `DOWNLOAD_ERROR` | 422 | The download process itself failed. |
+| `WORKER_ERROR` | 422 | The download worker subprocess errored out. |
+| `NETWORK_ERROR` | 424 | A network connectivity problem (connection, timeout, DNS, TLS). Retryable. |
+| `SERVICE_UNAVAILABLE` | 424 | The service is temporarily unavailable or under maintenance. Retryable. |
 
 !!! note "Fallback status"
     If a code is ever emitted without a mapped status, the server falls back to
-    `500`. In practice every code above has an explicit mapping.
+    `422`. In practice every code above has an explicit mapping. A middleware
+    in every server mode also changes any `5xx` answer, such as one from a CDM subapplication, to `422`.
 
 ## How the server produces errors
 
@@ -169,14 +172,14 @@ The classification is keyword-based, checked in order:
 | If the error mentions... | It becomes | Retryable |
 |---|---|---|
 | `auth`, `login`, `credential`, `unauthorized`, `forbidden`, `token` | `AUTH_FAILED` (401) | no |
-| `connection`, `timeout`, `network`, `unreachable`, `socket`, `dns`, `resolve` (or `ConnectionError`, `TimeoutError`, `URLError`, `SSLError`) | `NETWORK_ERROR` (503) | yes |
+| `connection`, `timeout`, `network`, `unreachable`, `socket`, `dns`, `resolve` (or `ConnectionError`, `TimeoutError`, `URLError`, `SSLError`) | `NETWORK_ERROR` (424) | yes |
 | `geofence`, `geoblock`, `region`, `not available in`, `territory` | `GEOFENCE` (403) | no |
 | `not found`, `404`, `does not exist`, `invalid id` | `NOT_FOUND` (404) | no |
 | `rate limit`, `too many requests`, `429`, `throttle` | `RATE_LIMITED` (429) | yes |
 | `drm`, `license`, `widevine`, `playready`, `decrypt` | `DRM_ERROR` (422) | no |
-| `service unavailable`, `503`, `maintenance`, `temporarily unavailable` | `SERVICE_UNAVAILABLE` (503) | yes |
+| `service unavailable`, `503`, `maintenance`, `temporarily unavailable` | `SERVICE_UNAVAILABLE` (424) | yes |
 | `invalid`, `malformed`, `validation` (or `ValueError`, `ValidationError`) | `INVALID_INPUT` (400) | no |
-| anything else | `INTERNAL_ERROR` (500) | no |
+| anything else | `INTERNAL_ERROR` (422) | no |
 
 Categorised errors include a `reason` tag inside `details` (such as
 `"network_connectivity"` or `"drm_failure"`) so a client can react without parsing

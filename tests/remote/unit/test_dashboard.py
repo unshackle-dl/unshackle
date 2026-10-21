@@ -281,6 +281,37 @@ async def test_dashboard_session_logs(aiohttp_client, dashboard_cfg) -> None:
     await store.delete(entry.session_id)
 
 
+async def test_drain_refuses_new_work_and_warns_open_sessions(aiohttp_client, dashboard_cfg) -> None:
+    from unshackle.core.api.download_manager import get_download_manager
+    from unshackle.core.api.errors import APIError
+    from unshackle.core.api.session_log import SessionLogBuffer
+    from unshackle.core.api.session_store import get_session_store
+
+    store = get_session_store()
+    entry = await store.create("EXAMPLE", object())
+    entry.log_buffer = SessionLogBuffer()
+    client = await aiohttp_client(make_app())
+    headers = {"X-Secret-Key": "dash-secret"}
+    try:
+        body = await (await client.post("/api/dashboard/drain", headers=headers)).json()
+        assert body["draining"] is True and body["sessions"] == 1
+        await client.post("/api/dashboard/drain", headers=headers)
+        assert [r["level"] for r in entry.log_buffer.since(0)] == ["WARNING"]
+
+        refused = await client.post("/api/session/create", json={})
+        assert refused.status == 409
+        assert (await refused.json())["error_code"] == "SERVER_DRAINING"
+        with pytest.raises(APIError, match="restarts for an update"):
+            get_download_manager().create_job("EXAMPLE", "t")
+
+        body = await (await client.delete("/api/dashboard/drain", headers=headers)).json()
+        assert body["draining"] is False
+        assert (await client.post("/api/session/create", json={})).status == 400
+    finally:
+        store.stop_drain()
+        await store.delete(entry.session_id)
+
+
 async def test_dashboard_log_read_does_not_touch_the_session() -> None:
     from unshackle.core.api.session_store import SessionStore
 

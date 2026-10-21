@@ -22,6 +22,8 @@ from unshackle.core.api.handlers import (
     clear_finished_download_jobs_handler,
     clear_temp_handler,
     dashboard_cdm_logs_handler,
+    dashboard_drain_start_handler,
+    dashboard_drain_stop_handler,
     dashboard_events_handler,
     dashboard_health_handler,
     dashboard_jobs_handler,
@@ -69,6 +71,7 @@ from unshackle.core.api.handlers import (
     tunnel_check_handler,
     tunnel_handler,
 )
+from unshackle.core.api.sanitize import sanitize_log
 from unshackle.core.drm import cbcs
 from unshackle.core.services import Services
 from unshackle.core.tunnel import CHECK_ROUTE as TUNNEL_CHECK_ROUTE
@@ -91,6 +94,24 @@ async def cors_middleware(
 
     response.headers.update(CORS_HEADERS)
 
+    return response
+
+
+@web.middleware
+async def no_5xx_middleware(
+    request: web.Request, handler: Callable[[web.Request], Awaitable[web.StreamResponse]]
+) -> web.StreamResponse:
+    """Answer an uncaught exception or any unsent 5xx (a CDM subapplication's own) as a 422; see errors.py."""
+    try:
+        response = await handler(request)
+    except Exception as e:
+        if isinstance(e, web.HTTPException) and e.status < 500:
+            raise
+        # the exception text can hold a caller's key, so the answer gets a generic message
+        log.exception(f"Unhandled error in {sanitize_log(request.path)}")
+        response = build_error_response(APIError(APIErrorCode.INTERNAL_ERROR, "Internal server error"))
+    if response.status >= 500 and not response.prepared:
+        response.set_status(APIError.default_http_status(APIErrorCode.INTERNAL_ERROR))
     return response
 
 
@@ -291,7 +312,7 @@ async def services(request: web.Request) -> web.Response:
                         type: string
                         nullable: true
                         description: Full service documentation
-      '500':
+      '422':
         description: Server error
         content:
           application/json:
@@ -698,7 +719,7 @@ async def list_titles(request: web.Request) -> web.Response:
                 timestamp:
                   type: string
                   format: date-time
-      '500':
+      '422':
         description: Server error
         content:
           application/json:
@@ -1229,7 +1250,7 @@ async def download_jobs(request: web.Request) -> web.Response:
                         type: number
       '400':
         description: Invalid query parameters
-      '500':
+      '422':
         description: Server error
     """
     # Extract query parameters
@@ -1261,7 +1282,7 @@ async def download_job_detail(request: web.Request) -> web.Response:
         description: Download job details
       '404':
         description: Job not found
-      '500':
+      '422':
         description: Server error
     """
     job_id = request.match_info["job_id"]
@@ -1301,7 +1322,7 @@ async def download_job_events(request: web.Request) -> web.StreamResponse:
               type: string
       '404':
         description: Job not found
-      '500':
+      '422':
         description: Server error
     """
     job_id = request.match_info["job_id"]
@@ -1330,7 +1351,7 @@ async def cancel_download_job(request: web.Request) -> web.Response:
         description: The server cannot cancel the job
       '404':
         description: Job not found
-      '500':
+      '422':
         description: Server error
     """
     job_id = request.match_info["job_id"]
@@ -1355,7 +1376,7 @@ async def clear_finished_download_jobs(request: web.Request) -> web.Response:
                 removed:
                   type: integer
                   description: Number of jobs removed
-      '500':
+      '422':
         description: Server error
     """
     return await clear_finished_download_jobs_handler(request)
@@ -1392,7 +1413,7 @@ async def retry_download_job(request: web.Request) -> web.Response:
         description: Job not found
       '409':
         description: Job is not in a terminal state
-      '500':
+      '422':
         description: Server error
     """
     job_id = request.match_info["job_id"]
@@ -1429,7 +1450,7 @@ async def prioritize_download_job(request: web.Request) -> web.Response:
         description: Job not found
       '409':
         description: Job is not queued
-      '500':
+      '422':
         description: Server error
     """
     job_id = request.match_info["job_id"]
@@ -1517,7 +1538,7 @@ async def profiles(request: web.Request) -> web.Response:
                     type: array
                     items:
                       type: string
-      '500':
+      '422':
         description: Server error
     """
     return await profiles_handler(request)
@@ -1585,7 +1606,7 @@ async def server_config(request: web.Request) -> web.Response:
                       items:
                         type: string
                       description: Available service tags (allowlist-filtered)
-      '500':
+      '422':
         description: Server error
     """
     return await server_config_handler(request)
@@ -1656,7 +1677,7 @@ async def download_history(request: web.Request) -> web.Response:
                   type: integer
       '400':
         description: Invalid query parameters
-      '500':
+      '422':
         description: Server error
     """
     query_params = {"limit": request.query.get("limit"), "service": request.query.get("service")}
@@ -1681,7 +1702,7 @@ async def delete_history(request: web.Request) -> web.Response:
         description: History entry removed
       '404':
         description: History entry not found
-      '500':
+      '422':
         description: Server error
     """
     return await delete_history_handler(request.match_info["job_id"], request)
@@ -1706,7 +1727,7 @@ async def maintenance_clear_cache(request: web.Request) -> web.Response:
                   type: boolean
                 freed_bytes:
                   type: integer
-      '500':
+      '422':
         description: Server error
     """
     return await clear_cache_handler(request)
@@ -1731,7 +1752,7 @@ async def maintenance_clear_temp(request: web.Request) -> web.Response:
                   type: boolean
                 freed_bytes:
                   type: integer
-      '500':
+      '422':
         description: Server error
     """
     return await clear_temp_handler(request)
@@ -1783,7 +1804,7 @@ async def maintenance_refresh_services(request: web.Request) -> web.Response:
                         description: Services whose new code failed to import
                         items:
                           type: string
-      '500':
+      '422':
         description: Server error
     """
     return await refresh_services_handler(request)
@@ -1818,7 +1839,7 @@ async def env_check(request: web.Request) -> web.Response:
                         nullable: true
                       required:
                         type: boolean
-      '500':
+      '422':
         description: Server error
     """
     return await env_check_handler(request)
@@ -2048,7 +2069,7 @@ async def tunnel_check(request: web.Request) -> web.Response:
         description: The exit IP and country through the tunnel, and the lookup time in ms
       '404':
         description: No open tunnel with this id for this API key
-      '502':
+      '424':
         description: No IP lookup got through the tunnel, or the requests left from the server itself
     """
     return await tunnel_check_handler(request)
@@ -2651,6 +2672,44 @@ async def dashboard_status(request: web.Request) -> web.Response:
         description: Dashboard key missing or invalid
     """
     return await dashboard_status_handler(request)
+
+
+@api_handler
+async def dashboard_drain_start(request: web.Request) -> web.Response:
+    """
+    Dashboard: start a drain before a restart.
+    ---
+    summary: Dashboard drain start
+    description: >
+      Refuses every new remote session, download job and job retry with `SERVER_DRAINING` (409)
+      until the server restarts or the operator cancels the drain. Open remote sessions continue, and
+      each one gets a warning in its service log. Poll `/api/dashboard/status` until `sessions`
+      and the active jobs reach 0, then restart. A second call changes nothing.
+    tags: [Dashboard]
+    responses:
+      '200':
+        description: The status body, with `draining` true
+      '401':
+        description: Dashboard key missing or invalid
+    """
+    return await dashboard_drain_start_handler(request)
+
+
+@api_handler
+async def dashboard_drain_stop(request: web.Request) -> web.Response:
+    """
+    Dashboard: cancel a drain.
+    ---
+    summary: Dashboard drain cancel
+    description: The server accepts new remote sessions and download jobs again.
+    tags: [Dashboard]
+    responses:
+      '200':
+        description: The status body, with `draining` false
+      '401':
+        description: Dashboard key missing or invalid
+    """
+    return await dashboard_drain_stop_handler(request)
 
 
 @api_handler
@@ -3335,6 +3394,8 @@ ROUTES: list[tuple[str, str, Handler, bool]] = [
 
 DASHBOARD_ROUTES: list[tuple[str, str, Handler, bool]] = [
     ("GET", DASHBOARD_PREFIX + "status", dashboard_status, True),
+    ("POST", DASHBOARD_PREFIX + "drain", dashboard_drain_start, True),
+    ("DELETE", DASHBOARD_PREFIX + "drain", dashboard_drain_stop, True),
     ("GET", DASHBOARD_PREFIX + "sessions", dashboard_sessions, True),
     ("GET", DASHBOARD_PREFIX + "jobs", dashboard_jobs, True),
     ("GET", DASHBOARD_PREFIX + "logs", dashboard_logs, True),

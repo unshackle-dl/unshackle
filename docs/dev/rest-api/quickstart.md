@@ -443,8 +443,8 @@ The `error_code` maps to an HTTP status. The ones you will meet most often:
 | `CONFLICT` | 409 | Illegal state transition (e.g. retry a running job) |
 | `SERVICE_ERROR` | 422 | The service raised an error |
 | `RATE_LIMITED` | 429 | Upstream throttling (retryable) |
-| `INTERNAL_ERROR` | 500 | Unexpected server-side failure |
-| `NETWORK_ERROR` | 503 | Connection/timeout reaching the service (retryable) |
+| `INTERNAL_ERROR` | 422 | Unexpected server-side failure |
+| `NETWORK_ERROR` | 424 | Connection/timeout reaching the service (retryable) |
 
 The [error code catalogue](errors.md#error-code-catalogue) lists every code.
 

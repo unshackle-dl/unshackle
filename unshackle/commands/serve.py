@@ -16,7 +16,7 @@ from aiohttp import web
 
 import unshackle.core.config as config_module
 from unshackle.core import binaries
-from unshackle.core.api import cors_middleware, setup_routes, setup_swagger
+from unshackle.core.api import cors_middleware, no_5xx_middleware, setup_routes, setup_swagger
 from unshackle.core.api.compression import compression_middleware
 from unshackle.core.api.events import publish_refresh_events, publish_service_event
 from unshackle.core.api.handlers import (
@@ -495,12 +495,19 @@ def serve(
             log.info("Starting REST API server (pywidevine/pyplayready CDM disabled)")
             if no_key:
                 app = web.Application(
-                    middlewares=[cors_middleware, stats_middleware, dashboard_authentication, compression_middleware]
+                    middlewares=[
+                        cors_middleware,
+                        no_5xx_middleware,
+                        stats_middleware,
+                        dashboard_authentication,
+                        compression_middleware,
+                    ]
                 )
             else:
                 app = web.Application(
                     middlewares=[
                         cors_middleware,
+                        no_5xx_middleware,
                         stats_middleware,
                         dashboard_authentication,
                         api_key_authentication,
@@ -569,6 +576,7 @@ def serve(
                 app = web.Application(
                     middlewares=[
                         cors_middleware,
+                        no_5xx_middleware,
                         stats_middleware,
                         cdm_log_middleware,
                         dashboard_authentication,
@@ -580,6 +588,7 @@ def serve(
                 app = web.Application(
                     middlewares=[
                         cors_middleware,
+                        no_5xx_middleware,
                         stats_middleware,
                         cdm_log_middleware,
                         dashboard_authentication,

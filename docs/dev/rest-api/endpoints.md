@@ -131,7 +131,7 @@ Field notes:
 | Status | Meaning |
 | --- | --- |
 | `200` | Service list returned. |
-| `500` | Unexpected server error (`INTERNAL_ERROR`). |
+| `422` | Unexpected server error (`INTERNAL_ERROR`). |
 
 ### `POST /api/search`
 
@@ -296,7 +296,7 @@ These keys are sent only when the title carries them, so a title without them se
 | `400` | `INVALID_SERVICE` | Unknown or disallowed service. |
 | `401` | `AUTH_FAILED` | Authentication with the service failed. |
 | `404` | `NOT_FOUND` | Title not found. |
-| `500` | `INTERNAL_ERROR` | Unexpected error. |
+| `422` | `INTERNAL_ERROR` | Unexpected error. |
 
 ### `POST /api/list-tracks`
 
@@ -1290,7 +1290,7 @@ The server serialises every structured error raised inside a handler to the same
 
 The [error code catalogue](errors.md#error-code-catalogue) gives the default HTTP status of each error code.
 
-When a generic (uncategorized) exception reaches a handler, unshackle inspects its message and type to pick a code. For example, messages mentioning "connection" or "timeout" become `NETWORK_ERROR` (503, retryable), "rate limit" or "429" become `RATE_LIMITED` (429, retryable), and anything unrecognized collapses to `INTERNAL_ERROR` (500).
+When a generic (uncategorized) exception reaches a handler, unshackle inspects its message and type to pick a code. For example, messages mentioning "connection" or "timeout" become `NETWORK_ERROR` (424, retryable), "rate limit" or "429" become `RATE_LIMITED` (429, retryable), and anything unrecognized collapses to `INTERNAL_ERROR` (422).
 
 ---
 
