@@ -395,20 +395,20 @@ def test_save_returned_cache_writes_nested_keys_and_rejects_escapes(tmp_path, mo
     RemoteService.save_returned_cache(
         stub,
         {
-            "tokens": blob("flat"),
-            "session_web/abc": blob("nested"),
-            "session_web\\def": blob("windows"),
-            "MSL/keys.v2": blob("dotted"),
-            "../escape": blob("bad"),
-            "/abs": blob("bad"),
-            "C:/x": blob("bad"),
+            "tokens": blob('"flat"'),
+            "session_web/abc": blob('"nested"'),
+            "session_web\\def": blob('"windows"'),
+            "MSL/keys.v2": blob('"dotted"'),
+            "../escape": blob('"bad"'),
+            "/abs": blob('"bad"'),
+            "C:/x": blob('"bad"'),
         },
     )
 
-    assert (tmp_path / tag / "tokens.json").read_text() == "flat"
-    assert (tmp_path / tag / "session_web" / "abc.json").read_text() == "nested"
-    assert (tmp_path / tag / "session_web" / "def.json").read_text() == "windows"
-    assert (tmp_path / tag / "MSL" / "keys.v2.json").read_text() == "dotted"
+    assert (tmp_path / tag / "tokens.json").read_text() == '"flat"'
+    assert (tmp_path / tag / "session_web" / "abc.json").read_text() == '"nested"'
+    assert (tmp_path / tag / "session_web" / "def.json").read_text() == '"windows"'
+    assert (tmp_path / tag / "MSL" / "keys.v2.json").read_text() == '"dotted"'
     assert not (tmp_path / "escape.json").exists()
     written = sorted(p.relative_to(tmp_path).as_posix() for p in tmp_path.rglob("*.json"))
     assert written == [
@@ -433,7 +433,7 @@ def test_save_returned_cache_drops_other_profiles_files(tmp_path, monkeypatch) -
     monkeypatch.setattr(config.directories, "cache", tmp_path)
     monkeypatch.setattr(config, "credentials", {tag: {"default": "a@example.com:pw", "work": "b@example.com:pw"}})
     stub = SimpleNamespace(service_tag=tag, log=logging.getLogger("test"))
-    blob = base64.b64encode(zlib.compress(b"x")).decode("ascii")
+    blob = base64.b64encode(zlib.compress(b'"x"')).decode("ascii")
 
     RemoteService.save_returned_cache(stub, {"tokens_work": blob, "tokens_default": blob, "tokens": blob}, "work")
 
@@ -560,12 +560,12 @@ def test_session_create_writes_nested_cache_and_skips_colliding_keys(tmp_path, m
     )
     monkeypatch.setattr("unshackle.core.api.session_store.get_session_store", lambda: (_ for _ in ()).throw(Stop()))
 
-    cache = {"x": blob("flat"), "x.json/y": blob("collides"), "MSL/keys.v2": blob("dotted")}
+    cache = {"x": blob('"flat"'), "x.json/y": blob('"collides"'), "MSL/keys.v2": blob('"dotted"')}
     response = asyncio.run(handlers.session_create_handler({"service": "TESTSVC", "title_id": "t", "cache": cache}))
     assert response.status == 500  # the Stop stand-in fired after the cache write
 
     written = {p.name: p.read_text() for p in tmp_path.rglob("*.json") if p.is_file()}
-    assert written == {"x.json": "flat", "keys.v2.json": "dotted"}
+    assert written == {"x.json": '"flat"', "keys.v2.json": '"dotted"'}
 
 
 class _SentCreate(Exception):

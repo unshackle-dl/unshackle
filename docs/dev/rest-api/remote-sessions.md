@@ -398,7 +398,8 @@ serve:
   cannot read each other's cached tokens. The server deletes the directory when the
   remote session ends. A remote session that uses a server account (`serve.server_accounts`)
   gets a persistent per-account cache instead, so the account's tokens outlive the
-  remote session.
+  remote session. The server and the client both refuse a forwarded cache file that is not
+  JSON or that names a type other than a date or time, and the service then authenticates again.
 - **The server redacts secrets in logs.** It redacts remote session IDs, service tags,
   and other user values before it writes them to the log.
 

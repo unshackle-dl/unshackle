@@ -1977,12 +1977,13 @@ class RemoteService:
         can forward them back, skipping interactive auth. The same filter that
         :meth:`load_cache_files` applies drops a file that belongs to another
         credential or profile, so it cannot overwrite that profile's local file.
+        The client also refuses a file that names a type other than a datetime.
         """
         if not cache_data:
             return
 
         from unshackle.core.api.compression import safe_inflate
-        from unshackle.core.api.sanitize import MAX_SESSION_CACHE_KEYS, safe_cache_key
+        from unshackle.core.api.sanitize import MAX_SESSION_CACHE_KEYS, safe_cache_key, safe_cache_payload
 
         if len(cache_data) > MAX_SESSION_CACHE_KEYS:
             self.log.warning(f"Ignoring {len(cache_data)} cache files from server: more than {MAX_SESSION_CACHE_KEYS}")
@@ -2003,6 +2004,11 @@ class RemoteService:
                 continue
             try:
                 decompressed = safe_inflate(base64.b64decode(content))
+                if not safe_cache_payload(decompressed.decode("utf-8")):
+                    self.log.warning(
+                        f"Rejecting cache file '{safe_name}' from the server: it holds a type a peer may not send"
+                    )
+                    continue
                 # Not with_suffix: that would turn the key "keys.v2" into "keys.json".
                 target = cache_dir / f"{safe_name}.json"
                 target.parent.mkdir(parents=True, exist_ok=True)

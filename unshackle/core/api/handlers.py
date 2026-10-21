@@ -23,7 +23,7 @@ from aiohttp import web
 from unshackle.core.api.compression import safe_inflate
 from unshackle.core.api.errors import APIError, APIErrorCode, categorize_exception, handle_api_exception
 from unshackle.core.api.input_bridge import AuthStatus, InputBridge, NoUserBridge
-from unshackle.core.api.sanitize import MAX_SESSION_CACHE_KEYS, safe_cache_key, sanitize_log
+from unshackle.core.api.sanitize import MAX_SESSION_CACHE_KEYS, safe_cache_key, safe_cache_payload, sanitize_log
 from unshackle.core.api.session_log import SessionLogBuffer, SessionLogMirror, capture_service_logs
 from unshackle.core.api.session_store import SessionStore
 from unshackle.core.cacher import Cacher
@@ -316,9 +316,9 @@ def write_client_cache(cache_data: Any, cache_tag: str) -> None:
     """Write a client-sent ``cache`` map into the cache directory ``cache_tag``.
 
     Each cache key is a file path relative to that directory, and each value is the file as
-    base64 of zlib-compressed bytes. The function skips an unsafe key or a file it cannot write,
-    and raises INVALID_INPUT for a map that is not an object, has too many entries, or holds a
-    value that is not a string.
+    base64 of zlib-compressed bytes. The function skips an unsafe key, a file that names a type
+    other than a datetime, or a file it cannot write, and raises INVALID_INPUT for a map that is
+    not an object, has too many entries, or holds a value that is not a string.
     """
     if not isinstance(cache_data, dict) or len(cache_data) > MAX_SESSION_CACHE_KEYS:
         raise APIError(APIErrorCode.INVALID_INPUT, f"cache must hold at most {MAX_SESSION_CACHE_KEYS} entries")
@@ -332,6 +332,9 @@ def write_client_cache(cache_data: Any, cache_tag: str) -> None:
         if not isinstance(content, str):
             raise APIError(APIErrorCode.INVALID_INPUT, "cache values must be base64 strings")
         decompressed = safe_inflate(base64.b64decode(content)).decode("utf-8")
+        if not safe_cache_payload(decompressed):
+            log.warning(f"Rejecting session cache file {sanitize_log(key)}: it holds a type a peer may not send")
+            continue
         target = cache_dir / f"{safe_name}.json"
         try:
             target.parent.mkdir(parents=True, exist_ok=True)
@@ -3895,7 +3898,7 @@ async def session_create_handler(data: Dict[str, Any], request: Optional[web.Req
 
         cache_data = data.get("cache", {})
         if cache_data and session_cache_tag:
-            write_client_cache(cache_data, session_cache_tag)
+            await asyncio.to_thread(write_client_cache, cache_data, session_cache_tag)
 
         service_instance._input_bridge = bridge
 
