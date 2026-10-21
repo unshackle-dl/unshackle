@@ -2831,7 +2831,8 @@ mid-prompt.</p>
   cannot read each other's cached tokens. The server deletes the directory when the
   remote session ends. A remote session that uses a server account (<code>serve.server_accounts</code>)
   gets a persistent per-account cache instead, so the account's tokens outlive the
-  remote session.</li>
+  remote session. The server and the client both refuse a forwarded cache file that is not
+  JSON or that names a type other than a date or time, and the service then authenticates again.</li>
 <li><strong>The server redacts secrets in logs.</strong> It redacts remote session IDs, service tags,
   and other user values before it writes them to the log.</li>
 </ul>
