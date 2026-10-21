@@ -17,6 +17,7 @@ from uuid import uuid4
 
 from unshackle.core.api.input_bridge import AUTH_INPUT_TIMEOUT
 from unshackle.core.console import set_notice_handler, set_prompt_handler
+from unshackle.core.downloaders import format_speed, set_speed_limit
 
 from .download_manager import perform_download
 
@@ -95,6 +96,15 @@ def relay_prompts(progress_callback: Callable[[Dict[str, Any]], None]) -> None:
     set_notice_handler(lambda message: progress_callback({"notice": message}))
 
 
+def apply_payload_speed_limit(payload: Dict[str, Any]) -> None:
+    """Lock this worker's share of the server speed limit so the job cannot clear it."""
+    limit = payload.get("speed_limit")
+    if not limit:
+        return
+    set_speed_limit(limit, lock=True)
+    log.info(f"Job speed limit: {format_speed(limit)} (share of the global speed limit)")
+
+
 def main(argv: list[str]) -> int:
     if len(argv) not in [3, 4]:
         print(
@@ -116,6 +126,7 @@ def main(argv: list[str]) -> int:
         service = payload["service"]
         title_id = payload["title_id"]
         params = payload.get("parameters", {})
+        apply_payload_speed_limit(payload)
 
         log.info(f"Worker starting job {job_id} ({service}:{title_id})")
 

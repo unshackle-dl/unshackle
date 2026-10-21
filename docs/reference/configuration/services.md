@@ -147,7 +147,7 @@ is the [REST API](../../dev/rest-api/index.md) section. These are the config key
 | `compression_level` | int | `1` | gzip level for responses. |
 | `services_refresh_interval` | int (s) | `0` | How often the server pulls the git-backed service repositories in `directories.services` and hot-reloads the services that changed. `0` turns it off. A service with a running or queued job, or a live remote session, is staged and swaps to the new code as soon as its last job and session finish. |
 | `services_staged_max_age` | int (s) | `0` | How long a staged service waits for its jobs and sessions before the server swaps it in anyway. `0` waits forever. Set it on a server whose popular services never have a quiet moment. A session that is live at the swap keeps the old code until it ends; a running job keeps its old code too. |
-| `global_speed_limit` | str | *(unlimited)* | Server-wide download speed cap, e.g. `10M`, `1.5G` or plain bytes/sec (same format as `speed_limit`). One shared budget across all concurrent jobs; the server ignores per-job speed limits while it is set. |
+| `global_speed_limit` | str | *(unlimited)* | Server-wide download speed cap, e.g. `10M`, `1.5G` or plain bytes/sec (same format as `speed_limit`). Each download job gets an equal share: the cap divided by the number of download job slots (2 by default, see [job lifecycle](../../dev/rest-api/job-lifecycle.md)). A job that runs alone still gets only its share. The server ignores per-job speed limits while it is set. |
 | `cdm_overrides` | list or bool | *(unset)* | Allowed per-request CDM overrides: a list of permitted device names, or `true` for any. Unset rejects every override. |
 | `allow_job_credentials` | bool | `false` | Permit clients to supply credentials per job. |
 | `server_accounts` | dict | `{}` | Services whose remote sessions use the server's own `credentials` and cookie files instead of the client's (see below). |
@@ -168,7 +168,8 @@ list.
     continue; an API key you removed gets `401` on its next request. A file that does not parse
     or validate keeps the running settings and logs the reason. A change to `remote_only`,
     `services_refresh_interval`, the first PlayReady device, or any command-line flag needs
-    a restart, and the log says so. Windows has no `SIGHUP`: restart the server there.
+    a restart, and the log says so. A new `global_speed_limit` applies to jobs that start after the
+    reload; running jobs keep their share. Windows has no `SIGHUP`: restart the server there.
 
 `server_cdm` decides whether the server runs the CDM licensing for that API key. Set it to
 `true` to enable every service, or to a list of service tags to enable only those. It is `false`

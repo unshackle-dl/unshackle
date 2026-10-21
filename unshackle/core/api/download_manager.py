@@ -1,5 +1,6 @@
 import asyncio
 import hashlib
+import importlib
 import json
 import logging
 import os
@@ -1054,6 +1055,15 @@ class DownloadQueueManager:
             log.error(f"Download failed for job {job.job_id}: {e}")
             raise
 
+    def worker_speed_limit(self) -> Optional[float]:
+        """Return one job worker's share of the locked global speed limit, or None when unset."""
+        requests_downloader = importlib.import_module("unshackle.core.downloaders.requests")
+
+        limiter = requests_downloader.speed_limiter
+        if not (requests_downloader.speed_limit_locked and limiter):
+            return None
+        return limiter.rate / max(1, self.max_concurrent_downloads)
+
     async def run_download_async(self, job: DownloadJob) -> List[str]:
         """Invoke a job worker subprocess to do the download."""
 
@@ -1062,6 +1072,7 @@ class DownloadQueueManager:
             "service": job.service,
             "title_id": job.title_id,
             "parameters": job.parameters,
+            "speed_limit": self.worker_speed_limit(),
         }
 
         payload_fd, payload_path = tempfile.mkstemp(prefix=f"unshackle_job_{job.job_id}_", suffix="_payload.json")

@@ -468,7 +468,7 @@ def serve(
             global_speed_limit = parse_speed_limit(config.serve.get("global_speed_limit"))
             if global_speed_limit:
                 set_speed_limit(global_speed_limit, lock=True)
-                log.info(f"Global speed limit: {format_speed(global_speed_limit)} (shared by all jobs)")
+                log.info(f"Global speed limit: {format_speed(global_speed_limit)} (split evenly across job slots)")
 
             global_services = config.serve.get("services")
             if global_services:
