@@ -207,6 +207,7 @@ order the service used, then renumbers the episodes into the order you asked for
 | Flag | Description |
 |---|---|
 | `--proxy` | Proxy URI, a country or location code resolved from configured providers, or `provider:region` (e.g. `nordvpn:ca`, `gluetun:us`, `protonvpn:de:berlin`, `controld:yul`). |
+| `--local-proxy` | With `--remote`, send the server's service requests through your machine's own connection. Works with no other proxy option. Check it first with `unshackle tunnel-test`. See [Proxies & VPN](proxies-and-vpn.md#send-the-servers-requests-through-your-machine). |
 | `--no-proxy` | Force-disable all proxy use. |
 | `--no-proxy-download` | Bypass the proxy for **all downloads** (manifest, licence, and auth stay proxied). |
 | `--proxy-download` | Use a different proxy for **all downloads**, in the same forms as `--proxy` (manifest, licence, and auth stay on `--proxy`). |
@@ -250,6 +251,7 @@ unshackle logs in to the service before the search. A service that declares a se
 |---|---|
 | `-p`, `--profile` | Profile for credentials and cookies. |
 | `--proxy` | Proxy URI, country or location code, or `provider:region` (e.g. `controld:ca`). |
+| `--local-proxy` | With `--remote`, send the server's search requests through your machine's own connection. Works with no other proxy option. |
 | `--no-proxy` | Force-disable all proxy use. |
 | `--remote` | Search on a remote unshackle server. The server logs in to the service. unshackle sends it your credentials, cookies and cache for the profile, and saves the cache that the server sends back. A service that searches with no login gets none of them. |
 | `--local` | Search with the local service code, also when the config sets `remote: true` for the service. |
@@ -282,6 +284,24 @@ unshackle forwards any `dl` options after the file verbatim, so you can override
     ```
 
 The export file can be a `mediaexport` file from `dl --export`, an export from an older version of unshackle, or an export from unidl. The file must name the service it came from.
+
+---
+
+## `tunnel-test`
+
+Check `--local-proxy` before a real `--remote` run. The command finds the IP address that this
+machine exits from, opens a tunnel to the server, and makes the server look up its exit IP address
+through the tunnel. It stops at the first step that fails.
+
+```
+unshackle tunnel-test [--server NAME]
+```
+
+| Flag | Description |
+|---|---|
+| `--server` | Name of the remote server from `remote_services` config, if you configure more than one. |
+
+See [Proxies & VPN](proxies-and-vpn.md#send-the-servers-requests-through-your-machine).
 
 ---
 

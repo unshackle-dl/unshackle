@@ -62,10 +62,12 @@ from unshackle.core.providers.anilist import parse_anilist_ref
 from unshackle.core.providers.tvdb import SEASON_TYPES, parse_int
 from unshackle.core.proxies.resolve import (
     REGION,
+    describe_explicit_proxy,
     describe_proxy,
     is_loopback,
     load_proxy_providers,
     pick_proxy,
+    require_alone_local_proxy,
     resolve_proxy,
     split_proxy_query,
 )
@@ -923,6 +925,12 @@ class dl:
         help="Proxy URI to use. If a 2-letter country is provided, it will try to get a proxy from the config.",
     )
     @click.option(
+        "--local-proxy",
+        is_flag=True,
+        default=False,
+        help="With --remote, the server sends its service requests out through this machine's own connection (and any VPN on it). Works with no other proxy option.",
+    )
+    @click.option(
         "--tag",
         type=str,
         default=None,
@@ -1598,6 +1606,10 @@ class dl:
                 if cdm_info:
                     log_event("load_cdm", level="INFO", service=self.service, context={"cdm": cdm_info})
 
+        if ctx.params.get("local_proxy"):
+            require_alone_local_proxy(ctx)
+            proxy, no_proxy = ctx.params.get("proxy"), bool(ctx.params.get("no_proxy"))
+
         # A server on this machine can reach a local proxy, so only a server elsewhere is guarded
         self.remote_needs_public_proxy = self.is_remote and not is_loopback(server_url(ctx.params.get("server")))
 
@@ -1644,7 +1656,7 @@ class dl:
                     ctx.params["proxy_query"] = proxy_query
                     ctx.params["proxy_provider"] = requested_provider
                 else:
-                    self.log.info(f"Using explicit Proxy: {mask_proxy(ctx.params['proxy'])}")
+                    self.log.info(describe_explicit_proxy(ctx.params["proxy"]))
                     ctx.params["proxy_query"] = None
                     ctx.params["proxy_provider"] = None
 

@@ -66,9 +66,14 @@ from unshackle.core.api.handlers import (
     session_segments_handler,
     session_titles_handler,
     session_tracks_handler,
+    tunnel_check_handler,
+    tunnel_handler,
 )
 from unshackle.core.drm import cbcs
 from unshackle.core.services import Services
+from unshackle.core.tunnel import CHECK_ROUTE as TUNNEL_CHECK_ROUTE
+from unshackle.core.tunnel import ROUTE as TUNNEL_ROUTE
+from unshackle.core.tunnel import close_tunnels
 from unshackle.core.update_checker import UpdateChecker
 from unshackle.core.utils.redact import redact_path
 
@@ -485,7 +490,7 @@ async def search(request: web.Request) -> web.Response:
                 description: Profile to use for credentials and cookies (default - None)
               proxy:
                 type: string
-                description: Full proxy URI, a Control D resolver as controld://<resolver>@dns.controld.com, or a country code when the API key has server_proxy (default - None)
+                description: Full proxy URI, a Control D resolver as controld://<resolver>@dns.controld.com, or a country code when the API key has server_proxy, or tunnel:<id> for a tunnel the same API key opened on /api/tunnel (default - None)
               no_proxy:
                 type: boolean
                 description: Force disable all proxy use (default - false)
@@ -1848,6 +1853,7 @@ async def session_create(request: web.Request) -> web.Response:
                 type: string
               proxy:
                 type: string
+                description: As on /api/search, including tunnel:<id> for a --local-proxy client
               no_proxy:
                 type: boolean
               profile:
@@ -1995,6 +2001,57 @@ async def session_create(request: web.Request) -> web.Response:
         return handle_api_exception(
             e, context={"operation": "session_create"}, debug_mode=request.app.get("debug_api", False)
         )
+
+
+@api_handler
+async def tunnel(request: web.Request) -> web.StreamResponse:
+    """
+    Open a --local-proxy tunnel.
+    ---
+    summary: Open tunnel
+    description: >-
+      A WebSocket that a --remote client holds open. The server sends the requests of a remote session
+      created with proxy tunnel:<id> through it, and the client makes them from its own connection.
+      The first message is {"id": <tunnel id>}.
+    parameters:
+      - name: id
+        in: query
+        required: false
+        description: Reattach to this tunnel after a drop
+        schema:
+          type: string
+    responses:
+      '101':
+        description: WebSocket open
+      '404':
+        description: No open tunnel with this id for this API key
+      '429':
+        description: The API key has the maximum number of tunnels open
+    """
+    return await tunnel_handler(request)
+
+
+@api_handler
+async def tunnel_check(request: web.Request) -> web.Response:
+    """
+    Look up the exit IP through a tunnel.
+    ---
+    summary: Check tunnel
+    parameters:
+      - name: id
+        in: query
+        required: true
+        schema:
+          type: string
+    responses:
+      '200':
+        description: The exit IP and country through the tunnel, and the lookup time in ms
+      '404':
+        description: No open tunnel with this id for this API key
+      '502':
+        description: No IP lookup got through the tunnel, or the requests left from the server itself
+    """
+    return await tunnel_check_handler(request)
 
 
 @api_handler
@@ -3260,6 +3317,8 @@ ROUTES: list[tuple[str, str, Handler, bool]] = [
     ("GET", "/api/remote/logins", remote_logins, False),
     ("POST", "/api/remote/logins/{login_id}/input", remote_login_input, False),
     ("POST", "/api/session/create", session_create, True),
+    ("GET", TUNNEL_ROUTE, tunnel, True),
+    ("GET", TUNNEL_CHECK_ROUTE, tunnel_check, True),
     ("GET", "/api/session/{session_id}/titles", session_titles, True),
     ("POST", "/api/session/{session_id}/tracks", session_tracks, True),
     ("POST", "/api/session/{session_id}/segments", session_segments, True),
@@ -3304,6 +3363,7 @@ def setup_routes(
         if remote_only and not remote:
             continue
         add[method](path, handler)
+    app.on_shutdown.append(close_tunnels)
 
 
 def setup_swagger(app: web.Application, dashboard: bool = False) -> None:

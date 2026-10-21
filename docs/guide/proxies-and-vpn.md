@@ -22,11 +22,12 @@ a query to a real proxy URL: [basic static proxies](#basic-static-proxies),
 
 ## The `--proxy` flag
 
-Four options on the `dl` command control proxying at download time:
+Five options on the `dl` command control proxying at download time:
 
 | Option | Effect |
 |---|---|
 | `--proxy` | The proxy to use. Either an explicit URI, or a query that unshackle resolves against your configured providers. |
+| `--local-proxy` | With `--remote`, send the server's service requests through your machine's own connection. Works with no other proxy option. See [Send the server's requests through your machine](#send-the-servers-requests-through-your-machine). |
 | `--no-proxy` | Force **all** proxy use off. No providers are initialised and no proxy query is resolved. |
 | `--no-proxy-download` | Use the proxy for the manifest, licence, and authentication, but bypass it for the **downloads** themselves. |
 | `--proxy-download` | Use `--proxy` for the manifest, licence, and authentication, and a different proxy for the **downloads**. Takes the same forms as `--proxy`. |
@@ -203,6 +204,75 @@ sees your own IP, but the service does not.
 
 A `socks5://` proxy makes the DNS lookup of each host on your machine and gives no warning.
 Use `socks5h://` to make the proxy do the DNS lookups too.
+
+### Send the server's requests through your machine
+
+With `--remote`, the server sends the service requests, and they leave from the server's own
+connection. Add `--local-proxy` to send them through your machine's connection instead:
+
+```shell
+unshackle dl --remote --local-proxy EXAMPLE 81234567
+```
+
+A VPN app that covers your whole machine then also covers the server's requests, so the
+service sees your VPN's IP address. `--local-proxy` needs `--remote` (or a service with
+`remote: true`), and it works with no other proxy option: unshackle stops if you also give
+`--proxy`, `--no-proxy`, `--proxy-download` or `--no-proxy-download`. A proxy option from the `dl`
+config defaults does not count: `--local-proxy` turns it off for the run.
+
+A `--proxy` on `localhost` or a loopback address, such as the local port of a VPN app, stops a
+`--remote` run with `That proxy is on your machine, so --remote cannot use it`. Connect the VPN
+app for the whole machine, then use `--local-proxy` without `--proxy`.
+
+#### Test it first
+
+`unshackle tunnel-test` checks the route before a real run. Add `--server <name>` to test a
+server other than the default one:
+
+```shell
+unshackle tunnel-test
+```
+
+It does three steps, and it stops at the first one that fails:
+
+1. It looks up the IP address that your machine exits from.
+2. It opens a tunnel to the server.
+3. It makes the server look up its exit IP address through the tunnel. That address must be
+   the same as in step 1, or in the same country when one lookup used IPv4 and the other IPv6.
+   It fails when the lookup left from the server's own address. It also shows how long one
+   lookup takes.
+
+#### How the tunnel works
+
+1. The client opens a WebSocket on the server, on the same host and port as the other
+   remote session requests. Only a client opens a tunnel. The server never connects to
+   a host for a client, so a tunnel gives no access to the server's network.
+2. The server gives the service a SOCKS5 proxy on its loopback address, with a username and
+   password for that tunnel only. Another API key cannot use it.
+3. The server sends each connection that the service opens through the tunnel. The client
+   connects to the host and relays the bytes.
+
+The client logs `The server sends its requests through your connection on this machine`. You
+do not configure ports: the server picks a free one, and your
+machine opens none, because the client opens the connection to the server. A NAT router, a
+firewall, or a Cloudflare tunnel in front of the server does not stop it.
+
+The service traffic stays encrypted from the server to the service, so the client relays only
+encrypted bytes. The client refuses to connect to `localhost`, and to a host name or IP address
+that resolves only to a loopback, private or link-local address, so the server cannot reach
+your local network.
+
+!!! note "Each request crosses the tunnel twice"
+    A request from the server goes to your machine and then to the service, so it takes
+    longer than a request that the server sends directly. The segments do not go through the
+    tunnel: the client downloads them as before.
+
+A service that uses a server account does not work with `--local-proxy`, because the server
+logs in with its own account. If the tunnel drops, the client connects again, and a new request
+from the server waits up to 10 seconds for it. A request that was in progress when the tunnel
+dropped fails. The server closes a tunnel when its client has not connected for 60 seconds, and
+the client then stops with `The tunnel to the server closed`. An API key can have 4 tunnels
+open at once.
 
 ## Basic (static proxies)
 

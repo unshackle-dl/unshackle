@@ -8,6 +8,9 @@ import re
 from typing import Any, List, Optional
 from urllib.parse import urlparse
 
+import click
+from click.core import ParameterSource
+
 from unshackle.core.proxies.proxy import Proxy
 from unshackle.core.utils.redact import mask_proxy
 
@@ -187,6 +190,38 @@ def describe_proxy(provider: Any, uri: str, query: str, allow_debug: bool = True
         if display:
             return f"Using {name} Proxy {display}"
     return f"Using {name} Proxy: {mask_proxy(uri, isinstance(provider, Basic), allow_debug)}"
+
+
+def require_alone_local_proxy(ctx: click.Context) -> None:
+    """Check ``--local-proxy``: it needs a remote run and no other proxy option.
+
+    A proxy option that comes from the ``dl`` config defaults, not the command line, is cleared instead.
+    """
+    if not ctx.params.get("remote"):
+        raise click.UsageError(
+            "--local-proxy needs --remote: it sends a remote server's requests through this machine."
+        )
+    given = []
+    for key in ("proxy", "no_proxy", "proxy_download", "no_proxy_download"):
+        if not ctx.params.get(key):
+            continue
+        if ctx.get_parameter_source(key) in (ParameterSource.DEFAULT, ParameterSource.DEFAULT_MAP):
+            ctx.params[key] = False if key.startswith("no_") else None
+        else:
+            given.append("--" + key.replace("_", "-"))
+    if given:
+        raise click.UsageError(f"--local-proxy does not work with {', '.join(given)}.")
+
+
+def describe_explicit_proxy(uri: str) -> str:
+    """The log line for a proxy URI typed in full: a proxy on this machine shows only as its port."""
+    if is_loopback(uri):
+        try:
+            port = urlparse(uri if "//" in uri else f"//{uri}").port
+        except ValueError:
+            port = None
+        return f"Using a local proxy on port {port}" if port else "Using a local proxy"
+    return f"Using explicit Proxy: {mask_proxy(uri)}"
 
 
 def resolve_proxy(proxy: str, proxy_providers: List[Any]) -> Optional[str]:

@@ -146,10 +146,14 @@ hood the client walks a remote session through its lifecycle.
       `controld://<resolver>@dns.controld.com`. The server counts it as a full proxy
       URI and runs its own forwarder for it. A bare region skips Control D, because its
       proxy is a forwarder on the client. See
-      [Control D](../../guide/proxies-and-vpn.md#control-d)
+      [Control D](../../guide/proxies-and-vpn.md#control-d).
       The client also downloads playlists and segments through the same proxy,
       as a local run does. `--no-proxy-download` and `--proxy-download` change
       that for downloads only.
+    - A `--local-proxy` goes as `tunnel:<id>`. The client opens
+      `GET /api/tunnel` first, and the server replaces the ID with a loopback SOCKS5
+      proxy that relays to the client's own connection. See
+      [Send the server's requests through your machine](../../guide/proxies-and-vpn.md#send-the-servers-requests-through-your-machine).
     - Track-selection hints (`range_`, `vcodec`, `quality`, `best_available`,
       `generate_dv`) so the server fetches the right manifests
     - Your language and audio codec selection (`-l`, `-vl`, `-al`, `-a`, `-fs`)
@@ -400,6 +404,11 @@ serve:
   gets a persistent per-account cache instead, so the account's tokens outlive the
   remote session. The server and the client both refuse a forwarded cache file that is not
   JSON or that names a type other than a date or time, and the service then authenticates again.
+- **A tunnel belongs to its API key.** The server accepts `tunnel:<id>` only from the API key
+  that opened the tunnel. Its SOCKS5 proxy listens on loopback only, and it needs a username and
+  password for that tunnel, so a raw `socks5h://127.0.0.1:<port>` proxy from a client fails.
+- **Only the client dials.** The server ignores a request from the client to open a
+  connection, so a tunnel never gives a client access to the server's network.
 - **The server redacts secrets in logs.** It redacts remote session IDs, service tags,
   and other user values before it writes them to the log.
 
@@ -427,6 +436,8 @@ The server mounts all these routes, even in `--remote-only` mode. Paths use the
 | Method | Path | Purpose |
 |---|---|---|
 | `POST` | `/api/session/create` | Build + authenticate a service instance; returns a session ID immediately |
+| `GET` | `/api/tunnel` | WebSocket that relays the connections of a `tunnel:<id>` proxy to the client; `?id=` reconnects |
+| `GET` | `/api/tunnel/check?id=` | Exit IP address and lookup time through the caller's tunnel, for `unshackle tunnel-test` |
 | `GET` | `/api/session/{id}/titles` | Fetch and cache the title list |
 | `POST` | `/api/session/{id}/tracks` | Resolve tracks, manifests, chapters, headers/cookies for a title |
 | `POST` | `/api/session/{id}/segments` | Resolve per-segment/track download descriptors |

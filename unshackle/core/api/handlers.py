@@ -38,6 +38,7 @@ from unshackle.core.session import utf8_text
 from unshackle.core.titles import Episode, Movie, Song, Title_T
 from unshackle.core.titles.music import SONG_FIELDS
 from unshackle.core.tracks import Audio, Subtitle, Tracks, Video
+from unshackle.core.tunnel import HEARTBEAT, MAX_MESSAGE, MAX_TUNNELS, TUNNELS, Tunnel, tunnel_proxy
 from unshackle.core.utilities import declared_kwargs, kind_only_conflict, original_tag
 from unshackle.core.utils.click_types import AUDIO_CODEC_LIST, QUALITY_LIST, SUBTITLE_CODEC, VIDEO_CODEC_LIST
 from unshackle.core.utils.collections import ci_get
@@ -2376,6 +2377,12 @@ def enforce_download_gates(params: Dict[str, Any], request: Optional[web.Request
     if params.get("proxy_download") is not None and not isinstance(params["proxy_download"], str):
         raise APIError(APIErrorCode.INVALID_INPUT, "proxy_download must be a string.")
 
+    if any(str(params.get(key) or "").startswith("tunnel:") for key in ("proxy", "proxy_download")):
+        raise APIError(
+            APIErrorCode.INVALID_PROXY,
+            "A download job cannot use a tunnel: proxy, because a tunnel belongs to one --remote client run.",
+        )
+
     if not server_proxy_allowed(request):
         resolve_handler_proxy(params, params.get("service") or "", request)
         if params.get("proxy_download"):
@@ -4527,7 +4534,7 @@ def resolve_handler_proxy(
 
     if (
         proxy_param
-        and re.match(r"^(https?://|socks|controld://)", str(proxy_param))
+        and re.match(r"^(https?://|socks|controld://|tunnel:)", str(proxy_param))
         and server_account_for(request, normalized_service)
     ):
         raise APIError(
@@ -4535,6 +4542,17 @@ def resolve_handler_proxy(
             "A server-account service does not accept a client proxy URI. Pass a country code or nothing.",
             details={"service": normalized_service},
         )
+
+    if isinstance(proxy_param, str) and proxy_param.startswith("tunnel:") and not no_proxy:
+        proxy_param = tunnel_proxy(
+            proxy_param.removeprefix("tunnel:"), request_secret_key(request) if request else None
+        )
+        if not proxy_param:
+            raise APIError(
+                APIErrorCode.INVALID_PROXY,
+                "The tunnel for this proxy is not open. Run the command again.",
+                details={"service": normalized_service},
+            )
 
     if allowed and not no_proxy:
         proxy_providers = initialize_proxy_providers()
@@ -5637,3 +5655,48 @@ async def session_delete_handler(session_id: str, request: Optional[web.Request]
     if cache_data:
         response["cache"] = cache_data
     return web.json_response(response)
+
+
+async def tunnel_handler(request: web.Request) -> web.StreamResponse:
+    """Open a ``--local-proxy`` tunnel, or reattach to the caller's tunnel named by ``?id=``."""
+    owner = request_secret_key(request)
+    tunnel_id = request.query.get("id")
+    tunnel = TUNNELS.get(tunnel_id) if tunnel_id else None
+    if tunnel_id and (not tunnel or tunnel.owner != owner):
+        raise APIError(APIErrorCode.NOT_FOUND, "No open tunnel has this id.")
+    if not tunnel and sum(t.owner == owner for t in TUNNELS.values()) >= MAX_TUNNELS:
+        raise APIError(APIErrorCode.RATE_LIMITED, f"An API key can have {MAX_TUNNELS} tunnels open at once.")
+    ws = web.WebSocketResponse(heartbeat=HEARTBEAT, max_msg_size=MAX_MESSAGE)
+    await ws.prepare(request)  # a request that is not a WebSocket upgrade fails here, before a tunnel exists
+    if not tunnel:
+        tunnel = Tunnel(owner)
+        await tunnel.start()
+    await tunnel.serve(ws)
+    return ws
+
+
+async def tunnel_check_handler(request: web.Request) -> web.Response:
+    """Look up the exit IP through the caller's tunnel ``?id=``, so the client can confirm the route before a real run."""
+    import requests
+
+    from unshackle.core.utils.ip_info import verify_proxy_exit
+
+    proxy = tunnel_proxy(request.query.get("id", ""), request_secret_key(request))
+    if not proxy:
+        raise APIError(APIErrorCode.NOT_FOUND, "No open tunnel has this id.")
+    with requests.Session() as session:
+        session.proxies = {"all": proxy}
+        session.trust_env = False
+        started = time.perf_counter()
+        try:
+            info = await asyncio.to_thread(verify_proxy_exit, session)
+        except ConnectionError as e:
+            raise APIError(APIErrorCode.INVALID_PROXY, str(e), http_status=502)
+    if not info:
+        raise APIError(
+            APIErrorCode.INVALID_PROXY,
+            "The server could not look up an IP address through the tunnel.",
+            http_status=502,
+        )
+    ms = round((time.perf_counter() - started) * 1000)
+    return web.json_response({"ip": info.get("ip"), "country": info.get("country"), "ms": ms})
