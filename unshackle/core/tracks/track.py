@@ -32,6 +32,7 @@ from unshackle.core.drm import DRM_T, ClearKeyCENC, PlayReady, Widevine
 from unshackle.core.drm.verify import decrypt_track
 from unshackle.core.events import events
 from unshackle.core.session import MAX_BACKOFF, RnetSession, utf8_text
+from unshackle.core.temp import restore_segments, stash_segments
 from unshackle.core.tracks import resume
 from unshackle.core.utilities import get_boxes, log_event, try_ensure_utf8
 from unshackle.core.utils import run_proxy
@@ -760,6 +761,7 @@ class Track:
                 if keep_segments:
                     if save_dir.exists():
                         for partial in save_dir.rglob("*.!dev"):
+                            partial.with_name(partial.name.removesuffix(".!dev")).unlink(missing_ok=True)
                             partial.unlink(missing_ok=True)
                 else:
                     if save_dir.exists():
@@ -774,6 +776,8 @@ class Track:
 
             # completed segments are reusable once the parser proves the segmentation
             # unchanged (resume sidecar); partial .!dev files never survive a run boundary
+            if keep_segments:
+                restore_segments(save_dir)
             cleanup()
 
         try:
@@ -925,6 +929,8 @@ class Track:
         except DownloadCancelled:
             try:
                 cleanup()
+                if keep_segments:
+                    stash_segments(save_dir)
             except OSError:
                 pass
             progress(downloaded="[yellow]SKIPPED")
@@ -932,6 +938,8 @@ class Track:
         except (Exception, KeyboardInterrupt):
             if not DOWNLOAD_LICENCE_ONLY.is_set():
                 cleanup()
+                if keep_segments:
+                    stash_segments(save_dir)
             raise
 
         if DOWNLOAD_CANCELLED.is_set():

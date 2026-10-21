@@ -112,6 +112,11 @@ dl:
 Keep a failed download's completed segment files so the next download resumes from where it
 stopped instead of restarting from byte zero.
 
+unshackle keeps the segments of a failed track in a `resume` directory inside the temp
+directory, and the next download of the same track takes them back from there. It removes a
+kept entry after 7 days, and `unshackle env clear temp` removes them all. A process that is
+killed, or a job cancelled over the REST API, keeps nothing.
+
 unshackle reuses only whole, fully downloaded segments. It always discards partially written
 segments, and no partial-byte (`Range`) resume across runs takes place. Reuse is possible only
 with proof that the segmentation did not change. The manifest URL, segment count, and byte
