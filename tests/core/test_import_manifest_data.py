@@ -87,6 +87,12 @@ def test_export_without_manifest_url_still_rebuilds_dash_manifest_data(tmp_path:
     assert set(tracks.videos[0].data.get("dash", {})) >= {"manifest", "adaptation_set", "representation"}
 
 
+def test_exported_track_its_manifest_no_longer_lists_is_dropped(tmp_path: Path) -> None:
+    """A track that matches no representation would get no manifest data and fail only at download."""
+    service = make_service(tmp_path, None, {"v-hevc": exported_video("v-hevc", AVC_URL, "HEVC", 3840, 2160)})
+    assert service.get_tracks(next(iter(service.get_titles()))).videos == []
+
+
 def test_exported_hevc_on_its_own_mpd_survives_the_reparse(tmp_path: Path) -> None:
     """A ladder split across per-codec MPDs loses every codec but manifest_url's if only URL tracks merge back."""
     service = make_service(

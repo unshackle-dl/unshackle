@@ -102,7 +102,8 @@ def resolve_import_manifest_data(
     Exports can be without ``manifest_url`` (for example, when the service never set
     ``title.tracks.manifest_url``) or carry one MPD per adaptation set. ``Track.from_dict``
     does not serialise manifest XML, so each exported track's ``url`` is re-fetched and
-    matched to a locally parsed representation before download.
+    matched to a locally parsed representation before download. A track that matches none is
+    dropped with a warning, since without its manifest data it fails only when it downloads.
     """
     if manifest_type not in MANIFEST_DATA_KEYS:
         return
@@ -142,6 +143,13 @@ def resolve_import_manifest_data(
             matched = match_track(track, local_tracks)
             if matched and matched.data.get(data_key):
                 track.data.update(matched.data)
+
+    unmatched = {str(track.id) for track in pending if not track.data.get(data_key)}
+    for track_id in unmatched:
+        log.warning(f"Skipping exported track {track_id}: its {manifest_type} manifest no longer lists it")
+    tracks.select_video(lambda t: str(t.id) not in unmatched)
+    tracks.select_audio(lambda t: str(t.id) not in unmatched)
+    tracks.select_subtitles(lambda t: str(t.id) not in unmatched)
 
 
 def parse_codec(codec: type[E], parse: Callable[[str], E], value: Any) -> Optional[E]:
@@ -316,13 +324,30 @@ class ImportService:
         if self.titles is not None:
             return self.titles
         titles_list = [
-            build_title(entry.get("meta", {}), self.service_tag, fallback_id=title_id)
+            build_title(self.title_meta(entry), self.service_tag, fallback_id=title_id)
             for title_id, entry in self.titles_data.items()
         ]
         self.titles = (
             Series(titles_list) if titles_list and isinstance(titles_list[0], Episode) else Movies(titles_list)
         )
         return self.titles
+
+    @staticmethod
+    def title_meta(entry: dict[str, Any]) -> dict[str, Any]:
+        """The title meta, with the language of an exported track when the title has none.
+
+        A service can set no title language yet label its tracks. The manifest re-parse and
+        ``-l orig`` need a title language, so an original-language track gives it, else a video.
+        """
+        meta = entry.get("meta") or {}
+        if fallback_language(meta.get("language")):
+            return meta
+        source = min(
+            (d for d in (entry.get("tracks") or {}).values() if fallback_language(d.get("language"))),
+            key=lambda d: (not d.get("is_original_lang"), d.get("type") != "Video"),
+            default=None,
+        )
+        return {**meta, "language": source["language"]} if source else meta
 
     def get_titles_cached(self, title_id: Optional[str] = None) -> Titles_T:
         """Apply the service's title_map to titles reconstructed from the export sidecar."""

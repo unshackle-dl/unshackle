@@ -54,19 +54,20 @@ URL_SUBTITLE = {
 }
 
 
-def make_service(tmp_path: Path, language: Optional[str], tracks: Optional[dict[str, Any]] = None) -> ImportService:
-    export = {
-        "version": 2,
-        "service": "EXAMPLE",
-        "titles": {
-            "movie-1": {
-                "meta": {"type": "movie", "id": "movie-1", "name": "Example Movie", "year": 2024, "language": language},
-                "manifest_url": "https://example.invalid/m.mpd",
-                "manifest_type": "DASH",
-                "tracks": tracks or {},
-            }
-        },
+def make_service(
+    tmp_path: Path,
+    language: Optional[str],
+    tracks: Optional[dict[str, Any]] = None,
+    manifest_url: Optional[str] = "https://example.invalid/m.mpd",
+) -> ImportService:
+    entry: dict[str, Any] = {
+        "meta": {"type": "movie", "id": "movie-1", "name": "Example Movie", "year": 2024, "language": language},
+        "manifest_type": "DASH",
+        "tracks": tracks or {},
     }
+    if manifest_url:
+        entry["manifest_url"] = manifest_url
+    export = {"version": 2, "service": "EXAMPLE", "titles": {"movie-1": entry}}
     path = tmp_path / "export.json"
     path.write_text(json.dumps(export), encoding="utf8")
     return ImportService(click.Context(click.Command("dl")), "EXAMPLE", "movie-1", str(path))
@@ -93,6 +94,35 @@ def test_unlabelled_manifest_without_usable_language_blames_the_service(
         get_tracks(make_service(tmp_path, language=language), MPD_NO_LANG)
     assert "Title.language" in error.value.message
     assert "may have expired" not in error.value.message
+
+
+def exported_video(language: str = "ja") -> dict[str, Any]:
+    return {
+        "type": "Video",
+        "id": "v1",
+        "url": "https://example.invalid/m.mpd",
+        "language": language,
+        "descriptor": "DASH",
+        "codec": "AVC",
+        "bitrate": 5000000,
+        "width": 1920,
+        "height": 1080,
+    }
+
+
+@pytest.mark.parametrize("manifest_url", ["https://example.invalid/m.mpd", None], ids=["manifest-url", "per-track-url"])
+def test_unlabelled_manifest_takes_the_exported_track_language(tmp_path: Path, manifest_url: Optional[str]) -> None:
+    """A title with no language takes it from its exported tracks, for either import branch."""
+    service = make_service(tmp_path, language=None, tracks={"v1": exported_video()}, manifest_url=manifest_url)
+    tracks = get_tracks(service, MPD_NO_LANG)
+    assert [(str(t.language), t.data.get("dash") is not None) for t in tracks.videos] == [("ja", True)]
+
+
+def test_original_language_track_gives_the_title_language(tmp_path: Path) -> None:
+    """The exporter marks the original-language tracks, which beat a video of another language."""
+    audio = {"type": "Audio", "id": "a1", "language": "de", "is_original_lang": True}
+    service = make_service(tmp_path, language=None, tracks={"v1": exported_video("en"), "a1": audio})
+    assert str(next(iter(service.get_titles())).language) == "de"
 
 
 def test_exported_url_subtitles_replace_the_manifests(tmp_path: Path) -> None:
