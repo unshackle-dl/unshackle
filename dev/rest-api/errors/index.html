@@ -2404,6 +2404,9 @@ is the default HTTP status the server returns for that code. A handler can overr
 the status in special cases (for example, a network error is always forced to <code>503</code>),
 but the defaults hold for the overwhelming majority of responses.</p>
 <h3 id="client-errors-4xx">Client errors (4xx)<a class="headerlink" href="#client-errors-4xx" title="Permanent link">&para;</a></h3>
+<p><code>SERVICE_ERROR</code> and <code>DRM_ERROR</code> are upstream failures, but they use <code>422</code>, not <code>502</code>.
+A proxy such as Cloudflare replaces the body of a <code>502</code> or <code>504</code> with its own page, and
+the JSON error is then lost.</p>
 <table>
 <thead>
 <tr>
@@ -2484,6 +2487,16 @@ but the defaults hold for the overwhelming majority of responses.</p>
 <td>The target resource is in a state that disallows the action (retrying a running job, prioritising a non-queued job, clearing cache during an active download).</td>
 </tr>
 <tr>
+<td><code>SERVICE_ERROR</code></td>
+<td>422</td>
+<td>The streaming service's API returned an error, or the service does not support the requested operation.</td>
+</tr>
+<tr>
+<td><code>DRM_ERROR</code></td>
+<td>422</td>
+<td>DRM or license acquisition failed.</td>
+</tr>
+<tr>
 <td><code>RATE_LIMITED</code></td>
 <td>429</td>
 <td>The streaming service is rate-limiting requests. Retryable.</td>
@@ -2524,16 +2537,6 @@ the window is fixed, so an early retry only spends the next window. See
 <td><code>WORKER_ERROR</code></td>
 <td>500</td>
 <td>The download worker subprocess errored out.</td>
-</tr>
-<tr>
-<td><code>SERVICE_ERROR</code></td>
-<td>502</td>
-<td>The streaming service's API returned an error, or the service does not support the requested operation.</td>
-</tr>
-<tr>
-<td><code>DRM_ERROR</code></td>
-<td>502</td>
-<td>DRM or license acquisition failed. Retryable.</td>
 </tr>
 <tr>
 <td><code>NETWORK_ERROR</code></td>
@@ -2598,7 +2601,7 @@ The classification is keyword-based, checked in order:</p>
 </tr>
 <tr>
 <td><code>drm</code>, <code>license</code>, <code>widevine</code>, <code>playready</code>, <code>decrypt</code></td>
-<td><code>DRM_ERROR</code> (502)</td>
+<td><code>DRM_ERROR</code> (422)</td>
 <td>no</td>
 </tr>
 <tr>
@@ -2707,9 +2710,8 @@ debugging, never on a server reachable by untrusted clients.</p>
    body.</li>
 <li><strong>Branch on <code>error_code</code>.</strong> For structured errors, this is the stable identifier
    to switch on. Do not use <code>message</code> as the identifier.</li>
-<li><strong>Respect <code>retryable</code>.</strong> When it is <code>true</code>, back off and try the request again. The
-   reference client retries <code>429</code>, <code>500</code>, <code>502</code>, <code>503</code>, and <code>504</code> with exponential
-   backoff. When absent, fix the request rather than repeating it.</li>
+<li><strong>Respect <code>retryable</code>.</strong> When it is <code>true</code>, back off and try the request again.
+   When absent, fix the request rather than repeating it.</li>
 <li><strong>Fall back gracefully.</strong> For an unrecognised code, show the <code>message</code> and the
    HTTP status.</li>
 </ol>
@@ -2717,9 +2719,10 @@ debugging, never on a server reachable by untrusted clients.</p>
 <p class="admonition-title">Reference consumer</p>
 <p>unshackle's own remote-download client treats any status of <code>400</code> or above as
 fatal, and a <code>200</code> body with <code>"status": "error"</code> and an <code>error_code</code> too: it logs
-<code>Server error [&lt;error_code&gt;]: &lt;message&gt;</code> and exits. It also wraps
-requests in a retry adapter (five attempts, backing off on <code>429</code>, <code>500</code>, <code>502</code>,
-<code>503</code>, and <code>504</code>). This is a reasonable template for your own client's error
+<code>Server error [&lt;error_code&gt;]: &lt;message&gt;</code> and exits. It retries a request once,
+after one second, only when a <code>502</code>, <code>503</code> or <code>504</code> arrives with a body that is
+not JSON: that is a page from the proxy in front of the server, not an answer
+from the server. This is a reasonable template for your own client's error
 handling.</p>
 </div>
 
