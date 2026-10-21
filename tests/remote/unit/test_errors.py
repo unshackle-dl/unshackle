@@ -43,8 +43,8 @@ def test_api_error_default_http_status_per_code() -> None:
         APIErrorCode.INTERNAL_ERROR: 500,
         APIErrorCode.DOWNLOAD_ERROR: 500,
         APIErrorCode.WORKER_ERROR: 500,
-        APIErrorCode.SERVICE_ERROR: 502,
-        APIErrorCode.DRM_ERROR: 502,
+        APIErrorCode.SERVICE_ERROR: 422,
+        APIErrorCode.DRM_ERROR: 422,
         APIErrorCode.NETWORK_ERROR: 503,
         APIErrorCode.SERVICE_UNAVAILABLE: 503,
     }
@@ -52,6 +52,8 @@ def test_api_error_default_http_status_per_code() -> None:
     assert {c.name for c in cases} == {c.name for c in APIErrorCode}
     for code, expected in cases.items():
         assert APIError(code, "x").http_status == expected, code
+    # the edge proxy replaces a 502 or 504 body, so no code may default to either
+    assert not {502, 504} & set(cases.values())
 
 
 def test_api_error_explicit_http_status_overrides_default() -> None:
@@ -164,7 +166,7 @@ def test_handle_api_exception_categorizes_generic() -> None:
         (Exception("Not available in your region"), 403, "GEOFENCE", False),
         (Exception("Title not found"), 404, "NOT_FOUND", False),
         (Exception("HTTP 429 too many requests"), 429, "RATE_LIMITED", True),
-        (Exception("DRM license fetch failed"), 502, "DRM_ERROR", False),
+        (Exception("DRM license fetch failed"), 422, "DRM_ERROR", False),
         (Exception("503 service unavailable"), 503, "SERVICE_UNAVAILABLE", True),
         (ValueError("malformed body"), 400, "INVALID_INPUT", False),
         (RuntimeError("totally novel failure xyz"), 500, "INTERNAL_ERROR", False),

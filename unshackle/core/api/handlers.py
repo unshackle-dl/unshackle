@@ -5123,7 +5123,7 @@ def handle_proxy_license(
         )
 
     # A service raises when the upstream licence server rejects the challenge.
-    # Surface it as a structured licence error, not an uncaught 500 the edge turns into a 502.
+    # Surface it as a structured licence error, not an uncaught 500.
     try:
         if drm_type == "widevine" and certificate:
             license_blob = service.get_widevine_service_certificate(

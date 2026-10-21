@@ -92,6 +92,10 @@ but the defaults hold for the overwhelming majority of responses.
 
 ### Client errors (4xx)
 
+`SERVICE_ERROR` and `DRM_ERROR` are upstream failures, but they use `422`, not `502`.
+A proxy such as Cloudflare replaces the body of a `502` or `504` with its own page, and
+the JSON error is then lost.
+
 | Code | Status | Meaning |
 |---|---|---|
 | `INVALID_INPUT` | 400 | A required field is missing, or the request body could not be parsed. Also used as the generic "your input was malformed" code. |
@@ -108,6 +112,8 @@ but the defaults hold for the overwhelming majority of responses.
 | `SESSION_NOT_FOUND` | 404 | The remote-dl session does not exist or has expired. |
 | `TRACK_NOT_FOUND` | 404 | A referenced track ID is not present in the remote session. |
 | `CONFLICT` | 409 | The target resource is in a state that disallows the action (retrying a running job, prioritising a non-queued job, clearing cache during an active download). |
+| `SERVICE_ERROR` | 422 | The streaming service's API returned an error, or the service does not support the requested operation. |
+| `DRM_ERROR` | 422 | DRM or license acquisition failed. |
 | `RATE_LIMITED` | 429 | The streaming service is rate-limiting requests. Retryable. |
 
 !!! warning "Not every `429` is `RATE_LIMITED`"
@@ -126,8 +132,6 @@ but the defaults hold for the overwhelming majority of responses.
 | `INTERNAL_ERROR` | 500 | An unexpected server-side error. This is the fallback for any exception the server could not categorise. |
 | `DOWNLOAD_ERROR` | 500 | The download process itself failed. |
 | `WORKER_ERROR` | 500 | The download worker subprocess errored out. |
-| `SERVICE_ERROR` | 502 | The streaming service's API returned an error, or the service does not support the requested operation. |
-| `DRM_ERROR` | 502 | DRM or license acquisition failed. Retryable. |
 | `NETWORK_ERROR` | 503 | A network connectivity problem (connection, timeout, DNS, TLS). Retryable. |
 | `SERVICE_UNAVAILABLE` | 503 | The service is temporarily unavailable or under maintenance. Retryable. |
 
@@ -156,7 +160,7 @@ The classification is keyword-based, checked in order:
 | `geofence`, `geoblock`, `region`, `not available in`, `territory` | `GEOFENCE` (403) | no |
 | `not found`, `404`, `does not exist`, `invalid id` | `NOT_FOUND` (404) | no |
 | `rate limit`, `too many requests`, `429`, `throttle` | `RATE_LIMITED` (429) | yes |
-| `drm`, `license`, `widevine`, `playready`, `decrypt` | `DRM_ERROR` (502) | no |
+| `drm`, `license`, `widevine`, `playready`, `decrypt` | `DRM_ERROR` (422) | no |
 | `service unavailable`, `503`, `maintenance`, `temporarily unavailable` | `SERVICE_UNAVAILABLE` (503) | yes |
 | `invalid`, `malformed`, `validation` (or `ValueError`, `ValidationError`) | `INVALID_INPUT` (400) | no |
 | anything else | `INTERNAL_ERROR` (500) | no |
@@ -262,16 +266,16 @@ For anyone writing a consumer of the API, a durable strategy is:
    body.
 2. **Branch on `error_code`.** For structured errors, this is the stable identifier
    to switch on. Do not use `message` as the identifier.
-3. **Respect `retryable`.** When it is `true`, back off and try the request again. The
-   reference client retries `429`, `500`, `502`, `503`, and `504` with exponential
-   backoff. When absent, fix the request rather than repeating it.
+3. **Respect `retryable`.** When it is `true`, back off and try the request again.
+   When absent, fix the request rather than repeating it.
 4. **Fall back gracefully.** For an unrecognised code, show the `message` and the
    HTTP status.
 
 !!! note "Reference consumer"
     unshackle's own remote-download client treats any status of `400` or above as
     fatal, and a `200` body with `"status": "error"` and an `error_code` too: it logs
-    `Server error [<error_code>]: <message>` and exits. It also wraps
-    requests in a retry adapter (five attempts, backing off on `429`, `500`, `502`,
-    `503`, and `504`). This is a reasonable template for your own client's error
+    `Server error [<error_code>]: <message>` and exits. It retries a request once,
+    after one second, only when a `502`, `503` or `504` arrives with a body that is
+    not JSON: that is a page from the proxy in front of the server, not an answer
+    from the server. This is a reasonable template for your own client's error
     handling.

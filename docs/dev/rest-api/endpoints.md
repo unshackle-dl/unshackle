@@ -182,7 +182,7 @@ For a service with `anonymous_search`, the server does not log in and ignores `c
 | `400` | `INVALID_PARAMETERS` | Missing `query`. |
 | `400` | `INVALID_SERVICE` | Unknown or disallowed service. |
 | `400` | `INVALID_PROXY` | Proxy could not be resolved. |
-| `502` | `SERVICE_ERROR` | Service failed to initialise, or does not support search. |
+| `422` | `SERVICE_ERROR` | Service failed to initialise, or does not support search. |
 
 ### `POST /api/list-titles`
 
@@ -1141,7 +1141,7 @@ Get the HLS segments a service drops (ads, bumpers, dub cards). The server runs 
 | `200` | - | Unwanted segment URIs, or `null`. |
 | `400` | `INVALID_INPUT` | Missing `track_id`. |
 | `404` | `TRACK_NOT_FOUND` | An unknown track ID was requested. |
-| `500` | `SERVICE_ERROR` | The playlist request or the filter failed. |
+| `422` | `SERVICE_ERROR` | The playlist request or the filter failed. |
 
 ### `POST /api/session/{session_id}/samples`
 
@@ -1159,7 +1159,7 @@ The client sends at most 8 MiB of samples per request, and the route accepts a b
 | `413` | - | The body is larger than 16 MiB. |
 | `403` | `FORBIDDEN` | The API key has no `server_cdm` grant for the service. |
 | `404` | `TRACK_NOT_FOUND` | An unknown track ID was requested. |
-| `500` | `SERVICE_ERROR` | The service's decrypter failed. |
+| `422` | `SERVICE_ERROR` | The service's decrypter failed. |
 
 ### `POST /api/session/{session_id}/license`
 
@@ -1211,7 +1211,7 @@ A slow answer arrives as a [slow response](#slow-responses).
 | `400` | `INVALID_PARAMETERS` | Unsupported `drm_type`. |
 | `404` | `TRACK_NOT_FOUND` | Unknown track ID. |
 | `404` | `NO_CONTENT` | Server CDM produced no keys. |
-| `502` | `SERVICE_ERROR` | The service aborted during licensing. |
+| `422` | `SERVICE_ERROR` | The service aborted during licensing. |
 
 ### `POST /api/session/{session_id}/keys/bad`
 
@@ -1288,30 +1288,7 @@ The server serialises every structured error raised inside a handler to the same
 
 ### Error codes and default status
 
-| Error code | HTTP status |
-| --- | --- |
-| `INVALID_INPUT` | 400 |
-| `INVALID_SERVICE` | 400 |
-| `INVALID_PROXY` | 400 |
-| `INVALID_PARAMETERS` | 400 |
-| `AUTH_FAILED` | 401 |
-| `FORBIDDEN` | 403 |
-| `SERVER_CDM_CAPPED` | 403 |
-| `GEOFENCE` | 403 |
-| `NOT_FOUND` | 404 |
-| `NO_CONTENT` | 404 |
-| `JOB_NOT_FOUND` | 404 |
-| `SESSION_NOT_FOUND` | 404 |
-| `TRACK_NOT_FOUND` | 404 |
-| `CONFLICT` | 409 |
-| `RATE_LIMITED` | 429 |
-| `INTERNAL_ERROR` | 500 |
-| `DOWNLOAD_ERROR` | 500 |
-| `WORKER_ERROR` | 500 |
-| `SERVICE_ERROR` | 502 |
-| `DRM_ERROR` | 502 |
-| `NETWORK_ERROR` | 503 |
-| `SERVICE_UNAVAILABLE` | 503 |
+The [error code catalogue](errors.md#error-code-catalogue) gives the default HTTP status of each error code.
 
 When a generic (uncategorized) exception reaches a handler, unshackle inspects its message and type to pick a code. For example, messages mentioning "connection" or "timeout" become `NETWORK_ERROR` (503, retryable), "rate limit" or "429" become `RATE_LIMITED` (429, retryable), and anything unrecognized collapses to `INTERNAL_ERROR` (500).
 

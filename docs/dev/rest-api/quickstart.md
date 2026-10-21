@@ -441,10 +441,12 @@ The `error_code` maps to an HTTP status. The ones you will meet most often:
 | `NOT_FOUND` | 404 | Title or resource does not exist |
 | `JOB_NOT_FOUND` | 404 | No job with that `job_id` |
 | `CONFLICT` | 409 | Illegal state transition (e.g. retry a running job) |
+| `SERVICE_ERROR` | 422 | The service raised an error |
 | `RATE_LIMITED` | 429 | Upstream throttling (retryable) |
 | `INTERNAL_ERROR` | 500 | Unexpected server-side failure |
-| `SERVICE_ERROR` | 502 | The service raised an error |
 | `NETWORK_ERROR` | 503 | Connection/timeout reaching the service (retryable) |
+
+The [error code catalogue](errors.md#error-code-catalogue) lists every code.
 
 !!! tip "Retry politely"
     Codes marked retryable (`NETWORK_ERROR`, `RATE_LIMITED`, `SERVICE_UNAVAILABLE`) reflect transient conditions. Back off and retry rather than hammering the server.
