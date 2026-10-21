@@ -16,6 +16,7 @@ import requests
 from requests.adapters import HTTPAdapter
 
 from unshackle.core.proxies.proxy import Proxy
+from unshackle.core.utils.redact import REDACTED
 
 log = logging.getLogger("ControlD")
 
@@ -261,6 +262,7 @@ class LocalProxy(socketserver.ThreadingTCPServer):
 # process-wide across provider instances; separate processes share only the account's unshackle-<region> names
 FORWARDERS: dict[str, LocalProxy] = {}
 REGIONS: dict[str, str] = {}  # profile -> region, oldest claim first
+LOCATIONS: dict[str, str] = {}  # profile -> the location code it redirects through
 STATE = threading.Lock()
 
 
@@ -337,6 +339,7 @@ class ControlD(Proxy):
         self.configured = {x["profile"]: resolver_id(x["resolver"]) for x in pairs}
         self.max_profiles = max_profiles
         self.resolvers = dict(self.configured)
+        self.last_profile: Optional[str] = None
 
         self.catalogue = self.get_locations()
 
@@ -459,6 +462,8 @@ class ControlD(Proxy):
                     server.resolver.cache.clear()
             REGIONS.pop(profile, None)
             REGIONS[profile] = query
+            LOCATIONS[profile] = location
+        self.last_profile = profile
         return resolver
 
     def get_proxy(self, query: str) -> Optional[str]:
@@ -466,6 +471,15 @@ class ControlD(Proxy):
         with STATE:
             resolver = self.claim(query.lower())
             return forwarder(resolver).uri if resolver else None
+
+    def last_connection_display(self) -> Optional[str]:
+        """Name the location of the last claim, with the resolver ID masked, in place of the loopback URI."""
+        location = LOCATIONS.get(self.last_profile or "")
+        if not location:
+            return None
+        city = next((x.get("city") for x in self.catalogue if x["PK"] == location), None)
+        label = f"{location} - {city}" if city else location
+        return f"({label}): {self.resolvers[self.last_profile][:4]}{REDACTED}@dns.controld.com"
 
     def get_remote_proxy(self, query: str) -> Optional[str]:
         """Get the `controld://` proxy URI for this region, for a server on another machine."""

@@ -267,12 +267,14 @@ def account(catalogue: None, monkeypatch: pytest.MonkeyPatch) -> Iterator[Accoun
     monkeypatch.setattr("unshackle.core.proxies.controld.requests.request", made.request)
     controld.FORWARDERS.clear()
     controld.REGIONS.clear()
+    controld.LOCATIONS.clear()
     yield made
     for server in controld.FORWARDERS.values():
         server.shutdown()
         server.server_close()
     controld.FORWARDERS.clear()
     controld.REGIONS.clear()
+    controld.LOCATIONS.clear()
 
 
 def test_locations_come_from_control_d(account: Account) -> None:
@@ -378,6 +380,13 @@ def test_a_server_runs_a_forwarder_for_a_resolver_a_client_sends(account: Accoun
         local_proxy("controld://evil.example/x@dns.controld.com")
 
 
+def test_the_log_names_the_location_and_masks_the_resolver(account: Account) -> None:
+    provider = ControlD(token="secret", profile="abcd123", resolver="efgh456")
+    provider.get_proxy("yul")
+    provider.get_proxy("yul")  # a profile already on the region keeps its location
+    assert provider.last_connection_display() == "(YUL - Montreal): efgh***@dns.controld.com"
+
+
 def test_remote_sends_the_resolver_and_a_bare_region_skips_control_d(
     account: Account, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -389,6 +398,15 @@ def test_remote_sends_the_resolver_and_a_bare_region_skips_control_d(
     assert remote_service.resolve_remote_proxy_arg("controld:us") == "controld://efgh456@dns.controld.com"
     with pytest.raises(click.ClickException):
         remote_service.resolve_remote_proxy_arg("us")  # a loopback forwarder is useless to a server
+
+
+def test_a_server_gets_the_typed_proxy_only_when_this_machine_resolved_it_to_loopback() -> None:
+    from unshackle.core.remote_service import server_proxy_arg
+
+    assert server_proxy_arg({"proxy": "http://127.0.0.1:4000", "proxy_arg": "controld:ca"}) == "controld:ca"
+    assert server_proxy_arg({"proxy": "https://u:p@ca1.example:89", "proxy_arg": "nordvpn:ca"}) == (
+        "https://u:p@ca1.example:89"
+    )
 
 
 @pytest.mark.parametrize("query", ["ca", "us:seattle", "us-ny", "uk1", "yul", "jfk", "res_yyz", "nordvpn:ca"])

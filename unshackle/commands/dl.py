@@ -1613,6 +1613,7 @@ class dl:
                 with console.status("Loading Proxy Providers...", spinner="dots"):
                     self.proxy_providers = load_proxy_providers()
 
+            ctx.params["proxy_arg"] = proxy
             if proxy and proxy.startswith("controld://"):
                 proxy = ctx.params["proxy"] = resolve_proxy(proxy, [])
             if proxy:
@@ -1646,9 +1647,6 @@ class dl:
                     self.log.info(f"Using explicit Proxy: {mask_proxy(ctx.params['proxy'])}")
                     ctx.params["proxy_query"] = None
                     ctx.params["proxy_provider"] = None
-
-            if self.remote_needs_public_proxy and ctx.params.get("proxy") and is_loopback(ctx.params["proxy"]):
-                raise click.UsageError("That proxy is on your machine, so --remote cannot use it.")
 
         ctx.obj = ContextData(
             config=self.service_config,

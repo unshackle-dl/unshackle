@@ -920,6 +920,12 @@ def resolve_remote_proxy_arg(proxy_arg: str, providers: Optional[list] = None) -
         raise click.ClickException(str(e))
 
 
+def server_proxy_arg(params: Dict[str, Any]) -> str:
+    """The --proxy value to resolve for a server: the one typed when it resolved to a proxy on this machine."""
+    proxy = params["proxy"]
+    return (params.get("proxy_arg") or proxy) if is_loopback(proxy) else proxy
+
+
 _CACHE_HEX_ID_RE = re.compile(r"[0-9a-f]{32,}", re.IGNORECASE)
 
 
@@ -1159,7 +1165,8 @@ class RemoteService:
         if params.get("no_proxy"):
             data["no_proxy"] = True
         elif params.get("proxy"):
-            data["proxy"] = resolve_remote_proxy_arg(params["proxy"], getattr(self.ctx.obj, "proxy_providers", None))
+            providers = getattr(self.ctx.obj, "proxy_providers", None)
+            data["proxy"] = resolve_remote_proxy_arg(server_proxy_arg(params), providers)
             self.require_reachable_proxy(data["proxy"])
         response = self.client.post("/api/search", data)
         self.save_returned_cache(response.get("cache") or {}, profile)
@@ -1226,7 +1233,7 @@ class RemoteService:
                         "rejects the remote session"
                     )
         elif not no_proxy and proxy:
-            resolved_proxy = resolve_remote_proxy_arg(proxy, providers)
+            resolved_proxy = resolve_remote_proxy_arg(server_proxy_arg(self.ctx.parent.params), providers)
             if resolved_proxy:
                 create_data["proxy"] = resolved_proxy
                 query = (self.ctx.parent.params.get("proxy_query") if self.ctx.parent else None) or proxy

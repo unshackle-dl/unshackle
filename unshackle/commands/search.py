@@ -88,6 +88,7 @@ def search(
         with console.status("Loading Proxy Providers...", spinner="dots"):
             proxy_providers = load_proxy_providers()
 
+        ctx.params["proxy_arg"] = proxy
         if proxy:
             try:
                 requested_provider, query = split_proxy_query(proxy, proxy_providers)

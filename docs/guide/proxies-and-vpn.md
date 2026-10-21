@@ -288,7 +288,8 @@ run. Give `profile` and `resolver` only to use a profile that you made yourself 
 [How unshackle chooses a profile](#how-unshackle-chooses-a-profile)).
 
 The returned proxy is HTTP on loopback,
-`http://127.0.0.1:{port}`. The locations themselves are read from Control D at startup
+`http://127.0.0.1:{port}`. The log shows the location and a masked resolver ID, for example
+`Using ControlD Proxy (YUL - Montreal): abcd***@dns.controld.com`. The locations themselves are read from Control D at startup
 (107 of them across 68 countries, at the time of writing), so there is nothing to list:
 
 | Query | Meaning |
