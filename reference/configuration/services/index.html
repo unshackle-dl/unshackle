@@ -2111,6 +2111,8 @@
   <a href="../download/#dl"><code>dl</code></a> block. Set <code>remote: true</code> to send the <code>dl</code> and <code>search</code> runs of that
   service to a <a href="#remote_services">remote server</a> without <code>--remote</code>. Add <code>server</code> to select one of
   several servers. On the command line, <code>--local</code> and <code>--server</code> override these keys. A REST API job ignores both keys.
+  A REST API job takes the other keys that it accepts as download parameters as its defaults,
+  above the <code>serve</code> defaults and below the values that the request sends.
   See <a href="../../../dev/rest-api/remote-sessions/#making-a-service-remote-by-default">making a service remote by default</a>.</li>
 </ul>
 <p>Individual services may read any additional keys they define. unshackle hands the merged result
@@ -2300,7 +2302,7 @@ is the <a href="../../../dev/rest-api/">REST API</a> section. These are the conf
 <td><code>global_speed_limit</code></td>
 <td>str</td>
 <td><em>(unlimited)</em></td>
-<td>Server-wide download speed cap, e.g. <code>10M</code>, <code>1.5G</code> or plain bytes/sec (same format as <code>speed_limit</code>). One shared budget across all concurrent jobs; the server ignores per-job speed limits while it is set.</td>
+<td>Server-wide download speed cap, e.g. <code>10M</code>, <code>1.5G</code> or plain bytes/sec (same format as <code>speed_limit</code>). Each download job gets an equal share: the cap divided by the number of download job slots (2 by default, see <a href="../../../dev/rest-api/job-lifecycle/">job lifecycle</a>). A job that runs alone still gets only its share. The server ignores per-job speed limits while it is set.</td>
 </tr>
 <tr>
 <td><code>cdm_overrides</code></td>
@@ -2348,7 +2350,8 @@ the whole file again, globs the device directories again, and swaps in the new <
 continue; an API key you removed gets <code>401</code> on its next request. A file that does not parse
 or validate keeps the running settings and logs the reason. A change to <code>remote_only</code>,
 <code>services_refresh_interval</code>, the first PlayReady device, or any command-line flag needs
-a restart, and the log says so. Windows has no <code>SIGHUP</code>: restart the server there.</p>
+a restart, and the log says so. A new <code>global_speed_limit</code> applies to jobs that start after the
+reload; running jobs keep their share. Windows has no <code>SIGHUP</code>: restart the server there.</p>
 </div>
 <p><code>server_cdm</code> decides whether the server runs the CDM licensing for that API key. Set it to
 <code>true</code> to enable every service, or to a list of service tags to enable only those. It is <code>false</code>
