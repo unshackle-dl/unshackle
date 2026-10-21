@@ -2398,6 +2398,24 @@ def enforce_download_gates(params: Dict[str, Any], request: Optional[web.Request
             )
 
 
+def service_dl_defaults(service: str) -> Dict[str, Any]:
+    """The ``services.<TAG>.dl`` values that name an API download parameter, keyed as the API names them."""
+    from unshackle.commands.dl import DL_OPTION_ALIASES
+    from unshackle.core.services import ROUTING_PARAMS
+
+    api_names = {click_name: api_name for api_name, click_name in DL_OPTION_ALIASES.items()}
+    result: Dict[str, Any] = {}
+    for key, value in ((ci_get(config.services, service) or {}).get("dl") or {}).items():
+        key = api_names.get(key, key)
+        if value is None or key in ROUTING_PARAMS:
+            continue
+        if key not in DEFAULT_DOWNLOAD_PARAMS:
+            log.debug("Ignoring services.%s.dl key %r: not an API download parameter", service, key)
+            continue
+        result[key] = value
+    return result
+
+
 async def download_handler(data: Dict[str, Any], request: Optional[web.Request] = None) -> web.Response:
     """Answer the download request: make a download job and add it to the queue."""
     from unshackle.core.api.download_manager import get_download_manager
@@ -2442,10 +2460,13 @@ async def download_handler(data: Dict[str, Any], request: Optional[web.Request] 
         serve_overrides = {
             k: v for k, v in (config.serve or {}).items() if k in DEFAULT_DOWNLOAD_PARAMS and v is not None
         }
+        # A relayed job gets no local service overrides, so none of its keys may count as defaults.
+        service_dl = {} if server else service_dl_defaults(normalized_service)
         params_with_defaults = {
             **DEFAULT_DOWNLOAD_PARAMS,
             **serve_overrides,
             **service_specific_defaults,
+            **service_dl,
             **filtered_params,
         }
         await asyncio.to_thread(enforce_download_gates, {**params_with_defaults, "service": service_tag}, request)
@@ -2455,6 +2476,7 @@ async def download_handler(data: Dict[str, Any], request: Optional[web.Request] 
         # The download worker reads this to decide whether dl may load the server's proxy
         # providers. Always stamped server-side so a client-sent value cannot grant it.
         params_with_defaults["server_proxy"] = server_proxy_allowed(request)
+        params_with_defaults["client_keys"] = sorted(params_with_defaults if server else filtered_params)
         job = manager.create_job(normalized_service, title_id, owner_key=caller_key(request), **params_with_defaults)
 
         return web.json_response(

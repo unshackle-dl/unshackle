@@ -344,6 +344,11 @@ def normalize_sub_format(sub_format_raw: str) -> Any:
     return mapped[0] if mapped else None
 
 
+def client_sent_keys(params: Dict[str, Any]) -> set[str]:
+    """Pop the server's ``client_keys`` stamp; a job without one counts every parameter as client-sent."""
+    return set(params.pop("client_keys", params))
+
+
 def perform_download(
     job_id: str,
     service: str,
@@ -392,6 +397,8 @@ def perform_download(
     for banned in ("postscript", "post_script", "post_scripts"):
         if params.pop(banned, None) is not None:
             log.warning(f"Ignoring '{banned}' in API download parameters; post-scripts are config-only")
+
+    client_keys = client_sent_keys(params)
 
     vcodec_raw = params.get("vcodec")
     if vcodec_raw:
@@ -515,7 +522,7 @@ def perform_download(
     for param_name in ctx.params:
         source_key = "range" if param_name == "range_" else param_name
         ctx.set_parameter_source(
-            param_name, ParameterSource.COMMANDLINE if source_key in params else ParameterSource.DEFAULT
+            param_name, ParameterSource.COMMANDLINE if source_key in client_keys else ParameterSource.DEFAULT
         )
 
     dl_instance = dl(

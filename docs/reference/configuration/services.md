@@ -16,6 +16,8 @@ Per-service configuration, keyed by the canonical service tag (for example `EXAM
   [`dl`](download.md#dl) block. Set `remote: true` to send the `dl` and `search` runs of that
   service to a [remote server](#remote_services) without `--remote`. Add `server` to select one of
   several servers. On the command line, `--local` and `--server` override these keys. A REST API job ignores both keys.
+  A REST API job takes the other keys that it accepts as download parameters as its defaults,
+  above the `serve` defaults and below the values that the request sends.
   See [making a service remote by default](../../dev/rest-api/remote-sessions.md#making-a-service-remote-by-default).
 
 Individual services may read any additional keys they define. unshackle hands the merged result
