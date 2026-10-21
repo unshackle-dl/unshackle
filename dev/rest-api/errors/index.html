@@ -1782,10 +1782,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#server-errors-5xx" class="md-nav__link">
+  <a href="#server-errors-422-and-424" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Server errors (5xx)
+        Server errors (422 and 424)
       
     </span>
   </a>
@@ -2198,10 +2198,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#server-errors-5xx" class="md-nav__link">
+  <a href="#server-errors-422-and-424" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Server errors (5xx)
+        Server errors (422 and 424)
       
     </span>
   </a>
@@ -2436,12 +2436,13 @@ When it is absent, assume the request will keep failing until you change somethi
 <h2 id="error-code-catalogue">Error code catalogue<a class="headerlink" href="#error-code-catalogue" title="Permanent link">&para;</a></h2>
 <p>Every code below is a member of the <code>APIErrorCode</code> enumeration. The <strong>Status</strong> column
 is the default HTTP status the server returns for that code. A handler can override
-the status in special cases (for example, a network error is always forced to <code>503</code>),
-but the defaults hold for the overwhelming majority of responses.</p>
+the status in special cases, but the defaults hold for the overwhelming majority of responses.</p>
+<p>The server never answers with a <code>5xx</code> status. A proxy such as Cloudflare can replace the
+body of a <code>5xx</code> with its own page, and the JSON error is then lost. Server-side failures
+use <code>422</code>, and the ones that a retry can fix use <code>424</code>. Read <code>error_code</code> to tell them apart.
+A <code>5xx</code> that a client receives comes from a proxy in front of the server, for example
+while the server restarts.</p>
 <h3 id="client-errors-4xx">Client errors (4xx)<a class="headerlink" href="#client-errors-4xx" title="Permanent link">&para;</a></h3>
-<p><code>SERVICE_ERROR</code> and <code>DRM_ERROR</code> are upstream failures, but they use <code>422</code>, not <code>502</code>.
-A proxy such as Cloudflare replaces the body of a <code>502</code> or <code>504</code> with its own page, and
-the JSON error is then lost.</p>
 <table>
 <thead>
 <tr>
@@ -2522,6 +2523,11 @@ the JSON error is then lost.</p>
 <td>The target resource is in a state that disallows the action (retrying a running job, prioritising a non-queued job, clearing cache during an active download).</td>
 </tr>
 <tr>
+<td><code>SERVER_DRAINING</code></td>
+<td>409</td>
+<td>The server is about to restart and starts no new remote session or download job. Open work continues. Retryable after the restart.</td>
+</tr>
+<tr>
 <td><code>SERVICE_ERROR</code></td>
 <td>422</td>
 <td>The streaming service's API returned an error, or the service does not support the requested operation.</td>
@@ -2548,7 +2554,7 @@ header. Read <code>Retry-After</code> and wait it out rather than retrying on a 
 the window is fixed, so an early retry only spends the next window. See
 <a href="../authentication/#rate-limit-rejections">Authentication</a>.</p>
 </div>
-<h3 id="server-errors-5xx">Server errors (5xx)<a class="headerlink" href="#server-errors-5xx" title="Permanent link">&para;</a></h3>
+<h3 id="server-errors-422-and-424">Server errors (422 and 424)<a class="headerlink" href="#server-errors-422-and-424" title="Permanent link">&para;</a></h3>
 <table>
 <thead>
 <tr>
@@ -2560,27 +2566,27 @@ the window is fixed, so an early retry only spends the next window. See
 <tbody>
 <tr>
 <td><code>INTERNAL_ERROR</code></td>
-<td>500</td>
-<td>An unexpected server-side error. This is the fallback for any exception the server could not categorise.</td>
+<td>422</td>
+<td>An unexpected server-side error. This is the fallback for any exception the server could not categorise, and for an exception that no handler caught.</td>
 </tr>
 <tr>
 <td><code>DOWNLOAD_ERROR</code></td>
-<td>500</td>
+<td>422</td>
 <td>The download process itself failed.</td>
 </tr>
 <tr>
 <td><code>WORKER_ERROR</code></td>
-<td>500</td>
+<td>422</td>
 <td>The download worker subprocess errored out.</td>
 </tr>
 <tr>
 <td><code>NETWORK_ERROR</code></td>
-<td>503</td>
+<td>424</td>
 <td>A network connectivity problem (connection, timeout, DNS, TLS). Retryable.</td>
 </tr>
 <tr>
 <td><code>SERVICE_UNAVAILABLE</code></td>
-<td>503</td>
+<td>424</td>
 <td>The service is temporarily unavailable or under maintenance. Retryable.</td>
 </tr>
 </tbody>
@@ -2588,7 +2594,8 @@ the window is fixed, so an early retry only spends the next window. See
 <div class="admonition note">
 <p class="admonition-title">Fallback status</p>
 <p>If a code is ever emitted without a mapped status, the server falls back to
-<code>500</code>. In practice every code above has an explicit mapping.</p>
+<code>422</code>. In practice every code above has an explicit mapping. A middleware
+in every server mode also changes any <code>5xx</code> answer, such as one from a CDM subapplication, to <code>422</code>.</p>
 </div>
 <h2 id="how-the-server-produces-errors">How the server produces errors<a class="headerlink" href="#how-the-server-produces-errors" title="Permanent link">&para;</a></h2>
 <p>Understanding where an error comes from helps interpret it.</p>
@@ -2616,7 +2623,7 @@ The classification is keyword-based, checked in order:</p>
 </tr>
 <tr>
 <td><code>connection</code>, <code>timeout</code>, <code>network</code>, <code>unreachable</code>, <code>socket</code>, <code>dns</code>, <code>resolve</code> (or <code>ConnectionError</code>, <code>TimeoutError</code>, <code>URLError</code>, <code>SSLError</code>)</td>
-<td><code>NETWORK_ERROR</code> (503)</td>
+<td><code>NETWORK_ERROR</code> (424)</td>
 <td>yes</td>
 </tr>
 <tr>
@@ -2641,7 +2648,7 @@ The classification is keyword-based, checked in order:</p>
 </tr>
 <tr>
 <td><code>service unavailable</code>, <code>503</code>, <code>maintenance</code>, <code>temporarily unavailable</code></td>
-<td><code>SERVICE_UNAVAILABLE</code> (503)</td>
+<td><code>SERVICE_UNAVAILABLE</code> (424)</td>
 <td>yes</td>
 </tr>
 <tr>
@@ -2651,7 +2658,7 @@ The classification is keyword-based, checked in order:</p>
 </tr>
 <tr>
 <td>anything else</td>
-<td><code>INTERNAL_ERROR</code> (500)</td>
+<td><code>INTERNAL_ERROR</code> (422)</td>
 <td>no</td>
 </tr>
 </tbody>

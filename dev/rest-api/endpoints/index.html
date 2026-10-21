@@ -3268,7 +3268,7 @@
 <td>Service list returned.</td>
 </tr>
 <tr>
-<td><code>500</code></td>
+<td><code>422</code></td>
 <td>Unexpected server error (<code>INTERNAL_ERROR</code>).</td>
 </tr>
 </tbody>
@@ -3602,7 +3602,7 @@ ignore it safely. See <a href="../../creating-a-service/#split-episodes">Split e
 <td>Title not found.</td>
 </tr>
 <tr>
-<td><code>500</code></td>
+<td><code>422</code></td>
 <td><code>INTERNAL_ERROR</code></td>
 <td>Unexpected error.</td>
 </tr>
@@ -5429,7 +5429,7 @@ A slow answer arrives as a <a href="#slow-responses">slow response</a>.</p>
 </div>
 <h3 id="error-codes-and-default-status">Error codes and default status<a class="headerlink" href="#error-codes-and-default-status" title="Permanent link">&para;</a></h3>
 <p>The <a href="../errors/#error-code-catalogue">error code catalogue</a> gives the default HTTP status of each error code.</p>
-<p>When a generic (uncategorized) exception reaches a handler, unshackle inspects its message and type to pick a code. For example, messages mentioning "connection" or "timeout" become <code>NETWORK_ERROR</code> (503, retryable), "rate limit" or "429" become <code>RATE_LIMITED</code> (429, retryable), and anything unrecognized collapses to <code>INTERNAL_ERROR</code> (500).</p>
+<p>When a generic (uncategorized) exception reaches a handler, unshackle inspects its message and type to pick a code. For example, messages mentioning "connection" or "timeout" become <code>NETWORK_ERROR</code> (424, retryable), "rate limit" or "429" become <code>RATE_LIMITED</code> (429, retryable), and anything unrecognized collapses to <code>INTERNAL_ERROR</code> (422).</p>
 <hr />
 <h2 id="see-also">See also<a class="headerlink" href="#see-also" title="Permanent link">&para;</a></h2>
 <ul>
