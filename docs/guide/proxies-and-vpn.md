@@ -462,11 +462,18 @@ it next needs them.
 
 ### Troubleshooting Control D
 
+When the forwarder cannot connect to a host, it answers `502 Bad Gateway` and gives the reason in brackets.
+Python-Requests shows it as `Tunnel connection failed: 502 Bad Gateway (<reason>)`. The forwarder also logs
+each reason once as a warning, `Could not reach <host>:<port>: <reason>`, because some HTTP clients do not
+show the reason.
+
 | Symptom | Cause and fix |
 |---|---|
 | `Proxy check failed`, because the exit IP is your own IP. | The profile does not redirect. Make sure that the plan includes traffic redirection (*Full Control*, not *Some Control*). After a region change, wait for the TTL of the previous answer to end. |
-| A `502 Bad Gateway` for one host. With `-d`, the log shows `Control D returned no A record for …`. | Control D gave no IPv4 address for that host. |
-| A `502 Bad Gateway` for one host only. With `-d`, the log shows `Refused …, an address that Control D cannot redirect`. | The request names the host by IP address. The forwarder refuses it. See the note on IPv4 above. |
+| `502 Bad Gateway (Control D returned no A record for …)` | Control D gave no IPv4 address for that host. |
+| `502 Bad Gateway (an IP address skips Control D's DNS …)` | The request names the host by IP address. The forwarder refuses it. See the note on IPv4 above. |
+| `502 Bad Gateway (Control D sent … to …, which did not answer: …)` | Control D gave an address for the host, but the connection to that address failed. This is usually a temporary fault on Control D's network. Try again, or use `--no-proxy-download` to download without the proxy. |
+| `502 Bad Gateway (Control D DNS timed out)`, `(Control D DNS could not be reached …)` or `(Control D DNS answered HTTP …)` | unshackle got no answer from Control D's DNS at `dns.controld.com`. Check the network connection of this machine. |
 | An HTTP `401` or `403` from `api.controld.com`. | The token is a *Read* token, or its *Allowed IPs* do not include this machine. Use a *Write* token. |
 | `Control D needs both a profile and a resolver` or `Control D needs max_profiles of 1 or more` at startup. | The `controld` config is not valid. Give `profile` and `resolver` together, and a `max_profiles` of 1 or more. Every run fails until you correct it, also a run that does not use Control D. |
 | `Could not read Control D's locations`. | unshackle could not get the location list. It tries again at the next Control D query. |

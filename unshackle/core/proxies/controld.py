@@ -102,6 +102,7 @@ class Resolver:
         self.lock = threading.Lock()
 
     def resolve(self, host: str) -> str:
+        """Get the IPv4 address Control D gives `host`. A failure raises `ConnectionError` without the resolver ID."""
         host = host.lower()
         with self.lock:
             cached = self.cache.get(host)
@@ -109,13 +110,20 @@ class Resolver:
             return cached[0]
 
         query = base64.urlsafe_b64encode(build_query(host)).rstrip(b"=").decode()
-        response = self.session.get(
-            self.url,
-            params={"dns": query},
-            headers={"accept": "application/dns-message"},
-            timeout=DOH_TIMEOUT,
-        )
-        response.raise_for_status()
+        try:
+            response = self.session.get(
+                self.url,
+                params={"dns": query},
+                headers={"accept": "application/dns-message"},
+                timeout=DOH_TIMEOUT,
+            )
+            response.raise_for_status()
+        except requests.HTTPError as e:
+            raise ConnectionError(f"Control D DNS answered HTTP {e.response.status_code}") from None
+        except requests.Timeout:
+            raise ConnectionError("Control D DNS timed out") from None
+        except requests.RequestException as e:
+            raise ConnectionError(f"Control D DNS could not be reached ({type(e).__name__})") from None
 
         records = parse_a_records(response.content)
         if not records:
@@ -157,6 +165,17 @@ class Handler(socketserver.StreamRequestHandler):
             self.connection.sendall(b"HTTP/1.1 " + status + b"\r\n\r\n")
         except OSError:
             pass
+
+    def refuse(self, host: str, port: int, reason: str) -> None:
+        """Answer 502 with the reason in the status line, which a client shows as `Tunnel connection failed: ...`.
+
+        Some HTTP clients drop the reason phrase, so this also logs each new reason once as a warning.
+        """
+        reason = " ".join(reason.split())
+        if (host, reason) not in self.server.refused:
+            self.server.refused.add((host, reason))
+            log.warning(f"Could not reach {host}:{port}: {reason}")
+        self.reply(f"502 Bad Gateway ({reason})".encode("latin-1", "replace"))
 
     def forward_response_head(self, upstream: socket.socket) -> None:
         """Send the response head on with `Connection: close`, so the client never reuses this connection."""
@@ -212,16 +231,16 @@ class Handler(socketserver.StreamRequestHandler):
         except ValueError:
             pass
         else:
-            # an IP literal bypasses Control D's DNS and would leak this machine's own IP
-            log.debug(f"Refused {host}:{port}, an address that Control D cannot redirect")
-            return self.reply(b"502 Bad Gateway")
+            return self.refuse(host, port, "an IP address skips Control D's DNS and would expose this machine's IP")
 
         try:
             ip = self.server.resolver.resolve(host)
-            upstream = socket.create_connection((ip, port), timeout=HEAD_TIMEOUT)
         except Exception as e:
-            log.debug(f"Could not reach {host}:{port}: {e}")
-            return self.reply(b"502 Bad Gateway")
+            return self.refuse(host, port, str(e) or type(e).__name__)
+        try:
+            upstream = socket.create_connection((ip, port), timeout=HEAD_TIMEOUT)
+        except OSError as e:
+            return self.refuse(host, port, f"Control D sent {host} to {ip}, which did not answer: {e.strerror or e}")
 
         self.connection.settimeout(IDLE_TIMEOUT)
         upstream.settimeout(IDLE_TIMEOUT)
@@ -253,6 +272,7 @@ class LocalProxy(socketserver.ThreadingTCPServer):
         """An HTTP forward proxy on loopback that resolves every host through `resolver`."""
         super().__init__(("127.0.0.1", 0), Handler)
         self.resolver = resolver
+        self.refused: set[tuple[str, str]] = set()
 
     @property
     def uri(self) -> str:
@@ -460,6 +480,7 @@ class ControlD(Proxy):
             if server:
                 with server.resolver.lock:
                     server.resolver.cache.clear()
+                server.refused.clear()
             REGIONS.pop(profile, None)
             REGIONS[profile] = query
             LOCATIONS[profile] = location

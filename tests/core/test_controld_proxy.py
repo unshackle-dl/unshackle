@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import base64
 import http.server
+import logging
 import re
 import socket
 import socketserver
@@ -13,6 +14,7 @@ import threading
 import time
 from types import SimpleNamespace
 from typing import Iterator
+from unittest.mock import Mock
 
 import click
 import pytest
@@ -30,6 +32,7 @@ from unshackle.core.proxies.controld import (
     parse_a_records,
 )
 from unshackle.core.proxies.resolve import REGION, resolve_proxy
+from unshackle.core.utilities import get_free_port
 
 pytestmark = pytest.mark.unit
 
@@ -74,9 +77,12 @@ def origin(body: bytes) -> http.server.HTTPServer:
 
 
 @pytest.fixture
-def forwarder() -> Iterator[LocalProxy]:
-    """A forwarder whose resolver sends every hostname to 127.0.0.1, as Control D sends it to its proxy."""
-    proxy = LocalProxy(SimpleNamespace(resolve=lambda host: "127.0.0.1"))
+def forwarder(request: pytest.FixtureRequest) -> Iterator[LocalProxy]:
+    """A forwarder whose resolver sends every hostname to 127.0.0.1, as Control D sends it to its proxy.
+
+    A test can pass its own resolver as the indirect parameter.
+    """
+    proxy = LocalProxy(getattr(request, "param", None) or SimpleNamespace(resolve=lambda host: "127.0.0.1"))
     threading.Thread(target=proxy.serve_forever, daemon=True).start()
     yield proxy
     proxy.shutdown()
@@ -134,8 +140,8 @@ def test_connect_tunnels_bytes_both_ways(forwarder: LocalProxy) -> None:
 @pytest.mark.parametrize(
     ("target", "status"),
     [
-        ("1.2.3.4:443", b"502"),  # an IP literal would bypass Control D
-        ("[::1]:443", b"502"),
+        ("1.2.3.4:443", b"502 Bad Gateway (an IP address skips Control D's DNS"),
+        ("[::1]:443", b"502 Bad Gateway (an IP address skips Control D's DNS"),
         ("a.test:x", b"400"),
     ],
 )
@@ -145,18 +151,63 @@ def test_connect_refuses_what_it_cannot_redirect(forwarder: LocalProxy, target: 
         assert client.recv(128).startswith(b"HTTP/1.1 " + status)
 
 
-def test_an_unreachable_host_answers_502() -> None:
-    def refuse(host: str) -> str:
-        raise ConnectionError("no A record")
+def failing_resolver(error: Exception) -> Resolver:
+    resolver = Resolver("https://dns.controld.com/SECRETID")
+    resolver.session = SimpleNamespace(get=Mock(side_effect=error))
+    return resolver
 
-    proxy = LocalProxy(SimpleNamespace(resolve=refuse))
-    threading.Thread(target=proxy.serve_forever, daemon=True).start()
-    try:
-        response = requests.get("http://unresolvable.test/", proxies={"http": proxy.uri}, timeout=10)
-        assert response.status_code == 502
-    finally:
-        proxy.shutdown()
-        proxy.server_close()
+
+@pytest.mark.parametrize(
+    ("error", "reason"),
+    [
+        (
+            requests.ConnectionError("HTTPSConnectionPool(host='dns.controld.com'): /SECRETID"),
+            "Control D DNS could not be reached (ConnectionError)",
+        ),
+        (requests.Timeout("read timed out: dns.controld.com/SECRETID"), "Control D DNS timed out"),
+        (
+            requests.HTTPError("503 for url: /SECRETID", response=SimpleNamespace(status_code=503)),
+            "Control D DNS answered HTTP 503",
+        ),
+    ],
+)
+def test_a_failed_lookup_hides_the_resolver(error: Exception, reason: str) -> None:
+    with pytest.raises(ConnectionError) as e:
+        failing_resolver(error).resolve("a.test")
+    assert str(e.value) == reason and e.value.__suppress_context__  # a traceback must not print the URL
+
+
+@pytest.mark.parametrize(
+    ("forwarder", "reason"),
+    [
+        (
+            SimpleNamespace(resolve=Mock(side_effect=ConnectionError("Control D returned no A record for a.test"))),
+            "no A record for a.test",
+        ),
+        (
+            failing_resolver(requests.ConnectionError("dns.controld.com: /SECRETID")),
+            "Control D DNS could not be reached",
+        ),
+        # a CR/LF left in the reason would end the status line early and cut the reason off
+        (
+            SimpleNamespace(resolve=Mock(side_effect=ConnectionError("no A record\r\nX-Injected: 1"))),
+            "no A record X-Injected: 1",
+        ),
+        (None, "Control D sent a.test to 127.0.0.1, which did not answer"),
+    ],
+    indirect=["forwarder"],
+)
+def test_a_failed_tunnel_names_the_reason(forwarder: LocalProxy, reason: str, caplog: pytest.LogCaptureFixture) -> None:
+    caplog.set_level(logging.WARNING, logger="ControlD")
+    with pytest.raises(requests.exceptions.ProxyError) as e:
+        requests.get(f"https://a.test:{get_free_port()}/", proxies={"https": forwarder.uri}, timeout=10)
+    assert "502 Bad Gateway (" in str(e.value) and reason in str(e.value)
+    assert "SECRETID" not in str(e.value)
+    response = requests.get(f"http://a.test:{get_free_port()}/", proxies={"http": forwarder.uri}, timeout=10)
+    assert response.status_code == 502
+    # clients that drop the reason phrase still get it once in the log
+    warnings = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
+    assert len(warnings) == 1 and reason in warnings[0]
 
 
 def stub_session(response: bytes, seen: list) -> object:
