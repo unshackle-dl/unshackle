@@ -3170,6 +3170,10 @@ machine. A service whose accounts the server manages does not accept a proxy fro
 client, and that includes a Control D resolver.</p>
 </div>
 <h3 id="troubleshooting-control-d">Troubleshooting Control D<a class="headerlink" href="#troubleshooting-control-d" title="Permanent link">&para;</a></h3>
+<p>When the forwarder cannot connect to a host, it answers <code>502 Bad Gateway</code> and gives the reason in brackets.
+Python-Requests shows it as <code>Tunnel connection failed: 502 Bad Gateway (&lt;reason&gt;)</code>. The forwarder also logs
+each reason once as a warning, <code>Could not reach &lt;host&gt;:&lt;port&gt;: &lt;reason&gt;</code>, because some HTTP clients do not
+show the reason.</p>
 <table>
 <thead>
 <tr>
@@ -3183,12 +3187,20 @@ client, and that includes a Control D resolver.</p>
 <td>The profile does not redirect. Make sure that the plan includes traffic redirection (<em>Full Control</em>, not <em>Some Control</em>). After a region change, wait for the TTL of the previous answer to end.</td>
 </tr>
 <tr>
-<td>A <code>502 Bad Gateway</code> for one host. With <code>-d</code>, the log shows <code>Control D returned no A record for …</code>.</td>
+<td><code>502 Bad Gateway (Control D returned no A record for …)</code></td>
 <td>Control D gave no IPv4 address for that host.</td>
 </tr>
 <tr>
-<td>A <code>502 Bad Gateway</code> for one host only. With <code>-d</code>, the log shows <code>Refused …, an address that Control D cannot redirect</code>.</td>
+<td><code>502 Bad Gateway (an IP address skips Control D's DNS …)</code></td>
 <td>The request names the host by IP address. The forwarder refuses it. See the note on IPv4 above.</td>
+</tr>
+<tr>
+<td><code>502 Bad Gateway (Control D sent … to …, which did not answer: …)</code></td>
+<td>Control D gave an address for the host, but the connection to that address failed. This is usually a temporary fault on Control D's network. Try again, or use <code>--no-proxy-download</code> to download without the proxy.</td>
+</tr>
+<tr>
+<td><code>502 Bad Gateway (Control D DNS timed out)</code>, <code>(Control D DNS could not be reached …)</code> or <code>(Control D DNS answered HTTP …)</code></td>
+<td>unshackle got no answer from Control D's DNS at <code>dns.controld.com</code>. Check the network connection of this machine.</td>
 </tr>
 <tr>
 <td>An HTTP <code>401</code> or <code>403</code> from <code>api.controld.com</code>.</td>
