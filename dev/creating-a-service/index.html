@@ -2523,7 +2523,7 @@ will use throughout the service:</p>
 <tbody>
 <tr>
 <td><code>self.config</code></td>
-<td>This service's <code>config.yaml</code> contents (a dict), or <code>None</code> if absent.</td>
+<td>A dict: this service's <code>config.yaml</code>, with the user's <code>services.&lt;TAG&gt;</code> block from <code>unshackle.yaml</code> merged over it. Without a <code>config.yaml</code>, it holds only the user's block. See <a href="../../reference/configuration/services/">Services &amp; authentication</a> for the override keys.</td>
 </tr>
 <tr>
 <td><code>self.log</code></td>

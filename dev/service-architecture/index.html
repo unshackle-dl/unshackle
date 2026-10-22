@@ -2791,7 +2791,7 @@ up the objects your methods rely on:</p>
 <tbody>
 <tr>
 <td><code>self.config</code></td>
-<td>The per-service config slice (see <a href="#request-and-http-session-objects">Request and HTTP session objects</a>).</td>
+<td>The merged service config (see <a href="#request-and-http-session-objects">Request and HTTP session objects</a>).</td>
 </tr>
 <tr>
 <td><code>self.log</code></td>
@@ -3244,10 +3244,11 @@ the container file.</p>
 <p>Everything a service does over the network flows through objects the base constructor
 prepared, all derived from the Click context (<code>ctx</code>) that <code>dl</code> passes in.</p>
 <ul>
-<li><strong><code>self.config</code></strong>: your service's slice of <code>unshackle.yaml</code>, i.e.
-  <code>config.services[&lt;ServiceName&gt;]</code>. This is a plain dict. Use it for per-service settings
-  like base URLs, an API key, or a <code>title_map</code>. See
-  <a href="../../getting-started/configuration-file/">Configuration</a>.</li>
+<li><strong><code>self.config</code></strong>: a plain dict. unshackle loads the service's own <code>config.yaml</code>, then merges
+  the user's <code>services.&lt;TAG&gt;</code> block from <code>unshackle.yaml</code> over it. Nested keys merge one by one,
+  the user's value wins, and a list in the user's block replaces the whole list. Use it for
+  per-service settings like base URLs, an API key, or a <code>title_map</code>. See
+  <a href="../../reference/configuration/services/">Services &amp; authentication</a> for the override keys.</li>
 <li><strong><code>self.session</code></strong>: a <code>requests.Session</code> with <code>config.headers</code> applied, a retry policy
   (<code>total=5</code>, backoff, retry on 429/5xx), and any resolved proxy already mounted. Pass this
   HTTP session into the manifest parsers and DRM calls so headers, cookies, and proxies flow
