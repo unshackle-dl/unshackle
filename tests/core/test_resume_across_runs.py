@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import contextlib
 import os
+import shutil
 import time
 from functools import partial
 from pathlib import Path
@@ -76,6 +78,12 @@ def failing_parser(track, ctx):
     seed(ctx)
     (ctx.save_dir / "1.mp4.p.!dev").write_bytes(b"partial")
     raise RuntimeError("simulated crash")
+
+
+def cancelled_parser(track, ctx):
+    seed(ctx)
+    (ctx.save_dir / "1.mp4.p.!dev").write_bytes(b"partial")
+    raise DownloadCancelled
 
 
 def test_failed_track_resumes_in_next_run(temp_root, monkeypatch):
@@ -170,6 +178,40 @@ def test_rename_failure_never_replaces_download_error(temp_root, monkeypatch):
             run_download(monkeypatch, failing_parser)
 
 
+def test_locked_segment_never_replaces_download_error(temp_root, monkeypatch):
+    monkeypatch.setattr(config, "continue_downloads", False)
+
+    rmtree = shutil.rmtree
+
+    def locked(path, *args, **kwargs):
+        if Path(path).name == SEG_NAME:
+            raise PermissionError(32, "being used by another process", str(path))
+        rmtree(path, *args, **kwargs)
+
+    monkeypatch.setattr(shutil, "rmtree", locked)
+    with task_temp_dir():
+        with pytest.raises(RuntimeError, match="simulated crash"):
+            run_download(monkeypatch, failing_parser)
+
+
+@pytest.mark.parametrize("parser", [failing_parser, cancelled_parser])
+def test_locked_partial_still_stashes(temp_root, monkeypatch, parser):
+    monkeypatch.setattr(config, "continue_downloads", True)
+    unlink = Path.unlink
+
+    def locked(self, missing_ok=False):
+        if self.name.endswith(".!dev"):
+            raise PermissionError(32, "being used by another process", str(self))
+        unlink(self, missing_ok=missing_ok)
+
+    with task_temp_dir():
+        monkeypatch.setattr(Path, "unlink", locked)
+        with contextlib.suppress(RuntimeError):
+            run_download(monkeypatch, parser)
+
+    assert (temp_root / RESUME_STASH / SEG_NAME / "0.mp4").read_bytes() == b"complete segment"
+
+
 def test_sweep_removes_only_old_stash_entries(temp_root):
     stash = temp_root / RESUME_STASH
     old, fresh = stash / "old_segments", stash / "fresh_segments"
@@ -194,10 +236,6 @@ def test_no_stash_outside_task_dir(temp_root):
 
 def test_cancelled_track_is_stashed(temp_root, monkeypatch):
     monkeypatch.setattr(config, "continue_downloads", True)
-
-    def cancelled_parser(track, ctx):
-        seed(ctx)
-        raise DownloadCancelled
 
     with task_temp_dir():
         run_download(monkeypatch, cancelled_parser)

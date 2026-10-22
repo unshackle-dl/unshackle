@@ -1,4 +1,5 @@
 import base64
+import contextlib
 import html
 import logging
 import re
@@ -768,6 +769,17 @@ class Track:
                         shutil.rmtree(save_dir)
                     resume.clear_sidecar(save_dir)
 
+        def abandon() -> None:
+            """Clean up a failed or cancelled download and stash its segments when resume is on.
+
+            The downloader does not wait for its workers on failure, so on Windows one can still hold a
+            .!dev file open (WinError 32). A cleanup error must not replace the download's own error.
+            """
+            with contextlib.suppress(OSError):
+                cleanup()
+            if keep_segments:
+                stash_segments(save_dir)
+
         if not DOWNLOAD_LICENCE_ONLY.is_set():
             if config.directories.temp.is_file():
                 raise ValueError(f"Temp Directory '{config.directories.temp}' must be a Directory, not a file")
@@ -927,19 +939,12 @@ class Track:
                     progress(downloaded="[red]FAILED")
                     raise
         except DownloadCancelled:
-            try:
-                cleanup()
-                if keep_segments:
-                    stash_segments(save_dir)
-            except OSError:
-                pass
+            abandon()
             progress(downloaded="[yellow]SKIPPED")
             return
         except (Exception, KeyboardInterrupt):
             if not DOWNLOAD_LICENCE_ONLY.is_set():
-                cleanup()
-                if keep_segments:
-                    stash_segments(save_dir)
+                abandon()
             raise
 
         if DOWNLOAD_CANCELLED.is_set():
