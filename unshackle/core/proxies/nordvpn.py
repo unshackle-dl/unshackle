@@ -1,17 +1,17 @@
 import json
 import random
 import re
-from typing import Optional
+from typing import Optional, Union
 
 import requests
 
-from unshackle.core.proxies.asn import describe, is_ip, select, split_selector
+from unshackle.core.proxies.asn import describe, is_ip, mapped_query, select, split_selector
 from unshackle.core.proxies.proxy import Proxy
 from unshackle.core.utilities import COUNTRY_CODE_ALIASES
 
 
 class NordVPN(Proxy):
-    def __init__(self, username: str, password: str, server_map: Optional[dict[str, int]] = None):
+    def __init__(self, username: str, password: str, server_map: Optional[dict[str, Union[int, str]]] = None):
         """
         Proxy provider that uses NordVPN Service Credentials.
 
@@ -89,6 +89,8 @@ class NordVPN(Proxy):
             )
 
             if server_mapping and not selector:
+                if mapped := mapped_query(server_map_key, server_mapping):
+                    return self.get_proxy(mapped)
                 hostname = f"{country['code'].lower()}{server_mapping}.proxy.nordvpn.com"
             else:
                 city_id = None

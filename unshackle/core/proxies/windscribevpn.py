@@ -5,7 +5,7 @@ from typing import Iterator, Optional
 
 import requests
 
-from unshackle.core.proxies.asn import describe, resolve_all, select, split_selector
+from unshackle.core.proxies.asn import describe, mapped_query, resolve_all, select, split_selector
 from unshackle.core.proxies.proxy import Proxy
 
 
@@ -67,10 +67,10 @@ class WindscribeVPN(Proxy):
             if not re.fullmatch(r"[a-z]+", query):
                 raise ValueError(f"'{query}' is already one WindscribeVPN server, so it takes no '@' network selector.")
             hostname: Optional[str] = self.get_random_server(query, city, selector)
-        elif server_map_key in self.server_map:
-            hostname = self.server_map[server_map_key]
-        elif query in self.server_map:
-            hostname = self.server_map[query]
+        elif mapping := self.server_map.get(server_map_key) or self.server_map.get(query):
+            if mapped := mapped_query(server_map_key, mapping):
+                return self.get_proxy(mapped)
+            hostname = mapping
         else:
             server_match = re.fullmatch(r"([a-z]{2})(\d+)", query)
             if server_match:

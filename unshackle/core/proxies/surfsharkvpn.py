@@ -12,7 +12,7 @@ from typing import Optional
 import certifi
 import requests
 
-from unshackle.core.proxies.asn import describe, fold, is_ip, select, split_selector
+from unshackle.core.proxies.asn import describe, fold, is_ip, mapped_query, select, split_selector
 from unshackle.core.proxies.controld import build_query, parse_a_records
 from unshackle.core.proxies.proxy import Proxy
 from unshackle.core.utilities import COUNTRY_CODE_ALIASES
@@ -155,8 +155,12 @@ class SurfsharkVPN(Proxy):
         query = COUNTRY_CODE_ALIASES.get(query, query)
 
         server_map_key = f"{query}:{city}" if city else query
-        if server_map_key in self.server_map:
-            servers = [self.server_map[server_map_key]]
+        mapped = self.server_map.get(server_map_key)
+        as_query = mapped_query(server_map_key, mapped) if mapped else None
+        if as_query and not selector:
+            return self.get_proxy(as_query)
+        if mapped and not as_query:
+            servers = [mapped]
         elif not city and any(x["connectionName"].split(".", 1)[0] == query for x in self.countries):
             servers = [query]
         elif re.fullmatch(r"[a-z]{2}", query):

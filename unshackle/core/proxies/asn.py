@@ -22,6 +22,19 @@ def split_selector(query: str) -> tuple[str, Optional[str]]:
     return query, selector or None
 
 
+def mapped_query(region: str, value: object) -> Optional[str]:
+    """
+    Get the query that a server_map value stands for, or None for a plain server value.
+
+    A value that starts with "-" or "@" is a selector for the region of its config key ("fr: -datacamp" means
+    "fr@-datacamp"); a value with "@" after a server is a whole query ("fr: fr-bod@195.86.24.103").
+    """
+    value = str(value).strip().lower()
+    query = f"{region}@{value.removeprefix('@')}" if value.startswith(("-", "@")) else value
+    # an empty selector ("@", "fr@") would hit the same map entry again and recurse forever
+    return query if split_selector(query)[1] not in (None, "-") else None
+
+
 def lookup(ips: Iterable[str]) -> dict[str, str]:
     """
     Get the network (AS) name of each IP from Team Cymru's bulk whois. An IP it does not know is left out.

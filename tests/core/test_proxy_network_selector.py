@@ -57,6 +57,25 @@ def test_region_grammar_takes_the_selector_but_not_a_uri(value: str, is_query: b
     assert bool(re.fullmatch(rf"(?:[a-z]+:)?{REGION}", value, re.IGNORECASE)) is is_query
 
 
+@pytest.mark.parametrize(
+    ("region", "value", "expected"),
+    [
+        ("fr", "-datacamp", "fr@-datacamp"),
+        ("fr", "@DataCamp", "fr@datacamp"),
+        ("us:seattle", "-m247", "us:seattle@-m247"),
+        ("fr", "fr-bod@195.86.24.103", "fr-bod@195.86.24.103"),
+        ("fr", "fr-bod", None),
+        ("fr", "fr-028.totallyacdn.com", None),
+        ("fr", 1154, None),
+        ("fr", "@", None),
+        ("fr", "fr@", None),
+        ("fr", "-", None),
+    ],
+)
+def test_mapped_query(region: str, value: object, expected: str | None) -> None:
+    assert asn.mapped_query(region, value) == expected
+
+
 def test_remote_sends_a_surfshark_selector_unresolved() -> None:
     assert resolve_remote_proxy_arg("surfsharkvpn:fr-bod@datacamp", []) == "surfsharkvpn:fr-bod@datacamp"
 
@@ -164,6 +183,13 @@ def test_nordvpn_network_selector_skips_the_server_map(nordvpn: NordVPN, query: 
     assert nordvpn.last_hostname == f"{host}.proxy.nordvpn.com"
 
 
+@pytest.mark.parametrize(("value", "host"), [("-datacamp", "ca2"), ("ca@10.0.0.9", "ca3")])
+def test_nordvpn_server_map_takes_a_selector(nordvpn: NordVPN, value: str, host: str) -> None:
+    nordvpn.server_map = {"ca": value}
+    uri = nordvpn.get_proxy("ca")
+    assert uri is not None and uri.endswith(f"@{host}.proxy.nordvpn.com:89")
+
+
 def test_nordvpn_selector_with_no_match_raises(nordvpn: NordVPN) -> None:
     with pytest.raises(ValueError, match="No NordVPN server in ca"):
         nordvpn.get_proxy("ca@m247")
@@ -206,6 +232,24 @@ def test_windscribe_network_selector(windscribe: WindscribeVPN, query: str, host
     assert uri is not None and uri.rsplit("@", 1)[1].removesuffix(":443") in hosts
 
 
+@pytest.mark.parametrize(
+    ("server_map", "query", "hosts"),
+    [
+        ({"fr": "-datacamp"}, "fr", {"fr-001.example", "fr-002.example"}),
+        ({"fr": "-datacamp"}, "fr:paris", {"fr-001.example", "fr-002.example"}),
+        ({"fr:paris": "@-10.0.0.2"}, "fr:paris", {"fr-002.example"}),
+        ({"fr": "fr@10.0.0.1"}, "fr", {"fr-003.example"}),
+        ({"fr": "-datacamp"}, "fr@datacamp", {"fr-003.example"}),
+    ],
+)
+def test_windscribe_server_map_takes_a_selector(
+    windscribe: WindscribeVPN, server_map: dict, query: str, hosts: set[str]
+) -> None:
+    windscribe.server_map = server_map
+    uri = windscribe.get_proxy(query)
+    assert uri is not None and uri.rsplit("@", 1)[1].removesuffix(":443") in hosts
+
+
 def test_windscribe_selector_with_no_match_raises(windscribe: WindscribeVPN) -> None:
     with pytest.raises(ValueError, match="No WindscribeVPN server in fr"):
         windscribe.get_proxy("fr:paris@datacamp")
@@ -234,6 +278,22 @@ def test_surfshark_selector_pins_a_server_ip(surfshark: SurfsharkVPN, query: str
     assert uri is not None and uri.startswith(f"http://{'a' * 24}:{'b' * 24}@127.0.0.1:")
     assert int(uri.rsplit(":", 1)[1]) in ports
     assert surfshark.last_server is not None and surfshark.last_server[0] == "fr-bod.prod.surfshark.com"
+
+
+@pytest.mark.parametrize(
+    ("value", "query", "ports"),
+    [
+        ("-datacamp", "fr", {4002, 4003}),
+        ("fr-bod@10.0.0.1", "fr", {4001}),
+        ("-datacamp", "fr@datacamp", {4001}),
+    ],
+)
+def test_surfshark_server_map_takes_a_selector(
+    surfshark: SurfsharkVPN, value: str, query: str, ports: set[int]
+) -> None:
+    surfshark.server_map = {"fr": value}
+    uri = surfshark.get_proxy(query)
+    assert uri is not None and int(uri.rsplit(":", 1)[1]) in ports
 
 
 def test_surfshark_without_selector_is_unchanged(surfshark: SurfsharkVPN) -> None:
