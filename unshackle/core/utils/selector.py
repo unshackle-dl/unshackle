@@ -77,6 +77,7 @@ class Selector:
         self.page_size = page_size
         self.minimal_count = minimal_count
         self.single_select = single_select
+        self.cancelled = False
         self.dependencies = dependencies or {}
 
         self.child_to_parent = {}
@@ -394,6 +395,7 @@ class Selector:
         Returns:
             list[int]: A sorted list of selected indices.
         """
+        self.cancelled = False
         try:
             with Live(self.get_renderable(), console=console, auto_refresh=False, transient=True) as live:
                 while True:
@@ -430,6 +432,7 @@ class Selector:
                     elif action == "CANCEL":
                         raise KeyboardInterrupt
         except KeyboardInterrupt:
+            self.cancelled = True
             return []
 
 

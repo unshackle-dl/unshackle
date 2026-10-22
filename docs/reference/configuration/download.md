@@ -105,6 +105,29 @@ dl:
     config keys it does not know there, `speed_limit` for example. `serve` has its own
     `global_speed_limit`.
 
+## `interactive`
+
+- **Type:** `dict` &nbsp;·&nbsp; **Default:** `{}`
+
+Preselect options in the first menu shown by `unshackle dl --interactive`.
+The menu can still turn each option on or off for the current run.
+
+| Key | Type | Default |
+|---|---|---|
+| `no_mux` | bool | `false` |
+| `forced_subs_only` | bool | `false` |
+| `audio_description` | bool | `false` |
+| `skip_dl` | bool | `false` |
+| `list_` | bool | `false` |
+| `export` | bool | `false` |
+| `latest_episode` | bool | `false` |
+
+```yaml
+interactive:
+  list_: true
+  export: true
+```
+
 ## `continue_downloads`
 
 - **Type:** `bool` &nbsp;·&nbsp; **Default:** `false`

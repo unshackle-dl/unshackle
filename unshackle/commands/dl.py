@@ -236,6 +236,128 @@ def select_hybrid_bases(videos: Sequence[Video]) -> list[Video]:
     return list(bases.values())
 
 
+def select_interactive_video(
+    candidates: Sequence[Video], profile: Optional[dict[str, Any]], *, worst: bool
+) -> Optional[Video]:
+    """Select the exact single-title variant or the same bitrate rank for a batch."""
+    if not candidates:
+        return None
+    if not profile:
+        return candidates[-1] if worst else candidates[0]
+
+    ordered = sorted(candidates, key=lambda track: track.bitrate or 0, reverse=True)
+    target_bitrate = profile.get("bitrate")
+    target_language = profile.get("language")
+    if target_language is not None:
+        normalized_language = str(target_language).replace("_", "-").lower()
+        ordered = [track for track in ordered if str(track.language).replace("_", "-").lower() == normalized_language]
+        if not ordered:
+            return None
+    if profile.get("single"):
+        target_id = profile.get("id")
+        if target_id is not None:
+            exact = next((track for track in ordered if str(track.id) == str(target_id)), None)
+            if exact:
+                return exact
+        target_range = profile.get("range")
+        if target_range is not None:
+            ordered = [track for track in ordered if track.range == target_range]
+            if not ordered:
+                return None
+        if target_bitrate is not None:
+            target_fps = profile.get("fps")
+            return min(
+                ordered,
+                key=lambda track: (
+                    abs((track.bitrate or 0) - target_bitrate),
+                    abs((track.fps or 0) - target_fps) if target_fps is not None else 0,
+                ),
+            )
+
+    rank = min(max(int(profile.get("rank", 0)), 0), len(ordered) - 1)
+    return ordered[rank]
+
+
+def apply_interactive_hybrid_profile(
+    selected: list[Video],
+    candidates: Sequence[Video],
+    quality: Sequence[int],
+    profile: Optional[dict[str, Any]],
+    *,
+    worst: bool,
+) -> list[Video]:
+    """Replace the engine's default hybrid ingredient with the variant chosen in the TUI."""
+    if not profile or not selected:
+        return selected
+
+    profile_range = profile.get("range")
+    if profile_range not in (Video.Range.HDR10, Video.Range.HDR10P, Video.Range.DV):
+        return selected
+
+    result = list(selected)
+    for resolution in quality:
+        profile_candidates = [
+            track for track in candidates if track.range == profile_range and at_resolution(track, resolution)
+        ]
+        preferred = select_interactive_video(profile_candidates, profile, worst=worst)
+        if not preferred:
+            continue
+
+        def replace(track: Video) -> bool:
+            if profile_range == Video.Range.DV:
+                return track.range == Video.Range.DV
+            return track.range in (Video.Range.HDR10, Video.Range.HDR10P) and at_resolution(track, resolution)
+
+        replace_index = next((index for index, track in enumerate(result) if replace(track)), None)
+        if replace_index is None:
+            result.append(preferred)
+        else:
+            result[replace_index] = preferred
+    return result
+
+
+def select_interactive_audio(tracks: Sequence[Audio], profiles: Sequence[dict[str, Any]]) -> list[Audio]:
+    """Resolve each interactive audio profile to one exact or rank-equivalent track."""
+    selected: list[Audio] = []
+    for profile in profiles:
+        profile_language = profile["language"].replace("_", "-").lower()
+        profile_channels = Audio.channel_total(profile["channels"]) if profile["channels"] is not None else None
+        candidates = []
+        for track in tracks:
+            track_language = str(track.language).replace("_", "-").lower()
+            track_channels = Audio.channel_total(track.channels) if track.channels is not None else None
+            if track_language != profile_language or track.codec != profile["codec"]:
+                continue
+            if bool(track.descriptive) != profile["descriptive"] or bool(track.atmos) != profile["atmos"]:
+                continue
+            if track_channels != profile_channels:
+                continue
+            candidates.append(track)
+
+        if not candidates:
+            continue
+        target_bitrate = profile["bitrate"]
+        if target_bitrate is None and "rank" not in profile:
+            candidates = [track for track in candidates if track.bitrate is None] or candidates
+        ordered = sorted(candidates, key=lambda track: track.bitrate or 0, reverse=True)
+        target_id = profile.get("id")
+        exact = next((track for track in ordered if target_id is not None and str(track.id) == str(target_id)), None)
+        if profile.get("single") and exact:
+            chosen = exact
+        elif profile.get("single") and target_bitrate is not None:
+            chosen = min(ordered, key=lambda track: abs((track.bitrate or 0) - target_bitrate))
+        elif "rank" in profile:
+            rank = min(max(int(profile["rank"]), 0), len(ordered) - 1)
+            chosen = ordered[rank]
+        elif target_bitrate is not None:
+            chosen = min(ordered, key=lambda track: abs((track.bitrate or 0) - target_bitrate))
+        else:
+            chosen = ordered[0]
+        if chosen not in selected:
+            selected.append(chosen)
+    return selected
+
+
 def hybrid_gate_failure(videos: Sequence[Video], generate_dv: bool) -> Optional[tuple[str, str]]:
     """The (message, detail) that stops HYBRID for these selected videos, or None when it can go on."""
     if any(v.native_hybrid for v in videos):
@@ -270,6 +392,27 @@ def hybrid_gate_failure(videos: Sequence[Video], generate_dv: bool) -> Optional[
             msg_detail += ". Add --generate-dv to generate Dolby Vision from HDR10+."
         return "HYBRID mode requires both HDR10/HDR10+ and DV tracks, but only HDR10 is available", msg_detail
     return None
+
+
+def validate_hybrid_tools(ranges: Sequence[Video.Range], generate_dv: bool, log: logging.Logger) -> None:
+    """Stop before HYBRID processing when its required local tools are unavailable."""
+    if Video.Range.HYBRID not in ranges:
+        return
+
+    from unshackle.core.binaries import DoviTool
+
+    if not DoviTool:
+        log.error("Unable to run hybrid mode: dovi_tool not detected")
+        log.error("Please install dovi_tool from https://github.com/quietvoid/dovi_tool")
+        sys.exit(1)
+
+    if generate_dv:
+        from unshackle.core.binaries import HDR10PlusTool
+
+        if not HDR10PlusTool:
+            log.error("Unable to run --generate-dv: hdr10plus_tool not detected")
+            log.error("Please install hdr10plus_tool from https://github.com/quietvoid/hdr10plus_tool")
+            sys.exit(1)
 
 
 def hybrid_plan(videos: Sequence[Video], generate_dv: bool) -> tuple[list[Video], Optional[Video]]:
@@ -1260,13 +1403,14 @@ class dl:
             from unshackle.core.interactive import run_service_extra_options, run_service_selector
             from unshackle.core.utils.selector import tui_header, tui_prompt
 
-            selected_service = run_service_selector()
+            selected_service = run_service_selector(ctx.command.list_commands(ctx))
             if not selected_service:
                 return
 
-            # Registers dl.result as the group result callback (side effect); click then forwards
-            # the interactive service's return value to it. Do not remove.
-            kwargs["tag"] = selected_service
+            routing = Services.routing(ctx, Services.get_tag(selected_service))
+            ctx.params.update(routing)
+            kwargs.update(routing)
+            kwargs["interactive_service"] = selected_service
             dl(ctx, **kwargs)
 
             tui_header(f"Enter URL or ID for {selected_service}")
@@ -1275,10 +1419,10 @@ class dl:
             if not content_id:
                 raise click.UsageError("Content ID/URL is required.")
 
-            service_cmd = Services.load(selected_service)
+            service_cmd = ctx.command.get_command(ctx, selected_service)
             service_kwargs = run_service_extra_options(service_cmd, ctx)
 
-            params = getattr(service_cmd.cli, "params", [])
+            params = getattr(service_cmd, "params", [])
             param_by_name = {p.name: p for p in params}
 
             # Collapse single-value options to a scalar and unwrap enum .value; leave
@@ -1294,7 +1438,7 @@ class dl:
                 service_kwargs[k] = v
 
             # Fill the service's positional argument. Services normally declare a single `title`.
-            arguments = [p for p in params if isinstance(p, click.Argument)]
+            arguments = [p for p in params if p.param_type_name == "argument"]
             invoke_kwargs = dict(service_kwargs)
             if arguments:
                 invoke_kwargs[arguments[0].name] = content_id
@@ -1305,10 +1449,7 @@ class dl:
                         f"cannot infer values for: {', '.join(unfilled)}"
                     )
 
-            # Sync context params so they are accessible during dl.result()
-            ctx.params.update(service_kwargs)
-
-            result_service = ctx.invoke(service_cmd.cli, **invoke_kwargs)
+            result_service = ctx.invoke(service_cmd, **invoke_kwargs)
 
             if result_service is None:
                 logging.getLogger("download").error(f"Failed to initialize service: {selected_service}")
@@ -1335,6 +1476,7 @@ class dl:
         proxy: Optional[str] = None,
         repack: bool = False,
         tag: Optional[str] = None,
+        interactive_service: Optional[str] = None,
         tmdb_id: Optional[int] = None,
         imdb_id: Optional[str] = None,
         tvdb_id: Optional[int] = None,
@@ -1347,9 +1489,9 @@ class dl:
         *_: Any,
         **__: Any,
     ):
-        sub_cmd = ctx.invoked_subcommand or tag
+        sub_cmd = ctx.invoked_subcommand or interactive_service
         if not sub_cmd:
-            raise ValueError("A subcommand or tag to invoke was not specified, the main code cannot continue.")
+            raise ValueError("A subcommand or interactive service was not specified, the main code cannot continue.")
 
         self.log = logging.getLogger("download")
         self.completed_files: list[Path] = []
@@ -1910,22 +2052,25 @@ class dl:
                 if excludes and name in parent_params:
                     parent_params[name] = includes
 
-        conflict = kind_only_conflict(
-            {
-                "audio_description_only": audio_description_only,
-                "forced_subs_only": forced_subs_only,
-                "no_audio": no_audio,
-                "no_subs": no_subs,
-                "video_only": video_only,
-                "audio_only": audio_only,
-                "subs_only": subs_only,
-                "chapters_only": chapters_only,
-            }
-        )
-        if conflict:
-            first, second = (f"--{name.replace('_', '-')}" for name in conflict)
-            self.log.error(f"{first} cannot be used with {second}: {second} drops the tracks that {first} selects.")
-            sys.exit(1)
+        def validate_kind_only_options() -> None:
+            conflict = kind_only_conflict(
+                {
+                    "audio_description_only": audio_description_only,
+                    "forced_subs_only": forced_subs_only,
+                    "no_audio": no_audio,
+                    "no_subs": no_subs,
+                    "video_only": video_only,
+                    "audio_only": audio_only,
+                    "subs_only": subs_only,
+                    "chapters_only": chapters_only,
+                }
+            )
+            if conflict:
+                first, second = (f"--{name.replace('_', '-')}" for name in conflict)
+                self.log.error(f"{first} cannot be used with {second}: {second} drops the tracks that {first} selects.")
+                sys.exit(1)
+
+        validate_kind_only_options()
 
         if audio_description_only:
             audio_description = True
@@ -2021,20 +2166,7 @@ class dl:
             self.log.error("--select-titles and -w/--wanted cannot be used together")
             sys.exit(1)
 
-        if any(r == Video.Range.HYBRID for r in range_):
-            from unshackle.core.binaries import DoviTool
-
-            if not DoviTool:
-                self.log.error("Unable to run hybrid mode: dovi_tool not detected")
-                self.log.error("Please install dovi_tool from https://github.com/quietvoid/dovi_tool")
-                sys.exit(1)
-            if generate_dv:
-                from unshackle.core.binaries import HDR10PlusTool
-
-                if not HDR10PlusTool:
-                    self.log.error("Unable to run --generate-dv: hdr10plus_tool not detected")
-                    self.log.error("Please install hdr10plus_tool from https://github.com/quietvoid/hdr10plus_tool")
-                    sys.exit(1)
+        validate_hybrid_tools(range_, generate_dv, self.log)
 
         if cdm_only is None:
             vaults_only = None
@@ -2116,6 +2248,9 @@ class dl:
                     level="INFO", operation="get_titles", service=self.service, context={"titles": titles_info}
                 )
 
+        interactive_video_profile: Optional[dict[str, Any]] = None
+        interactive_audio_profiles: list[dict[str, Any]] = []
+        interactive_subtitle_profiles: list[dict[str, Any]] = []
         if interactive:
             # Function-local import avoids a circular import at module load.
             from unshackle.core.interactive import run_interactive_session
@@ -2135,6 +2270,7 @@ class dl:
                 "export": export,
                 "list_titles": list_titles,
                 "forced_subs": forced_subs,
+                "forced_subs_only": forced_subs_only,
                 "audio_description": audio_description,
                 "skip_dl": skip_dl,
                 "no_subs": no_subs,
@@ -2144,32 +2280,48 @@ class dl:
 
             selections = run_interactive_session(service, titles, self.log, current_params)
 
-            quality = selections.get('quality', quality)
-            vcodec = selections.get('vcodec', vcodec)
-            acodec = selections.get('acodec', acodec)
-            range_ = selections.get('range_', range_)
-            a_lang = selections.get('a_lang', a_lang)
-            s_lang = selections.get('s_lang', s_lang)
-            vbitrate = selections.get('vbitrate', vbitrate)
-            abitrate = selections.get('abitrate', abitrate)
+            quality = selections.get("quality", quality)
+            vcodec = selections.get("vcodec", vcodec)
+            acodec = selections.get("acodec", acodec)
+            range_ = selections.get("range_", range_)
+            validate_hybrid_tools(range_, generate_dv, self.log)
+            a_lang = selections.get("a_lang", a_lang)
+            s_lang = selections.get("s_lang", s_lang)
+            vbitrate = selections.get("vbitrate", vbitrate)
+            abitrate = selections.get("abitrate", abitrate)
+            interactive_video_profile = selections.get("video_profile")
+            if interactive_video_profile:
+                # The profile resolves the chosen track after optional real-bitrate probing.
+                vbitrate = None
+            interactive_audio_profiles = selections.get("audio_profiles", [])
+            interactive_subtitle_profiles = selections.get("subtitle_profiles", [])
 
-            no_mux = selections.get('no_mux', no_mux)
-            list_ = selections.get('list_', list_)
-            export = selections.get('export', export)
+            no_mux = selections.get("no_mux", no_mux)
+            list_ = selections.get("list_", list_)
+            export = selections.get("export", export)
             if export:
                 config.directories.exports.mkdir(parents=True, exist_ok=True)
                 export_path = config.directories.exports / f"export_{self.service}_{int(time.time())}.json"
                 self.export_service = service
+                if getattr(self, "export_namer", None) is None:
+                    self.export_namer = ExportNamer(self.service)
             else:
                 export_path = None
-            list_titles = selections.get('list_titles', list_titles)
-            forced_subs = selections.get('forced_subs', forced_subs)
-            audio_description = selections.get('audio_description', audio_description)
-            skip_dl = selections.get('skip_dl', skip_dl)
-            no_subs = selections.get('no_subs', no_subs)
-            latest_episode = selections.get('latest_episode', latest_episode)
-            worst = selections.get('v_mode', 'best') == 'worst'
-            select_titles = selections.get('select_titles', select_titles)
+            list_titles = selections.get("list_titles", list_titles)
+            forced_subs = selections.get("forced_subs", forced_subs)
+            forced_subs_only = selections.get("forced_subs_only", forced_subs_only)
+            if forced_subs_only:
+                forced_subs = True
+                service_ctx = getattr(service, "ctx", None)
+                if service_ctx and service_ctx.parent:
+                    service_ctx.parent.params["forced_subs"] = True
+            audio_description = selections.get("audio_description", audio_description)
+            skip_dl = selections.get("skip_dl", skip_dl)
+            no_subs = selections.get("no_subs", no_subs)
+            latest_episode = selections.get("latest_episode", latest_episode)
+            worst = selections.get("v_mode", "best") == "worst"
+            select_titles = selections.get("select_titles", select_titles)
+            validate_kind_only_options()
 
             # --worst requires an explicit quality, same as the CLI path.
             if worst and not quality:
@@ -2405,6 +2557,21 @@ class dl:
             # the same track across iterations; dedupe by id.
             seen_ids: set[str] = set()
             return [t for t in selected if not (t.id in seen_ids or seen_ids.add(t.id))]
+
+        def validate_interactive_audio_profile_count(found_count: int) -> None:
+            missing_profile_count = len(interactive_audio_profiles) - found_count
+            if not missing_profile_count:
+                return
+            variant_word = "variant" if missing_profile_count == 1 else "variants"
+            verb = "is" if missing_profile_count == 1 else "are"
+            message = (
+                f"{missing_profile_count} selected interactive audio {variant_word} {verb} unavailable for this title."
+            )
+            if best_available:
+                self.log.warning(message)
+            else:
+                self.log.error(message)
+                sys.exit(1)
 
         base_selection = (v_lang, a_lang, s_lang, range_)
 
@@ -2883,6 +3050,13 @@ class dl:
                                     hybrid_candidate_tracks, quality, worst=worst, generate_dv=generate_dv
                                 )
                                 hybrid_selected = list(filter(hybrid_filter, hybrid_candidate_tracks))
+                                hybrid_selected = apply_interactive_hybrid_profile(
+                                    hybrid_selected,
+                                    hybrid_candidate_tracks,
+                                    quality,
+                                    interactive_video_profile,
+                                    worst=worst,
+                                )
 
                                 if non_hybrid_ranges and non_hybrid_tracks:
                                     non_hybrid_selected = [
@@ -2929,6 +3103,7 @@ class dl:
                                 self.log.error(f"There's no {res_list} Video Track{plural}...")
                                 sys.exit(1)
 
+                    interactive_video_fallback = list(title.tracks.videos)
                     pre_hybrid_videos: list[Video] = list(title.tracks.videos) if has_hybrid else []
                     if keep_videos and has_hybrid:
                         hybrid_candidate_tracks, non_hybrid_tracks = Tracks.partition_hybrid_videos(
@@ -2945,6 +3120,13 @@ class dl:
                                 hybrid_candidate_tracks, hybrid_quality, worst=worst, generate_dv=generate_dv
                             )
                             hybrid_selected = list(filter(hybrid_filter, hybrid_candidate_tracks))
+                            hybrid_selected = apply_interactive_hybrid_profile(
+                                hybrid_selected,
+                                hybrid_candidate_tracks,
+                                hybrid_quality,
+                                interactive_video_profile,
+                                worst=worst,
+                            )
                             for res in hybrid_quality:
                                 if not any(at_resolution(v, res) for v in hybrid_selected):
                                     self.log.warning(f"Skipping {res}p: nothing at that resolution can make a hybrid")
@@ -2970,7 +3152,7 @@ class dl:
                                     and (not codec or t.codec == codec)
                                     and (vlang is None or str(t.language) == vlang)
                                 ]
-                                match = candidates[-1] if worst and candidates else next(iter(candidates), None)
+                                match = select_interactive_video(candidates, interactive_video_profile, worst=worst)
                                 if match and match not in non_hybrid_selected:
                                     non_hybrid_selected.append(match)
 
@@ -3001,10 +3183,28 @@ class dl:
                                 and (not codec or t.codec == codec)
                                 and (vlang is None or str(t.language) == vlang)
                             ]
-                            match = candidates[-1] if worst and candidates else next(iter(candidates), None)
+                            match = select_interactive_video(candidates, interactive_video_profile, worst=worst)
                             if match and match not in selected_videos:
                                 selected_videos.append(match)
                         title.tracks.videos = selected_videos
+
+                    if keep_videos and interactive_video_profile and not title.tracks.videos:
+                        message = "Selected interactive video variant is unavailable"
+                        if best_available:
+                            fallback_video = select_interactive_video(
+                                interactive_video_fallback,
+                                None,
+                                worst=worst,
+                            )
+                            if fallback_video:
+                                self.log.warning(f"{message}; continuing with the best available video")
+                                title.tracks.videos = [fallback_video]
+                            else:
+                                self.log.error(message)
+                                sys.exit(1)
+                        else:
+                            self.log.error(message)
+                            sys.exit(1)
 
                     if keep_videos and any(r == Video.Range.HYBRID for r in range_):
                         gate_failure = hybrid_gate_failure(title.tracks.videos, generate_dv)
@@ -3043,7 +3243,7 @@ class dl:
                                         and (not codec or t.codec == codec)
                                         and (vlang is None or str(t.language) == vlang)
                                     ]
-                                    match = candidates[-1] if worst and candidates else next(iter(candidates), None)
+                                    match = select_interactive_video(candidates, interactive_video_profile, worst=worst)
                                     if match and match not in fallback_selected:
                                         fallback_selected.append(match)
                                 title.tracks.videos = fallback_selected
@@ -3053,13 +3253,48 @@ class dl:
                                 sys.exit(1)
 
                     fsl = resolve_sort_langs(forced_s_lang, title.language, exact=exact_lang)
+                    if keep_subtitles and interactive_subtitle_profiles:
+
+                        def matches_interactive_subtitle_profile(track: Subtitle, profile: dict[str, Any]) -> bool:
+                            track_language = str(track.language).replace("_", "-").lower()
+                            return (
+                                track_language == profile["language"].replace("_", "-").lower()
+                                and (profile.get("codec") is None or track.codec == profile["codec"])
+                                and bool(track.forced) == profile["forced"]
+                                and bool(track.sdh) == profile["sdh"]
+                                and bool(track.cc) == profile["cc"]
+                            )
+
+                        missing_profiles = [
+                            profile
+                            for profile in interactive_subtitle_profiles
+                            if not any(
+                                matches_interactive_subtitle_profile(track, profile) for track in title.tracks.subtitles
+                            )
+                        ]
+                        if missing_profiles:
+                            missing_str = ", ".join(profile["language"] for profile in missing_profiles)
+                            if best_available:
+                                self.log.warning(
+                                    f"{missing_str} not found in subtitle tracks, continuing with available selections"
+                                )
+                            else:
+                                self.log.error(missing_str + " not found in subtitle tracks")
+                                sys.exit(1)
+
+                        title.tracks.select_subtitles(
+                            lambda track: any(
+                                matches_interactive_subtitle_profile(track, profile)
+                                for profile in interactive_subtitle_profiles
+                            )
+                        )
                     if keep_subtitles and s_excl_r:
                         # applies to forced subs too: an excluded language is unwanted in any form
                         drop = matched_language_tags(
                             s_excl_r, [t.language for t in title.tracks.subtitles], exact_lang, every_variant=True
                         )
                         title.tracks.select_subtitles(lambda x: str(x.language) not in drop)
-                    if keep_subtitles and s_lang and "all" not in s_lang:
+                    if keep_subtitles and not interactive_subtitle_profiles and s_lang and "all" not in s_lang:
                         s_lang = resolve_sort_langs(s_lang, title.language, exact=exact_lang)
                         # the pool selection draws from: forced tracks count only when -fs keeps them
                         missing_langs = find_missing_langs(
@@ -3132,12 +3367,20 @@ class dl:
                     if not title.tracks.audio:
                         skip_title(title, "There's no audio description track.")
                         continue
+                if keep_audio and interactive_audio_profiles and not title.tracks.audio:
+                    validate_interactive_audio_profile_count(0)
                 # might have no audio tracks if part of the video, e.g. transport stream hls
                 if keep_audio and len(title.tracks.audio) > 0:
                     if not audio_description:
                         title.tracks.select_audio(lambda x: not x.descriptive)
                         if not title.tracks.audio:
                             self.log.error("Audio description only, use --audio-description...")
+                            sys.exit(1)
+                    if interactive_audio_profiles:
+                        title.tracks.audio = select_interactive_audio(title.tracks.audio, interactive_audio_profiles)
+                        validate_interactive_audio_profile_count(len(title.tracks.audio))
+                        if not title.tracks.audio:
+                            self.log.error("The selected interactive audio variant is unavailable for this title.")
                             sys.exit(1)
                     if acodec:
                         title.tracks.select_audio(lambda x: x.codec in acodec)
@@ -3159,7 +3402,7 @@ class dl:
                         if not title.tracks.audio:
                             self.log.error("No non-Atmos audio tracks available...")
                             sys.exit(1)
-                    if abitrate:
+                    if abitrate and not interactive_audio_profiles:
                         title.tracks.select_audio(lambda x: x.bitrate and x.bitrate // 1000 == abitrate)
                         if not title.tracks.audio:
                             self.log.error(f"There's no {abitrate}kbps Audio Track...")
@@ -3221,9 +3464,10 @@ class dl:
                                     self.log.error(f"{missing_str} not found in {audio_noun}")
                                     sys.exit(1)
 
-                        title.tracks.audio = select_best_audio(
-                            title.tracks.audio, processed_lang, acodec, audio_description, exact_lang
-                        )
+                        if not interactive_audio_profiles:
+                            title.tracks.audio = select_best_audio(
+                                title.tracks.audio, processed_lang, acodec, audio_description, exact_lang
+                            )
                         if not title.tracks.audio and not embedded_langs:
                             # empty when 'orig' was the sole request, did not resolve, and the
                             # video carries no audio of its own to fall back on

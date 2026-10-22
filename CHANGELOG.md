@@ -6,6 +6,12 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 This changelog is automatically generated using [git-cliff](https://git-cliff.org).
 
+## [Unreleased]
+
+### Features
+
+- *dl*: Add guided interactive service and track selection
+
 ## [6.0.0] - 2026-10-13
 
 ### Features

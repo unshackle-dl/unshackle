@@ -58,6 +58,13 @@ key_vaults:
     name: Local
     path: key_store.db
 
+# --- Guided download menus --- docs/reference/configuration/download.md#interactive
+# Preselect options in `unshackle dl --interactive`. The menu can change them
+# for the current run.
+# interactive:
+#   list_: true
+#   export: true
+
 # --- Everything else lives in docs/ ---
 # credentials, directories, proxy providers, subtitles, muxing, serve/REST API,
 # remote services, per-service overrides, debug logging, Firefox cookie import,

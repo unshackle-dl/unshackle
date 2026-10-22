@@ -264,6 +264,7 @@ def test_perform_download_passes_latest_episodes_to_dl_result(tmp_path: Path, mo
         download_manager.perform_download("job-1", "EXAMPLE", "t1", {"latest_episodes": 3})
 
     assert exc.value.args[0]["latest_episodes"] == 3
+    assert exc.value.args[0]["interactive"] is False
 
 
 def test_worker_relays_a_prompt_and_reads_the_answer(monkeypatch: pytest.MonkeyPatch) -> None:

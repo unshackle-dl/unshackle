@@ -1461,9 +1461,10 @@ class RemoteService:
         info = self.client.get_optional(f"/api/session/{self._session_id}")
         interval = max(float(info.get("expires_in") or 300) / 3, 5.0)
         url = f"{self.client.server_url}/api/session/{self._session_id}"
+        stop_event = self._keepalive_stop
 
         def ping() -> None:
-            while not self._keepalive_stop.wait(interval):
+            while not stop_event.wait(interval):
                 try:
                     self.client.session.get(url, timeout=30)
                 except requests.RequestException:
@@ -1676,6 +1677,40 @@ class RemoteService:
         self._chapters_by_title[title_id] = result.get("chapters", [])
 
         return tracks
+
+    def refresh_track_filters(
+        self,
+        codecs: Optional[list[Video.Codec]],
+        ranges: Optional[list[Video.Range]],
+        forced_subs: Optional[bool] = None,
+    ) -> None:
+        """Recreate the remote session when interactive manifest filters change."""
+        if not self.ctx.parent:
+            return
+        params = self.ctx.parent.params
+        changed = False
+        if codecs is not None and params.get("vcodec") != codecs:
+            params["vcodec"] = codecs
+            changed = True
+        if ranges is not None and params.get("range_") != ranges:
+            params["range_"] = ranges
+            changed = True
+        if forced_subs is not None and params.get("forced_subs") != forced_subs:
+            params["forced_subs"] = forced_subs
+            changed = True
+        if not changed:
+            return
+
+        self.close()
+        self._keepalive_stop = Event()
+        self._titles = None
+        self._log_seq = 0
+        self._recent_logs.clear()
+        self.auth_notice = None
+        self._tracks_by_title.clear()
+        self._chapters_by_title.clear()
+        self.authenticate(credential=self.credential)
+        self.get_titles()
 
     def decrypts_samples(self, track: AnyTrack) -> bool:
         return str(track.id) in self._sample_decrypt_tracks
@@ -2026,6 +2061,7 @@ class RemoteService:
                 self.log.warning(f"Failed to clean up remote session: {e}")
         if self.client.tunnel:
             self.client.tunnel.stop()
+            self.client.tunnel = None
 
     def save_returned_cache(self, cache_data: Dict[str, str], profile: Optional[str] = None) -> None:
         """Save cache files returned by the server to the local cache directory.

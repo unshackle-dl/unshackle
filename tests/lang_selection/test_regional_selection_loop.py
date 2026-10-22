@@ -164,3 +164,47 @@ def test_the_meant_variant_does_not_depend_on_codec(
     service = RegionalService("ja", ["ja", "es-ES:EC3", "es-419"], [])
     ids = run(monkeypatch, caplog, service, a_lang=["es"], acodec=[Audio.Codec.AAC, Audio.Codec.EC3])
     assert ids["audio"] == ["es-ES:EC3"]
+
+
+def test_interactive_subtitle_profiles_keep_regional_variants_distinct(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    profiles = [
+        {"language": "es-ES", "forced": False, "sdh": False, "cc": False},
+        {"language": "es-419", "forced": False, "sdh": True, "cc": False},
+    ]
+    service = RegionalService(
+        "en",
+        ["en"],
+        [("es-ES", ""), ("es-ES", "sdh"), ("es-419", ""), ("es-419", "sdh")],
+    )
+    monkeypatch.setattr(
+        "unshackle.core.interactive.run_interactive_session",
+        lambda *args: {
+            "subtitle_profiles": profiles,
+            "s_lang": ["es-ES", "es-419"],
+            "no_subs": False,
+        },
+    )
+
+    ids = run(monkeypatch, caplog, service, interactive=True)
+
+    assert ids["subs"] == ["es-ES", "es-419-sdh"]
+
+
+def test_interactive_subtitle_profiles_are_not_narrowed_by_language_preferences(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    profiles = [
+        {"language": "en", "forced": False, "sdh": True, "cc": False},
+        {"language": "en-GB", "forced": False, "sdh": False, "cc": False},
+    ]
+    service = RegionalService("ja", ["ja"], [("en", "sdh"), ("en-GB", "")])
+    monkeypatch.setattr(
+        "unshackle.core.interactive.run_interactive_session",
+        lambda *args: {"subtitle_profiles": profiles, "s_lang": ["en", "en-GB"], "no_subs": False},
+    )
+
+    ids = run(monkeypatch, caplog, service, interactive=True)
+
+    assert ids["subs"] == ["en-sdh", "en-GB"]

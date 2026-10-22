@@ -650,6 +650,7 @@ def perform_download(
                 audio_description=params.get("audio_description", False),
                 audio_description_only=params.get("audio_description_only", False),
                 slow=params.get("slow", None),
+                interactive=False,
                 list_=False,
                 list_titles=False,
                 skip_dl=params.get("skip_dl", False),
