@@ -113,7 +113,8 @@ flowchart TD
 
 unshackle compares the query against a region grammar: a country or location code of two
 to four letters, with an optional `_code` part (`res_yyz`), then an optional server
-number and/or a `:city` or `-city` part. A `host:port` value never matches. It then
+number and/or a `:city` or `-city` part, and an optional `@` network part (see
+[Choose a server network](#choose-a-server-network)). A `host:port` value never matches. It then
 lowercases the query and hands it to the proxy provider. Its section below gives the
 exact forms each proxy provider accepts.
 
@@ -160,7 +161,42 @@ where you came out:
 - **Gluetun** reports the verified exit IP, country, and city of the container.
 - **ExpressVPN** and **Proton VPN** print a location summary such as
   `(USA - New York, #3 of 5): .214`.
+- **NordVPN** and **Windscribe** name the server, its IP, and its network, for example
+  `Using NordVPN Proxy fr1154.proxy.nordvpn.com (187.14.108.15, Datacamp Limited)`.
+  **Surfshark** prints the same line when the query has an `@` part.
 - Other proxy providers log the resolved proxy URL.
+
+### Choose a server network
+
+A VPN rents its servers from different hosting companies, and each hosting company has its own
+network. A service often blocks all the IPs of one network, so a random server in a country
+works on one run and fails on the next. NordVPN, Surfshark and Windscribe accept an `@` part after the query that keeps or skips a network, or one server IP:
+
+| Query | Meaning |
+|---|---|
+| `nordvpn:ca@datacamp` | A random Canadian server on a network whose name contains `datacamp`. |
+| `nordvpn:ca@-datacamp` | A random Canadian server on any other network. |
+| `windscribevpn:fr:paris@m247` | A random Paris server on an M247 network. |
+| `nordvpn:fr@187.14.108.15` | The French server with that IP. Any of the three proxy providers takes an IP. |
+| `surfsharkvpn:fr-bod@-195.86.24.103` | A random Bordeaux server IP other than that one. |
+
+A network name matches without case, spaces or punctuation, and part of the name is enough.
+Read the name or IP to use from the connection line of an earlier run. To keep a server that works,
+run again with `@<ip>`. When a server is blocked, run again with `@-<name>` to skip its network.
+
+unshackle gets the network of each server IP from the Team Cymru whois service
+(`whois.cymru.com`, TCP port 43). The NordVPN and Windscribe connection line uses it too, on every run.
+If that port is blocked, a query with an `@` part fails, and the connection line shows no network
+name. unshackle tries the port once per run.
+An `@` part skips `server_map`, except on Surfshark, where it selects from the servers of
+the mapped cluster. A query that already names one server, such as `nordvpn:us1234`,
+does not accept an `@` part. An IP selector needs no whois lookup. On NordVPN it searches every server in
+the country, not only the recommended ones, so a pinned server still works when it is busy.
+
+!!! note "Not every proxy provider"
+    Only NordVPN, Surfshark and Windscribe read the `@` part. With a bare query such as
+    `--proxy fr@datacamp`, the other proxy providers have no proxy for it, so prefix
+    the query to be sure which proxy provider answers.
 
 ### Exit check
 
@@ -771,6 +807,7 @@ that server for a day or two as a workaround, until it degrades and you swap in 
 | `us1234` | The specific server `us1234`. |
 | `nordvpn:us:seattle` | A recommended server in Seattle. |
 | `228` | A NordVPN numeric country ID. |
+| `nordvpn:us@-datacamp` | A recommended US server that is not on a Datacamp network. See [Choose a server network](#choose-a-server-network). |
 
 The returned proxy is HTTPS on **port 89** (NordVPN disabled its plain-HTTP proxies on
 port 80 in 2021).
@@ -906,6 +943,8 @@ fall back to the `us` entry.
 | `surfsharkvpn:us` | A random US server. `uk` and `gb` both give a UK server. |
 | `surfsharkvpn:us-bos` | A specific server from Surfshark's server list. |
 | `surfsharkvpn:us:seattle` | A random server in Seattle. |
+| `surfsharkvpn:fr-bod@datacamp` | A random Bordeaux server IP on a Datacamp network. See [Choose a server network](#choose-a-server-network). |
+| `surfsharkvpn:fr-bod@195.86.24.103` | The server at that IP, in the `fr-bod` cluster. |
 
 unshackle ignores case, spaces, hyphens and accents in a city name, so `us:new-york`
 matches New York. A city also matches the start of a longer name: `de:frankfurt` matches
@@ -914,6 +953,18 @@ proxy provider earlier in the order, and a bare `us:seattle` does not work, so u
 `surfsharkvpn:` prefix for those forms.
 
 The returned proxy is HTTPS on **port 443**.
+
+A Surfshark server name such as `fr-bod` is a cluster: its DNS name points at many server
+IPs, and each connection can go to a different one. Surfshark publishes no name for each server, so
+unshackle lists the IPs of a cluster from its nameserver. With an `@` part, unshackle connects to one
+of those IPs through a local port on `127.0.0.1`. That port checks the server certificate against the
+cluster name, so your credentials go only to a real Surfshark server. The connection line shows the
+IP, so you can pin a server that works with `@<ip>`. Surfshark changes its server IPs from time to
+time, and a pinned IP can stop working.
+
+With `--remote`, the client sends a Surfshark query with an `@` part to the server as you typed it,
+because the local port is on your machine. The server then selects and pins the server with its own
+Surfshark configuration. This needs the `server_proxy` grant on your API key.
 
 ## Windscribe
 
@@ -941,6 +992,7 @@ proxy_providers:
 | `us` | A random US server. |
 | `us150` / `sg007` | A specific numbered server. |
 | `windscribevpn:us:seattle` | A random server in Seattle. |
+| `windscribevpn:fr@-datacamp` | A random French server that is not on a Datacamp network. See [Choose a server network](#choose-a-server-network). |
 
 The returned proxy is HTTPS on **port 443**.
 

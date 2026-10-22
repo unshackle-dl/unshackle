@@ -16,7 +16,7 @@ from unshackle.core.utils.redact import mask_proxy
 
 log = logging.getLogger("proxies")
 
-REGION = r"[a-z]{2,4}(?:_[a-z0-9]{2,4})?(?:-[a-z0-9]+|:[a-z][a-z0-9]*)*\d*"
+REGION = r"[a-z]{2,4}(?:_[a-z0-9]{2,4})?(?:-[a-z0-9]+|:[a-z][a-z0-9]*)*\d*(?:@-?[a-z0-9][a-z0-9._-]*)?"
 
 
 class Unavailable(Proxy):

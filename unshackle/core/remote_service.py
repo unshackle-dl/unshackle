@@ -916,6 +916,8 @@ def resolve_remote_proxy_arg(proxy_arg: str, providers: Optional[list] = None) -
         # the providers dl or a serve already loaded, which a serve leaves empty for a key without server_proxy
         providers = initialize_proxy_providers() if providers is None else providers
         provider, _, query = proxy_arg.partition(":")
+        if provider.lower() == "surfsharkvpn" and "@" in query:
+            return proxy_arg
         if provider.lower() == "controld" and query:
             controld = find_provider(providers, "controld")
             uri = controld.get_remote_proxy(query)
@@ -1281,7 +1283,7 @@ class RemoteService:
             if resolved_proxy:
                 create_data["proxy"] = resolved_proxy
                 query = (self.ctx.parent.params.get("proxy_query") if self.ctx.parent else None) or proxy
-                country = re.match(r"^(?:[a-z]+:)?([a-z]{2})\d*$", query, re.IGNORECASE)
+                country = re.match(r"^(?:[a-z]+:)?([a-z]{2})\d*(?:@.*)?$", query, re.IGNORECASE)
                 if country:
                     create_data["proxy_region"] = country.group(1).lower()
         self.require_reachable_proxy(create_data.get("proxy"))

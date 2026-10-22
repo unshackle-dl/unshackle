@@ -19,7 +19,9 @@ CREDENTIALS = {"username": "a" * 24, "password": "b" * 24}
 def nordvpn(monkeypatch: pytest.MonkeyPatch) -> NordVPN:
     countries = [{"id": 228, "code": "US", "name": "United States", "serverCount": 1}]
     monkeypatch.setattr(NordVPN, "get_countries", staticmethod(lambda: countries))
-    monkeypatch.setattr(NordVPN, "get_recommended_servers", staticmethod(lambda country_id, city_id=None: []))
+    monkeypatch.setattr(
+        NordVPN, "get_recommended_servers", staticmethod(lambda country_id, city_id=None, limit=None: [])
+    )
     return NordVPN(**CREDENTIALS)
 
 
@@ -108,7 +110,7 @@ def nordvpn_with_cities(monkeypatch: pytest.MonkeyPatch) -> NordVPN:
     ]
     by_city = {None: "us100.nordvpn.com", 1: "us1.nordvpn.com", 2: "us2.nordvpn.com"}
 
-    def recommended(country_id: int, city_id: int | None = None) -> list[dict]:
+    def recommended(country_id: int, city_id: int | None = None, limit: int | None = None) -> list[dict]:
         return [{"hostname": "uk6018.nordvpn.com" if country_id == 227 else by_city[city_id]}]
 
     monkeypatch.setattr(NordVPN, "get_countries", staticmethod(lambda: countries))

@@ -5,6 +5,7 @@ from typing import Iterator, Optional
 
 import requests
 
+from unshackle.core.proxies.asn import describe, resolve_all, select, split_selector
 from unshackle.core.proxies.proxy import Proxy
 
 
@@ -30,6 +31,7 @@ class WindscribeVPN(Proxy):
         self.username = username
         self.password = password
         self.server_map = server_map or {}
+        self.last_hostname: Optional[str] = None
 
         self.countries = self.get_countries()
 
@@ -47,11 +49,13 @@ class WindscribeVPN(Proxy):
         - Country code: "us", "ca", "gb"
         - Specific server: "sg007", "us150", "us-central-150"
         - City selection: "us:seattle", "ca:toronto"
+        - Network selection: "fr@datacamp", "ca:toronto@-datacamp" (a leading "-" excludes)
+        - One server IP: "fr@195.86.24.129"
 
         Returns None for a query WindscribeVPN cannot serve. A city with no matching server raises ValueError.
         """
         # Windscribe names GB hosts "uk-NNN"; Ukraine is "ua", so "uk" is unambiguous.
-        query = re.sub(r"^uk(?=$|[:\d])", "gb", query.lower())
+        query, selector = split_selector(re.sub(r"^uk(?=$|[:\d@])", "gb", query.lower()))
         city = None
 
         if ":" in query:
@@ -59,8 +63,12 @@ class WindscribeVPN(Proxy):
             city = city.strip()
 
         server_map_key = f"{query}:{city}" if city else query
-        if server_map_key in self.server_map:
-            hostname: Optional[str] = self.server_map[server_map_key]
+        if selector:
+            if not re.fullmatch(r"[a-z]+", query):
+                raise ValueError(f"'{query}' is already one WindscribeVPN server, so it takes no '@' network selector.")
+            hostname: Optional[str] = self.get_random_server(query, city, selector)
+        elif server_map_key in self.server_map:
+            hostname = self.server_map[server_map_key]
         elif query in self.server_map:
             hostname = self.server_map[query]
         else:
@@ -77,8 +85,12 @@ class WindscribeVPN(Proxy):
         if not hostname:
             return None
 
-        hostname = hostname.split(":")[0]
+        hostname = self.last_hostname = hostname.split(":")[0]
         return f"https://{self.username}:{self.password}@{hostname}:443"
+
+    def last_connection_display(self) -> Optional[str]:
+        """Name the last server with its IP and network, so a blocked network can be excluded with '@-'."""
+        return describe(self.last_hostname) if self.last_hostname else None
 
     def iter_hostnames(self) -> Iterator[str]:
         """Yield every known server hostname."""
@@ -107,19 +119,23 @@ class WindscribeVPN(Proxy):
                         return hostname
         return None
 
-    def get_random_server(self, country_code: str, city: Optional[str] = None) -> Optional[str]:
+    def get_random_server(
+        self, country_code: str, city: Optional[str] = None, selector: Optional[str] = None
+    ) -> Optional[str]:
         """
         Get a random server hostname for a country, optionally filtered by city.
 
         Args:
             country_code: The country code (e.g., "us", "ca")
             city: Optional city name to filter by (case-insensitive)
+            selector: Optional network selector, such as "datacamp" or "-datacamp" (see asn.select)
 
         Returns:
             A random hostname from matching servers, or None if the country has no servers.
 
         Raises:
-            ValueError: If you give a city and no server in that country matches it.
+            ValueError: If you give a city and no server in that country matches it, or a selector
+                and no server is on a matching network.
         """
         hostnames = []
 
@@ -135,6 +151,10 @@ class WindscribeVPN(Proxy):
                         if hostname := host.get("hostname"):
                             hostnames.append(hostname)
 
+        if hostnames and selector:
+            hostnames = select(resolve_all(hostnames), selector)
+            if not hostnames:
+                raise ValueError(f"No WindscribeVPN server in {country_code} matches '@{selector}'.")
         if hostnames:
             return random.choice(hostnames)
         elif city:
