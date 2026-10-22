@@ -137,7 +137,7 @@ will use throughout the service:
 
 | Attribute | What it is |
 |---|---|
-| `self.config` | This service's `config.yaml` contents (a dict), or `None` if absent. |
+| `self.config` | A dict: this service's `config.yaml`, with the user's `services.<TAG>` block from `unshackle.yaml` merged over it. Without a `config.yaml`, it holds only the user's block. See [Services & authentication](../reference/configuration/services.md) for the override keys. |
 | `self.log` | A `logging.Logger` named after your class. |
 | `self.session` | A prepared `requests.Session` with config headers and a retry adapter (5 retries, backoff 0.2, retries on 429/500/502/503/504). Send every request through it: with a proxy active, a request from service code that does not go through the proxy logs a warning. A separate HTTP session that goes direct on purpose sets `proxy_exempt = True`. |
 | `self.cache` | A `Cacher` for arbitrary key/value data, for example authentication tokens. |

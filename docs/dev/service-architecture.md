@@ -112,7 +112,7 @@ up the objects your methods rely on:
 
 | Attribute | What it is |
 |---|---|
-| `self.config` | The per-service config slice (see [Request and HTTP session objects](#request-and-http-session-objects)). |
+| `self.config` | The merged service config (see [Request and HTTP session objects](#request-and-http-session-objects)). |
 | `self.log` | A `logging.Logger` named after your class. |
 | `self.session` | A ready-to-use HTTP session (headers, retries, and proxy applied). Send every request through it: with a proxy active, a request from service code that does not go through the proxy logs a warning. A separate HTTP session that goes direct on purpose sets `proxy_exempt = True`. |
 | `self.cache` | A generic key/value `Cacher` namespaced to the service. |
@@ -471,10 +471,11 @@ the container file.
 Everything a service does over the network flows through objects the base constructor
 prepared, all derived from the Click context (`ctx`) that `dl` passes in.
 
-- **`self.config`**: your service's slice of `unshackle.yaml`, i.e.
-  `config.services[<ServiceName>]`. This is a plain dict. Use it for per-service settings
-  like base URLs, an API key, or a `title_map`. See
-  [Configuration](../getting-started/configuration-file.md).
+- **`self.config`**: a plain dict. unshackle loads the service's own `config.yaml`, then merges
+  the user's `services.<TAG>` block from `unshackle.yaml` over it. Nested keys merge one by one,
+  the user's value wins, and a list in the user's block replaces the whole list. Use it for
+  per-service settings like base URLs, an API key, or a `title_map`. See
+  [Services & authentication](../reference/configuration/services.md) for the override keys.
 - **`self.session`**: a `requests.Session` with `config.headers` applied, a retry policy
   (`total=5`, backoff, retry on 429/5xx), and any resolved proxy already mounted. Pass this
   HTTP session into the manifest parsers and DRM calls so headers, cookies, and proxies flow
