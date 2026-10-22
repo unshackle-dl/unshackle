@@ -891,6 +891,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#choose-a-server-network" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Choose a server network
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#exit-check" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2409,6 +2420,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#choose-a-server-network" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Choose a server network
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#exit-check" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2842,7 +2864,8 @@ them in this order.</p>
 </ol>
 <p>unshackle compares the query against a region grammar: a country or location code of two
 to four letters, with an optional <code>_code</code> part (<code>res_yyz</code>), then an optional server
-number and/or a <code>:city</code> or <code>-city</code> part. A <code>host:port</code> value never matches. It then
+number and/or a <code>:city</code> or <code>-city</code> part, and an optional <code>@</code> network part (see
+<a href="#choose-a-server-network">Choose a server network</a>). A <code>host:port</code> value never matches. It then
 lowercases the query and hands it to the proxy provider. Its section below gives the
 exact forms each proxy provider accepts.</p>
 <p>A Control D resolver, <code>controld://&lt;resolver&gt;@dns.controld.com</code>, is a fourth form. A
@@ -2883,8 +2906,62 @@ where you came out:</p>
 <li><strong>Gluetun</strong> reports the verified exit IP, country, and city of the container.</li>
 <li><strong>ExpressVPN</strong> and <strong>Proton VPN</strong> print a location summary such as
   <code>(USA - New York, #3 of 5): .214</code>.</li>
+<li><strong>NordVPN</strong> and <strong>Windscribe</strong> name the server, its IP, and its network, for example
+  <code>Using NordVPN Proxy fr1154.proxy.nordvpn.com (187.14.108.15, Datacamp Limited)</code>.
+  <strong>Surfshark</strong> prints the same line when the query has an <code>@</code> part.</li>
 <li>Other proxy providers log the resolved proxy URL.</li>
 </ul>
+<h3 id="choose-a-server-network">Choose a server network<a class="headerlink" href="#choose-a-server-network" title="Permanent link">&para;</a></h3>
+<p>A VPN rents its servers from different hosting companies, and each hosting company has its own
+network. A service often blocks all the IPs of one network, so a random server in a country
+works on one run and fails on the next. NordVPN, Surfshark and Windscribe accept an <code>@</code> part after the query that keeps or skips a network, or one server IP:</p>
+<table>
+<thead>
+<tr>
+<th>Query</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>nordvpn:ca@datacamp</code></td>
+<td>A random Canadian server on a network whose name contains <code>datacamp</code>.</td>
+</tr>
+<tr>
+<td><code>nordvpn:ca@-datacamp</code></td>
+<td>A random Canadian server on any other network.</td>
+</tr>
+<tr>
+<td><code>windscribevpn:fr:paris@m247</code></td>
+<td>A random Paris server on an M247 network.</td>
+</tr>
+<tr>
+<td><code>nordvpn:fr@187.14.108.15</code></td>
+<td>The French server with that IP. Any of the three proxy providers takes an IP.</td>
+</tr>
+<tr>
+<td><code>surfsharkvpn:fr-bod@-195.86.24.103</code></td>
+<td>A random Bordeaux server IP other than that one.</td>
+</tr>
+</tbody>
+</table>
+<p>A network name matches without case, spaces or punctuation, and part of the name is enough.
+Read the name or IP to use from the connection line of an earlier run. To keep a server that works,
+run again with <code>@&lt;ip&gt;</code>. When a server is blocked, run again with <code>@-&lt;name&gt;</code> to skip its network.</p>
+<p>unshackle gets the network of each server IP from the Team Cymru whois service
+(<code>whois.cymru.com</code>, TCP port 43). The NordVPN and Windscribe connection line uses it too, on every run.
+If that port is blocked, a query with an <code>@</code> part fails, and the connection line shows no network
+name. unshackle tries the port once per run.
+An <code>@</code> part skips <code>server_map</code>, except on Surfshark, where it selects from the servers of
+the mapped cluster. A query that already names one server, such as <code>nordvpn:us1234</code>,
+does not accept an <code>@</code> part. An IP selector needs no whois lookup. On NordVPN it searches every server in
+the country, not only the recommended ones, so a pinned server still works when it is busy.</p>
+<div class="admonition note">
+<p class="admonition-title">Not every proxy provider</p>
+<p>Only NordVPN, Surfshark and Windscribe read the <code>@</code> part. With a bare query such as
+<code>--proxy fr@datacamp</code>, the other proxy providers have no proxy for it, so prefix
+the query to be sure which proxy provider answers.</p>
+</div>
 <h3 id="exit-check">Exit check<a class="headerlink" href="#exit-check" title="Permanent link">&para;</a></h3>
 <p>Before the service sends a request, unshackle looks up the proxy exit IP through the
 proxy. The service stops with <code>Proxy check failed</code> in two cases:</p>
@@ -3591,6 +3668,10 @@ country-code confusion that <code>uk</code> invites.</p>
 <td><code>228</code></td>
 <td>A NordVPN numeric country ID.</td>
 </tr>
+<tr>
+<td><code>nordvpn:us@-datacamp</code></td>
+<td>A recommended US server that is not on a Datacamp network. See <a href="#choose-a-server-network">Choose a server network</a>.</td>
+</tr>
 </tbody>
 </table>
 <p>The returned proxy is HTTPS on <strong>port 89</strong> (NordVPN disabled its plain-HTTP proxies on
@@ -3754,6 +3835,14 @@ fall back to the <code>us</code> entry.</p>
 <td><code>surfsharkvpn:us:seattle</code></td>
 <td>A random server in Seattle.</td>
 </tr>
+<tr>
+<td><code>surfsharkvpn:fr-bod@datacamp</code></td>
+<td>A random Bordeaux server IP on a Datacamp network. See <a href="#choose-a-server-network">Choose a server network</a>.</td>
+</tr>
+<tr>
+<td><code>surfsharkvpn:fr-bod@195.86.24.103</code></td>
+<td>The server at that IP, in the <code>fr-bod</code> cluster.</td>
+</tr>
 </tbody>
 </table>
 <p>unshackle ignores case, spaces, hyphens and accents in a city name, so <code>us:new-york</code>
@@ -3762,6 +3851,16 @@ Frankfurt am Main. A bare <code>us</code> also reaches Surfshark. A bare <code>u
 proxy provider earlier in the order, and a bare <code>us:seattle</code> does not work, so use the
 <code>surfsharkvpn:</code> prefix for those forms.</p>
 <p>The returned proxy is HTTPS on <strong>port 443</strong>.</p>
+<p>A Surfshark server name such as <code>fr-bod</code> is a cluster: its DNS name points at many server
+IPs, and each connection can go to a different one. Surfshark publishes no name for each server, so
+unshackle lists the IPs of a cluster from its nameserver. With an <code>@</code> part, unshackle connects to one
+of those IPs through a local port on <code>127.0.0.1</code>. That port checks the server certificate against the
+cluster name, so your credentials go only to a real Surfshark server. The connection line shows the
+IP, so you can pin a server that works with <code>@&lt;ip&gt;</code>. Surfshark changes its server IPs from time to
+time, and a pinned IP can stop working.</p>
+<p>With <code>--remote</code>, the client sends a Surfshark query with an <code>@</code> part to the server as you typed it,
+because the local port is on your machine. The server then selects and pins the server with its own
+Surfshark configuration. This needs the <code>server_proxy</code> grant on your API key.</p>
 <h2 id="windscribe">Windscribe<a class="headerlink" href="#windscribe" title="Permanent link">&para;</a></h2>
 <p>Windscribe uses <strong>Service Credentials</strong> from its
 <a href="https://windscribe.com/getconfig/openvpn">OpenVPN config page</a>. unshackle only makes
@@ -3796,6 +3895,10 @@ sure that a username and a password are present (there is no 48-character rule).
 <tr>
 <td><code>windscribevpn:us:seattle</code></td>
 <td>A random server in Seattle.</td>
+</tr>
+<tr>
+<td><code>windscribevpn:fr@-datacamp</code></td>
+<td>A random French server that is not on a Datacamp network. See <a href="#choose-a-server-network">Choose a server network</a>.</td>
 </tr>
 </tbody>
 </table>
