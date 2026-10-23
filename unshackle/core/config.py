@@ -406,12 +406,6 @@ def duplicate_key_lines(root: Any) -> list[tuple[int, int]]:
     return sorted(pairs)
 
 
-def duplicate_key_message(name: str, pairs: list[tuple[int, int]], line: int = 0) -> str:
-    """Say where a file repeats a key: each (first, repeat) pair, or `line` when no pair is known."""
-    where = ", ".join(f"lines {first} and {repeat}" for first, repeat in pairs) or f"line {line}"
-    return f"{name}: duplicate key on {where}. Unshackle uses the later one."
-
-
 _warned: set[str] = set()
 
 
@@ -422,9 +416,12 @@ def load_yaml(path: Path) -> Any:
         node = loader.get_single_node()
         if node is None:
             return None
-        if (pairs := duplicate_key_lines(node)) and (message := duplicate_key_message(str(path), pairs)) not in _warned:
-            _warned.add(message)
-            logging.getLogger("config").warning(message)
+        if pairs := duplicate_key_lines(node):
+            where = ", ".join(f"lines {first} and {repeat}" for first, repeat in pairs)
+            message = f"{path}: duplicate key on {where}. Unshackle uses the later one."
+            if message not in _warned:
+                _warned.add(message)
+                logging.getLogger("config").warning(message)
         return loader.construct_document(node)
     finally:
         loader.dispose()

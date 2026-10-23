@@ -6,7 +6,7 @@ import click
 from ruamel.yaml import YAML
 from ruamel.yaml.constructor import DuplicateKeyError
 
-from unshackle.core.config import config, duplicate_key_lines, duplicate_key_message, get_config_path
+from unshackle.core.config import config, duplicate_key_lines, get_config_path, load_yaml
 from unshackle.core.constants import context_settings
 
 
@@ -45,10 +45,13 @@ def cfg(ctx: click.Context, key: str, value: str, unset: bool, list_: bool) -> N
         try:
             data = yaml.load(config_path)
         except DuplicateKeyError as e:
-            pairs = duplicate_key_lines(yaml.compose(config_path))
-            raise click.ClickException(
-                duplicate_key_message(config_path.name, pairs, e.problem_mark.line + 1)
-            ) from None
+            if duplicate_key_lines(yaml.compose(config_path)):
+                load_yaml(config_path)
+            else:
+                log.warning(
+                    f"{config_path}: duplicate key on line {e.problem_mark.line + 1}. Unshackle uses the later one."
+                )
+            sys.exit(1)
 
     if not data:
         log.warning("No config file was found or it has no data, yet")
