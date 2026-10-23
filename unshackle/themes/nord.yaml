@@ -1,0 +1,21 @@
+# Nord (nordtheme.com): polar night, snow storm, frost and aurora.
+author: unshackle
+description: Cool arctic blues; the brand accent is aurora purple.
+
+bg: "#2e3440"
+text: "#d8dee9"
+text2: "#9aa4b8"
+black: "#3b4252"
+bright_black: "#4c566a"
+red: "#bf616a"
+green: "#a3be8c"
+yellow: "#ebcb8b"
+blue: "#81a1c1"
+pink: "#b48ead"
+cyan: "#88c0d0"
+gray: "#616e88"
+bright_gray: "#e5e9f0"
+dark_gray: "#434c5e"
+
+styles:
+  progress.data.speed: "#d08770"

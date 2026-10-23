@@ -1,200 +1,261 @@
 """
-Named CLI colour themes.
+CLI colour themes, read from YAML files.
 
-Each palette maps the same role keys to colors: `text`/`text2` for body copy, `pink` for the
-brand accent, the six ANSI hues, and the grey ramp used for rules and dim details. The active
-palette drives both the rich Console theme (banner, logs, progress) and the click help screens,
-so a single `theme` config value restyles the whole CLI.
+A theme sets the colours of the `ROLES`, can override any Rich style under `styles:`, and can draw the
+`GRADIENT_SURFACES` in blended colours under `gradients:`. The shipped themes are in `unshackle/themes/`. A file in `directories.themes` adds a theme, or replaces a shipped
+theme with the same name. The active theme drives both the rich Console theme (banner, logs,
+progress) and the click help screens.
 """
 
 from __future__ import annotations
 
+import logging
+from pathlib import Path
+from typing import Any
+
+import yaml
+from rich.color import Color, ColorParseError
+from rich.errors import StyleSyntaxError
+from rich.style import Style
+from rich.theme import Theme
 from rich_click import RichHelpConfiguration
 
-DEFAULT_THEME = "catppuccin-mocha"
+from unshackle.core.config import config
 
-PALETTES: dict[str, dict[str, str]] = {
-    # Colors based on "CatppuccinMocha" from Gogh themes
-    "catppuccin-mocha": {
-        "bg": "rgb(30,30,46)",
-        "text": "rgb(205,214,244)",
-        "text2": "rgb(162,169,193)",
-        "black": "rgb(69,71,90)",
-        "bright_black": "rgb(88,91,112)",
-        "red": "rgb(243,139,168)",
-        "green": "rgb(166,227,161)",
-        "yellow": "rgb(249,226,175)",
-        "blue": "rgb(137,180,250)",
-        "pink": "rgb(245,194,231)",
-        "cyan": "rgb(148,226,213)",
-        "gray": "rgb(166,173,200)",
-        "bright_gray": "rgb(186,194,222)",
-        "dark_gray": "rgb(54,54,84)",
-    },
-    # draculatheme.com spec; purple stands in for blue, comment for the dim grays
-    "dracula": {
-        "bg": "#282a36",
-        "text": "#f8f8f2",
-        "text2": "#b8bfd8",
-        "black": "#21222c",
-        "bright_black": "#6272a4",
-        "red": "#ff5555",
-        "green": "#50fa7b",
-        "yellow": "#f1fa8c",
-        "blue": "#bd93f9",
-        "pink": "#ff79c6",
-        "cyan": "#8be9fd",
-        "gray": "#6272a4",
-        "bright_gray": "#e9e9f4",
-        "dark_gray": "#44475a",
-    },
-    # nordtheme.com: polar night / snow storm / frost / aurora
-    "nord": {
-        "bg": "#2e3440",
-        "text": "#d8dee9",
-        "text2": "#9aa4b8",
-        "black": "#3b4252",
-        "bright_black": "#4c566a",
-        "red": "#bf616a",
-        "green": "#a3be8c",
-        "yellow": "#ebcb8b",
-        "blue": "#81a1c1",
-        "pink": "#b48ead",
-        "cyan": "#88c0d0",
-        "gray": "#616e88",
-        "bright_gray": "#e5e9f0",
-        "dark_gray": "#434c5e",
-    },
-    # github.com/morhetz/gruvbox dark, bright variants
-    "gruvbox": {
-        "bg": "#282828",
-        "text": "#ebdbb2",
-        "text2": "#bdae93",
-        "black": "#504945",
-        "bright_black": "#665c54",
-        "red": "#fb4934",
-        "green": "#b8bb26",
-        "yellow": "#fabd2f",
-        "blue": "#83a598",
-        "pink": "#d3869b",
-        "cyan": "#8ec07c",
-        "gray": "#928374",
-        "bright_gray": "#d5c4a1",
-        "dark_gray": "#3c3836",
-    },
-    # Atom One Dark syntax palette
-    "one-dark": {
-        "bg": "#282c34",
-        "text": "#abb2bf",
-        "text2": "#818896",
-        "black": "#3b4048",
-        "bright_black": "#5c6370",
-        "red": "#e06c75",
-        "green": "#98c379",
-        "yellow": "#e5c07b",
-        "blue": "#61afef",
-        "pink": "#c678dd",
-        "cyan": "#56b6c2",
-        "gray": "#5c6370",
-        "bright_gray": "#c8ccd4",
-        "dark_gray": "#3e4451",
-    },
-    # github.com/enkia/tokyo-night-vscode-theme, night variant
-    "tokyo-night": {
-        "bg": "#1a1b26",
-        "text": "#c0caf5",
-        "text2": "#a9b1d6",
-        "black": "#15161e",
-        "bright_black": "#414868",
-        "red": "#f7768e",
-        "green": "#9ece6a",
-        "yellow": "#e0af68",
-        "blue": "#7aa2f7",
-        "pink": "#bb9af7",
-        "cyan": "#7dcfff",
-        "gray": "#565f89",
-        "bright_gray": "#a9b1d6",
-        "dark_gray": "#292e42",
-    },
-    # classic Monokai; purple stands in for pink, 66d9ef doubles as blue
-    "monokai": {
-        "bg": "#272822",
-        "text": "#f8f8f2",
-        "text2": "#cfcfc2",
-        "black": "#2e2e2e",
-        "bright_black": "#75715e",
-        "red": "#f92672",
-        "green": "#a6e22e",
-        "yellow": "#e6db74",
-        "blue": "#66d9ef",
-        "pink": "#ae81ff",
-        "cyan": "#a1efe4",
-        "gray": "#a59f85",
-        "bright_gray": "#cfcfc2",
-        "dark_gray": "#3e3d32",
-    },
-    # flexoki.com dark, 400-level accents
-    "flexoki": {
-        "bg": "#100f0f",
-        "text": "#cecdc3",
-        "text2": "#878580",
-        "black": "#282726",
-        "bright_black": "#403e3c",
-        "red": "#d14d41",
-        "green": "#879a39",
-        "yellow": "#d0a215",
-        "blue": "#4385be",
-        "pink": "#ce5d97",
-        "cyan": "#3aa99f",
-        "gray": "#6f6e69",
-        "bright_gray": "#b7b5ac",
-        "dark_gray": "#343331",
-    },
-    # ethanschoonover.com/solarized dark; magenta stands in for pink
-    "solarized-dark": {
-        "bg": "#002b36",
-        "text": "#839496",
-        "text2": "#586e75",
-        "black": "#073642",
-        "bright_black": "#586e75",
-        "red": "#dc322f",
-        "green": "#859900",
-        "yellow": "#b58900",
-        "blue": "#268bd2",
-        "pink": "#d33682",
-        "cyan": "#2aa198",
-        "gray": "#657b83",
-        "bright_gray": "#93a1a1",
-        "dark_gray": "#073642",
-    },
-}
-
+DEFAULT_THEME = "unshackle"
 ALIASES = {
     "default": DEFAULT_THEME,
-    "catppuccin": DEFAULT_THEME,
-    "mocha": DEFAULT_THEME,
+    "catppuccin": "catppuccin-mocha",
+    "mocha": "catppuccin-mocha",
     "onedark": "one-dark",
-    "tokyonight": "tokyo-night",
     "solarized": "solarized-dark",
+    "tokyonight": "tokyo-night",
 }
 
+ROLES = (
+    "bg",
+    "text",
+    "text2",
+    "black",
+    "bright_black",
+    "red",
+    "green",
+    "yellow",
+    "blue",
+    "pink",
+    "cyan",
+    "gray",
+    "bright_gray",
+    "dark_gray",
+)
+ROLE_ALIASES = {"accent": "pink"}
+PRESETS_DIR = Path(__file__).resolve().parent.parent / "themes"
+FILE_KEYS = {*ROLES, *ROLE_ALIASES, "extends", "styles", "gradients", "author", "description"}
+GRADIENT_SURFACES = ("banner", "bar", "pulse", "rule", "panel")
+GRADIENT_OPTIONS = {"direction": ("horizontal", "vertical", "diagonal"), "motion": ("static", "scroll")}
 
-def resolve_palette(name: object) -> dict[str, str] | None:
-    """Look up a palette by theme name or alias, case-insensitively.
+ThemeData = tuple[dict[str, str], dict[str, str], dict[str, Any]]
 
-    Takes any YAML scalar, because unshackle does not validate config values. A non-string
-    never matches a palette name.
-    Returns a copy: console.py extends the active palette in place, and that must
-    not pollute the master definitions.
+
+def normalize_name(name: object) -> str:
+    """Normalise a theme name or file stem: lowercase, with `_` read as `-`."""
+    return str(name or "").strip().lower().replace("_", "-")
+
+
+def canonical_name(name: object) -> str:
+    """Normalise a theme name and resolve an alias to the theme it names."""
+    key = normalize_name(name)
+    return ALIASES.get(key, key)
+
+
+def theme_files(folder: Path) -> dict[str, Path]:
+    """Map each theme file's name to its path. It skips alias names, which belong to the shipped themes."""
+    try:
+        paths = sorted(path for path in folder.iterdir() if path.suffix.lower() in (".yaml", ".yml"))
+    except OSError as e:
+        if folder.exists():
+            logging.getLogger("console").warning("cannot read the themes folder %s: %s", folder, e.strerror or e)
+        return {}
+    files: dict[str, Path] = {}
+    for path in paths:
+        name = normalize_name(path.stem)
+        if name not in ALIASES and name.isprintable():
+            files.setdefault(name, path)
+    return files
+
+
+def shipped_themes() -> dict[str, Path]:
+    return theme_files(PRESETS_DIR)
+
+
+def user_themes() -> dict[str, Path]:
+    return theme_files(Path(config.directories.themes))
+
+
+def load_theme(name: object, user_files: bool = True) -> ThemeData:
+    """Resolve a theme name to its role colours and its `styles:` overrides.
+
+    A user file starts from its `extends` theme, else the shipped theme with the same name, else the
+    default. That base is always a shipped file, so a theme that extends itself cannot loop.
+    It checks every value, so `build_console_theme` always accepts the result. Raises ValueError,
+    naming the file and the entry, when the theme is unknown or not valid.
     """
-    key = str(name or "").strip().lower().replace("_", "-")
-    palette = PALETTES.get(ALIASES.get(key, key))
-    return dict(palette) if palette else None
+    key = canonical_name(name)
+    shipped = shipped_themes()
+    users = user_themes() if user_files else {}
+    user = users.get(key)
+    if user is None:
+        if key not in shipped:
+            raise ValueError(f"unknown theme {str(name)!r}")
+        return apply_theme(shipped[key].name, read_theme_file(shipped[key]), {}, {}, {})
+
+    data = read_theme_file(user)
+    extends = data.get("extends")
+    if extends is not None and not isinstance(extends, str):
+        raise ValueError(f"{user.name}: extends must be a quoted theme name")
+    base = canonical_name(extends or (key if key in shipped else DEFAULT_THEME))
+    if base not in shipped:
+        raise ValueError(f"{user.name}: extends {data['extends']!r}, not a shipped theme")
+    return apply_theme(user.name, data, *load_theme(base, user_files=False))
+
+
+def load_active_theme(name: object) -> tuple[str, ThemeData]:
+    """Load the configured theme, or the shipped default when it is unknown or not valid. Returns the name in use."""
+    try:
+        return canonical_name(name), load_theme(name)
+    except ValueError as e:
+        logging.getLogger("console").warning("%s, using the %s theme", e, DEFAULT_THEME)
+        return DEFAULT_THEME, load_theme(DEFAULT_THEME, user_files=False)
+
+
+def read_theme_file(path: Path) -> dict[str, Any]:
+    try:
+        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    except (OSError, UnicodeDecodeError, RecursionError, yaml.YAMLError) as e:
+        raise ValueError(f"{path.name}: cannot read: {shorten(' '.join(str(e).split()), 80)}") from e
+    if not isinstance(data, dict):
+        raise ValueError(f"{path.name}: not a mapping of theme keys")
+    unknown = sorted(str(key) for key in data if key not in FILE_KEYS)
+    if unknown:
+        raise ValueError(f"{path.name}: unknown key {', '.join(unknown)}")
+    return data
+
+
+def apply_theme(
+    file: str, data: dict[str, Any], palette: dict[str, str], styles: dict[str, str], gradients: dict[str, Any]
+) -> ThemeData:
+    """Lay the keys of a theme file over a base theme, and return the result. The base is not changed."""
+    data = dict(data)
+    for alias, role in ROLE_ALIASES.items():
+        if alias in data:
+            if role in data:
+                raise ValueError(f"{file}: set {role} or {alias}, not both")
+            data[role] = data.pop(alias)
+
+    palette = dict(palette)
+    for role in ROLES:
+        if role not in data:
+            continue
+        value = data[role]
+        if value is None or value == "":
+            raise ValueError(f"{file}: {role} is empty (put hex values in quotes)")
+        if not isinstance(value, str):
+            raise ValueError(f"{file}: {role} must be a quoted colour")
+        palette[role] = parse_colour(file, role, value, {})
+    missing = [role for role in ROLES if role not in palette]
+    if missing:
+        raise ValueError(f"{file}: missing {', '.join(missing)}")
+
+    overrides = data.get("styles") or {}
+    if not isinstance(overrides, dict):
+        raise ValueError(f"{file}: styles must be a mapping")
+    styles = dict(styles)
+    for style_name, value in overrides.items():
+        if not isinstance(style_name, str) or not isinstance(value, str):
+            raise ValueError(f"{file}: styles: quote {shorten(str(style_name))} and its value")
+        if style_name in ROLES or style_name in ROLE_ALIASES:
+            raise ValueError(f"{file}: set {style_name} at the top level, not under styles")
+        resolved = " ".join(palette.get(ROLE_ALIASES.get(word.lower(), word.lower()), word) for word in value.split())
+        try:
+            parsed = Style.parse(resolved)
+        except (StyleSyntaxError, ValueError) as e:
+            raise ValueError(f"{file}: styles: {style_name}: {shorten(value)} is not a Rich style") from e
+        if parsed.link or parsed.conceal:
+            raise ValueError(f"{file}: styles: {style_name}: link and conceal not allowed")
+        styles[style_name] = resolved
+
+    overrides = data.get("gradients") or {}
+    if not isinstance(overrides, dict):
+        raise ValueError(f"{file}: gradients must be a mapping")
+    gradients = dict(gradients)
+    for key, value in overrides.items():
+        if key in GRADIENT_OPTIONS:
+            if not isinstance(value, str) or value not in GRADIENT_OPTIONS[key]:
+                raise ValueError(f"{file}: gradients: {key} must be {' or '.join(GRADIENT_OPTIONS[key])}")
+            gradients[key] = value
+        elif key in GRADIENT_SURFACES:
+            stops = [value] if isinstance(value, str) else value
+            if not isinstance(stops, list) or not stops or not all(isinstance(stop, str) for stop in stops):
+                raise ValueError(f"{file}: gradients: {key} must be a list of quoted colours")
+            gradients[key] = tuple(parse_colour(file, f"gradients: {key}", stop, palette) for stop in stops)
+        else:
+            raise ValueError(f"{file}: gradients: unknown key {shorten(str(key))}")
+    return palette, styles, gradients
+
+
+def parse_colour(file: str, label: str, value: str, palette: dict[str, str]) -> str:
+    """Check one colour from a theme file. A role name in *palette* becomes that role's colour."""
+    value = palette.get(ROLE_ALIASES.get(value.lower(), value.lower()), value)
+    value = "".join(value.split())
+    try:
+        Color.parse(value)
+    except (ColorParseError, ValueError) as e:
+        raise ValueError(f"{file}: {label}: {shorten(value)} is not a colour") from e
+    return value
+
+
+def shorten(text: str, limit: int = 40) -> str:
+    """Quote a value from a theme file for an error message, cut to *limit* characters."""
+    return repr(text if len(text) <= limit else text[:limit] + "...")
+
+
+def build_console_theme(palette: dict[str, str], styles: dict[str, str], set_terminal_bg: bool = False) -> Theme:
+    """Assemble the Rich console theme: fixed styles first, then the roles and the names made from them, then `styles:`."""
+    on_bg = f" on {palette['bg']}" if set_terminal_bg else ""
+    return Theme(
+        {
+            "bar.back": palette["dark_gray"],
+            "bar.complete": palette["pink"],
+            "bar.finished": palette["green"],
+            "bar.pulse": palette["pink"],
+            "inspect.async_def": f"italic {palette['cyan']}",
+            "repr.number": f"bold not italic {palette['cyan']}",
+            "repr.number_complex": f"bold not italic {palette['cyan']}",
+            "rule.line": palette["dark_gray"],
+            "rule.text": palette["pink"],
+            "tree.line": palette["dark_gray"],
+            "status.spinner": palette["pink"],
+            "progress.spinner": palette["pink"],
+            "ascii.art": palette["pink"] + on_bg,
+            "none": palette["text"] + on_bg,
+            "grey23": palette["black"],
+            "magenta": palette["pink"],
+            "bright_red": palette["red"],
+            "bright_green": palette["green"],
+            "bright_yellow": palette["yellow"],
+            "bright_blue": palette["blue"],
+            "bright_magenta": palette["pink"],
+            "bright_cyan": palette["cyan"],
+            **palette,
+            **styles,
+        }
+    )
 
 
 def build_help_config(palette: dict[str, str]) -> RichHelpConfiguration:
     """Assemble the rich-click help configuration for a palette."""
     return RichHelpConfiguration(
+        enable_theme_env_var=False,
         style_option=palette["text"],
         style_switch=palette["green"],
         style_argument=palette["cyan"],

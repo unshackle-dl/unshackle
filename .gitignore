@@ -1,6 +1,7 @@
 # unshackle
 unshackle.yaml
 unshackle.yml
+!unshackle/themes/unshackle.yaml
 update_check.json
 *.mkv
 *.mp4
@@ -27,6 +28,7 @@ unshackle/binaries/*
 # test fixtures (binary subtitle samples) must be tracked despite the *.mp4 rule above
 !tests/tracks/fixtures/*.mp4
 unshackle/cache/
+unshackle/themes/custom/
 unshackle/cookies/
 unshackle/certs/
 unshackle/WVDs/

@@ -1,0 +1,21 @@
+# One Dark, the Atom syntax colours.
+author: unshackle
+description: Muted blues and purples on slate.
+
+bg: "#282c34"
+text: "#abb2bf"
+text2: "#818896"
+black: "#3b4048"
+bright_black: "#5c6370"
+red: "#e06c75"
+green: "#98c379"
+yellow: "#e5c07b"
+blue: "#61afef"
+pink: "#c678dd"
+cyan: "#56b6c2"
+gray: "#5c6370"
+bright_gray: "#c8ccd4"
+dark_gray: "#3e4451"
+
+styles:
+  progress.data.speed: dark_orange

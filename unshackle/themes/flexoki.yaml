@@ -1,0 +1,21 @@
+# Flexoki (flexoki.com) dark, with the 400-level accents.
+author: unshackle
+description: Warm ink-on-paper tones.
+
+bg: "#100f0f"
+text: "#cecdc3"
+text2: "#878580"
+black: "#282726"
+bright_black: "#403e3c"
+red: "#d14d41"
+green: "#879a39"
+yellow: "#d0a215"
+blue: "#4385be"
+pink: "#ce5d97"
+cyan: "#3aa99f"
+gray: "#6f6e69"
+bright_gray: "#b7b5ac"
+dark_gray: "#343331"
+
+styles:
+  progress.data.speed: dark_orange

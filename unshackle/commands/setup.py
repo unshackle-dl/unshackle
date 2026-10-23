@@ -136,6 +136,7 @@ DATA_DIRS = {
     for key in ("cookies", "wvds", "prds", "cache", "logs", "exports", "dcsl", "temp")
 }
 DATA_DIRS["services"] = Config._Directories.services[0].name
+DATA_DIRS["themes"] = "themes"
 
 say = partial(console.print, soft_wrap=True)
 

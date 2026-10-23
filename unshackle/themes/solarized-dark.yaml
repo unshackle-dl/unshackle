@@ -1,0 +1,21 @@
+# Solarized dark (ethanschoonover.com/solarized); magenta stands in for pink.
+author: unshackle
+description: Teal-black background with precise accents.
+
+bg: "#002b36"
+text: "#839496"
+text2: "#586e75"
+black: "#073642"
+bright_black: "#586e75"
+red: "#dc322f"
+green: "#859900"
+yellow: "#b58900"
+blue: "#268bd2"
+pink: "#d33682"
+cyan: "#2aa198"
+gray: "#657b83"
+bright_gray: "#93a1a1"
+dark_gray: "#073642"
+
+styles:
+  progress.data.speed: dark_orange

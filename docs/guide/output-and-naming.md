@@ -431,6 +431,7 @@ directories:
 | `exports` | Export JSONs. |
 | `services`, `vaults`, `fonts`, `commands` | Search paths for services, key-vault backends, bundled fonts, and CLI commands. |
 | `wvds`, `prds`, `dcsl` | Widevine devices, PlayReady devices, and DCSL data. |
+| `themes` | Your [theme files](themes.md). |
 
 Paths can hold a `~` for expansion. unshackle protects the names `app_dirs`, `core_dir`, `namespace_dir`, `user_configs`, and `data`, so you cannot change them.
 

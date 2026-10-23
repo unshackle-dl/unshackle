@@ -25,6 +25,7 @@ directories:
 | `wvds` | path | `<data>/WVDs` | Yes | Widevine device files (`.wvd`). |
 | `prds` | path | `<data>/PRDs` | Yes | PlayReady device files (`.prd`). |
 | `dcsl` | path | `<data>/DCSL` | Yes | DCSL data. |
+| `themes` | path | `<data>/themes/custom` | Yes | Your [theme files](../../guide/themes.md) (`<name>.yaml`). |
 | `commands` | path | `unshackle/commands` | Yes | CLI command modules. |
 | `services` | list \| path | `[unshackle/services]` | Yes | Service search paths and/or remote repo specs (see below). |
 | `vaults` | path | `unshackle/vaults` | Yes | Vault backend modules. |

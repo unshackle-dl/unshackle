@@ -159,6 +159,7 @@ The directories unshackle uses:
 | `wvds` | Widevine devices (`.wvd` files) | Yes |
 | `prds` | PlayReady devices (`.prd` files) | Yes |
 | `dcsl` | DCSL data | Yes |
+| `themes` | Your [theme files](../guide/themes.md) | Yes |
 | `services` | Search paths for service code (see below) | Yes |
 | `commands` | CLI command modules | Yes |
 | `vaults` | Vault modules | Yes |

@@ -4,17 +4,29 @@ import logging
 import math
 import shutil
 import sys
+import time
 import unicodedata
+from contextlib import contextmanager
 from datetime import datetime
 from functools import lru_cache
 from types import ModuleType
-from typing import IO, Any, Callable, Iterable, List, Literal, Mapping, Optional, TextIO, Union
+from typing import IO, Any, Callable, Iterable, Iterator, List, Literal, Mapping, Optional, TextIO, Union
 
 import rich.cells
 from rich import box
 from rich._log_render import FormatTimeCallable, LogRender
+from rich.cells import cell_len
 from rich.color import Color, blend_rgb
-from rich.console import Console, ConsoleOptions, ConsoleRenderable, HighlighterType, RenderableType, RenderResult
+from rich.console import (
+    Console,
+    ConsoleOptions,
+    ConsoleRenderable,
+    Group,
+    HighlighterType,
+    RenderableType,
+    RenderResult,
+)
+from rich.control import Control
 from rich.emoji import EmojiVariant
 from rich.highlighter import Highlighter, ReprHighlighter
 from rich.live import Live
@@ -23,6 +35,8 @@ from rich.measure import Measurement
 from rich.padding import Padding, PaddingDimensions
 from rich.panel import Panel
 from rich.progress import BarColumn, Task
+from rich.rule import Rule
+from rich.segment import ControlType, Segment, SegmentLines, Segments
 from rich.status import Status
 from rich.style import Style, StyleType
 from rich.table import Table
@@ -30,7 +44,7 @@ from rich.text import Text, TextType
 from rich.theme import Theme
 
 from unshackle.core.config import config
-from unshackle.core.themes import DEFAULT_THEME, PALETTES, apply_help_theme, resolve_palette
+from unshackle.core.themes import apply_help_theme, build_console_theme, load_active_theme
 
 
 class ComfyLogRenderer(LogRender):
@@ -311,7 +325,8 @@ class ComfyConsole(Console):
         # We copy the list because stop() will modify console._live_stack.
         active_lives = list(self._live_stack)
 
-        for live in active_lives:
+        # newest first: Rich's stop() pops the top of the stack
+        for live in reversed(active_lives):
             live.stop()
 
         try:
@@ -323,70 +338,377 @@ class ComfyConsole(Console):
                 stream=stream,
             )
         finally:
-            for live in reversed(active_lives):
+            for live in active_lives:
                 live.start()
 
 
-primary_scheme = resolve_palette(config.theme)
-if primary_scheme is None:
-    logging.getLogger("console").warning(
-        "Unknown theme %r, falling back to %s (available: %s)",
-        config.theme,
-        DEFAULT_THEME,
-        ", ".join(PALETTES),
-    )
-    primary_scheme = dict(PALETTES[DEFAULT_THEME])
+active_theme, (primary_scheme, theme_styles, theme_gradients) = load_active_theme(config.theme)
 apply_help_theme(primary_scheme)
-primary_scheme["none"] = primary_scheme["text"]
-primary_scheme["grey23"] = primary_scheme["black"]
-primary_scheme["magenta"] = primary_scheme["pink"]
-primary_scheme["bright_red"] = primary_scheme["red"]
-primary_scheme["bright_green"] = primary_scheme["green"]
-primary_scheme["bright_yellow"] = primary_scheme["yellow"]
-primary_scheme["bright_blue"] = primary_scheme["blue"]
-primary_scheme["bright_magenta"] = primary_scheme["pink"]
-primary_scheme["bright_cyan"] = primary_scheme["cyan"]
-if config.set_terminal_bg:
-    primary_scheme["none"] += f" on {primary_scheme['bg']}"
 
-custom_colors = {"ascii.art": primary_scheme["pink"]}
-if config.set_terminal_bg:
-    custom_colors["ascii.art"] += f" on {primary_scheme['bg']}"
+
+@contextmanager
+def use_gradients(gradients: dict[str, Any]) -> Iterator[None]:
+    """Draw with another theme's gradients for the duration, as `env theme NAME` does."""
+    global theme_gradients
+    saved, theme_gradients = theme_gradients, gradients
+    try:
+        yield
+    finally:
+        theme_gradients = saved
+
+
+@lru_cache(maxsize=32)
+def gradient_lut(stops: tuple[str, ...], size: int = 64, cyclic: bool = False) -> list[Style]:
+    """Blend colour stops into *size* evenly spaced styles. *cyclic* blends the last stop back into the first."""
+    colours = [Color.parse(stop).get_truecolor() for stop in stops]
+    if cyclic:
+        colours.append(colours[0])
+    if len(colours) == 1:
+        return [Style(color=Color.from_triplet(colours[0]))]
+    lut = []
+    for i in range(size):
+        t = i / (size - 1) * (len(colours) - 1)
+        n = min(int(t), len(colours) - 2)
+        lut.append(Style(color=Color.from_triplet(blend_rgb(colours[n], colours[n + 1], t - n))))
+    return lut
+
+
+class Gradient:
+    """Draw *renderable*, then recolour the cells drawn in *style*'s colour along the theme's *surface* gradient.
+
+    With *frame_only*, only the box-drawing characters on the outer edge change, so a panel's title and the lines inside
+    keep their colours, even a tree guide drawn in the border's colour. Each recoloured cell carries its place along the
+    gradient in its style's meta, so `slide_gradients` can animate the drawn lines.
+    """
+
+    def __init__(
+        self,
+        renderable: RenderableType,
+        surface: str,
+        style: StyleType,
+        frame_only: bool = False,
+        direction: Optional[str] = None,
+    ) -> None:
+        self.renderable = renderable
+        self.surface = surface
+        self.style = style
+        self.frame_only = frame_only
+        self.direction = direction
+
+    def __rich_console__(self, console: Console, options: ConsoleOptions) -> RenderResult:
+        stops = theme_gradients.get(self.surface)
+        if not stops:
+            yield self.renderable
+            return
+        colour = console.get_style(self.style).color
+        lines = console.render_lines(self.renderable, options, pad=False, new_lines=True)
+
+        def candidate(segment: Segment) -> bool:
+            return not segment.control and segment.style is not None and segment.style.color == colour
+
+        def characters(line: list[Segment]) -> Iterator[tuple[int, Segment, str]]:
+            x = 0
+            for segment in line:
+                for character in segment.text if candidate(segment) else [segment.text]:
+                    yield x, segment, character
+                    x += cell_len(character)
+
+        marks = [
+            (x, y, character)
+            for y, line in enumerate(lines)
+            for x, segment, character in characters(line)
+            if candidate(segment) and character.strip()
+        ]
+        cells = {(x, y) for x, y, _ in marks}
+        if self.frame_only:
+            boxes = [(x, y) for x, y, character in marks if "─" <= character <= "╿"]
+            ends = (min(y for _, y in boxes), max(y for _, y in boxes)) if boxes else ()
+            left: dict[int, int] = {}
+            right: dict[int, int] = {}
+            for x, y in boxes:
+                left[y], right[y] = min(left.get(y, x), x), max(right.get(y, x), x)
+            cells = {(x, y) for x, y in boxes if y in ends or x in (left[y], right[y])}
+        if not cells:
+            yield from (segment for line in lines for segment in line)
+            return
+        x0, y0 = min(x for x, _ in cells), min(y for _, y in cells)
+        direction = self.direction or theme_gradients.get("direction", "horizontal")
+
+        def distance(x: int, y: int) -> int:
+            return {"horizontal": x - x0, "vertical": y - y0}.get(direction, x - x0 + 2 * (y - y0))
+
+        span = max(distance(x, y) for x, y in cells) or 1
+        lut = gradient_lut(stops)
+
+        def recoloured() -> Iterator[Segment]:
+            for y, line in enumerate(lines):
+                for x, segment, character in characters(line):
+                    if candidate(segment) and (x, y) in cells:
+                        t = distance(x, y) / span
+                        tint = lut[round(t * (len(lut) - 1))] + Style(meta={"gradient": (self.surface, t)})
+                        yield Segment(character, (segment.style or Style.null()) + tint)
+                    elif candidate(segment):
+                        yield Segment(character, segment.style)
+                    else:
+                        yield segment
+
+        yield from Segment.simplify(recoloured())
+
+    def __rich_measure__(self, console: Console, options: ConsoleOptions) -> Measurement:
+        return Measurement.get(console, options, self.renderable)
+
+
+def slide_gradients(lines: list[list[Segment]], offset: float) -> list[list[Segment]]:
+    """Slide the gradient colours that `Gradient` drew into *lines* along by *offset* gradient lengths, looping the last
+    stop back into the first, so a sequence of offsets animates them. Other cells keep their colours."""
+    return [[_slid(segment, offset) for segment in line] for line in lines]
+
+
+def _slid(segment: Segment, offset: float) -> Segment:
+    mark = _gradient_mark(segment.style) if segment.style else None
+    stops = theme_gradients.get(mark[0]) if mark else None
+    if not mark or not stops or segment.style is None:
+        return segment
+    lut = gradient_lut(stops, cyclic=True)
+    return Segment(segment.text, segment.style + lut[round((mark[1] - offset) % 1 * (len(lut) - 1))])
+
+
+@lru_cache(maxsize=4096)
+def _gradient_mark(style: Style) -> Optional[tuple[str, float]]:
+    """The surface and the place along it of a cell that `Gradient` coloured, or None."""
+    return style.meta.get("gradient") if style._meta else None
+
+
+class _Drawn:
+    """A renderable that draws *target* with Rich's own, unpatched *render* method."""
+
+    def __init__(self, render: Callable[..., RenderResult], target: Any) -> None:
+        self.render = render
+        self.target = target
+
+    def __rich_console__(self, console: Console, options: ConsoleOptions) -> RenderResult:
+        return self.render(self.target, console, options)
+
+
+def _paint_with(
+    render: Callable[..., RenderResult], surface: str, style_attribute: str, direction: Optional[str] = None
+) -> Callable[..., RenderResult]:
+    """Wrap a Rich class's render method so the theme's *surface* gradient colours its lines."""
+
+    def __rich_console__(self: Any, console: Console, options: ConsoleOptions) -> RenderResult:
+        if not theme_gradients.get(surface):
+            return render(self, console, options)
+        gradient = Gradient(_Drawn(render, self), surface, getattr(self, style_attribute), True, direction)
+        return gradient.__rich_console__(console, options)
+
+    return __rich_console__
+
+
+Rule.__rich_console__ = _paint_with(Rule.__rich_console__, "rule", "style", "horizontal")  # type: ignore[method-assign]
+Panel.__rich_console__ = _paint_with(Panel.__rich_console__, "panel", "border_style")  # type: ignore[method-assign]
+
+_SYNC_BEGIN = Segments([Segment("\x1b[?2026h", None, [(ControlType.BELL,)])])
+_SYNC_END = Segments([Segment("\x1b[?2026l", None, [(ControlType.BELL,)])])
 
 
 class SyncLive(Live):
-    """Live that wraps each repaint in DEC 2026 begin/end-sync so the terminal draws it as one atomic frame."""
+    """Live that wraps each repaint, and each print while it runs, in DEC 2026 begin/end-sync, so the terminal draws
+    the frame as one."""
 
-    def refresh(self) -> None:
-        if not self.console.is_terminal:
-            super().refresh()
-            return
-        self.console.file.write("\x1b[?2026h")
-        try:
-            super().refresh()
-        finally:
-            self.console.file.write("\x1b[?2026l")
-            self.console.file.flush()
+    def process_renderables(self, renderables: list[ConsoleRenderable]) -> list[ConsoleRenderable]:
+        return self.synced(super().process_renderables(renderables))
+
+    def synced(self, renderables: list[ConsoleRenderable]) -> list[ConsoleRenderable]:
+        if not self.console.is_interactive or self.console.legacy_windows:
+            return renderables
+        return [_SYNC_BEGIN, *renderables, _SYNC_END]
+
+
+class PinnedLive(SyncLive):
+    """A root live area that holds the screen for a whole command: *header* at the top, the newest output under it,
+    and the nested live areas (spinners, progress bars) at the bottom.
+
+    It keeps what is printed while it runs, and sends the oldest lines to the scrollback above the live area once the
+    screen is full, so they scroll off the top. The header goes to the scrollback first, so the scrollback ends up as a
+    plain run would leave it. On screen, the gradients in the header and the kept lines move.
+    """
+
+    LOOP_SECONDS = 4.0
+
+    def __init__(self, header: RenderableType, live_console: Console) -> None:
+        super().__init__(console=live_console, transient=True, refresh_per_second=20)
+        self.header = header
+        self.header_lines: tuple[int, list[list[Segment]]] = (-1, [])
+        self.kept: list[list[Segment]] = []
+        self.room = live_console.size.height
+        self.header_sent = False
+        self.started_at = time.monotonic()
+
+    @staticmethod
+    def wanted(live_console: Console) -> bool:
+        """Whether the terminal can show the moving header: interactive, with colour, and wide enough."""
+        colour = live_console.color_system is not None and not live_console.no_color
+        return live_console.is_interactive and colour and fits_terminal(live_console)
+
+    @property
+    def renderable(self) -> RenderableType:
+        return _PinnedScreen(self)
+
+    def process_renderables(self, renderables: list[ConsoleRenderable]) -> list[ConsoleRenderable]:
+        if not self.console.is_interactive:
+            return super().process_renderables(renderables)
+        with self._lock:
+            printed = [renderable for renderable in renderables if not isinstance(renderable, Control)]
+            capture = [_Capture(self, printed)] if printed else []
+            return self.synced([self._live_render.position_cursor(), *capture, self._live_render])
+
+    def head(self, options: ConsoleOptions) -> list[list[Segment]]:
+        """The header's lines, drawn once for each width."""
+        width, lines = self.header_lines
+        if width != options.max_width:
+            lines = self.console.render_lines(self.header, options, pad=False)
+            self.header_lines = (options.max_width, lines)
+        return lines
+
+    def overflow(self) -> list[list[Segment]]:
+        """Take off the oldest kept lines that no longer fit on the screen. Call it with the lock held."""
+        count = max(0, len(self.kept) - self.room)
+        out = self.kept[:count]
+        del self.kept[:count]
+        return out
+
+    def still(self, lines: list[list[Segment]]) -> list[RenderableType]:
+        """*lines* for the scrollback, after the header if it has not gone there yet."""
+        out: list[RenderableType] = [] if self.header_sent else [self.header]
+        self.header_sent = True
+        return [*out, SegmentLines(lines, new_lines=True)]
+
+    def close(self) -> None:
+        """Stop the live area, then print what is still kept."""
+        self.stop()
+        with self._lock:
+            kept, self.kept = self.kept, []
+            for renderable in self.still(kept):
+                self.console.print(renderable, crop=False)
+
+
+class _Capture:
+    """The output of one print while PinnedLive runs. Rendered with the print's own options, it keeps the lines in
+    PinnedLive and yields only the oldest kept lines that no longer fit, which land above the live area."""
+
+    def __init__(self, live: PinnedLive, renderables: list[ConsoleRenderable]) -> None:
+        self.live = live
+        self.renderables = renderables
+
+    def __rich_console__(self, console: Console, options: ConsoleOptions) -> RenderResult:
+        lines = [
+            line for renderable in self.renderables for line in console.render_lines(renderable, options, pad=False)
+        ]
+        with self.live._lock:
+            self.live.kept.extend(lines)
+            flushed = self.live.overflow()
+            if flushed:
+                yield from self.live.still(flushed)
+
+
+class _PinnedScreen:
+    def __init__(self, live: PinnedLive) -> None:
+        self.live = live
+
+    def __rich_console__(self, console: Console, options: ConsoleOptions) -> RenderResult:
+        offset = (time.monotonic() - self.live.started_at) / self.live.LOOP_SECONDS
+        head = self.live.head(options)
+        nested = [live.get_renderable() for live in console._live_stack[1:]]
+        foot = console.render_lines(Group(*nested), options, pad=False) if nested else []
+        room = self.live.room = max(0, console.size.height - len(head) - len(foot))
+        body = self.live.kept[-room:] if room else []
+        for line in slide_gradients([*head, *body], offset) + foot:
+            yield from Segment.adjust_line_length(line, options.max_width, pad=False)
+            yield Segment.line()
+
+
+PULSE_PERIOD = 40.0
+PULSE_SPEED = 15.0  # cells a second
+
+
+def fits_terminal(live_console: Console) -> bool:
+    """Whether the terminal is at least as wide as *live_console*. A live area that wraps leaves old frames behind,
+    because Rich moves the cursor up by the lines it drew, not by the rows the terminal used."""
+    return shutil.get_terminal_size((live_console.width, 0)).columns >= live_console.width
+
+
+def bar_gradients(palette: Mapping[str, str]) -> tuple[bool, Optional[list[Style]], list[Style]]:
+    """The progress bar colours of the gradients in use: whether they scroll, the fill (None without a `bar`
+    gradient) and the pulse, which without a `pulse` gradient blends *palette*'s dark_gray into its pink."""
+    scroll = theme_gradients.get("motion") == "scroll"
+    bar = theme_gradients.get("bar")
+    pulse = gradient_lut(theme_gradients.get("pulse") or (palette["dark_gray"], palette["pink"]))
+    return scroll, gradient_lut(bar, cyclic=scroll) if bar else None, pulse
 
 
 class GradientPulseBarColumn(BarColumn):
-    LUT_SIZE = 32
-
-    def __init__(self, *args: Any, pulse_period: float = 40.0, pulse_speed: float = 15.0, **kwargs: Any) -> None:
+    def __init__(
+        self, *args: Any, pulse_period: float = PULSE_PERIOD, pulse_speed: float = PULSE_SPEED, **kwargs: Any
+    ) -> None:
         super().__init__(*args, **kwargs)
         self.pulse_period = pulse_period
         self.pulse_speed = pulse_speed
-        lo = Color.parse(primary_scheme["dark_gray"]).triplet
-        hi = Color.parse(primary_scheme["pink"]).triplet
-        assert lo and hi
-        self._lut = [
-            Style(color=Color.from_triplet(blend_rgb(lo, hi, i / (self.LUT_SIZE - 1)))) for i in range(self.LUT_SIZE)
-        ]
+        self.scroll, self._fill_lut, self._lut = bar_gradients(primary_scheme)
 
     def render(self, task: Task) -> RenderableType:  # type: ignore[override]
         if task.started and task.total is not None:
-            return super().render(task)
+            if self._fill_lut is None or task.completed >= task.total:
+                return super().render(task)
+            fraction = min(1.0, max(0.0, task.completed / task.total)) if task.total else 1.0
+            offset = task.get_time() * self.pulse_speed if self.scroll else None
+            return _GradientFill(self._fill_lut, fraction, offset, self.bar_width, self.style)
         return _GradientPulse(self._lut, task.get_time() * self.pulse_speed, self.pulse_period, self.bar_width)
+
+
+def gradient_fill(
+    lut: list[Style],
+    fraction: float,
+    width: int,
+    offset: Optional[float],
+    back: Optional[StyleType],
+    ascii: bool = False,
+) -> Text:
+    """Draw a progress bar *fraction* full, with the gradient fixed along the bar or, given an *offset*, slid along it."""
+    full, half = divmod(int(width * 2 * fraction), 2)
+    bar = Text()
+    for i in range(full + half):
+        t = i / max(1, width - 1) if offset is None else (i - offset) / width % 1
+        character = ("-" if ascii else "━") if i < full else (" " if ascii else "╸")
+        bar.append(character, lut[round(t * (len(lut) - 1))])
+    remaining = width - full - half
+    if remaining and back is not None:
+        if not half and full:
+            bar.append(" " if ascii else "╺", back)
+            remaining -= 1
+        bar.append(("-" if ascii else "━") * remaining, back)
+    return bar
+
+
+class _GradientFill:
+    def __init__(
+        self, lut: list[Style], fraction: float, offset: Optional[float], width: Optional[int], back: StyleType
+    ) -> None:
+        self.lut = lut
+        self.fraction = fraction
+        self.offset = offset
+        self.width = width
+        self.back = back
+
+    def __rich_console__(self, console: Console, options: ConsoleOptions) -> RenderResult:
+        width = min(self.width or options.max_width, options.max_width)
+        # as ProgressBar: without colour the empty part would look full
+        back = self.back if not console.no_color and console.color_system is not None else None
+        yield gradient_fill(
+            self.lut, self.fraction, width, self.offset, back, options.legacy_windows or options.ascii_only
+        )
+
+    def __rich_measure__(self, console: Console, options: ConsoleOptions) -> Measurement:
+        return Measurement(self.width, self.width) if self.width is not None else Measurement(4, options.max_width)
 
 
 class _GradientPulse:
@@ -433,26 +755,7 @@ console = ComfyConsole(
     log_time=False,
     log_path=False,
     width=80,
-    theme=Theme(
-        {
-            "bar.back": primary_scheme["dark_gray"],
-            "bar.complete": primary_scheme["pink"],
-            "bar.finished": primary_scheme["green"],
-            "bar.pulse": primary_scheme["pink"],
-            "black": primary_scheme["black"],
-            "inspect.async_def": f"italic {primary_scheme['cyan']}",
-            "progress.data.speed": "dark_orange",
-            "repr.number": f"bold not italic {primary_scheme['cyan']}",
-            "repr.number_complex": f"bold not italic {primary_scheme['cyan']}",
-            "rule.line": primary_scheme["dark_gray"],
-            "rule.text": primary_scheme["pink"],
-            "tree.line": primary_scheme["dark_gray"],
-            "status.spinner": primary_scheme["pink"],
-            "progress.spinner": primary_scheme["pink"],
-            **primary_scheme,
-            **custom_colors,
-        }
-    ),
+    theme=build_console_theme(primary_scheme, theme_styles, config.set_terminal_bg),
     log_renderer=ComfyLogRenderer(show_time=False, show_path=False),
 )
 
@@ -524,7 +827,9 @@ __all__ = (
     "ComfyLogRenderer",
     "ComfyRichHandler",
     "ComfyConsole",
+    "Gradient",
     "GradientPulseBarColumn",
+    "PinnedLive",
     "SyncLive",
     "console",
     "listing_panel",
@@ -534,4 +839,5 @@ __all__ = (
     "set_notice_handler",
     "set_prompt_handler",
     "show_notice",
+    "use_gradients",
 )

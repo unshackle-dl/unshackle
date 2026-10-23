@@ -1,0 +1,21 @@
+# Dracula (draculatheme.com); purple stands in for blue, the comment grey for the dim greys.
+author: unshackle
+description: Dark purple-grey with vivid pink and green.
+
+bg: "#282a36"
+text: "#f8f8f2"
+text2: "#b8bfd8"
+black: "#21222c"
+bright_black: "#6272a4"
+red: "#ff5555"
+green: "#50fa7b"
+yellow: "#f1fa8c"
+blue: "#bd93f9"
+pink: "#ff79c6"
+cyan: "#8be9fd"
+gray: "#6272a4"
+bright_gray: "#e9e9f4"
+dark_gray: "#44475a"
+
+styles:
+  progress.data.speed: dark_orange

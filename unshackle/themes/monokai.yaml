@@ -1,0 +1,21 @@
+# Monokai, classic; purple stands in for pink, and 66d9ef doubles as blue.
+author: unshackle
+description: High-contrast greens and pinks on charcoal.
+
+bg: "#272822"
+text: "#f8f8f2"
+text2: "#cfcfc2"
+black: "#2e2e2e"
+bright_black: "#75715e"
+red: "#f92672"
+green: "#a6e22e"
+yellow: "#e6db74"
+blue: "#66d9ef"
+pink: "#ae81ff"
+cyan: "#a1efe4"
+gray: "#a59f85"
+bright_gray: "#cfcfc2"
+dark_gray: "#3e3d32"
+
+styles:
+  progress.data.speed: dark_orange

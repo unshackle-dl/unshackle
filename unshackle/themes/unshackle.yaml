@@ -1,0 +1,22 @@
+# The default unshackle theme, based on Catppuccin Mocha.
+# Copy this file into your themes folder to start your own; see docs/guide/themes.md.
+author: unshackle
+description: Default theme, soft pastels on a dark blue-grey background.
+
+bg: "#1e1e2e" # used only when set_terminal_bg is on
+text: "#cdd6f4"
+text2: "#a2a9c1"
+black: "#45475a"
+bright_black: "#585b70"
+red: "#f38ba8"
+green: "#a6e3a1"
+yellow: "#f9e2af"
+blue: "#89b4fa"
+pink: "#f5c2e7" # the brand accent; `accent` is another name for it
+cyan: "#94e2d5"
+gray: "#9399b2"
+bright_gray: "#bac2de"
+dark_gray: "#313244"
+
+styles:
+  progress.data.speed: "#fab387"

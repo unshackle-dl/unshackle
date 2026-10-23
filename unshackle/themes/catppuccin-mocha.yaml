@@ -1,0 +1,21 @@
+# Catppuccin Mocha (catppuccin.com), from the Gogh terminal themes.
+author: unshackle
+description: Soft pastels on a dark blue-grey background.
+
+bg: "#1e1e2e"
+text: "#cdd6f4"
+text2: "#a2a9c1"
+black: "#45475a"
+bright_black: "#585b70"
+red: "#f38ba8"
+green: "#a6e3a1"
+yellow: "#f9e2af"
+blue: "#89b4fa"
+pink: "#f5c2e7"
+cyan: "#94e2d5"
+gray: "#a6adc8"
+bright_gray: "#bac2de"
+dark_gray: "#363654"
+
+styles:
+  progress.data.speed: dark_orange

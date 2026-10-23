@@ -1,7 +1,9 @@
 import atexit
 import logging
+import signal
 import sys
 from datetime import datetime
+from typing import Optional
 
 import click
 import urllib3
@@ -12,19 +14,20 @@ from rich.text import Text
 from urllib3.exceptions import InsecureRequestWarning
 
 from unshackle.core import __code_hash__, __version__
+from unshackle.core import console as console_module
 from unshackle.core.commands import Commands
 from unshackle.core.config import config
-from unshackle.core.console import ComfyRichHandler, console
+from unshackle.core.console import ComfyRichHandler, Gradient, PinnedLive, console
 from unshackle.core.constants import context_settings
 from unshackle.core.update_checker import UpdateChecker
 from unshackle.core.utilities import close_debug_logger, init_debug_logger
 
 
-def print_banner() -> None:
-    """Print the ASCII banner with the version line."""
-    console.print(
-        Padding(
-            Group(
+def banner() -> Padding:
+    """The ASCII banner with the version line."""
+    return Padding(
+        Group(
+            Gradient(
                 Text(
                     r"▄• ▄▌ ▐ ▄ .▄▄ ·  ▄ .▄ ▄▄▄·  ▄▄· ▄ •▄ ▄▄▌  ▄▄▄ ." + "\n"
                     r"█▪██▌•█▌▐█▐█ ▀. ██▪▐█▐█ ▀█ ▐█ ▌▪█▌▄▌▪██•  ▀▄.▀·" + "\n"
@@ -32,15 +35,37 @@ def print_banner() -> None:
                     r"▐█▄█▌██▐█▌▐█▄▪▐███▌▐▀▐█ ▪▐▌▐███▌▐█.█▌▐█▌▐▌▐█▄▄▌" + "\n"
                     r" ▀▀▀ ▀▀ █▪ ▀▀▀▀ ▀▀▀ · ▀  ▀ ·▀▀▀ ·▀  ▀.▀▀▀  ▀▀▀ ",
                     style="ascii.art",
+                    justify="center",
                 ),
+                "banner",
+                "ascii.art",
+            ),
+            Text.from_markup(
                 f"v [repr.number]{__version__}[/]{f' ({__code_hash__})' if __code_hash__ else ''}"
                 f" - © 2025-{datetime.now().year} github.com/unshackle-dl/unshackle",
+                justify="center",
             ),
-            (1, 11, 1, 10),
-            expand=True,
         ),
-        justify="center",
+        (1, 11, 1, 10),
+        expand=True,
     )
+
+
+def print_banner() -> None:
+    """Print the ASCII banner with the version line."""
+    console.print(banner())
+
+
+def pins_banner(subcommand: Optional[str], args: list[str]) -> bool:
+    """Whether to pin the moving banner over this command's output: only dl, and not for its help.
+
+    It needs a theme with a banner gradient and a colour terminal. Help prints while Click parses the arguments,
+    and the pinned area would wrap it again at its own width; usage errors print after the pinned area closes.
+    """
+    if subcommand != "dl" or not console_module.theme_gradients.get("banner") or not PinnedLive.wanted(console):
+        return False
+    help_options: list[str] = context_settings["help_option_names"]  # type: ignore[assignment]
+    return not set(args) & set(help_options)
 
 
 class Main(Commands):
@@ -54,7 +79,8 @@ class Main(Commands):
 @click.command(cls=Main, invoke_without_command=True, context_settings=context_settings)
 @click.option("-v", "--version", is_flag=True, default=False, help="Print version information.")
 @click.option("-d", "--debug", is_flag=True, default=False, help="Enable DEBUG level logs and JSON debug logging.")
-def main(version: bool, debug: bool) -> None:
+@click.pass_context
+def main(ctx: click.Context, version: bool, debug: bool) -> None:
     """unshackle: Modular Movie, TV, and Music Archival Software."""
     debug_logging_enabled = debug or config.debug
 
@@ -89,7 +115,14 @@ def main(version: bool, debug: bool) -> None:
         if "--quiet" in serve_args or "-q" in serve_args:
             return
 
-    print_banner()
+    if pins_banner(ctx.invoked_subcommand, sys.argv[1:]):
+        pinned = PinnedLive(banner(), console)
+        pinned.start(refresh=True)
+        ctx.call_on_close(pinned.close)
+        if signal.getsignal(signal.SIGTERM) is signal.SIG_DFL:
+            signal.signal(signal.SIGTERM, lambda signum, frame: sys.exit(128 + signum))
+    else:
+        print_banner()
 
     if version:
         return

@@ -120,6 +120,7 @@ nav:
       - Key Vaults: guide/vaults.md
       - Output & Naming: guide/output-and-naming.md
       - Subtitles: guide/subtitles.md
+      - Themes: guide/themes.md
       - Troubleshooting: guide/troubleshooting.md
   - Configuration:
       - Overview: reference/configuration/index.md

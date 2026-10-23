@@ -391,10 +391,15 @@ Shows the location unshackle loaded the configuration file from. If it found no 
 ### `env theme`
 
 ```
-unshackle env theme
+unshackle env theme [NAME]
 ```
 
-Prints a sample of every available CLI theme. Each sample has colour swatches, help text with option rows, and a track listing with video, audio and subtitle entries. It also has log lines, a progress bar, and the gradient pulse bar. unshackle marks the active theme and shows each theme's aliases. Set your choice with the [`theme`](../reference/configuration/misc.md#appearance) config key.
+Without `NAME`, lists every theme with its source (shipped or user), its colours and the active
+mark. A theme file that is not valid shows with the reason. The list also shows the folder of your
+theme files. With `NAME`, prints a sample of that theme: a rule with its name, the banner, colour
+swatches, help text with option rows, a track listing, log lines, a progress bar and a pulse bar.
+In a terminal at least 80 columns wide, the sample moves for 5 seconds. Set your choice with
+the [`theme`](../reference/configuration/misc.md#appearance) config key. See [Themes](themes.md).
 
 ### `env clear`
 

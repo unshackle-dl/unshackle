@@ -3,10 +3,12 @@ import os
 import shutil
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import Any, Callable, Optional
 
 import click
+from rich.console import RenderableType
 from rich.padding import Padding
+from rich.text import Text
 from rich.tree import Tree
 
 from unshackle.core import binaries
@@ -243,108 +245,179 @@ def check() -> None:
 
 
 @env.command()
-def theme() -> None:
-    """Preview the available CLI themes."""
+@click.argument("name", required=False)
+def theme(name: Optional[str]) -> None:
+    """List the CLI themes, or preview the theme NAME in full."""
+
+    from unshackle.core.console import active_theme
+    from unshackle.core.themes import canonical_name, load_theme, shipped_themes, user_themes
+
+    if name:
+        try:
+            palette, styles, gradients = load_theme(name)
+        except ValueError as e:
+            raise click.ClickException(str(e)) from e
+        preview_theme(canonical_name(name), palette, styles, gradients)
+        return
+
+    shipped, user = shipped_themes(), user_themes()
+    mark = "  (active)" if active_theme == canonical_name(config.theme) else "  (active, fallback)"
+    table = listing_table("Themes", show_lines=True)
+    table.add_column("Theme", style="cyan", no_wrap=True)
+    table.add_column("Source", style="text2", no_wrap=True)
+    table.add_column("Colours", overflow="fold")
+    for theme_name in sorted({*shipped, *user}):
+        source = "shipped" if theme_name not in user else "user, replaces shipped" if theme_name in shipped else "user"
+        label = Text(theme_name)
+        try:
+            palette, *_ = load_theme(theme_name)
+        except ValueError as e:
+            table.add_row(label, source, Text(f"not valid: {e}", style="red"))
+            continue
+        if theme_name == active_theme:
+            label.append(mark, style="green")
+        table.add_row(label, source, swatch(palette))
+    print_wide(table)
+    hint = Text.assemble(
+        ("Theme files folder: ", "text"),
+        (str(config.directories.themes), "text2"),
+        ("\nPreview one theme with ", "text"),
+        ("unshackle env theme NAME", "cyan"),
+    )
+    print_wide(hint, (0, 3, 1, 3))
+
+
+def swatch(palette: dict[str, str]) -> Text:
+    """A row of colour blocks, one for each main role of a theme."""
+
+    blocks = Text()
+    for role in ("red", "green", "yellow", "blue", "pink", "cyan", "text", "gray"):
+        blocks.append("██ ", style=palette[role])
+    return blocks
+
+
+def play_preview(frame: Callable[[Optional[float]], RenderableType], seconds: float) -> None:
+    """Play *frame* on a terminal for *seconds*, then leave its still frame. *frame* takes the time in seconds, or None."""
+    import time
+
+    from unshackle.core.console import SyncLive, fits_terminal
+
+    if not console.is_interactive or not fits_terminal(console):
+        console.print(frame(None))
+        return
+    with SyncLive(frame(0.0), console=console, auto_refresh=False) as live:
+        start = time.monotonic()
+        while (elapsed := time.monotonic() - start) < seconds:
+            live.update(frame(elapsed), refresh=True)
+            time.sleep(1 / 30)
+        live.update(frame(None), refresh=True)
+
+
+def preview_theme(name: str, palette: dict[str, str], styles: dict[str, str], gradients: dict[str, Any]) -> None:
+    """Print a sample of each kind of CLI output in one theme."""
     import math
 
-    from rich import box
-    from rich.color import Color, blend_rgb
     from rich.console import Group
-    from rich.panel import Panel
+    from rich.progress_bar import ProgressBar
     from rich.rule import Rule
-    from rich.style import Style
-    from rich.text import Text
+    from rich.segment import SegmentLines
+    from rich.table import Table
 
-    from unshackle.core.themes import ALIASES, DEFAULT_THEME, PALETTES, resolve_palette
+    from unshackle.core.__main__ import banner
+    from unshackle.core.console import (
+        PULSE_PERIOD,
+        PULSE_SPEED,
+        _GradientFill,
+        _GradientPulse,
+        bar_gradients,
+        listing_panel,
+        slide_gradients,
+        use_gradients,
+    )
+    from unshackle.core.themes import build_console_theme, build_help_config
 
-    active = resolve_palette(config.theme) or PALETTES[DEFAULT_THEME]
-    for name, palette in PALETTES.items():
-        text, text2, gray, guide = palette["text"], palette["text2"], palette["gray"], palette["bright_black"]
+    text, text2, gray, guide = palette["text"], palette["text2"], palette["gray"], palette["bright_black"]
+    help_config = build_help_config(palette)
 
-        header = Text(name, style=palette["pink"])
-        if palette == active:
-            header.append("  (active)", style=palette["green"])
-        aliases = sorted(alias for alias, target in ALIASES.items() if target == name)
-        if aliases:
-            header.append(f"  aliases: {', '.join(aliases)}", style=f"dim {gray}")
+    docstring = Text()
+    docstring.append("Service docstrings render like this, ", style=text)
+    docstring.append("with secondary detail lines like this.", style=text2)
 
-        swatch = Text()
-        for role in ("red", "green", "yellow", "blue", "pink", "cyan", "text", "gray"):
-            swatch.append("██ ", style=palette[role])
+    # the help screen's own styles
+    separator = Text("─" * 60, style=help_config.style_options_table_border_style or "")
+    options: list[Text] = []
+    rows = (
+        ("-q, ", "--quality ", "TEXT            ", "Video quality to download", "  [default: best]", "default"),
+        ("-r, ", "--range   ", "[SDR|HDR10|DV]  ", "Video color range", "  [env: RANGE]", "envvar"),
+    )
+    for short, long_opt, metavar, help_text, extra, extra_kind in rows:
+        row = Text()
+        row.append(short, style=help_config.style_switch)
+        row.append(long_opt, style=help_config.style_option)
+        row.append(metavar, style=help_config.style_metavar)
+        row.append(f"  {help_text}", style=help_config.style_option_help)
+        row.append(extra, style=getattr(help_config, f"style_option_{extra_kind}"))
+        options.extend((row, separator))
 
-        docstring = Text()
-        docstring.append("Service docstrings render like this, ", style=text)
-        docstring.append("with secondary detail lines like this.", style=text2)
+    listing = Tree(Text("1 season, S1(1)", style=text), guide_style=guide)
+    episode = listing.add(Text.assemble(("1. ", palette["blue"]), ("Pilot", text)), guide_style=guide)
+    track_rows = (
+        ("VID", "H.264 | 1920x1080 @ 4523 kb/s"),
+        ("AUD", "AAC 2.0 | en @ 192 kb/s"),
+        ("SUB", "WebVTT | en (SDH)"),
+    )
+    for kind, desc in track_rows:
+        episode.add(Text.assemble((kind, palette["pink"]), (" | ", guide), (desc, text)), guide_style=guide)
+    tracks = listing_panel(listing, "Available Tracks")
 
-        separator = Text("─" * 60, style=palette["dark_gray"])
-        options: list[Text] = []
-        rows = (
-            ("-q, ", "--quality ", "TEXT            ", "Video quality to download", "  [default: best]", f"dim {gray}"),
-            (
-                "-r, ",
-                "--range   ",
-                "[SDR|HDR10|DV]  ",
-                "Video color range",
-                "  [env: RANGE]",
-                f"dim {palette['yellow']}",
-            ),
+    logs = []
+    log_rows = (
+        ("INFO", "Downloading 3 tracks"),
+        ("WARNING", "Subtitle cues overlapped, fixed 2"),
+        ("ERROR", "License request denied (403)"),
+    )
+    for level, message in log_rows:
+        line = Text()
+        line.append("18:00:01 ", style=gray)
+        line.append(f"{level:<8} ", style=f"logging.level.{level.lower()}")
+        line.append(message, style=text if level != "ERROR" else palette["red"])
+        logs.append(line)
+
+    seconds = 5.0
+
+    def bars(t: Optional[float]) -> RenderableType:
+        """The bars *t* seconds into the sample. The download finishes at *seconds*, or at None."""
+        now = seconds if t is None else t
+        fill: RenderableType = (
+            _GradientFill(fill_lut, now / seconds, now * PULSE_SPEED if scroll else None, 39, "bar.back")
+            if fill_lut and now < seconds
+            else ProgressBar(total=seconds, completed=now, width=39)
         )
-        for short, long_opt, metavar, help_text, extra, extra_style in rows:
-            row = Text()
-            row.append(short, style=palette["green"])
-            row.append(long_opt, style=text)
-            row.append(metavar, style=palette["yellow"])
-            row.append(f"  {help_text}", style=text)
-            row.append(extra, style=extra_style)
-            options.extend((row, separator))
+        # style names, so a theme's `styles:` overrides show
+        remaining = f"0:00:{math.ceil(seconds - now):02d}"
+        speed = Text.assemble(" • ", (remaining, "progress.remaining"), " • ", ("12.4 MB/s", "progress.data.speed"))
+        grid = Table.grid()
+        grid.add_row(Text("Pilot  ", style=text), fill, speed)
+        grid.add_row(Text("Muxing ", style=text), _GradientPulse(pulse_lut, 8 + now * PULSE_SPEED, PULSE_PERIOD, 39))
+        return Padding(grid, (1, 2, 1, 2))
 
-        listing = Tree(Text("1 season, S1(1)", style=text), guide_style=guide)
-        episode = listing.add(Text.assemble(("1. ", palette["blue"]), ("Pilot", text)), guide_style=guide)
-        track_rows = (
-            ("VID", "H.264 | 1920x1080 @ 4523 kb/s"),
-            ("AUD", "AAC 2.0 | en @ 192 kb/s"),
-            ("SUB", "WebVTT | en (SDH)"),
-        )
-        for kind, desc in track_rows:
-            episode.add(Text.assemble((kind, palette["pink"]), (" | ", guide), (desc, text)), guide_style=guide)
-        tracks = Panel(listing, title="Available Tracks", box=box.SQUARE, border_style=guide, expand=False)
+    block = Group(swatch(palette), Text(), docstring, *options, tracks, *logs)
+    with console.use_theme(build_console_theme(palette, styles, config.set_terminal_bg)), use_gradients(gradients):
+        scroll, fill_lut, pulse_lut = bar_gradients(palette)
+        header = Padding(Rule(f"[rule.text]{name}"), (0, 2))
+        still = console.render_lines(Group(header, banner(), Padding(block, (0, 2))), pad=False)
 
-        logs = []
-        log_rows = (
-            ("INFO", palette["green"], "Downloading 3 tracks"),
-            ("WARNING", palette["yellow"], "Subtitle cues overlapped, fixed 2"),
-            ("ERROR", palette["red"], "License request denied (403)"),
-        )
-        for level, level_style, message in log_rows:
-            line = Text()
-            line.append("18:00:01 ", style=gray)
-            line.append(f"{level:<8} ", style=level_style)
-            line.append(message, style=text if level != "ERROR" else palette["red"])
-            logs.append(line)
+        def sample(t: Optional[float]) -> RenderableType:
+            """The whole sample *t* seconds in. The gradient colours loop twice while the download runs."""
+            lines = still if t is None else slide_gradients(still, 2 * t / seconds)
+            return Group(SegmentLines(lines, new_lines=True), bars(t))
 
-        progress = Text()
-        progress.append("Pilot  ", style=text)
-        progress.append("━" * 24, style=palette["green"])
-        progress.append("╸", style=palette["green"])
-        progress.append("━" * 14, style=guide)
-        progress.append("  62%", style=palette["yellow"])
-        progress.append("  12.4 MB/s", style=palette["cyan"])
-        progress.append("  0:00:42", style=text2)
-
-        # one frozen frame of GradientPulseBarColumn's dark_gray-to-pink cosine sweep
-        lo = Color.parse(palette["dark_gray"]).triplet
-        hi = Color.parse(palette["pink"]).triplet
-        assert lo and hi
-        lut = [Style(color=Color.from_triplet(blend_rgb(lo, hi, i / 31))) for i in range(32)]
-        pulse = Text("Muxing ", style=text)
-        for i in range(39):
-            fade = (math.cos((i - 8) * math.tau / 40.0) + 1) / 2
-            pulse.append("━", style=lut[int(fade * 31)])
-
-        block = Group(header, swatch, Text(), docstring, *options, tracks, *logs, Text(), progress, pulse)
-        print_wide(block, (1, 2, 1, 2))
-        print_wide(Rule(style=guide, characters="─"), (0, 0))
-    console.print()
+        # a live area taller than the terminal is cropped, so only the bars move
+        if len(console.render_lines(sample(None), pad=False)) < console.size.height:
+            play_preview(sample, seconds)
+        else:
+            console.print(SegmentLines(still, new_lines=True))
+            play_preview(bars, seconds)
 
 
 @env.command()

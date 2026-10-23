@@ -1,0 +1,21 @@
+# Gruvbox (github.com/morhetz/gruvbox) dark, bright variants.
+author: unshackle
+description: Retro warm browns and yellows.
+
+bg: "#282828"
+text: "#ebdbb2"
+text2: "#bdae93"
+black: "#504945"
+bright_black: "#665c54"
+red: "#fb4934"
+green: "#b8bb26"
+yellow: "#fabd2f"
+blue: "#83a598"
+pink: "#d3869b"
+cyan: "#8ec07c"
+gray: "#928374"
+bright_gray: "#d5c4a1"
+dark_gray: "#3c3836"
+
+styles:
+  progress.data.speed: dark_orange

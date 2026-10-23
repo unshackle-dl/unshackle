@@ -1,0 +1,21 @@
+# Tokyo Night (github.com/enkia/tokyo-night-vscode-theme), night variant.
+author: unshackle
+description: Deep navy with neon blues and purples.
+
+bg: "#1a1b26"
+text: "#c0caf5"
+text2: "#a9b1d6"
+black: "#15161e"
+bright_black: "#414868"
+red: "#f7768e"
+green: "#9ece6a"
+yellow: "#e0af68"
+blue: "#7aa2f7"
+pink: "#bb9af7"
+cyan: "#7dcfff"
+gray: "#565f89"
+bright_gray: "#a9b1d6"
+dark_gray: "#292e42"
+
+styles:
+  progress.data.speed: dark_orange

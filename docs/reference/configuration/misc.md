@@ -145,7 +145,7 @@ calls.
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `theme` | str | `catppuccin-mocha` | Named colour theme for all CLI output: banner, logs, progress bars, and help screens. One of `catppuccin-mocha` (aliases `default`, `catppuccin`, `mocha`), `dracula`, `nord`, `gruvbox`, `one-dark` (alias `onedark`), `tokyo-night` (alias `tokyonight`), `monokai`, `flexoki`, `solarized-dark` (alias `solarized`). Case-insensitive; underscores work in place of hyphens. Unknown names fall back to the default with a warning. Preview them all with `unshackle env theme`. |
+| `theme` | str | `unshackle` | Colour theme for all CLI output: banner, logs, progress bars, and help screens. The shipped themes are `unshackle`, `rainbow`, `nord`, `catppuccin-mocha`, `dracula`, `flexoki`, `gruvbox`, `monokai`, `one-dark`, `solarized-dark` and `tokyo-night`. Some have other names, for example `default` for `unshackle`; see [Themes](../../guide/themes.md#when-unshackle-does-not-use-a-theme). Any other name is a theme file in [`directories.themes`](directories.md). Case-insensitive; underscores work in place of hyphens. An unknown name or a theme file that is not valid falls back to `unshackle` with a warning. List the themes with `unshackle env theme`. See [Themes](../../guide/themes.md). |
 
 ---
 

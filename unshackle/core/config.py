@@ -102,6 +102,7 @@ class Config:
         wvds = data / "WVDs"
         prds = data / "PRDs"
         dcsl = data / "DCSL"
+        themes = data / "themes" / "custom"
 
     class _Filenames:
         # default filenames, do not modify here, set via config
