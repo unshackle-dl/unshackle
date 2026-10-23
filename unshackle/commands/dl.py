@@ -4508,13 +4508,14 @@ class dl:
         neither happens. For a fragmented MP4, ``verify.kid_windows`` reads from the ciphertext
         which fragments each KID encrypts, and FFmpeg decodes windows inside each KID's
         fragments, so only a KID that fails is flagged. A complete map does not judge a KID it does
-        not hold. A KID that is not in an incomplete map, and every KID of any other file, gets a
-        start and end check of the whole file, and a failure there flags each of those KIDs. On
-        failure the pair is flagged in the local vaults, the ciphertext is restored, and the
-        licence runs again; ``Vaults`` tells the vault that served it. Every vault skips a
-        flagged pair, so each pass burns at most one vault; when the vaults run out the CDM
-        answers, and a CDM key is not checked. A CDM that returns the flagged key clears the
-        flag and stores the content key again, because then the decode check was wrong.
+        not hold, so a clear file judges and copies no KID. A KID that is not in an incomplete map,
+        and every KID of any other file, gets a start and end check of the whole file, and a
+        failure there flags each of those KIDs. On failure the pair is flagged in the local
+        vaults, the ciphertext is restored, and the licence runs again; ``Vaults`` tells the
+        vault that served it. Every vault skips a flagged pair, so each pass burns at most one
+        vault; when the vaults run out the CDM answers, and a CDM key is not checked. A CDM
+        that returns the flagged key clears the flag and stores the content key again, because
+        then the decode check was wrong.
 
         With ``decrypt=False`` the downloader already decrypted the segments in place, so a
         failure can only flag and raise; the next run skips the flagged pair.
@@ -4578,7 +4579,7 @@ class dl:
         def judged_kids() -> dict[UUID, Vault]:
             """The vault KIDs this file can judge. A map whose KIDs all have keys skips the KIDs it lacks."""
             kids = vault_kids()
-            if windows and all(kid in keys for kid in windows):
+            if kid_map is not None and all(kid in keys for kid in windows):
                 return {kid: vault for kid, vault in kids.items() if kid in windows}
             return kids
 

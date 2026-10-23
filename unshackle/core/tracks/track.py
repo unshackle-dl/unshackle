@@ -30,7 +30,7 @@ from unshackle.core.config import config
 from unshackle.core.constants import DOWNLOAD_ALL_DRM, DOWNLOAD_CANCELLED, DOWNLOAD_LICENCE_ONLY, DownloadCancelled
 from unshackle.core.downloaders import requests
 from unshackle.core.drm import DRM_T, ClearKeyCENC, PlayReady, Widevine
-from unshackle.core.drm.verify import decrypt_track
+from unshackle.core.drm.verify import decrypt_track, senc_protects_samples
 from unshackle.core.events import events
 from unshackle.core.session import MAX_BACKOFF, RnetSession, utf8_text
 from unshackle.core.temp import restore_segments, stash_segments
@@ -266,20 +266,6 @@ def has_encrypted_sample_entry(path: Path) -> bool:
                 return True
             i = moov.find(tok, i + 1)
     return False
-
-
-def senc_protects_samples(buf: bytes, body: int, end: int) -> bool:
-    """True if a senc/PIFF-uuid box describes protected samples.
-
-    An empty senc (sample_count 0) sits on a genuinely clear fragment, so treating it as
-    a skipped one would raise on a healthy file. Field order follows
-    read_per_sample_iv_size.
-    """
-    flags = int.from_bytes(buf[body + 1 : body + 4], "big")
-    pos = body + 4 + (20 if flags & 0x1 else 0)  # PIFF override: AlgorithmID(3)+IV_size(1)+KID(16)
-    if pos + 4 > end:
-        return False
-    return int.from_bytes(buf[pos : pos + 4], "big") > 0
 
 
 def moof_still_encrypted(moof: bytes) -> bool:

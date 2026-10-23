@@ -9,7 +9,9 @@ DECRYPT_HOOK: Optional[Callable[..., None]] = None
 CONTAINERS = {b"moov", b"trak", b"mdia", b"minf", b"stbl", b"mvex", b"moof", b"traf", b"sinf", b"schi"}
 PIFF_TENC = bytes.fromhex("8974dbce7be74c5184f97148f9882554")
 PIFF_TFXD = bytes.fromhex("6d1d9b0542d544e680e2141daff757b2")
+PIFF_SENC = bytes.fromhex("a2394f525a9b4f14a2446c427c648df4")
 TENC = {b"tenc", b"uuid" + PIFF_TENC}
+SENC = {b"senc", b"uuid" + PIFF_SENC}
 # the fixed sample entry fields before the child boxes: visual; sound v0 (and ISO v1), QuickTime sound v1 and v2
 ENTRY_FIELDS = {b"encv": (78,), b"enca": (28, 44, 64)}
 
@@ -123,9 +125,26 @@ def entry_kid(data: bytes, kind: bytes, entry: int, end: int) -> Optional[UUID]:
     return None
 
 
-def sample_entries(data: bytes, body: int, end: int) -> list[Optional[UUID]]:
-    """Parse an ``stsd`` box. Returns the default KID of each sample entry, None for a clear one."""
-    return [entry_kid(data, kind, entry, entry_end) for kind, entry, entry_end in children(data, body + 8, end)]
+def sample_entries(data: bytes, body: int, end: int) -> tuple[list[Optional[UUID]], bool]:
+    """Parse an ``stsd`` box. Returns the default KID of each sample entry (None for a clear one), and
+    whether any entry is encrypted."""
+    found = list(children(data, body + 8, end))
+    kids = [entry_kid(data, kind, entry, entry_end) for kind, entry, entry_end in found]
+    return kids, any(kind[:3] in (b"enc", b"drm") for kind, _, _ in found)
+
+
+def senc_protects_samples(buf: bytes, body: int, end: int) -> bool:
+    """True if a senc/PIFF-uuid box describes protected samples.
+
+    An empty senc (sample_count 0) sits on a genuinely clear fragment, so treating it as
+    a skipped one would raise on a healthy file. Field order follows
+    read_per_sample_iv_size.
+    """
+    flags = int.from_bytes(buf[body + 1 : body + 4], "big")
+    pos = body + 4 + (20 if flags & 0x1 else 0)  # PIFF override: AlgorithmID(3)+IV_size(1)+KID(16)
+    if pos + 4 > end:
+        return False
+    return int.from_bytes(buf[pos : pos + 4], "big") > 0
 
 
 def read_top_boxes(f: BinaryIO) -> Iterator[tuple[bytes, Optional[bytes]]]:
@@ -164,8 +183,10 @@ def kid_windows(path: Path) -> Optional[KidMap]:
     the result holds up to three (start, end) windows from ``pick_windows``, relative to
     the first fragment of the track. A fragment ends where the next fragment of the track
     starts. The last fragment ends after its sample durations, or after 3 seconds when
-    they are not known. Returns None when the file has no encrypted fragment this reader
-    can place in time, so the caller must use another check.
+    they are not known. Returns an empty map for a clear MP4: no track with fragments (or,
+    without fragments, no track) has an encrypted sample entry or a senc. Returns None when
+    the file has no encrypted fragment this reader can place in time, so the caller must
+    use another check; that includes an encrypted sample entry whose fragments are all clear.
     """
     timescales: dict[int, int] = {}
     handlers: dict[int, bytes] = {}
@@ -174,6 +195,7 @@ def kid_windows(path: Path) -> Optional[KidMap]:
     moov_groups: dict[int, list[Seig]] = {}
     fragments: list[Fragment] = []
     clock: dict[int, int] = {}
+    protected: set[int] = set()
     try:
         with path.open("rb") as f:
             for kind, box in read_top_boxes(f):
@@ -197,13 +219,15 @@ def kid_windows(path: Path) -> Optional[KidMap]:
                                 # the mdia handler comes first; a QuickTime minf can hold a data handler after it
                                 handlers.setdefault(track, box[body + 8 : body + 12])
                             elif kind_ == b"stsd":
-                                entries[track] = sample_entries(box, body, box_end)
+                                entries[track], encrypted = sample_entries(box, body, box_end)
+                                if encrypted:
+                                    protected.add(track)
                             elif kind_ == b"sgpd":
                                 groups = seig_entries(box, body)
                                 if groups is not None:
                                     moov_groups[track] = groups
                 elif kind == b"moof" and box:
-                    fragments.extend(read_fragment(box, entries, defaults, moov_groups, clock))
+                    fragments.extend(read_fragment(box, entries, defaults, moov_groups, clock, protected))
     except (OSError, struct.error, IndexError, ValueError, MemoryError, OverflowError, RecursionError):
         return None
 
@@ -230,7 +254,7 @@ def kid_windows(path: Path) -> Optional[KidMap]:
             for kid in kids:
                 spans.setdefault(kid, []).append((start, end))
     if not spans:
-        return None
+        return KidMap({}, False) if entries and protected.isdisjoint(tracks or entries) else None
     return KidMap({kid: pick_windows(fragment_spans) for kid, fragment_spans in spans.items()}, video)
 
 
@@ -284,11 +308,13 @@ def read_fragment(
     defaults: dict[int, tuple[int, int]],
     moov_groups: dict[int, list[Seig]],
     clock: dict[int, int],
+    protected: set[int],
 ) -> Iterator[Fragment]:
     """Yield (track, decode time, duration, KIDs that encrypt samples) for each track fragment in a moof.
 
     A fragment without a tfdt or tfxd starts where the track's previous fragment ended, by
-    the running sum of sample durations in ``clock``.
+    the running sum of sample durations in ``clock``. A track with a senc that protects
+    samples goes into ``protected``.
     """
     for kind, traf, traf_end in children(moof):
         if kind != b"traf":
@@ -297,7 +323,7 @@ def read_fragment(
         groups: list[Seig] = []
         runs: Optional[list[tuple[int, int]]] = None
         truns: list[int] = []
-        for kind_, body, _ in children(moof, traf, traf_end):
+        for kind_, body, box_end in children(moof, traf, traf_end):
             if kind_ == b"tfhd":
                 flags = int.from_bytes(moof[body + 1 : body + 4], "big")
                 track = struct.unpack_from(">I", moof, body + 4)[0]
@@ -317,6 +343,8 @@ def read_fragment(
                 groups = seig_entries(moof, body) or groups
             elif kind_ == b"sbgp":
                 runs = sbgp_runs(moof, body) or runs
+            elif kind_ in SENC and senc_protects_samples(moof, body, box_end):
+                protected.add(track)
         if track not in entries:
             continue
         default_entry, trex_duration = defaults.get(track, (1, 0))

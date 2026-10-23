@@ -639,6 +639,32 @@ def test_only_checked_kids_are_copied_to_other_vaults(tmp_path: Path, monkeypatc
     assert local.get_key(KID, "SVC") is None
 
 
+def test_a_clear_file_judges_and_copies_no_vault_key(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    local = SQLite("local", tmp_path / "local.db")
+    remote = Remote("remote", tmp_path / "remote.db")
+    remote.add_key("SVC", KID, BAD)
+    vaults = Vaults("SVC")
+    vaults.vaults = [local, remote]
+    cmd = make_cmd(monkeypatch, vaults)
+    drm = FakeDRM({KID: vaults.get_key(KID)[0]})
+    checks: list = []
+
+    def decodes(path: Path, start: object = None, seconds: float = 3, video: object = None) -> bool:
+        checks.append(start)
+        return True
+
+    monkeypatch.setattr(dl_module.verify, "kid_windows", lambda path: dl_module.verify.KidMap({}, False))
+    monkeypatch.setattr(dl_module, "ffmpeg_decodes", decodes)
+    path = tmp_path / "audio.mp4"
+    path.write_bytes(b"clear")
+
+    cmd.decrypt_verified(drm, path, None, KID)
+    cmd.wait_vault_writes()
+    assert checks == []
+    assert local.get_key(KID, "SVC") is None
+    assert not local.is_bad_key(KID, BAD)
+
+
 def test_flagged_pair_warns_once_per_vault(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
     local = SQLite("local", tmp_path / "local.db")
     poisoned = Remote("poisoned", tmp_path / "poisoned.db")
