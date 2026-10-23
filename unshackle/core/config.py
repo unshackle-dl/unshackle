@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import re
 import warnings
 from pathlib import Path
@@ -411,6 +412,9 @@ def duplicate_key_message(name: str, pairs: list[tuple[int, int]], line: int = 0
     return f"{name}: duplicate key on {where}. Unshackle uses the later one."
 
 
+_warned: set[str] = set()
+
+
 def load_yaml(path: Path) -> Any:
     """yaml.safe_load a file, and warn with the lines of each duplicate key, which PyYAML takes silently."""
     loader = yaml.SafeLoader(path.read_text(encoding="utf8"))
@@ -418,8 +422,9 @@ def load_yaml(path: Path) -> Any:
         node = loader.get_single_node()
         if node is None:
             return None
-        if pairs := duplicate_key_lines(node):
-            warnings.warn(duplicate_key_message(str(path), pairs), stacklevel=2)
+        if (pairs := duplicate_key_lines(node)) and (message := duplicate_key_message(str(path), pairs)) not in _warned:
+            _warned.add(message)
+            logging.getLogger("config").warning(message)
         return loader.construct_document(node)
     finally:
         loader.dispose()
