@@ -63,6 +63,17 @@ def test_raise_errors_raises_the_load_failure() -> None:
         load_proxy_providers(OTHERS, raise_errors=True)
 
 
+def test_bare_query_order_follows_config_key_order_with_controld_last(monkeypatch: pytest.MonkeyPatch) -> None:
+    from unshackle.core.proxies import ControlD
+
+    order = {"controld": {"token": "t"}, "surfsharkvpn": CREDENTIALS, "nordvpn": CREDENTIALS, "basic": {"us": "x"}}
+    monkeypatch.setattr(config, "proxy_providers", order)
+    monkeypatch.setattr(ControlD, "get_locations", lambda self: [])
+    loaded = load_proxy_providers(("expressvpn", "protonvpn", "hola"), quiet=True)
+    names = [getattr(p, "name", p.__class__.__name__) for p in loaded]
+    assert names == ["Basic", "SurfsharkVPN", "NordVPN", "ControlD"]
+
+
 def test_rest_path_loads_windscribe_but_not_gluetun(monkeypatch: pytest.MonkeyPatch) -> None:
     from unshackle.core.proxies import Gluetun, WindscribeVPN
     from unshackle.core.proxies.resolve import initialize_proxy_providers

@@ -54,7 +54,7 @@ def find_provider(proxy_providers: List[Any], name: str, hint: str = "") -> Any:
 
 def load_proxy_providers(exclude: tuple[str, ...] = (), raise_errors: bool = False, quiet: bool = False) -> List[Any]:
     """
-    Build the proxy providers set in config, in the order a bare query tries them.
+    Build the proxy providers set in config: Basic first, then config key order, Control D last.
 
     Each proxy provider loads on its own. One that fails is logged and kept as Unavailable, so a bare
     query skips it and a query that names it reports why. *raise_errors* raises the failure instead.
@@ -75,8 +75,15 @@ def load_proxy_providers(exclude: tuple[str, ...] = (), raise_errors: bool = Fal
     )
 
     settings = config.proxy_providers
-    # Control D is last: a bare region reaches it only when nothing else answers, since it changes the account.
-    classes = (Basic, ExpressVPN, NordVPN, ProtonVPN, SurfsharkVPN, WindscribeVPN, Gluetun, Hola, ControlD)
+    rank = {key: i for i, key in enumerate(settings)}
+    classes = [
+        Basic,
+        *sorted(
+            (ExpressVPN, NordVPN, ProtonVPN, SurfsharkVPN, WindscribeVPN, Gluetun, Hola),
+            key=lambda c: rank.get(c.__name__.lower(), len(rank)),
+        ),
+        ControlD,
+    ]
 
     def build(cls: type) -> Any:
         key = cls.__name__.lower()

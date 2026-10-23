@@ -125,14 +125,18 @@ forwarder for it. See [Control D](#control-d).
 ### Provider load order
 
 When you do a download without `--no-proxy`, unshackle instantiates every configured
-proxy provider once, in this fixed order. It uses that same order for bare-query
-resolution:
+proxy provider once. It uses that same order for bare-query resolution:
 
-**Basic → ExpressVPN → NordVPN → Proton VPN → Surfshark → Windscribe → Gluetun → Hola → Control D**
+1. Basic is always first, so your own proxies win.
+2. The other proxy providers follow in the order of their keys under `proxy_providers` in
+   `unshackle.yaml`. Proxy providers that load without a config key, such as Hola, come
+   after the listed ones in this default order:
+   **ExpressVPN → NordVPN → Proton VPN → Surfshark → Windscribe → Gluetun → Hola**
+3. Control D is always last.
 
-So if you have both Basic and NordVPN configured and use `--proxy us`, a `us` entry in
-your Basic config wins, because unshackle tries Basic first. To skip ahead to a specific
-proxy provider, prefix the query (`--proxy nordvpn:us`).
+So if you list `windscribevpn` above `nordvpn` and use `--proxy us`, a `us` entry in your
+Basic config answers first, then Windscribe. To skip ahead to a specific proxy provider,
+prefix the query (`--proxy nordvpn:us`).
 
 If a proxy provider cannot load, for example because its server list cannot be fetched
 or its config is not valid, unshackle logs a warning and continues with the other proxy
@@ -1025,21 +1029,14 @@ The returned proxy is HTTPS on **port 443**.
 
 ## Developer notes
 
-!!! note "Two resolution paths (developers)"
-    unshackle has **two** proxy-resolution code paths that are intentionally not
-    identical:
-
-    - `unshackle/commands/dl.py` inlines its own logic and loads **all nine** providers,
-      including Windscribe and Gluetun.
-    - `unshackle/core/proxies/resolve.py::initialize_proxy_providers()` is the shared
-      resolver used by the REST API handlers and the remote-service client. It **omits**
-      Windscribe and Gluetun.
-
-    Both paths accept the same query grammar (a direct URI, a `provider:query`, a bare
-    country query tried against providers in order, or a `controld://` resolver), but the
-    set of available providers differs. Keep this in mind when you add a proxy provider:
-    an entry in `dl.py` does not make it available over the API, and the opposite is also
-    true.
+!!! note "One resolution path (developers)"
+    `dl`, `search`, the REST API handlers and the remote-service client all load proxy
+    providers through `load_proxy_providers()` in `unshackle/core/proxies/resolve.py`.
+    The REST API and the remote-service client call it through
+    `initialize_proxy_providers()`, which leaves out Gluetun because Gluetun starts a
+    local Docker container. All paths accept the same query grammar: a direct URI, a
+    `provider:query`, a bare query tried against providers in order, or a `controld://`
+    resolver.
 
     The remote-service client resolves `--proxy` with its own
     `resolve_remote_proxy_arg()`. It changes a `controld:` query to a `controld://`

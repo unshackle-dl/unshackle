@@ -25,7 +25,7 @@ from unshackle.core.constants import AnyTrack
 from unshackle.core.credential import Credential
 from unshackle.core.drm import DRM_T
 from unshackle.core.proxies.basic import Basic
-from unshackle.core.proxies.resolve import find_provider
+from unshackle.core.proxies.resolve import pick_proxy
 from unshackle.core.search_result import SearchResult
 from unshackle.core.session import (
     BACKOFF_FACTOR,
@@ -229,40 +229,16 @@ class Service(metaclass=ABCMeta):
                     self.log.info(
                         f"Found service-specific proxy mapping: {full_proxy_key} -> {sanitize_proxy_for_log(mapped_value)}"
                     )
-                    if proxy_provider_name:
-                        # Specific provider requested
-                        try:
-                            proxy_provider = find_provider(ctx.obj.proxy_providers, proxy_provider_name)
-                        except ValueError:
-                            proxy_provider = None
-                        if proxy_provider:
-                            mapped_proxy_uri = proxy_provider.get_proxy(mapped_value)
-                            if mapped_proxy_uri:
-                                proxy = mapped_proxy_uri
-                                self.log.info(
-                                    f"Using mapped proxy from {proxy_provider.__class__.__name__}: "
-                                    f"{sanitize_proxy_for_log(proxy, mask_host=isinstance(proxy_provider, Basic))}"
-                                )
-                            else:
-                                self.log.warning(
-                                    f"Failed to get proxy for mapped value '{sanitize_proxy_for_log(mapped_value)}', using default"
-                                )
-                        else:
-                            self.log.warning(f"Proxy provider '{proxy_provider_name}' not found, using default proxy")
-                    else:
-                        for proxy_provider in ctx.obj.proxy_providers:
-                            mapped_proxy_uri = proxy_provider.get_proxy(mapped_value)
-                            if mapped_proxy_uri:
-                                proxy = mapped_proxy_uri
-                                self.log.info(
-                                    f"Using mapped proxy from {proxy_provider.__class__.__name__}: "
-                                    f"{sanitize_proxy_for_log(proxy, mask_host=isinstance(proxy_provider, Basic))}"
-                                )
-                                break
-                        else:
-                            self.log.warning(
-                                f"No provider could resolve mapped value '{sanitize_proxy_for_log(mapped_value)}', using default"
-                            )
+                    try:
+                        proxy_provider, proxy = pick_proxy(ctx.obj.proxy_providers, mapped_value, proxy_provider_name)
+                        self.log.info(
+                            f"Using mapped proxy from {proxy_provider.__class__.__name__}: "
+                            f"{sanitize_proxy_for_log(proxy, mask_host=isinstance(proxy_provider, Basic))}"
+                        )
+                    except ValueError:
+                        self.log.warning(
+                            f"No provider could resolve mapped value '{sanitize_proxy_for_log(mapped_value)}', using default"
+                        )
 
             if not proxy:
                 # don't override the explicit proxy set by the user, even if they may be geoblocked
@@ -284,12 +260,10 @@ class Service(metaclass=ABCMeta):
                                 self.log.info(
                                     f"Service is Geoblocked in your region, getting a Proxy to {requested_proxy}"
                                 )
-                                for proxy_provider in ctx.obj.proxy_providers:
-                                    proxy = proxy_provider.get_proxy(requested_proxy)
-                                    if proxy:
-                                        self.log.info(f"Got Proxy from {proxy_provider.__class__.__name__}")
-                                        break
-                                if not proxy:
+                                try:
+                                    proxy_provider, proxy = pick_proxy(ctx.obj.proxy_providers, requested_proxy)
+                                    self.log.info(f"Got Proxy from {proxy_provider.__class__.__name__}")
+                                except ValueError:
                                     self.log.warning(
                                         f"No proxy available for {requested_proxy}. "
                                         f"Pass --proxy with a proxy in {requested_proxy}, or the request can fail."

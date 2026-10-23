@@ -61,8 +61,11 @@ headers:
 - **Type:** `dict` &nbsp;·&nbsp; **Default:** `{}`
 
 Proxy/VPN provider configuration. Each sub-key names a proxy provider, and unshackle passes its
-block straight to that provider's constructor. See [Proxies & VPN](../../guide/proxies-and-vpn.md)
-for the full proxy provider guide. Recognised proxy providers and their exit ports:
+block straight to that provider's constructor. A bare `--proxy` query tries Basic first, then
+the other proxy providers in the order of their sub-keys, and Control D last (see
+[Provider load order](../../guide/proxies-and-vpn.md#provider-load-order)). See
+[Proxies & VPN](../../guide/proxies-and-vpn.md) for the full proxy provider guide. Recognised proxy
+providers and their exit ports:
 
 | Provider | Config key | Credentials | Proxy scheme/port |
 |----------|-----------|-------------|-------------------|
