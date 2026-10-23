@@ -43,11 +43,12 @@ def test_client_marks_vault_keys_and_forgets_cdm_keys():
     assert svc.server_vault_keys == {}
 
 
-def test_report_bad_posts_only_the_pair():
+def test_server_vault_flag_posts_only_the_pair():
     svc = remote_service()
     posted: list = []
     svc.client = SimpleNamespace(post_optional=lambda ep, data: posted.append((ep, data)) or {})
-    svc.server_vault.report_bad(KID, "v")
+    assert svc.server_vault.report_now
+    svc.server_vault.flag_bad_key("SVC", KID, "v", "server_cdm")
     assert posted == [("/api/session/sess/keys/bad", {"kid": KID.hex, "key": "v"})]
 
 
@@ -77,16 +78,25 @@ def session(monkeypatch):
     return entry, vault
 
 
-async def test_server_flags_a_served_pair_with_its_own_vault_name(session):
+async def test_server_flags_a_served_pair_with_its_own_vault_name(session, monkeypatch):
     entry, vault = session
+    monkeypatch.setattr(handlers, "CACHED_PAIRS", {("SimpleNamespace", KID.hex, "v")})
     resp = await handlers.session_bad_key_handler({"kid": KID.hex, "key": "v"}, "sess")
     assert resp.status == 200
     assert vault.flagged == [("SVC", KID, "v", "sqlite")]
     assert KID.hex not in entry.served_keys
+    assert not handlers.CACHED_PAIRS
 
     with pytest.raises(APIError):
         await handlers.session_bad_key_handler({"kid": CDM_KID.hex, "key": "nope"}, "sess")
     assert len(vault.flagged) == 1
+
+
+async def test_server_does_not_flag_a_pair_its_cdm_licensed(session):
+    entry, vault = session
+    resp = await handlers.session_bad_key_handler({"kid": CDM_KID.hex, "key": "c"}, "sess")
+    assert json.loads(resp.body) == {"flagged": False}
+    assert vault.flagged == []
 
 
 class _WV:
@@ -218,3 +228,20 @@ def test_reconstruct_drm_keeps_the_default_kid_of_a_pssh_without_kids():
     (drm,) = reconstruct_drm([{"type": "widevine", "pssh": content_id_only.dumps(), "kids": [str(KID)]}])
 
     assert real_kids(drm) == [KID]
+
+
+def test_a_cdm_licence_unflags_a_pair_a_client_reported(monkeypatch, tmp_path):
+    """The CDM returned the reported pair, so the client's decode check was wrong."""
+    from unshackle.core.vaults import Vaults
+    from unshackle.vaults.SQLite import SQLite
+
+    local = SQLite("local", tmp_path / "local.db")
+    vaults = Vaults("SVC")
+    vaults.vaults = [local]
+    vaults.flag_bad_key(KID, "ab" * 16)
+    monkeypatch.setattr(handlers, "load_server_vaults", lambda service: vaults)
+    monkeypatch.setattr(handlers, "CACHED_PAIRS", set())
+
+    handlers.cache_to_vaults({KID.hex: "ab" * 16}, "SVC")
+    assert not local.is_bad_key(KID, "ab" * 16)
+    assert local.get_key(KID, "SVC") == "ab" * 16

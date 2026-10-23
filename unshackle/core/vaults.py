@@ -30,6 +30,7 @@ class Vaults:
         self.candidates: dict[Union[UUID, str], list[tuple[str, Vault]]] = {}
         self.warned: set[tuple[str, Union[UUID, str], str]] = set()
         self.unreachable: set[Vault] = set()
+        self.unreported: dict[tuple[Union[UUID, str], str], Vault] = {}
 
     def __iter__(self) -> Iterator[Vault]:
         return iter(self.vaults)
@@ -153,22 +154,42 @@ class Vaults:
         return key if found else None
 
     def flag_bad_key(self, kid: Union[UUID, str], key: str) -> None:
-        """Flag a KID:KEY that failed decryption, naming the Vault it came from.
-
-        Every local vault records it. A remote vault is told only when it served the pair,
-        so it stops serving it too, and a vault that never held it is not bothered. A vault
-        that cannot take the flag is skipped with a debug line: the local flag already
-        protects this run, and a vault without the route is not a fault.
-        """
+        """Flag a KID:KEY in every local vault. A failed decode is no proof, so the remote vault that
+        served it hears of it from ``report_replaced``, or at once when it sets ``report_now``."""
         self.flagged.add((kid, key))
         source = self.sources.pop(kid, None)
+        name = source[1].name if source else "unknown"
         for vault in self.live():
-            if not vault.local and (source is None or vault is not source[1]):
-                continue
-            try:
-                vault.flag_bad_key(self.service, kid, key, source[1].name if source else "unknown")
-            except Exception as e:
-                log.debug(f"Could not flag {key} as bad in Vault '{vault.name}': {e!r}")
+            if vault.local:
+                self.tell(vault, kid, key, name)
+        if source and not source[1].local:
+            if source[1].report_now:
+                self.tell(source[1], kid, key, name)
+            else:
+                self.unreported[kid, key] = source[1]
+
+    def report_replaced(self, content_keys: dict[Union[UUID, str], str]) -> None:
+        """Tell each remote vault about its flagged pair once ``content_keys`` holds another key for the KID."""
+        live = self.live()
+        for (kid, key), vault in list(self.unreported.items()):
+            if content_keys.get(kid) not in (None, key):
+                del self.unreported[kid, key]
+                if vault in live:
+                    self.tell(vault, kid, key, vault.name)
+
+    def tell(self, vault: Vault, kid: Union[UUID, str], key: str, source: str) -> None:
+        """Flag one pair in one vault; a failure is only a debug line."""
+        try:
+            vault.flag_bad_key(self.service, kid, key, source)
+        except Exception as e:
+            log.debug(f"Could not flag {key} as bad in Vault '{vault.name}': {e!r}")
+
+    def clear_licensed_flags(self, content_keys: dict[UUID, str]) -> list[UUID]:
+        """Unflag each pair a licence returned, since the decode check was wrong. Returns their KIDs."""
+        cleared = [kid for kid, key in content_keys.items() if self.is_flagged(kid, key)]
+        for kid in cleared:
+            self.unflag_bad_key(kid, content_keys[kid])
+        return cleared
 
     def unflag_bad_key(self, kid: Union[UUID, str], key: str) -> None:
         """Remove a flag from every Vault."""

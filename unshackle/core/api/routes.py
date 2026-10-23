@@ -2421,7 +2421,7 @@ async def session_bad_key(request: web.Request) -> web.Response:
                 description: Content key as hex
     responses:
       '200':
-        description: The pair is flagged
+        description: "flagged true when the pair is flagged; false when the CDM licensed it"
       '400':
         description: The remote session was not served that pair
       '404':

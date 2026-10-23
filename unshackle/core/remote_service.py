@@ -1045,8 +1045,10 @@ class ServerVault(Vault):
     ``decrypt_verified`` needs a Vault to hold in ``Vaults.sources`` so a server-supplied
     content key gets the same decode check as a local vault key. The client never learns
     which server vault answered and can neither read nor write it, so every method returns
-    nothing and a bad verdict goes to the server, which flags the row itself.
+    nothing. A bad verdict goes to the server at once, so its next licence skips the pair.
     """
+
+    report_now = True
 
     def __init__(self, service: "RemoteService"):
         super().__init__("server_cdm", no_push=True)
@@ -1067,8 +1069,8 @@ class ServerVault(Vault):
     def get_services(self) -> Iterator[str]:
         return iter(())
 
-    def report_bad(self, kid: UUID, key: str) -> None:
-        self.service.report_bad_key(kid, key)
+    def flag_bad_key(self, service: str, kid: Union[UUID, str], key: str, source: str) -> None:
+        self.service.report_bad_key(UUID(str(kid)), key)
 
 
 class RemoteService:

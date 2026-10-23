@@ -1218,7 +1218,7 @@ A slow answer arrives as a [slow response](#slow-responses).
 
 ### `POST /api/session/{session_id}/keys/bad`
 
-Report a content key from `vault_keys` that did not decrypt the track. The server flags the pair in its local vaults and reports it to the vault that served it, and the next licence for that KID reaches the CDM. The client never learns the server vault names.
+Report a content key from `vault_keys` that did not decrypt the track. The server flags the pair in its local vaults and reports it to the vault that served it, and the next licence for that KID reaches the CDM. When the CDM returns the same pair, the server removes the flag. The client never learns the server vault names.
 
 ```json
 { "kid": "<kid_hex>", "key": "<key_hex>" }
@@ -1226,7 +1226,7 @@ Report a content key from `vault_keys` that did not decrypt the track. The serve
 
 | Status | Error code | Meaning |
 | --- | --- | --- |
-| `200` | - | The pair is flagged. |
+| `200` | - | `{"flagged": true}`: the pair is flagged. `{"flagged": false}`: the CDM licensed the pair, so it is not flagged. |
 | `400` | `INVALID_INPUT` | This remote session was not served that pair. |
 | `404` | `SESSION_NOT_FOUND` | Unknown remote session. |
 

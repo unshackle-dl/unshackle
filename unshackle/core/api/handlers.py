@@ -4928,11 +4928,12 @@ CACHED_PAIRS: set[tuple[str, str, str]] = set()
 
 
 def cache_to_vaults(keys: Dict[str, str], service_name: str) -> None:
-    """Cache newly obtained keys to server vaults.
+    """Cache the content keys of a CDM licence to the server vaults.
 
     A PlayReady licence always runs, and a Widevine licence runs when one PSSH KID has no content
     key in a vault, so the same content keys come back on every request for a title. This process
-    does not send a pair again after every vault accepted it.
+    does not send a pair again after every vault accepted it. A pair a client reported as bad
+    leaves that set, and is unflagged when the CDM returns it.
     """
     from uuid import UUID
 
@@ -4945,6 +4946,8 @@ def cache_to_vaults(keys: Dict[str, str], service_name: str) -> None:
             return
 
         key_map = {UUID(hex=kid): key for kid, key in new.items()}
+        for kid in vaults.clear_licensed_flags(key_map):
+            log.info(f"Unflagged {kid.hex}:{key_map[kid]}, the CDM returned it")
         cached = vaults.add_keys(key_map)
         if cached == len([vault for vault in vaults.vaults if not vault.no_push]):
             CACHED_PAIRS.update((service_name, kid, key) for kid, key in new.items())
@@ -5617,7 +5620,8 @@ async def session_bad_key_handler(
 
     The server never sees a segment, so the client is the only side that can test a content key.
     Only a pair this remote session served can be flagged, which keeps a client from
-    poisoning the bad-key table for content keys it never received.
+    poisoning the bad-key table for content keys it never received. A pair the CDM licensed is
+    not flagged, because the CDM is the authority.
     """
     from uuid import UUID
 
@@ -5630,8 +5634,12 @@ async def session_bad_key_handler(
     if not key or served_key.lower() != key:
         log.warning(f"Session {sanitize_log(session_id[:12])} reported a bad content key it was never served: {kid}")
         raise APIError(APIErrorCode.INVALID_INPUT, "This session was not served that KID:KEY pair")
+    if source == "cdm":
+        log.warning(f"Session {sanitize_log(session_id[:12])} reported a CDM key as bad, not flagged: {kid}")
+        return web.json_response({"flagged": False})
 
-    vaults = load_server_vaults(session.service_instance.__class__.__name__)
+    service_name = session.service_instance.__class__.__name__
+    vaults = load_server_vaults(service_name)
 
     def flag() -> None:
         for vault in vaults.vaults:
@@ -5644,6 +5652,7 @@ async def session_bad_key_handler(
 
     await asyncio.to_thread(flag)
     session.served_keys.pop(kid, None)
+    CACHED_PAIRS.discard((service_name, kid, served_key))
     log.warning(
         f"Client proved {kid}:{served_key} from vault {sanitize_log(source)} wrong, flagged in the server vaults"
     )

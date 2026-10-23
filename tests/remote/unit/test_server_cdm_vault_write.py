@@ -42,6 +42,9 @@ class FakeVaults:
     def is_flagged(self, kid, key):
         return False
 
+    def clear_licensed_flags(self, content_keys):
+        return []
+
     def add_keys(self, kid_keys):
         self.added.update(kid_keys)
         self.pushes.append(dict(kid_keys))
@@ -227,3 +230,21 @@ def test_cdm_only_trusts_server_vault_keys():
 
     assert vaults.sources == {}
     assert dl.LICENSE_KEY_CACHE == {CACHED: "k_cached"}
+
+
+@pytest.mark.parametrize("system", ["widevine", "playready"])
+def test_no_cdm_and_no_server_cdm_names_the_missing_cdm(system):
+    """The server does not license this service for the API key, and the client has no CDM for it."""
+    import click
+
+    from unshackle.core.drm import PlayReady, Widevine
+
+    cmd = make_cmd(FakeVaults())
+    cmd._remote_service = SimpleNamespace(_server_cdm=False)
+    cmd.cdm = None
+    cmd.cdm_for = lambda system, quality=None: None
+    drm_class = PlayReady if system == "playready" else Widevine
+    drm = drm_class.__new__(drm_class)
+    drm.content_keys = {}
+    with pytest.raises(click.ClickException, match="No CDM configured for TEST"):
+        prepare(cmd, drm, lambda **kwargs: None, NEW)

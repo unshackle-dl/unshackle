@@ -131,6 +131,7 @@ def ffmpeg_decodes(path: Path, start: Optional[float] = None, seconds: float = 3
             return True
         if not keyframes and video is not False and any(m in err for m in FFMPEG_MISSING_REFERENCE):
             return decode(window, keyframes=True)
+        log_tool_run("FFmpeg decode check", ffmpeg, ff.returncode, window=window, stderr=ff.stderr[-2000:])
         return False
 
     tail = ["-sseof", f"-{FFMPEG_CHECK_TAIL}", "-t", str(FFMPEG_CHECK_TAIL)]

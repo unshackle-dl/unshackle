@@ -39,6 +39,9 @@ def fake_server_vaults(pushes: list, vault_list: list[FakeVault]) -> Any:
         def __len__(self) -> int:
             return len(vault_list)
 
+        def clear_licensed_flags(self, content_keys: dict) -> list:
+            return []
+
         def add_keys(self, key_map: dict) -> int:
             pushes.append(key_map)
             return sum(vault.ok for vault in vault_list)

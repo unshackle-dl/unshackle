@@ -51,6 +51,7 @@ def vault_session(timeout: float) -> Session:
 class Vault(metaclass=ABCMeta):
     # a vault on this machine; Vaults.get_key tries these first, before the network ones
     local: bool = False
+    report_now: bool = False
 
     def __init__(self, name: str, no_push: bool = False):
         self.name = name

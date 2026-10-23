@@ -4507,10 +4507,11 @@ class dl:
         then copied to the other vaults, once FFmpeg can decode the result. Without FFmpeg
         neither happens. For a fragmented MP4, ``verify.kid_windows`` reads from the ciphertext
         which fragments each KID encrypts, and FFmpeg decodes windows inside each KID's
-        fragments, so only a KID that fails is flagged. A KID that is not in the map, and every KID
-        of any other file, gets a start and end check of the whole file, and a failure there flags
-        each of those KIDs. On failure the pair is flagged in the local vaults and reported
-        to the vault that served it, the ciphertext is restored, and the licence runs again. Every vault skips a
+        fragments, so only a KID that fails is flagged. A complete map does not judge a KID it does
+        not hold. A KID that is not in an incomplete map, and every KID of any other file, gets a
+        start and end check of the whole file, and a failure there flags each of those KIDs. On
+        failure the pair is flagged in the local vaults, the ciphertext is restored, and the
+        licence runs again; ``Vaults`` tells the vault that served it. Every vault skips a
         flagged pair, so each pass burns at most one vault; when the vaults run out the CDM
         answers, and a CDM key is not checked. A CDM that returns the flagged key clears the
         flag and stores the content key again, because then the decode check was wrong.
@@ -4574,6 +4575,13 @@ class dl:
         def window_decodes(start: float, end: float) -> bool:
             return ffmpeg_decodes(path, start=start, seconds=end - start if end > start else 0.5, video=video)
 
+        def judged_kids() -> dict[UUID, Vault]:
+            """The vault KIDs this file can judge. A map whose KIDs all have keys skips the KIDs it lacks."""
+            kids = vault_kids()
+            if windows and all(kid in keys for kid in windows):
+                return {kid: vault for kid, vault in kids.items() if kid in windows}
+            return kids
+
         def failed_kids(kids: dict[UUID, Vault]) -> set[UUID]:
             """The vault KIDs whose content key did not decode.
 
@@ -4604,20 +4612,21 @@ class dl:
                 done += 1
                 if decrypt:
                     drm.decrypt(path)
-                kids = vault_kids()
+                kids = judged_kids()
                 stale = flagged_kids()
                 failed: set[UUID] = set()
                 if not stale:
-                    if not kids or not binaries.FFMPEG or not path.exists():
-                        return
-                    failed = failed_kids(kids)
+                    checked = bool(kids and binaries.FFMPEG and path.exists())
+                    failed = failed_kids(kids) if checked else set()
                     if not failed:
-                        self.flush_vault_writes(
-                            [
-                                partial(self.vaults.add_key, kid, keys[kid], excluding=vault)
-                                for kid, vault in kids.items()
-                            ]
-                        )
+                        if checked:
+                            self.flush_vault_writes(
+                                [
+                                    partial(self.vaults.add_key, kid, keys[kid], excluding=vault)
+                                    for kid, vault in kids.items()
+                                ]
+                            )
+                        self.vaults.report_replaced(keys)
                         return
                 bad = {kid: drop(kid) for kid in {*failed, *stale}}
                 for kid, key in bad.items():
@@ -4625,21 +4634,23 @@ class dl:
                         continue
                     self.log.warning(f"{key} from {kids[kid].name} was bad, trying other vaults")
                     self.vaults.flag_bad_key(kid, key)
-                    if report := getattr(kids[kid], "report_bad", None):
-                        report(kid, key)
                 if not backup.exists() or not licence:
                     raise ValueError("The content key from the vault did not decrypt the track; run again")
                 path.unlink()
                 os.link(backup, path)
                 relicense(set(bad))
                 for kid, key in bad.items():
-                    if keys.get(kid) != key:
+                    new = keys.get(kid)
+                    if new is None:
                         continue
                     source = self.vaults.sources.get(kid)
                     if source is None:
-                        self.vaults.unflag_bad_key(kid, key)
-                        self.flush_vault_writes([partial(self.vaults.add_key, kid, key)])
-                    elif kid in kids and source[1] is kids[kid]:
+                        if new == key:
+                            self.vaults.unflag_bad_key(kid, key)
+                            self.flush_vault_writes([partial(self.vaults.add_key, kid, key)])
+                        elif not self.vaults.held_locally(kid, new):
+                            self.flush_vault_writes([partial(self.vaults.add_key, kid, new)])
+                    elif new == key and kid in kids and source[1] is kids[kid]:
                         raise ValueError(f"{key} from {kids[kid].name} was bad and no other source has the key")
             raise ValueError("No vault or CDM produced a content key that decrypts the track")
         finally:
@@ -4728,9 +4739,7 @@ class dl:
         flag came from a decode check that was wrong, and a local vault refuses a flagged pair."""
         if not content_keys or not self.vaults:
             return
-        for kid, key in content_keys.items():
-            if self.vaults.is_flagged(kid, key):
-                self.vaults.unflag_bad_key(kid, key)
+        self.vaults.clear_licensed_flags(content_keys)
         successful_caches = self.vaults.add_keys(content_keys)
         kids, caches = self.vault_cache_tally or (set(), successful_caches)
         self.vault_cache_tally = (kids | content_keys.keys(), min(caches, successful_caches))
@@ -5034,34 +5043,22 @@ class dl:
                     drm.content_keys.update(local_drm.content_keys)
                 return
 
-        licence = partial(licence, drm_system="playready" if isinstance(drm, PlayReady) else "widevine")
+        drm_system = "playready" if isinstance(drm, PlayReady) else "widevine"
+        licence = partial(licence, drm_system=drm_system)
 
-        if not server_cdm:
-            if isinstance(drm, Widevine):
-                if not is_widevine_cdm(self.cdm):
-                    widevine_cdm = self.cdm_for("widevine", track_quality)
-                    if widevine_cdm and is_widevine_cdm(widevine_cdm):
-                        if track_quality:
-                            self.log.info(f"Switching to Widevine CDM for Widevine {track_quality}p content")
-                        else:
-                            self.log.info("Switching to Widevine CDM for Widevine content")
-                        self.cdm = widevine_cdm
-                        track_cdm = widevine_cdm
-                    else:
-                        raise ValueError(f"Title needs a Widevine CDM but {self.service} is configured with PlayReady.")
-
-            elif isinstance(drm, PlayReady):
-                if not is_playready_cdm(self.cdm):
-                    playready_cdm = self.cdm_for("playready", track_quality)
-                    if playready_cdm and is_playready_cdm(playready_cdm):
-                        if track_quality:
-                            self.log.info(f"Switching to PlayReady CDM for PlayReady {track_quality}p content")
-                        else:
-                            self.log.info("Switching to PlayReady CDM for PlayReady content")
-                        self.cdm = playready_cdm
-                        track_cdm = playready_cdm
-                    else:
-                        raise ValueError(f"Title needs a PlayReady CDM but {self.service} is configured with Widevine.")
+        if not server_cdm and isinstance(drm, (Widevine, PlayReady)):
+            matches = is_playready_cdm if drm_system == "playready" else is_widevine_cdm
+            if not matches(self.cdm):
+                name, other = ("PlayReady", "Widevine") if drm_system == "playready" else ("Widevine", "PlayReady")
+                system_cdm = self.cdm_for(drm_system, track_quality)
+                if system_cdm and matches(system_cdm):
+                    self.log.info(f"Switching to the {name} CDM")
+                    self.cdm = system_cdm
+                    track_cdm = system_cdm
+                elif self.cdm is None:
+                    raise click.ClickException(f"No CDM configured for {self.service} and no default CDM")
+                else:
+                    raise ValueError(f"Title needs a {name} CDM but {self.service} is configured with {other}.")
 
         if isinstance(drm, Widevine):
             if self.debug_logger:
