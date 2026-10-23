@@ -2222,8 +2222,11 @@ fingerprint. This block is for cross-service defaults only (for example <code>Ac
 <li><strong>Type:</strong> <code>dict</code> &nbsp;·&nbsp; <strong>Default:</strong> <code>{}</code></li>
 </ul>
 <p>Proxy/VPN provider configuration. Each sub-key names a proxy provider, and unshackle passes its
-block straight to that provider's constructor. See <a href="../../../guide/proxies-and-vpn/">Proxies &amp; VPN</a>
-for the full proxy provider guide. Recognised proxy providers and their exit ports:</p>
+block straight to that provider's constructor. A bare <code>--proxy</code> query tries Basic first, then
+the other proxy providers in the order of their sub-keys, and Control D last (see
+<a href="../../../guide/proxies-and-vpn/#provider-load-order">Provider load order</a>). See
+<a href="../../../guide/proxies-and-vpn/">Proxies &amp; VPN</a> for the full proxy provider guide. Recognised proxy
+providers and their exit ports:</p>
 <table>
 <thead>
 <tr>

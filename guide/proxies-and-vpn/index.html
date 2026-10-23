@@ -2873,12 +2873,18 @@ exact forms each proxy provider accepts.</p>
 forwarder for it. See <a href="#control-d">Control D</a>.</p>
 <h3 id="provider-load-order">Provider load order<a class="headerlink" href="#provider-load-order" title="Permanent link">&para;</a></h3>
 <p>When you do a download without <code>--no-proxy</code>, unshackle instantiates every configured
-proxy provider once, in this fixed order. It uses that same order for bare-query
-resolution:</p>
-<p><strong>Basic → ExpressVPN → NordVPN → Proton VPN → Surfshark → Windscribe → Gluetun → Hola → Control D</strong></p>
-<p>So if you have both Basic and NordVPN configured and use <code>--proxy us</code>, a <code>us</code> entry in
-your Basic config wins, because unshackle tries Basic first. To skip ahead to a specific
-proxy provider, prefix the query (<code>--proxy nordvpn:us</code>).</p>
+proxy provider once. It uses that same order for bare-query resolution:</p>
+<ol>
+<li>Basic is always first, so your own proxies win.</li>
+<li>The other proxy providers follow in the order of their keys under <code>proxy_providers</code> in
+   <code>unshackle.yaml</code>. Proxy providers that load without a config key, such as Hola, come
+   after the listed ones in this default order:
+   <strong>ExpressVPN → NordVPN → Proton VPN → Surfshark → Windscribe → Gluetun → Hola</strong></li>
+<li>Control D is always last.</li>
+</ol>
+<p>So if you list <code>windscribevpn</code> above <code>nordvpn</code> and use <code>--proxy us</code>, a <code>us</code> entry in your
+Basic config answers first, then Windscribe. To skip ahead to a specific proxy provider,
+prefix the query (<code>--proxy nordvpn:us</code>).</p>
 <p>If a proxy provider cannot load, for example because its server list cannot be fetched
 or its config is not valid, unshackle logs a warning and continues with the other proxy
 providers. A bare query skips the proxy provider that did not load. A query that names it,
@@ -3930,21 +3936,14 @@ developer note below.</p>
 </div>
 <h2 id="developer-notes">Developer notes<a class="headerlink" href="#developer-notes" title="Permanent link">&para;</a></h2>
 <div class="admonition note">
-<p class="admonition-title">Two resolution paths (developers)</p>
-<p>unshackle has <strong>two</strong> proxy-resolution code paths that are intentionally not
-identical:</p>
-<ul>
-<li><code>unshackle/commands/dl.py</code> inlines its own logic and loads <strong>all nine</strong> providers,
-  including Windscribe and Gluetun.</li>
-<li><code>unshackle/core/proxies/resolve.py::initialize_proxy_providers()</code> is the shared
-  resolver used by the REST API handlers and the remote-service client. It <strong>omits</strong>
-  Windscribe and Gluetun.</li>
-</ul>
-<p>Both paths accept the same query grammar (a direct URI, a <code>provider:query</code>, a bare
-country query tried against providers in order, or a <code>controld://</code> resolver), but the
-set of available providers differs. Keep this in mind when you add a proxy provider:
-an entry in <code>dl.py</code> does not make it available over the API, and the opposite is also
-true.</p>
+<p class="admonition-title">One resolution path (developers)</p>
+<p><code>dl</code>, <code>search</code>, the REST API handlers and the remote-service client all load proxy
+providers through <code>load_proxy_providers()</code> in <code>unshackle/core/proxies/resolve.py</code>.
+The REST API and the remote-service client call it through
+<code>initialize_proxy_providers()</code>, which leaves out Gluetun because Gluetun starts a
+local Docker container. All paths accept the same query grammar: a direct URI, a
+<code>provider:query</code>, a bare query tried against providers in order, or a <code>controld://</code>
+resolver.</p>
 <p>The remote-service client resolves <code>--proxy</code> with its own
 <code>resolve_remote_proxy_arg()</code>. It changes a <code>controld:</code> query to a <code>controld://</code>
 resolver for the server with <code>get_remote_proxy()</code>, and it removes Control D from a bare
