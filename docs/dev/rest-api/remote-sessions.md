@@ -214,8 +214,10 @@ hood the client walks a remote session through its lifecycle.
     downloading. A service can build an AdaptationSet of its own that the served
     manifest does not contain. Each such track gets a one-AdaptationSet MPD in
     `track_manifests`, and the client re-parses that instead. Any
-    `session_headers` / `session_cookies` the server used are merged into the
-    client's local HTTP session.
+    `session_headers` and cookies the server used are merged into the
+    client's local HTTP session. Each cookie in `session_cookie_jar` keeps its
+    domain, path and `secure` flag, so it goes only to its own hosts. `session_cookies` carries
+    the same cookies as names and values only, for older clients.
 
     The tracks response repeats the title. A service can rewrite title fields inside
     `get_tracks`, so the client takes this copy in place of the one from the title
@@ -653,7 +655,7 @@ remote session API and a good template for any client.
 - **Flow.** `authenticate()` → `create` (+ poll `prompt` every 2s up to a 600s
   deadline, answering `pending_input` prompts. With stdin closed the client logs an
   error and raises `SystemExit(1)` instead of posting an empty answer) → `get_titles()` → `get_tracks()`
-  (merging returned `session_headers`/`session_cookies`, re-parsing `manifests`) →
+  (merging returned `session_headers`/`session_cookie_jar`, re-parsing `manifests`) →
   get the licence in proxy mode or `server_cdm` mode → `close()` (`DELETE`, saving any returned
   `cache`).
 - **Server resolution.** `resolve_server()` reads `config.remote_services.<name>`

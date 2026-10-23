@@ -389,7 +389,7 @@ def test_a_lent_device_session_keeps_its_auth_headers_and_track_secrets() -> Non
     headers, cookies = handlers.client_session_auth(session)
 
     assert headers == {"User-Agent": "ua"}
-    assert cookies == {"account": "client"}
+    assert handlers.cookie_values(cookies) == {"account": "client"}
     assert handlers.scrub_track_data({"token": "server", "id": 1}, session) == {"id": 1}
 
 

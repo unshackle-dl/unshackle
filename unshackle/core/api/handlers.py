@@ -34,7 +34,7 @@ from unshackle.core.drm import cbcs
 from unshackle.core.providers.anilist import parse_anilist_ref
 from unshackle.core.proxies.resolve import initialize_proxy_providers, resolve_proxy
 from unshackle.core.services import Services
-from unshackle.core.session import utf8_text
+from unshackle.core.session import RnetSession, utf8_text
 from unshackle.core.titles import Episode, Movie, Song, Title_T
 from unshackle.core.titles.music import SONG_FIELDS
 from unshackle.core.tracks import Audio, Subtitle, Tracks, Video
@@ -4068,8 +4068,8 @@ async def session_titles_handler(session_id: str, request: Optional[web.Request]
         )
 
 
-def client_session_auth(session: Any) -> tuple[Dict[str, str], Dict[str, str]]:
-    """The service session headers and cookies a remote client may receive.
+def client_session_auth(session: Any) -> tuple[Dict[str, str], list[Dict[str, Any]]]:
+    """The service session headers and cookies (name, value, domain, path, secure) a remote client may receive.
 
     A client whose own login succeeded gets them back. For a server account the cookie jar
     stays on the server and the server drops the auth-bearing headers, so the client cannot
@@ -4078,16 +4078,29 @@ def client_session_auth(session: Any) -> tuple[Dict[str, str], Dict[str, str]]:
     """
     svc_session = session.service_instance.session
     headers = dict(svc_session.headers) if hasattr(svc_session, "headers") and svc_session.headers else {}
-    cookies: Dict[str, str] = {}
-    if hasattr(svc_session, "cookies"):
-        for cookie in svc_session.cookies:
-            if hasattr(cookie, "name") and hasattr(cookie, "value"):
-                cookies[cookie.name] = cookie.value
+    cookies: list[Dict[str, Any]] = []
+    jar = svc_session.scoped_cookies() if isinstance(svc_session, RnetSession) else getattr(svc_session, "cookies", [])
+    for cookie in jar:
+        if hasattr(cookie, "name") and hasattr(cookie, "value"):
+            cookies.append(
+                {
+                    "name": cookie.name,
+                    "value": cookie.value,
+                    "domain": getattr(cookie, "domain", None) or "",
+                    "path": getattr(cookie, "path", None) or "/",
+                    "secure": bool(getattr(cookie, "secure", False)),
+                }
+            )
     if not client_owns_login(session):
         headers = {k: v for k, v in headers.items() if not CONFIG_SECRET_KEY_RE.search(str(k))}
     if not session.client_auth:
-        cookies = {}
+        cookies = []
     return headers, cookies
+
+
+def cookie_values(cookies: list[Dict[str, Any]]) -> Dict[str, str]:
+    """The ``{name: value}`` form of :func:`client_session_auth` cookies, for clients that predate the jar."""
+    return {c["name"]: c["value"] for c in cookies}
 
 
 def client_owns_login(session: Any) -> bool:
@@ -4232,7 +4245,8 @@ async def session_tracks_handler(
                 "manifests": manifests,
                 "track_manifests": track_manifests,
                 "session_headers": session_headers,
-                "session_cookies": session_cookies,
+                "session_cookies": cookie_values(session_cookies),
+                "session_cookie_jar": session_cookies,
                 "server_cdm": session.server_cdm,
                 "server_cdm_type": server_cdm_type,
                 "sample_decrypt_tracks": [
@@ -4269,6 +4283,7 @@ async def session_segments_handler(
 
     try:
         result: Dict[str, Any] = {}
+        headers, cookies = client_session_auth(session)
 
         for track_id in track_ids:
             track = session.tracks.get(track_id)
@@ -4285,9 +4300,10 @@ async def session_segments_handler(
                 "descriptor": descriptor_name,
                 "url": str(track.url) if track.url else None,
                 "drm": serialize_drm(track.drm) if hasattr(track, "drm") and track.drm else None,
+                "headers": headers,
+                "cookies": cookie_values(cookies),
+                "cookie_jar": cookies,
             }
-
-            track_info["headers"], track_info["cookies"] = client_session_auth(session)
 
             # Include manifest-specific data for segment resolution. Round-trip through
             # JSON so any non-serializable value becomes its str() (default=str).

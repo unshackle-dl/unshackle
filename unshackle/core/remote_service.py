@@ -426,6 +426,27 @@ def apply_service_track_data(tracks: Tracks, data: Dict[str, Any]) -> None:
                 track.data.update(extra)
 
 
+def apply_session_cookies(session: requests.Session, result: dict) -> None:
+    """Copy the server's session cookies into ``session``, each scoped to its own domain.
+
+    An older server sends only ``session_cookies`` names and values, so those cookies go to every host.
+    It skips malformed entries.
+    """
+    jar = result.get("session_cookie_jar")
+    if not isinstance(jar, list):
+        old = result.get("session_cookies")
+        jar = [{"name": k, "value": v} for k, v in old.items()] if isinstance(old, dict) else []
+    for c in jar:
+        if isinstance(c, dict) and isinstance(c.get("name"), str) and isinstance(c.get("value"), str):
+            session.cookies.set(
+                c["name"],
+                c["value"],
+                domain=str(c.get("domain") or ""),
+                path=str(c.get("path") or "/"),
+                secure=bool(c.get("secure")),
+            )
+
+
 def resolve_track_manifests(tracks: Tracks, track_manifests: list) -> None:
     """Fill track.data from the per-track MPD fragments the server sent.
 
@@ -1651,8 +1672,7 @@ class RemoteService:
         for k, v in result.get("session_headers", {}).items():
             if k.lower() not in ("host", "content-length", "content-type"):
                 self._session.headers[k] = v
-        for k, v in result.get("session_cookies", {}).items():
-            self._session.cookies.set(k, v)
+        apply_session_cookies(self._session, result)
 
         resolve_track_manifests(tracks, result.get("track_manifests", []))
         resolve_manifest_data(tracks, result.get("manifests", []))

@@ -1,13 +1,15 @@
 from types import SimpleNamespace
 
 import pytest
+import requests
 
 from unshackle.core.api.errors import APIError
 from unshackle.core.api.handlers import client_session_auth, resolve_handler_proxy, scrub_track_data
+from unshackle.core.remote_service import apply_session_cookies
 
 
 def _session(client_auth):
-    cookie = SimpleNamespace(name="sid", value="secret")
+    cookie = SimpleNamespace(name="sid", value="secret", domain=".example.com", path="/")
     svc = SimpleNamespace(headers={"Authorization": "Bearer x", "User-Agent": "ua"}, cookies=[cookie])
     return SimpleNamespace(service_instance=SimpleNamespace(session=svc), client_auth=client_auth)
 
@@ -15,14 +17,129 @@ def _session(client_auth):
 def test_client_login_keeps_auth():
     headers, cookies = client_session_auth(_session(True))
     assert headers == {"Authorization": "Bearer x", "User-Agent": "ua"}
-    assert cookies == {"sid": "secret"}
+    assert cookies == [{"name": "sid", "value": "secret", "domain": ".example.com", "path": "/", "secure": False}]
     assert scrub_track_data({"token": "t", "hls": {}}, _session(True)) == {"token": "t", "hls": {}}
+
+
+def test_client_cookies_keep_their_domain():
+    session = requests.Session()
+    _, cookies = client_session_auth(_session(True))
+    apply_session_cookies(session, {"session_cookie_jar": cookies})
+    assert session.cookies.get("sid", domain=".example.com") == "secret"
+    cdn = session.prepare_request(requests.Request("GET", "https://cdn.other.net/seg.mp4"))
+    assert "Cookie" not in cdn.headers
+    own = session.prepare_request(requests.Request("GET", "https://www.example.com/api"))
+    assert own.headers["Cookie"] == "sid=secret"
+
+
+def test_client_takes_old_server_cookies_without_domain():
+    session = requests.Session()
+    apply_session_cookies(session, {"session_cookies": {"sid": "secret"}})
+    assert session.cookies.get("sid") == "secret"
+
+
+def test_client_keeps_secure_cookies_off_http():
+    session = requests.Session()
+    jar = [{"name": "sid", "value": "s", "domain": ".example.com", "path": "/", "secure": True}]
+    apply_session_cookies(session, {"session_cookie_jar": jar})
+    plain = session.prepare_request(requests.Request("GET", "http://cdn.example.com/seg.mp4"))
+    assert "Cookie" not in plain.headers
+    tls = session.prepare_request(requests.Request("GET", "https://cdn.example.com/seg.mp4"))
+    assert tls.headers["Cookie"] == "sid=s"
+
+
+def test_client_skips_malformed_server_cookies():
+    session = requests.Session()
+    jar = [{"value": "v"}, "str", {"name": "n", "value": 1}, {"name": "ok", "value": "v", "domain": ".example.com"}]
+    apply_session_cookies(session, {"session_cookie_jar": jar})
+    assert [c.name for c in session.cookies] == ["ok"]
+    session = requests.Session()
+    apply_session_cookies(session, {"session_cookie_jar": 5, "session_cookies": ["x"]})
+    assert not session.cookies
+
+
+def test_rnet_session_sends_client_and_set_cookies():
+    from unshackle.core.session import RnetSession
+
+    svc = RnetSession()
+    svc.cookies.set("sid", "stale", domain=".example.com")
+    svc.cookies.set("cdn", "c", domain="cdn.other.net")
+    svc.export_origin_cookies = lambda: {"https://www.example.com": "sid=live; cf=1"}
+    _, cookies = client_session_auth(SimpleNamespace(service_instance=SimpleNamespace(session=svc), client_auth=True))
+    assert {(c["name"], c["value"], c["domain"]) for c in cookies} == {
+        ("sid", "live", "www.example.com"),
+        ("cf", "1", "www.example.com"),
+        ("cdn", "c", "cdn.other.net"),
+    }
+
+
+def test_tracks_response_carries_the_cookie_jar():
+    import asyncio
+    import json
+
+    from unshackle.core.api import session_store as store_mod
+    from unshackle.core.api.handlers import session_tracks_handler
+    from unshackle.core.tracks import Tracks
+
+    cookie = SimpleNamespace(name="sid", value="secret", domain=".example.com", path="/", secure=True)
+
+    class StubService:
+        session = SimpleNamespace(headers={}, cookies=[cookie])
+
+        def get_tracks(self, title):
+            return Tracks()
+
+        def get_chapters(self, title):
+            raise NotImplementedError
+
+    async def run():
+        store = store_mod.get_session_store()
+        entry = await store.create(
+            service_tag="EXAMPLE", service_instance=StubService(), session_id="jar", owner_key=None
+        )
+        entry.title_map = {"t1": "Example Title"}
+        entry.client_auth = True
+        try:
+            return json.loads((await session_tracks_handler({"title_id": "t1"}, "jar")).body)
+        finally:
+            await store.delete("jar")
+
+    body = asyncio.run(run())
+    assert body["session_cookies"] == {"sid": "secret"}
+    assert body["session_cookie_jar"] == [
+        {"name": "sid", "value": "secret", "domain": ".example.com", "path": "/", "secure": True}
+    ]
+
+
+def test_remote_get_tracks_scopes_server_cookies():
+    import logging
+
+    from unshackle.core.remote_service import RemoteService
+
+    jar = [{"name": "sid", "value": "secret", "domain": ".example.com", "path": "/"}]
+    service = object.__new__(RemoteService)
+    service.__dict__.update(
+        _tracks_by_title={},
+        _chapters_by_title={},
+        _sample_decrypt_tracks=set(),
+        _server_cdm=None,
+        _session=requests.Session(),
+        _session_id="s",
+        service_tag="EXAMPLE",
+        log=logging.getLogger("test"),
+        client=SimpleNamespace(post=lambda path, body: {"session_cookie_jar": jar}),
+        drain_server_logs=lambda: None,
+    )
+    service.get_tracks(SimpleNamespace(id="t1"))
+    cdn = service._session.prepare_request(requests.Request("GET", "https://cdn.other.net/seg.mp4"))
+    assert "Cookie" not in cdn.headers
+    assert service._session.cookies.get("sid", domain=".example.com") == "secret"
 
 
 def test_server_login_strips_auth():
     headers, cookies = client_session_auth(_session(False))
     assert headers == {"User-Agent": "ua"}
-    assert cookies == {}
+    assert cookies == []
     assert scrub_track_data({"token": "t", "hls": {}}, _session(False)) == {"hls": {}}
 
 

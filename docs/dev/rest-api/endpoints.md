@@ -1096,6 +1096,7 @@ Get tracks and chapters for a specific title within the remote session. Body: `{
       "track_manifests": [ { "track_id": "s-1", "type": "dash", "url": "https://...", "data": "<base64 zlib xml>" } ],
       "session_headers": { "User-Agent": "..." },
       "session_cookies": { "sid": "..." },
+      "session_cookie_jar": [ { "name": "sid", "value": "...", "domain": ".example.com", "path": "/", "secure": true } ],
       "server_cdm_type": "widevine"
     }
     ```
@@ -1115,10 +1116,12 @@ Get the download URL, DRM info, headers, cookies, and raw track data for the sel
     ```json
     {
       "tracks": {
-        "v-1": { "descriptor": "DASH", "url": "https://...", "drm": [ ... ], "headers": { ... }, "cookies": { ... }, "data": { ... } }
+        "v-1": { "descriptor": "DASH", "url": "https://...", "drm": [ ... ], "headers": { ... }, "cookies": { ... }, "cookie_jar": [ ... ], "data": { ... } }
       }
     }
     ```
+
+`cookies` gives names and values only. `cookie_jar` gives the same cookies with their domain, path and `secure` flag, in the `session_cookie_jar` form of the tracks response.
 
 | Status | Error code | Meaning |
 | --- | --- | --- |

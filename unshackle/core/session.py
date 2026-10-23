@@ -17,6 +17,7 @@ from urllib.parse import urlencode, urlparse, urlunparse
 
 import rnet
 from requests import HTTPError, Request, Response
+from requests.cookies import create_cookie
 from requests.structures import CaseInsensitiveDict
 
 from unshackle.core.config import config
@@ -664,14 +665,19 @@ class RnetSession:
         self._client = client
 
     @staticmethod
-    def set_cookie_header(client: rnet.BlockingClient, origin: str, header: str) -> None:
-        """Set every cookie in a ``name=value; ...`` header string on one origin of *client*."""
+    def parse_cookie_header(header: str) -> Iterator[tuple[str, str]]:
+        """The ``(name, value)`` pairs of a ``name=value; ...`` header string."""
         for pair in header.split(";"):
             name, separator, value = pair.partition("=")
-            if not separator:
-                continue
+            if separator:
+                yield name.strip(), value.strip()
+
+    @staticmethod
+    def set_cookie_header(client: rnet.BlockingClient, origin: str, header: str) -> None:
+        """Set every cookie in a ``name=value; ...`` header string on one origin of *client*."""
+        for name, value in RnetSession.parse_cookie_header(header):
             try:
-                client.set_cookie(origin, rnet.Cookie(name.strip(), value.strip()))
+                client.set_cookie(origin, rnet.Cookie(name, value))
             except Exception:
                 pass
 
@@ -704,6 +710,26 @@ class RnetSession:
             if raw:
                 exported[origin] = raw.decode("utf-8", errors="replace")
         return exported
+
+    def scoped_cookies(self) -> CookieJar:
+        """Every cookie this HTTP session sends, each scoped to its domain.
+
+        The live client's cookies of each requested origin come first, then the cookies set
+        through :attr:`cookies` for any other host.
+        """
+        jar = CookieJar()
+        hosts: dict[str, set[str]] = {}
+        for origin, header in self.export_origin_cookies().items():
+            host = urlparse(origin).hostname or ""
+            for name, value in self.parse_cookie_header(header):
+                jar.set_cookie(create_cookie(name, value, domain=host))
+                hosts.setdefault(name, set()).add(host)
+        for domain, values in self.cookies.get_dict_by_domain().items():
+            bare = domain.lstrip(".")
+            for name, value in values.items():
+                if not any(h == bare or h.endswith("." + bare) for h in hosts.get(name, ())):
+                    jar.set_cookie(create_cookie(name, value, domain=domain))
+        return jar
 
     def import_origin_cookies(self, exported: dict[str, str]) -> None:
         """Load cookie headers from :meth:`export_origin_cookies` into this HTTP session's client."""
