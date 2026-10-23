@@ -15,6 +15,7 @@ import m3u8
 from construct import Container
 from pymp4.parser import Box
 from pyplayready.cdm import Cdm as PlayReadyCdm
+from pyplayready.misc.exceptions import InvalidPssh
 from pyplayready.system.pssh import PSSH
 from pyplayready.system.wrmheader import WRMHeader
 from requests import Session
@@ -169,6 +170,26 @@ class PlayReady:
             pass
 
         return []
+
+    @classmethod
+    def from_pssh_b64(cls, pssh_b64: str, kid: Optional[UUID] = None) -> PlayReady:
+        """Load a base64 PSSH box or PlayReady Object, or a bare UTF-16LE WRMHEADER that some packagers emit.
+
+        It wraps a bare WRMHEADER in a PlayReady Object and keeps that as `pssh_b64`, so remote CDMs and
+        the REST API can parse it again.
+        """
+        try:
+            pssh = PSSH(pssh_b64)
+        except InvalidPssh:
+            try:
+                raw = base64.b64decode(pssh_b64)
+            except ValueError:
+                raw = b""
+            if not raw.startswith(b"<\x00"):
+                raise
+            pssh_b64 = cls.pro_b64_for(WRMHeader(raw))
+            pssh = PSSH(pssh_b64)
+        return cls(pssh=pssh, kid=kid, pssh_b64=pssh_b64)
 
     @classmethod
     def from_track(cls, track: AnyTrack, session: Optional[Session] = None) -> PlayReady:

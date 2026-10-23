@@ -1578,10 +1578,7 @@ class HLS:
                 **extra_params,
             )
         elif key.keyformat and key.keyformat.lower() in {f"urn:uuid:{PR_PSSH.SYSTEM_ID}", "com.microsoft.playready"}:
-            drm = PlayReady(
-                pssh=PR_PSSH(key.uri.split(",")[-1]),
-                pssh_b64=key.uri.split(",")[-1],
-            )
+            drm = PlayReady.from_pssh_b64(key.uri.split(",")[-1])
         else:
             raise NotImplementedError(f"The key system is not supported: {key}")
 

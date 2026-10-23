@@ -20,7 +20,6 @@ from zlib import crc32
 import requests
 from langcodes import Language, tag_is_valid
 from lxml.etree import Element, ElementTree, XMLSyntaxError
-from pyplayready.system.pssh import PSSH as PR_PSSH
 from pywidevine.cdm import Cdm as WidevineCdm
 from pywidevine.pssh import PSSH
 from requests import Session
@@ -1355,7 +1354,6 @@ class DASH:
                 )
                 if not pr_pssh_b64:
                     continue
-                pr_pssh = PR_PSSH(pr_pssh_b64)
                 kid_b64 = protection.findtext("kid")
                 kid = None
                 if kid_b64:
@@ -1364,7 +1362,10 @@ class DASH:
                     except ValueError:
                         kid = None
 
-                drm.append(PlayReady(pssh=pr_pssh, kid=kid, pssh_b64=pr_pssh_b64))
+                try:
+                    drm.append(PlayReady.from_pssh_b64(pr_pssh_b64, kid=kid))
+                except Exception as e:
+                    logging.getLogger("DASH").warning(f"Skipping unparseable PlayReady ContentProtection: {e!r}")
 
             elif urn == ClearKeyCENC.urn:
                 # W3C EME ClearKey (org.w3.clearkey): match the scheme UUID alone,

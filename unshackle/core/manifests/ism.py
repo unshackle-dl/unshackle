@@ -15,7 +15,6 @@ from typing import Any, BinaryIO, Optional, Union
 import requests
 from langcodes import Language, tag_is_valid
 from lxml.etree import Element
-from pyplayready.system.pssh import PSSH as PR_PSSH
 from pywidevine.pssh import PSSH
 from requests import Session
 
@@ -104,11 +103,9 @@ class ISM:
                 drm.append(Widevine(pssh=pssh, kid=kid))
             elif system_id == "9a04f079-9840-4286-ab92-e65be0885f95":
                 try:
-                    pr_pssh = PR_PSSH(data)
+                    drm.append(PlayReady.from_pssh_b64(data))
                 except Exception as e:
                     logging.getLogger("ISM").warning(f"Skipping unparseable PlayReady ProtectionHeader: {e!r}")
-                    continue
-                drm.append(PlayReady(pssh=pr_pssh, pssh_b64=data))
         return drm
 
     @staticmethod

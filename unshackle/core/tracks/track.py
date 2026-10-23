@@ -1174,7 +1174,7 @@ class Track:
                     drm_list.append(drm)
                 elif fmt in {f"urn:uuid:{PR_PSSH.SYSTEM_ID}", "com.microsoft.playready"}:
                     pssh_b64 = key.uri.split(",")[-1]
-                    drm = PlayReady(pssh=PR_PSSH(pssh_b64), pssh_b64=pssh_b64)
+                    drm = PlayReady.from_pssh_b64(pssh_b64)
                     drm_list.append(drm)
 
             if drm_list:
