@@ -2326,6 +2326,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#unshackle.core.drm.PlayReady.from_pssh_b64" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;from_pssh_b64
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#unshackle.core.drm.PlayReady.to_dict" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3157,6 +3168,17 @@
     <span class="md-ellipsis">
       
         <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;extract_kids_from_pssh_b64
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unshackle.core.drm.PlayReady.from_pssh_b64" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;from_pssh_b64
       
     </span>
   </a>
@@ -4949,6 +4971,32 @@ H5DCID-V3-P1-YYYYMMDD-HHMMSS-MEDIAID-TIMESTAMP-SUFFIX</p>
     <div class="doc doc-contents ">
 
         <p>Extract all KIDs from base64-encoded PSSH data.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="unshackle.core.drm.PlayReady.from_pssh_b64" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">from_pssh_b64</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-classmethod"><code>classmethod</code></small>
+  </span>
+
+<a href="#unshackle.core.drm.PlayReady.from_pssh_b64" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">from_pssh_b64</span><span class="p">(</span><span class="n">pssh_b64</span><span class="p">,</span> <span class="n">kid</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Load a base64 PSSH box or PlayReady Object, or a bare UTF-16LE WRMHEADER that some packagers emit.</p>
+<p>It wraps a bare WRMHEADER in a PlayReady Object and keeps that as <code>pssh_b64</code>, so remote CDMs and
+the REST API can parse it again.</p>
 
 
     </div>
