@@ -3665,7 +3665,7 @@ through the tunnel. It stops at the first step that fails.</p>
 </table>
 <div class="admonition warning">
 <p class="admonition-title">Comments are stripped</p>
-<p>Writing a value through <code>cfg</code> rewrites the configuration file and <strong>removes all comments</strong> from it. If your config relies on comments, edit it by hand instead. Setting a value and using <code>--unset</code> together is an error. If a config key is set twice in the same block, <code>cfg</code> stops and gives the line numbers of the two copies. Other commands use the later copy.</p>
+<p>Writing a value through <code>cfg</code> rewrites the configuration file and <strong>removes all comments</strong> from it. If your config relies on comments, edit it by hand instead. Setting a value and using <code>--unset</code> together is an error. If a config key is set twice in the same block, <code>cfg</code> stops and gives the line numbers of the two copies. Other commands warn with the same line numbers and use the later copy.</p>
 </div>
 <div class="admonition example">
 <p class="admonition-title">Example</p>

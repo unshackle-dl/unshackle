@@ -1944,6 +1944,39 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#unshackle.core.config.duplicate_key_lines" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;duplicate_key_lines
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#unshackle.core.config.duplicate_key_message" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;duplicate_key_message
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#unshackle.core.config.load_yaml" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;load_yaml
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#unshackle.core.config.get_config_path" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2179,6 +2212,39 @@
     <span class="md-ellipsis">
       
         <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;cdm_entry_names_device
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#unshackle.core.config.duplicate_key_lines" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;duplicate_key_lines
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#unshackle.core.config.duplicate_key_message" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;duplicate_key_message
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#unshackle.core.config.load_yaml" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;load_yaml
       
     </span>
   </a>
@@ -2464,6 +2530,67 @@ between variables. Falls back to dot separator (scene-style) by default.</p>
 
         <p>Whether a per-service <code>cdm</code> entry names a device when no quality is known.</p>
 <p>An entry that selects only by quality, or by a different profile, names none.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="unshackle.core.config.duplicate_key_lines" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <span class="doc doc-object-name doc-function-name">duplicate_key_lines</span>
+
+
+<a href="#unshackle.core.config.duplicate_key_lines" class="headerlink" title="Permanent link">&para;</a></h2>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">duplicate_key_lines</span><span class="p">(</span><span class="n">root</span><span class="p">)</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Return (first line, repeat line), counted from 1, for each repeated scalar key in a PyYAML or ruamel node tree.</p>
+<p>Keys compare as written, so two spellings that load as the same key (yes and true, 1 and 0x1) are not found.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="unshackle.core.config.duplicate_key_message" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <span class="doc doc-object-name doc-function-name">duplicate_key_message</span>
+
+
+<a href="#unshackle.core.config.duplicate_key_message" class="headerlink" title="Permanent link">&para;</a></h2>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">duplicate_key_message</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">pairs</span><span class="p">,</span> <span class="n">line</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Say where a file repeats a key: each (first, repeat) pair, or <code>line</code> when no pair is known.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="unshackle.core.config.load_yaml" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <span class="doc doc-object-name doc-function-name">load_yaml</span>
+
+
+<a href="#unshackle.core.config.load_yaml" class="headerlink" title="Permanent link">&para;</a></h2>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">load_yaml</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>yaml.safe_load a file, and warn with the lines of each duplicate key, which PyYAML takes silently.</p>
 
 
     </div>
