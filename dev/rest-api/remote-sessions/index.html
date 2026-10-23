@@ -2629,8 +2629,10 @@ DASH/ISM manifests as compressed XML so the client can re-parse them locally for
 downloading. A service can build an AdaptationSet of its own that the served
 manifest does not contain. Each such track gets a one-AdaptationSet MPD in
 <code>track_manifests</code>, and the client re-parses that instead. Any
-<code>session_headers</code> / <code>session_cookies</code> the server used are merged into the
-client's local HTTP session.</p>
+<code>session_headers</code> and cookies the server used are merged into the
+client's local HTTP session. Each cookie in <code>session_cookie_jar</code> keeps its
+domain, path and <code>secure</code> flag, so it goes only to its own hosts. <code>session_cookies</code> carries
+the same cookies as names and values only, for older clients.</p>
 <p>The tracks response repeats the title. A service can rewrite title fields inside
 <code>get_tracks</code>, so the client takes this copy in place of the one from the title
 list. Each track carries the full local field set. After the manifest re-parse the
@@ -3159,7 +3161,7 @@ remote session API and a good template for any client.</p>
 <li><strong>Flow.</strong> <code>authenticate()</code> → <code>create</code> (+ poll <code>prompt</code> every 2s up to a 600s
   deadline, answering <code>pending_input</code> prompts. With stdin closed the client logs an
   error and raises <code>SystemExit(1)</code> instead of posting an empty answer) → <code>get_titles()</code> → <code>get_tracks()</code>
-  (merging returned <code>session_headers</code>/<code>session_cookies</code>, re-parsing <code>manifests</code>) →
+  (merging returned <code>session_headers</code>/<code>session_cookie_jar</code>, re-parsing <code>manifests</code>) →
   get the licence in proxy mode or <code>server_cdm</code> mode → <code>close()</code> (<code>DELETE</code>, saving any returned
   <code>cache</code>).</li>
 <li><strong>Server resolution.</strong> <code>resolve_server()</code> reads <code>config.remote_services.&lt;name&gt;</code>
