@@ -371,11 +371,10 @@ def perform_download(
 
     # Import dl.py components lazily to avoid circular deps during module import
     import click
-    import yaml
 
     from unshackle.commands.dl import dl
     from unshackle.core.api.errors import APIError, APIErrorCode
-    from unshackle.core.config import config
+    from unshackle.core.config import config, load_yaml
     from unshackle.core.services import Services
     from unshackle.core.tracks import Video
     from unshackle.core.utils.click_types import ContextData
@@ -467,7 +466,7 @@ def perform_download(
     remote = params.get("remote")
     service_config_path = None if remote else Services.get_path(service) / config.filenames.config
     if service_config_path and service_config_path.exists():
-        service_config = yaml.safe_load(service_config_path.read_text(encoding="utf8"))
+        service_config = load_yaml(service_config_path)
     else:
         service_config = {}
     merge_dict(config.services.get(service), service_config)

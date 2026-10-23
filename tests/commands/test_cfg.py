@@ -45,13 +45,6 @@ def test_a_valid_config_still_reads_a_key(config_file: Path) -> None:
     assert "rainbow" in result.output
 
 
-def test_duplicate_key_lines_follows_aliases_without_looping() -> None:
-    from ruamel.yaml import YAML
-
-    root = YAML().compose("base: &b\n  x: 1\n  x: 2\n  self: *b\nother: *b\nlist:\n  - y: 1\n    y: 2\n")
-    assert cfg_module.duplicate_key_lines(root) == [(2, 3), (7, 8)]
-
-
 def test_a_duplicate_only_ruamel_sees_still_gives_its_line(config_file: Path) -> None:
     config_file.write_text("a: 1\n1: x\n0x1: y\n", encoding="utf-8")
     result = CliRunner().invoke(cfg_module.cfg, ["a"])

@@ -6,13 +6,12 @@ import sys
 from typing import Any, Optional
 
 import click
-import yaml
 from rich.padding import Padding
 from rich.rule import Rule
 from rich.tree import Tree
 
 from unshackle.commands.dl import dl
-from unshackle.core.config import config
+from unshackle.core.config import config, load_yaml
 from unshackle.core.console import console
 from unshackle.core.constants import context_settings
 from unshackle.core.proxies.proxy import Proxy
@@ -91,7 +90,7 @@ def search(
         with console.status("Loading Service Config...", spinner="dots"):
             service_config_path = Services.get_path(service) / config.filenames.config
             if service_config_path.exists():
-                service_config = yaml.safe_load(service_config_path.read_text(encoding="utf8"))
+                service_config = load_yaml(service_config_path)
                 log.info("Service Config loaded")
     merge_dict(ci_get(config.services, service), service_config)
 

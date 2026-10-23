@@ -374,7 +374,55 @@ class Config:
             raise FileNotFoundError(f"Config file path ({path}) was not found")
         if not path.is_file():
             raise FileNotFoundError(f"Config file path ({path}) is not to a file.")
-        return cls(**restore_bool_languages(yaml.safe_load(path.read_text(encoding="utf8")) or {}))
+        return cls(**restore_bool_languages(load_yaml(path) or {}))
+
+
+def duplicate_key_lines(root: Any) -> list[tuple[int, int]]:
+    """
+    Return (first line, repeat line), counted from 1, for each repeated scalar key in a PyYAML or ruamel node tree.
+
+    Keys compare as written, so two spellings that load as the same key (yes and true, 1 and 0x1) are not found.
+    """
+    pairs, stack, visited = [], [root], set()
+    while stack:
+        node = stack.pop()
+        if node in visited:
+            continue
+        visited.add(node)
+        if node.id == "mapping":
+            first: dict[tuple[str, str], int] = {}
+            for key_node, value_node in node.value:
+                if key_node.id == "scalar" and key_node.tag != "tag:yaml.org,2002:merge":
+                    key = (key_node.tag, key_node.value)
+                    line = key_node.start_mark.line + 1
+                    if key in first:
+                        pairs.append((first[key], line))
+                    else:
+                        first[key] = line
+                stack += [key_node, value_node]
+        elif node.id == "sequence":
+            stack += node.value
+    return sorted(pairs)
+
+
+def duplicate_key_message(name: str, pairs: list[tuple[int, int]], line: int = 0) -> str:
+    """Say where a file repeats a key: each (first, repeat) pair, or `line` when no pair is known."""
+    where = ", ".join(f"lines {first} and {repeat}" for first, repeat in pairs) or f"line {line}"
+    return f"{name}: duplicate key on {where}. Unshackle uses the later one."
+
+
+def load_yaml(path: Path) -> Any:
+    """yaml.safe_load a file, and warn with the lines of each duplicate key, which PyYAML takes silently."""
+    loader = yaml.SafeLoader(path.read_text(encoding="utf8"))
+    try:
+        node = loader.get_single_node()
+        if node is None:
+            return None
+        if pairs := duplicate_key_lines(node):
+            warnings.warn(duplicate_key_message(str(path), pairs), stacklevel=2)
+        return loader.construct_document(node)
+    finally:
+        loader.dispose()
 
 
 # noinspection PyProtectedMember

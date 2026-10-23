@@ -28,7 +28,7 @@ from unshackle.core.api.session_log import SessionLogBuffer, SessionLogMirror, c
 from unshackle.core.api.session_store import SessionStore
 from unshackle.core.cacher import Cacher
 from unshackle.core.cdm.detect import cdm_type_stub
-from unshackle.core.config import config
+from unshackle.core.config import config, load_yaml
 from unshackle.core.constants import AUDIO_CODEC_MAP, DYNAMIC_RANGE_MAP, VIDEO_CODEC_MAP
 from unshackle.core.drm import cbcs
 from unshackle.core.providers.anilist import parse_anilist_ref
@@ -190,13 +190,11 @@ def load_full_cdm(service: str, profile: Optional[str], cdm_type: Optional[str] 
 
 def load_service_yaml(normalized_service: str) -> dict:
     """Load a service's config.yaml and merge it with the global override block."""
-    import yaml
-
     from unshackle.core.utils.collections import merge_dict
 
     service_config_path = Services.get_path(normalized_service) / config.filenames.config
     if service_config_path.exists():
-        service_config = yaml.safe_load(service_config_path.read_text(encoding="utf8")) or {}
+        service_config = load_yaml(service_config_path) or {}
     else:
         service_config = {}
     merge_dict(config.services.get(normalized_service), service_config)
