@@ -339,7 +339,7 @@ unshackle cfg [KEY] [VALUE] [OPTIONS]
 | `--list` | List all set configuration values. |
 
 !!! warning "Comments are stripped"
-    Writing a value through `cfg` rewrites the configuration file and **removes all comments** from it. If your config relies on comments, edit it by hand instead. Setting a value and using `--unset` together is an error.
+    Writing a value through `cfg` rewrites the configuration file and **removes all comments** from it. If your config relies on comments, edit it by hand instead. Setting a value and using `--unset` together is an error. If a config key is set twice in the same block, `cfg` stops and gives the line numbers of the two copies. Other commands use the later copy.
 
 !!! example
     ```shell

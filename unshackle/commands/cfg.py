@@ -4,9 +4,35 @@ import sys
 
 import click
 from ruamel.yaml import YAML
+from ruamel.yaml.constructor import DuplicateKeyError
+from ruamel.yaml.nodes import MappingNode, Node, ScalarNode, SequenceNode
 
 from unshackle.core.config import config, get_config_path
 from unshackle.core.constants import context_settings
+
+
+def duplicate_key_lines(root: Node) -> list[tuple[int, int]]:
+    """Return (first line, repeat line), counted from 1, for each repeated scalar key in the node tree."""
+    pairs, stack, visited = [], [root], set()
+    while stack:
+        node = stack.pop()
+        if node in visited:  # an alias reuses its node, and can point back at itself
+            continue
+        visited.add(node)
+        if isinstance(node, MappingNode):
+            first: dict[tuple[str, str], int] = {}
+            for key_node, value_node in node.value:
+                if isinstance(key_node, ScalarNode):
+                    key = (key_node.tag, key_node.value)
+                    line = key_node.start_mark.line + 1
+                    if key in first:
+                        pairs.append((first[key], line))
+                    else:
+                        first[key] = line
+                stack += [key_node, value_node]
+        elif isinstance(node, SequenceNode):
+            stack += node.value
+    return sorted(pairs)
 
 
 @click.command(
@@ -41,7 +67,15 @@ def cfg(ctx: click.Context, key: str, value: str, unset: bool, list_: bool) -> N
 
     config_path = get_config_path() or config.directories.user_configs / config.filenames.root_config
     if config_path.exists():
-        data = yaml.load(config_path)
+        try:
+            data = yaml.load(config_path)
+        except DuplicateKeyError as e:
+            pairs = duplicate_key_lines(yaml.compose(config_path))
+            where = ", ".join(f"lines {first} and {repeat}" for first, repeat in pairs)
+            where = where or f"line {e.problem_mark.line + 1}"
+            raise click.ClickException(
+                f"{config_path.name}: duplicate key on {where}. Unshackle uses the later one."
+            ) from None
 
     if not data:
         log.warning("No config file was found or it has no data, yet")
