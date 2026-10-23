@@ -1,5 +1,5 @@
 """Self-check for ``has_encrypted_sample_entry``: a finalized MP4 whose moov still carries
-an encv/enca sample entry means the decrypt tool skipped/failed the track (frma was never
+an encrypted (enc*/drm*) sample entry means the decrypt tool skipped/failed the track (frma was never
 applied), so the detector must flag it before the file reaches the muxer. Detection is
 scoped to moov, so stray 4CC byte runs in mdat must never trip (or mask) it.
 
@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import struct
 from pathlib import Path
+
+import pytest
 
 from unshackle.core.tracks.track import has_encrypted_sample_entry
 
@@ -78,6 +80,12 @@ def test_text_containing_enca_in_moov_not_detected(tmp_path: Path) -> None:
     udta = box(b"udta", b"data is encapsulated here")
     f = write(tmp_path, "text.mp4", FTYP, box(b"moov", stsd([avc1]) + udta))
     assert has_encrypted_sample_entry(f) is False
+
+
+@pytest.mark.parametrize("kind", [b"encs", b"enct", b"drmi"])
+def test_other_encrypted_entry_kinds_detected(tmp_path: Path, kind: bytes) -> None:
+    f = write(tmp_path, "enc.mp4", FTYP, moov(stsd([sample_entry(kind, box(b"sinf", box(b"frma", b"stpp")))])))
+    assert has_encrypted_sample_entry(f) is True
 
 
 def test_missing_or_bogus_file(tmp_path: Path) -> None:

@@ -30,7 +30,7 @@ from unshackle.core.config import config
 from unshackle.core.constants import DOWNLOAD_ALL_DRM, DOWNLOAD_CANCELLED, DOWNLOAD_LICENCE_ONLY, DownloadCancelled
 from unshackle.core.downloaders import requests
 from unshackle.core.drm import DRM_T, ClearKeyCENC, PlayReady, Widevine
-from unshackle.core.drm.verify import decrypt_track, senc_protects_samples
+from unshackle.core.drm.verify import decrypt_track, has_encrypted_entry, senc_protects_samples
 from unshackle.core.events import events
 from unshackle.core.session import MAX_BACKOFF, RnetSession, utf8_text
 from unshackle.core.temp import restore_segments, stash_segments
@@ -244,28 +244,18 @@ def has_dts_uhd_sample_entry(path: Path) -> bool:
 
 
 def has_encrypted_sample_entry(path: Path) -> bool:
-    """True if the MP4's moov still carries an encrypted sample entry (encv/enca).
+    """True if the MP4's moov still carries an encrypted sample entry (``enc*`` or ``drm*``).
 
-    A faithful decrypt rewrites encv/enca back to the real codec 4CC through frma, so a
-    survivor means the decrypt tool skipped/failed the track. This is a 4CC scan
-    scoped to the moov box (where sample entries live), not a structural parse.
-    The scoping avoids chance byte collisions in mdat. Any read error -> False.
+    A faithful decrypt rewrites the entry back to the real codec 4CC through frma, so a
+    survivor means the decrypt tool skipped/failed the track. Only the moov is read, and its
+    stsd boxes are parsed, so byte runs in mdat or in metadata cannot match. Any read or
+    parse error -> False.
     """
     try:
         moov = read_top_level_box(path, b"moov")
-    except OSError:
+        return moov is not None and has_encrypted_entry(moov)
+    except (OSError, struct.error, RecursionError):
         return False
-    if not moov:
-        return False
-    for tok in (b"encv", b"enca"):
-        i = moov.find(tok, 4)
-        while i != -1:
-            # require a plausible sample-entry box size right before the 4CC
-            size = int.from_bytes(moov[i - 4 : i], "big")
-            if 16 <= size <= len(moov) - (i - 4):
-                return True
-            i = moov.find(tok, i + 1)
-    return False
 
 
 def moof_still_encrypted(moof: bytes) -> bool:

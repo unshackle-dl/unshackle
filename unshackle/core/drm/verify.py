@@ -11,6 +11,7 @@ PIFF_TENC = bytes.fromhex("8974dbce7be74c5184f97148f9882554")
 PIFF_TFXD = bytes.fromhex("6d1d9b0542d544e680e2141daff757b2")
 PIFF_SENC = bytes.fromhex("a2394f525a9b4f14a2446c427c648df4")
 TENC = {b"tenc", b"uuid" + PIFF_TENC}
+ENCRYPTED_ENTRY = (b"enc", b"drm")
 SENC = {b"senc", b"uuid" + PIFF_SENC}
 # the fixed sample entry fields before the child boxes: visual; sound v0 (and ISO v1), QuickTime sound v1 and v2
 ENTRY_FIELDS = {b"encv": (78,), b"enca": (28, 44, 64)}
@@ -130,7 +131,15 @@ def sample_entries(data: bytes, body: int, end: int) -> tuple[list[Optional[UUID
     whether any entry is encrypted."""
     found = list(children(data, body + 8, end))
     kids = [entry_kid(data, kind, entry, entry_end) for kind, entry, entry_end in found]
-    return kids, any(kind[:3] in (b"enc", b"drm") for kind, _, _ in found)
+    return kids, any(kind[:3] in ENCRYPTED_ENTRY for kind, _, _ in found)
+
+
+def has_encrypted_entry(moov: bytes) -> bool:
+    """True if a moov box holds a sample entry of an encrypted type (``enc*`` or ``drm*``)."""
+    return any(
+        kind == b"stsd" and any(entry[:3] in ENCRYPTED_ENTRY for entry, _, _ in children(moov, body + 8, end))
+        for kind, body, end in walk(moov)
+    )
 
 
 def senc_protects_samples(buf: bytes, body: int, end: int) -> bool:
