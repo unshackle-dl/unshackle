@@ -129,7 +129,9 @@ def test_raw_socket_connect_to_a_host_name_warns(caplog, address, warns):
     assert bool(leaks(caplog)) is warns
 
 
-def test_core_frame_ends_the_walk(caplog):
+def test_core_frame_ends_the_walk(caplog, monkeypatch):
+    """A core lookup returns before the CDM host set is built, which a server does for every request it sends."""
+    monkeypatch.setattr(run_proxy, "cdm_hosts", lambda: pytest.fail("cdm_hosts() ran for a core lookup"))
     with caplog.at_level(logging.WARNING):
         source = "sys.audit('socket.getaddrinfo', 'vault.example', 443, 0, 0, 0)"
         run_as(os.path.join(run_proxy.CORE_DIR, "core", "vaults.py"), source)

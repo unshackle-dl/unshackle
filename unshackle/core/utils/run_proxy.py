@@ -190,10 +190,10 @@ def check(host: Any, frame: Optional[FrameType]) -> None:
     if isinstance(host, bytes):
         host = host.decode(errors="replace")
     host = str(host or "").lower().strip("[]")
-    if not host or is_local(host) or host in proxy_hosts or host in cdm_hosts():
+    if not host or is_local(host) or host in proxy_hosts:
         return
     found = find_service(frame, through_core=False)
-    if not found:
+    if not found or host in cdm_hosts():
         return
     service_frame, entry = found
     while frame is not None and frame is not service_frame:
