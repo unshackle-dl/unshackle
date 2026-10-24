@@ -305,6 +305,29 @@ A tag without a region, such as `zh`, gets no script because the region is what 
 unshackle writes audio tags as the service gives them, because a script applies only to written text.
 Track selection, `--list` tags and file names use the service tag.
 
+Set `muxing.track_names` to `native` to name each track in its own language. The same rules apply
+to the script and the region:
+
+```yaml title="unshackle.yaml"
+muxing:
+  track_names: native
+```
+
+| Service tag | Track name |
+|-------------|------------|
+| `zh-TW` subtitle | 中文（繁體） |
+| `zh-HK` subtitle | 中文（繁體，香港） |
+| `pt-PT` | Português (Portugal) |
+| `es-419` | Español (Latinoamérica) |
+| `ja-JP` | 日本語 |
+
+The option also changes the names in `--list` and in the `track_name` field of the REST API.
+
+!!! note "Players that show the language next to the name"
+    Some players, such as Jellyfin, show the track name and the language name together. They leave
+    out the language when the name already contains it, so an English name shows once. A native name
+    such as `日本語` shows next to `Japanese` in an English interface.
+
 ### DTS:X Profile 2 output
 
 A title whose audio holds a `dtsx` or `dtsy` sample entry (DTS:X Profile 2, DTS-UHD) muxes

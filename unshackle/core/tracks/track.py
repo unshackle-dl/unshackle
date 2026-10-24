@@ -1013,7 +1013,7 @@ class Track:
         return self.language
 
     def get_track_name(self) -> Optional[str]:
-        """Get the Track Name, or the English name of its language when the service set none."""
+        """Get the Track Name, or the name of its language when the service set none."""
         return self.name if self.name is not None else language_name(self.mux_language)
 
     def get_drm_for_cdm(self, cdm: Optional[object]) -> Optional[DRM_T]:

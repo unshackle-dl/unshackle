@@ -5,6 +5,7 @@ import pytest
 from langcodes import Language
 
 from unshackle.core import binaries
+from unshackle.core.config import config
 from unshackle.core.tracks import Audio, Subtitle, Tracks, Video
 from unshackle.core.utilities import language_name, multi_script_languages, with_script
 
@@ -70,6 +71,41 @@ def test_with_script(tag: str, expected: str) -> None:
 )
 def test_language_name(tag: str, expected: Optional[str]) -> None:
     assert language_name(Language.get(tag)) == expected
+
+
+@pytest.mark.parametrize(
+    ("tag", "expected"),
+    [
+        ("zh-Hant-TW", "中文（繁體）"),
+        ("zh-Hans-CN", "中文（简体）"),
+        ("zh-Hant-HK", "中文（繁體，香港）"),
+        ("zh-Hans-MO", "中文（简体，澳门）"),
+        ("zh-TW", "中文（台灣）"),
+        ("zh-HK", "中文（香港）"),
+        ("cmn-Hant", "中文（繁體）"),
+        ("yue-Hant", "粵語（繁體）"),
+        ("sr-ME", "Srpski (Crna Gora)"),
+        ("ka", "ქართული"),
+        ("hy", "Հայերեն"),
+        ("pt-BR", "Português"),
+        ("pt-PT", "Português (Portugal)"),
+        ("es-419", "Español (Latinoamérica)"),
+        ("sr-Latn-ME", "Srpski (latinica, Crna Gora)"),
+        ("ja-JP", "日本語"),
+        ("en-GB", "English (United Kingdom)"),
+        ("en-HK", "English (Hong Kong)"),
+        ("qaa", None),
+    ],
+)
+def test_native_language_name(tag: str, expected: Optional[str], monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(config, "muxing", {"track_names": "native"})
+    assert language_name(Language.get(tag)) == expected
+
+
+def test_native_subtitle_name_keeps_the_flag(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(config, "muxing", {"track_names": "native"})
+    assert sub("zh-TW", sdh=True).get_track_name() == "中文（繁體） (SDH)"
+    assert sub("zh", name="Mandarin").get_track_name() == "Mandarin"
 
 
 def test_subtitle_names_and_tags_the_script_but_keeps_its_language() -> None:

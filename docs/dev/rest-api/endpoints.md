@@ -377,7 +377,7 @@ The server sorts tracks by bitrate, descending. Episodes the server cannot get g
 
 The `drm` array on a track is a list of `{type, pssh?, kids?, content_keys?, license_url?}` objects.
 
-Every track carries the same fields as a local track: `is_original_lang`, `name`, `needs_repack`, `edition`, and `data`. `name` is the name the service set, or null. `track_name` is the name `--list` shows and the mux writes to an audio or subtitle track: `name` when the service set one, else the English name of the language, with the SDH, CC, Forced or Descriptive label. `bitrate` is in kb/s, and `bitrate_bps` gives the exact bits/s. `data` holds the part of the service-set `track.data` that fits in JSON, without the `hls`, `dash`, and `ism` parser keys. Audio keeps `is_original` and `atmos` for clients that read them, and adds the exact `joc` object count.
+Every track carries the same fields as a local track: `is_original_lang`, `name`, `needs_repack`, `edition`, and `data`. `name` is the name the service set, or null. `track_name` is the name `--list` shows and the mux writes to an audio or subtitle track: `name` when the service set one, else the name of the language (English, or in the language itself when the server sets `muxing.track_names: native`), with the SDH, CC, Forced or Descriptive label. `bitrate` is in kb/s, and `bitrate_bps` gives the exact bits/s. `data` holds the part of the service-set `track.data` that fits in JSON, without the `hls`, `dash`, and `ism` parser keys. Audio keeps `is_original` and `atmos` for clients that read them, and adds the exact `joc` object count.
 
 | Status | Error code | Meaning |
 | --- | --- | --- |

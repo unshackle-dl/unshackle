@@ -8,6 +8,7 @@ from typing import Any
 
 import pytest
 
+from unshackle.core.config import config
 from unshackle.core.update_checker import UpdateChecker
 
 # shutdown() blocks until the serve loop polls again, and the 0.5s default is paid by every
@@ -38,3 +39,9 @@ def no_update_check(monkeypatch: pytest.MonkeyPatch) -> None:
         return None
 
     monkeypatch.setattr(UpdateChecker, "check_for_updates", no_release)
+
+
+@pytest.fixture(autouse=True)
+def default_muxing(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Mux with the default options, whatever the muxing block of the local unshackle.yaml sets."""
+    monkeypatch.setattr(config, "muxing", {})

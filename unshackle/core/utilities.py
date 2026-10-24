@@ -196,10 +196,11 @@ def with_script(language: Language) -> Language:
 
 def language_name(language: Language) -> Optional[str]:
     """
-    Return the English name of a track language, or None for an unknown or private-use language.
+    Return the name of a track language, or None for an unknown or private-use language.
 
-    It leaves out a script or region that adds nothing: private use (but XK, Kosovo), 001, the CLDR default
-    region of the language and script (pt-BR, zh-Hant-TW, but not pt-PT), a script named like the language.
+    The name is English, or in the language itself when `muxing.track_names` is `native`. It leaves out a
+    script or region that adds nothing: private use (but XK, Kosovo), 001, the CLDR default region of the
+    language and script (pt-BR, zh-Hant-TW, but not pt-PT), a script named like the language.
     """
     code = language.language
     if not code or not Language.make(language=code).has_name_data():
@@ -215,7 +216,20 @@ def language_name(language: Language) -> Optional[str]:
         or Language.make(language=code, script=script).maximize().territory == region
     ):
         region = None
-    return language.update_dict({"script": script, "territory": region}).display_name().replace(" SAR China", "")
+    shown = language.update_dict({"script": script, "territory": region})
+    native = config.muxing.get("track_names") == "native"
+    # names are filed under the full macrolanguage tag (zh-Hant): zh-TW or cmn-Hant named in itself falls back to English
+    full = language.maximize()
+    name = shown.prefer_macrolanguage().display_name(full.prefer_macrolanguage()) if native else shown.display_name()
+    name = name.replace(" SAR China", "")
+    if not native:
+        return name
+    name = re.sub(r"中[国國](香港|澳[门門])特[别別]行政[区區]", r"\1", name)
+    if "（" in name:
+        # the Traditional Chinese data separates with an ASCII comma, the Simplified with a full-width one
+        name = name.replace(", ", "，")
+    # Georgian has capitals (Mtavruli) but never starts a name with one
+    return name[:1].upper() + name[1:] if full.script in ("Latn", "Cyrl", "Grek", "Armn") else name
 
 
 def is_exact_match(language: Union[str, Language], languages: Sequence[Union[str, Language, None]]) -> bool:
