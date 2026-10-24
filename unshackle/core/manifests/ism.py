@@ -23,7 +23,7 @@ from unshackle.core.constants import DOWNLOAD_CANCELLED, DOWNLOAD_LICENCE_ONLY, 
 from unshackle.core.drm import DRM_T, PlayReady, Widevine
 from unshackle.core.drm.verify import decrypt_track
 from unshackle.core.events import events
-from unshackle.core.manifests.dash import RollingMerge, append_segment
+from unshackle.core.manifests.dash import RollingMerge, append_segment, missing_language
 from unshackle.core.manifests.ism_init import (
     build_init_segment,
     parse_codec_private_data_vui,
@@ -251,10 +251,7 @@ class ISM:
                     track_lang = Language.get(lang)
                 if not track_lang and not language:
                     # Language is optional in MS-SSTR; video streams commonly omit it.
-                    raise ValueError(
-                        "Language information could not be derived from the manifest and no fallback "
-                        "language was provided when calling ISM.to_tracks()."
-                    )
+                    raise missing_language("an ISM stream", language)
 
                 track_urls: list[str] = []
                 track_times: list[int] = []

@@ -37,7 +37,7 @@ class Hola(Proxy):
             return None
 
         ban = "Transaction error: temporary ban detected."
-        banned = ConnectionError("Hola banned your IP temporarily from it's services. Try change your IP.")
+        banned = ConnectionError("Hola temporarily banned your IP")
         try:
             # hola-proxy logs to stderr from another thread, so a merged stream splits the Login/Password lines.
             result = subprocess.run(

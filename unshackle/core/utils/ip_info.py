@@ -288,10 +288,7 @@ def verify_proxy_exit(session: requests.Session) -> dict:
         if len(errors) < len(build_providers()):
             log.warning("No geolocation API returned the proxy exit IP, so the exit IP check does not occur")
             return {}
-        raise ConnectionError(
-            f"Proxy check failed: no IP lookup got through the proxy ({type(errors[-1]).__name__}). "
-            "The proxy is down or refused the connection."
-        )
+        raise ConnectionError(f"Proxy check failed: no IP lookup got through the proxy ({type(errors[-1]).__name__})")
     exit_ip = info.get("ip")
     server_ip = (get_ip_info(cached=True) or {}).get("ip")
     # The cached IP can be up to 24h old: a machine that was on a VPN when it cached its IP,

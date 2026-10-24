@@ -346,9 +346,7 @@ def assert_fragments_decrypted(path: Path) -> None:
             first_offset=first_offset,
         )
         raise ValueError(
-            f"{path.name}: {surviving}/{total} fragment(s) still encrypted after decryption (first at "
-            f"byte {first_offset}). The decrypt tool skipped them silently, so check "
-            f"tfhd.sample_description_index against the stsd entry count in the init segment."
+            f"{path.name}: {surviving}/{total} fragment(s) still encrypted after decryption, first at byte {first_offset}"
         )
 
 
@@ -529,9 +527,7 @@ class Track:
             return slice(None)
         low, high = (starts[0] + seconds * timescale for seconds in window)
         if low > starts[-1] and len(starts) > 1:
-            raise click.ClickException(
-                "The title ends before the sample window starts. Use --sample START-END with an earlier window."
-            )
+            raise click.ClickException("The title ends before the sample window starts, use an earlier --sample window")
         first = max(bisect_right(starts, low) - 1, 0)
         self.sample_start = (starts[first] - starts[0]) / timescale
         return slice(first, max(bisect_left(starts, high) + self.sample_tail, first + 1))

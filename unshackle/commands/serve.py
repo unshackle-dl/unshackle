@@ -135,9 +135,7 @@ def _prepare_serve(serve: dict, no_key: bool) -> Optional[str]:
     """
     api_secret = None if no_key else serve.get("api_secret")
     if not no_key and not api_secret:
-        raise ValueError(
-            "API secret key is not configured. Please add 'api_secret' to the 'serve' section in your config."
-        )
+        raise ValueError("No 'api_secret' in the 'serve' section of your config")
 
     for key, directory, pattern in (
         ("devices", config.directories.wvds, "*.wvd"),
@@ -213,8 +211,8 @@ def _build_cdm_config(
             user_config["playready_devices"] = []
             if serve_playready:
                 log.warning(
-                    f'User "{key_id(user_key)}" has no "playready_devices" configured; PlayReady access disabled '
-                    f"for this user. Available PlayReady devices: {prd_device_names}"
+                    f'User "{key_id(user_key)}" has no "playready_devices", PlayReady is off for this user '
+                    f"(available: {prd_device_names})"
                 )
     serve_config["devices"] = wvd_devices
     serve_config["playready_devices"] = prd_devices

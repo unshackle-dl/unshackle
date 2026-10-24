@@ -21,9 +21,9 @@ class WindscribeVPN(Proxy):
         code with a city ("ca:toronto"), and unshackle uses a pinned hostname before any server lookup.
         """
         if not username:
-            raise ValueError("No Username was provided to the WindscribeVPN Proxy Service.")
+            raise ValueError("No username for the WindscribeVPN proxy provider")
         if not password:
-            raise ValueError("No Password was provided to the WindscribeVPN Proxy Service.")
+            raise ValueError("No password for the WindscribeVPN proxy provider")
 
         if server_map is not None and not isinstance(server_map, dict):
             raise TypeError(f"Expected server_map to be a dict mapping a region to a hostname, not '{server_map!r}'.")
@@ -158,10 +158,7 @@ class WindscribeVPN(Proxy):
         if hostnames:
             return random.choice(hostnames)
         elif city:
-            raise ValueError(
-                f"No servers found in city '{city}' for country code '{country_code}'. "
-                "Try a different city or check the city name spelling."
-            )
+            raise ValueError(f"No servers found in city '{city}' for country code '{country_code}'")
 
         return None
 

@@ -42,7 +42,7 @@ This value becomes the one and only API key that the server accepts. The server 
     If you start `unshackle serve` with no `api_secret` configured, and you have *not* passed `--no-key`, the command fails immediately with:
 
     ```
-    API secret key is not configured. Please add 'api_secret' to the 'serve' section in your config.
+    No 'api_secret' in the 'serve' section of your config
     ```
 
     Choose a long, unpredictable value. The API key is the only thing standing between the internet and your CDM and download endpoints.

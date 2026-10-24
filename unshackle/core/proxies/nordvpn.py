@@ -19,14 +19,11 @@ class NordVPN(Proxy):
         The Service Credentials can be found here: https://my.nordaccount.com/dashboard/nordvpn/
         """
         if not username:
-            raise ValueError("No Username was provided to the NordVPN Proxy Service.")
+            raise ValueError("No username for the NordVPN proxy provider")
         if not password:
-            raise ValueError("No Password was provided to the NordVPN Proxy Service.")
+            raise ValueError("No password for the NordVPN proxy provider")
         if not re.match(r"^[a-z0-9]{48}$", username + password, re.IGNORECASE) or "@" in username:
-            raise ValueError(
-                "The Username and Password must be NordVPN Service Credentials, not your Login Credentials. "
-                "The Service Credentials can be found here: https://my.nordaccount.com/dashboard/nordvpn/"
-            )
+            raise ValueError("NordVPN needs its Service Credentials, not your login credentials")
 
         if server_map is not None and not isinstance(server_map, dict):
             raise TypeError(f"Expected server_map to be a dict mapping a region to a server ID, not '{server_map!r}'.")
@@ -101,10 +98,7 @@ class NordVPN(Proxy):
                         None,
                     )
                     if city_id is None:
-                        raise ValueError(
-                            f"No servers found in city '{city}' for country '{country['name']}'. "
-                            "Try a different city or check the city name spelling."
-                        )
+                        raise ValueError(f"No servers found in city '{city}' for country '{country['name']}'")
                 if selector and is_ip(selector):
                     recommended_servers = self.get_all_servers(country["id"])
                 else:

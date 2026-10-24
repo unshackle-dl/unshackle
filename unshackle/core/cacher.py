@@ -67,18 +67,14 @@ class Cacher:
             checksum = data["crc32"]
             calculated = zlib.crc32(jsonpickle.dumps(payload).encode("utf8"))
             if calculated != checksum:
-                raise ValueError(
-                    f"The checksum of the Cache payload mismatched. Checksum: {checksum} !== Calculated: {calculated}"
-                )
+                raise ValueError(f"Cache payload checksum mismatch: {checksum} != calculated {calculated}")
             cache.data = data["data"]
             # The pickled `expiration` is local wall-clock and only right in the zone that wrote it.
             expires_at = data.get("expires_at")
             cache.expiration = datetime.fromtimestamp(expires_at) if expires_at is not None else data["expiration"]
             cache.version = data["version"]
             if cache.version != version:
-                raise ValueError(
-                    f"The version of your {self.service_tag} {key} cache is outdated. Please delete: {cache.path}"
-                )
+                raise ValueError(f"The {self.service_tag} {key} cache is outdated, delete {cache.path}")
         return cache
 
     def set(self, data: Any, expiration: Optional[EXP_T] = None) -> Any:

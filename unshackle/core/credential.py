@@ -75,7 +75,7 @@ class Credential:
         credential = re.fullmatch(r"^([^:]+?):([^:]+?)(?::(.+))?$", text)
         if credential:
             return cls(*credential.groups())
-        raise ValueError("No credentials found in text string. Expecting the format `username:password`")
+        raise ValueError("No credentials in text string, expected `username:password`")
 
     @classmethod
     def load(cls, path: Path) -> Credential:

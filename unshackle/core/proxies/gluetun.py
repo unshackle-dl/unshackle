@@ -191,10 +191,7 @@ class Gluetun(Proxy):
             verify_ip: Automatically make sure that the IP and region are correct after connection (default: True)
         """
         if not binaries.Docker:
-            raise RuntimeError(
-                "Docker is not available. Please install Docker to use Gluetun proxy.\n"
-                "Visit: https://docs.docker.com/engine/install/"
-            )
+            raise RuntimeError("Docker not found, the Gluetun proxy needs it")
 
         self.providers = providers or {}
         self.base_port = base_port
@@ -247,14 +244,14 @@ class Gluetun(Proxy):
         if len(parts) == 1:
             return None
         if len(parts) != 2:
-            raise ValueError(f"Invalid query format: '{query}'. Expected 'provider:region' (e.g., 'windscribe:us')")
+            raise ValueError(f"Invalid query '{query}': expected provider:region, such as windscribe:us")
 
         provider_name = parts[0].lower()
         region = parts[1].lower()
 
         if provider_name not in self.providers:
             available = ", ".join(self.providers.keys())
-            raise ValueError(f"VPN provider '{provider_name}' not configured. Available providers: {available}")
+            raise ValueError(f"VPN provider '{provider_name}' not configured, available: {available}")
 
         query_key = f"{provider_name}:{region}"
         container_name = f"{self.container_prefix}-{provider_name}-{region}"
@@ -320,15 +317,9 @@ class Gluetun(Proxy):
             if re.match(r"^[a-z]{2}$", region):
                 country = get_country_name(region)
                 if not country:
-                    raise ValueError(
-                        f"Country code '{region}' not recognized. "
-                        f"Configure it in server_countries or use a valid ISO 3166-1 alpha-2 code."
-                    )
+                    raise ValueError(f"Country code '{region}' not recognized")
             else:
-                raise ValueError(
-                    f"Region '{region}' not recognized for provider '{provider_name}'. "
-                    f"Configure it in server_countries or server_cities, or use a 2-letter country code."
-                )
+                raise ValueError(f"Region '{region}' not recognized for provider '{provider_name}'")
 
         self.remove_stopped_container(container_name)
 
@@ -453,7 +444,7 @@ class Gluetun(Proxy):
         credentials = config.get("credentials", {})
 
         if vpn_type not in ["wireguard", "openvpn"]:
-            raise ValueError(f"Provider '{provider_name}': Invalid vpn_type '{vpn_type}'. Use 'wireguard' or 'openvpn'")
+            raise ValueError(f"Provider '{provider_name}': vpn_type '{vpn_type}' is not wireguard or openvpn")
 
         if vpn_type == "wireguard":
             # private_key is always required for WireGuard
@@ -468,16 +459,11 @@ class Gluetun(Proxy):
 
             # Windscribe requires preshared_key (can be empty string, but must be set)
             if provider_lower == "windscribe":
-                if "preshared_key" not in credentials:
-                    raise ValueError(
-                        f"Provider '{provider_name}': Windscribe WireGuard requires 'preshared_key' in credentials "
-                        "(can be empty string, but must be set). Get it from windscribe.com/getconfig/wireguard"
-                    )
-                if "addresses" not in credentials:
-                    raise ValueError(
-                        f"Provider '{provider_name}': Windscribe WireGuard requires 'addresses' in credentials. "
-                        "Get it from windscribe.com/getconfig/wireguard"
-                    )
+                for key in ("preshared_key", "addresses"):
+                    if key not in credentials:
+                        raise ValueError(
+                            f"Provider '{provider_name}': Windscribe WireGuard needs '{key}' in credentials"
+                        )
 
             # Providers that require addresses (but not preshared_key)
             elif provider_lower in ["surfshark", "mullvad", "ivpn"]:
@@ -539,8 +525,8 @@ class Gluetun(Proxy):
         country_lower = country_code.lower()
         if provider_name == "surfshark":
             raise ValueError(
-                "Surfshark has no numbered servers. Map the region to a server name such as "
-                f"'{country_lower}-dal.prod.surfshark.com' in server_hostnames instead."
+                f"Surfshark has no numbered servers: map the region in server_hostnames, "
+                f"such as '{country_lower}-dal.prod.surfshark.com'"
             )
         hostname_formats = {
             "nordvpn": f"{country_lower}{server_num}.nordvpn.com",
@@ -646,7 +632,7 @@ class Gluetun(Proxy):
                 message=f"Failed to pull Docker image: {gluetun_image}",
                 success=False,
             )
-            raise RuntimeError(f"Failed to ensure Gluetun Docker image '{gluetun_image}' is available")
+            raise RuntimeError(f"Failed to pull the Gluetun proxy Docker image '{gluetun_image}'")
 
         vpn_type = provider_config.get("vpn_type", "wireguard").lower()
         credentials = provider_config.get("credentials", {})
@@ -1234,7 +1220,7 @@ class Gluetun(Proxy):
         )
         raise RuntimeError(
             f"Failed to verify VPN IP for {container['provider']}:{container['region']} "
-            f"after {max_retries} attempts. Last error: {last_error}"
+            f"after {max_retries} attempts: {last_error}"
         )
 
     def remove_stopped_container(self, container_name: str) -> bool:

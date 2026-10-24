@@ -38,8 +38,7 @@ def tunnel_test(server: Optional[str]) -> None:
     # one exit can answer over IPv4 here and IPv6 there, so a matching country also passes
     if remote.get("ip") != local["ip"] and remote.get("country") != local.get("country"):
         raise click.ClickException(
-            f"Step 3 failed: the server's requests exit at {remote.get('ip')} ({country}), "
-            f"not where this machine exits. Report this with the IP addresses."
+            f"Step 3 failed: the server's requests exit at {remote.get('ip')} ({country}), not at this machine's exit"
         )
     log.info(f"Step 3: the server's requests exit at {remote['ip']} ({country}), {remote.get('ms')} ms for one lookup")
     log.info("The tunnel works. Add --local-proxy to a --remote command.")

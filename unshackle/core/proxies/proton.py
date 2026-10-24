@@ -226,8 +226,7 @@ class ProtonVPN(Proxy):
             self.load_session()
         if not self.access_token:
             log.error(
-                "Proton: no session available; export account.proton.me cookies to %s "
-                "or set proxy_providers.protonvpn.enable: true for the one-time TV login",
+                "Proton: no access token, export account.proton.me cookies to %s or set proxy_providers.protonvpn.enable",
                 self.cookie_path,
             )
             return None

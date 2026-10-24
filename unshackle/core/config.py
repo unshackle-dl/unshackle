@@ -144,7 +144,7 @@ class Config:
         downloader_cfg = kwargs.get("downloader")
         if downloader_cfg and downloader_cfg != "requests":
             warnings.warn(
-                f"downloader '{downloader_cfg}' is deprecated. The unified requests downloader is now used.",
+                f"downloader '{downloader_cfg}' is deprecated, using the requests downloader",
                 DeprecationWarning,
                 stacklevel=2,
             )
@@ -215,9 +215,7 @@ class Config:
 
         if kwargs.get("scene_naming") is not None:
             raise SystemExit(
-                "ERROR: The 'scene_naming' option has been removed.\n"
-                "Please configure 'output_template' in your unshackle.yaml instead.\n"
-                "See unshackle-example.yaml for examples."
+                "ERROR: The 'scene_naming' option was removed, use 'output_template' in your unshackle.yaml"
             )
 
         if self.output_template:

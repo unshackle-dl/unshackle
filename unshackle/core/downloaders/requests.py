@@ -154,7 +154,7 @@ def parse_speed_limit(value: Union[str, int, float, None]) -> Optional[float]:
         return None
     match = re.fullmatch(r"(\d*\.?\d+)\s*([kmg]b?|b)?", text)
     if not match:
-        raise ValueError(f"Invalid speed limit {value!r}: use e.g. 500k, 5M, 1.5G, plain bytes/sec, or 'off'.")
+        raise ValueError(f"Invalid speed limit {value!r}: expected 500k, 5M, 1.5G, bytes per second or 'off'")
     return float(match.group(1)) * SPEED_UNITS[match.group(2) or ""]
 
 

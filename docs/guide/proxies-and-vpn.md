@@ -559,8 +559,7 @@ in unshackle itself.
 
 !!! warning "Docker is required"
     Gluetun needs a working [Docker](https://docs.docker.com/get-docker/) installation on
-    your `PATH`. If Docker is not found, the proxy provider fails to load with an error linking
-    to the install docs. The container also needs the `NET_ADMIN` capability and access
+    your `PATH`. If Docker is not found, the proxy provider fails to load. The container also needs the `NET_ADMIN` capability and access
     to `/dev/net/tun` to bring up the tunnel. unshackle requests both automatically.
 
 ### Query format
@@ -643,6 +642,7 @@ proxy_providers:
     - `surfshark`, `mullvad`, and `ivpn` also require `addresses`.
     - `windscribe` additionally requires **both** `addresses` and `preshared_key`
       (`preshared_key` may be an empty string, but the config key must be present).
+      Get both from the [Windscribe WireGuard config generator](https://windscribe.com/getconfig/wireguard).
     - NordVPN and Proton VPN need only `private_key`.
 
 === "OpenVPN"

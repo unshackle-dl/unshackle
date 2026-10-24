@@ -156,9 +156,7 @@ class RemoteClient:
                 if isinstance(e.args[0] if e.args else None, urllib3.exceptions.ReadTimeoutError):
                     raise self.timed_out(endpoint) from None
                 server_url = safe_display_url(self.server_url)
-                raise RemoteError(
-                    f"Could not connect to remote server at {server_url}. Is it running? (unshackle serve)", "CONNECT"
-                ) from None
+                raise RemoteError(f"Could not connect to remote server at {server_url}", "CONNECT") from None
             except requests.Timeout:
                 raise self.timed_out(endpoint) from None
             # servers differ on which header carries the key, so retry the rest before giving up
@@ -196,8 +194,7 @@ class RemoteClient:
                 return {}
             if self.tunnel and self.tunnel.lost:
                 raise RemoteError(
-                    "The tunnel to the server closed, so the server can no longer send its requests through this "
-                    "machine. Run the command again.",
+                    "The tunnel to the server closed",
                     "TUNNEL_CLOSED",
                 )
             raise RemoteError(f"Server error [{error_code}]: {error_msg}", error_code)
@@ -205,8 +202,7 @@ class RemoteClient:
 
     def timed_out(self, endpoint: str) -> RemoteError:
         return RemoteError(
-            f"Request to remote server timed out after {self.timeout}s: {endpoint}. "
-            "Raise 'timeout' for this server in remote_services.",
+            f"Request to remote server timed out after {self.timeout}s: {endpoint}",
             "TIMEOUT",
         )
 
@@ -727,8 +723,7 @@ def build_title(info: Dict[str, Any], service_tag: str, fallback_id: str) -> Tit
         )
     else:
         raise click.ClickException(
-            f"The remote server sent a title of type {title_type!r}, which this client does not support. "
-            "Update unshackle on both ends so they agree on the title types."
+            f"The remote server sent an unknown title type {title_type!r}; unshackle versions differ"
         )
     apply_title_fields(title, info)
     return title
@@ -744,10 +739,7 @@ def resolve_auth_headers(svc: dict, server_name: str) -> list[str]:
         or not auth_headers
         or not all(isinstance(h, str) and h.strip() for h in auth_headers)
     ):
-        raise click.ClickException(
-            f"Remote service '{server_name}': 'auth_headers' must be a list of header names, e.g.\n\n"
-            '      auth_headers: ["Authorization"]'
-        )
+        raise click.ClickException(f"Remote service '{server_name}': 'auth_headers' must be a list of header names")
     resolved = [h.strip() for h in auth_headers]
     seen = {h.lower() for h in resolved}
     resolved.extend(h for h in DEFAULT_AUTH_HEADERS if h.lower() not in seen)
@@ -764,19 +756,13 @@ def resolve_server(server_name: Optional[str]) -> tuple[str, str, dict]:
     """
     remote_services = config.remote_services
     if not remote_services:
-        raise click.ClickException(
-            "No remote services configured. Add 'remote_services' to your unshackle.yaml:\n\n"
-            "  remote_services:\n"
-            "    my_server:\n"
-            '      url: "https://server:8080"\n'
-            '      api_key: "your-api-key"'
-        )
+        raise click.ClickException("No 'remote_services' in your unshackle.yaml")
 
     if server_name:
         svc = remote_services.get(server_name)
         if not svc:
             available = ", ".join(remote_services.keys())
-            raise click.ClickException(f"Remote service '{server_name}' not found. Available: {available}")
+            raise click.ClickException(f"Remote service '{server_name}' not found, available: {available}")
         services = svc.get("services", {})
         services["_server_cdm"] = svc.get("server_cdm")
         services["_auth_headers"] = resolve_auth_headers(svc, server_name)
@@ -795,7 +781,7 @@ def resolve_server(server_name: Optional[str]) -> tuple[str, str, dict]:
         return svc["url"], svc.get("api_key", ""), services
 
     available = ", ".join(remote_services.keys())
-    raise click.ClickException(f"Multiple remote services configured. Use --server to select one: {available}")
+    raise click.ClickException(f"Multiple remote services configured, pick one with --server: {available}")
 
 
 REMOTE_LIST_TTL = 300.0
@@ -958,7 +944,7 @@ def start_tunnel(client: RemoteClient) -> TunnelClient:
     try:
         tunnel.start()
     except ConnectionError as e:
-        raise click.ClickException(f"--local-proxy needs a tunnel to the server. {e}")
+        raise click.ClickException(f"--local-proxy could not open a tunnel to the server: {e}")
     client.tunnel = tunnel
     return tunnel
 
@@ -1240,10 +1226,7 @@ class RemoteService:
     def require_reachable_proxy(self, proxy: Optional[str]) -> None:
         """Refuse a proxy on this machine when the server is elsewhere: the server cannot reach it."""
         if proxy and is_loopback(proxy) and not is_loopback(self.client.server_url):
-            raise click.ClickException(
-                "That proxy is on your machine, so --remote cannot use it. "
-                "To send the server's requests through this machine's connection, use --local-proxy without --proxy."
-            )
+            raise click.ClickException("--remote cannot use a proxy on this machine; use --local-proxy without --proxy")
 
     def tunnel(self) -> str:
         """The ``tunnel:<id>`` proxy to send the server for ``--local-proxy``, opening the tunnel the first time."""
@@ -1297,9 +1280,8 @@ class RemoteService:
                     self.log.info(f"Using a '{regions[0]}' proxy to match a server account ({', '.join(regions)})")
                 except click.ClickException:
                     self.log.warning(
-                        f"The server's accounts work in {', '.join(regions)} and you are in {client_region}. "
-                        "There is no local proxy for that region. Pass --proxy yourself if the server "
-                        "rejects the remote session"
+                        f"No local proxy for the server's account region ({', '.join(regions)}), "
+                        f"you are in {client_region}"
                     )
         elif not no_proxy and proxy:
             resolved_proxy = resolve_remote_proxy_arg(server_proxy_arg(self.ctx.parent.params), providers)
@@ -1830,25 +1812,23 @@ class RemoteService:
                 else "no vault, neither the server's nor yours"
             )
             raise click.ClickException(
-                f"The key for {track} is in {vaults}. This session runs on the server's device, which "
-                "licenses nothing, so drop the service's server-identity option to license it with your own device."
+                f"The content key for {track} is in {vaults}; drop the service's server-identity option to license it locally"
             )
         cap = refusal.get("max_height")
         if cap:
-            why = f"The server CDM licenses up to {cap}p for this key"
+            why = f"The server CDM licenses up to {cap}p for this API key"
         elif getattr(self, "_server_vault", False):
-            why = "The server vault holds no key for this track"
+            why = "The server vault holds no content key for this track"
         else:
             why = "The server CDM refused this track"
         cdm = self.local_cdm
         if cdm is None:
-            raise click.ClickException(f"{why}, and {track} needs a local CDM to license it with your own device.")
+            raise click.ClickException(f"{why}, and {track} needs a local CDM to license it")
         drm_class = "PlayReady" if is_playready_cdm(cdm) else "Widevine"
         if track.drm and not any(d.__class__.__name__ == drm_class for d in track.drm):
             height = getattr(track, "height", None)
             raise click.ClickException(
-                f"{why}, and {track} carries no {drm_class} DRM for your local device to license. "
-                f"Pass -q {height or 'with that height'} so the session starts on your own device."
+                f"{why}, and {track} has no {drm_class} DRM for your local CDM; pass -q {height or 'with that height'}"
             )
         track.drm_preference = drm_class.lower()
         self.client_licensed.add(str(track.id))

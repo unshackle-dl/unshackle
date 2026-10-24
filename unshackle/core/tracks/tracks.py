@@ -237,14 +237,7 @@ class Tracks:
         for track in flatten(tracks):
             if self.exists(by_id=track.id):
                 if not warn_only:
-                    raise ValueError(
-                        "One or more of the provided Tracks is a duplicate. "
-                        "Track IDs must be unique but accurate using static values. The "
-                        "value should stay the same no matter when you request the same "
-                        "content. Use a value that has relation to the track content "
-                        "itself and is static or permanent and not random/RNG data that "
-                        "wont change each refresh or conflict in edge cases."
-                    )
+                    raise ValueError(f"Duplicate track ID {track.id}: track IDs must be unique and stable")
                 duplicates += 1
                 continue
 
@@ -573,11 +566,7 @@ class Tracks:
         """
         mp4box = getattr(binaries, "MP4Box", None)
         if not mp4box:
-            raise RuntimeError(
-                "MP4Box (GPAC) is required to mux DTS-UHD (DTS:X Profile 2) audio but was not found. "
-                "Install it with your package manager (e.g. `apt install gpac`), then check it with "
-                "`unshackle env check`."
-            )
+            raise RuntimeError("MP4Box (GPAC) not found, muxing DTS-UHD (DTS:X Profile 2) audio needs it")
 
         progress = progress or partial(lambda **kwargs: None)
 

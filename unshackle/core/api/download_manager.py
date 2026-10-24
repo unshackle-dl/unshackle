@@ -677,26 +677,22 @@ def perform_download(
 
     except SystemExit as exc:
         if exc.code != 0:
-            stdout_str = stdout_capture.getvalue()
-            stderr_str = stderr_capture.getvalue()
             log.error(f"Download exited with code {exc.code}")
-            log.error(f"Stdout: {stdout_str}")
-            log.error(f"Stderr: {stderr_str}")
+            log.debug("Stdout: %s", stdout_capture.getvalue())
+            log.debug("Stderr: %s", stderr_capture.getvalue())
             raise APIError(APIErrorCode.DOWNLOAD_ERROR, f"Download failed with exit code {exc.code}")
 
     except Exception as exc:  # noqa: BLE001 - propagate to caller
-        stdout_str = stdout_capture.getvalue()
-        stderr_str = stderr_capture.getvalue()
         log.error(f"Download execution failed: {exc}")
-        log.error(f"Stdout: {stdout_str}")
-        log.error(f"Stderr: {stderr_str}")
+        log.debug("Stdout: %s", stdout_capture.getvalue())
+        log.debug("Stderr: %s", stderr_capture.getvalue())
         raise
 
     # dl.result() catches a download-worker exception, reports it, but returns normally (exit 0).
     # It keeps the error in download_error, so the job isn't reported as completed with no output.
     if (error := getattr(dl_instance, "download_error", None)) is not None:
         # segment URLs carry signed CDN tokens (hmac, session IDs) that redact_text does not match
-        detail = redact_all(" ".join(line.strip() for line in dl_instance.failure_lines(error)[1:]))
+        detail = redact_all(dl_instance.failure_lines(error)[1].strip())
         raise APIError(APIErrorCode.WORKER_ERROR, f"download worker failed: {detail}")
 
     if progress_callback:

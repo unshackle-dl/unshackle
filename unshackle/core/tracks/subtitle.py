@@ -1128,8 +1128,7 @@ class Subtitle(Track):
             except (IOError, OSError) as e:
                 if "is not valid subtitle file" in str(e):
                     log = logging.getLogger("Subtitle")
-                    log.warning(f"Failed to strip SDH from {self.path.name}: {e}")
-                    log.warning("Continuing without SDH stripping for this subtitle")
+                    log.warning(f"Failed to strip SDH from {self.path.name}, keeping it as is: {e}")
                 else:
                     raise
 

@@ -181,10 +181,7 @@ def validate_metadata_ids(
         (flag, value) for flag, value in (("--tmdb", tmdb_id), ("--imdb", imdb_id), ("--tvdb", tvdb_id)) if value
     ]
     if len(supplied) > 1:
-        raise click.UsageError(
-            f"{', '.join(flag for flag, _ in supplied)} cannot be used together. "
-            "Give one ID and unshackle resolves the others from it."
-        )
+        raise click.UsageError(f"{', '.join(flag for flag, _ in supplied)} cannot be used together; give one ID")
     if not supplied:
         return
 
@@ -197,9 +194,7 @@ def validate_metadata_ids(
 
     if consumers:
         keys = sorted({ID_PROVIDER_KEYS[cls.NAME] for cls in consumers if cls.NAME in ID_PROVIDER_KEYS})
-        raise click.UsageError(
-            f"{flag} needs the {consumers[0].NAME} provider. Set {' or '.join(keys)} in your config."
-        )
+        raise click.UsageError(f"{flag} needs the {consumers[0].NAME} provider: set {' or '.join(keys)} in your config")
     names = sorted({cls.NAME for cls in providers.REGISTRY.values() if cls.ID_KIND == id_kind})
     raise click.UsageError(
         f"{flag} needs the {' or '.join(names)} provider, which your metadata_providers config leaves out."
@@ -241,39 +236,28 @@ def select_hybrid_bases(videos: Sequence[Video]) -> list[Video]:
     return list(bases.values())
 
 
-def hybrid_gate_failure(videos: Sequence[Video], generate_dv: bool) -> Optional[tuple[str, str]]:
-    """The (message, detail) that stops HYBRID for these selected videos, or None when it can go on."""
+def hybrid_gate_failure(videos: Sequence[Video], generate_dv: bool) -> Optional[str]:
+    """The message that stops HYBRID for these selected videos, or None when it can go on."""
     if any(v.native_hybrid for v in videos):
         return None
     hdr_tracks = [v for v in videos if v.range in (Video.Range.HDR10, Video.Range.HDR10P)]
     base_tracks = [v for v in hdr_tracks if v.codec in (Video.Codec.HEVC, None)]
     dv_tracks = [v for v in videos if v.range == Video.Range.DV]
     has_hdr10p = any(v.range == Video.Range.HDR10P for v in base_tracks)
-    available_ranges = sorted(set(v.range.name for v in videos))
+    ranges = ", ".join(sorted(set(v.range.name for v in videos))) or "none"
+    missing = f"HYBRID needs HDR10/HDR10+ and DV tracks, available ranges: {ranges}"
 
-    if not hdr_tracks and not dv_tracks:
-        return (
-            "HYBRID mode requires both HDR10/HDR10+ and DV tracks, but neither is available",
-            f"Available ranges: {', '.join(available_ranges) if available_ranges else 'none'}",
-        )
     if not hdr_tracks:
-        return (
-            "HYBRID mode requires both HDR10/HDR10+ and DV tracks, but only DV is available",
-            f"Available ranges: {', '.join(available_ranges)}",
-        )
+        return missing
     if not base_tracks:
         codecs = sorted(set(v.codec.name for v in hdr_tracks if v.codec))
-        return (
-            "HYBRID mode requires an HEVC HDR10/HDR10+ base, but none is available",
-            f"Available HDR10/HDR10+ codecs: {', '.join(codecs)}",
-        )
+        return f"HYBRID needs an HEVC HDR10/HDR10+ base, available codecs: {', '.join(codecs)}"
     if not dv_tracks and not (generate_dv and has_hdr10p):
-        msg_detail = f"Available ranges: {', '.join(available_ranges)}"
         if generate_dv:
-            msg_detail += ". --generate-dv needs an HEVC HDR10+ track, and the service returned none."
-        elif has_hdr10p:
-            msg_detail += ". Add --generate-dv to generate Dolby Vision from HDR10+."
-        return "HYBRID mode requires both HDR10/HDR10+ and DV tracks, but only HDR10 is available", msg_detail
+            return f"{missing}; --generate-dv found no HEVC HDR10+ track"
+        if has_hdr10p:
+            return f"{missing}; add --generate-dv to make DV from HDR10+"
+        return missing
     return None
 
 
@@ -491,10 +475,7 @@ def apply_service_dl_overrides(ctx: click.Context, service_dl_config: dict[str, 
             ctx.params[name] = param.type_cast_value(ctx, value)
             log.debug(f"Applied service dl override '{name}': {ctx.params[name]}")
         except Exception as e:
-            log.warning(
-                f"Failed to apply service dl override '{name}'={value!r}: {e}. "
-                f"Check that the value is valid for this parameter."
-            )
+            log.warning(f"Failed to apply service dl override '{name}'={value!r}: {e}")
 
 
 def download_tracks_in_passes(
@@ -1288,11 +1269,7 @@ class dl:
         self.download_error: Optional[BaseException] = None
 
         if not config.output_template:
-            raise click.ClickException(
-                "No 'output_template' configured in your unshackle.yaml.\n"
-                "Please add an 'output_template' section with movies, series, and songs/music templates.\n"
-                "See unshackle-example.yaml for examples."
-            )
+            raise click.ClickException("No 'output_template' in your unshackle.yaml")
 
         self.service = Services.get_tag(ctx.invoked_subcommand)
         self.vault_service = Services.get_vault_tag(self.service)
@@ -1335,7 +1312,7 @@ class dl:
             )
 
         if self.daily and not self.enrich:
-            self.log.warning("--daily fills air dates from TVDB only with --enrich. A service can set them itself.")
+            self.log.warning("--daily takes TVDB air dates only with --enrich")
 
         # Initialize debug logger with service name if debug logging is enabled
         if config.debug or logging.root.level == logging.DEBUG:
@@ -1800,7 +1777,7 @@ class dl:
             ("-fsl/--forced-s-lang", fsl_excl),
         ):
             if any(token.lower() == "all" for token in excludes):
-                self.log.error(f"{flag}: 'all' cannot be excluded. Name the languages to exclude instead.")
+                self.log.error(f"{flag}: 'all' cannot be excluded")
                 sys.exit(1)
         # exclusion-only use falls back to the flag's own default; -vl/-al have none, they cascade to -l
         if lang_excl and not lang:
@@ -1910,7 +1887,7 @@ class dl:
                 if vbitrate_min > vbitrate_max:
                     vbitrate_min, vbitrate_max = vbitrate_max, vbitrate_min
             except (ValueError, IndexError):
-                self.log.error("Invalid --vbitrate-range format. Use 'MIN-MAX' (e.g., '6000-7000').")
+                self.log.error("Invalid --vbitrate-range: expected MIN-MAX, such as 6000-7000")
                 sys.exit(1)
 
         abitrate_min, abitrate_max = None, None
@@ -1926,7 +1903,7 @@ class dl:
                 if abitrate_min > abitrate_max:
                     abitrate_min, abitrate_max = abitrate_max, abitrate_min
             except (ValueError, IndexError):
-                self.log.error("Invalid --abitrate-range format. Use 'MIN-MAX' (e.g., '128-256').")
+                self.log.error("Invalid --abitrate-range: expected MIN-MAX, such as 128-256")
                 sys.exit(1)
 
         if not acodec:
@@ -1950,15 +1927,13 @@ class dl:
             from unshackle.core.binaries import DoviTool
 
             if not DoviTool:
-                self.log.error("Unable to run hybrid mode: dovi_tool not detected")
-                self.log.error("Please install dovi_tool from https://github.com/quietvoid/dovi_tool")
+                self.log.error("Unable to run hybrid mode: dovi_tool not found")
                 sys.exit(1)
             if generate_dv:
                 from unshackle.core.binaries import HDR10PlusTool
 
                 if not HDR10PlusTool:
-                    self.log.error("Unable to run --generate-dv: hdr10plus_tool not detected")
-                    self.log.error("Please install hdr10plus_tool from https://github.com/quietvoid/hdr10plus_tool")
+                    self.log.error("Unable to run --generate-dv: hdr10plus_tool not found")
                     sys.exit(1)
 
         if cdm_only is None:
@@ -2077,13 +2052,13 @@ class dl:
             if enrich_lang:
                 self.log.info(f"Original language from metadata: {enrich_lang}")
             if not (enrich_title or enrich_year or enrich_lang):
-                self.log.warning("--enrich found no metadata. Is the provider's API key configured?")
+                self.log.warning("--enrich found no metadata")
             elif missing := [
                 name
                 for name, value in (("title", enrich_title), ("year", enrich_year), ("language", enrich_lang))
                 if not value
             ]:
-                self.log.warning(f"--enrich source gave no {', '.join(missing)}. Those fields are unchanged.")
+                self.log.warning(f"--enrich source gave no {', '.join(missing)}, kept the service's values")
 
             if isinstance(titles, (Series, Movies)):
                 for t in titles:
@@ -2868,12 +2843,10 @@ class dl:
                             self.log.info("No Dolby Vision track: Dolby Vision will be generated from HDR10+")
 
                         if gate_failure:
-                            msg, msg_detail = gate_failure
                             other_ranges = [r for r in range_ if r != Video.Range.HYBRID]
                             if best_available and other_ranges:
-                                self.log.warning(msg)
                                 self.log.warning(
-                                    f"Continuing with remaining range(s): {', '.join(r.name for r in other_ranges)}"
+                                    f"{gate_failure}; continuing with {', '.join(r.name for r in other_ranges)}"
                                 )
                                 range_ = other_ranges
                                 fallback_pool = pre_hybrid_videos
@@ -2902,8 +2875,7 @@ class dl:
                                         fallback_selected.append(match)
                                 title.tracks.videos = fallback_selected
                             else:
-                                self.log.error(msg)
-                                self.log.error(msg_detail)
+                                self.log.error(gate_failure)
                                 sys.exit(1)
 
                     fsl = resolve_sort_langs(forced_s_lang, title.language, exact=exact_lang)
@@ -3198,17 +3170,14 @@ class dl:
                     system_cdms = [self.cdm_for(system.lower(), height) for height in heights]
                     if not all(system_cdm and matches(system_cdm) for system_cdm in system_cdms):
                         hint = (
-                            "--cdm selects one device, so remove it."
+                            "drop --cdm, which selects one device"
                             if self.cdm_override
-                            else f"Set cdm.{self.service}.{system.lower()} in the configuration."
+                            else f"set cdm.{self.service}.{system.lower()}"
                         )
-                        raise click.ClickException(f"--all-drm needs a {system} CDM for {self.service}. {hint}")
+                        raise click.ClickException(f"--all-drm needs a {system} CDM for {self.service}: {hint}")
                     if is_remote_cdm(system_cdms[0]) and system not in self.all_drm_warned:
                         self.all_drm_warned.add(system)
-                        self.log.warning(
-                            f"The {system} CDM is remote. It can answer from its own key cache "
-                            "and send no licence request."
-                        )
+                        self.log.warning(f"The {system} CDM is remote and can answer with cached content keys")
 
             if hasattr(service, "resolve_server_keys"):
                 service.resolve_server_keys(title)
@@ -3510,10 +3479,7 @@ class dl:
                             has_repacked = True
                             events.emit(events.Types.TRACK_REPACKED, track=track)
                             if has_encrypted_sample_entry(track.path):
-                                self.log.warning(
-                                    f"Track {track.id} still has an encrypted sample entry after repacking, so "
-                                    "decryption likely failed and the muxed output may be unplayable."
-                                )
+                                self.log.warning(f"Track {track.id} still has an encrypted sample entry after repack")
                     if has_repacked:
                         self.log.info("Repacked one or more tracks with FFMPEG")
 
@@ -4213,9 +4179,7 @@ class dl:
         collisions = [slot for slot, count in Counter(renumbered).items() if count > 1]
         if collisions:
             self.log.error(
-                "TVDB's %s order does not cover %d of this series' episodes, and renumbering the rest "
-                "would give %d season/episode slot(s) two episodes each. Keeping the %s numbering "
-                "%s uses. Pick an order that covers the whole series.",
+                "TVDB's %s order misses %d episode(s) and puts two in %d slot(s), keeping the %s numbering of %s",
                 self.tvdb_order,
                 unmapped,
                 len(collisions),
@@ -4411,7 +4375,7 @@ class dl:
         keys = len(doc.key_pool())
         self.log.info(f"Saved the export to {namer.path}: {plural(len(doc.titles), 'title')}, {plural(keys, 'key')}")
         if keys:
-            self.log.warning("The export holds content keys. Keep it private.")
+            self.log.warning("The export holds content keys: keep it private")
 
     def export_entry(self, title: Title_T) -> mediaexport.Entry:
         """A mediaexport entry for ``title``: manifests, chapters, a small track list, no keys yet."""
@@ -4485,21 +4449,19 @@ class dl:
 
     @staticmethod
     def failure_lines(e: BaseException) -> list[str]:
-        """Return the lines that report a failed download.
+        """Return the header and the one line that report a failed download.
 
-        A ClickException is a deliberate stop with a message for the user, so it gets no
-        "unexpected error" line, and the caller prints no traceback for it. Neither does a
-        request that failed on every retry: it gets its retry notes instead.
+        A ClickException is a deliberate stop with a message for the user, so it is reported
+        without its type, and the caller prints no traceback for it. Neither does a request
+        that failed on every retry: its line ends with its retry notes.
         """
         if isinstance(e, click.ClickException):
-            return [":x: Download Failed...", f"   {e.format_message()}"]
-        if retries_exhausted(e):
-            return [":x: Download Failed...", f"   {type(e).__name__}: {e}, {'; '.join(e.__notes__)}"]
-        lines = [":x: Download Failed...", f"   {type(e).__name__}: {e}"]
-        if (returncode := getattr(e, "returncode", None)) is not None:
-            lines.append(f"   Binary call failed, Process exit code: {returncode}")
-        lines.append("   An unexpected error occurred in one of the download workers.")
-        return lines
+            line = e.format_message()
+        else:
+            line = f"{type(e).__name__}: {e}"
+            if retries_exhausted(e):
+                line += f", {'; '.join(e.__notes__)}"
+        return [":x: Download Failed...", f"   {line}"]
 
     def decrypt_verified(
         self,
@@ -4852,8 +4814,7 @@ class dl:
         if not others and other_type.__name__ not in self.all_drm_warned:
             self.all_drm_warned.add(other_type.__name__)
             self.log.warning(
-                f"A track does not offer {other_type.__name__}, so it licenses with "
-                f"{type(drm).__name__} only. This warning shows one time: {track}"
+                f"Track {track} has no {other_type.__name__} DRM, licensing with {type(drm).__name__} only"
             )
 
         targets = [drm, *others[:1]]

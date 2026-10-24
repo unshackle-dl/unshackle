@@ -386,10 +386,7 @@ class Hybrid:
                     message="Video has no container duration; RPU keeps the active area of the DV track",
                     context={"input": str(input_video)},
                 )
-                self.log.warning(
-                    "Video has no container duration, skipping crop detection. "
-                    "The RPU keeps the active area of the DV track."
-                )
+                self.log.warning("Video has no container duration, skipping crop detection")
                 return None
             duration = float(duration_value)
 
@@ -665,7 +662,7 @@ class Hybrid:
             return
 
         if not HDR10PlusTool:
-            raise ValueError("HDR10Plus_tool not found. Please install it to use HDR10+ to DV conversion.")
+            raise ValueError("HDR10Plus_tool not found, HDR10+ to DV conversion needs it")
 
         try:
             run_step(
@@ -817,10 +814,7 @@ class Hybrid:
                     json.dump(generator_config, f)
 
             if profile == "A":
-                self.log.warning(
-                    "The HDR10+ metadata is Profile A, which is often less reliable than Profile B. "
-                    "Check the Dolby Vision result before you keep it."
-                )
+                self.log.warning("The HDR10+ metadata is Profile A, less reliable than Profile B")
 
             try:
                 dovi.generate(

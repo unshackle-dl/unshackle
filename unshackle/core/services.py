@@ -332,10 +332,7 @@ def check_load_errors() -> None:
     """
     if DIRTY_REPOS:
         joined = "\n".join(f"  - {p}" for p in DIRTY_REPOS)
-        raise click.ClickException(
-            "Service repo has local changes - refusing to refresh so your edits are not lost.\n"
-            "Commit and push them to the upstream repo (or revert them), then retry:\n" + joined
-        )
+        raise click.ClickException("Service repo has local changes, not refreshing:\n" + joined)
     global SUMMARY_LOGGED
     if not SUMMARY_LOGGED:
         SUMMARY_LOGGED = True
@@ -422,7 +419,7 @@ class Services(click.Group):
                 raise click.ClickException(
                     f"There are no Services added yet, therefore the '{name}' Service could not be found."
                 )
-            raise click.ClickException(f"{e}. Available Services: {', '.join(available_services)}")
+            raise click.ClickException(f"{e}, available: {', '.join(available_services)}")
 
         if hasattr(service, "cli"):
             cli = service.cli
@@ -518,8 +515,7 @@ class Services(click.Group):
                 if services:
                     available = ", ".join(sorted(svc["tag"] for svc in services))
                     raise click.ClickException(
-                        f"The remote server does not offer a service named '{name}'. "
-                        f"It offers these services: {available}"
+                        f"The remote server does not offer a service named '{name}', available: {available}"
                     )
                 raise click.ClickException("The remote server offers no services to your API key.")
             tag = svc_info["tag"]

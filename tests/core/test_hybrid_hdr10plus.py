@@ -652,19 +652,14 @@ def video(
 
 def test_hybrid_fails_with_neither_a_base_nor_dv() -> None:
     assert hybrid_gate_failure([video("sdr", Video.Range.SDR)], True) == (
-        "HYBRID mode requires both HDR10/HDR10+ and DV tracks, but neither is available",
-        "Available ranges: SDR",
+        "HYBRID needs HDR10/HDR10+ and DV tracks, available ranges: SDR"
     )
-    assert hybrid_gate_failure([], True) == (
-        "HYBRID mode requires both HDR10/HDR10+ and DV tracks, but neither is available",
-        "Available ranges: none",
-    )
+    assert hybrid_gate_failure([], True) == "HYBRID needs HDR10/HDR10+ and DV tracks, available ranges: none"
 
 
 def test_hybrid_fails_with_dv_only() -> None:
     assert hybrid_gate_failure([video("dv", Video.Range.DV)], True) == (
-        "HYBRID mode requires both HDR10/HDR10+ and DV tracks, but only DV is available",
-        "Available ranges: DV",
+        "HYBRID needs HDR10/HDR10+ and DV tracks, available ranges: DV"
     )
 
 
@@ -681,27 +676,16 @@ def test_hybrid_goes_on_with_a_base_and_dv_whatever_the_flag() -> None:
 def test_hybrid_fails_up_front_when_no_base_is_hevc() -> None:
     """dovi_tool injects into HEVC, so an all-AV1 title fails before it downloads anything."""
     videos = [video("av1", Video.Range.HDR10P, codec=Video.Codec.AV1), video("dv", Video.Range.DV)]
-    assert hybrid_gate_failure(videos, False) == (
-        "HYBRID mode requires an HEVC HDR10/HDR10+ base, but none is available",
-        "Available HDR10/HDR10+ codecs: AV1",
-    )
+    assert hybrid_gate_failure(videos, False) == "HYBRID needs an HEVC HDR10/HDR10+ base, available codecs: AV1"
     assert hybrid_gate_failure(videos + [video("h", Video.Range.HDR10, codec=None)], False) is None
 
 
 @pytest.mark.parametrize(
     "ranges, to_dv, detail",
     [
-        (
-            [Video.Range.HDR10P],
-            False,
-            "Available ranges: HDR10P. Add --generate-dv to generate Dolby Vision from HDR10+.",
-        ),
-        ([Video.Range.HDR10], False, "Available ranges: HDR10"),
-        (
-            [Video.Range.HDR10],
-            True,
-            "Available ranges: HDR10. --generate-dv needs an HEVC HDR10+ track, and the service returned none.",
-        ),
+        ([Video.Range.HDR10P], False, "HDR10P; add --generate-dv to make DV from HDR10+"),
+        ([Video.Range.HDR10], False, "HDR10"),
+        ([Video.Range.HDR10], True, "HDR10; --generate-dv found no HEVC HDR10+ track"),
     ],
 )
 def test_hybrid_fails_without_dv_and_hints_at_the_flag_only_when_it_is_off(
@@ -709,10 +693,7 @@ def test_hybrid_fails_without_dv_and_hints_at_the_flag_only_when_it_is_off(
 ) -> None:
     """A service that fetches HYBRID by hand may never return HDR10+; the hint must not blame the user then."""
     videos = [video(r.name, r) for r in ranges]
-    assert hybrid_gate_failure(videos, to_dv) == (
-        "HYBRID mode requires both HDR10/HDR10+ and DV tracks, but only HDR10 is available",
-        detail,
-    )
+    assert hybrid_gate_failure(videos, to_dv) == f"HYBRID needs HDR10/HDR10+ and DV tracks, available ranges: {detail}"
 
 
 @pytest.mark.parametrize("to_dv", [False, True])

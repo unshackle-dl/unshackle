@@ -668,7 +668,7 @@ remote session API and a good template for any client.
 
 ## Troubleshooting
 
-!!! example "\"Could not connect to remote server ... Is it running?\""
+!!! example "\"Could not connect to remote server at ...\""
     The client could not reach the URL. Make sure that `unshackle serve` operates on
     the server, the `url`/port in `remote_services` are correct (default port `8786`),
     and any firewall or reverse proxy allows the connection.

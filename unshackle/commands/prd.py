@@ -63,9 +63,9 @@ def new(
     elif len(paths) == 2:
         group_key, group_certificate = paths
         if not group_key.is_file():
-            raise click.UsageError("group_key: Not a path to a file, or it doesn't exist.", ctx)
+            raise click.UsageError("group_key: Not a path to a file, or it does not exist.", ctx)
         if not group_certificate.is_file():
-            raise click.UsageError("group_certificate: Not a path to a file, or it doesn't exist.", ctx)
+            raise click.UsageError("group_certificate: Not a path to a file, or it does not exist.", ctx)
         device_dir = None
     else:
         raise click.UsageError(
@@ -73,9 +73,9 @@ def new(
             ctx,
         )
     if encryption_key and not encryption_key.is_file():
-        raise click.UsageError("encryption_key: Not a path to a file, or it doesn't exist.", ctx)
+        raise click.UsageError("encryption_key: Not a path to a file, or it does not exist.", ctx)
     if signing_key and not signing_key.is_file():
-        raise click.UsageError("signing_key: Not a path to a file, or it doesn't exist.", ctx)
+        raise click.UsageError("signing_key: Not a path to a file, or it does not exist.", ctx)
 
     log = logging.getLogger("prd")
 
@@ -161,7 +161,7 @@ def reprovision_device(
 ) -> None:
     """Reprovision a PlayReady Device (.prd) file."""
     if not prd_path.is_file():
-        raise click.UsageError("prd_path: Not a path to a file, or it doesn't exist.", ctx)
+        raise click.UsageError("prd_path: Not a path to a file, or it does not exist.", ctx)
 
     log = logging.getLogger("prd")
     log.info("Reprovisioning Playready Device (.prd) file, %s", prd_path.name)
@@ -234,7 +234,7 @@ def test(
     """Do a test of a PlayReady device on the Microsoft demo server."""
 
     if not device.is_file():
-        raise click.UsageError("device: Not a path to a file, or it doesn't exist.", ctx)
+        raise click.UsageError("device: Not a path to a file, or it does not exist.", ctx)
 
     log = logging.getLogger("prd")
 

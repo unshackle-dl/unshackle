@@ -115,10 +115,10 @@ def test_other_audio_still_muxes_with_mkvmerge(tmp_path: Path, monkeypatch: pyte
         tracks.mux("Title", delete=False, output_path=tmp_path / "out.muxed.mkv")
 
 
-def test_a_missing_mp4box_names_the_install(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_a_missing_mp4box_names_the_binary(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(binaries, "MP4Box", None, raising=False)
     tracks = build_tracks(tmp_path, b"dtsx")
-    with pytest.raises(RuntimeError, match="gpac"):
+    with pytest.raises(RuntimeError, match="MP4Box"):
         tracks.mux("Title", delete=False, output_path=tmp_path / "out.muxed.mkv")
 
 

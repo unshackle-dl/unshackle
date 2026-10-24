@@ -44,6 +44,19 @@ from unshackle.core.utils.redact import safe_display_url
 from unshackle.core.utils.xml import load_xml
 
 
+class MissingLanguageError(ValueError):
+    """A manifest track has no language, and the fallback language is missing or invalid."""
+
+
+def missing_language(where: str, fallback: Any) -> MissingLanguageError:
+    """The MissingLanguageError for a track at ``where``, naming why the fallback did not apply."""
+    if fallback is None:
+        return MissingLanguageError(f"No language for {where}, and no fallback language was given")
+    if not tag_is_valid(str(fallback).strip()) or str(fallback).startswith("und"):
+        return MissingLanguageError(f"No language for {where}, and the fallback language {fallback} is invalid")
+    return MissingLanguageError(f"No language for {where}")
+
+
 def append_segment(dst: BinaryIO, segment_file: Path, is_text_subtitle: bool) -> None:
     """Append one segment file to the output, with the text subtitle fixups when they apply."""
     if is_text_subtitle:
@@ -286,12 +299,7 @@ class DASH:
 
                     track_lang = self.get_language(adaptation_set, rep, fallback=language)
                     if not track_lang:
-                        msg = "Language information could not be derived from a Representation."
-                        if language is None:
-                            msg += " No fallback language was provided when calling DASH.to_tracks()."
-                        elif not tag_is_valid((str(language) or "").strip()) or str(language).startswith("und"):
-                            msg += f" The fallback language provided is also invalid: {language}"
-                        raise ValueError(msg)
+                        raise missing_language("a DASH Representation", language)
 
                     # for some reason it's incredibly common for services to not provide
                     # a good and actually unique track ID, sometimes because of the lang

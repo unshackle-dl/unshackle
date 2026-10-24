@@ -271,8 +271,7 @@ def instantiate_service(
             for k in cli_param_names & transport_keys & set(data):
                 if k not in ("service", "title_id", "proxy", "no_proxy") and data.get(k) is not None:
                     log.warning(
-                        f"Ignoring flat '{sanitize_log(k)}' as a service option (it names a transport field); "
-                        "update the client to send service options under 'service_params'"
+                        f"Ignoring flat '{sanitize_log(k)}' as a service option, send it under 'service_params'"
                     )
     return parent_ctx.invoke(service_module.cli, title=title, **extras)
 
@@ -1055,8 +1054,7 @@ def choose_session_cdm(
     if data.get("cdm_type"):
         return False, cap
     raise capped_error(
-        f"The server CDM licenses {service} up to {cap}p for this API key. "
-        f"Set up a local CDM to license {wanted}p with your own device, or pass -q {cap}.",
+        f"The server CDM licenses {service} up to {cap}p for this API key, {wanted}p needs a local CDM",
         cap,
     )
 
@@ -1206,8 +1204,7 @@ def next_server_profile(service: str, region: Optional[str]) -> Optional[str]:
         regions = ", ".join(covered.get("regions") or []) or "none"
         raise APIError(
             APIErrorCode.INVALID_INPUT,
-            f"No server account for {service} in region '{region or 'unknown'}'. "
-            f"Its accounts cover: {regions}. Pass --proxy with one of those country codes.",
+            f"No server account for {service} in region '{region or 'unknown'}', accounts cover: {regions}",
             details={"service": service, "region": region, "regions": covered.get("regions") or []},
         )
     key = f"{service}:{','.join(p or '' for p in pool)}"
@@ -2160,7 +2157,7 @@ def validate_download_parameters(data: Dict[str, Any]) -> Optional[str]:
     """
     for banned in ("postscript", "post_script", "post_scripts"):
         if data.get(banned):
-            return f"'{banned}' is not accepted over the API. Define post_scripts in unshackle.yaml."
+            return f"'{banned}' is not accepted over the API, only from unshackle.yaml"
 
     # The worker reads cookies/{service}/{profile}.txt, so a profile must not be able to name a path.
     try:
@@ -2267,10 +2264,7 @@ def validate_download_parameters(data: Dict[str, Any]) -> Optional[str]:
 
     supplied_ids = [name for name in ("tmdb_id", "imdb_id", "tvdb_id") if data.get(name)]
     if len(supplied_ids) > 1:
-        return (
-            f"Cannot use multiple external IDs: {', '.join(supplied_ids)}. "
-            "Give one ID and unshackle resolves the others from it."
-        )
+        return f"Cannot use multiple external IDs: {', '.join(supplied_ids)}; give one ID"
 
     exclusive_flags = []
     if data.get("video_only"):
@@ -2340,7 +2334,7 @@ def enforce_download_gates(params: Dict[str, Any], request: Optional[web.Request
     if not server_cdm_allowed(request, params.get("service")):
         raise APIError(
             APIErrorCode.FORBIDDEN,
-            "Download jobs license with the server CDM, which is not enabled for this key on this service.",
+            "Download jobs license with the server CDM, which is not enabled for this API key on this service",
         )
     cap = server_cdm_max_height(request, params.get("service"))
     if cap is not None:
@@ -2350,27 +2344,16 @@ def enforce_download_gates(params: Dict[str, Any], request: Optional[web.Request
             """The job's own value for this parameter, or the ``serve:`` dl default that the job falls back to."""
             return params[key] if key in params else serve_defaults.get(key)
 
+        capped = f"Download jobs license with the server CDM, up to {cap}p for this API key"
         wanted = requested_height(effective("quality"))
         if wanted is None or wanted > cap:
-            raise capped_error(
-                f"Download jobs license with the server CDM, which covers up to {cap}p for this API key. "
-                f"Pass a quality of {cap} or lower.",
-                cap,
-            )
+            raise capped_error(f"{capped}: pass a quality", cap)
         if effective("best_available"):
-            raise capped_error(
-                f"Download jobs license with the server CDM, which covers up to {cap}p for this API key. "
-                "Turn off best_available, because it can fall back to a track above that height.",
-                cap,
-            )
+            raise capped_error(f"{capped}: drop best_available", cap)
         ranges = effective("range") or []
         ranges = [ranges] if isinstance(ranges, str) else ranges
         if any(str(getattr(r, "value", r)).upper() == "HYBRID" for r in ranges):
-            raise capped_error(
-                f"Download jobs license with the server CDM, which covers up to {cap}p for this API key. "
-                "Remove HYBRID from range, because it always keeps the lowest DV track, whatever the quality.",
-                cap,
-            )
+            raise capped_error(f"{capped}: drop HYBRID", cap)
 
     if params.get("proxy_download") is not None and not isinstance(params["proxy_download"], str):
         raise APIError(APIErrorCode.INVALID_INPUT, "proxy_download must be a string.")
@@ -4571,7 +4554,7 @@ def resolve_handler_proxy(
     ):
         raise APIError(
             APIErrorCode.FORBIDDEN,
-            "A server-account service does not accept a client proxy URI. Pass a country code or nothing.",
+            "A server-account service takes a country code or no proxy, not a proxy URI",
             details={"service": normalized_service},
         )
 
@@ -4601,8 +4584,7 @@ def resolve_handler_proxy(
                 )
             raise APIError(
                 APIErrorCode.INVALID_PROXY,
-                "This server does not resolve country codes into proxies. "
-                "Pass --proxy with a full proxy URI (http://, https:// or socks5://).",
+                "This server does not resolve country codes into proxies, pass a full proxy URI",
                 details={"service": normalized_service},
             )
 
@@ -4628,8 +4610,7 @@ def resolve_handler_proxy(
         if client_region.lower() in {x.lower() for x in geoblock}:
             raise APIError(
                 APIErrorCode.GEOFENCE,
-                f"Service is not available in your region ({client_region.upper()}). "
-                "Pass --proxy with a proxy outside the blocked regions.",
+                f"Service is not available in your region ({client_region.upper()})",
                 details={"service": normalized_service},
             )
 
@@ -4638,8 +4619,7 @@ def resolve_handler_proxy(
             if server_region and not in_client_region:
                 raise APIError(
                     APIErrorCode.INVALID_PROXY,
-                    "This server is in a different region from yours. Pass --proxy with a proxy "
-                    "in the region you want, or pass --no-proxy to use the server's own connection.",
+                    "This server is in a different region from yours, pass --proxy or --no-proxy",
                     details={"service": normalized_service},
                 )
         elif in_client_region:
@@ -5070,7 +5050,7 @@ def handle_single_server_cdm(
             if sources is not None:
                 sources.update(vault_hit[1])
             return vault_hit[0]
-        raise refusal or APIError(APIErrorCode.NO_CONTENT, "The server vault holds no key for this track")
+        raise refusal or APIError(APIErrorCode.NO_CONTENT, "The server vault holds no content key for this track")
 
     api_key = request.headers.get("X-Secret-Key", "anonymous") if request else "anonymous"
     user_config = serve_user_config(api_key)
@@ -5350,7 +5330,7 @@ def license_response(
     ):
         raise APIError(
             APIErrorCode.FORBIDDEN,
-            "Server CDM licensing is not enabled for this key on this service. Use a local CDM (proxy mode).",
+            "Server CDM licensing is not enabled for this API key on this service",
         )
 
     if mode == "server_cdm" and track_ids:

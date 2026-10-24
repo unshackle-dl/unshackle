@@ -536,7 +536,7 @@ class DecryptLabsRemoteCDM:
             session["decrypt_labs_session_id"] = data["session_id"]
             return challenge
 
-        error_msg = f"Unexpected API response format. message_type={message_type}, available_fields={list(data.keys())}"
+        error_msg = f"Unexpected API response format: message_type={message_type}, available_fields={list(data.keys())}"
         if data.get("message"):
             error_msg = f"API response: {data['message']} - {error_msg}"
         if "details" in data:

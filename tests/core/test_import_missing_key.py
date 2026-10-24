@@ -150,4 +150,4 @@ def test_a_download_stopped_by_a_click_exception_reports_only_its_message() -> N
     lines = dl.failure_lines(error)
 
     assert lines == [":x: Download Failed...", f"   {error.format_message()}"]
-    assert "unexpected error" in dl.failure_lines(ValueError("boom"))[-1]
+    assert dl.failure_lines(ValueError("boom")) == [":x: Download Failed...", "   ValueError: boom"]

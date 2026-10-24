@@ -52,11 +52,7 @@ def resolve_impersonate(browser: str) -> rnet.Impersonate:
     preset = getattr(rnet.Impersonate, browser, None)
     if preset is not None:
         return preset
-    raise ValueError(
-        f"Unknown impersonate preset: {browser!r}. "
-        f"Use exact rnet preset names like 'Chrome131', 'OkHttp4_12', 'Edge101'. "
-        f"See rnet.Impersonate for all available presets."
-    )
+    raise ValueError(f"Unknown impersonate preset {browser!r}, expected an rnet.Impersonate name such as 'Chrome131'")
 
 
 METHOD_MAP: dict[str, rnet.Method] = {

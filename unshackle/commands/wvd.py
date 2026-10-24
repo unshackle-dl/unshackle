@@ -223,15 +223,15 @@ def new(
         # TODO: Remove need for name, create name based on Client IDs ClientInfo values
         name = unidecode(name.strip().lower().replace(" ", "_"))
     except UnidecodeError as e:
-        raise click.UsageError(f"name: Failed to sanitize name, {e}", ctx)
+        raise click.UsageError(f"name: Failed to sanitise name, {e}", ctx)
     if not name:
-        raise click.UsageError("name: Empty after sanitizing, please make sure the name is valid.", ctx)
+        raise click.UsageError("name: Empty after sanitising", ctx)
     if not private_key.is_file():
-        raise click.UsageError("private_key: Not a path to a file, or it doesn't exist.", ctx)
+        raise click.UsageError("private_key: Not a path to a file, or it does not exist.", ctx)
     if not client_id.is_file():
-        raise click.UsageError("client_id: Not a path to a file, or it doesn't exist.", ctx)
+        raise click.UsageError("client_id: Not a path to a file, or it does not exist.", ctx)
     if file_hashes and not file_hashes.is_file():
-        raise click.UsageError("file_hashes: Not a path to a file, or it doesn't exist.", ctx)
+        raise click.UsageError("file_hashes: Not a path to a file, or it does not exist.", ctx)
 
     device = Device(
         type_=DeviceTypes[type_.upper()],

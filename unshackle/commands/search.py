@@ -164,6 +164,4 @@ def result(service: Service, profile: Optional[str] = None, remote: bool = False
     if search_results.children:
         console.print(Padding(search_results, (0, 5)))
     else:
-        console.print(
-            Padding("[bold text]No matches[/]\n[bright_black]Please check spelling and search again....[/]", (0, 5))
-        )
+        console.print(Padding("[bold text]No matches[/]", (0, 5)))

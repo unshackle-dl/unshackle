@@ -202,10 +202,7 @@ class InputBridge:
             self._status = value
 
 
-NO_USER_MESSAGE = (
-    "This login needs the user, and this request cannot reach the user. "
-    "Start a download job or a remote session to complete the authentication"
-)
+NO_USER_MESSAGE = "This login needs the user, and only a download job or a remote session can reach the user"
 
 
 class NoUserBridge(InputBridge):

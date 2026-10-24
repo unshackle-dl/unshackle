@@ -252,8 +252,7 @@ class Service(metaclass=ABCMeta):
                                 self.log.info("Service is not Geoblocked in your region")
                             elif not (fence_targets := [x for x in self.GEOFENCE if self.is_region_allowed(x)]):
                                 raise click.ClickException(
-                                    f"Service is not available in {whose} region ({current_region.upper()}). "
-                                    "Pass --proxy with a proxy outside the blocked regions."
+                                    f"Service is not available in {whose} region ({current_region.upper()})"
                                 )
                             else:
                                 requested_proxy = fence_targets[0]  # first is likely main region
@@ -264,10 +263,7 @@ class Service(metaclass=ABCMeta):
                                     proxy_provider, proxy = pick_proxy(ctx.obj.proxy_providers, requested_proxy)
                                     self.log.info(f"Got Proxy from {proxy_provider.__class__.__name__}")
                                 except ValueError:
-                                    self.log.warning(
-                                        f"No proxy available for {requested_proxy}. "
-                                        f"Pass --proxy with a proxy in {requested_proxy}, or the request can fail."
-                                    )
+                                    self.log.warning(f"No proxy available for {requested_proxy}")
                         except click.ClickException:
                             raise
                         except Exception as e:
@@ -290,8 +286,7 @@ class Service(metaclass=ABCMeta):
                 # Only GEOBLOCK applies here: an explicit --proxy outside GEOFENCE stays the user's call.
                 if exit_region and any(x.lower() == exit_region.lower() for x in self.GEOBLOCK):
                     raise click.ClickException(
-                        f"Service is not available in {whose} proxy's region ({exit_region.upper()}). "
-                        "Pass --proxy with a proxy outside the blocked regions."
+                        f"Service is not available in {whose} proxy's region ({exit_region.upper()})"
                     )
             else:
                 # No proxy, use cached IP info for title caching (non-critical)

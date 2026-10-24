@@ -17,7 +17,7 @@ from unshackle.core.config import config
 from unshackle.core.constants import AnyTrack
 from unshackle.core.credential import Credential
 from unshackle.core.drm import drm_from_dict, real_kids
-from unshackle.core.manifests import DASH, HLS, ISM
+from unshackle.core.manifests import DASH, HLS, ISM, MissingLanguageError
 from unshackle.core.remote_service import (
     RemoteService,
     build_title,
@@ -123,17 +123,15 @@ def resolve_import_manifest_data(
         try:
             manifest = parser.from_url(url=url, session=session)
             parsed = manifest.to_tracks(language=fallback_lang)
+        except MissingLanguageError:
+            raise click.ClickException(
+                f"No language for '{title}': the {manifest_type} manifest has none and Title.language is unset"
+            )
         except ValueError as e:
-            if "Language information could not be derived" in str(e):
-                raise click.ClickException(
-                    f"No language for '{title}': the {manifest_type} manifest has none and the "
-                    f"service did not set Title.language."
-                )
-            raise click.ClickException(f"Failed to parse the {manifest_type} manifest for '{title}'. ({e})")
+            raise click.ClickException(f"Failed to parse the {manifest_type} manifest for '{title}': {e}")
         except Exception as e:
             raise click.ClickException(
-                f"Failed to fetch the {manifest_type} manifest for '{title}'. "
-                f"The manifest URL may have expired since export. ({e})"
+                f"Failed to fetch the {manifest_type} manifest for '{title}', the URL may have expired: {e}"
             )
 
         local_tracks = [*parsed.videos, *parsed.audio, *parsed.subtitles]
@@ -303,7 +301,7 @@ class ImportService:
         except Exception as e:
             if explicit:
                 raise click.ClickException(f"Failed to resolve proxy '{proxy_query}': {e}")
-            log.warning(f"Could not auto-select a proxy for export region '{region}': {e}. Continuing without proxy.")
+            log.warning(f"No proxy for export region '{region}', continuing without one: {e}")
             proxy = None
 
         if proxy:
@@ -386,28 +384,21 @@ class ImportService:
                 manifest = parser.from_url(url=manifest_url, session=self.session)
             except Exception as e:
                 raise click.ClickException(
-                    f"Failed to fetch the {manifest_type} manifest for '{title}'. "
-                    f"The manifest URL may have expired since export. ({e})"
+                    f"Failed to fetch the {manifest_type} manifest for '{title}', the URL may have expired: {e}"
                 )
             language = fallback_language(title.language)
             if language is None and isinstance(manifest, HLS):
                 language = hls_audio_language(manifest)
                 if language is None:
-                    raise click.ClickException(
-                        f"No language for '{title}': the export gives no title language and the HLS "
-                        "manifest gives no audio language."
-                    )
+                    raise click.ClickException(f"No language for '{title}': the export and the HLS manifest have none")
             try:
                 parsed = manifest.to_tracks(language=language)
-            except ValueError as e:
-                if "Language information could not be derived" in str(e):
-                    raise click.ClickException(
-                        f"No language for '{title}': the {manifest_type} manifest has none and the "
-                        f"service did not set Title.language."
-                    )
-                raise click.ClickException(f"Failed to parse the {manifest_type} manifest for '{title}'. ({e})")
+            except MissingLanguageError:
+                raise click.ClickException(
+                    f"No language for '{title}': the {manifest_type} manifest has none and Title.language is unset"
+                )
             except Exception as e:
-                raise click.ClickException(f"Failed to parse the {manifest_type} manifest for '{title}'. ({e})")
+                raise click.ClickException(f"Failed to parse the {manifest_type} manifest for '{title}': {e}")
             for track in parsed:
                 tracks.add(track)
             parsed_ids = {str(t.id) for t in tracks}
@@ -787,10 +778,7 @@ class ImportService:
             }
         )
         subject = f"KID {', '.join(kids)}" if kids else f"track {track}"
-        return click.ClickException(
-            f"The export has no content key for {subject}, and no vault has it. An import does not "
-            "license through a CDM: export the title again with the tracks you need selected."
-        )
+        return click.ClickException(f"The export has no content key to decrypt {subject}, and no vault has it")
 
     def decrypts_samples(self, track: AnyTrack) -> bool:
         return False

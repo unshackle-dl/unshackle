@@ -24,10 +24,7 @@ from unshackle.core.tracks import Track
 
 log = logging.getLogger("api.session")
 
-DRAIN_WARNING = (
-    "This server restarts for an update when the open downloads finish. "
-    "This download continues. Start new downloads after the restart."
-)
+DRAIN_WARNING = "This server restarts for an update after the open downloads finish; this download continues"
 
 
 @dataclass
@@ -359,8 +356,7 @@ def refuse_while_draining() -> None:
     if get_session_store().draining:
         raise APIError(
             APIErrorCode.SERVER_DRAINING,
-            "This server restarts for an update and does not start new sessions or downloads now. "
-            "Try again in a few minutes.",
+            "This server restarts for an update and starts no new sessions or downloads",
             retryable=True,
         )
 

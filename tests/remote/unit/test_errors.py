@@ -115,9 +115,7 @@ def test_build_error_response_debug_mode_includes_traceback() -> None:
         (Exception("Not available in your region"), APIErrorCode.GEOFENCE),
         (Exception("Service is geoblocked in GB"), APIErrorCode.GEOFENCE),
         (
-            Exception(
-                "Service is not available in your region (GB). Pass --proxy with a proxy outside the blocked regions."
-            ),
+            Exception("Service is not available in your region (GB)"),
             APIErrorCode.GEOFENCE,
         ),
         (Exception("Title not found"), APIErrorCode.NOT_FOUND),

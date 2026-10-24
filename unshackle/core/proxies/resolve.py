@@ -127,7 +127,7 @@ def initialize_proxy_providers(raise_errors: bool = False, quiet: bool = False) 
     """
     proxy_providers = load_proxy_providers(("gluetun",), raise_errors, quiet)
     if not quiet and not proxy_providers:
-        log.warning("No proxy providers were loaded. Check your proxy provider configuration in unshackle.yaml")
+        log.warning("No proxy providers were loaded")
     return proxy_providers
 
 
