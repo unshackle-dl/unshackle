@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import socket
 import socketserver
-from typing import Any
+from pathlib import Path
+from typing import Any, Callable, Optional
 
 import pytest
 
+from unshackle.core import binaries
 from unshackle.core.config import config
 from unshackle.core.update_checker import UpdateChecker
 
@@ -45,3 +47,27 @@ def no_update_check(monkeypatch: pytest.MonkeyPatch) -> None:
 def default_muxing(monkeypatch: pytest.MonkeyPatch) -> None:
     """Mux with the default options, whatever the muxing block of the local unshackle.yaml sets."""
     monkeypatch.setattr(config, "muxing", {})
+
+
+@pytest.fixture
+def mux_args(monkeypatch: pytest.MonkeyPatch) -> Callable[..., list[str]]:
+    """Run Tracks.mux up to mkvmerge and return its arguments; ``ids`` is what the track ID probe reports."""
+
+    class Stop(Exception):
+        pass
+
+    def run(tracks: Any, ids: Optional[dict[str, int]] = None, **kwargs: Any) -> list[str]:
+        captured: list[list[str]] = []
+
+        def fake_popen(args: list[str], **_: object) -> None:
+            captured.append(args)
+            raise Stop
+
+        monkeypatch.setattr("unshackle.core.tracks.tracks.subprocess.Popen", fake_popen)
+        monkeypatch.setattr("unshackle.core.tracks.tracks.file_track_ids", lambda path: ids or {"video": 0})
+        monkeypatch.setattr(binaries, "MKVToolNix", Path("mkvmerge"))
+        with pytest.raises(Stop):
+            tracks.mux("Title", delete=False, **kwargs)
+        return captured[0]
+
+    return run

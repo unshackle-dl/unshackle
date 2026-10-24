@@ -8,7 +8,7 @@ import struct
 import threading
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Optional
+from typing import Callable, Optional
 from unittest.mock import MagicMock
 
 import click
@@ -16,7 +16,6 @@ import pytest
 from requests import Session
 
 from unshackle.commands.dl import sample_name
-from unshackle.core import binaries
 from unshackle.core.api.handlers import validate_download_parameters
 from unshackle.core.config import config
 from unshackle.core.manifests.dash import DASH
@@ -231,19 +230,7 @@ def test_subtitle_trim_leaves_an_unreadable_file_whole(tmp_path: Path) -> None:
     assert subtitle.path.read_bytes() == b"\x00\x01not a subtitle"
 
 
-def mux_command(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> list[str]:
-    class Stop(Exception):
-        pass
-
-    captured: list[list[str]] = []
-
-    def fake_popen(args: list[str], **kwargs: object) -> None:
-        captured.append(args)
-        raise Stop
-
-    monkeypatch.setattr("unshackle.core.tracks.tracks.subprocess.Popen", fake_popen)
-    monkeypatch.setattr(binaries, "MKVToolNix", Path("mkvmerge"))
-
+def mux_command(tmp_path: Path, mux_args: Callable[..., list[str]]) -> list[str]:
     video, audio = make_video(), make_audio()
     trimmed = Subtitle(id_="s1", url="https://x/s1", codec=Subtitle.Codec.SubRip, language="en")
     whole = Subtitle(id_="s2", url="https://x/s2", codec=Subtitle.Codec.SubRip, language="fr")
@@ -254,14 +241,14 @@ def mux_command(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> list[str]:
     tracks = Tracks([video, audio, trimmed, whole])
     tracks.chapters.add(Chapter("00:02:05.000", "Scene"))
 
-    with pytest.raises(Stop):
-        tracks.mux("Title", delete=False, progress=lambda **k: None, output_path=tmp_path / "out.mkv")
-    return captured[0]
+    return mux_args(tracks, progress=lambda **k: None, output_path=tmp_path / "out.mkv")
 
 
-def test_the_mux_shifts_each_track_and_cuts_to_the_window(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_the_mux_shifts_each_track_and_cuts_to_the_window(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mux_args: Callable[..., list[str]]
+) -> None:
     monkeypatch.setattr(config, "sample", (121, 181))
-    command = mux_command(tmp_path, monkeypatch)
+    command = mux_command(tmp_path, mux_args)
 
     def sync_before(name: str) -> str:
         file_at = command.index(str(tmp_path / name))
@@ -273,17 +260,19 @@ def test_the_mux_shifts_each_track_and_cuts_to_the_window(tmp_path: Path, monkey
         return command[sync_at + 1]
 
     assert command[command.index("--split") + 1] == "parts:1.500s-61.500s"
-    assert sync_before("v.mp4") == "0:500"
+    assert sync_before("v.mp4") == "-1:500"
     assert "--sync" not in command[: command.index(str(tmp_path / "a.mp4"))][-12:], "the earliest track is not moved"
-    assert sync_before("s1.srt") == "0:1500"
-    assert sync_before("s2.srt") == "0:-119500"
+    assert sync_before("s1.srt") == "-1:1500"
+    assert sync_before("s2.srt") == "-1:-119500"
     assert command[command.index("--chapter-sync") + 1] == "-119500"
     assert command.index("--chapter-sync") < command.index("--chapters")
 
 
-def test_a_full_download_adds_no_sample_options(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_a_full_download_adds_no_sample_options(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mux_args: Callable[..., list[str]]
+) -> None:
     monkeypatch.setattr(config, "sample", None)
-    command = mux_command(tmp_path, monkeypatch)
+    command = mux_command(tmp_path, mux_args)
     assert not {"--split", "--sync", "--chapter-sync"} & set(command)
 
 

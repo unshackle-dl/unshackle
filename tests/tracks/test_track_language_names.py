@@ -1,10 +1,9 @@
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 import pytest
 from langcodes import Language
 
-from unshackle.core import binaries
 from unshackle.core.config import config
 from unshackle.core.tracks import Audio, Subtitle, Tracks, Video
 from unshackle.core.utilities import language_name, multi_script_languages, with_script
@@ -130,18 +129,7 @@ def test_a_service_name_wins() -> None:
     assert sub("zh", name="简体中文").get_track_name() == "简体中文"
 
 
-def test_mkvmerge_gets_the_subtitle_script_and_name(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    class Stop(Exception):
-        pass
-
-    captured: list[list[str]] = []
-
-    def fake_popen(args: list[str], **kwargs: object) -> None:
-        captured.append(args)
-        raise Stop
-
-    monkeypatch.setattr("unshackle.core.tracks.tracks.subprocess.Popen", fake_popen)
-    monkeypatch.setattr(binaries, "MKVToolNix", Path("mkvmerge"))
+def test_mkvmerge_gets_the_subtitle_script_and_name(tmp_path: Path, mux_args: Callable[..., list[str]]) -> None:
     video = Video(id_="v", url="https://x/v", codec=Video.Codec.AVC, language="zh-TW", width=1920, height=1080)
     audio = Audio(id_="a", url="https://x/a", codec=Audio.Codec.AAC, language="zh-TW", bitrate=1)
     subtitle = sub("zh-TW")
@@ -149,12 +137,11 @@ def test_mkvmerge_gets_the_subtitle_script_and_name(tmp_path: Path, monkeypatch:
         track.path = tmp_path / file
         track.path.write_bytes(b"\x00" * 16)
 
-    with pytest.raises(Stop):
-        Tracks([video, audio, subtitle]).mux("T", delete=False, output_path=tmp_path / "o.mkv")
+    args = mux_args(Tracks([video, audio, subtitle]), output_path=tmp_path / "o.mkv")
 
     def last_option(file: str, flag: str) -> str:
         """Return the value of the last flag given before the file, which is the one mkvmerge applies to it."""
-        before = captured[0][: captured[0].index(str(tmp_path / file))]
+        before = args[: args.index(str(tmp_path / file))]
         return before[len(before) - before[::-1].index(flag)]
 
     assert last_option("s.vtt", "--language") == "0:zh-Hant-TW"

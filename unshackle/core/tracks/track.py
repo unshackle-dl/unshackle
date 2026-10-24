@@ -1012,6 +1012,11 @@ class Track:
         """The language tag written to the output file."""
         return self.language
 
+    def embedded_audio_name(self) -> str:
+        """Name the audio a service keeps inside this track's file, by its language when the service set none."""
+        lang = self.data["audio_language"]
+        return self.data.get("audio_language_name") or language_name(Language.get(lang)) or lang
+
     def get_track_name(self) -> Optional[str]:
         """Get the Track Name, or the name of its language when the service set none."""
         return self.name if self.name is not None else language_name(self.mux_language)
@@ -1276,7 +1281,7 @@ class Track:
 
             if hasattr(self, "data") and self.data.get("audio_language"):
                 audio_lang = self.data["audio_language"]
-                audio_name = self.data.get("audio_language_name", audio_lang)
+                audio_name = self.embedded_audio_name()
                 args.extend(
                     [
                         "-metadata:s:a:0",
