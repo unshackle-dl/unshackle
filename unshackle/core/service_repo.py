@@ -32,6 +32,58 @@ def stamp_for(dest: Path) -> Path:
 
 SHORTHAND_RE = re.compile(r"^[\w.-]+/[\w.-]+$")
 
+# Importing services rewrites tracked bytecode when upstream mistakenly commits
+# ``__pycache__`` (e.g. playtv). That must not block refresh / look like source edits.
+_JUNK_NAME_SUFFIXES = (".pyc", ".pyo")
+_JUNK_BASENAMES = frozenset({".DS_Store"})
+
+
+def is_junk_path(path: str) -> bool:
+    """True for import/OS noise that is never a meaningful service-source edit."""
+    normalized = path.replace("\\", "/").strip()
+    if not normalized:
+        return False
+    parts = normalized.split("/")
+    if "__pycache__" in parts:
+        return True
+    name = parts[-1]
+    if name in _JUNK_BASENAMES:
+        return True
+    return name.endswith(_JUNK_NAME_SUFFIXES)
+
+
+def porcelain_paths(porcelain: str) -> list[str]:
+    """Paths from ``git status --porcelain`` lines (handles rename ``old -> new``)."""
+    paths: list[str] = []
+    for raw in porcelain.splitlines():
+        if len(raw) < 4:
+            continue
+        # XY<space>path  or  XY<space>old -> new
+        entry = raw[3:]
+        if " -> " in entry:
+            entry = entry.split(" -> ", 1)[1]
+        # quoted paths are rare here; strip optional quotes
+        if len(entry) >= 2 and entry[0] == entry[-1] == '"':
+            entry = entry[1:-1]
+        paths.append(entry)
+    return paths
+
+
+def discard_junk_workdir(dest: Path) -> None:
+    """Restore tracked junk paths so ``git pull`` is not blocked by rewritten ``.pyc`` files."""
+    if not binaries.Git:
+        return
+    git = str(binaries.Git)
+    status = subprocess.run(
+        [git, "-C", str(dest), "status", "--porcelain", "--untracked-files=no"], capture_output=True
+    )  # nosec B603
+    if status.returncode != 0 or not status.stdout.strip():
+        return
+    junk = [p for p in porcelain_paths(status.stdout.decode(errors="ignore")) if is_junk_path(p)]
+    if not junk:
+        return
+    subprocess.run([git, "-C", str(dest), "checkout", "--", *junk], capture_output=True)  # nosec B603
+
 
 def is_repo_spec(value: object) -> bool:
     """True if value is a git repo spec (URL or owner/repo shorthand), not a local path."""
@@ -121,6 +173,9 @@ def pull(dest: Path, stamp: Path) -> None:
     if not binaries.Git:
         write_stamp(stamp)
         return
+    # Drop rewritten bytecode before the dirty check / pull so a tracked ``.pyc`` cannot
+    # false-trigger DirtyServiceRepo or block ``git pull --ff-only``.
+    discard_junk_workdir(dest)
     # never clobber local edits: refuse to refresh a dirty clone and let the caller exit cleanly
     if is_dirty(dest):
         raise DirtyServiceRepo(dest)
@@ -163,7 +218,13 @@ def local_dirty_services(dest: Path) -> list[str]:
     r = subprocess.run([str(binaries.Git), "-C", str(dest), "diff", "--name-only", "HEAD"], capture_output=True)  # nosec B603
     if r.returncode != 0:
         return []
-    return sorted({line.split("/")[0] for line in r.stdout.decode(errors="ignore").splitlines() if line})
+    return sorted(
+        {
+            line.split("/")[0]
+            for line in r.stdout.decode(errors="ignore").splitlines()
+            if line and not is_junk_path(line)
+        }
+    )
 
 
 def changed_services(dest: Path, old: Optional[str], new: Optional[str]) -> list[str]:
@@ -205,17 +266,20 @@ def force_sync(dest: Path, stamp: Path) -> None:
 def is_dirty(dest: Path) -> bool:
     """True if the clone has uncommitted edits to tracked files or local commits not on its upstream.
 
-    This function intentionally ignores untracked files: a `git pull --ff-only` only touches tracked
-    files, so untracked files (including `__pycache__` that importing the services creates) are never
-    at risk and must not falsely flag the clone as dirty.
+    Ignores untracked files (``git pull`` does not remove them) and tracked import/OS noise
+    (``__pycache__/``, ``*.pyc`` / ``*.pyo``, ``.DS_Store``). Upstream sometimes commits a
+    ``.pyc``; importing under another interpreter rewrites it and must not look like a
+    service-source edit.
     """
     git = str(binaries.Git)
-    # modifications to tracked files only (--untracked-files=no skips __pycache__ etc.)
+    # modifications to tracked files only (--untracked-files=no skips untracked __pycache__ etc.)
     status = subprocess.run(
         [git, "-C", str(dest), "status", "--porcelain", "--untracked-files=no"], capture_output=True
     )  # nosec B603
-    if status.returncode == 0 and status.stdout.strip():
-        return True
+    if status.returncode == 0:
+        meaningful = [p for p in porcelain_paths(status.stdout.decode(errors="ignore")) if not is_junk_path(p)]
+        if meaningful:
+            return True
     # local commits ahead of upstream (committed but not pushed); no upstream → treat as clean
     ahead = subprocess.run([git, "-C", str(dest), "rev-list", "--count", "@{u}..HEAD"], capture_output=True)  # nosec B603
     if ahead.returncode == 0:
