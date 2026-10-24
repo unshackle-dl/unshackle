@@ -345,6 +345,12 @@ def test_parse_sidx_refuses_what_it_cannot_cut() -> None:
     assert parse_sidx(sidx_box(count=3)[:-4], 0) == (0, [])
 
 
+def test_parse_sidx_refuses_a_box_that_counts_more_references_than_it_holds() -> None:
+    box = bytearray(sidx_box(count=3))
+    box[30:32] = (5).to_bytes(2, "big")
+    assert parse_sidx(bytes(box) + bytes(100), 0) == (0, [])
+
+
 def test_a_single_file_dash_track_is_cut_by_its_segment_index(monkeypatch: pytest.MonkeyPatch) -> None:
     box = sidx_box()
     requested: list[str] = []

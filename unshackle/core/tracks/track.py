@@ -360,11 +360,15 @@ def parse_sidx(data: bytes, offset: int) -> tuple[int, list[tuple[int, int, int]
     Returns the timescale and one (start time, first byte, last byte) for each subsegment. The list
     is empty when the box is not a ``sidx`` or when it points at more indexes and not at media.
     """
+    size, header = int.from_bytes(data[:4], "big"), 32 if data[8:9] == b"\x00" else 40
+    # pymp4 loops forever on a box that counts more references than its size holds
+    if data[4:8] != b"sidx" or size < header + 12 * int.from_bytes(data[header - 2 : header], "big"):
+        return 0, []
     try:
         box = Box.parse(data)
     except ConstructError:
         return 0, []
-    if box.type != b"sidx" or any(reference.reference_type != "MEDIA" for reference in box.references):
+    if any(reference.reference_type != "MEDIA" for reference in box.references):
         return 0, []
     start, byte = box.earliest_presentation_time, offset + box.end + box.first_offset
     subsegments: list[tuple[int, int, int]] = []

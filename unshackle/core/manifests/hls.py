@@ -8,7 +8,6 @@ import os
 import re
 import shutil
 import subprocess
-import sys
 import time
 from contextlib import ExitStack, closing
 from itertools import accumulate
@@ -18,6 +17,7 @@ from urllib.parse import urljoin, urlparse
 from uuid import UUID
 from zlib import crc32
 
+import click
 import m3u8
 import requests
 from langcodes import Language, tag_is_valid
@@ -644,14 +644,12 @@ class HLS:
             if not isinstance(response, (requests.Response, RnetResponse)):
                 raise TypeError(f"Expected response to be a requests.Response or rnet.Response, not {type(response)}")
             if not response.ok:
-                log.error(f"Failed to request the invariant M3U8 playlist: {response.status_code}")
-                sys.exit(1)
+                raise click.ClickException(f"Failed to request the invariant M3U8 playlist: {response.status_code}")
 
             master = m3u8.loads(utf8_text(response), uri=track.url)
 
         if not master.segments:
-            log.error("Track's HLS playlist has no segments, expecting an invariant M3U8 playlist.")
-            sys.exit(1)
+            raise click.ClickException("Track's HLS playlist has no segments, expecting an invariant M3U8 playlist.")
 
         unwanted_segments = [
             segment for segment in master.segments if callable(track.OnSegmentFilter) and track.OnSegmentFilter(segment)
