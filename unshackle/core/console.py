@@ -426,7 +426,23 @@ def _cell_size(character: str, *args: str) -> int:
     return 1 if unicodedata.category(character) == "Mc" else _rich_cell_size(character, *args)
 
 
+# the viramas that join the next consonant into one cluster (Unicode InCB=Linker); Tamil and Kannada do not
+_JOINING_VIRAMAS = frozenset("्্્୍్്")
+_rich_cell_len = rich.cells._cell_len
+
+
+def _cell_len(text: str, *args: str) -> int:
+    """Count a consonant joined by a virama (the न्द in हिन्दी) as no cell: terminals draw the conjunct in one."""
+    width = _rich_cell_len(text, *args)
+    if _JOINING_VIRAMAS.isdisjoint(text):
+        return width
+    return width - sum(
+        prev in _JOINING_VIRAMAS and unicodedata.category(char) == "Lo" for prev, char in zip(text, text[1:])
+    )
+
+
 rich.cells.get_character_cell_size = _cell_size
+rich.cells._cell_len = _cell_len
 rich.cells.cached_cell_len.cache_clear()
 
 console = ComfyConsole(
