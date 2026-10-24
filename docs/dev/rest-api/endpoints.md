@@ -333,7 +333,7 @@ When you give both `season` and `episode`, the server combines them into a `"{se
           "resolution": "2160p", "fps": "24", "range": "HDR10",
           "range_display": "HDR10", "scan_type": null, "closed_captions": [],
           "dv_compatible_bitstream": false, "hdr10plus": false, "language": "en", "is_original_lang": true,
-          "name": null, "needs_repack": false, "edition": [], "data": null,
+          "name": null, "track_name": "English", "needs_repack": false, "edition": [], "data": null,
           "drm": [], "descriptor": "DASH"
         }
       ],
@@ -342,14 +342,14 @@ When you give both `season` and `episode`, the server combines them into a `"{se
           "id": "a-1", "codec": "EC3", "codec_display": "DD+",
           "bitrate": 640, "bitrate_bps": 640000, "channels": "5.1", "language": "en",
           "is_original": true, "is_original_lang": true, "atmos": false, "joc": 0,
-          "descriptive": false, "name": null, "needs_repack": false, "edition": [],
+          "descriptive": false, "name": null, "track_name": "English", "needs_repack": false, "edition": [],
           "data": null, "drm": [], "descriptor": "DASH"
         }
       ],
       "subtitles": [
         { "id": "s-1", "codec": "vtt", "language": "en",
           "forced": false, "sdh": false, "cc": false, "is_original_lang": false,
-          "name": null, "needs_repack": false, "edition": [], "data": null,
+          "name": null, "track_name": "English", "needs_repack": false, "edition": [], "data": null,
           "drm": [], "descriptor": "DASH" }
       ]
     }
@@ -377,7 +377,7 @@ The server sorts tracks by bitrate, descending. Episodes the server cannot get g
 
 The `drm` array on a track is a list of `{type, pssh?, kids?, content_keys?, license_url?}` objects.
 
-Every track carries the same fields as a local track: `is_original_lang`, `name`, `needs_repack`, `edition`, and `data`. `bitrate` is in kb/s, and `bitrate_bps` gives the exact bits/s. `data` holds the part of the service-set `track.data` that fits in JSON, without the `hls`, `dash`, and `ism` parser keys. Audio keeps `is_original` and `atmos` for clients that read them, and adds the exact `joc` object count.
+Every track carries the same fields as a local track: `is_original_lang`, `name`, `needs_repack`, `edition`, and `data`. `name` is the name the service set, or null. `track_name` is the name `--list` shows and the mux writes to an audio or subtitle track: `name` when the service set one, else the English name of the language, with the SDH, CC, Forced or Descriptive label. `bitrate` is in kb/s, and `bitrate_bps` gives the exact bits/s. `data` holds the part of the service-set `track.data` that fits in JSON, without the `hls`, `dash`, and `ism` parser keys. Audio keeps `is_original` and `atmos` for clients that read them, and adds the exact `joc` object count.
 
 | Status | Error code | Meaning |
 | --- | --- | --- |

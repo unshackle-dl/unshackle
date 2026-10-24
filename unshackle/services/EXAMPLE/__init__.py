@@ -399,10 +399,11 @@ class EXAMPLE(Service):
             # tells us explicitly we can set it eagerly.
             if audio.data.get("isAtmos"):
                 audio.joc = 16
-            # is_original_lang was set by to_tracks (via the language= arg). Use it to
-            # label the original audio so it reads "Original" in selection/output.
-            if audio.is_original_lang:
-                audio.name = "Original"
+            # Leave audio.name unset: core names the track from its language and writes
+            # is_original_lang (set by to_tracks) as the original flag. Set a name only
+            # for what the language tag cannot say, such as a commentary track.
+            if "commentary" in label.lower():
+                audio.name = "Commentary"
 
         # Subtitles built by hand (not via to_tracks) skip the parser's is_original_lang
         # pass, so determine it ourselves with the same helper the parser uses.

@@ -1718,6 +1718,7 @@ def serialize_track_common(track: Any) -> Dict[str, Any]:
         "language": str(track.language) if track.language else None,
         "is_original_lang": bool(getattr(track, "is_original_lang", False)),
         "name": getattr(track, "name", None),
+        "track_name": track.get_track_name(),
         "needs_repack": bool(getattr(track, "needs_repack", False)),
         "edition": list(getattr(track, "edition", None) or []),
         "descriptor": descriptor_name(track),

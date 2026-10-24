@@ -15,6 +15,7 @@ import unicodedata
 import zlib
 from collections import defaultdict
 from datetime import datetime, timezone
+from functools import cache
 from pathlib import Path
 from types import ModuleType
 from typing import Any, Callable, Mapping, Optional, Sequence, Union
@@ -26,6 +27,7 @@ import pycountry
 from construct import ValidationError
 from fontTools import ttLib
 from langcodes import Language, closest_match
+from langcodes.data_dicts import LIKELY_SUBTAGS
 from langcodes.tag_parser import LanguageTagError
 from pymp4.parser import Box
 from unidecode import unidecode
@@ -167,6 +169,53 @@ def valid_language(language: Any) -> Optional[str]:
         logging.getLogger("utilities").warning("%r is not a valid language tag, ignoring it", language)
         return None
     return str(language)
+
+
+@cache
+def multi_script_languages() -> frozenset[str]:
+    """Return the languages whose likely script changes with the region in CLDR (zh, yue, sr, ...)."""
+    found = set()
+    for tag, likely in LIKELY_SUBTAGS.items():
+        match = re.fullmatch(r"([a-z]{2,3})-(?:[A-Z]{2}|\d{3})", tag)
+        if match and match[1] != "und" and Language.get(likely).script != Language.get(match[1]).maximize().script:
+            found.add(match[1])
+    return frozenset(found)
+
+
+def with_script(language: Language) -> Language:
+    """
+    Add the script a region implies to a subtitle tag, e.g. zh-TW to zh-Hant-TW.
+
+    Only a language written in several scripts gets one, and only when the tag has a region:
+    a bare zh says nothing about the script, so it stays zh.
+    """
+    if language.script or not language.territory or language.language not in multi_script_languages():
+        return language
+    return language.update_dict({"script": language.maximize().script}).simplify_script()
+
+
+def language_name(language: Language) -> Optional[str]:
+    """
+    Return the English name of a track language, or None for an unknown or private-use language.
+
+    It leaves out a script or region that adds nothing: private use (but XK, Kosovo), 001, the CLDR default
+    region of the language and script (pt-BR, zh-Hant-TW, but not pt-PT), a script named like the language.
+    """
+    code = language.language
+    if not code or not Language.make(language=code).has_name_data():
+        return None
+    script, region = language.script, language.territory
+    if script and (
+        re.fullmatch(r"Qaa[a-z]|Qab[a-x]|Zzzz", script) or language.script_name() == language.language_name()
+    ):
+        script = None
+    if region and (
+        region == "001"
+        or re.fullmatch(r"AA|Q[M-Z]|X[A-JL-Z]|ZZ", region)
+        or Language.make(language=code, script=script).maximize().territory == region
+    ):
+        region = None
+    return language.update_dict({"script": script, "territory": region}).display_name().replace(" SAR China", "")
 
 
 def is_exact_match(language: Union[str, Language], languages: Sequence[Union[str, Language, None]]) -> bool:

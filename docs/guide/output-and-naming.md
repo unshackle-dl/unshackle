@@ -284,6 +284,27 @@ warning and continues.
 !!! note "Height channels"
     A track with height channels is named bed.LFE.heights, such as `5.1.4`.
 
+### Track names and language tags
+
+When the service gives a track no name, unshackle names it with the English name of its language,
+such as `English`, `Portuguese (Portugal)` or `Spanish (Latin America)`. The name leaves out the
+region that is the default for the language, so `en-US` is `English` and `pt-BR` is `Portuguese`,
+but `en-GB` is `English (United Kingdom)`. A name from the service is kept as is. unshackle adds the SDH, CC, Forced or Descriptive label after either name.
+
+A subtitle in a language with more than one script gets the script from its region:
+
+| Service tag | Tag in the file | Track name |
+|-------------|-----------------|------------|
+| `zh-TW` | `zh-Hant-TW` | Chinese (Traditional) |
+| `zh-HK` | `zh-Hant-HK` | Chinese (Traditional, Hong Kong) |
+| `zh-CN` | `zh-Hans-CN` | Chinese (Simplified) |
+| `sr-ME` | `sr-Latn-ME` | Serbian (Latin, Montenegro) |
+| `zh` | `zh` | Chinese |
+
+A tag without a region, such as `zh`, gets no script because the region is what tells the script.
+unshackle writes audio tags as the service gives them, because a script applies only to written text.
+Track selection, `--list` tags and file names use the service tag.
+
 ### DTS:X Profile 2 output
 
 A title whose audio holds a `dtsx` or `dtsy` sample entry (DTS:X Profile 2, DTS-UHD) muxes

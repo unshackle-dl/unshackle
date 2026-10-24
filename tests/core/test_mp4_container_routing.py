@@ -150,6 +150,30 @@ def test_substation_alpha_subtitles_are_left_out(tmp_path: Path, monkeypatch: py
     assert "s.vtt:lang=es" in command
 
 
+def test_mp4_subtitles_get_the_script_their_region_implies(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: list[FakePopen] = []
+
+    def fake_popen(args: list[str], **kwargs: object) -> FakePopen:
+        p = FakePopen(args, **kwargs)
+        captured.append(p)
+        Path(args[-1]).write_bytes(b"muxed")
+        return p
+
+    monkeypatch.setattr(binaries, "MP4Box", Path("MP4Box"), raising=False)
+    monkeypatch.setattr(subprocess, "Popen", fake_popen)
+
+    tracks = build_tracks(tmp_path, b"dtsx")
+    vtt = Subtitle(id_="s1", url="https://x/s", codec=Subtitle.Codec.WebVTT, language="zh-TW")
+    vtt.path = tmp_path / "s.vtt"
+    vtt.path.write_text("WEBVTT\n")
+    tracks.add(vtt)
+
+    tracks.mux("Title", delete=False, output_path=tmp_path / "out.muxed.mkv")
+    command = captured[0].args
+    assert f"{tmp_path / 's.vtt'}:lang=zh-Hant-TW" in command
+    assert any(arg.endswith("=Chinese (Traditional)") for arg in command)
+
+
 def test_mp4box_errors_come_back_to_the_caller(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """A failed mux does not raise; the caller inspects the return code and lines."""
 

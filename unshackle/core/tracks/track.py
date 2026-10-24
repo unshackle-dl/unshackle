@@ -35,7 +35,7 @@ from unshackle.core.events import events
 from unshackle.core.session import MAX_BACKOFF, RnetSession, utf8_text
 from unshackle.core.temp import restore_segments, stash_segments
 from unshackle.core.tracks import resume
-from unshackle.core.utilities import get_boxes, log_event, try_ensure_utf8
+from unshackle.core.utilities import get_boxes, language_name, log_event, try_ensure_utf8
 from unshackle.core.utils import run_proxy
 from unshackle.core.utils.subprocess import ffprobe
 
@@ -467,7 +467,7 @@ class Track:
 
         self.path: Optional[Path] = None
         self.url = url
-        self.language = Language.get(language)
+        self.language = language
         self.is_original_lang = is_original_lang
         self.descriptor = descriptor
         self.needs_repack = needs_repack
@@ -482,23 +482,6 @@ class Track:
         self._data: defaultdict[Any, Any] = defaultdict(dict)
         self.data = data or {}
         self.extra: Any = extra or {}  # allow anything for extra, but default to a dict
-
-        if self.name is None:
-            lang = self.language
-            if (lang.language or "").lower() == (lang.territory or "").lower():
-                lang = lang.update_dict({"territory": None})
-            reduced = lang.simplify_script()
-            extra_parts = []
-            if reduced.script is not None:
-                script = reduced.script_name(max_distance=25)
-                if script and script != "Zzzz":
-                    extra_parts.append(script)
-            if reduced.territory is not None:
-                territory = reduced.territory_name(max_distance=25)
-                if territory and territory != "ZZ":
-                    territory = territory.removesuffix(" SAR China")
-                    extra_parts.append(territory)
-            self.name = ", ".join(extra_parts) or None
 
         if not id_:
             this = copy(self)
@@ -587,6 +570,15 @@ class Track:
 
     def __eq__(self, other: Any) -> bool:
         return isinstance(other, Track) and self.id == other.id
+
+    @property
+    def language(self) -> Language:
+        """The language the service tagged, parsed even when a service assigns a string or None later."""
+        return self._language
+
+    @language.setter
+    def language(self, value: Union[Language, str, None]) -> None:
+        self._language = Language.get(value or "und")
 
     @property
     def data(self) -> defaultdict[Any, Any]:
@@ -1015,9 +1007,14 @@ class Track:
             raise ValueError(f"Cannot reconstruct unsupported track type: {track_type!r}")
         return builder.from_dict(data)
 
+    @property
+    def mux_language(self) -> Language:
+        """The language tag written to the output file."""
+        return self.language
+
     def get_track_name(self) -> Optional[str]:
-        """Get the Track Name."""
-        return self.name
+        """Get the Track Name, or the English name of its language when the service set none."""
+        return self.name if self.name is not None else language_name(self.mux_language)
 
     def get_drm_for_cdm(self, cdm: Optional[object]) -> Optional[DRM_T]:
         """Return the DRM matching the provided CDM, if available."""

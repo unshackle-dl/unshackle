@@ -28,6 +28,7 @@ from unshackle.core.tracks.track import Track, has_dts_uhd_sample_entry, strip_d
 from unshackle.core.tracks.video import Video
 from unshackle.core.utilities import (
     is_close_match,
+    language_name,
     log_event,
     matching_languages,
     original_tag,
@@ -606,7 +607,7 @@ class Tracks:
                 candidate.unlink()
 
             delay = round((track.sample_start - sample_base) * 1000) if config.sample else 0
-            cl.extend(["-add", f"{source}:lang={track.language}" + (f":delay={delay}" if delay else "")])
+            cl.extend(["-add", f"{source}:lang={track.mux_language}" + (f":delay={delay}" if delay else "")])
             name = "" if isinstance(track, Video) else (track.get_track_name() or "")
             if name:
                 names.extend(["-name", f"{track_id}={name}"])
@@ -765,7 +766,7 @@ class Tracks:
             video_track = video_track or self.videos[0]
             if video_track.language.is_valid():
                 lang_code = str(video_track.language)
-                lang_name = video_track.language.display_name()
+                lang_name = language_name(video_track.language) or lang_code
 
                 for video in self.videos:
                     if video.data.get("audio_language"):
@@ -832,7 +833,7 @@ class Tracks:
 
             video_args = [
                 "--language",
-                f"0:{vt.language}",
+                f"0:{vt.mux_language}",
                 "--default-track",
                 f"0:{is_default}",
                 "--original-flag",
@@ -888,7 +889,7 @@ class Tracks:
                     "--track-name",
                     f"0:{at.get_track_name() or ''}",
                     "--language",
-                    f"0:{at.language}",
+                    f"0:{at.mux_language}",
                     "--default-track",
                     f"0:{audio_default}",
                     "--visual-impaired-flag",
@@ -918,7 +919,7 @@ class Tracks:
                         "--track-name",
                         f"0:{st.get_track_name() or ''}",
                         "--language",
-                        f"0:{st.language}",
+                        f"0:{st.mux_language}",
                         "--sub-charset",
                         "0:UTF-8",
                         "--forced-track",

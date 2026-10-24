@@ -15,6 +15,7 @@ import click
 import pycaption
 import requests
 from construct import Container
+from langcodes import Language
 from pycaption import Caption, CaptionList, CaptionNode, WebVTTReader
 from pycaption.geometry import Layout
 from pymp4.parser import MP4
@@ -24,7 +25,7 @@ from subtitle_filter import Subtitles
 from unshackle.core import binaries
 from unshackle.core.config import config
 from unshackle.core.tracks.track import Track
-from unshackle.core.utilities import try_ensure_utf8
+from unshackle.core.utilities import try_ensure_utf8, with_script
 from unshackle.core.utils.subprocess import log_tool_run
 from unshackle.core.utils.webvtt import merge_segmented_webvtt
 
@@ -220,6 +221,11 @@ class Subtitle(Track):
             sdh=data.get("sdh", False),
             forced=data.get("forced", False),
         )
+
+    @property
+    def mux_language(self) -> Language:
+        """The language tag written to the output file, with the script its region implies."""
+        return with_script(self.language)
 
     def __str__(self) -> str:
         return " | ".join(
