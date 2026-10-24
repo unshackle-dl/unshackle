@@ -3339,8 +3339,7 @@ machine (a <code>remote_services</code> URL on <code>127.0.0.1</code>) can reach
 <div class="admonition warning">
 <p class="admonition-title">Docker is required</p>
 <p>Gluetun needs a working <a href="https://docs.docker.com/get-docker/">Docker</a> installation on
-your <code>PATH</code>. If Docker is not found, the proxy provider fails to load with an error linking
-to the install docs. The container also needs the <code>NET_ADMIN</code> capability and access
+your <code>PATH</code>. If Docker is not found, the proxy provider fails to load. The container also needs the <code>NET_ADMIN</code> capability and access
 to <code>/dev/net/tun</code> to bring up the tunnel. unshackle requests both automatically.</p>
 </div>
 <h3 id="query-format">Query format<a class="headerlink" href="#query-format" title="Permanent link">&para;</a></h3>
@@ -3434,7 +3433,8 @@ credentials, and how your region aliases map onto Gluetun's server selectors.</p
 <li><code>private_key</code> is <strong>always</strong> required.</li>
 <li><code>surfshark</code>, <code>mullvad</code>, and <code>ivpn</code> also require <code>addresses</code>.</li>
 <li><code>windscribe</code> additionally requires <strong>both</strong> <code>addresses</code> and <code>preshared_key</code>
-  (<code>preshared_key</code> may be an empty string, but the config key must be present).</li>
+  (<code>preshared_key</code> may be an empty string, but the config key must be present).
+  Get both from the <a href="https://windscribe.com/getconfig/wireguard">Windscribe WireGuard config generator</a>.</li>
 <li>NordVPN and Proton VPN need only <code>private_key</code>.</li>
 </ul>
 </div>

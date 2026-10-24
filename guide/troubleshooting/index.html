@@ -2605,6 +2605,11 @@
 <p><strong>Inspect:</strong> set <code>debug_requests: true</code> and operate unshackle with <code>-d</code> to show the underlying <code>urllib3</code> / <code>rnet</code> / <code>httpx</code> logs. In the JSON debug log, filter for <code>service_call</code> operations to see which request failed. If you use a proxy, also read <a href="../proxies-and-vpn/">Proxies &amp; VPN</a>.</p>
 </div>
 <div class="admonition example">
+<p class="admonition-title">A segment download fails after every retry</p>
+<p><strong>Symptom:</strong> the download stops with a line like <code>MaxRetriesError: GET &lt;host&gt; failed: RequestError (stream closed because of a broken pipe), gave up after 5 failed attempts over 30s</code>.</p>
+<p><strong>Inspect:</strong> the connection to the CDN host dropped on every attempt. This is almost always the network, the VPN, or the proxy, not the service. Run the download again: unshackle keeps the segments it already has. Over HTTP/2, all segments share one connection, so one drop fails every segment in flight. Set <code>network.http1_only: true</code> (see <a href="../../reference/configuration/network/">Network &amp; proxy</a>) to spread them over separate connections. Operate unshackle with <code>-d</code> to see each retry as a <code>segment_retry</code> entry in the JSON debug log.</p>
+</div>
+<div class="admonition example">
 <p class="admonition-title">The wrong titles/metadata keep coming back</p>
 <p><strong>Symptom:</strong> a service returns outdated titles even after the source changed.</p>
 <p><strong>Inspect:</strong> the title cache is likely serving stale data. Clear it with <code>unshackle env clear cache &lt;SERVICE&gt;</code>, or bypass it for one run using the <code>dl</code> no-cache / reset-cache options (see <a href="../downloading/">Downloading</a> and the <a href="../cli-reference/#dl">CLI Reference</a>).</p>
