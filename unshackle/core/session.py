@@ -6,6 +6,7 @@ import http
 import logging
 import math
 import random
+import re
 import sys
 import time
 from collections.abc import Iterator, MutableMapping
@@ -531,6 +532,34 @@ class MaxRetriesError(Exception):
         self.__cause__ = cause
 
 
+# the innermost io error text in rnet's wreq::Error debug form, e.g. "stream closed because of a broken pipe"
+RNET_ERROR_TEXT_RE = re.compile(r'error: "([^"]+)"')
+
+
+def failure_response(exc: BaseException) -> Any:
+    """The HTTP response of a status failure, or None.
+
+    RnetSession wraps a forcelist HTTPError in MaxRetriesError as ``__cause__``, so this unwraps one level.
+    """
+    response = getattr(exc, "response", None)
+    return response if response is not None else getattr(exc.__cause__, "response", None)
+
+
+def failure_reason(exc: BaseException) -> str:
+    """Name a request failure without its URL, which can carry signed tokens.
+
+    Gives the HTTP status of a status failure, else the exception class and, for an rnet error,
+    its innermost error text.
+    """
+    inner = exc.__cause__ or exc
+    response = failure_response(exc)
+    status = getattr(response, "status_code", None)
+    if isinstance(status, int):
+        return f"{status} {getattr(response, 'reason', '') or ''}".strip()
+    texts = RNET_ERROR_TEXT_RE.findall(str(inner))
+    return f"{type(inner).__name__} ({texts[-1]})" if texts else type(inner).__name__
+
+
 class RnetSession:
     """TLS-fingerprinted HTTP session powered by rnet (Rust/BoringSSL).
 
@@ -868,12 +897,12 @@ class RnetSession:
                 if response.status_code not in self.status_forcelist:
                     return response
                 last_exception = HTTPError(f"Received status code: {response.status_code}", response=response)
-                failure = f"{response.status_code} {response.reason}"
+                failure = failure_reason(last_exception)
 
             except self.catch_exceptions as e:
                 last_exception = e
                 response = None
-                failure = e.__class__.__name__
+                failure = failure_reason(e)
 
             if attempt < max_retries:
                 self.log.warning(f"{failure}({urlparse(url).path}). Retrying... ({attempt + 1}/{max_retries})")
@@ -883,7 +912,10 @@ class RnetSession:
             else:
                 break
 
-        raise MaxRetriesError(f"Max retries exceeded for {method} {url}", cause=last_exception)
+        attempts = f" after {max_retries + 1} attempts" if max_retries else ""
+        raise MaxRetriesError(
+            f"{method_upper} {parsed_origin.hostname} failed{attempts}: {failure}", cause=last_exception
+        )
 
     def get(self, url: str, **kwargs: Any) -> RnetResponse:
         return self.request("GET", url, **kwargs)

@@ -258,6 +258,11 @@ Each command reports how many files it removed and how much space it freed, then
 
     **Inspect:** set `debug_requests: true` and operate unshackle with `-d` to show the underlying `urllib3` / `rnet` / `httpx` logs. In the JSON debug log, filter for `service_call` operations to see which request failed. If you use a proxy, also read [Proxies & VPN](proxies-and-vpn.md).
 
+!!! example "A segment download fails after every retry"
+    **Symptom:** the download stops with a line like `MaxRetriesError: GET <host> failed: RequestError (stream closed because of a broken pipe), gave up after 5 failed attempts over 30s`.
+
+    **Inspect:** the connection to the CDN host dropped on every attempt. This is almost always the network, the VPN, or the proxy, not the service. Run the download again: unshackle keeps the segments it already has. Over HTTP/2, all segments share one connection, so one drop fails every segment in flight. Set `network.http1_only: true` (see [Network & proxy](../reference/configuration/network.md)) to spread them over separate connections. Operate unshackle with `-d` to see each retry as a `segment_retry` entry in the JSON debug log.
+
 !!! example "The wrong titles/metadata keep coming back"
     **Symptom:** a service returns outdated titles even after the source changed.
 

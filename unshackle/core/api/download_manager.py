@@ -20,7 +20,7 @@ from typing import Any, Callable, Dict, List, Optional
 from unshackle.core.api.events import bus, publish_service_event
 from unshackle.core.api.sanitize import sanitize_log
 from unshackle.core.utils.click_types import AUDIO_CODEC_LIST, QUALITY_LIST, VIDEO_CODEC_LIST
-from unshackle.core.utils.redact import REDACTED, URL_USERINFO_RE, redact_path, redact_text
+from unshackle.core.utils.redact import REDACTED, URL_USERINFO_RE, redact_all, redact_path, redact_text
 
 log = logging.getLogger("download_manager")
 
@@ -693,10 +693,11 @@ def perform_download(
         raise
 
     # dl.result() catches a download-worker exception, reports it, but returns normally (exit 0).
-    # It sets download_failed in that case, so the job isn't reported as completed with no output.
-    if getattr(dl_instance, "download_failed", False):
-        detail = (stdout_capture.getvalue() + stderr_capture.getvalue())[-200:].strip()
-        raise APIError(APIErrorCode.WORKER_ERROR, "download worker failed: " + (detail or "see logs"))
+    # It keeps the error in download_error, so the job isn't reported as completed with no output.
+    if (error := getattr(dl_instance, "download_error", None)) is not None:
+        # segment URLs carry signed CDN tokens (hmac, session IDs) that redact_text does not match
+        detail = redact_all(" ".join(line.strip() for line in dl_instance.failure_lines(error)[1:]))
+        raise APIError(APIErrorCode.WORKER_ERROR, f"download worker failed: {detail}")
 
     if progress_callback:
         skipped_subs = getattr(dl_instance, "skipped_subtitles", None)

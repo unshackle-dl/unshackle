@@ -53,7 +53,13 @@ from unshackle.core.constants import (
     context_settings,
 )
 from unshackle.core.credential import Credential
-from unshackle.core.downloaders import default_max_workers, format_speed, parse_speed_limit, set_speed_limit
+from unshackle.core.downloaders import (
+    default_max_workers,
+    format_speed,
+    parse_speed_limit,
+    retries_exhausted,
+    set_speed_limit,
+)
 from unshackle.core.drm import DRM_T, ClearKeyCENC, MonaLisa, PlayReady, Widevine, cbcs, own_kids, real_kids, verify
 from unshackle.core.events import events
 from unshackle.core.export_name import ExportNamer, move_export, plural, season_episodes, title_label
@@ -1277,9 +1283,9 @@ class dl:
         # report which weren't available without parsing the console output. See SkippedSubtitle.
         self.skipped_subtitles: list[SkippedSubtitle] = []
         # result() catches a download-worker failure, reports it, and returns rather than
-        # re-raising (so the CLI still exits cleanly). Flag it so an embedding caller (the API
+        # re-raising (so the CLI still exits cleanly). Keep it so an embedding caller (the API
         # worker) can tell the title did not complete instead of reading it as a success.
-        self.download_failed: bool = False
+        self.download_error: Optional[BaseException] = None
 
         if not config.output_template:
             raise click.ClickException(
@@ -3309,11 +3315,11 @@ class dl:
                     self.log_export_summary()
                 return
             except Exception as e:  # noqa
-                # Reported and swallowed (no re-raise) so the CLI exits cleanly; flag it so the
+                # Reported and swallowed (no re-raise) so the CLI exits cleanly; keep it so the
                 # API worker sees the title failed rather than completing with no output.
-                self.download_failed = True
+                self.download_error = e
                 console.print(Padding(Group(*self.failure_lines(e)), (1, 5)))
-                if not isinstance(e, click.ClickException):
+                if not isinstance(e, click.ClickException) and not retries_exhausted(e):
                     console.print_exception()
 
                 if self.debug_logger:
@@ -4482,10 +4488,13 @@ class dl:
         """Return the lines that report a failed download.
 
         A ClickException is a deliberate stop with a message for the user, so it gets no
-        "unexpected error" line, and the caller prints no traceback for it.
+        "unexpected error" line, and the caller prints no traceback for it. Neither does a
+        request that failed on every retry: it gets its retry notes instead.
         """
         if isinstance(e, click.ClickException):
             return [":x: Download Failed...", f"   {e.format_message()}"]
+        if retries_exhausted(e):
+            return [":x: Download Failed...", f"   {type(e).__name__}: {e}, {'; '.join(e.__notes__)}"]
         lines = [":x: Download Failed...", f"   {type(e).__name__}: {e}"]
         if (returncode := getattr(e, "returncode", None)) is not None:
             lines.append(f"   Binary call failed, Process exit code: {returncode}")

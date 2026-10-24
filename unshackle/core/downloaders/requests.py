@@ -27,11 +27,12 @@ from requests.adapters import HTTPAdapter, Retry
 from rich import filesize
 
 from unshackle.core.constants import DOWNLOAD_CANCELLED, DownloadCancelled
-from unshackle.core.utilities import get_debug_logger, get_extension
+from unshackle.core.utilities import get_debug_logger, get_extension, log_event
 from unshackle.core.utils import run_proxy
 
 MAX_ATTEMPTS = 5
 RETRY_WAIT = 2
+GAVE_UP_NOTE = "gave up after"
 # a cut that still delivered bytes is resumable and refreshes the attempt budget; bound it
 # so a server that sends a little and closes, over and over, still terminates
 MAX_RESUMES = 50
@@ -324,15 +325,12 @@ class AdaptiveWorkerController:
 def permanent_status(exc: BaseException) -> Optional[int]:
     """HTTP status of ``exc`` when it is a client error that no retry can fix.
 
-    Both session types raise requests' HTTPError; RnetSession wraps it in MaxRetriesError
-    as ``__cause__``, so unwrap one level like retry_sleep does. 408 and 429 do not count:
-    they are transient, and a fan-out that trips a per-client rate limit can still succeed
-    over one sequential connection.
+    408 and 429 do not count: they are transient, and a fan-out that trips a per-client rate
+    limit can still succeed over one sequential connection.
     """
-    response = getattr(exc, "response", None)
-    if response is None:
-        response = getattr(getattr(exc, "__cause__", None), "response", None)
-    status = getattr(response, "status_code", None)
+    from unshackle.core.session import failure_response
+
+    status = getattr(failure_response(exc), "status_code", None)
     if isinstance(status, int) and 400 <= status < 500 and status not in (408, 429):
         return status
     return None
@@ -358,12 +356,9 @@ def retry_sleep(exc: Exception, attempts: int) -> float:
     else exponential growth from RETRY_WAIT with jitter so concurrently rate-limited
     segments do not retry in lockstep. Capped at ``session.MAX_BACKOFF`` either way.
     """
-    from unshackle.core.session import MAX_BACKOFF
+    from unshackle.core.session import MAX_BACKOFF, failure_response
 
-    response = getattr(exc, "response", None)
-    if response is None:
-        # RnetSession wraps forcelist failures in MaxRetriesError with the HTTPError as __cause__
-        response = getattr(getattr(exc, "__cause__", None), "response", None)
+    response = failure_response(exc)
     if response is not None:
         try:
             retry_after = response.headers.get("Retry-After")
@@ -385,6 +380,11 @@ def retry_sleep(exc: Exception, attempts: int) -> float:
                 return min(max(wait, 0.0), MAX_BACKOFF)
     backoff = RETRY_WAIT * (2 ** (attempts - 1))
     return min(backoff + random.uniform(0, backoff * 0.1), MAX_BACKOFF)
+
+
+def retries_exhausted(exc: BaseException) -> bool:
+    """Whether ``exc`` is the error download() re-raised after it spent every attempt."""
+    return any(str(note).startswith(GAVE_UP_NOTE) for note in getattr(exc, "__notes__", ()))
 
 
 def is_requests_session(session: Any) -> bool:
@@ -814,6 +814,9 @@ def download(
     item_range = has_range_header(kwargs)
 
     attempts = 1
+    # attempts resets on progress, so the give-up note counts failures on their own
+    failures = 0
+    started = _time()
     written = 0
     resumes = 0
     request_limit: Optional[int] = None
@@ -1141,11 +1144,13 @@ def download(
             # a superseded loser's error must not retry or kill the batch
             if claimed is not None and claimed():
                 return
+            failures += 1
             cancelled = DOWNLOAD_CANCELLED.is_set() or (abort is not None and abort.is_set())
             if cancelled or attempts == MAX_ATTEMPTS:
                 # cancel/abort is not an error, but a genuine retry-exhaustion is, so surface it
                 # so the caller fails fast instead of hitting a missing segment at merge time
                 if not cancelled:
+                    exc.add_note(f"{GAVE_UP_NOTE} {failures} failed attempts over {_time() - started:.0f}s")
                     raise
                 return
             if not part_mode:
@@ -1169,6 +1174,13 @@ def download(
                 except Exception:
                     pass
             delay = retry_sleep(exc, max(1, attempts))
+            from unshackle.core.session import failure_reason
+
+            log_event(
+                "segment_retry",
+                message=f"{failure_reason(exc)}, retry {max(1, attempts)}/{MAX_ATTEMPTS - 1} in {delay:.1f}s",
+                context={"file": save_path.name, "failures": failures, "resumes": resumes},
+            )
             if abort is not None:
                 # interruptible nap: backoff can reach MAX_BACKOFF, and teardown always
                 # sets the batch abort, so a parked worker must wake and exit at once
@@ -1315,8 +1327,13 @@ def mp_worker(queue: Any, kwargs: dict[str, Any]) -> None:
         for event in requests(**kwargs):
             queue.put(event)
     except Exception as exc:
-        summary = " ".join(f"{type(exc).__name__}: {exc}".split())
-        queue.put({"__mp_error__": f"{summary}\n{traceback.format_exc()}"})
+        queue.put(
+            {
+                "__mp_error__": " ".join(f"{type(exc).__name__}: {exc}".split()),
+                "__mp_traceback__": traceback.format_exc(),
+                "__mp_notes__": [str(note) for note in getattr(exc, "__notes__", ())],
+            }
+        )
     finally:
         queue.put({"__mp_done__": True})
 
@@ -1432,7 +1449,11 @@ def download_multiprocess(
                 if "__mp_error__" in event:
                     for p in procs:
                         p.terminate()
-                    raise RuntimeError(f"segment download child failed: {event['__mp_error__']}")
+                    log_event("segment_child_failed", level="ERROR", message=event.get("__mp_traceback__", ""))
+                    child_error = RuntimeError(f"segment download child failed: {event['__mp_error__']}")
+                    for note in event.get("__mp_notes__", ()):
+                        child_error.add_note(note)
+                    raise child_error
                 if "total" in event:
                     continue
                 if "downloaded" in event:
