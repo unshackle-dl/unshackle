@@ -2186,7 +2186,8 @@ network on every run.</p>
 <p>The <strong>automatic</strong> 24 h-TTL refresh that happens during a normal <code>dl</code>/<code>search</code> run
 <strong>refuses to refresh and exits</strong> (naming the offending clone) if that clone has
 uncommitted changes to tracked files or unpushed local commits. Untracked files (new
-service folders, <code>__pycache__</code>) never block it. The <strong>manual</strong>
+service folders, <code>__pycache__</code>), Python bytecode (<code>.pyc</code>, <code>.pyo</code>, also when the repo
+commits it) and <code>.DS_Store</code> never block it. The <strong>manual</strong>
 <code>unshackle util refresh-services</code> command instead <strong>hard-resets</strong> the clone to upstream,
 discarding any local edits.</p>
 <p>Set <code>services_repo_force: true</code> to make the automatic 24 h refresh behave like
