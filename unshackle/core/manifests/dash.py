@@ -1293,8 +1293,8 @@ class DASH:
 
     @staticmethod
     def is_closed_caption(adaptation_set: Element) -> bool:
-        """Whether the Adaptation Set is a Closed Caption Subtitle."""
-        return any(
+        """Whether the Adaptation Set is a Closed Caption Subtitle. A caption that is also marked SDH counts as SDH."""
+        return not DASH.is_sdh(adaptation_set) and any(
             (x.get("schemeIdUri"), x.get("value")) == ("urn:mpeg:dash:role:2011", "caption")
             for x in adaptation_set.findall("Role")
         )
