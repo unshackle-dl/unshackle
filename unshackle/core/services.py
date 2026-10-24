@@ -28,10 +28,6 @@ log = logging.getLogger("services")
 DIRTY_REPOS: list[str] = []
 SHADOWED: list[str] = []
 
-# Service clones live inside the tree; writing bytecode there rewrites tracked ``.pyc``
-# files (when upstream committed them) and floods untracked ``__pycache__`` dirs.
-sys.dont_write_bytecode = True
-
 
 def discover_services() -> tuple[list[Path], list[str]]:
     """Resolve the configured service dirs and glob every ``TAG/__init__.py``.

@@ -1,4 +1,4 @@
-"""Unit tests for remote git service-repo resolution. No network, no real git."""
+"""Unit tests for remote git service-repo resolution. No network; only the bytecode tests run a real git."""
 
 from __future__ import annotations
 
@@ -243,6 +243,66 @@ def test_changed_services_up_to_date(monkeypatch):
     # same HEAD before/after → no diff computed at all
     monkeypatch.setattr(service_repo.subprocess, "run", lambda *a, **k: pytest.fail("no git diff when HEAD unchanged"))
     assert service_repo.changed_services(Path("/x"), "same", "same") == []
+
+
+@pytest.fixture
+def bytecode_clone(tmp_path):
+    """A clone of a repo that commits a ``.pyc``, with that ``.pyc`` rewritten as an import does."""
+    git = service_repo.binaries.Git
+    if not git:
+        pytest.skip("git not found")
+    upstream, dest = tmp_path / "upstream", tmp_path / "clone"
+    (upstream / "EXAMPLE" / "__pycache__").mkdir(parents=True)
+    (upstream / "EXAMPLE" / "__init__.py").write_text("X = 1\n")
+    (upstream / "EXAMPLE" / "__pycache__" / "__init__.cpython-312.pyc").write_bytes(b"old")
+
+    def run(*args: str, cwd: Path = upstream) -> None:
+        subprocess.run(
+            [git, "-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false", *args],
+            cwd=cwd,
+            check=True,
+            capture_output=True,
+        )
+
+    run("init", "-q", "-b", "main")
+    run("add", "-A")
+    run("commit", "-qm", "init")
+    run("clone", "-q", str(upstream), str(dest), cwd=tmp_path)
+    (dest / "EXAMPLE" / "__pycache__" / "__init__.cpython-312.pyc").write_bytes(b"rewritten")
+    return upstream, dest, run
+
+
+def test_rewritten_bytecode_does_not_block_pull(bytecode_clone, tmp_path):
+    upstream, dest, run = bytecode_clone
+    assert service_repo.is_dirty(dest) is False
+    assert service_repo.local_dirty_services(dest) == []
+    (upstream / "EXAMPLE" / "__init__.py").write_text("X = 2\n")
+    (upstream / "EXAMPLE" / "__pycache__" / "__init__.cpython-312.pyc").write_bytes(b"new")
+    run("commit", "-qam", "update")
+    service_repo.pull(dest, tmp_path / "stamp")
+    assert (dest / "EXAMPLE" / "__init__.py").read_text() == "X = 2\n"
+
+
+def test_source_edit_still_dirty_beside_bytecode(bytecode_clone):
+    _, dest, _ = bytecode_clone
+    (dest / "EXAMPLE" / "__init__.py").write_text("X = 3\n")
+    assert service_repo.is_dirty(dest) is True
+    assert service_repo.local_dirty_services(dest) == ["EXAMPLE"]
+
+
+def test_untracked_bytecode_does_not_block_pull(bytecode_clone, tmp_path):
+    upstream, dest, run = bytecode_clone
+    (dest / "EXAMPLE" / "__pycache__" / "__init__.cpython-314.pyc").write_bytes(b"local")
+    (dest / "OTHER").mkdir()
+    (dest / "OTHER" / "__init__.py").write_text("")
+    (dest / "OTHER" / "__init__.cpython-314-x86_64-linux-gnu.so").write_bytes(b"compiled")
+    (upstream / "EXAMPLE" / "__init__.py").write_text("X = 2\n")
+    (upstream / "EXAMPLE" / "__pycache__" / "__init__.cpython-314.pyc").write_bytes(b"upstream")
+    run("add", "-A")
+    run("commit", "-qm", "update")
+    service_repo.pull(dest, tmp_path / "stamp")
+    assert (dest / "EXAMPLE" / "__init__.py").read_text() == "X = 2\n"
+    assert (dest / "OTHER" / "__init__.cpython-314-x86_64-linux-gnu.so").read_bytes() == b"compiled"
 
 
 @pytest.mark.parametrize("order", [["a", "b"], ["b", "a"]])
