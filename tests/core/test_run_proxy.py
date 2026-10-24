@@ -3,6 +3,7 @@
 import logging
 import os
 import sys
+import weakref
 
 import pytest
 import requests
@@ -26,12 +27,31 @@ class Svc:
     def fallback(self) -> requests.Session:
         return run_proxy.fallback_session()
 
+    def helper_lookup(self, host: str) -> None:
+        Helper().lookup(host)
+
+    def helper_fallback(self) -> requests.Session:
+        return Helper().fallback()
+
+
+class Helper:
+    """A helper class of the service with its own HTTP session, which has no proxy."""
+
+    def __init__(self):
+        self.session = requests.Session()
+
+    def lookup(self, host: str) -> None:
+        lookup(host)
+
+    def fallback(self) -> requests.Session:
+        return run_proxy.fallback_session()
+
 
 @pytest.fixture(autouse=True)
 def watching(monkeypatch):
     monkeypatch.setattr(run_proxy, "watched", {})
     monkeypatch.setattr(run_proxy, "proxy_hosts", set())
-    monkeypatch.setattr(run_proxy, "warned", set())
+    monkeypatch.setattr(run_proxy, "warned", weakref.WeakKeyDictionary())
     run_proxy.watch(Svc, PROXY)
 
 
@@ -147,6 +167,39 @@ def test_service_instance_uses_the_proxy_of_its_own_run(caplog):
     assert leaks(caplog) == [leaks(caplog)[0]] * 2
     assert "leak.example" in leaks(caplog)[0]
     assert {r.name for r in caplog.records if r.getMessage() in leaks(caplog)} == {"Svc"}
+
+
+def test_a_reloaded_service_class_uses_the_proxy_of_its_own_run(caplog):
+    """A service reload makes a new class from the same directory; the watch still holds the old one."""
+    reloaded = type("Svc", (), {"__init__": Svc.__init__, "lookup": Svc.lookup})
+    with caplog.at_level(logging.WARNING):
+        reloaded().lookup("direct.example")  # a run with no proxy
+        reloaded(PROXY).lookup("leak.example")
+    assert len(leaks(caplog)) == 1
+    assert "leak.example" in leaks(caplog)[0]
+
+
+def test_a_subclass_of_the_service_uses_the_proxy_of_its_own_run(caplog):
+    sub = type("Sub", (Svc,), {})
+    with caplog.at_level(logging.WARNING):
+        sub().lookup("direct.example")
+    assert leaks(caplog) == []
+
+
+def test_a_helper_session_without_proxy_does_not_hide_a_leak(caplog):
+    """A helper class of the service is not the service instance, so the proxy of the run still decides."""
+    with caplog.at_level(logging.WARNING):
+        Svc(PROXY).helper_lookup("leak.example")
+    assert len(leaks(caplog)) == 1
+    assert Svc(PROXY).helper_fallback().proxies == {"all": PROXY}
+
+
+def test_each_run_warns_even_when_a_finished_run_had_the_same_id(caplog):
+    """CPython reuses the id of a freed instance, so the warned hosts belong to the instance itself."""
+    with caplog.at_level(logging.WARNING):
+        for _ in range(2):
+            Svc(PROXY).lookup("leak.example")
+    assert len(leaks(caplog)) == 2
 
 
 def test_fallback_session_takes_the_proxy_of_the_calling_run():

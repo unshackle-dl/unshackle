@@ -10,6 +10,7 @@ import ipaddress
 import logging
 import os
 import sys
+import weakref
 from dataclasses import dataclass, field
 from types import FrameType
 from typing import Any, Optional
@@ -30,7 +31,7 @@ class Watch:
 
 watched: dict[str, Watch] = {}  # service directory -> Watch
 proxy_hosts: set[str] = set()
-warned: set[tuple[str, str, int]] = set()
+warned: weakref.WeakKeyDictionary[Any, set[str]] = weakref.WeakKeyDictionary()
 hook_installed = False
 
 
@@ -99,10 +100,15 @@ def instance_of(frame: Optional[FrameType], entry: Watch) -> Any:
     """The service instance nearest to ``frame``, which knows the proxy of its own run.
 
     The walk goes on past helper functions of the service, which have no ``self``.
+    It matches the class by module and qualified name, because a service reload makes a new class
+    that ``entry.cls`` is not.
     """
+    name = (entry.cls.__module__, entry.cls.__qualname__)
     while frame is not None:
         inst = frame.f_locals.get("self")
-        if isinstance(inst, entry.cls) and getattr(inst, "session", None) is not None:
+        if getattr(inst, "session", None) is not None and any(
+            (c.__module__, c.__qualname__) == name for c in type(inst).__mro__
+        ):
             return inst
         frame = frame.f_back
     return None
@@ -198,10 +204,10 @@ def check(host: Any, frame: Optional[FrameType]) -> None:
     inst = instance_of(service_frame, entry)
     if inst is not None and not proxy_of(getattr(inst, "session", None)):
         return
-    key = (entry.cls.__name__, host, id(inst))
-    if key in warned:
+    hosts = warned.setdefault(entry.cls if inst is None else inst, set())
+    if host in hosts:
         return
-    warned.add(key)
+    hosts.add(host)
     # a service instance logs through self.log, which a remote session mirrors to its client
     log = getattr(inst, "log", None) or logging.getLogger(entry.cls.__name__)
     where = os.path.relpath(service_frame.f_code.co_filename, os.path.dirname(entry.directory[:-1]))
