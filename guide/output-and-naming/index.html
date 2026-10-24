@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../assets/favicon.svg">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
     
     
       
@@ -31,10 +31,10 @@
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.57a0d79d.min.css">
       
         
-        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.fb2fffe2.min.css">
       
       
 
@@ -1045,6 +1045,17 @@
   
     <nav class="md-nav" aria-label="Muxing options">
       <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#track-names-and-language-tags" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Track names and language tags
+      
+    </span>
+  </a>
+  
+</li>
         
           <li class="md-nav__item">
   <a href="#dtsx-profile-2-output" class="md-nav__link">
@@ -2432,6 +2443,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#track-names-and-language-tags" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Track names and language tags
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#dtsx-profile-2-output" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3041,6 +3063,51 @@ warning and continues.</p>
 <p class="admonition-title">Height channels</p>
 <p>A track with height channels is named bed.LFE.heights, such as <code>5.1.4</code>.</p>
 </div>
+<h3 id="track-names-and-language-tags">Track names and language tags<a class="headerlink" href="#track-names-and-language-tags" title="Permanent link">&para;</a></h3>
+<p>When the service gives a track no name, unshackle names it with the English name of its language,
+such as <code>English</code>, <code>Portuguese (Portugal)</code> or <code>Spanish (Latin America)</code>. The name leaves out the
+region that is the default for the language, so <code>en-US</code> is <code>English</code> and <code>pt-BR</code> is <code>Portuguese</code>,
+but <code>en-GB</code> is <code>English (United Kingdom)</code>. A name from the service is kept as is. unshackle adds the SDH, CC, Forced or Descriptive label after either name.</p>
+<p>A subtitle in a language with more than one script gets the script from its region:</p>
+<table>
+<thead>
+<tr>
+<th>Service tag</th>
+<th>Tag in the file</th>
+<th>Track name</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>zh-TW</code></td>
+<td><code>zh-Hant-TW</code></td>
+<td>Chinese (Traditional)</td>
+</tr>
+<tr>
+<td><code>zh-HK</code></td>
+<td><code>zh-Hant-HK</code></td>
+<td>Chinese (Traditional, Hong Kong)</td>
+</tr>
+<tr>
+<td><code>zh-CN</code></td>
+<td><code>zh-Hans-CN</code></td>
+<td>Chinese (Simplified)</td>
+</tr>
+<tr>
+<td><code>sr-ME</code></td>
+<td><code>sr-Latn-ME</code></td>
+<td>Serbian (Latin, Montenegro)</td>
+</tr>
+<tr>
+<td><code>zh</code></td>
+<td><code>zh</code></td>
+<td>Chinese</td>
+</tr>
+</tbody>
+</table>
+<p>A tag without a region, such as <code>zh</code>, gets no script because the region is what tells the script.
+unshackle writes audio tags as the service gives them, because a script applies only to written text.
+Track selection, <code>--list</code> tags and file names use the service tag.</p>
 <h3 id="dtsx-profile-2-output">DTS:X Profile 2 output<a class="headerlink" href="#dtsx-profile-2-output" title="Permanent link">&para;</a></h3>
 <p>A title whose audio holds a <code>dtsx</code> or <code>dtsy</code> sample entry (DTS:X Profile 2, DTS-UHD) muxes
 to MP4 with <a href="../../getting-started/installation/">MP4Box</a>, because Matroska has no CodecID
@@ -3520,10 +3587,10 @@ empty on disc 1, so <code>{disc?}</code> and its separator only appear from disc
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["content.code.annotate", "content.code.copy", "content.tabs.link", "content.tooltips", "navigation.footer", "navigation.indexes", "navigation.sections", "navigation.tabs", "navigation.top", "navigation.tracking", "search.highlight", "search.share", "search.suggest", "toc.follow"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["content.code.annotate", "content.code.copy", "content.tabs.link", "content.tooltips", "navigation.footer", "navigation.indexes", "navigation.sections", "navigation.tabs", "navigation.top", "navigation.tracking", "search.highlight", "search.share", "search.suggest", "toc.follow"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      <script src="../../assets/javascripts/bundle.c21346df.min.js"></script>
       
     
   </body>
