@@ -288,7 +288,7 @@ Matroska (MKV) muxing options.
 | `default_language` | dict | `{}` | Force which language is flagged *default* per track type, e.g. `{audio: en, subtitle: en}`. A tag with a region, such as `en-US`, matches only that variant. |
 | `merge_audio` | bool | `true` | Merge all audio into one file. `--split-audio` on the CLI flips this off. |
 | `merge_video` | bool | `false` | Merge video tracks that share height, range, and codec into one file, so only language varies inside a file. `--merge-video` on the CLI flips this on. |
-| `track_names` | str | `english` | The language of the name unshackle gives a track that the service left unnamed: `english` (`Chinese (Traditional)`) or `native`, the name in the language itself (`中文（繁體）`). Read [Track names and language tags](../../guide/output-and-naming.md#track-names-and-language-tags). |
+| `track_names` | str | `english` | The language of the name unshackle gives a track that the service left unnamed: `english` (`Chinese (Traditional)`), `native`, the name in the language itself (`中文（繁體）`), or `none`, which leaves the track unnamed. Read [Track names and language tags](../../guide/output-and-naming.md#track-names-and-language-tags). |
 | `concurrency` | int | `4` | How many mkvmerge processes run at the same time when a title muxes more than one output file (one per video variant or audio codec). Each process uses one CPU core, so this shortens the mux step on an SSD. Set it to `1` on a hard disk, where parallel writes are slower. |
 
 ```yaml

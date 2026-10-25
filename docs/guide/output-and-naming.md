@@ -321,6 +321,9 @@ muxing:
 | `es-419` | Español (Latinoamérica) |
 | `ja-JP` | 日本語 |
 
+Set `muxing.track_names` to `none` to leave a track unnamed when the service gives it no name. An
+SDH, CC, Forced or Descriptive track then has only that label as its name.
+
 The option also changes the names in `--list` and in the `track_name` field of the REST API.
 
 !!! note "Players that show the language next to the name"

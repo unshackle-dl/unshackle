@@ -107,6 +107,16 @@ def test_native_subtitle_name_keeps_the_flag(monkeypatch: pytest.MonkeyPatch) ->
     assert sub("zh", name="Mandarin").get_track_name() == "Mandarin"
 
 
+def test_no_language_name_when_track_names_is_none(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(config, "muxing", {"track_names": "none"})
+    assert sub("en").get_track_name() is None
+    assert sub("en", sdh=True).get_track_name() == "SDH"
+    assert sub("en", name="English [Full]").get_track_name() == "English [Full]"
+    video = Video(id_="v", url="https://x/v", codec=Video.Codec.AVC, language="en")
+    video.data["audio_language"] = "en"
+    assert video.embedded_audio_name() == ""
+
+
 def test_subtitle_names_and_tags_the_script_but_keeps_its_language() -> None:
     track = sub("zh-TW")
     assert track.name is None

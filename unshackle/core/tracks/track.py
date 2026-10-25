@@ -1019,11 +1019,17 @@ class Track:
     def embedded_audio_name(self) -> str:
         """Name the audio a service keeps inside this track's file, by its language when the service set none."""
         lang = self.data["audio_language"]
-        return self.data.get("audio_language_name") or language_name(Language.get(lang)) or lang
+        if name := self.data.get("audio_language_name"):
+            return name
+        if config.muxing.get("track_names") == "none":
+            return ""
+        return language_name(Language.get(lang)) or lang
 
     def get_track_name(self) -> Optional[str]:
         """Get the Track Name, or the name of its language when the service set none."""
-        return self.name if self.name is not None else language_name(self.mux_language)
+        if self.name is not None or config.muxing.get("track_names") == "none":
+            return self.name
+        return language_name(self.mux_language)
 
     def get_drm_for_cdm(self, cdm: Optional[object]) -> Optional[DRM_T]:
         """Return the DRM matching the provided CDM, if available."""
