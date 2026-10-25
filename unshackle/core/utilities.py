@@ -9,6 +9,7 @@ import os
 import re
 import socket
 import sys
+import threading
 import time
 import traceback
 import unicodedata
@@ -456,6 +457,11 @@ def resolve_sort_langs(
     return resolved
 
 
+# construct 2.8 gives each bit-field struct one shared stream, so two threads in a pymp4
+# parse or build of a box with bit fields (tenc, senc, trun, sidx, ...) read each other's bytes
+PYMP4_LOCK = threading.Lock()
+
+
 def get_boxes(data: bytes, box_type: bytes, as_bytes: bool = False) -> Box:  # type: ignore
     """
     Scan a byte array for a wanted MP4/ISOBMFF box, then parse and yield each find.
@@ -506,14 +512,13 @@ def get_boxes(data: bytes, box_type: bytes, as_bytes: bool = False) -> Box:  # t
         box_start = pos - 4
 
         try:
-            box = Box.parse(data[box_start:])
-            if as_bytes:
-                box = Box.build(box)
+            with PYMP4_LOCK:
+                box = Box.parse(data[box_start:])
+                built = Box.build(box)
 
-            yield box
+            yield built if as_bytes else box
 
-            box_size = len(Box.build(box))
-            offset = box_start + box_size
+            offset = box_start + len(built)
 
         except IOError:
             break
