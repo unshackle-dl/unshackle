@@ -3057,7 +3057,12 @@ firewall, or a Cloudflare tunnel in front of the server does not stop it.</p>
 <p>The service traffic stays encrypted from the server to the service, so the client relays only
 encrypted bytes. The client refuses to connect to <code>localhost</code>, and to a host name or IP address
 that resolves only to a loopback, private or link-local address, so the server cannot reach
-your local network.</p>
+your local network.
+A VPN or proxy app in TUN mode with fake-IP DNS answers a host name with an address from
+<code>198.18.0.0/15</code> or <code>2001:2::/48</code> and maps it back to the real host. The client accepts that
+address for a host name, but not as an IP address from the server. An app set to a different
+fake-IP range does not work with <code>--local-proxy</code>. With fake-IP DNS, the client cannot see the
+real address of a host name, so it cannot stop a host name that points into your local network.</p>
 <div class="admonition note">
 <p class="admonition-title">Each request crosses the tunnel twice</p>
 <p>A request from the server goes to your machine and then to the service, so it takes
