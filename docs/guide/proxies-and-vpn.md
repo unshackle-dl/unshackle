@@ -318,6 +318,11 @@ The service traffic stays encrypted from the server to the service, so the clien
 encrypted bytes. The client refuses to connect to `localhost`, and to a host name or IP address
 that resolves only to a loopback, private or link-local address, so the server cannot reach
 your local network.
+A VPN or proxy app in TUN mode with fake-IP DNS answers a host name with an address from
+`198.18.0.0/15` or `2001:2::/48` and maps it back to the real host. The client accepts that
+address for a host name, but not as an IP address from the server. An app set to a different
+fake-IP range does not work with `--local-proxy`. With fake-IP DNS, the client cannot see the
+real address of a host name, so it cannot stop a host name that points into your local network.
 
 !!! note "Each request crosses the tunnel twice"
     A request from the server goes to your machine and then to the service, so it takes

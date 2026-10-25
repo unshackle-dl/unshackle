@@ -30,6 +30,7 @@ HEARTBEAT = 20
 GRACE = 60
 RELINK_WAIT = 10
 OPEN_TIMEOUT = 15
+FAKE_IP_POOLS = (ipaddress.ip_network("198.18.0.0/15"), ipaddress.ip_network("2001:2::/48"))
 MAX_TUNNELS = 4
 MAX_STREAMS = 256
 CHUNK = 65536
@@ -282,20 +283,32 @@ async def close_tunnels(_: web.Application) -> None:
         await tunnel.close()
 
 
-def is_public_ip(address: str) -> bool:
+def parse_ip(address: str) -> Optional[ipaddress.IPv4Address | ipaddress.IPv6Address]:
     try:
-        return ipaddress.ip_address(address.partition("%")[0]).is_global
+        return ipaddress.ip_address(address.partition("%")[0])
     except ValueError:
-        return False
+        return None
+
+
+def is_public_ip(address: str) -> bool:
+    return (ip := parse_ip(address)) is not None and ip.is_global
+
+
+def is_fake_ip(address: str) -> bool:
+    """True for an address from a pool that fake-IP DNS in a TUN-mode VPN or proxy hands out for a name."""
+    return (ip := parse_ip(address)) is not None and any(ip in pool for pool in FAKE_IP_POOLS)
 
 
 async def connect_public(host: str, port: int) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
     """Connect to the first public address of ``host``. The server picks the targets, so a name that resolves
-    only to the client's own machine or LAN is refused."""
+    only to the client's own machine or LAN is refused. A fake IP passes only when it comes from a name lookup:
+    the TUN maps it back to the real host, which the client cannot check."""
     infos = await asyncio.get_running_loop().getaddrinfo(host, port, type=socket.SOCK_STREAM)
-    addresses = [info[4][0] for info in infos if is_public_ip(str(info[4][0]))]
+    resolved = [str(info[4][0]) for info in infos]
+    from_name = parse_ip(host) is None
+    addresses = [a for a in resolved if is_public_ip(a) or (from_name and is_fake_ip(a))]
     if not addresses:
-        raise PermissionError(f"{host} resolves only to local addresses")
+        raise PermissionError(f"{host} resolves only to local addresses ({', '.join(resolved)})")
     error: OSError = OSError(f"could not connect to {host}")
     for address in addresses:
         try:
@@ -316,6 +329,7 @@ class TunnelClient:
         self.lost = False
         self.ready = threading.Event()
         self.relays: set[asyncio.Task[None]] = set()
+        self.refused: set[str] = set()
         self.thread = threading.Thread(target=lambda: asyncio.run(self.run()), name="tunnel", daemon=True)
         self.loop: Optional[asyncio.AbstractEventLoop] = None
         self.task: Optional[asyncio.Task[None]] = None
@@ -401,6 +415,12 @@ class TunnelClient:
     async def open(self, link: Link, sid: int, host: str, port: int) -> None:
         try:
             reader, writer = await connect_public(host, port)
+        except PermissionError as e:
+            if host not in self.refused:  # the server retries, so warn once per host
+                self.refused.add(host)
+                log.warning(f"Tunnel refused {e}")
+            await link.close_stream(sid)
+            return
         except (OSError, ValueError, asyncio.TimeoutError) as e:  # the idna codec raises ValueError on a bad hostname
             log.debug(f"Tunnel dial to {host}:{port} failed: {e}")
             await link.close_stream(sid)

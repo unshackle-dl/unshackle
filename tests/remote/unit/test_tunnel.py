@@ -28,6 +28,7 @@ from unshackle.core.tunnel import (
     TunnelClient,
     connect_public,
     frame,
+    is_fake_ip,
     is_public_ip,
     tunnel_proxy,
 )
@@ -106,10 +107,49 @@ def test_the_client_refuses_a_target_on_its_own_network(server: str, target: int
 
 @pytest.mark.parametrize(
     ("address", "public"),
-    [("8.8.8.8", True), ("127.0.0.1", False), ("192.168.1.10", False), ("10.0.0.1", False), ("::1", False)],
+    [
+        ("8.8.8.8", True),
+        ("127.0.0.1", False),
+        ("192.168.1.10", False),
+        ("10.0.0.1", False),
+        ("::1", False),
+        ("198.18.2.36", False),
+    ],
 )
 def test_is_public_ip(address: str, public: bool) -> None:
     assert is_public_ip(address) is public
+
+
+@pytest.mark.parametrize(
+    ("address", "fake"),
+    [
+        ("198.18.2.36", True),
+        ("198.19.255.1", True),
+        ("198.20.0.1", False),
+        ("::ffff:198.18.0.1", False),
+        ("2001:2::1", True),
+        ("2001:2:1::1", False),
+        ("fdfe:dcba:9876::1", False),
+    ],
+)
+def test_is_fake_ip(address: str, fake: bool) -> None:
+    assert is_fake_ip(address) is fake
+
+
+def test_a_name_that_resolves_to_a_fake_ip_is_dialled(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def resolve(self: object, host: str, port: int, **_: object) -> list:
+        return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("198.18.2.36", port))]
+
+    dialled: list[str] = []
+
+    async def open_connection(address: str, port: int) -> tuple:
+        dialled.append(address)
+        return None, None
+
+    monkeypatch.setattr(asyncio.BaseEventLoop, "getaddrinfo", resolve)
+    monkeypatch.setattr(asyncio, "open_connection", open_connection)
+    asyncio.run(connect_public("api.example", 443))
+    assert dialled == ["198.18.2.36"]
 
 
 def test_localhost_is_refused() -> None:
@@ -117,13 +157,16 @@ def test_localhost_is_refused() -> None:
         asyncio.run(connect_public("localhost", 443))
 
 
-def test_a_name_that_resolves_to_a_local_address_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize(("host", "address"), [("rebind.example", "192.168.1.1"), ("198.18.0.1", "198.18.0.1")])
+def test_a_target_that_resolves_to_a_local_address_is_refused(
+    monkeypatch: pytest.MonkeyPatch, host: str, address: str
+) -> None:
     async def resolve(self: object, host: str, port: int, **_: object) -> list:
-        return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("192.168.1.1", port))]
+        return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", (address, port))]
 
     monkeypatch.setattr(asyncio.BaseEventLoop, "getaddrinfo", resolve)
     with pytest.raises(PermissionError):
-        asyncio.run(connect_public("rebind.example", 443))
+        asyncio.run(connect_public(host, 443))
 
 
 def local_proxy_ctx(params: dict, typed: set) -> click.Context:
