@@ -10,7 +10,7 @@ survive, while duplicate headers collapse and boundary-duplicate cues dedupe.
 
 from __future__ import annotations
 
-from unshackle.core.utils.webvtt import merge_segmented_webvtt
+from unshackle.core.utils.webvtt import merge_segmented_webvtt, rebase_webvtt, timestamp_ms
 
 # Two segments, each a full WebVTT document with its own X-TIMESTAMP-MAP header,
 # as they arrive concatenated from a DASH/HLS subtitle stream. The first cue carries
@@ -118,3 +118,16 @@ def test_merge_skips_malformed_timing_line():
     out = merge_segmented_webvtt(vtt)
     assert "Good" in out
     assert "Broken" not in out
+
+
+def test_rebase_moves_live_clock_cues_to_zero():
+    vtt = "WEBVTT\n\n498024:05:44.300 --> 498024:05:44.829 line:0.01%\nText\n"
+    out = rebase_webvtt(vtt, timestamp_ms("498024:00:14.700"))
+    assert "00:05:29.600 --> 00:05:30.129 line:0.01%\nText" in out
+
+
+def test_rebase_leaves_presentation_time_cues_alone():
+    # a second pass, or a VOD period with a non-zero offset, must not shift again
+    vtt = "WEBVTT\n\n00:05:29.600 --> 00:05:30.129\nText\n"
+    assert rebase_webvtt(vtt, 1_792_886_414_700) == vtt
+    assert rebase_webvtt(vtt, 0) == vtt

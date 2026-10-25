@@ -27,7 +27,7 @@ from unshackle.core.config import config
 from unshackle.core.tracks.track import Track
 from unshackle.core.utilities import try_ensure_utf8, with_script
 from unshackle.core.utils.subprocess import log_tool_run
-from unshackle.core.utils.webvtt import merge_segmented_webvtt
+from unshackle.core.utils.webvtt import merge_segmented_webvtt, rebase_webvtt
 
 # silence srt library INFO logging
 logging.getLogger("srt").setLevel(logging.ERROR)
@@ -280,6 +280,14 @@ class Subtitle(Track):
             text = self.path.read_text("utf8")
             text = Subtitle.strip_webvtt_timestamp_map(text)
             if self.descriptor == Track.Descriptor.DASH:
+                from unshackle.core.manifests import DASH
+
+                template = DASH.merge_segment_templates(
+                    self.data["dash"]["adaptation_set"], self.data["dash"]["representation"]
+                )
+                if template is not None:
+                    offset = template.get("presentationTimeOffset", "0")
+                    text = rebase_webvtt(text, int(offset) * 1000 // int(template.get("timescale", "1")))
                 if len(self.data["dash"]["segment_durations"]) > 1:
                     text = merge_segmented_webvtt(
                         text,

@@ -1,8 +1,10 @@
 import re
 from typing import Optional
 
+TIMESTAMP = r"(?:\d+:)?\d{2}:\d{2}\.\d{3}"
 # Timing line: optional hours, verbatim settings tail.
-TIMING = re.compile(r"^((?:\d+:)?\d{2}:\d{2}\.\d{3})[ \t]+-->[ \t]+((?:\d+:)?\d{2}:\d{2}\.\d{3})(.*)$")
+TIMING = re.compile(rf"^({TIMESTAMP})[ \t]+-->[ \t]+({TIMESTAMP})(.*)$")
+CUE_TIMES = re.compile(rf"(?m)^([ \t]*)({TIMESTAMP})([ \t]+-->[ \t]+)({TIMESTAMP})")
 
 
 def timestamp_ms(ts: str) -> int:
@@ -75,3 +77,20 @@ def merge_segmented_webvtt(vtt_raw: str, segment_durations: Optional[list[int]] 
 
     blocks = headers + [f"{c[0]} --> {c[1]}{c[2]}\n{c[3]}" for c in cues]
     return "WEBVTT\n\n" + "\n\n".join(blocks) + "\n"
+
+
+def rebase_webvtt(text: str, offset_ms: int) -> str:
+    """
+    Subtract offset_ms from every cue time when the cues sit on the media timeline of a DASH
+    period whose presentationTimeOffset is offset_ms, as a live replay's do. Cues that start
+    below the offset are already presentation times, so the text stays as it is.
+    """
+    first = CUE_TIMES.search(text)
+    if offset_ms <= 0 or not first or timestamp_ms(first[2]) < offset_ms:
+        return text
+
+    def shift(ts: str) -> str:
+        ms = max(timestamp_ms(ts) - offset_ms, 0)
+        return f"{ms // 3_600_000:02}:{ms // 60_000 % 60:02}:{ms // 1000 % 60:02}.{ms % 1000:03}"
+
+    return CUE_TIMES.sub(lambda m: f"{m[1]}{shift(m[2])}{m[3]}{shift(m[4])}", text)
