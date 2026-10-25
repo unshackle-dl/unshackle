@@ -9,6 +9,8 @@ localhost server, asserting that:
 - a SegmentList whose ranges collapse fetches the parent resource whole in one direct
   (Range-less) request and writes a byte-correct file at ``save_path``, leaving no
   segment dir or ``.!dev`` artifacts, and
+- a SegmentBase track writes the parent byte for byte, when the server sends its total
+  length and when it sends an unknown (``*``) one, and
 - a track with mixed segment URLs still takes the per-segment download-and-merge path, and
 - that same segmented path raises ``DownloadCancelled`` when a sibling track's failure has
   already set ``DOWNLOAD_CANCELLED``, instead of treating the segments the cancel left
@@ -57,10 +59,12 @@ class _Handler(BaseHTTPRequestHandler):
             self.end_headers()
             return
         if rng:
-            start, end = (int(x) for x in rng.removeprefix("bytes=").split("-"))
+            first, _, last = rng.removeprefix("bytes=").partition("-")
+            start, end = int(first), int(last) if last else len(body) - 1
             chunk = body[start : end + 1]
             self.send_response(206)
-            self.send_header("Content-Range", f"bytes {start}-{end}/{len(body)}")
+            total = "*" if server.unknown_total else len(body)
+            self.send_header("Content-Range", f"bytes {start}-{end}/{total}")
             body = chunk
         else:
             self.send_response(200)
@@ -78,6 +82,7 @@ def server():
     srv.lock = threading.Lock()
     srv.requests = []
     srv.routes = {}
+    srv.unknown_total = False
     thread = threading.Thread(target=srv.serve_forever, daemon=True)
     thread.start()
     yield srv
@@ -126,9 +131,8 @@ def sidx_box(sizes: list[int]) -> bytes:
     return struct.pack(">I", 8 + len(body)) + b"sidx" + body
 
 
-def ranged_mpd(srv, ranges: list[tuple[int, int]], init: str = f'range="0-{INIT_LEN - 1}"') -> str:
-    # SegmentList of byte ranges on one media.mp4, with the given Initialization attributes
-    segment_urls = "\n".join(f'          <SegmentURL mediaRange="{s}-{e}"/>' for s, e in ranges)
+def media_mpd(srv, segments: str) -> str:
+    # one Representation on media.mp4, described by the given segment element
     return f"""<?xml version="1.0"?>
 <MPD xmlns="urn:mpeg:dash:schema:mpd:2011" type="static" profiles="urn:mpeg:dash:profile:isoff-on-demand:2011">
   <BaseURL>{base(srv)}</BaseURL>
@@ -136,14 +140,33 @@ def ranged_mpd(srv, ranges: list[tuple[int, int]], init: str = f'range="0-{INIT_
     <AdaptationSet contentType="video" mimeType="video/mp4" lang="en">
       <Representation id="v0" codecs="avc1.640028" bandwidth="1000000" width="1920" height="1080">
         <BaseURL>media.mp4</BaseURL>
-        <SegmentList timescale="1">
-          <Initialization {init}/>
-{segment_urls}
-        </SegmentList>
+{segments}
       </Representation>
     </AdaptationSet>
   </Period>
 </MPD>"""
+
+
+def ranged_mpd(srv, ranges: list[tuple[int, int]], init: str = f'range="0-{INIT_LEN - 1}"') -> str:
+    # SegmentList of byte ranges on one media.mp4, with the given Initialization attributes
+    segment_urls = "\n".join(f'          <SegmentURL mediaRange="{s}-{e}"/>' for s, e in ranges)
+    return media_mpd(
+        srv,
+        f"""        <SegmentList timescale="1">
+          <Initialization {init}/>
+{segment_urls}
+        </SegmentList>""",
+    )
+
+
+def segment_base_mpd(srv) -> str:
+    # the media range comes from the init response, not the manifest
+    return media_mpd(
+        srv,
+        f"""        <SegmentBase>
+          <Initialization range="0-{INIT_LEN - 1}"/>
+        </SegmentBase>""",
+    )
 
 
 def make_track(mpd: str, srv):
@@ -202,6 +225,27 @@ def test_collapse_keeps_the_sidx_between_init_and_first_segment(server, tmp_path
 
     assert ctx.save_path.read_bytes() == parent
     assert [path for path, rng in server.requests if rng is None] == ["/media.mp4"]
+
+
+def test_segment_base_collapse_ends_at_the_last_byte(server, tmp_path):
+    server.routes["/media.mp4"] = PARENT
+    ctx = make_ctx(tmp_path, "segment_base.mp4")
+
+    DASH.download_track(make_track(segment_base_mpd(server), server), ctx)
+
+    # the media range ends at total - 1, so the truncate after the collapse adds no byte
+    assert ctx.save_path.read_bytes() == PARENT
+
+
+def test_segment_base_unknown_total_fetches_the_rest_open_ended(server, tmp_path):
+    server.routes["/media.mp4"] = PARENT
+    server.unknown_total = True
+    ctx = make_ctx(tmp_path, "unknown_total.mp4")
+
+    DASH.download_track(make_track(segment_base_mpd(server), server), ctx)
+
+    assert ctx.save_path.read_bytes() == PARENT
+    assert ("/media.mp4", f"bytes={INIT_LEN}-") in server.requests
 
 
 def test_leading_gap_that_is_not_a_sidx_takes_segmented_path(server, tmp_path):

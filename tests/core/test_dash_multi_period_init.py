@@ -185,6 +185,6 @@ def test_segment_base_range_survives_a_skipped_probe(server, probes):
         probe_kid=False,
     )
 
-    assert segments == [(f"{base(server)}p1.mp4", f"{INIT_LEN}-{len(MEDIA)}")]
+    assert segments == [(f"{base(server)}p1.mp4", f"{INIT_LEN}-{len(MEDIA) - 1}")]
     assert track_kid is None
     assert not probes

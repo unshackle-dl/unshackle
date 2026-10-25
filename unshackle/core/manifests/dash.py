@@ -27,6 +27,7 @@ from requests import Session
 from unshackle.core import binaries
 from unshackle.core.config import config
 from unshackle.core.constants import DOWNLOAD_ALL_DRM, DOWNLOAD_CANCELLED, DOWNLOAD_LICENCE_ONLY, AnyTrack
+from unshackle.core.downloaders.requests import parse_content_range
 from unshackle.core.drm import DRM_T, ClearKeyCENC, PlayReady, Widevine
 from unshackle.core.drm.segment_decrypt import SegmentDecrypter, can_use
 from unshackle.core.drm.verify import decrypt_track
@@ -1104,9 +1105,10 @@ class DASH:
                 init_data = res.content
                 if probe_kid:
                     track_kid = track.get_key_id(init_data)
-                total_size = res.headers.get("Content-Range", "").split("/")[-1]
-                if total_size:
-                    media_range = f"{len(init_data)}-{total_size}"
+                content_range = parse_content_range(res.headers.get("Content-Range"))
+                if content_range:
+                    _, init_end, total = content_range
+                    media_range = f"{init_end + 1}-{'' if total is None else total - 1}"
 
             subsegments: list[tuple[int, int, int]] = []
             index_range = segment_base.get("indexRange")
