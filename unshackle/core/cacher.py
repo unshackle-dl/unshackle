@@ -49,8 +49,11 @@ class Cacher:
 
     @property
     def expired(self) -> bool:
-        """Compare as unix time: wall-clock comparison is wrong for an hour at each DST change."""
-        return bool(self.expiration and self.expiration.timestamp() < time.time())
+        """
+        Compare as unix time: wall-clock comparison is wrong for an hour at each DST change.
+        The 1 µs allowance covers datetime rounding the expiry up past a coarse clock (15.6 ms on Windows).
+        """
+        return bool(self.expiration and self.expiration.timestamp() < time.time() + 1e-6)
 
     def get(self, key: str, version: int = 1) -> Cacher:
         """
