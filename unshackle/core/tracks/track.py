@@ -18,9 +18,7 @@ from uuid import UUID
 from zlib import crc32
 
 import click
-from construct import ConstructError
 from langcodes import Language
-from pymp4.parser import Box
 from requests import Session
 from requests.adapters import HTTPAdapter, Retry
 
@@ -360,23 +358,25 @@ def parse_sidx(data: bytes, offset: int) -> tuple[int, list[tuple[int, int, int]
     Returns the timescale and one (start time, first byte, last byte) for each subsegment. The list
     is empty when the box is not a ``sidx`` or when it points at more indexes and not at media.
     """
+    # read by hand: pymp4's Box.parse gives wrong results when two threads parse at once
     size, header = int.from_bytes(data[:4], "big"), 32 if data[8:9] == b"\x00" else 40
-    # pymp4 loops forever on a box that counts more references than its size holds
-    if data[4:8] != b"sidx" or size < header + 12 * int.from_bytes(data[header - 2 : header], "big"):
+    count = int.from_bytes(data[header - 2 : header], "big")
+    if data[4:8] != b"sidx" or len(data) < header or min(size, len(data)) < header + 12 * count:
         return 0, []
-    try:
-        box = Box.parse(data)
-    except ConstructError:
-        return 0, []
-    if any(reference.reference_type != "MEDIA" for reference in box.references):
-        return 0, []
-    start, byte = box.earliest_presentation_time, offset + box.end + box.first_offset
+    if header == 32:
+        timescale, start, first_offset = struct.unpack_from(">III", data, 16)
+    else:
+        timescale, start, first_offset = struct.unpack_from(">IQQ", data, 16)
+    byte = offset + size + first_offset
     subsegments: list[tuple[int, int, int]] = []
-    for reference in box.references:
-        subsegments.append((start, byte, byte + reference.referenced_size - 1))
-        start += reference.segment_duration
-        byte += reference.referenced_size
-    return box.timescale, subsegments
+    for i in range(count):
+        word, duration = struct.unpack_from(">II", data, header + 12 * i)
+        if word >> 31:
+            return 0, []
+        subsegments.append((start, byte, byte + (word & 0x7FFFFFFF) - 1))
+        start += duration
+        byte += word & 0x7FFFFFFF
+    return timescale, subsegments
 
 
 @dataclass

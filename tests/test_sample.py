@@ -345,6 +345,24 @@ def test_parse_sidx_refuses_what_it_cannot_cut() -> None:
     assert parse_sidx(sidx_box(count=3)[:-4], 0) == (0, [])
 
 
+def test_parse_sidx_is_right_when_tracks_parse_at_the_same_time() -> None:
+    boxes = {758: sidx_box(count=758), 1408: sidx_box(count=1408, size=500)}
+    wrong: list[int] = []
+
+    def parse(count: int) -> None:
+        for _ in range(100):
+            if len(parse_sidx(boxes[count], 0)[1]) != count:
+                wrong.append(count)
+
+    threads = [threading.Thread(target=parse, args=(count,)) for count in (758, 1408, 758, 1408)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=30)
+    assert not wrong
+    assert not any(thread.is_alive() for thread in threads)
+
+
 def test_parse_sidx_refuses_a_box_that_counts_more_references_than_it_holds() -> None:
     box = bytearray(sidx_box(count=3))
     box[30:32] = (5).to_bytes(2, "big")
