@@ -4,15 +4,13 @@ resource instead of per-segment files + merge."""
 
 from __future__ import annotations
 
-from typing import Optional
-
 from unshackle.core.manifests import DASH
 
 URL = "https://cdn/media.mp4"
 
 
-def collapsible(segments, init_len: Optional[int], is_subtitle: bool = False) -> bool:
-    return DASH.collapsible_single_url(is_subtitle, segments, init_len)
+def collapsible(segments, init_len: int, is_subtitle: bool = False) -> bool:
+    return DASH.collapsible_single_url(is_subtitle, segments, init_len) is not None
 
 
 def test_segmentbase_single_range_eligible():
@@ -29,10 +27,6 @@ def test_subtitle_never_eligible():
     assert collapsible([(URL, "863-999999")], init_len=863, is_subtitle=True) is False
 
 
-def test_missing_init_len_ineligible():
-    assert collapsible([(URL, "863-999999")], init_len=None) is False
-
-
 def test_missing_range_ineligible():
     assert collapsible([(URL, None)], init_len=863) is False
     assert collapsible([(URL, "863-1999"), (URL, None)], init_len=863) is False
@@ -43,9 +37,14 @@ def test_mixed_urls_ineligible():
     assert collapsible(segments, init_len=863) is False
 
 
-def test_first_segment_gap_after_init_ineligible():
-    # first media byte does not immediately follow the init prefix
-    assert collapsible([(URL, "900-1999")], init_len=863) is False
+def test_first_segment_gap_after_init_left_to_prefix_check():
+    # the gap may be the sidx; single_url_prefix_matches decides from the bytes
+    segments = [(URL, "900-1999"), (URL, "2000-2999")]
+    assert DASH.collapsible_single_url(False, segments, 863) == (900, 2999)
+
+
+def test_first_segment_inside_init_ineligible():
+    assert collapsible([(URL, "800-1999")], init_len=863) is False
 
 
 def test_gap_between_segments_ineligible():

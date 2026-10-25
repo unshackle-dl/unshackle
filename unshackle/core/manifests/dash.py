@@ -40,6 +40,7 @@ from unshackle.core.tracks.track import (
 )
 from unshackle.core.utilities import is_close_match, log_event, try_ensure_utf8
 from unshackle.core.utils import run_proxy
+from unshackle.core.utils.bitrate import ranged_get
 from unshackle.core.utils.redact import safe_display_url
 from unshackle.core.utils.xml import load_xml
 
@@ -558,14 +559,17 @@ class DASH:
 
         downloader = track.downloader
 
-        # When every segment is a byte range of one parent resource and init is its [0, len)
-        # prefix, the whole resource is itself a valid MP4, so one direct download to save_path
-        # replaces the per-segment files, init write and merge pass.
-        collapse_single_url = not config.sample and DASH.collapsible_single_url(
-            isinstance(track, Subtitle),
-            segments,
-            len(init_data) if init_data is not None else None,
+        # A parent resource that is itself a valid MP4 downloads in one pass to save_path,
+        # replacing the per-segment files, init write and merge pass.
+        collapse_span = (
+            DASH.collapsible_single_url(isinstance(track, Subtitle), segments, len(init_data))
+            if init_data is not None and not config.sample
+            else None
         )
+        if collapse_span and init_data:
+            if not DASH.single_url_prefix_matches(session, segments[0][0], collapse_span, init_data):
+                collapse_span = None
+        collapse_single_url = collapse_span is not None
 
         use_segment_decrypt = not collapse_single_url and bool(init_data) and can_use(drm, config.decryption)
         # subtitle segments are tiny, the post-download merge costs nothing there
@@ -674,9 +678,9 @@ class DASH:
                 save_path.unlink(missing_ok=True)
             raise
 
-        if collapse_single_url:
+        if collapse_span:
             with open(save_path, "r+b") as collapsed:
-                collapsed.truncate(int(segments[-1][1].split("-")[1]) + 1)
+                collapsed.truncate(collapse_span[1] + 1)
         elif merger:
             for control_file in save_dir.glob("*.!dev"):
                 control_file.unlink(missing_ok=True)
@@ -805,42 +809,67 @@ class DASH:
     def collapsible_single_url(
         is_subtitle: bool,
         segments: list[tuple[str, Optional[str]]],
-        init_len: Optional[int],
-    ) -> bool:
+        init_len: int,
+    ) -> Optional[tuple[int, int]]:
         """
-        Whether every segment is a byte range of one parent resource whose [0, init_len)
-        prefix is the init segment, so unshackle can download the whole resource in one pass.
+        Get the first and last byte of the segments when every segment is a byte range of one
+        parent resource that follows an init of init_len bytes, so unshackle can download the
+        whole resource in one pass.
 
-        Returns False for subtitle tracks, an unknown init length, mixed URLs, malformed
-        ranges, and anything but one gapless run in document order starting at the init
-        prefix. A gap would pull bytes the segmented merge path excludes (a period the
-        manifest filters out) into the collapsed file, so it fails closed.
+        Returns None for subtitle tracks, mixed URLs, malformed ranges, and anything but one
+        gapless run in document order. A gap between segments would pull bytes the segmented
+        merge path excludes (a period the manifest filters out) into the collapsed file, so it
+        fails closed. A gap before the first segment passes here, and single_url_prefix_matches
+        must then prove that it is the index.
         """
-        if is_subtitle or init_len is None or not segments:
-            return False
+        if is_subtitle or not segments:
+            return None
 
         first_url = segments[0][0]
         ranges: list[tuple[int, int]] = []
         for url, bytes_range in segments:
             if url != first_url or not bytes_range:
-                return False
+                return None
             parts = bytes_range.split("-")
             if len(parts) != 2 or not parts[0] or not parts[1]:
-                return False
+                return None
             try:
                 start, end = int(parts[0]), int(parts[1])
             except ValueError:
-                return False
+                return None
             if end < start:
-                return False
+                return None
             ranges.append((start, end))
 
-        prev_end = init_len - 1
+        if ranges[0][0] < init_len:
+            return None
+        prev_end = ranges[0][0] - 1
         for start, end in ranges:
             if start != prev_end + 1:
-                return False
+                return None
             prev_end = end
-        return True
+        return ranges[0][0], prev_end
+
+    @staticmethod
+    def single_url_prefix_matches(
+        session: Union[Session, RnetSession],
+        url: str,
+        span: tuple[int, int],
+        init_data: bytes,
+    ) -> bool:
+        """
+        Whether the resource at url starts with init_data and, when bytes sit between the init
+        and the first byte of span, whether they are one sidx that indexes exactly span.
+        Fetches the resource up to the start of span.
+        """
+        first_start, last_end = span
+        head = ranged_get(url, session, f"bytes=0-{first_start - 1}")
+        if not head or len(head) != first_start or not head.startswith(init_data):
+            return False
+        if first_start == len(init_data):
+            return True
+        _, subsegments = parse_sidx(head[len(init_data) :], len(init_data))
+        return bool(subsegments) and subsegments[0][1] == first_start and subsegments[-1][2] == last_end
 
     @staticmethod
     def is_content_period(period: Element, filtered_period_ids: list[str]) -> bool:

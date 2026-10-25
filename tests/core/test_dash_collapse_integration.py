@@ -18,6 +18,7 @@ localhost server, asserting that:
 from __future__ import annotations
 
 import shutil
+import struct
 import threading
 from functools import partial
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -99,48 +100,6 @@ def base(srv) -> str:
     return f"http://127.0.0.1:{srv.server_address[1]}/"
 
 
-def collapse_mpd(srv) -> str:
-    # SegmentList on one media.mp4: init is bytes [0, INIT_LEN), media ranges cover the rest
-    # contiguously -> collapsible_single_url returns the URL and download_track collapses.
-    return f"""<?xml version="1.0"?>
-<MPD xmlns="urn:mpeg:dash:schema:mpd:2011" type="static" profiles="urn:mpeg:dash:profile:isoff-on-demand:2011">
-  <BaseURL>{base(srv)}</BaseURL>
-  <Period id="0">
-    <AdaptationSet contentType="video" mimeType="video/mp4" lang="en">
-      <Representation id="v0" codecs="avc1.640028" bandwidth="1000000" width="1920" height="1080">
-        <BaseURL>media.mp4</BaseURL>
-        <SegmentList timescale="1">
-          <Initialization range="0-{INIT_LEN - 1}"/>
-          <SegmentURL mediaRange="{INIT_LEN}-5119"/>
-          <SegmentURL mediaRange="5120-{len(PARENT) - 1}"/>
-        </SegmentList>
-      </Representation>
-    </AdaptationSet>
-  </Period>
-</MPD>"""
-
-
-def clipped_mpd(srv) -> str:
-    # same parent, but the ranges stop short of its end -> the collapsed file must be trimmed
-    # to the last indexed byte, not left holding the parent's trailing bytes.
-    return f"""<?xml version="1.0"?>
-<MPD xmlns="urn:mpeg:dash:schema:mpd:2011" type="static" profiles="urn:mpeg:dash:profile:isoff-on-demand:2011">
-  <BaseURL>{base(srv)}</BaseURL>
-  <Period id="0">
-    <AdaptationSet contentType="video" mimeType="video/mp4" lang="en">
-      <Representation id="v0" codecs="avc1.640028" bandwidth="1000000" width="1920" height="1080">
-        <BaseURL>media.mp4</BaseURL>
-        <SegmentList timescale="1">
-          <Initialization range="0-{INIT_LEN - 1}"/>
-          <SegmentURL mediaRange="{INIT_LEN}-5119"/>
-          <SegmentURL mediaRange="5120-{CLIP_END}"/>
-        </SegmentList>
-      </Representation>
-    </AdaptationSet>
-  </Period>
-</MPD>"""
-
-
 def mixed_mpd(srv) -> str:
     # Two SegmentURLs on distinct paths -> mixed URLs -> predicate False -> segmented path.
     return f"""<?xml version="1.0"?>
@@ -153,6 +112,33 @@ def mixed_mpd(srv) -> str:
           <Initialization sourceURL="init.bin"/>
           <SegmentURL media="part0.bin"/>
           <SegmentURL media="part1.bin"/>
+        </SegmentList>
+      </Representation>
+    </AdaptationSet>
+  </Period>
+</MPD>"""
+
+
+def sidx_box(sizes: list[int]) -> bytes:
+    # version 0 sidx: one MEDIA reference per size, each starting with a SAP
+    refs = b"".join(struct.pack(">III", size, 1, 0x90000000) for size in sizes)
+    body = struct.pack(">IIIIIHH", 0, 1, 1, 0, 0, 0, len(sizes)) + refs
+    return struct.pack(">I", 8 + len(body)) + b"sidx" + body
+
+
+def ranged_mpd(srv, ranges: list[tuple[int, int]], init: str = f'range="0-{INIT_LEN - 1}"') -> str:
+    # SegmentList of byte ranges on one media.mp4, with the given Initialization attributes
+    segment_urls = "\n".join(f'          <SegmentURL mediaRange="{s}-{e}"/>' for s, e in ranges)
+    return f"""<?xml version="1.0"?>
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011" type="static" profiles="urn:mpeg:dash:profile:isoff-on-demand:2011">
+  <BaseURL>{base(srv)}</BaseURL>
+  <Period id="0">
+    <AdaptationSet contentType="video" mimeType="video/mp4" lang="en">
+      <Representation id="v0" codecs="avc1.640028" bandwidth="1000000" width="1920" height="1080">
+        <BaseURL>media.mp4</BaseURL>
+        <SegmentList timescale="1">
+          <Initialization {init}/>
+{segment_urls}
         </SegmentList>
       </Representation>
     </AdaptationSet>
@@ -174,7 +160,7 @@ def make_ctx(tmp_path, name="out.mp4"):
 
 def test_collapse_downloads_parent_whole_in_one_direct_request(server, tmp_path):
     server.routes["/media.mp4"] = PARENT
-    track = make_track(collapse_mpd(server), server)
+    track = make_track(ranged_mpd(server, [(INIT_LEN, 5119), (5120, len(PARENT) - 1)]), server)
     ctx = make_ctx(tmp_path, "collapsed.mp4")
 
     DASH.download_track(track, ctx)
@@ -194,13 +180,68 @@ def test_collapse_downloads_parent_whole_in_one_direct_request(server, tmp_path)
 
 def test_collapse_trims_parent_bytes_past_the_last_segment(server, tmp_path):
     server.routes["/media.mp4"] = PARENT
-    track = make_track(clipped_mpd(server), server)
+    # the ranges stop short of the parent's end, so the collapsed file must be trimmed
+    track = make_track(ranged_mpd(server, [(INIT_LEN, 5119), (5120, CLIP_END)]), server)
     ctx = make_ctx(tmp_path, "clipped.mp4")
 
     DASH.download_track(track, ctx)
 
     # the parent's trailing 1024 bytes are not part of any segment, so they must not survive
     assert ctx.save_path.read_bytes() == PARENT[: CLIP_END + 1]
+
+
+def test_collapse_keeps_the_sidx_between_init_and_first_segment(server, tmp_path):
+    media = [bytes([0xC0]) * 3000, bytes([0xD1]) * 2000]
+    head = PARENT[:INIT_LEN] + sidx_box([len(m) for m in media])
+    parent = head + b"".join(media)
+    server.routes["/media.mp4"] = parent
+    ranges = [(len(head), len(head) + 2999), (len(head) + 3000, len(parent) - 1)]
+    ctx = make_ctx(tmp_path, "sidx.mp4")
+
+    DASH.download_track(make_track(ranged_mpd(server, ranges), server), ctx)
+
+    assert ctx.save_path.read_bytes() == parent
+    assert [path for path, rng in server.requests if rng is None] == ["/media.mp4"]
+
+
+def test_leading_gap_that_is_not_a_sidx_takes_segmented_path(server, tmp_path):
+    # a filtered period cut from the same file leaves a gap of media, not an index
+    gap = struct.pack(">I", 1000) + b"moof" + bytes(992)
+    media = bytes([0xC0]) * 3000
+    server.routes["/media.mp4"] = PARENT[:INIT_LEN] + gap + media
+    start = INIT_LEN + len(gap)
+    ctx = make_ctx(tmp_path, "gap.mp4")
+
+    DASH.download_track(make_track(ranged_mpd(server, [(start, start + 2999)]), server), ctx)
+
+    assert ctx.save_path.read_bytes() == PARENT[:INIT_LEN] + media
+    assert not [path for path, rng in server.requests if rng is None]
+
+
+def test_sidx_indexing_more_than_the_listed_segments_takes_segmented_path(server, tmp_path):
+    # the file carries a post-roll after the listed segments, and the sidx indexes it too
+    media, post_roll = bytes([0xC0]) * 3000, bytes([0xEE]) * 500
+    head = PARENT[:INIT_LEN] + sidx_box([len(media), len(post_roll)])
+    server.routes["/media.mp4"] = head + media + post_roll
+    ctx = make_ctx(tmp_path, "post-roll.mp4")
+
+    DASH.download_track(make_track(ranged_mpd(server, [(len(head), len(head) + 2999)]), server), ctx)
+
+    assert ctx.save_path.read_bytes() == PARENT[:INIT_LEN] + media
+
+
+def test_init_from_another_file_takes_segmented_path(server, tmp_path):
+    # the media ranges start where an init of the same length would end, but the init is elsewhere
+    init = bytes([0x11]) * INIT_LEN
+    server.routes["/init.bin"] = init
+    server.routes["/media.mp4"] = PARENT
+    ranges = [(INIT_LEN, 5119), (5120, len(PARENT) - 1)]
+    ctx = make_ctx(tmp_path, "init-elsewhere.mp4")
+
+    DASH.download_track(make_track(ranged_mpd(server, ranges, init='sourceURL="init.bin"'), server), ctx)
+
+    assert ctx.save_path.read_bytes() == init + PARENT[INIT_LEN:]
+    assert not [path for path, rng in server.requests if rng is None and path == "/media.mp4"]
 
 
 def test_non_collapse_takes_segmented_merge_path(server, tmp_path):
