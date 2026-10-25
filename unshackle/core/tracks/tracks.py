@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, Callable, Iterator, Optional, Sequence, Union
 
 from langcodes import Language
+from rich.markup import escape
 from rich.progress import Progress, SpinnerColumn, TaskID, TextColumn, TimeRemainingColumn
 from rich.table import Table
 from rich.tree import Tree
@@ -190,11 +191,11 @@ class Tracks:
 
                         progress_callables.append(update_track_progress)
                         track_table = Table.grid()
-                        track_table.add_row(str(track)[6:], style="text2")
+                        track_table.add_row(escape(str(track)[6:]), style="text2")
                         track_table.add_row(progress)
                         tracks_tree.add(track_table)
                     else:
-                        tracks_tree.add(str(track)[6:], style="text2")
+                        tracks_tree.add(escape(str(track)[6:]), style="text2")
 
             # Show Closed Captions right after Subtitles (even if no subtitle tracks exist)
             if track_type is Subtitle:

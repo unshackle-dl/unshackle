@@ -326,6 +326,34 @@ SDH, CC, Forced or Descriptive track then has only that label as its name.
 
 The option also changes the names in `--list` and in the `track_name` field of the REST API.
 
+Set `muxing.original_label` to add a label after the name of each audio and subtitle track in the
+title's original language. unshackle also sets the Matroska original flag on these tracks, but some
+players show only the name. MP4 output has no original flag, so there the label is the only marker:
+
+```yaml title="unshackle.yaml"
+muxing:
+  original_label: "[Original]"
+```
+
+| Track | Track name |
+|-------|------------|
+| Japanese audio, original language | Japanese [Original] |
+| Japanese SDH subtitle, original language | Japanese [Original] (SDH) |
+| Korean subtitle | Korean |
+
+The label can be any text, for example `"| Original"` or a label in another language. Put it in
+quotes: YAML reads an unquoted `[Original]` as a list, and an unquoted `| Original` stops the config
+from loading. unshackle ignores a value that is not text.
+
+The label also applies to a name that the service sets, and to audio that a service keeps inside the
+video file. unshackle does not add the label when the name already contains its words, so a service
+name `Original` or `Japanese (original)` stays as it is.
+
+!!! tip "Use an English label with Jellyfin 12"
+    Jellyfin 12 adds its own "Original" to an original-language audio track from the flag, unless the
+    name already contains the word. It adds none to a subtitle. A label in another language, such as `[원어]`, then shows next to Jellyfin's
+    "Original".
+
 !!! note "Players that show the language next to the name"
     Some players, such as Jellyfin, show the track name and the language name together. They leave
     out the language when the name already contains it, so an English name shows once. A native name

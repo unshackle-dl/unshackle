@@ -1019,17 +1019,29 @@ class Track:
     def embedded_audio_name(self) -> str:
         """Name the audio a service keeps inside this track's file, by its language when the service set none."""
         lang = self.data["audio_language"]
-        if name := self.data.get("audio_language_name"):
-            return name
-        if config.muxing.get("track_names") == "none":
-            return ""
-        return language_name(Language.get(lang)) or lang
+        name = self.data.get("audio_language_name")
+        if not name and config.muxing.get("track_names") != "none":
+            name = language_name(Language.get(lang)) or lang
+        return self.with_original_label(name) or ""
 
     def get_track_name(self) -> Optional[str]:
         """Get the Track Name, or the name of its language when the service set none."""
-        if self.name is not None or config.muxing.get("track_names") == "none":
-            return self.name
-        return language_name(self.mux_language)
+        name = self.name
+        if name is None and config.muxing.get("track_names") != "none":
+            name = language_name(self.mux_language)
+        return self.with_original_label(name)
+
+    def with_original_label(self, name: Optional[str]) -> Optional[str]:
+        """Add `muxing.original_label` to the name of a track in the title's original language,
+        unless the name already contains the label's words."""
+        label = config.muxing.get("original_label")
+        label = label.strip() if isinstance(label, str) else ""
+        if not label or not self.is_original_lang:
+            return name
+        words = re.sub(r"[\W_]+", " ", label).strip() or label
+        if name and words.casefold() in name.casefold():
+            return name
+        return f"{name} {label}" if name else label
 
     def get_drm_for_cdm(self, cdm: Optional[object]) -> Optional[DRM_T]:
         """Return the DRM matching the provided CDM, if available."""

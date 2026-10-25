@@ -3,14 +3,23 @@ from typing import Callable, Optional
 
 import pytest
 from langcodes import Language
+from rich.text import Text
 
 from unshackle.core.config import config
 from unshackle.core.tracks import Audio, Subtitle, Tracks, Video
 from unshackle.core.utilities import language_name, multi_script_languages, with_script
 
 
-def sub(lang: str, name: Optional[str] = None, sdh: bool = False) -> Subtitle:
-    return Subtitle(id_="s", url="https://x/s", codec=Subtitle.Codec.WebVTT, language=lang, name=name, sdh=sdh)
+def sub(lang: str, name: Optional[str] = None, sdh: bool = False, original: bool = False) -> Subtitle:
+    return Subtitle(
+        id_="s",
+        url="https://x/s",
+        codec=Subtitle.Codec.WebVTT,
+        language=lang,
+        name=name,
+        sdh=sdh,
+        is_original_lang=original,
+    )
 
 
 def test_multi_script_languages_come_from_cldr() -> None:
@@ -115,6 +124,47 @@ def test_no_language_name_when_track_names_is_none(monkeypatch: pytest.MonkeyPat
     video = Video(id_="v", url="https://x/v", codec=Video.Codec.AVC, language="en")
     video.data["audio_language"] = "en"
     assert video.embedded_audio_name() == ""
+
+
+@pytest.mark.parametrize(
+    ("muxing", "track", "expected"),
+    [
+        ({"original_label": "[Original]"}, sub("ja", sdh=True, original=True), "Japanese [Original] (SDH)"),
+        ({"original_label": "[Original]"}, sub("ko"), "Korean"),
+        ({"original_label": "| Original", "track_names": "none"}, sub("ja", original=True), "| Original"),
+    ],
+)
+def test_original_label_follows_the_name_of_an_original_language_track(
+    muxing: dict, track: Subtitle, expected: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(config, "muxing", muxing)
+    assert track.get_track_name() == expected
+
+
+@pytest.mark.parametrize("name", ["Original", "Japanese [Original]", "Japanese (original)"])
+def test_original_label_is_not_added_twice(name: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(config, "muxing", {"original_label": "[Original]"})
+    assert sub("ja", name=name, original=True).get_track_name() == name
+
+
+@pytest.mark.parametrize("label", [True, 1, ["Original"], "  "])
+def test_original_label_that_is_not_text_is_ignored(label: object, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(config, "muxing", {"original_label": label, "track_names": "none"})
+    assert sub("ja", sdh=True, original=True).get_track_name() == "SDH"
+
+
+def test_embedded_audio_takes_the_original_label(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(config, "muxing", {"original_label": "[Original]"})
+    video = Video(id_="v", url="https://x/v", codec=Video.Codec.AVC, language="ja", is_original_lang=True)
+    video.data["audio_language"] = "ja"
+    assert video.embedded_audio_name() == "Japanese [Original]"
+
+
+def test_track_list_shows_a_bracketed_label_as_text(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(config, "muxing", {"original_label": "[/]"})
+    tree = Tracks([sub("ja", original=True)]).tree()[0]
+    labels = [Text.from_markup(node.label).plain for node in tree.children[0].children]
+    assert labels == ["[VTT] | ja | Japanese [/]"]
 
 
 def test_subtitle_names_and_tags_the_script_but_keeps_its_language() -> None:
