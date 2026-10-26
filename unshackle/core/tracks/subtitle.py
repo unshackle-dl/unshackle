@@ -61,7 +61,7 @@ class Subtitle(Track):
                 return Subtitle.Codec.SubStationAlpha
             elif mime == "ass":
                 return Subtitle.Codec.SubStationAlphav4
-            elif mime == "ttml":
+            elif mime in ("ttml", "ttml+xml"):
                 return Subtitle.Codec.TimedTextMarkupLang
             elif mime == "vtt":
                 return Subtitle.Codec.WebVTT
