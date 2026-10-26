@@ -1,0 +1,26 @@
+<?xml version="1.0"?>
+<MPD xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="urn:mpeg:dash:schema:mpd:2011" xsi:schemaLocation="urn:mpeg:dash:schema:mpd:2011 DASH-MPD.xsd" type="static" mediaPresentationDuration="PT24S" availabilityStartTime="2014-10-17T17:17:05Z" minBufferTime="PT4S" profiles="urn:mpeg:dash:profile:cmaf:2019,urn:mpeg:dash:profile:isoff-live:2011">
+  <Period id="1">
+    <!-- Video -->
+    <AdaptationSet contentType="video" id="1" mimeType="video/mp4 profiles='cmfc'" codecs="avc1.4D401F" maxWidth="1080" maxHeight="720" maxFrameRate="30" segmentProfiles="cmfs cmff" segmentAlignment="true" startWithSAP="1">
+      <SegmentTemplate timescale="30" initialization="$RepresentationID$/0" media="$RepresentationID$/$Number$">
+        <SegmentTimeline>
+          <S t="0" d="120" r="5"/>
+        </SegmentTimeline>
+      </SegmentTemplate>
+      <Representation id="video1/1" bandwidth="250000"/>
+      <Representation id="video1/2" bandwidth="500000"/>
+      <Representation id="video1/3" bandwidth="1000000"/>
+    </AdaptationSet>
+    <!-- Audio -->
+    <AdaptationSet contentType="audio" id="1" mimeType="audio/mp4 profiles='cmfc'" codecs="mp4a.40.5" segmentProfiles="cmfs cmff" segmentAlignment="true" startWithSAP="1">
+      <SegmentTemplate timescale="48" initialization="$RepresentationID$/0" media="$RepresentationID$/$Number$">
+        <SegmentTimeline>
+          <S t="0" d="120" r="5"/>
+        </SegmentTimeline>
+      </SegmentTemplate>
+      <Representation id="audio1/1" bandwidth="2500"/>
+      <Representation id="audio1/2" bandwidth="500000"/>
+    </AdaptationSet>
+  </Period>
+</MPD>

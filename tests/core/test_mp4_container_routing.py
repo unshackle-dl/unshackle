@@ -19,7 +19,7 @@ import pytest
 from unshackle.core import binaries
 from unshackle.core.tracks import Audio, Subtitle, Tracks, Video
 from unshackle.core.tracks.track import (
-    has_dts_uhd_sample_entry,
+    has_mp4_only_audio_entry,
     iter_top_level_boxes,
     strip_duplicate_init_boxes,
 )
@@ -36,9 +36,9 @@ def write_mp4(path: Path, sample_entry: bytes) -> Path:
     return path
 
 
-@pytest.mark.parametrize("fourcc", [b"dtsx", b"dtsy"])
-def test_dts_uhd_sample_entries_are_detected(tmp_path: Path, fourcc: bytes) -> None:
-    assert has_dts_uhd_sample_entry(write_mp4(tmp_path / "a.mp4", fourcc)) is True
+@pytest.mark.parametrize("fourcc", [b"dtsx", b"dtsy", b"mha1", b"mha2", b"mhm1", b"mhm2"])
+def test_dts_uhd_and_mpeg_h_sample_entries_are_detected(tmp_path: Path, fourcc: bytes) -> None:
+    assert has_mp4_only_audio_entry(write_mp4(tmp_path / "a.mp4", fourcc)) is True
 
 
 @pytest.mark.parametrize("fourcc", [b"dtsc", b"dtse", b"dtsh", b"dtsl", b"ec-3", b"mp4a"])
@@ -47,13 +47,13 @@ def test_other_dts_profiles_stay_in_matroska(tmp_path: Path, fourcc: bytes) -> N
     DTS:X Profile 1 is DTS-HD Master Audio underneath and Matroska stores it as
     A_DTS, so it must not be pulled out of Matroska by the DTS:X container rule.
     """
-    assert has_dts_uhd_sample_entry(write_mp4(tmp_path / "a.mp4", fourcc)) is False
+    assert has_mp4_only_audio_entry(write_mp4(tmp_path / "a.mp4", fourcc)) is False
 
 
 def test_a_file_with_no_moov_is_not_detected(tmp_path: Path) -> None:
     path = tmp_path / "a.mp4"
     path.write_bytes(box(b"ftyp", b"isom") + box(b"mdat", b"dtsx" * 8))
-    assert has_dts_uhd_sample_entry(path) is False, "a 4CC in mdat is not a sample entry"
+    assert has_mp4_only_audio_entry(path) is False, "a 4CC in mdat is not a sample entry"
 
 
 def build_tracks(tmp_path: Path, audio_entry: bytes) -> Tracks:

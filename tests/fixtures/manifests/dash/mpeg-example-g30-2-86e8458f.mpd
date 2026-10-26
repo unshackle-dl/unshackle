@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<MPD xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="urn:mpeg:dash:schema:mpd:2011" xsi:schemaLocation="urn:mpeg:dash:schema:mpd:2011 DASH-MPD.xsd" type="static" mediaPresentationDuration="PT3256S" minBufferTime="PT1.2S" profiles="urn:mpeg:dash:profile:isoff-on-demand:2011">
+  <Period>
+    <AdaptationSet id="1" mimeType="video/mp4" segmentAlignment="true" startWithSAP="1" maxWidth="1280" maxHeight="720" maxFrameRate="25" par="16:9">
+      <SupplementalProperty schemeIdUri="urn:mpeg:dash:preselection:2016"/>
+      <SegmentTemplate duration="2" startNumber="1" media="video_$Number$_$Bandwidth$bps.mp4">
+      </SegmentTemplate>
+      <Representation id="v0" codecs="hvc1.2.4.L153.B0" width="1280" height="720" frameRate="25" sar="1:1" bandwidth="3000000"/>
+      <Representation id="v1" codecs="hvc1.2.4.L90.B0" width="640" height="360" frameRate="25" sar="1:1" bandwidth="1500000"/>
+    </AdaptationSet>
+    <!-- stereoscopic view, combination of the above -->
+    <Preselection codecs="lhc1" tag="3" preselectionComponents="1" selectionPriority="3">
+      <Role schemeIdUri="urn:mpeg:dash:stereoid:2011" value="l0 r1"/>
+    </Preselection>
+  </Period>
+</MPD>

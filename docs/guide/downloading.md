@@ -119,8 +119,12 @@ either enum **names** or their **values**, comma-separated.
 | `VP8` | `VP8` |
 | `VP9` | `VP9` |
 | `AV1` | `AV1` |
+| `LCEVC` | `LCEVC` |
 
 `H264` and `H265` are aliases of `AVC` and `HEVC`.
+
+An LCEVC (MPEG-5 Part 2) track only adds detail on top of its base video track and cannot play
+alone, so unshackle selects it only when you ask for it with `-v LCEVC`.
 
 ```shell title="Either spelling works"
 unshackle dl -v HEVC   EXAMPLE 81234567
@@ -280,6 +284,8 @@ bitrate for the top renditions, overriding the manifest value:
 | `OGG` | `VORB` | Vorbis |
 | `DTS` | `DTS` | DTS |
 | `DTSX` | `DTS-X` | DTS:X Profile 2 (DTS-UHD) |
+| `DTSHD` | `DTS-HD` | DTS-HD High Resolution, Master Audio and Express |
+| `MPEGH` | `MPEG-H` | MPEG-H 3D Audio |
 | `ALAC` | `ALAC` | Apple Lossless |
 | `FLAC` | `FLAC` | FLAC |
 

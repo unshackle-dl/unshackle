@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="urn:mpeg:dash:schema:mpd:2011 DASH-MPD.xsd" availabilityStartTime="1970-01-01T00:00:00Z" maxSegmentDuration="PT6S" minBufferTime="PT2S" minimumUpdatePeriod="PT5M" profiles="urn:mpeg:dash:profile:isoff-live:2011" publishTime="2019-03-12T01:17:30Z" timeShiftBufferDepth="PT8M20S" type="dynamic">
+  <Period id="p0" start="PT0S">
+    <BaseURL>http://liveserver.com/live/live1/</BaseURL>
+    <EventStream timescale="90000" schemeIdUri="urn:mpeg:dash:event:alternativeMPD:replace:2025">
+      <Event presentationTime="0" duration="2838240000000000" id="42">
+        <ReplacePresentation uri="http://cdn1.example.com/preroll.mpd" maxDuration="1350000" clip="false" executeOnce="true"/>
+      </Event>
+    </EventStream>
+    <AdaptationSet contentType="video" maxHeight="1920" maxWidth="1080" mimeType="video/mp4" par="16:9" segmentAlignment="true" startWithSAP="1">
+      <SegmentTemplate duration="2" initialization="$RepresentationID$/init.mp4" media="$RepresentationID$/$Number$.m4s" startNumber="0"/>
+      <Representation id="V300" bandwidth="300000" codecs="avc1.64001e" frameRate="30000/1001"/>
+      <Representation id="V600" bandwidth="600000" codecs="avc1.64001e" frameRate="30000/1001"/>
+    </AdaptationSet>
+  </Period>
+</MPD>

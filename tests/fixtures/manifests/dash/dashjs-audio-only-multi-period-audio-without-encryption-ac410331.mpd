@@ -1,0 +1,56 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<!--
+Version information:
+Axinom.MediaProcessing v3.0.0 targeting General Purpose Media Format specification v7
+ffmpeg version N-81423-g61fac0e Copyright (c) 2000-2016 the FFmpeg developers
+x265 [info]: HEVC encoder version 2.0+12-49a0d1176aef5bc6
+x264 0.148.2705 3f5ed56
+MP4Box - GPAC version 0.6.2-DEV-rev683-g7b29fbe-master
+MediaInfoLib - v0.7.87
+
+For more info about this video, see https://github.com/Axinom/dash-test-vectors
+-->
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011" minBufferTime="PT1.500S" type="static" mediaPresentationDuration="PT0H24M28.000S" maxSegmentDuration="PT0H0M4.000S" profiles="urn:mpeg:dash:profile:isoff-live:2011,http://dashif.org/guidelines/dash264">
+	<Period duration="PT0H12M14.000S">
+		<AdaptationSet segmentAlignment="true" group="2" lang="en">
+			<Role schemeIdUri="urn:mpeg:dash:role:2011" value="main" />
+			<SegmentTemplate timescale="24000" media="$RepresentationID$/$Number%04d$.m4s" startNumber="1" duration="95232" initialization="$RepresentationID$/init.mp4" />
+			<Representation id="15" mimeType="audio/mp4" codecs="mp4a.40.29" audioSamplingRate="48000" startWithSAP="1" bandwidth="131351">
+				<AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2" />
+			</Representation>
+		</AdaptationSet>
+		<AdaptationSet segmentAlignment="true" group="2" lang="en-AU">
+			<SegmentTemplate timescale="24000" media="$RepresentationID$/$Number%04d$.m4s" startNumber="1" duration="95232" initialization="$RepresentationID$/init.mp4" />
+			<Representation id="16" mimeType="audio/mp4" codecs="mp4a.40.29" audioSamplingRate="48000" startWithSAP="1" bandwidth="130991">
+				<AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2" />
+			</Representation>
+		</AdaptationSet>
+		<AdaptationSet segmentAlignment="true" group="2" lang="et-ET">
+			<SegmentTemplate timescale="24000" media="$RepresentationID$/$Number%04d$.m4s" startNumber="1" duration="95232" initialization="$RepresentationID$/init.mp4" />
+			<Representation id="17" mimeType="audio/mp4" codecs="mp4a.40.29" audioSamplingRate="48000" startWithSAP="1" bandwidth="130749">
+				<AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2" />
+			</Representation>
+		</AdaptationSet>
+	</Period>
+	<Period duration="PT0H12M14.000S">
+		<AdaptationSet segmentAlignment="true" group="2" lang="en">
+			<Role schemeIdUri="urn:mpeg:dash:role:2011" value="main" />
+			<SegmentTemplate timescale="24000" media="$RepresentationID$/$Number%04d$.m4s" startNumber="1" duration="95232" initialization="$RepresentationID$/init.mp4" />
+			<Representation id="15" mimeType="audio/mp4" codecs="mp4a.40.29" audioSamplingRate="48000" startWithSAP="1" bandwidth="131351">
+				<AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2" />
+			</Representation>
+		</AdaptationSet>
+		<AdaptationSet segmentAlignment="true" group="2" lang="en-AU">
+			<SegmentTemplate timescale="24000" media="$RepresentationID$/$Number%04d$.m4s" startNumber="1" duration="95232" initialization="$RepresentationID$/init.mp4" />
+			<Representation id="16" mimeType="audio/mp4" codecs="mp4a.40.29" audioSamplingRate="48000" startWithSAP="1" bandwidth="130991">
+				<AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2" />
+			</Representation>
+		</AdaptationSet>
+		<AdaptationSet segmentAlignment="true" group="2" lang="et-ET">
+			<SegmentTemplate timescale="24000" media="$RepresentationID$/$Number%04d$.m4s" startNumber="1" duration="95232" initialization="$RepresentationID$/init.mp4" />
+			<Representation id="17" mimeType="audio/mp4" codecs="mp4a.40.29" audioSamplingRate="48000" startWithSAP="1" bandwidth="130749">
+				<AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2" />
+			</Representation>
+		</AdaptationSet>
+	</Period>
+</MPD>

@@ -2587,6 +2587,8 @@ class dl:
                         if not title.tracks.videos:
                             self.log.error(f"There's no {', '.join(c.name for c in vcodec)} Video Track...")
                             sys.exit(1)
+                    elif keep_videos:
+                        title.tracks.select_video(lambda x: x.codec != Video.Codec.LCEVC)
 
                     if keep_videos and range_:
                         # Special handling for HYBRID - don't filter, keep all HDR10 and DV tracks

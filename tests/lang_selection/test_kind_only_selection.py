@@ -154,3 +154,21 @@ def test_a_multi_title_run_with_every_title_skipped_completes(
 ) -> None:
     assert run(monkeypatch, caplog, {1: {}, 2: {}}, forced_subs_only=True) is None
     assert caplog.text.count("Skipping Show S01E") == 2
+
+
+class LcevcService(FakeService):
+    """A 540p base video and the 1080p LCEVC enhancement layer that decodes on top of it."""
+
+    def get_tracks(self, title: Episode) -> Tracks:
+        tracks = super().get_tracks(title)
+        tracks.videos[0].height = 540
+        tracks.add(Video(id_="lcevc", url="https://x/l", language="en", codec=Video.Codec.LCEVC, height=1080))
+        return tracks
+
+
+def test_an_lcevc_layer_is_left_out_unless_asked_for(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    assert run(monkeypatch, caplog, {1: {}}, service=LcevcService({1: {}}))["video"] == ["v"]
+    asked = run(monkeypatch, caplog, {1: {}}, service=LcevcService({1: {}}), vcodec=[Video.Codec.LCEVC])
+    assert asked["video"] == ["lcevc"]

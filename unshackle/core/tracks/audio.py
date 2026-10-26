@@ -1,12 +1,33 @@
 from __future__ import annotations
 
 import math
+import re
 import subprocess
 from enum import Enum
 from typing import Any, Optional, Union
 
 from unshackle.core import binaries
-from unshackle.core.tracks.track import Track
+from unshackle.core.tracks.track import MPEGH_SAMPLE_ENTRIES, Track
+
+# the Dolby DASH channel configuration is the E-AC-3 chanmap (ETSI TS 102 366 Table E.1.4), read from the MSB
+DOLBY_CHANNEL_BITS = (
+    (1, "main"),  # L
+    (1, "main"),  # C
+    (1, "main"),  # R
+    (1, "main"),  # Ls
+    (1, "main"),  # Rs
+    (2, "main"),  # Lc/Rc
+    (2, "main"),  # Lrs/Rrs
+    (1, "main"),  # Cs
+    (1, "height"),  # Ts
+    (2, "main"),  # Lsd/Rsd
+    (2, "main"),  # Lw/Rw
+    (2, "height"),  # Vhl/Vhr
+    (1, "height"),  # Vhc
+    (2, "height"),  # Lts/Rts
+    (1, "lfe"),  # LFE2
+    (1, "lfe"),  # LFE
+)
 
 
 class Audio(Track):
@@ -19,6 +40,8 @@ class Audio(Track):
         OGG = "VORB"  # https://wikipedia.org/wiki/Vorbis
         DTS = "DTS"  # https://en.wikipedia.org/wiki/DTS,_Inc.#DTS_Digital_Surround
         DTSX = "DTS-X"  # https://en.wikipedia.org/wiki/DTS,_Inc.#DTS:X
+        DTSHD = "DTS-HD"  # https://en.wikipedia.org/wiki/DTS-HD_Master_Audio
+        MPEGH = "MPEG-H"  # https://en.wikipedia.org/wiki/MPEG-H_3D_Audio
         ALAC = "ALAC"  # https://en.wikipedia.org/wiki/Apple_Lossless_Audio_Codec
         FLAC = "FLAC"  # https://en.wikipedia.org/wiki/FLAC
 
@@ -43,6 +66,10 @@ class Audio(Track):
                 return Audio.Codec.DTSX
             if mime == "dtsc":
                 return Audio.Codec.DTS
+            if mime in ("dtsh", "dtsl", "dtse"):  # High Resolution, Master Audio, Express
+                return Audio.Codec.DTSHD
+            if mime in MPEGH_SAMPLE_ENTRIES:
+                return Audio.Codec.MPEGH
             if mime == "alac":
                 return Audio.Codec.ALAC
             if mime == "flac":
@@ -204,11 +231,16 @@ class Audio(Track):
         It does not convert the value to assume a sub speaker channel layout, e.g. 5.1->6.0.
         """
         if isinstance(channels, str):
-            # TODO: Support all possible DASH channel configurations (https://datatracker.ietf.org/doc/html/rfc8216)
-            if channels.upper() == "A000":
-                return 2.0
-            elif channels.upper() == "F801":
-                return 5.1
+            # TODO: decode a DASH AudioChannelConfiguration by its schemeIdUri (CICP, Dolby), not by its shape
+            if re.fullmatch(r"[0-9A-Fa-f]{4}", channels) and not channels.isdigit():
+                mask = int(channels, 16)
+                counts = {"main": 0, "lfe": 0, "height": 0}
+                for bit, (count, kind) in enumerate(DOLBY_CHANNEL_BITS):
+                    if mask & (0x8000 >> bit):
+                        counts[kind] += count
+                if counts["height"]:
+                    return f"{counts['main']}.{counts['lfe']}.{counts['height']}"
+                return float(f"{counts['main']}.{counts['lfe']}")
             layout = channels.replace("ch", "")
             if layout.count(".") == 2 and all(part.isdigit() for part in layout.split(".")):
                 return layout

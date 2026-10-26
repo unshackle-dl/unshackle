@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="urn:mpeg:dash:schema:mpd:2011 DASH-MPD.xsd" id="auto-patch-id" profiles="urn:mpeg:dash:profile:isoff-live:2011,http://dashif.org/guidelines/dash-if-simple" type="dynamic" availabilityStartTime="1970-01-01T00:00:00Z" publishTime="2026-10-26T15:56:14Z" minimumUpdatePeriod="PT2S" minBufferTime="PT2S" timeShiftBufferDepth="PT1M" maxSegmentDuration="PT2.006S">
+  <ProgramInformation moreInformationURL="https://github.com/dash-Industry-Forum/livesim-content">
+    <Title>Basic MPD with 640x480@30 video at 300kbp and 48kbps audio</Title>
+    <Source>VoD source for DASH-IF livesim2</Source>
+  </ProgramInformation>
+  <PatchLocation ttl="60">/patch/livesim2/patch_60/segtimeline_1/periods_60/testpic_2s/Manifest.mpp?publishTime=2026-10-26T15%3A56%3A14Z</PatchLocation>
+  <Period id="P29883835" start="PT498063H55M">
+    <AdaptationSet id="2" lang="en" contentType="audio" segmentAlignment="true" mimeType="audio/mp4" startWithSAP="1">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"></Role>
+      <SegmentTemplate media="$RepresentationID$/$Time$.m4s" initialization="$RepresentationID$/init.mp4" timescale="48000" presentationTimeOffset="86065444800000">
+        <SegmentTimeline>
+          <S t="86065445374976" d="96256" r="2"></S>
+          <S t="86065445663744" d="95232"></S>
+          <S t="86065445758976" d="96256" r="2"></S>
+          <S t="86065446047744" d="95232"></S>
+          <S t="86065446142976" d="96256" r="2"></S>
+          <S t="86065446431744" d="95232"></S>
+          <S t="86065446526976" d="96256" r="2"></S>
+          <S t="86065446815744" d="95232"></S>
+          <S t="86065446910976" d="96256" r="2"></S>
+          <S t="86065447199744" d="95232"></S>
+          <S t="86065447294976" d="96256" r="2"></S>
+          <S t="86065447583744" d="95232"></S>
+          <S t="86065447678976" d="96256"></S>
+        </SegmentTimeline>
+      </SegmentTemplate>
+      <Representation id="A48" bandwidth="48000" audioSamplingRate="48000" codecs="mp4a.40.2">
+        <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2"></AudioChannelConfiguration>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="1" contentType="video" par="16:9" minWidth="640" maxWidth="640" minHeight="360" maxHeight="360" maxFrameRate="60/2" segmentAlignment="true" mimeType="video/mp4" startWithSAP="1">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"></Role>
+      <SegmentTemplate media="$RepresentationID$/$Time$.m4s" initialization="$RepresentationID$/init.mp4" timescale="90000" presentationTimeOffset="161372709000000">
+        <SegmentTimeline>
+          <S t="161372710080000" d="180000" r="23"></S>
+        </SegmentTimeline>
+      </SegmentTemplate>
+      <Representation id="V300" bandwidth="300000" width="640" height="360" sar="1:1" frameRate="60/2" codecs="avc1.64001e"></Representation>
+    </AdaptationSet>
+  </Period>
+  <Period id="P29883836" start="PT498063H56M">
+    <AdaptationSet id="2" lang="en" contentType="audio" segmentAlignment="true" mimeType="audio/mp4" startWithSAP="1">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"></Role>
+      <SegmentTemplate media="$RepresentationID$/$Time$.m4s" initialization="$RepresentationID$/init.mp4" timescale="48000" presentationTimeOffset="86065447680000">
+        <SegmentTimeline>
+          <S t="86065447775232" d="96256" r="1"></S>
+          <S t="86065447967744" d="95232"></S>
+          <S t="86065448062976" d="96256" r="2"></S>
+        </SegmentTimeline>
+      </SegmentTemplate>
+      <Representation id="A48" bandwidth="48000" audioSamplingRate="48000" codecs="mp4a.40.2">
+        <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2"></AudioChannelConfiguration>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="1" contentType="video" par="16:9" minWidth="640" maxWidth="640" minHeight="360" maxHeight="360" maxFrameRate="60/2" segmentAlignment="true" mimeType="video/mp4" startWithSAP="1">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"></Role>
+      <SegmentTemplate media="$RepresentationID$/$Time$.m4s" initialization="$RepresentationID$/init.mp4" timescale="90000" presentationTimeOffset="161372714400000">
+        <SegmentTimeline>
+          <S t="161372714400000" d="180000" r="6"></S>
+        </SegmentTimeline>
+      </SegmentTemplate>
+      <Representation id="V300" bandwidth="300000" width="640" height="360" sar="1:1" frameRate="60/2" codecs="avc1.64001e"></Representation>
+    </AdaptationSet>
+  </Period>
+  <UTCTiming schemeIdUri="urn:mpeg:dash:utc:http-xsdate:2014" value="https://time.akamai.com/?iso&amp;ms"></UTCTiming>
+</MPD>

@@ -1,0 +1,237 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--Generated with https://github.com/google/shaka-packager version 379e9de0e8-debug-->
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xlink="http://www.w3.org/1999/xlink" xsi:schemaLocation="urn:mpeg:dash:schema:mpd:2011 DASH-MPD.xsd" xmlns:cenc="urn:mpeg:cenc:2013" profiles="urn:mpeg:dash:profile:isoff-on-demand:2011" minBufferTime="PT2S" type="static" mediaPresentationDuration="PT888.053S">
+  <Period id="0">
+    <AdaptationSet id="0" contentType="text" lang="nl" subsegmentAlignment="true">
+      <Representation id="0" bandwidth="256" mimeType="text/vtt">
+        <BaseURL>s-dut.webvtt</BaseURL>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="1" contentType="text" lang="en" subsegmentAlignment="true">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"/>
+      <Representation id="1" bandwidth="256" mimeType="text/vtt">
+        <BaseURL>s-eng.webvtt</BaseURL>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="2" contentType="text" lang="fr" subsegmentAlignment="true">
+      <Representation id="2" bandwidth="256" mimeType="text/vtt">
+        <BaseURL>s-fre.webvtt</BaseURL>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="3" contentType="text" lang="de" subsegmentAlignment="true">
+      <Representation id="3" bandwidth="256" mimeType="text/vtt">
+        <BaseURL>s-ger.webvtt</BaseURL>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="4" contentType="text" lang="it" subsegmentAlignment="true">
+      <Representation id="4" bandwidth="256" mimeType="text/vtt">
+        <BaseURL>s-ita.webvtt</BaseURL>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="5" contentType="text" lang="pl" subsegmentAlignment="true">
+      <Representation id="5" bandwidth="256" mimeType="text/vtt">
+        <BaseURL>s-pol.webvtt</BaseURL>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="6" contentType="text" lang="pt" subsegmentAlignment="true">
+      <Representation id="6" bandwidth="256" mimeType="text/vtt">
+        <BaseURL>s-por.webvtt</BaseURL>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="7" contentType="text" lang="ru" subsegmentAlignment="true">
+      <Representation id="7" bandwidth="256" mimeType="text/vtt">
+        <BaseURL>s-rus.webvtt</BaseURL>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="8" contentType="text" lang="es" subsegmentAlignment="true">
+      <Representation id="8" bandwidth="256" mimeType="text/vtt">
+        <BaseURL>s-spa.webvtt</BaseURL>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="9" contentType="text" lang="vi" subsegmentAlignment="true">
+      <Representation id="9" bandwidth="256" mimeType="text/vtt">
+        <BaseURL>s-vie.webvtt</BaseURL>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="10" contentType="video" maxWidth="854" maxHeight="364" frameRate="12288/512" subsegmentAlignment="true" par="40:17">
+      <ContentProtection value="cenc" schemeIdUri="urn:mpeg:dash:mp4protection:2011" cenc:default_KID="51745386-2d42-56fd-8bad-4f58422004d7"/>
+      <ContentProtection schemeIdUri="urn:uuid:edef8ba9-79d6-4ace-a3c8-27dcd51d21ed">
+        <cenc:pssh>AAAAp3Bzc2gAAAAA7e+LqXnWSs6jyCfc1R0h7QAAAIcSEFF0U4YtQlb9i61PWEIgBNcSEPCTfpp3yFXwptQ4ZMXZ82USEE1LDKJawVjwucGYPFF+4rUSEJAqBRprNlaurBkm/A9dkjISECZHD0KW1F0Eqbq7RC4WmAAaDXdpZGV2aW5lX3Rlc3QiFnNoYWthX2NlYzViZmY1ZGM0MGRkYzlI49yVmwY=</cenc:pssh>
+      </ContentProtection>
+      <SupplementalProperty schemeIdUri="urn:mpeg:dash:adaptation-set-switching:2016" value="15,17"/>
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"/>
+      <Representation id="10" bandwidth="103942" codecs="avc1.42c01e" mimeType="video/mp4" sar="110:109" width="256" height="110">
+        <BaseURL>v-0144p-0100k-libx264.mp4</BaseURL>
+        <SegmentBase indexRange="1237-3932" timescale="12288">
+          <Initialization range="0-1236"/>
+        </SegmentBase>
+      </Representation>
+      <Representation id="12" bandwidth="421113" codecs="avc1.4d401f" mimeType="video/mp4" sar="2654:2645" width="426" height="182">
+        <BaseURL>v-0240p-0400k-libx264.mp4</BaseURL>
+        <SegmentBase indexRange="1239-3934" timescale="12288">
+          <Initialization range="0-1238"/>
+        </SegmentBase>
+      </Representation>
+      <Representation id="19" bandwidth="1046813" codecs="avc1.4d401f" mimeType="video/mp4" sar="3803:3799" width="854" height="364">
+        <BaseURL>v-0480p-1000k-libx264.mp4</BaseURL>
+        <SegmentBase indexRange="1237-3932" timescale="12288">
+          <Initialization range="0-1236"/>
+        </SegmentBase>
+      </Representation>
+      <Representation id="22" bandwidth="776186" codecs="avc1.4d401f" mimeType="video/mp4" sar="544:545" width="640" height="272">
+        <BaseURL>v-0360p-0750k-libx264.mp4</BaseURL>
+        <SegmentBase indexRange="1237-3932" timescale="12288">
+          <Initialization range="0-1236"/>
+        </SegmentBase>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="11" contentType="audio" lang="en" subsegmentAlignment="true">
+      <ContentProtection value="cenc" schemeIdUri="urn:mpeg:dash:mp4protection:2011" cenc:default_KID="26470f42-96d4-5d04-a9ba-bb442e169800"/>
+      <ContentProtection schemeIdUri="urn:uuid:edef8ba9-79d6-4ace-a3c8-27dcd51d21ed">
+        <cenc:pssh>AAAAp3Bzc2gAAAAA7e+LqXnWSs6jyCfc1R0h7QAAAIcSEFF0U4YtQlb9i61PWEIgBNcSEPCTfpp3yFXwptQ4ZMXZ82USEE1LDKJawVjwucGYPFF+4rUSEJAqBRprNlaurBkm/A9dkjISECZHD0KW1F0Eqbq7RC4WmAAaDXdpZGV2aW5lX3Rlc3QiFnNoYWthX2NlYzViZmY1ZGM0MGRkYzlI49yVmwY=</cenc:pssh>
+      </ContentProtection>
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"/>
+      <Representation id="11" bandwidth="135512" codecs="mp4a.40.2" mimeType="audio/mp4" audioSamplingRate="48000">
+        <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2"/>
+        <BaseURL>a-eng-0128k-aac.mp4</BaseURL>
+        <SegmentBase indexRange="1079-3786" timescale="48000">
+          <Initialization range="0-1078"/>
+        </SegmentBase>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="12" contentType="audio" lang="en">
+      <ContentProtection schemeIdUri="urn:uuid:edef8ba9-79d6-4ace-a3c8-27dcd51d21ed" cenc:default_KID="26470f42-96d4-5d04-a9ba-bb442e169800">
+        <cenc:pssh>AAAAp3Bzc2gAAAAA7e+LqXnWSs6jyCfc1R0h7QAAAIcSEFF0U4YtQlb9i61PWEIgBNcSEPCTfpp3yFXwptQ4ZMXZ82USEE1LDKJawVjwucGYPFF+4rUSEJAqBRprNlaurBkm/A9dkjISECZHD0KW1F0Eqbq7RC4WmAAaDXdpZGV2aW5lX3Rlc3QiFnNoYWthX2NlYzViZmY1ZGM0MGRkYzlI49yVmwY=</cenc:pssh>
+      </ContentProtection>
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"/>
+      <Representation id="13" bandwidth="134157" codecs="opus" mimeType="audio/webm" audioSamplingRate="48000">
+        <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2"/>
+        <BaseURL>a-eng-0128k-libopus.webm</BaseURL>
+        <SegmentBase indexRange="371-4148" timescale="1000000">
+          <Initialization range="0-370"/>
+        </SegmentBase>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="13" contentType="video" maxWidth="854" maxHeight="364" frameRate="1000000/42000" par="40:17">
+      <ContentProtection schemeIdUri="urn:uuid:edef8ba9-79d6-4ace-a3c8-27dcd51d21ed" cenc:default_KID="51745386-2d42-56fd-8bad-4f58422004d7">
+        <cenc:pssh>AAAAp3Bzc2gAAAAA7e+LqXnWSs6jyCfc1R0h7QAAAIcSEFF0U4YtQlb9i61PWEIgBNcSEPCTfpp3yFXwptQ4ZMXZ82USEE1LDKJawVjwucGYPFF+4rUSEJAqBRprNlaurBkm/A9dkjISECZHD0KW1F0Eqbq7RC4WmAAaDXdpZGV2aW5lX3Rlc3QiFnNoYWthX2NlYzViZmY1ZGM0MGRkYzlI49yVmwY=</cenc:pssh>
+      </ContentProtection>
+      <SupplementalProperty schemeIdUri="urn:mpeg:dash:adaptation-set-switching:2016" value="14,16"/>
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"/>
+      <Representation id="14" bandwidth="84834" codecs="vp9" mimeType="video/webm" sar="129:128" width="256" height="110">
+        <BaseURL>v-0144p-0100k-vp9.webm</BaseURL>
+        <SegmentBase indexRange="347-4106" timescale="1000000">
+          <Initialization range="0-346"/>
+        </SegmentBase>
+      </Representation>
+      <Representation id="15" bandwidth="206965" codecs="vp9" mimeType="video/webm" sar="427:426" width="426" height="182">
+        <BaseURL>v-0240p-0300k-vp9.webm</BaseURL>
+        <SegmentBase indexRange="347-4164" timescale="1000000">
+          <Initialization range="0-346"/>
+        </SegmentBase>
+      </Representation>
+      <Representation id="16" bandwidth="376328" codecs="vp9" mimeType="video/webm" sar="639:640" width="640" height="272">
+        <BaseURL>v-0360p-0550k-vp9.webm</BaseURL>
+        <SegmentBase indexRange="349-4243" timescale="1000000">
+          <Initialization range="0-348"/>
+        </SegmentBase>
+      </Representation>
+      <Representation id="17" bandwidth="524095" codecs="vp9" mimeType="video/webm" sar="855:854" width="854" height="364">
+        <BaseURL>v-0480p-0750k-vp9.webm</BaseURL>
+        <SegmentBase indexRange="349-4267" timescale="1000000">
+          <Initialization range="0-348"/>
+        </SegmentBase>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="14" contentType="video" maxWidth="1920" maxHeight="818" frameRate="1000000/42000" par="40:17">
+      <ContentProtection schemeIdUri="urn:uuid:edef8ba9-79d6-4ace-a3c8-27dcd51d21ed" cenc:default_KID="f0937e9a-77c8-55f0-a6d4-3864c5d9f365">
+        <cenc:pssh>AAAAp3Bzc2gAAAAA7e+LqXnWSs6jyCfc1R0h7QAAAIcSEFF0U4YtQlb9i61PWEIgBNcSEPCTfpp3yFXwptQ4ZMXZ82USEE1LDKJawVjwucGYPFF+4rUSEJAqBRprNlaurBkm/A9dkjISECZHD0KW1F0Eqbq7RC4WmAAaDXdpZGV2aW5lX3Rlc3QiFnNoYWthX2NlYzViZmY1ZGM0MGRkYzlI49yVmwY=</cenc:pssh>
+      </ContentProtection>
+      <SupplementalProperty schemeIdUri="urn:mpeg:dash:adaptation-set-switching:2016" value="13,16"/>
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"/>
+      <Representation id="18" bandwidth="689743" codecs="vp9" mimeType="video/webm" sar="1:1" width="1024" height="436">
+        <BaseURL>v-0576p-1000k-vp9.webm</BaseURL>
+        <SegmentBase indexRange="349-4280" timescale="1000000">
+          <Initialization range="0-348"/>
+        </SegmentBase>
+      </Representation>
+      <Representation id="21" bandwidth="2109936" codecs="vp9" mimeType="video/webm" sar="1921:1920" width="1920" height="818">
+        <BaseURL>v-1080p-3300k-vp9.webm</BaseURL>
+        <SegmentBase indexRange="349-4308" timescale="1000000">
+          <Initialization range="0-348"/>
+        </SegmentBase>
+      </Representation>
+      <Representation id="23" bandwidth="1130335" codecs="vp9" mimeType="video/webm" sar="641:640" width="1280" height="546">
+        <BaseURL>v-0720p-1800k-vp9.webm</BaseURL>
+        <SegmentBase indexRange="349-4295" timescale="1000000">
+          <Initialization range="0-348"/>
+        </SegmentBase>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="15" contentType="video" maxWidth="1920" maxHeight="818" frameRate="12288/512" subsegmentAlignment="true" par="40:17">
+      <ContentProtection value="cenc" schemeIdUri="urn:mpeg:dash:mp4protection:2011" cenc:default_KID="f0937e9a-77c8-55f0-a6d4-3864c5d9f365"/>
+      <ContentProtection schemeIdUri="urn:uuid:edef8ba9-79d6-4ace-a3c8-27dcd51d21ed">
+        <cenc:pssh>AAAAp3Bzc2gAAAAA7e+LqXnWSs6jyCfc1R0h7QAAAIcSEFF0U4YtQlb9i61PWEIgBNcSEPCTfpp3yFXwptQ4ZMXZ82USEE1LDKJawVjwucGYPFF+4rUSEJAqBRprNlaurBkm/A9dkjISECZHD0KW1F0Eqbq7RC4WmAAaDXdpZGV2aW5lX3Rlc3QiFnNoYWthX2NlYzViZmY1ZGM0MGRkYzlI49yVmwY=</cenc:pssh>
+      </ContentProtection>
+      <SupplementalProperty schemeIdUri="urn:mpeg:dash:adaptation-set-switching:2016" value="10,17"/>
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"/>
+      <Representation id="20" bandwidth="2625924" codecs="avc1.4d401f" mimeType="video/mp4" sar="546:545" width="1280" height="546">
+        <BaseURL>v-0720p-2500k-libx264.mp4</BaseURL>
+        <SegmentBase indexRange="1241-3936" timescale="12288">
+          <Initialization range="0-1240"/>
+        </SegmentBase>
+      </Representation>
+      <Representation id="24" bandwidth="1458633" codecs="avc1.4d401f" mimeType="video/mp4" sar="1:1" width="1024" height="436">
+        <BaseURL>v-0576p-1400k-libx264.mp4</BaseURL>
+        <SegmentBase indexRange="1197-3892" timescale="12288">
+          <Initialization range="0-1196"/>
+        </SegmentBase>
+      </Representation>
+      <Representation id="25" bandwidth="4719456" codecs="avc1.640028" mimeType="video/mp4" sar="1636:1635" width="1920" height="818">
+        <BaseURL>v-1080p-4500k-libx264.mp4</BaseURL>
+        <SegmentBase indexRange="1245-3940" timescale="12288">
+          <Initialization range="0-1244"/>
+        </SegmentBase>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="16" contentType="video" maxWidth="3840" maxHeight="1636" frameRate="1000000/42000" par="40:17">
+      <ContentProtection schemeIdUri="urn:uuid:edef8ba9-79d6-4ace-a3c8-27dcd51d21ed" cenc:default_KID="4d4b0ca2-5ac1-58f0-b9c1-983c517ee2b5">
+        <cenc:pssh>AAAAp3Bzc2gAAAAA7e+LqXnWSs6jyCfc1R0h7QAAAIcSEFF0U4YtQlb9i61PWEIgBNcSEPCTfpp3yFXwptQ4ZMXZ82USEE1LDKJawVjwucGYPFF+4rUSEJAqBRprNlaurBkm/A9dkjISECZHD0KW1F0Eqbq7RC4WmAAaDXdpZGV2aW5lX3Rlc3QiFnNoYWthX2NlYzViZmY1ZGM0MGRkYzlI49yVmwY=</cenc:pssh>
+      </ContentProtection>
+      <SupplementalProperty schemeIdUri="urn:mpeg:dash:adaptation-set-switching:2016" value="13,14"/>
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"/>
+      <Representation id="26" bandwidth="4494687" codecs="vp9" mimeType="video/webm" sar="1:1" width="2560" height="1090">
+        <BaseURL>v-1440p-7500k-vp9.webm</BaseURL>
+        <SegmentBase indexRange="349-4324" timescale="1000000">
+          <Initialization range="0-348"/>
+        </SegmentBase>
+      </Representation>
+      <Representation id="27" bandwidth="8021323" codecs="vp9" mimeType="video/webm" sar="1921:1920" width="3840" height="1636">
+        <BaseURL>v-2160p-14000k-vp9.webm</BaseURL>
+        <SegmentBase indexRange="349-4327" timescale="1000000">
+          <Initialization range="0-348"/>
+        </SegmentBase>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="17" contentType="video" maxWidth="3840" maxHeight="1636" frameRate="12288/512" subsegmentAlignment="true" par="40:17">
+      <ContentProtection value="cenc" schemeIdUri="urn:mpeg:dash:mp4protection:2011" cenc:default_KID="4d4b0ca2-5ac1-58f0-b9c1-983c517ee2b5"/>
+      <ContentProtection schemeIdUri="urn:uuid:edef8ba9-79d6-4ace-a3c8-27dcd51d21ed">
+        <cenc:pssh>AAAAp3Bzc2gAAAAA7e+LqXnWSs6jyCfc1R0h7QAAAIcSEFF0U4YtQlb9i61PWEIgBNcSEPCTfpp3yFXwptQ4ZMXZ82USEE1LDKJawVjwucGYPFF+4rUSEJAqBRprNlaurBkm/A9dkjISECZHD0KW1F0Eqbq7RC4WmAAaDXdpZGV2aW5lX3Rlc3QiFnNoYWthX2NlYzViZmY1ZGM0MGRkYzlI49yVmwY=</cenc:pssh>
+      </ContentProtection>
+      <SupplementalProperty schemeIdUri="urn:mpeg:dash:adaptation-set-switching:2016" value="10,15"/>
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"/>
+      <Representation id="28" bandwidth="9263493" codecs="avc1.640028" mimeType="video/mp4" sar="1:1" width="2560" height="1090">
+        <BaseURL>v-1440p-9000k-libx264.mp4</BaseURL>
+        <SegmentBase indexRange="1205-3900" timescale="12288">
+          <Initialization range="0-1204"/>
+        </SegmentBase>
+      </Representation>
+      <Representation id="29" bandwidth="17629336" codecs="avc1.640033" mimeType="video/mp4" sar="1636:1635" width="3840" height="1636">
+        <BaseURL>v-2160p-17000k-libx264.mp4</BaseURL>
+        <SegmentBase indexRange="1245-3940" timescale="12288">
+          <Initialization range="0-1244"/>
+        </SegmentBase>
+      </Representation>
+    </AdaptationSet>
+  </Period>
+</MPD>

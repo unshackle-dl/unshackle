@@ -29,6 +29,7 @@ class Video(Track):
         VP8 = "VP8"
         VP9 = "VP9"
         AV1 = "AV1"
+        LCEVC = "LCEVC"
 
         @property
         def extension(self) -> str:
@@ -66,6 +67,8 @@ class Video(Track):
                 return Video.Codec.VP9
             if mime == "av01":
                 return Video.Codec.AV1
+            if mime == "lvc1":
+                return Video.Codec.LCEVC
             raise ValueError(f"The MIME '{mime}' is not a supported Video Codec")
 
         @staticmethod

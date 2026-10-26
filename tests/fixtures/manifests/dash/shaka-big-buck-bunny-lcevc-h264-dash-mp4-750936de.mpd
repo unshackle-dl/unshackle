@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--Generated with https://github.com/google/shaka-packager version v2.4.3-dd98700-release-->
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="urn:mpeg:dash:schema:mpd:2011 DASH-MPD.xsd" profiles="urn:mpeg:dash:profile:isoff-live:2011" minBufferTime="PT2S" type="static" mediaPresentationDuration="PT634.6333618164062S">
+<Period id="0">
+<AdaptationSet id="0" contentType="video" width="1920" height="1080" frameRate="15360/512" subsegmentAlignment="true" par="16:9">
+<Representation id="0" bandwidth="3072000" codecs="avc1.64001f" mimeType="video/mp4" sar="1:1">
+<BaseURL>lcevc_vn9s0p86SVbJorX6_2.mp4</BaseURL>
+<SegmentBase indexRange="865-1664" timescale="15360">
+<Initialization range="0-864"/>
+</SegmentBase>
+</Representation>
+</AdaptationSet>
+<AdaptationSet id="1" contentType="audio" subsegmentAlignment="true">
+<Representation id="1" bandwidth="136280" codecs="mp4a.40.2" mimeType="audio/mp4" audioSamplingRate="44100">
+<AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2"/>
+<BaseURL>lcevc_audio_vn9s0p86SVbJorX6_2.mp4</BaseURL>
+<SegmentBase indexRange="822-1621" timescale="44100">
+<Initialization range="0-821"/>
+</SegmentBase>
+</Representation>
+</AdaptationSet>
+</Period>
+</MPD>

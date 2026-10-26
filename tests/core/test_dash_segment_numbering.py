@@ -61,3 +61,31 @@ def test_timeline_numbers_follow_start_number(start: int, count: int) -> None:
 @pytest.mark.parametrize(("start", "seconds", "count"), [(0, "1M36.720", 17), (1, "1M36.720", 17), (2642, "30", 5)])
 def test_duration_numbers_follow_start_number(start: int, seconds: str, count: int) -> None:
     assert _numbers(DURATION_MPD.format(start=start, seconds=seconds)) == list(range(start, start + count))
+
+
+TIME_MPD = """
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011" type="static" mediaPresentationDuration="PT10S">
+  <Period id="0" start="PT0S" duration="PT10S">
+    <AdaptationSet mimeType="audio/mp4">
+      <SegmentTemplate timescale="10" media="a/$Time$.mp4">
+        <SegmentTimeline>{timeline}</SegmentTimeline>
+      </SegmentTemplate>
+      <Representation id="a" bandwidth="1"/>
+    </AdaptationSet>
+  </Period>
+</MPD>
+"""
+
+
+@pytest.mark.parametrize(
+    ("timeline", "starts"),
+    [
+        # a negative @r repeats to the end of the Period, or to the next S@t
+        ('<S t="0" d="20" r="-1"/>', [0, 20, 40, 60, 80]),
+        ('<S t="0" d="20" r="-1"/><S t="60" d="40"/>', [0, 20, 40, 60]),
+        # an S with @p cycles the Pattern durations from index @pE
+        ('<Pattern id="1"><P d="10" r="1"/><P d="30"/></Pattern><S t="0" r="4" p="1" pE="1"/>', [0, 10, 40, 50, 60]),
+    ],
+)
+def test_timeline_repeat_and_pattern_forms(timeline: str, starts: list[int]) -> None:
+    assert _numbers(TIME_MPD.format(timeline=timeline)) == starts

@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011" maxSegmentDuration="PT0H0M8.000S" mediaPresentationDuration="PT0H2M26.053S" minBufferTime="PT12.000S" profiles="urn:mpeg:dash:profile:isoff-live:2011,urn:hbbtv:dash:profile:isoff-live:2012" type="static">
+ 
+
+ <Period duration="PT0H2M26.053S" id="p0">
+  <AdaptationSet contentType="video" lang="eng" maxFrameRate="25" maxHeight="1080" maxWidth="1920" par="16:9" segmentAlignment="true" startWithSAP="1">
+   <InbandEventStream schemeIdUri="http://hbbtv.org/refapp" value="1a2b3c"/>
+<SegmentTemplate initialization="$RepresentationID$_i.mp4" media="$RepresentationID$_$Number$.m4s" startNumber="1" timescale="12800">
+    <SegmentTimeline>
+     <S d="76800" r="22" t="0"/>
+     <S d="102400"/>
+    </SegmentTimeline>
+   </SegmentTemplate>
+   <Representation bandwidth="516413" codecs="avc1.4D4028" frameRate="25" height="360" id="v1" mimeType="video/mp4" sar="1:1" scanType="progressive" width="640">
+   </Representation>
+   <Representation bandwidth="1507723" codecs="avc1.4D4028" frameRate="25" height="720" id="v2" mimeType="video/mp4" sar="1:1" scanType="progressive" width="1280">
+   </Representation>
+   <Representation bandwidth="2105253" codecs="avc1.4D4028" frameRate="25" height="1080" id="v3" mimeType="video/mp4" sar="1:1" scanType="progressive" width="1920">
+   </Representation>
+  </AdaptationSet>
+  <AdaptationSet contentType="audio" group="1" lang="eng" segmentAlignment="true" startWithSAP="1">
+   <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"/>
+<SegmentTemplate initialization="$RepresentationID$_i.mp4" media="$RepresentationID$_$Number$.m4s" startNumber="1" timescale="44100">
+    <SegmentTimeline>
+     <S d="263177" t="0"/>
+     <S d="264192" r="22"/>
+     <S d="101133"/>
+    </SegmentTimeline>
+   </SegmentTemplate>
+   <Representation audioSamplingRate="44100" bandwidth="130579" codecs="mp4a.40.2" id="a1" mimeType="audio/mp4">
+    <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2"/>
+   </Representation>
+  </AdaptationSet>
+  <AdaptationSet contentType="audio" group="1" lang="fin" segmentAlignment="true" startWithSAP="1">
+   <SegmentTemplate initialization="$RepresentationID$_i.mp4" media="$RepresentationID$_$Number$.m4s" startNumber="1" timescale="44100">
+    <SegmentTimeline>
+     <S d="263177" t="0"/>
+     <S d="264192" r="22"/>
+     <S d="101376"/>
+    </SegmentTimeline>
+   </SegmentTemplate>
+   <Representation audioSamplingRate="44100" bandwidth="131412" codecs="mp4a.40.2" id="a1-1" mimeType="audio/mp4">
+    <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2"/>
+   </Representation>
+  </AdaptationSet>
+  <AdaptationSet contentType="audio" group="1" lang="ger" segmentAlignment="true" startWithSAP="1">
+   <SegmentTemplate initialization="$RepresentationID$_i.mp4" media="$RepresentationID$_$Number$.m4s" startNumber="1" timescale="44100">
+    <SegmentTimeline>
+     <S d="263177" t="0"/>
+     <S d="264192" r="22"/>
+     <S d="101376"/>
+    </SegmentTimeline>
+   </SegmentTemplate>
+   <Representation audioSamplingRate="44100" bandwidth="131610" codecs="mp4a.40.2" id="a1-2" mimeType="audio/mp4">
+    <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2"/>
+   </Representation>
+  </AdaptationSet>
+  <AdaptationSet contentType="audio" group="1" lang="swe" segmentAlignment="true" startWithSAP="1">
+   <SegmentTemplate initialization="$RepresentationID$_i.mp4" media="$RepresentationID$_$Number$.m4s" startNumber="1" timescale="44100">
+    <SegmentTimeline>
+     <S d="263177" t="0"/>
+     <S d="264192" r="22"/>
+     <S d="101376"/>
+    </SegmentTimeline>
+   </SegmentTemplate>
+   <Representation audioSamplingRate="44100" bandwidth="131507" codecs="mp4a.40.2" id="a1-3" mimeType="audio/mp4">
+    <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2"/>
+   </Representation>
+  </AdaptationSet>
+
+  <AdaptationSet contentType="text" lang="eng" mimeType="application/ttml+xml">
+    <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"/>
+    <Representation bandwidth="3000" id="sub_eng">
+<BaseURL>sub_eng.xml</BaseURL>
+</Representation>
+  </AdaptationSet>
+
+  <AdaptationSet contentType="text" lang="fin" mimeType="application/ttml+xml">
+    <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"/>
+    <Representation bandwidth="3000" id="sub_fin2">
+<BaseURL>sub_fin2.xml</BaseURL>
+</Representation>
+  </AdaptationSet>
+
+
+ </Period>
+</MPD>

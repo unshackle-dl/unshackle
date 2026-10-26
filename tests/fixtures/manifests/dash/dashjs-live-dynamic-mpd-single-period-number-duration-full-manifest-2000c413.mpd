@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<MPD xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="urn:mpeg:dash:schema:mpd:2011" xsi:schemaLocation="urn:mpeg:dash:schema:mpd:2011 http://standards.iso.org/ittf/PubliclyAvailableStandards/MPEG-DASH_schema_files/DASH-MPD.xsd" id="201" type="dynamic" publishTime="2026-10-26T15:56:06" minimumUpdatePeriod="PT15S" availabilityStartTime="2023-04-25T19:50:26.320000+00:00" minBufferTime="PT30S" suggestedPresentationDelay="PT25.000S" timeShiftBufferDepth="PT298.500S" profiles="urn:mpeg:dash:profile:isoff-live:2011">
+  <Period start="PT0.000S" id="1">
+    <AdaptationSet mimeType="video/mp4" segmentAlignment="true" startWithSAP="1" subsegmentAlignment="true" subsegmentStartsWithSAP="1" bitstreamSwitching="true">
+      <Representation id="1" width="1920" height="1080" frameRate="30/1" bandwidth="5000000" codecs="avc1.4D4028">
+        <SegmentTemplate timescale="30000" media="index_video_7_0_$Number$.mp4?m=1637114294" initialization="index_video_7_0_init.mp4?m=1637114294" startNumber="31706784" duration="60000"/>
+      </Representation>
+      <Representation id="2" width="1280" height="720" frameRate="30/1" bandwidth="3000000" codecs="avc1.4D401F">
+        <SegmentTemplate timescale="30000" media="index_video_9_0_$Number$.mp4?m=1637114294" initialization="index_video_9_0_init.mp4?m=1637114294" startNumber="31706784" duration="60000"/>
+      </Representation>
+      <Representation id="3" width="640" height="360" frameRate="30/1" bandwidth="1499968" codecs="avc1.4D401E">
+        <SegmentTemplate timescale="30000" media="index_video_10_0_$Number$.mp4?m=1637114294" initialization="index_video_10_0_init.mp4?m=1637114294" startNumber="31706784" duration="60000"/>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet mimeType="audio/mp4" segmentAlignment="true" startWithSAP="1" lang="eng" bitstreamSwitching="true">
+      <Label>eng</Label>
+      <Representation id="4" bandwidth="192497" audioSamplingRate="48000" codecs="mp4a.40.2">
+        <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2"/>
+        <SegmentTemplate timescale="48000" media="index_audio_8_0_$Number$.mp4?m=1637114294" initialization="index_audio_8_0_init.mp4?m=1637114294" startNumber="31706784" duration="96000"/>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet mimeType="image/jpeg" contentType="image" bitstreamSwitching="true">
+      <Label>thumbnails</Label>
+      <Representation id="5" width="308" height="174" bandwidth="55649">
+        <SegmentTemplate timescale="90000" media="index_image_11_0_$Number$.jpg?m=1637114294" startNumber="31706784" duration="180000"/>
+        <EssentialProperty schemeIdUri="http://dashif.org/guidelines/thumbnail_tile" value="1x1"/>
+      </Representation>
+      <Representation id="6" width="1920" height="1080" bandwidth="2153225">
+        <SegmentTemplate timescale="90000" media="index_image_12_0_$Number$.jpg?m=1637114294" startNumber="31706784" duration="180000"/>
+        <EssentialProperty schemeIdUri="http://dashif.org/guidelines/thumbnail_tile" value="1x1"/>
+      </Representation>
+    </AdaptationSet>
+  </Period>
+  <UTCTiming schemeIdUri="urn:mpeg:dash:utc:http-iso:2014" value="https://time.akamai.com/?iso"/>
+</MPD>

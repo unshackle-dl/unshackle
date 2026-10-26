@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<MPD xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="urn:mpeg:dash:schema:mpd:2011" xmlns:drm="http://example.net/052011/drm" xsi:schemaLocation="urn:mpeg:dash:schema:mpd:2011 DASH-MPD.xsd" type="static" mediaPresentationDuration="PT3256S" minBufferTime="PT10.00S" profiles="urn:mpeg:dash:profile:isoff-on-demand:2011">
+  <BaseURL>http://cdn.example.com/movie23453235/</BaseURL>
+  <Period>
+    <!-- Audio protected with a specified license -->
+    <AdaptationSet mimeType="audio/mp4" codecs="mp4a.40" lang="en" subsegmentStartsWithSAP="1" subsegmentAlignment="true">
+      <ContentProtection schemeIdUri="http://example.net/052011/drm">
+        <drm:License>http://MoviesSP.example.com/protect?license=kljklsdfiowek</drm:License>
+        <drm:Content>http://MoviesSP.example.com/protect?content=oyfYvpo8yFyvyo8f</drm:Content>
+      </ContentProtection>
+      <Representation id="1" bandwidth="64000">
+        <BaseURL>audio/en/64.mp4</BaseURL>
+      </Representation>
+    </AdaptationSet>
+    <!-- Audio protected with embedded information defined by 'ZZZZ' -->
+    <AdaptationSet mimeType="audio/mp4" codecs="mp4a.40" lang="fr" subsegmentStartsWithSAP="1" subsegmentAlignment="true">
+      <ContentProtection schemeIdUri=" urn:mpeg:dash:mp4protection:2011" value="ZZZZ"/>
+      <Representation id="3" bandwidth="64000">
+        <BaseURL>audio/fr/64.mp4</BaseURL>
+      </Representation>
+    </AdaptationSet>
+    <!-- Timed text in the clear -->
+    <AdaptationSet mimeType="application/ttml+xml" lang="de">
+      <Representation id="5" bandwidth="256">
+        <BaseURL>subtitles/de.xml</BaseURL>
+      </Representation>
+    </AdaptationSet>
+    <!-- Video protected with a specified license -->
+    <AdaptationSet mimeType="video/mp4" codecs="avc1" subsegmentAlignment="true" subsegmentStartsWithSAP="2">
+      <ContentProtection schemeIdUri="http://example.net/052011/drm">
+        <drm:License>http://MoviesSP.example.com/protect?license=jfjhwlsdkfiowkl</drm:License>
+        <drm:Content>http://MoviesSP.example.com/protect?content=mslkfjsfiowelkfl</drm:Content>
+      </ContentProtection>
+      <BaseURL>video/</BaseURL>
+      <Representation id="6" bandwidth="256000" width="320" height="240">
+        <BaseURL>video256.mp4</BaseURL>
+      </Representation>
+      <Representation id="7" bandwidth="512000" width="320" height="240">
+        <BaseURL>video512.mp4</BaseURL>
+      </Representation>
+      <Representation id="8" bandwidth="1024000" width="640" height="480">
+        <BaseURL>video1024.mp4</BaseURL>
+      </Representation>
+    </AdaptationSet>
+  </Period>
+</MPD>

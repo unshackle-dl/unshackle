@@ -28,7 +28,7 @@ DYNAMIC_RANGE_MAP = {
     "HDR10 / HDR10+": "HDR10P",
     "HDR10 / HDR10": "HDR",
 }
-AUDIO_CODEC_MAP = {"E-AC-3": "DDP", "AC-3": "DD", "DTS-UHD": "DTS-X"}
+AUDIO_CODEC_MAP = {"E-AC-3": "DDP", "AC-3": "DD", "DTS-UHD": "DTS-X", "DTS LBR": "DTS-LBR", "MPEG-H 3D Audio": "MPEG-H"}
 
 SPACED_AUDIO_CODECS = {"DTS-X"}
 

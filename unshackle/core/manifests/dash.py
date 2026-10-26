@@ -230,6 +230,9 @@ class DASH:
                     if not content_type and not mime_type:
                         raise ValueError("Unable to determine the format of a Representation, cannot continue...")
 
+                    if content_type == "application" and mime_type and "/mp4" not in mime_type:
+                        content_type = "text"
+
                     if mime_type == "application/mp4" or content_type == "application":
                         # likely mp4-boxed subtitles
                         # TODO: It may not actually be subtitles
@@ -997,13 +1000,37 @@ class DASH:
                 track_kid = track.get_key_id(init_data)
 
             if segment_timeline is not None:
+                # an S with @p takes its durations from a Pattern, cycling from index @pE
+                patterns = {
+                    pattern.get("id"): [
+                        int(p.get("d")) for p in pattern.findall("P") for _ in range(1 + int(p.get("r") or 0))
+                    ]
+                    for pattern in segment_timeline.findall("Pattern")
+                }
+                timeline = segment_timeline.findall("S")
                 current_time = 0
-                for s in segment_timeline.findall("S"):
+                timeline_start = int(timeline[0].get("t") or 0) if timeline else 0
+                for index, s in enumerate(timeline):
                     if s.get("t"):
                         current_time = int(s.get("t"))
-                    for _ in range(1 + (int(s.get("r") or 0))):
+                    durations = patterns[s.get("p")] if s.get("p") else [int(s.get("d"))]
+                    offset = int(s.get("pE") or 0)
+                    count = 1 + int(s.get("r") or 0)
+                    if count <= 0:
+                        # a negative @r repeats up to the next S@t, or to the end of the Period
+                        next_time = timeline[index + 1].get("t") if index + 1 < len(timeline) else None
+                        end_time: float
+                        if next_time:
+                            end_time = int(next_time)
+                        elif period_duration:
+                            end_time = timeline_start + DASH.pt_to_sec(period_duration) * segment_timescale
+                        else:
+                            raise ValueError("Duration of the Period was unable to be determined.")
+                        # round off float noise from the duration so it cannot add a segment
+                        count = math.ceil(round((end_time - current_time) / (sum(durations) / len(durations)), 6))
+                    for i in range(count):
                         segment_durations.append(current_time)
-                        current_time += int(s.get("d"))
+                        current_time += durations[(offset + i) % len(durations)]
 
                 keep = track.sample_slice(segment_durations, segment_timescale, window) if window else slice(None)
                 start_number += keep.start or 0

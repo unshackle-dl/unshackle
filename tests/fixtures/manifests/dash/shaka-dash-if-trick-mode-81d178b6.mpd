@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<MPD xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="urn:mpeg:dash:schema:mpd:2011" xsi:schemaLocation="urn:mpeg:dash:schema:mpd:2011 DASH-MPD.xsd" profiles="urn:mpeg:dash:profile:isoff-live:2011,http://dashif.org/guidelines/dash-if-simple" maxSegmentDuration="PT2S" minBufferTime="PT2S" type="static" mediaPresentationDuration="PT1H">
+   <ProgramInformation moreInformationURL="https://github.com/dash-Industry-Forum/livesim-content">
+      <Title>Manifest.mpd extended with DASH trick mode track</Title>
+      <Source>VoD source for DASH-IF livesim2</Source>
+   </ProgramInformation>
+   <Period id="precambrian" start="PT0S">
+      <AdaptationSet contentType="audio" mimeType="audio/mp4" lang="en" segmentAlignment="true" startWithSAP="1">
+         <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"/>
+         <SegmentTemplate startNumber="1" initialization="$RepresentationID$/init.mp4" duration="2" media="$RepresentationID$/$Number$.m4s"/>
+         <Representation id="A48" codecs="mp4a.40.2" bandwidth="48000" audioSamplingRate="48000">
+            <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2"/>
+         </Representation>
+      </AdaptationSet>
+      <AdaptationSet contentType="video" id="0" mimeType="video/mp4" segmentAlignment="true" startWithSAP="1" par="16:9" minWidth="640" maxWidth="640" minHeight="360" maxHeight="360" maxFrameRate="60/2">
+         <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"/>
+         <SegmentTemplate startNumber="1" initialization="$RepresentationID$/init.mp4" duration="2" media="$RepresentationID$/$Number$.m4s"/>
+         <Representation id="V300" codecs="avc1.64001e" bandwidth="300000" width="640" height="360" frameRate="60/2" sar="1:1"/>
+      </AdaptationSet>
+      <AdaptationSet contentType="video" id="1" maxFrameRate="1/2" maxHeight="360" maxWidth="640" mimeType="video/mp4" minHeight="360" minWidth="640" par="16:9" segmentAlignment="true" startWithSAP="1">
+         <EssentialProperty schemeIdUri="http://dashif.org/guidelines/trickmode" value="0" />
+         <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main" />
+         <SegmentTemplate duration="2" initialization="$RepresentationID$/init.mp4" media="$RepresentationID$/$Number$.m4s" startNumber="1" />
+         <Representation bandwidth="30000" codecs="avc1.64001e" frameRate="1/2" height="360" id="V300_trick" sar="1:1" width="640" maxPlayoutRate="60" />
+   </AdaptationSet>
+   </Period>
+</MPD>

@@ -1,0 +1,36 @@
+<?xml version="1.0"?>
+<!-- Generated Sat Jun 01 21:01:19 2013 by Dolby Media Generator, Version 2013May16.160953 -->
+<MPD
+ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+ xmlns:dolby="http://www.dolby.com/ns/online/DASH"
+ xmlns="urn:mpeg:dash:schema:mpd:2011"
+ xsi:schemaLocation="urn:mpeg:dash:schema:mpd:2011"
+ type="static"
+ mediaPresentationDuration="PT0H0M30.030S"
+ minBufferTime="PT1.2S"
+ profiles="urn:mpeg:dash:profile:isoff-on-demand:2011,http://dashif.org/guidelines/dash264">
+
+ <BaseURL>./</BaseURL>
+
+ <Period>
+    <!-- Video -->
+    <AdaptationSet mimeType="video/mp4" codecs="avc1.42801e" subsegmentAlignment="true" subsegmentStartsWithSAP="1">
+      <Representation id="1" bandwidth="519264" width="640" height="480">
+        <BaseURL>ChID_voices_51_256_ddp_V.mp4</BaseURL>
+        <SegmentBase indexRange="742-953">
+            <Initialization range="0-741"/>
+        </SegmentBase>
+      </Representation>
+    </AdaptationSet>
+    <!-- Audio -->
+    <AdaptationSet mimeType="audio/mp4" codecs="ec-3" lang="eng" subsegmentAlignment="true" subsegmentStartsWithSAP="1">
+      <Representation id="2" bandwidth="256000">
+        <AudioChannelConfiguration schemeIdUri="urn:dolby:dash:audio_channel_configuration:2011" value="F801"/>
+        <BaseURL>ChID_voices_51_256_ddp_A.mp4</BaseURL>
+        <SegmentBase indexRange="603-766">
+            <Initialization range="0-602"/>
+        </SegmentBase>
+      </Representation>
+    </AdaptationSet>
+ </Period>
+</MPD>

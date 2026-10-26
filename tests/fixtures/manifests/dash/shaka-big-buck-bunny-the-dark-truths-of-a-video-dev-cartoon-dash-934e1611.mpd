@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--Generated with https://github.com/google/shaka-packager version v2.3.0-5bf8ad5-release-->
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="urn:mpeg:dash:schema:mpd:2011 DASH-MPD.xsd" profiles="urn:mpeg:dash:profile:isoff-on-demand:2011" minBufferTime="PT2S" type="static" mediaPresentationDuration="PT372.3333435058594S">
+  <Period id="0">
+    <AdaptationSet id="0" contentType="video" maxWidth="1252" maxHeight="720" frameRate="15360/512" subsegmentAlignment="true" par="33:19">
+      <Representation id="0" bandwidth="120158" codecs="avc1.42c01e" mimeType="video/mp4" sar="1:1" width="250" height="144">
+        <BaseURL>v-0144p-0100k-libx264.mp4</BaseURL>
+        <SegmentBase indexRange="823-1982" timescale="15360">
+          <Initialization range="0-822"/>
+        </SegmentBase>
+      </Representation>
+      <Representation id="2" bandwidth="410466" codecs="avc1.4d401f" mimeType="video/mp4" sar="1:1" width="418" height="240">
+        <BaseURL>v-0240p-0400k-libx264.mp4</BaseURL>
+        <SegmentBase indexRange="823-1982" timescale="15360">
+          <Initialization range="0-822"/>
+        </SegmentBase>
+      </Representation>
+      <Representation id="7" bandwidth="774852" codecs="avc1.4d401f" mimeType="video/mp4" sar="1:1" width="626" height="360">
+        <BaseURL>v-0360p-0750k-libx264.mp4</BaseURL>
+        <SegmentBase indexRange="824-1983" timescale="15360">
+          <Initialization range="0-823"/>
+        </SegmentBase>
+      </Representation>
+      <Representation id="9" bandwidth="1051938" codecs="avc1.4d401f" mimeType="video/mp4" sar="1:1" width="834" height="480">
+        <BaseURL>v-0480p-1000k-libx264.mp4</BaseURL>
+        <SegmentBase indexRange="822-1981" timescale="15360">
+          <Initialization range="0-821"/>
+        </SegmentBase>
+      </Representation>
+      <Representation id="11" bandwidth="1466036" codecs="avc1.4d401f" mimeType="video/mp4" sar="1:1" width="1002" height="576">
+        <BaseURL>v-0576p-1400k-libx264.mp4</BaseURL>
+        <SegmentBase indexRange="822-1981" timescale="15360">
+          <Initialization range="0-821"/>
+        </SegmentBase>
+      </Representation>
+      <Representation id="13" bandwidth="2646450" codecs="avc1.4d401f" mimeType="video/mp4" sar="1:1" width="1252" height="720">
+        <BaseURL>v-0720p-2500k-libx264.mp4</BaseURL>
+        <SegmentBase indexRange="824-1983" timescale="15360">
+          <Initialization range="0-823"/>
+        </SegmentBase>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="1" contentType="audio" lang="en" subsegmentAlignment="true">
+      <Representation id="1" bandwidth="135112" codecs="mp4a.40.2" mimeType="audio/mp4" audioSamplingRate="48000">
+        <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2"/>
+        <BaseURL>a-eng-0128k-aac-2c.mp4</BaseURL>
+        <SegmentBase indexRange="822-1981" timescale="48000">
+          <Initialization range="0-821"/>
+        </SegmentBase>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="2" contentType="video" maxWidth="1252" maxHeight="720" frameRate="1000000/34000" subsegmentAlignment="true" par="33:19">
+      <Representation id="3" bandwidth="187154" codecs="vp09.00.11.08.00.02.02.02.00" mimeType="video/webm" sar="1:1" width="250" height="144">
+        <BaseURL>v-0144p-0100k-vp9.webm</BaseURL>
+        <SegmentBase indexRange="303-1870" timescale="1000000">
+          <Initialization range="0-302"/>
+        </SegmentBase>
+      </Representation>
+      <Representation id="4" bandwidth="486896" codecs="vp09.00.20.08.00.02.02.02.00" mimeType="video/webm" sar="1:1" width="418" height="240">
+        <BaseURL>v-0240p-0300k-vp9.webm</BaseURL>
+        <SegmentBase indexRange="305-1873" timescale="1000000">
+          <Initialization range="0-304"/>
+        </SegmentBase>
+      </Representation>
+      <Representation id="5" bandwidth="961406" codecs="vp09.00.21.08.00.02.02.02.00" mimeType="video/webm" sar="1:1" width="626" height="360">
+        <BaseURL>v-0360p-0550k-vp9.webm</BaseURL>
+        <SegmentBase indexRange="307-1909" timescale="1000000">
+          <Initialization range="0-306"/>
+        </SegmentBase>
+      </Representation>
+      <Representation id="8" bandwidth="1514842" codecs="vp09.00.30.08.00.02.02.02.00" mimeType="video/webm" sar="1:1" width="834" height="480">
+        <BaseURL>v-0480p-0750k-vp9.webm</BaseURL>
+        <SegmentBase indexRange="307-1925" timescale="1000000">
+          <Initialization range="0-306"/>
+        </SegmentBase>
+      </Representation>
+      <Representation id="10" bandwidth="1830680" codecs="vp09.00.31.08.00.02.02.02.00" mimeType="video/webm" sar="1:1" width="1002" height="576">
+        <BaseURL>v-0576p-1000k-vp9.webm</BaseURL>
+        <SegmentBase indexRange="307-1937" timescale="1000000">
+          <Initialization range="0-306"/>
+        </SegmentBase>
+      </Representation>
+      <Representation id="12" bandwidth="3081666" codecs="vp09.00.31.08.00.02.02.02.00" mimeType="video/webm" sar="1:1" width="1252" height="720">
+        <BaseURL>v-0720p-1800k-vp9.webm</BaseURL>
+        <SegmentBase indexRange="307-1951" timescale="1000000">
+          <Initialization range="0-306"/>
+        </SegmentBase>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="3" contentType="audio" lang="en" subsegmentAlignment="true">
+      <Representation id="6" bandwidth="127492" codecs="opus" mimeType="audio/webm" audioSamplingRate="48000">
+        <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2"/>
+        <BaseURL>a-eng-0096k-libopus-2c.webm</BaseURL>
+        <SegmentBase indexRange="326-1909" timescale="1000000">
+          <Initialization range="0-325"/>
+        </SegmentBase>
+      </Representation>
+    </AdaptationSet>
+  </Period>
+</MPD>

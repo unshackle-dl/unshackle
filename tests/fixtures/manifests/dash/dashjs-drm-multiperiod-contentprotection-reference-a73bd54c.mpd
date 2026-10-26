@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="utf-8"?>
+<MPD xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="urn:mpeg:dash:schema:mpd:2011" xmlns:scte35="urn:scte:scte35:2013:xml" xsi:schemaLocation="urn:mpeg:dash:schema:mpd:2011 http://standards.iso.org/ittf/PubliclyAvailableStandards/MPEG-DASH_schema_files/DASH-MPD.xsd" id="201" type="dynamic" publishTime="2026-10-26T15:56:07+00:00" minimumUpdatePeriod="PT2S" availabilityStartTime="2024-01-08T10:46:33.853000+00:00" minBufferTime="PT10S" suggestedPresentationDelay="PT20.000S" timeShiftBufferDepth="PT58.000S" profiles="urn:mpeg:dash:profile:isoff-live:2011">
+  <ContentProtection refId="cp124221136" schemeIdUri="urn:mpeg:dash:mp4protection:2011" value="cenc" cenc:default_KID="FDC2CB3E-1B08-4601-9BA7-8D884967F2C6" xmlns:cenc="urn:mpeg:cenc:2013"/>
+  <ContentProtection refId="cp287761748" schemeIdUri="urn:uuid:edef8ba9-79d6-4ace-a3c8-27dcd51d21ed">
+    <cenc:pssh xmlns:cenc="urn:mpeg:cenc:2013">AAAAiHBzc2gAAAAA7e+LqXnWSs6jyCfc1R0h7QAAAGgIARIQ/cLLPhsIRgGbp42ISWfyxiJQZXlKaGMzTmxkRWxrSWpvaVpXMXdjbVZtYzNSeVpXRnRjM0JsYTJVeUxXUmhjMmhxY3kxdmJuUmxiblJ3Y205MFpXTjBhVzl1Y21WbUluMD04AA==</cenc:pssh>
+  </ContentProtection>
+  <ContentProtection refId="cp1186164142" schemeIdUri="urn:uuid:9a04f079-9840-4286-ab92-e65be0885f95" value="MSPR 2.0">
+    <cenc:pssh xmlns:cenc="urn:mpeg:cenc:2013">OAMAAAEAAQAuAzwAVwBSAE0ASABFAEEARABFAFIAIAB4AG0AbABuAHMAPQAiAGgAdAB0AHAAOgAvAC8AcwBjAGgAZQBtAGEAcwAuAG0AaQBjAHIAbwBzAG8AZgB0AC4AYwBvAG0ALwBEAFIATQAvADIAMAAwADcALwAwADMALwBQAGwAYQB5AFIAZQBhAGQAeQBIAGUAYQBkAGUAcgAiACAAdgBlAHIAcwBpAG8AbgA9ACIANAAuADAALgAwAC4AMAAiAD4APABEAEEAVABBAD4APABQAFIATwBUAEUAQwBUAEkATgBGAE8APgA8AEsARQBZAEwARQBOAD4AMQA2ADwALwBLAEUAWQBMAEUATgA+ADwAQQBMAEcASQBEAD4AQQBFAFMAQwBUAFIAPAAvAEEATABHAEkARAA+ADwALwBQAFIATwBUAEUAQwBUAEkATgBGAE8APgA8AEsASQBEAD4AUABzAHYAQwAvAFEAZwBiAEEAVQBhAGIAcAA0ADIASQBTAFcAZgB5AHgAZwA9AD0APAAvAEsASQBEAD4APABMAEEAXwBVAFIATAA+AGgAdAB0AHAAcwA6AC8ALwBsAGkAYwAuAHMAdABhAGcAaQBuAGcALgBkAHIAbQB0AG8AZABhAHkALgBjAG8AbQAvAGwAaQBjAGUAbgBzAGUALQBwAHIAbwB4AHkALQBoAGUAYQBkAGUAcgBhAHUAdABoAC8AZAByAG0AdABvAGQAYQB5AC8AUgBpAGcAaAB0AHMATQBhAG4AYQBnAGUAcgAuAGEAcwBtAHgAPAAvAEwAQQBfAFUAUgBMAD4APABMAFUASQBfAFUAUgBMAD4AaAB0AHQAcABzADoALwAvAHAAbABhAHkAcgBlAGEAZAB5AC0AdQBpAC4AZQB4AGEAbQBwAGwAZQAuAGMAbwBtADwALwBMAFUASQBfAFUAUgBMAD4APABDAEgARQBDAEsAUwBVAE0APgBGAEsAKwBBAGwAYQB3AGYAaABWAE0APQA8AC8AQwBIAEUAQwBLAFMAVQBNAD4APAAvAEQAQQBUAEEAPgA8AC8AVwBSAE0ASABFAEEARABFAFIAPgA=</cenc:pssh>
+  </ContentProtection>
+  <Period start="PT88319254.810S" id="42089305" duration="PT86.080S">
+    <AdaptationSet id="1485523442" mimeType="video/mp4" segmentAlignment="true" startWithSAP="1" subsegmentAlignment="true" subsegmentStartsWithSAP="1" bitstreamSwitching="true">
+      <InbandEventStream schemeIdUri="https://aomedia.org/emsg/ID3" value="0"/>
+      <ContentProtection ref="cp124221136" schemeIdUri="urn:mpeg:dash:mp4protection:2011"/>
+      <ContentProtection ref="cp287761748" schemeIdUri="urn:uuid:edef8ba9-79d6-4ace-a3c8-27dcd51d21ed"/>
+      <ContentProtection ref="cp1186164142" schemeIdUri="urn:uuid:9a04f079-9840-4286-ab92-e65be0885f95"/>
+      <SegmentTemplate timescale="50000" media="index_video_$RepresentationID$_0_$Number$.mp4?m=1704732914" initialization="index_video_$RepresentationID$_0_init.mp4?m=1704732914" startNumber="42089335" presentationTimeOffset="4415962740511">
+        <SegmentTimeline>
+          <S t="4415965640511" d="100000" r="12"/>
+          <S t="4415966940511" d="104000"/>
+        </SegmentTimeline>
+      </SegmentTemplate>
+      <Representation id="2" width="1280" height="720" frameRate="25/1" bandwidth="3000000" codecs="avc1.4D401F"/>
+      <Representation id="3" width="640" height="360" frameRate="25/1" bandwidth="1499968" codecs="avc1.4D401E"/>
+      <Representation id="4" width="1920" height="1080" frameRate="25/1" bandwidth="5000000" codecs="avc1.4D4028"/>
+    </AdaptationSet>
+    <AdaptationSet id="1377232898" mimeType="audio/mp4" segmentAlignment="true" startWithSAP="1" lang="eng" bitstreamSwitching="true">
+      <Label>eng</Label>
+      <ContentProtection ref="cp124221136" schemeIdUri="urn:mpeg:dash:mp4protection:2011"/>
+      <ContentProtection ref="cp287761748" schemeIdUri="urn:uuid:edef8ba9-79d6-4ace-a3c8-27dcd51d21ed"/>
+      <ContentProtection ref="cp1186164142" schemeIdUri="urn:uuid:9a04f079-9840-4286-ab92-e65be0885f95"/>
+      <SegmentTemplate timescale="48000" media="index_audio_$RepresentationID$_0_$Number$.mp4?m=1704732914" initialization="index_audio_$RepresentationID$_0_init.mp4?m=1704732914" startNumber="42089335" presentationTimeOffset="4239324231594">
+        <SegmentTimeline>
+          <S t="4239327015850" d="95232"/>
+          <S t="4239327111082" d="96256" r="2"/>
+          <S t="4239327399850" d="95232"/>
+          <S t="4239327495082" d="96256" r="2"/>
+          <S t="4239327783850" d="95232"/>
+          <S t="4239327879082" d="96256" r="2"/>
+          <S t="4239328167850" d="95232"/>
+          <S t="4239328263082" d="100352"/>
+        </SegmentTimeline>
+      </SegmentTemplate>
+      <Representation id="1" bandwidth="193613" audioSamplingRate="48000" codecs="mp4a.40.2">
+        <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2"/>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="1382011483" mimeType="image/jpeg" contentType="image" bitstreamSwitching="true">
+      <Label>thumbnails</Label>
+      <SegmentTemplate timescale="90000" media="index_image_$RepresentationID$_0_$Number$.jpg?m=1704732914" startNumber="42089335" presentationTimeOffset="7948732932920">
+        <SegmentTimeline>
+          <S t="7948738152920" d="180000" r="12"/>
+          <S t="7948740492920" d="187200"/>
+        </SegmentTimeline>
+      </SegmentTemplate>
+      <Representation id="5" width="308" height="174" bandwidth="55649">
+        <EssentialProperty schemeIdUri="http://dashif.org/guidelines/thumbnail_tile" value="1x1"/>
+      </Representation>
+    </AdaptationSet>
+    <SupplementalProperty schemeIdUri="urn:scte:dash:utc-time" value="2026-10-26T15:53:58.720Z"/>
+  </Period>
+  <Period start="PT88319340.890S" id="42089348">
+    <EventStream timescale="90000" schemeIdUri="urn:scte:scte35:2013:xml">
+      <Event duration="2790209">
+        <scte35:SpliceInfoSection protocolVersion="0" ptsAdjustment="7230359448" tier="4095">
+          <scte35:SpliceInsert spliceEventId="179302999" spliceEventCancelIndicator="false" outOfNetworkIndicator="true" spliceImmediateFlag="false" uniqueProgramId="1" availNum="1" availsExpected="1">
+            <scte35:Program>
+              <scte35:SpliceTime ptsTime="4410757664"/>
+            </scte35:Program>
+            <scte35:BreakDuration autoReturn="true" duration="2790209"/>
+          </scte35:SpliceInsert>
+        </scte35:SpliceInfoSection>
+      </Event>
+    </EventStream>
+    <AdaptationSet id="1485523442" mimeType="video/mp4" segmentAlignment="true" startWithSAP="1" subsegmentAlignment="true" subsegmentStartsWithSAP="1" bitstreamSwitching="true">
+      <InbandEventStream schemeIdUri="https://aomedia.org/emsg/ID3" value="0"/>
+      <ContentProtection ref="cp124221136" schemeIdUri="urn:mpeg:dash:mp4protection:2011"/>
+      <ContentProtection ref="cp287761748" schemeIdUri="urn:uuid:edef8ba9-79d6-4ace-a3c8-27dcd51d21ed"/>
+      <ContentProtection ref="cp1186164142" schemeIdUri="urn:uuid:9a04f079-9840-4286-ab92-e65be0885f95"/>
+      <SegmentTemplate timescale="50000" media="index_video_$RepresentationID$_0_$Number$.mp4?m=1704732914" initialization="index_video_$RepresentationID$_0_init.mp4?m=1704732914" startNumber="42089349" presentationTimeOffset="4415967044511">
+        <SegmentTimeline>
+          <S t="4415967044511" d="196000"/>
+          <S t="4415967240511" d="100000" r="11"/>
+          <S t="4415968440511" d="300000"/>
+        </SegmentTimeline>
+      </SegmentTemplate>
+      <Representation id="2" width="1280" height="720" frameRate="25/1" bandwidth="3000000" codecs="avc1.4D401F"/>
+      <Representation id="3" width="640" height="360" frameRate="25/1" bandwidth="1499968" codecs="avc1.4D401E"/>
+      <Representation id="4" width="1920" height="1080" frameRate="25/1" bandwidth="5000000" codecs="avc1.4D4028"/>
+    </AdaptationSet>
+    <AdaptationSet id="1377232898" mimeType="audio/mp4" segmentAlignment="true" startWithSAP="1" lang="eng" bitstreamSwitching="true">
+      <Label>eng</Label>
+      <ContentProtection ref="cp124221136" schemeIdUri="urn:mpeg:dash:mp4protection:2011"/>
+      <ContentProtection ref="cp287761748" schemeIdUri="urn:uuid:edef8ba9-79d6-4ace-a3c8-27dcd51d21ed"/>
+      <ContentProtection ref="cp1186164142" schemeIdUri="urn:uuid:9a04f079-9840-4286-ab92-e65be0885f95"/>
+      <SegmentTemplate timescale="48000" media="index_audio_$RepresentationID$_0_$Number$.mp4?m=1704732914" initialization="index_audio_$RepresentationID$_0_init.mp4?m=1704732914" startNumber="42089349" presentationTimeOffset="4239328363434">
+        <SegmentTimeline>
+          <S t="4239328363434" d="188416"/>
+          <S t="4239328551850" d="95232"/>
+          <S t="4239328647082" d="96256" r="2"/>
+          <S t="4239328935850" d="95232"/>
+          <S t="4239329031082" d="96256" r="2"/>
+          <S t="4239329319850" d="95232"/>
+          <S t="4239329415082" d="96256" r="2"/>
+          <S t="4239329703850" d="287744"/>
+        </SegmentTimeline>
+      </SegmentTemplate>
+      <Representation id="1" bandwidth="193613" audioSamplingRate="48000" codecs="mp4a.40.2">
+        <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2"/>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="1382011483" mimeType="image/jpeg" contentType="image" bitstreamSwitching="true">
+      <Label>thumbnails</Label>
+      <SegmentTemplate timescale="90000" media="index_image_$RepresentationID$_0_$Number$.jpg?m=1704732914" startNumber="42089349" presentationTimeOffset="7948740680120">
+        <SegmentTimeline>
+          <S t="7948740680120" d="352800"/>
+          <S t="7948741032920" d="180000" r="11"/>
+          <S t="7948743192920" d="540000"/>
+        </SegmentTimeline>
+      </SegmentTemplate>
+      <Representation id="5" width="308" height="174" bandwidth="55649">
+        <EssentialProperty schemeIdUri="http://dashif.org/guidelines/thumbnail_tile" value="1x1"/>
+      </Representation>
+    </AdaptationSet>
+    <SupplementalProperty schemeIdUri="urn:scte:dash:utc-time" value="2026-10-26T15:55:24.800Z"/>
+  </Period>
+</MPD>

@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<MPD xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="urn:mpeg:dash:schema:mpd:2011" xsi:schemaLocation="urn:mpeg:dash:schema:mpd:2011 DASH-MPD.xsd" type="dynamic" minimumUpdatePeriod="PT2S" timeShiftBufferDepth="PT30M" availabilityStartTime="2014-10-17T17:17:05Z" minBufferTime="PT4S" profiles="urn:mpeg:dash:profile:isoff-live:2011" publishTime="2014-10-17T17:17:05Z">
+  <BaseURL>http://cdn1.example.com/</BaseURL>
+  <BaseURL>http://cdn2.example.com/</BaseURL>
+  <Period id="1">
+    <!-- Video -->
+    <AdaptationSet mimeType="video/mp4" codecs="avc1.4D401F" frameRate="30000/1001" segmentAlignment="true" startWithSAP="1">
+      <BaseURL>video/</BaseURL>
+      <SegmentTemplate timescale="90000" initialization="$Bandwidth$/init.mp4v" media="$Bandwidth$/$Time$.mp4v">
+        <SegmentTimeline>
+          <S t="0" d="180180" r="432"/>
+        </SegmentTimeline>
+      </SegmentTemplate>
+      <Representation id="v0" width="320" height="240" bandwidth="250000"/>
+      <Representation id="v1" width="640" height="480" bandwidth="500000"/>
+      <Representation id="v2" width="960" height="720" bandwidth="1000000"/>
+    </AdaptationSet>
+    <!-- English Audio -->
+    <AdaptationSet mimeType="audio/mp4" codecs="mp4a.40" lang="en" segmentAlignment="0" startWithSAP="1">
+      <SegmentTemplate timescale="48000" initialization="audio/en/init.mp4a" media="audio/en/$Time$.mp4a">
+        <SegmentTimeline>
+          <S t="0" d="96000" r="432"/>
+        </SegmentTimeline>
+      </SegmentTemplate>
+      <Representation id="a0" bandwidth="64000"/>
+    </AdaptationSet>
+    <!-- French Audio -->
+    <AdaptationSet mimeType="audio/mp4" codecs="mp4a.40" lang="fr" segmentAlignment="0" startWithSAP="1">
+      <SegmentTemplate timescale="48000" initialization="audio/fr/init.mp4a" media="audio/fr/$Time$.mp4a">
+        <SegmentTimeline>
+          <S t="0" d="96000" r="432"/>
+        </SegmentTimeline>
+      </SegmentTemplate>
+      <Representation id="b0" bandwidth="64000"/>
+    </AdaptationSet>
+  </Period>
+</MPD>

@@ -1,0 +1,779 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<MPD availabilityStartTime="2021-03-31T00:51:01.110000+00:00" id="201" minBufferTime="PT6S" minimumUpdatePeriod="PT2S" profiles="urn:mpeg:dash:profile:isoff-live:2011" publishTime="2026-10-26T15:56:05+00:00" suggestedPresentationDelay="PT6.000S" timeShiftBufferDepth="PT298.000S" type="dynamic" xmlns="urn:mpeg:dash:schema:mpd:2011" xmlns:scte35="urn:scte:scte35:2013:xml" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="urn:mpeg:dash:schema:mpd:2011 http://standards.iso.org/ittf/PubliclyAvailableStandards/MPEG-DASH_schema_files/DASH-MPD.xsd">
+    <BaseURL>https://d24rwxnt7vw9qb.cloudfront.net/out/v1/4577dca5f8a44756875ab5cc913cd1f1/</BaseURL>
+    <Period duration="PT86.240S" id="86185387" start="PT175877939.473S">
+        <AdaptationSet bitstreamSwitching="true" id="1485523442" mimeType="video/mp4" segmentAlignment="true" startWithSAP="1" subsegmentAlignment="true" subsegmentStartsWithSAP="1">
+            <InbandEventStream schemeIdUri="https://aomedia.org/emsg/ID3" value="0"/>
+            <SegmentTemplate initialization="index_video_$RepresentationID$_0_init.mp4?m=1658267543" media="index_video_$RepresentationID$_0_$Number$.mp4?m=1658267543" presentationTimeOffset="8793896973666" startNumber="86185416" timescale="50000">
+                <SegmentTimeline>
+                    <S d="100000" r="13" t="8793899773666"/>
+                    <S d="112000" t="8793901173666"/>
+                </SegmentTimeline>
+            </SegmentTemplate>
+            <Representation bandwidth="5000000" codecs="avc1.4D4028" frameRate="25/1" height="1080" id="27" width="1920"/>
+            <Representation bandwidth="3000000" codecs="avc1.4D401F" frameRate="25/1" height="720" id="24" width="1280"/>
+            <Representation bandwidth="1499968" codecs="avc1.4D401E" frameRate="25/1" height="360" id="26" width="640"/>
+        </AdaptationSet>
+        <AdaptationSet bitstreamSwitching="true" id="1377232898" lang="eng" mimeType="audio/mp4" segmentAlignment="true" startWithSAP="1">
+            <Label>eng</Label>
+            <SegmentTemplate initialization="index_audio_$RepresentationID$_0_init.mp4?m=1658267543" media="index_audio_$RepresentationID$_0_$Number$.mp4?m=1658267543" presentationTimeOffset="8442141095424" startNumber="86185416" timescale="48000">
+                <SegmentTimeline>
+                    <S d="96256" t="8442143783424"/>
+                    <S d="95232" t="8442143879680"/>
+                    <S d="96256" r="2" t="8442143974912"/>
+                    <S d="95232" t="8442144263680"/>
+                    <S d="96256" r="2" t="8442144358912"/>
+                    <S d="95232" t="8442144647680"/>
+                    <S d="96256" r="2" t="8442144742912"/>
+                    <S d="95232" t="8442145031680"/>
+                    <S d="107520" t="8442145126912"/>
+                </SegmentTimeline>
+            </SegmentTemplate>
+            <Representation audioSamplingRate="48000" bandwidth="193613" codecs="mp4a.40.2" id="30">
+                <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2"/>
+            </Representation>
+        </AdaptationSet>
+        <AdaptationSet bitstreamSwitching="true" contentType="image" id="1382011483" mimeType="image/jpeg">
+            <Label>thumbnails</Label>
+            <SegmentTemplate media="index_image_$RepresentationID$_0_$Number$.jpg?m=1658267543" presentationTimeOffset="15829014552600" startNumber="86185416" timescale="90000">
+                <SegmentTimeline>
+                    <S d="180000" r="13" t="15829019592600"/>
+                    <S d="201600" t="15829022112600"/>
+                </SegmentTimeline>
+            </SegmentTemplate>
+            <Representation bandwidth="55649" height="174" id="28" width="308">
+                <EssentialProperty schemeIdUri="http://dashif.org/guidelines/thumbnail_tile" value="1x1"/>
+            </Representation>
+        </AdaptationSet>
+        <SupplementalProperty schemeIdUri="urn:scte:dash:utc-time" value="2026-10-26T15:49:58.720Z"/>
+    </Period>
+    <Period id="86185430_1" start="PT48855H25.713S">
+        <BaseURL>https://11901bf79f2b46f7842656281de4c494.mediatailor.us-east-1.amazonaws.com/v1/dashsegment/e6d234965645b411ad572802b6c9d5a10799c9c1/All_Reference_Streams/a9674811-0147-49d3-85e2-34306e0aadd0/86185430/86185430_1/</BaseURL>
+        <AdaptationSet bitstreamSwitching="false" frameRate="25/1" mimeType="video/mp4" segmentAlignment="true" startWithSAP="1" subsegmentAlignment="true" subsegmentStartsWithSAP="1">
+            <SegmentTemplate initialization="asset_$RepresentationID$_init.mp4" media="asset_$RepresentationID$_$Number%09d$.mp4" startNumber="1" timescale="25">
+                <SegmentTimeline>
+                    <S d="50" t="0"/>
+                    <S d="2" t="50"/>
+                </SegmentTimeline>
+            </SegmentTemplate>
+            <Representation bandwidth="5000000" codecs="avc1.4d4028" height="1080" id="4" width="1920"/>
+            <Representation bandwidth="3000000" codecs="avc1.4d401f" height="720" id="3" width="1280"/>
+            <Representation bandwidth="1496000" codecs="avc1.4d401e" height="360" id="2" width="640"/>
+        </AdaptationSet>
+        <AdaptationSet lang="eng" mimeType="audio/mp4" segmentAlignment="false">
+            <SegmentTemplate initialization="asset_$RepresentationID$_init.mp4" media="asset_$RepresentationID$_$Number%09d$.mp4" startNumber="1" timescale="48000">
+                <SegmentTimeline>
+                    <S d="98304" t="0"/>
+                    <S d="2048" t="98304"/>
+                </SegmentTimeline>
+            </SegmentTemplate>
+            <Label>eng</Label>
+            <Representation audioSamplingRate="48000" bandwidth="128000" codecs="mp4a.40.2" id="1">
+                <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2"/>
+            </Representation>
+        </AdaptationSet>
+    </Period>
+    <Period id="86185430_2" start="PT48855H27.793S">
+        <BaseURL>https://11901bf79f2b46f7842656281de4c494.mediatailor.us-east-1.amazonaws.com/v1/dashsegment/e6d234965645b411ad572802b6c9d5a10799c9c1/All_Reference_Streams/a9674811-0147-49d3-85e2-34306e0aadd0/86185430/86185430_2/</BaseURL>
+        <AdaptationSet bitstreamSwitching="false" frameRate="25/1" mimeType="video/mp4" segmentAlignment="true" startWithSAP="1" subsegmentAlignment="true" subsegmentStartsWithSAP="1">
+            <SegmentTemplate initialization="asset_$RepresentationID$_init.mp4" media="asset_$RepresentationID$_$Number%09d$.mp4" startNumber="1" timescale="25">
+                <SegmentTimeline>
+                    <S d="50" t="0"/>
+                    <S d="7" t="50"/>
+                </SegmentTimeline>
+            </SegmentTemplate>
+            <Representation bandwidth="5000000" codecs="avc1.4d4028" height="1080" id="4" width="1920"/>
+            <Representation bandwidth="3000000" codecs="avc1.4d401f" height="720" id="3" width="1280"/>
+            <Representation bandwidth="1496000" codecs="avc1.4d401e" height="360" id="2" width="640"/>
+        </AdaptationSet>
+        <AdaptationSet lang="eng" mimeType="audio/mp4" segmentAlignment="false">
+            <SegmentTemplate initialization="asset_$RepresentationID$_init.mp4" media="asset_$RepresentationID$_$Number%09d$.mp4" startNumber="1" timescale="48000">
+                <SegmentTimeline>
+                    <S d="98304" t="0"/>
+                    <S d="11264" t="98304"/>
+                </SegmentTimeline>
+            </SegmentTemplate>
+            <Label>eng</Label>
+            <Representation audioSamplingRate="48000" bandwidth="128000" codecs="mp4a.40.2" id="1">
+                <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2"/>
+            </Representation>
+        </AdaptationSet>
+    </Period>
+    <Period id="86185430_3" start="PT48855H30.073S">
+        <BaseURL>https://11901bf79f2b46f7842656281de4c494.mediatailor.us-east-1.amazonaws.com/v1/dashsegment/e6d234965645b411ad572802b6c9d5a10799c9c1/All_Reference_Streams/a9674811-0147-49d3-85e2-34306e0aadd0/86185430/86185430_3/</BaseURL>
+        <AdaptationSet bitstreamSwitching="false" frameRate="25/1" mimeType="video/mp4" segmentAlignment="true" startWithSAP="1" subsegmentAlignment="true" subsegmentStartsWithSAP="1">
+            <SegmentTemplate initialization="asset_$RepresentationID$_init.mp4" media="asset_$RepresentationID$_$Number%09d$.mp4" startNumber="1" timescale="25">
+                <SegmentTimeline>
+                    <S d="50" r="6" t="0"/>
+                    <S d="23" t="350"/>
+                </SegmentTimeline>
+            </SegmentTemplate>
+            <Representation bandwidth="5000000" codecs="avc1.4d4028" height="1080" id="4" width="1920"/>
+            <Representation bandwidth="3000000" codecs="avc1.4d401f" height="720" id="3" width="1280"/>
+            <Representation bandwidth="1496000" codecs="avc1.4d401e" height="360" id="2" width="640"/>
+        </AdaptationSet>
+        <AdaptationSet lang="eng" mimeType="audio/mp4" segmentAlignment="false">
+            <SegmentTemplate initialization="asset_$RepresentationID$_init.mp4" media="asset_$RepresentationID$_$Number%09d$.mp4" startNumber="1" timescale="48000">
+                <SegmentTimeline>
+                    <S d="98304" t="0"/>
+                    <S d="96256" t="98304"/>
+                    <S d="95232" t="194560"/>
+                    <S d="96256" r="2" t="289792"/>
+                    <S d="95232" t="578560"/>
+                    <S d="43008" t="673792"/>
+                </SegmentTimeline>
+            </SegmentTemplate>
+            <Label>eng</Label>
+            <Representation audioSamplingRate="48000" bandwidth="128000" codecs="mp4a.40.2" id="1">
+                <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2"/>
+            </Representation>
+        </AdaptationSet>
+    </Period>
+    <Period id="86185430_4" start="PT48855H44.993S">
+        <BaseURL>https://11901bf79f2b46f7842656281de4c494.mediatailor.us-east-1.amazonaws.com/v1/dashsegment/e6d234965645b411ad572802b6c9d5a10799c9c1/All_Reference_Streams/a9674811-0147-49d3-85e2-34306e0aadd0/86185430/86185430_4/</BaseURL>
+        <AdaptationSet bitstreamSwitching="false" frameRate="25/1" mimeType="video/mp4" segmentAlignment="true" startWithSAP="1" subsegmentAlignment="true" subsegmentStartsWithSAP="1">
+            <SegmentTemplate initialization="asset_$RepresentationID$_init.mp4" media="asset_$RepresentationID$_$Number%09d$.mp4" startNumber="1" timescale="25">
+                <SegmentTimeline>
+                    <S d="50" t="0"/>
+                    <S d="10" t="50"/>
+                </SegmentTimeline>
+            </SegmentTemplate>
+            <Representation bandwidth="5000000" codecs="avc1.4d4028" height="1080" id="4" width="1920"/>
+            <Representation bandwidth="3000000" codecs="avc1.4d401f" height="720" id="3" width="1280"/>
+            <Representation bandwidth="1496000" codecs="avc1.4d401e" height="360" id="2" width="640"/>
+        </AdaptationSet>
+        <AdaptationSet lang="eng" mimeType="audio/mp4" segmentAlignment="false">
+            <SegmentTemplate initialization="asset_$RepresentationID$_init.mp4" media="asset_$RepresentationID$_$Number%09d$.mp4" startNumber="1" timescale="48000">
+                <SegmentTimeline>
+                    <S d="98304" t="0"/>
+                    <S d="17408" t="98304"/>
+                </SegmentTimeline>
+            </SegmentTemplate>
+            <Label>eng</Label>
+            <Representation audioSamplingRate="48000" bandwidth="128000" codecs="mp4a.40.2" id="1">
+                <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2"/>
+            </Representation>
+        </AdaptationSet>
+    </Period>
+    <Period id="86185430_5" start="PT48855H47.393S">
+        <BaseURL>https://11901bf79f2b46f7842656281de4c494.mediatailor.us-east-1.amazonaws.com/v1/dashsegment/e6d234965645b411ad572802b6c9d5a10799c9c1/All_Reference_Streams/a9674811-0147-49d3-85e2-34306e0aadd0/86185430/86185430_5/</BaseURL>
+        <AdaptationSet bitstreamSwitching="false" frameRate="25/1" mimeType="video/mp4" segmentAlignment="true" startWithSAP="1" subsegmentAlignment="true" subsegmentStartsWithSAP="1">
+            <SegmentTemplate initialization="asset_$RepresentationID$_init.mp4" media="asset_$RepresentationID$_$Number%09d$.mp4" startNumber="1" timescale="25">
+                <SegmentTimeline>
+                    <S d="50" t="0"/>
+                    <S d="2" t="50"/>
+                </SegmentTimeline>
+            </SegmentTemplate>
+            <Representation bandwidth="5000000" codecs="avc1.4d4028" height="1080" id="4" width="1920"/>
+            <Representation bandwidth="3000000" codecs="avc1.4d401f" height="720" id="3" width="1280"/>
+            <Representation bandwidth="1496000" codecs="avc1.4d401e" height="360" id="2" width="640"/>
+        </AdaptationSet>
+        <AdaptationSet lang="eng" mimeType="audio/mp4" segmentAlignment="false">
+            <SegmentTemplate initialization="asset_$RepresentationID$_init.mp4" media="asset_$RepresentationID$_$Number%09d$.mp4" startNumber="1" timescale="48000">
+                <SegmentTimeline>
+                    <S d="98304" t="0"/>
+                    <S d="2048" t="98304"/>
+                </SegmentTimeline>
+            </SegmentTemplate>
+            <Label>eng</Label>
+            <Representation audioSamplingRate="48000" bandwidth="128000" codecs="mp4a.40.2" id="1">
+                <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2"/>
+            </Representation>
+        </AdaptationSet>
+    </Period>
+    <Period id="86185430_6" start="PT48855H49.473S">
+        <BaseURL>https://11901bf79f2b46f7842656281de4c494.mediatailor.us-east-1.amazonaws.com/v1/dashsegment/e6d234965645b411ad572802b6c9d5a10799c9c1/All_Reference_Streams/a9674811-0147-49d3-85e2-34306e0aadd0/86185430/86185430_6/</BaseURL>
+        <AdaptationSet bitstreamSwitching="false" frameRate="25/1" mimeType="video/mp4" segmentAlignment="true" startWithSAP="1" subsegmentAlignment="true" subsegmentStartsWithSAP="1">
+            <SegmentTemplate initialization="asset_$RepresentationID$_init.mp4" media="asset_$RepresentationID$_$Number%09d$.mp4" startNumber="1" timescale="25">
+                <SegmentTimeline>
+                    <S d="50" t="0"/>
+                    <S d="27" t="50"/>
+                </SegmentTimeline>
+            </SegmentTemplate>
+            <Representation bandwidth="5000000" codecs="avc1.4d4028" height="1080" id="4" width="1920"/>
+            <Representation bandwidth="3000000" codecs="avc1.4d401f" height="720" id="3" width="1280"/>
+            <Representation bandwidth="1496000" codecs="avc1.4d401e" height="360" id="2" width="640"/>
+        </AdaptationSet>
+        <AdaptationSet lang="eng" mimeType="audio/mp4" segmentAlignment="false">
+            <SegmentTemplate initialization="asset_$RepresentationID$_init.mp4" media="asset_$RepresentationID$_$Number%09d$.mp4" startNumber="1" timescale="48000">
+                <SegmentTimeline>
+                    <S d="98304" t="0"/>
+                    <S d="50176" t="98304"/>
+                </SegmentTimeline>
+            </SegmentTemplate>
+            <Label>eng</Label>
+            <Representation audioSamplingRate="48000" bandwidth="128000" codecs="mp4a.40.2" id="1">
+                <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2"/>
+            </Representation>
+        </AdaptationSet>
+    </Period>
+    <Period id="86185430_7" start="PT48855H52.553S">
+        <BaseURL>https://11901bf79f2b46f7842656281de4c494.mediatailor.us-east-1.amazonaws.com/v1/dashsegment/e6d234965645b411ad572802b6c9d5a10799c9c1/All_Reference_Streams/a9674811-0147-49d3-85e2-34306e0aadd0/86185430/86185430_7/</BaseURL>
+        <AdaptationSet bitstreamSwitching="false" frameRate="25/1" mimeType="video/mp4" segmentAlignment="true" startWithSAP="1" subsegmentAlignment="true" subsegmentStartsWithSAP="1">
+            <SegmentTemplate initialization="asset_$RepresentationID$_init.mp4" media="asset_$RepresentationID$_$Number%09d$.mp4" startNumber="1" timescale="25">
+                <SegmentTimeline>
+                    <S d="50" t="0"/>
+                    <S d="12" t="50"/>
+                </SegmentTimeline>
+            </SegmentTemplate>
+            <Representation bandwidth="5000000" codecs="avc1.4d4028" height="1080" id="4" width="1920"/>
+            <Representation bandwidth="3000000" codecs="avc1.4d401f" height="720" id="3" width="1280"/>
+            <Representation bandwidth="1496000" codecs="avc1.4d401e" height="360" id="2" width="640"/>
+        </AdaptationSet>
+        <AdaptationSet lang="eng" mimeType="audio/mp4" segmentAlignment="false">
+            <SegmentTemplate initialization="asset_$RepresentationID$_init.mp4" media="asset_$RepresentationID$_$Number%09d$.mp4" startNumber="1" timescale="48000">
+                <SegmentTimeline>
+                    <S d="98304" t="0"/>
+                    <S d="21504" t="98304"/>
+                </SegmentTimeline>
+            </SegmentTemplate>
+            <Label>eng</Label>
+            <Representation audioSamplingRate="48000" bandwidth="128000" codecs="mp4a.40.2" id="1">
+                <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2"/>
+            </Representation>
+        </AdaptationSet>
+    </Period>
+    <Period id="86185430_8_1" start="PT48855H55.033S">
+        <BaseURL>https://d24rwxnt7vw9qb.cloudfront.net/tm/e6d234965645b411ad572802b6c9d5a10799c9c1/b53d6333-73f9-4eb0-88fa-48b01788/</BaseURL>
+        <AdaptationSet bitstreamSwitching="false" frameRate="25/1" mimeType="video/mp4" segmentAlignment="true" startWithSAP="1" subsegmentAlignment="true" subsegmentStartsWithSAP="1">
+            <SegmentTemplate initialization="asset_$RepresentationID$_init.mp4" media="asset_$RepresentationID$_$Number%09d$.mp4" startNumber="1" timescale="25">
+                <SegmentTimeline>
+                    <S d="50" r="2" t="0"/>
+                </SegmentTimeline>
+            </SegmentTemplate>
+            <Representation bandwidth="5000000" codecs="avc1.4d4028" height="1080" id="4" width="1920"/>
+            <Representation bandwidth="3000000" codecs="avc1.4d401f" height="720" id="3" width="1280"/>
+            <Representation bandwidth="1496000" codecs="avc1.4d401e" height="360" id="2" width="640"/>
+        </AdaptationSet>
+        <AdaptationSet lang="eng" mimeType="audio/mp4" segmentAlignment="false">
+            <SegmentTemplate initialization="asset_$RepresentationID$_init.mp4" media="asset_$RepresentationID$_$Number%09d$.mp4" startNumber="1" timescale="48000">
+                <SegmentTimeline>
+                    <S d="98304" t="0"/>
+                    <S d="96256" t="98304"/>
+                    <S d="95232" t="194560"/>
+                </SegmentTimeline>
+            </SegmentTemplate>
+            <Label>eng</Label>
+            <Representation audioSamplingRate="48000" bandwidth="128000" codecs="mp4a.40.2" id="1">
+                <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2"/>
+            </Representation>
+        </AdaptationSet>
+    </Period>
+    <Period duration="PT86.160S" id="86185444" start="PT175878059.473S">
+        <AdaptationSet bitstreamSwitching="true" id="1485523442" mimeType="video/mp4" segmentAlignment="true" startWithSAP="1" subsegmentAlignment="true" subsegmentStartsWithSAP="1">
+            <InbandEventStream schemeIdUri="https://aomedia.org/emsg/ID3" value="0"/>
+            <SegmentTemplate initialization="index_video_$RepresentationID$_0_init.mp4?m=1658267543" media="index_video_$RepresentationID$_0_$Number$.mp4?m=1658267543" presentationTimeOffset="8793902973666" startNumber="86185445" timescale="50000">
+                <SegmentTimeline>
+                    <S d="100000" r="41" t="8793902973666"/>
+                    <S d="108000" t="8793907173666"/>
+                </SegmentTimeline>
+            </SegmentTemplate>
+            <Representation bandwidth="5000000" codecs="avc1.4D4028" frameRate="25/1" height="1080" id="27" width="1920"/>
+            <Representation bandwidth="3000000" codecs="avc1.4D401F" frameRate="25/1" height="720" id="24" width="1280"/>
+            <Representation bandwidth="1499968" codecs="avc1.4D401E" frameRate="25/1" height="360" id="26" width="640"/>
+        </AdaptationSet>
+        <AdaptationSet bitstreamSwitching="true" id="1377232898" lang="eng" mimeType="audio/mp4" segmentAlignment="true" startWithSAP="1">
+            <Label>eng</Label>
+            <SegmentTemplate initialization="index_audio_$RepresentationID$_0_init.mp4?m=1658267543" media="index_audio_$RepresentationID$_0_$Number$.mp4?m=1658267543" presentationTimeOffset="8442146855424" startNumber="86185445" timescale="48000">
+                <SegmentTimeline>
+                    <S d="96256" t="8442146855424"/>
+                    <S d="95232" t="8442146951680"/>
+                    <S d="96256" r="2" t="8442147046912"/>
+                    <S d="95232" t="8442147335680"/>
+                    <S d="96256" r="2" t="8442147430912"/>
+                    <S d="95232" t="8442147719680"/>
+                    <S d="96256" r="2" t="8442147814912"/>
+                    <S d="95232" t="8442148103680"/>
+                    <S d="96256" r="2" t="8442148198912"/>
+                    <S d="95232" t="8442148487680"/>
+                    <S d="96256" r="2" t="8442148582912"/>
+                    <S d="95232" t="8442148871680"/>
+                    <S d="96256" r="2" t="8442148966912"/>
+                    <S d="95232" t="8442149255680"/>
+                    <S d="96256" r="2" t="8442149350912"/>
+                    <S d="95232" t="8442149639680"/>
+                    <S d="96256" r="2" t="8442149734912"/>
+                    <S d="95232" t="8442150023680"/>
+                    <S d="96256" r="2" t="8442150118912"/>
+                    <S d="95232" t="8442150407680"/>
+                    <S d="96256" r="2" t="8442150502912"/>
+                    <S d="95232" t="8442150791680"/>
+                    <S d="104448" t="8442150886912"/>
+                </SegmentTimeline>
+            </SegmentTemplate>
+            <Representation audioSamplingRate="48000" bandwidth="193613" codecs="mp4a.40.2" id="30">
+                <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2"/>
+            </Representation>
+        </AdaptationSet>
+        <AdaptationSet bitstreamSwitching="true" contentType="image" id="1382011483" mimeType="image/jpeg">
+            <Label>thumbnails</Label>
+            <SegmentTemplate media="index_image_$RepresentationID$_0_$Number$.jpg?m=1658267543" presentationTimeOffset="15829025352600" startNumber="86185445" timescale="90000">
+                <SegmentTimeline>
+                    <S d="180000" r="41" t="15829025352600"/>
+                    <S d="194400" t="15829032912600"/>
+                </SegmentTimeline>
+            </SegmentTemplate>
+            <Representation bandwidth="55649" height="174" id="28" width="308">
+                <EssentialProperty schemeIdUri="http://dashif.org/guidelines/thumbnail_tile" value="1x1"/>
+            </Representation>
+        </AdaptationSet>
+        <SupplementalProperty schemeIdUri="urn:scte:dash:utc-time" value="2026-10-26T15:51:58.720Z"/>
+    </Period>
+    <Period id="86185487_1" start="PT48855H2M25.633S">
+        <BaseURL>https://11901bf79f2b46f7842656281de4c494.mediatailor.us-east-1.amazonaws.com/v1/dashsegment/e6d234965645b411ad572802b6c9d5a10799c9c1/All_Reference_Streams/a9674811-0147-49d3-85e2-34306e0aadd0/86185487/86185487_1/</BaseURL>
+        <AdaptationSet bitstreamSwitching="false" frameRate="25/1" mimeType="video/mp4" segmentAlignment="true" startWithSAP="1" subsegmentAlignment="true" subsegmentStartsWithSAP="1">
+            <SegmentTemplate initialization="asset_$RepresentationID$_init.mp4" media="asset_$RepresentationID$_$Number%09d$.mp4" startNumber="1" timescale="25">
+                <SegmentTimeline>
+                    <S d="50" t="0"/>
+                    <S d="2" t="50"/>
+                </SegmentTimeline>
+            </SegmentTemplate>
+            <Representation bandwidth="5000000" codecs="avc1.4d4028" height="1080" id="4" width="1920"/>
+            <Representation bandwidth="3000000" codecs="avc1.4d401f" height="720" id="3" width="1280"/>
+            <Representation bandwidth="1496000" codecs="avc1.4d401e" height="360" id="2" width="640"/>
+        </AdaptationSet>
+        <AdaptationSet lang="eng" mimeType="audio/mp4" segmentAlignment="false">
+            <SegmentTemplate initialization="asset_$RepresentationID$_init.mp4" media="asset_$RepresentationID$_$Number%09d$.mp4" startNumber="1" timescale="48000">
+                <SegmentTimeline>
+                    <S d="98304" t="0"/>
+                    <S d="2048" t="98304"/>
+                </SegmentTimeline>
+            </SegmentTemplate>
+            <Label>eng</Label>
+            <Representation audioSamplingRate="48000" bandwidth="128000" codecs="mp4a.40.2" id="1">
+                <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2"/>
+            </Representation>
+        </AdaptationSet>
+    </Period>
+    <Period id="86185487_2" start="PT48855H2M27.713S">
+        <BaseURL>https://11901bf79f2b46f7842656281de4c494.mediatailor.us-east-1.amazonaws.com/v1/dashsegment/e6d234965645b411ad572802b6c9d5a10799c9c1/All_Reference_Streams/a9674811-0147-49d3-85e2-34306e0aadd0/86185487/86185487_2/</BaseURL>
+        <AdaptationSet bitstreamSwitching="false" frameRate="25/1" mimeType="video/mp4" segmentAlignment="true" startWithSAP="1" subsegmentAlignment="true" subsegmentStartsWithSAP="1">
+            <SegmentTemplate initialization="asset_$RepresentationID$_init.mp4" media="asset_$RepresentationID$_$Number%09d$.mp4" startNumber="1" timescale="25">
+                <SegmentTimeline>
+                    <S d="50" t="0"/>
+                    <S d="7" t="50"/>
+                </SegmentTimeline>
+            </SegmentTemplate>
+            <Representation bandwidth="5000000" codecs="avc1.4d4028" height="1080" id="4" width="1920"/>
+            <Representation bandwidth="3000000" codecs="avc1.4d401f" height="720" id="3" width="1280"/>
+            <Representation bandwidth="1496000" codecs="avc1.4d401e" height="360" id="2" width="640"/>
+        </AdaptationSet>
+        <AdaptationSet lang="eng" mimeType="audio/mp4" segmentAlignment="false">
+            <SegmentTemplate initialization="asset_$RepresentationID$_init.mp4" media="asset_$RepresentationID$_$Number%09d$.mp4" startNumber="1" timescale="48000">
+                <SegmentTimeline>
+                    <S d="98304" t="0"/>
+                    <S d="11264" t="98304"/>
+                </SegmentTimeline>
+            </SegmentTemplate>
+            <Label>eng</Label>
+            <Representation audioSamplingRate="48000" bandwidth="128000" codecs="mp4a.40.2" id="1">
+                <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2"/>
+            </Representation>
+        </AdaptationSet>
+    </Period>
+    <Period id="86185487_3" start="PT48855H2M29.993S">
+        <BaseURL>https://11901bf79f2b46f7842656281de4c494.mediatailor.us-east-1.amazonaws.com/v1/dashsegment/e6d234965645b411ad572802b6c9d5a10799c9c1/All_Reference_Streams/a9674811-0147-49d3-85e2-34306e0aadd0/86185487/86185487_3/</BaseURL>
+        <AdaptationSet bitstreamSwitching="false" frameRate="25/1" mimeType="video/mp4" segmentAlignment="true" startWithSAP="1" subsegmentAlignment="true" subsegmentStartsWithSAP="1">
+            <SegmentTemplate initialization="asset_$RepresentationID$_init.mp4" media="asset_$RepresentationID$_$Number%09d$.mp4" startNumber="1" timescale="25">
+                <SegmentTimeline>
+                    <S d="50" r="6" t="0"/>
+                    <S d="23" t="350"/>
+                </SegmentTimeline>
+            </SegmentTemplate>
+            <Representation bandwidth="5000000" codecs="avc1.4d4028" height="1080" id="4" width="1920"/>
+            <Representation bandwidth="3000000" codecs="avc1.4d401f" height="720" id="3" width="1280"/>
+            <Representation bandwidth="1496000" codecs="avc1.4d401e" height="360" id="2" width="640"/>
+        </AdaptationSet>
+        <AdaptationSet lang="eng" mimeType="audio/mp4" segmentAlignment="false">
+            <SegmentTemplate initialization="asset_$RepresentationID$_init.mp4" media="asset_$RepresentationID$_$Number%09d$.mp4" startNumber="1" timescale="48000">
+                <SegmentTimeline>
+                    <S d="98304" t="0"/>
+                    <S d="96256" t="98304"/>
+                    <S d="95232" t="194560"/>
+                    <S d="96256" r="2" t="289792"/>
+                    <S d="95232" t="578560"/>
+                    <S d="43008" t="673792"/>
+                </SegmentTimeline>
+            </SegmentTemplate>
+            <Label>eng</Label>
+            <Representation audioSamplingRate="48000" bandwidth="128000" codecs="mp4a.40.2" id="1">
+                <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2"/>
+            </Representation>
+        </AdaptationSet>
+    </Period>
+    <Period id="86185487_4" start="PT48855H2M44.913S">
+        <BaseURL>https://11901bf79f2b46f7842656281de4c494.mediatailor.us-east-1.amazonaws.com/v1/dashsegment/e6d234965645b411ad572802b6c9d5a10799c9c1/All_Reference_Streams/a9674811-0147-49d3-85e2-34306e0aadd0/86185487/86185487_4/</BaseURL>
+        <AdaptationSet bitstreamSwitching="false" frameRate="25/1" mimeType="video/mp4" segmentAlignment="true" startWithSAP="1" subsegmentAlignment="true" subsegmentStartsWithSAP="1">
+            <SegmentTemplate initialization="asset_$RepresentationID$_init.mp4" media="asset_$RepresentationID$_$Number%09d$.mp4" startNumber="1" timescale="25">
+                <SegmentTimeline>
+                    <S d="50" t="0"/>
+                    <S d="10" t="50"/>
+                </SegmentTimeline>
+            </SegmentTemplate>
+            <Representation bandwidth="5000000" codecs="avc1.4d4028" height="1080" id="4" width="1920"/>
+            <Representation bandwidth="3000000" codecs="avc1.4d401f" height="720" id="3" width="1280"/>
+            <Representation bandwidth="1496000" codecs="avc1.4d401e" height="360" id="2" width="640"/>
+        </AdaptationSet>
+        <AdaptationSet lang="eng" mimeType="audio/mp4" segmentAlignment="false">
+            <SegmentTemplate initialization="asset_$RepresentationID$_init.mp4" media="asset_$RepresentationID$_$Number%09d$.mp4" startNumber="1" timescale="48000">
+                <SegmentTimeline>
+                    <S d="98304" t="0"/>
+                    <S d="17408" t="98304"/>
+                </SegmentTimeline>
+            </SegmentTemplate>
+            <Label>eng</Label>
+            <Representation audioSamplingRate="48000" bandwidth="128000" codecs="mp4a.40.2" id="1">
+                <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2"/>
+            </Representation>
+        </AdaptationSet>
+    </Period>
+    <Period id="86185487_5" start="PT48855H2M47.313S">
+        <BaseURL>https://11901bf79f2b46f7842656281de4c494.mediatailor.us-east-1.amazonaws.com/v1/dashsegment/e6d234965645b411ad572802b6c9d5a10799c9c1/All_Reference_Streams/a9674811-0147-49d3-85e2-34306e0aadd0/86185487/86185487_5/</BaseURL>
+        <AdaptationSet bitstreamSwitching="false" frameRate="25/1" mimeType="video/mp4" segmentAlignment="true" startWithSAP="1" subsegmentAlignment="true" subsegmentStartsWithSAP="1">
+            <SegmentTemplate initialization="asset_$RepresentationID$_init.mp4" media="asset_$RepresentationID$_$Number%09d$.mp4" startNumber="1" timescale="25">
+                <SegmentTimeline>
+                    <S d="50" t="0"/>
+                    <S d="2" t="50"/>
+                </SegmentTimeline>
+            </SegmentTemplate>
+            <Representation bandwidth="5000000" codecs="avc1.4d4028" height="1080" id="4" width="1920"/>
+            <Representation bandwidth="3000000" codecs="avc1.4d401f" height="720" id="3" width="1280"/>
+            <Representation bandwidth="1496000" codecs="avc1.4d401e" height="360" id="2" width="640"/>
+        </AdaptationSet>
+        <AdaptationSet lang="eng" mimeType="audio/mp4" segmentAlignment="false">
+            <SegmentTemplate initialization="asset_$RepresentationID$_init.mp4" media="asset_$RepresentationID$_$Number%09d$.mp4" startNumber="1" timescale="48000">
+                <SegmentTimeline>
+                    <S d="98304" t="0"/>
+                    <S d="2048" t="98304"/>
+                </SegmentTimeline>
+            </SegmentTemplate>
+            <Label>eng</Label>
+            <Representation audioSamplingRate="48000" bandwidth="128000" codecs="mp4a.40.2" id="1">
+                <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2"/>
+            </Representation>
+        </AdaptationSet>
+    </Period>
+    <Period id="86185487_6" start="PT48855H2M49.393S">
+        <BaseURL>https://11901bf79f2b46f7842656281de4c494.mediatailor.us-east-1.amazonaws.com/v1/dashsegment/e6d234965645b411ad572802b6c9d5a10799c9c1/All_Reference_Streams/a9674811-0147-49d3-85e2-34306e0aadd0/86185487/86185487_6/</BaseURL>
+        <AdaptationSet bitstreamSwitching="false" frameRate="25/1" mimeType="video/mp4" segmentAlignment="true" startWithSAP="1" subsegmentAlignment="true" subsegmentStartsWithSAP="1">
+            <SegmentTemplate initialization="asset_$RepresentationID$_init.mp4" media="asset_$RepresentationID$_$Number%09d$.mp4" startNumber="1" timescale="25">
+                <SegmentTimeline>
+                    <S d="50" t="0"/>
+                    <S d="27" t="50"/>
+                </SegmentTimeline>
+            </SegmentTemplate>
+            <Representation bandwidth="5000000" codecs="avc1.4d4028" height="1080" id="4" width="1920"/>
+            <Representation bandwidth="3000000" codecs="avc1.4d401f" height="720" id="3" width="1280"/>
+            <Representation bandwidth="1496000" codecs="avc1.4d401e" height="360" id="2" width="640"/>
+        </AdaptationSet>
+        <AdaptationSet lang="eng" mimeType="audio/mp4" segmentAlignment="false">
+            <SegmentTemplate initialization="asset_$RepresentationID$_init.mp4" media="asset_$RepresentationID$_$Number%09d$.mp4" startNumber="1" timescale="48000">
+                <SegmentTimeline>
+                    <S d="98304" t="0"/>
+                    <S d="50176" t="98304"/>
+                </SegmentTimeline>
+            </SegmentTemplate>
+            <Label>eng</Label>
+            <Representation audioSamplingRate="48000" bandwidth="128000" codecs="mp4a.40.2" id="1">
+                <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2"/>
+            </Representation>
+        </AdaptationSet>
+    </Period>
+    <Period id="86185487_7" start="PT48855H2M52.473S">
+        <BaseURL>https://11901bf79f2b46f7842656281de4c494.mediatailor.us-east-1.amazonaws.com/v1/dashsegment/e6d234965645b411ad572802b6c9d5a10799c9c1/All_Reference_Streams/a9674811-0147-49d3-85e2-34306e0aadd0/86185487/86185487_7/</BaseURL>
+        <AdaptationSet bitstreamSwitching="false" frameRate="25/1" mimeType="video/mp4" segmentAlignment="true" startWithSAP="1" subsegmentAlignment="true" subsegmentStartsWithSAP="1">
+            <SegmentTemplate initialization="asset_$RepresentationID$_init.mp4" media="asset_$RepresentationID$_$Number%09d$.mp4" startNumber="1" timescale="25">
+                <SegmentTimeline>
+                    <S d="50" t="0"/>
+                    <S d="12" t="50"/>
+                </SegmentTimeline>
+            </SegmentTemplate>
+            <Representation bandwidth="5000000" codecs="avc1.4d4028" height="1080" id="4" width="1920"/>
+            <Representation bandwidth="3000000" codecs="avc1.4d401f" height="720" id="3" width="1280"/>
+            <Representation bandwidth="1496000" codecs="avc1.4d401e" height="360" id="2" width="640"/>
+        </AdaptationSet>
+        <AdaptationSet lang="eng" mimeType="audio/mp4" segmentAlignment="false">
+            <SegmentTemplate initialization="asset_$RepresentationID$_init.mp4" media="asset_$RepresentationID$_$Number%09d$.mp4" startNumber="1" timescale="48000">
+                <SegmentTimeline>
+                    <S d="98304" t="0"/>
+                    <S d="21504" t="98304"/>
+                </SegmentTimeline>
+            </SegmentTemplate>
+            <Label>eng</Label>
+            <Representation audioSamplingRate="48000" bandwidth="128000" codecs="mp4a.40.2" id="1">
+                <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2"/>
+            </Representation>
+        </AdaptationSet>
+    </Period>
+    <Period id="86185487_8_1" start="PT48855H2M54.953S">
+        <BaseURL>https://d24rwxnt7vw9qb.cloudfront.net/tm/e6d234965645b411ad572802b6c9d5a10799c9c1/b53d6333-73f9-4eb0-88fa-48b01788/</BaseURL>
+        <AdaptationSet bitstreamSwitching="false" frameRate="25/1" mimeType="video/mp4" segmentAlignment="true" startWithSAP="1" subsegmentAlignment="true" subsegmentStartsWithSAP="1">
+            <SegmentTemplate initialization="asset_$RepresentationID$_init.mp4" media="asset_$RepresentationID$_$Number%09d$.mp4" startNumber="1" timescale="25">
+                <SegmentTimeline>
+                    <S d="50" r="2" t="0"/>
+                </SegmentTimeline>
+            </SegmentTemplate>
+            <Representation bandwidth="5000000" codecs="avc1.4d4028" height="1080" id="4" width="1920"/>
+            <Representation bandwidth="3000000" codecs="avc1.4d401f" height="720" id="3" width="1280"/>
+            <Representation bandwidth="1496000" codecs="avc1.4d401e" height="360" id="2" width="640"/>
+        </AdaptationSet>
+        <AdaptationSet lang="eng" mimeType="audio/mp4" segmentAlignment="false">
+            <SegmentTemplate initialization="asset_$RepresentationID$_init.mp4" media="asset_$RepresentationID$_$Number%09d$.mp4" startNumber="1" timescale="48000">
+                <SegmentTimeline>
+                    <S d="98304" t="0"/>
+                    <S d="96256" t="98304"/>
+                    <S d="95232" t="194560"/>
+                </SegmentTimeline>
+            </SegmentTemplate>
+            <Label>eng</Label>
+            <Representation audioSamplingRate="48000" bandwidth="128000" codecs="mp4a.40.2" id="1">
+                <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2"/>
+            </Representation>
+        </AdaptationSet>
+    </Period>
+    <Period duration="PT86.080S" id="86185501" start="PT175878179.473S">
+        <AdaptationSet bitstreamSwitching="true" id="1485523442" mimeType="video/mp4" segmentAlignment="true" startWithSAP="1" subsegmentAlignment="true" subsegmentStartsWithSAP="1">
+            <InbandEventStream schemeIdUri="https://aomedia.org/emsg/ID3" value="0"/>
+            <SegmentTemplate initialization="index_video_$RepresentationID$_0_init.mp4?m=1658267543" media="index_video_$RepresentationID$_0_$Number$.mp4?m=1658267543" presentationTimeOffset="8793908973666" startNumber="86185502" timescale="50000">
+                <SegmentTimeline>
+                    <S d="100000" r="41" t="8793908973666"/>
+                    <S d="104000" t="8793913173666"/>
+                </SegmentTimeline>
+            </SegmentTemplate>
+            <Representation bandwidth="5000000" codecs="avc1.4D4028" frameRate="25/1" height="1080" id="27" width="1920"/>
+            <Representation bandwidth="3000000" codecs="avc1.4D401F" frameRate="25/1" height="720" id="24" width="1280"/>
+            <Representation bandwidth="1499968" codecs="avc1.4D401E" frameRate="25/1" height="360" id="26" width="640"/>
+        </AdaptationSet>
+        <AdaptationSet bitstreamSwitching="true" id="1377232898" lang="eng" mimeType="audio/mp4" segmentAlignment="true" startWithSAP="1">
+            <Label>eng</Label>
+            <SegmentTemplate initialization="index_audio_$RepresentationID$_0_init.mp4?m=1658267543" media="index_audio_$RepresentationID$_0_$Number$.mp4?m=1658267543" presentationTimeOffset="8442152615424" startNumber="86185502" timescale="48000">
+                <SegmentTimeline>
+                    <S d="96256" t="8442152615424"/>
+                    <S d="95232" t="8442152711680"/>
+                    <S d="96256" r="2" t="8442152806912"/>
+                    <S d="95232" t="8442153095680"/>
+                    <S d="96256" r="2" t="8442153190912"/>
+                    <S d="95232" t="8442153479680"/>
+                    <S d="96256" r="2" t="8442153574912"/>
+                    <S d="95232" t="8442153863680"/>
+                    <S d="96256" r="2" t="8442153958912"/>
+                    <S d="95232" t="8442154247680"/>
+                    <S d="96256" r="2" t="8442154342912"/>
+                    <S d="95232" t="8442154631680"/>
+                    <S d="96256" r="2" t="8442154726912"/>
+                    <S d="95232" t="8442155015680"/>
+                    <S d="96256" r="2" t="8442155110912"/>
+                    <S d="95232" t="8442155399680"/>
+                    <S d="96256" r="2" t="8442155494912"/>
+                    <S d="95232" t="8442155783680"/>
+                    <S d="96256" r="2" t="8442155878912"/>
+                    <S d="95232" t="8442156167680"/>
+                    <S d="96256" r="2" t="8442156262912"/>
+                    <S d="95232" t="8442156551680"/>
+                    <S d="100352" t="8442156646912"/>
+                </SegmentTimeline>
+            </SegmentTemplate>
+            <Representation audioSamplingRate="48000" bandwidth="193613" codecs="mp4a.40.2" id="30">
+                <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2"/>
+            </Representation>
+        </AdaptationSet>
+        <AdaptationSet bitstreamSwitching="true" contentType="image" id="1382011483" mimeType="image/jpeg">
+            <Label>thumbnails</Label>
+            <SegmentTemplate media="index_image_$RepresentationID$_0_$Number$.jpg?m=1658267543" presentationTimeOffset="15829036152600" startNumber="86185502" timescale="90000">
+                <SegmentTimeline>
+                    <S d="180000" r="41" t="15829036152600"/>
+                    <S d="187200" t="15829043712600"/>
+                </SegmentTimeline>
+            </SegmentTemplate>
+            <Representation bandwidth="55649" height="174" id="28" width="308">
+                <EssentialProperty schemeIdUri="http://dashif.org/guidelines/thumbnail_tile" value="1x1"/>
+            </Representation>
+        </AdaptationSet>
+        <SupplementalProperty schemeIdUri="urn:scte:dash:utc-time" value="2026-10-26T15:53:58.720Z"/>
+    </Period>
+    <Period id="86185544_1" start="PT48855H4M25.553S">
+        <BaseURL>https://11901bf79f2b46f7842656281de4c494.mediatailor.us-east-1.amazonaws.com/v1/dashsegment/e6d234965645b411ad572802b6c9d5a10799c9c1/All_Reference_Streams/a9674811-0147-49d3-85e2-34306e0aadd0/86185544/86185544_1/</BaseURL>
+        <AdaptationSet bitstreamSwitching="false" frameRate="25/1" mimeType="video/mp4" segmentAlignment="true" startWithSAP="1" subsegmentAlignment="true" subsegmentStartsWithSAP="1">
+            <SegmentTemplate initialization="asset_$RepresentationID$_init.mp4" media="asset_$RepresentationID$_$Number%09d$.mp4" startNumber="1" timescale="25">
+                <SegmentTimeline>
+                    <S d="50" t="0"/>
+                    <S d="2" t="50"/>
+                </SegmentTimeline>
+            </SegmentTemplate>
+            <Representation bandwidth="5000000" codecs="avc1.4d4028" height="1080" id="4" width="1920"/>
+            <Representation bandwidth="3000000" codecs="avc1.4d401f" height="720" id="3" width="1280"/>
+            <Representation bandwidth="1496000" codecs="avc1.4d401e" height="360" id="2" width="640"/>
+        </AdaptationSet>
+        <AdaptationSet lang="eng" mimeType="audio/mp4" segmentAlignment="false">
+            <SegmentTemplate initialization="asset_$RepresentationID$_init.mp4" media="asset_$RepresentationID$_$Number%09d$.mp4" startNumber="1" timescale="48000">
+                <SegmentTimeline>
+                    <S d="98304" t="0"/>
+                    <S d="2048" t="98304"/>
+                </SegmentTimeline>
+            </SegmentTemplate>
+            <Label>eng</Label>
+            <Representation audioSamplingRate="48000" bandwidth="128000" codecs="mp4a.40.2" id="1">
+                <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2"/>
+            </Representation>
+        </AdaptationSet>
+    </Period>
+    <Period id="86185544_2" start="PT48855H4M27.633S">
+        <BaseURL>https://11901bf79f2b46f7842656281de4c494.mediatailor.us-east-1.amazonaws.com/v1/dashsegment/e6d234965645b411ad572802b6c9d5a10799c9c1/All_Reference_Streams/a9674811-0147-49d3-85e2-34306e0aadd0/86185544/86185544_2/</BaseURL>
+        <AdaptationSet bitstreamSwitching="false" frameRate="25/1" mimeType="video/mp4" segmentAlignment="true" startWithSAP="1" subsegmentAlignment="true" subsegmentStartsWithSAP="1">
+            <SegmentTemplate initialization="asset_$RepresentationID$_init.mp4" media="asset_$RepresentationID$_$Number%09d$.mp4" startNumber="1" timescale="25">
+                <SegmentTimeline>
+                    <S d="50" t="0"/>
+                    <S d="7" t="50"/>
+                </SegmentTimeline>
+            </SegmentTemplate>
+            <Representation bandwidth="5000000" codecs="avc1.4d4028" height="1080" id="4" width="1920"/>
+            <Representation bandwidth="3000000" codecs="avc1.4d401f" height="720" id="3" width="1280"/>
+            <Representation bandwidth="1496000" codecs="avc1.4d401e" height="360" id="2" width="640"/>
+        </AdaptationSet>
+        <AdaptationSet lang="eng" mimeType="audio/mp4" segmentAlignment="false">
+            <SegmentTemplate initialization="asset_$RepresentationID$_init.mp4" media="asset_$RepresentationID$_$Number%09d$.mp4" startNumber="1" timescale="48000">
+                <SegmentTimeline>
+                    <S d="98304" t="0"/>
+                    <S d="11264" t="98304"/>
+                </SegmentTimeline>
+            </SegmentTemplate>
+            <Label>eng</Label>
+            <Representation audioSamplingRate="48000" bandwidth="128000" codecs="mp4a.40.2" id="1">
+                <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2"/>
+            </Representation>
+        </AdaptationSet>
+    </Period>
+    <Period id="86185544_3" start="PT48855H4M29.913S">
+        <BaseURL>https://11901bf79f2b46f7842656281de4c494.mediatailor.us-east-1.amazonaws.com/v1/dashsegment/e6d234965645b411ad572802b6c9d5a10799c9c1/All_Reference_Streams/a9674811-0147-49d3-85e2-34306e0aadd0/86185544/86185544_3/</BaseURL>
+        <AdaptationSet bitstreamSwitching="false" frameRate="25/1" mimeType="video/mp4" segmentAlignment="true" startWithSAP="1" subsegmentAlignment="true" subsegmentStartsWithSAP="1">
+            <SegmentTemplate initialization="asset_$RepresentationID$_init.mp4" media="asset_$RepresentationID$_$Number%09d$.mp4" startNumber="1" timescale="25">
+                <SegmentTimeline>
+                    <S d="50" r="6" t="0"/>
+                    <S d="23" t="350"/>
+                </SegmentTimeline>
+            </SegmentTemplate>
+            <Representation bandwidth="5000000" codecs="avc1.4d4028" height="1080" id="4" width="1920"/>
+            <Representation bandwidth="3000000" codecs="avc1.4d401f" height="720" id="3" width="1280"/>
+            <Representation bandwidth="1496000" codecs="avc1.4d401e" height="360" id="2" width="640"/>
+        </AdaptationSet>
+        <AdaptationSet lang="eng" mimeType="audio/mp4" segmentAlignment="false">
+            <SegmentTemplate initialization="asset_$RepresentationID$_init.mp4" media="asset_$RepresentationID$_$Number%09d$.mp4" startNumber="1" timescale="48000">
+                <SegmentTimeline>
+                    <S d="98304" t="0"/>
+                    <S d="96256" t="98304"/>
+                    <S d="95232" t="194560"/>
+                    <S d="96256" r="2" t="289792"/>
+                    <S d="95232" t="578560"/>
+                    <S d="43008" t="673792"/>
+                </SegmentTimeline>
+            </SegmentTemplate>
+            <Label>eng</Label>
+            <Representation audioSamplingRate="48000" bandwidth="128000" codecs="mp4a.40.2" id="1">
+                <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2"/>
+            </Representation>
+        </AdaptationSet>
+    </Period>
+    <Period id="86185544_4" start="PT48855H4M44.833S">
+        <BaseURL>https://11901bf79f2b46f7842656281de4c494.mediatailor.us-east-1.amazonaws.com/v1/dashsegment/e6d234965645b411ad572802b6c9d5a10799c9c1/All_Reference_Streams/a9674811-0147-49d3-85e2-34306e0aadd0/86185544/86185544_4/</BaseURL>
+        <AdaptationSet bitstreamSwitching="false" frameRate="25/1" mimeType="video/mp4" segmentAlignment="true" startWithSAP="1" subsegmentAlignment="true" subsegmentStartsWithSAP="1">
+            <SegmentTemplate initialization="asset_$RepresentationID$_init.mp4" media="asset_$RepresentationID$_$Number%09d$.mp4" startNumber="1" timescale="25">
+                <SegmentTimeline>
+                    <S d="50" t="0"/>
+                    <S d="10" t="50"/>
+                </SegmentTimeline>
+            </SegmentTemplate>
+            <Representation bandwidth="5000000" codecs="avc1.4d4028" height="1080" id="4" width="1920"/>
+            <Representation bandwidth="3000000" codecs="avc1.4d401f" height="720" id="3" width="1280"/>
+            <Representation bandwidth="1496000" codecs="avc1.4d401e" height="360" id="2" width="640"/>
+        </AdaptationSet>
+        <AdaptationSet lang="eng" mimeType="audio/mp4" segmentAlignment="false">
+            <SegmentTemplate initialization="asset_$RepresentationID$_init.mp4" media="asset_$RepresentationID$_$Number%09d$.mp4" startNumber="1" timescale="48000">
+                <SegmentTimeline>
+                    <S d="98304" t="0"/>
+                    <S d="17408" t="98304"/>
+                </SegmentTimeline>
+            </SegmentTemplate>
+            <Label>eng</Label>
+            <Representation audioSamplingRate="48000" bandwidth="128000" codecs="mp4a.40.2" id="1">
+                <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2"/>
+            </Representation>
+        </AdaptationSet>
+    </Period>
+    <Period id="86185544_5" start="PT48855H4M47.233S">
+        <BaseURL>https://11901bf79f2b46f7842656281de4c494.mediatailor.us-east-1.amazonaws.com/v1/dashsegment/e6d234965645b411ad572802b6c9d5a10799c9c1/All_Reference_Streams/a9674811-0147-49d3-85e2-34306e0aadd0/86185544/86185544_5/</BaseURL>
+        <AdaptationSet bitstreamSwitching="false" frameRate="25/1" mimeType="video/mp4" segmentAlignment="true" startWithSAP="1" subsegmentAlignment="true" subsegmentStartsWithSAP="1">
+            <SegmentTemplate initialization="asset_$RepresentationID$_init.mp4" media="asset_$RepresentationID$_$Number%09d$.mp4" startNumber="1" timescale="25">
+                <SegmentTimeline>
+                    <S d="50" t="0"/>
+                    <S d="2" t="50"/>
+                </SegmentTimeline>
+            </SegmentTemplate>
+            <Representation bandwidth="5000000" codecs="avc1.4d4028" height="1080" id="4" width="1920"/>
+            <Representation bandwidth="3000000" codecs="avc1.4d401f" height="720" id="3" width="1280"/>
+            <Representation bandwidth="1496000" codecs="avc1.4d401e" height="360" id="2" width="640"/>
+        </AdaptationSet>
+        <AdaptationSet lang="eng" mimeType="audio/mp4" segmentAlignment="false">
+            <SegmentTemplate initialization="asset_$RepresentationID$_init.mp4" media="asset_$RepresentationID$_$Number%09d$.mp4" startNumber="1" timescale="48000">
+                <SegmentTimeline>
+                    <S d="98304" t="0"/>
+                    <S d="2048" t="98304"/>
+                </SegmentTimeline>
+            </SegmentTemplate>
+            <Label>eng</Label>
+            <Representation audioSamplingRate="48000" bandwidth="128000" codecs="mp4a.40.2" id="1">
+                <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2"/>
+            </Representation>
+        </AdaptationSet>
+    </Period>
+    <Period id="86185544_6" start="PT48855H4M49.313S">
+        <BaseURL>https://11901bf79f2b46f7842656281de4c494.mediatailor.us-east-1.amazonaws.com/v1/dashsegment/e6d234965645b411ad572802b6c9d5a10799c9c1/All_Reference_Streams/a9674811-0147-49d3-85e2-34306e0aadd0/86185544/86185544_6/</BaseURL>
+        <AdaptationSet bitstreamSwitching="false" frameRate="25/1" mimeType="video/mp4" segmentAlignment="true" startWithSAP="1" subsegmentAlignment="true" subsegmentStartsWithSAP="1">
+            <SegmentTemplate initialization="asset_$RepresentationID$_init.mp4" media="asset_$RepresentationID$_$Number%09d$.mp4" startNumber="1" timescale="25">
+                <SegmentTimeline>
+                    <S d="50" t="0"/>
+                    <S d="27" t="50"/>
+                </SegmentTimeline>
+            </SegmentTemplate>
+            <Representation bandwidth="5000000" codecs="avc1.4d4028" height="1080" id="4" width="1920"/>
+            <Representation bandwidth="3000000" codecs="avc1.4d401f" height="720" id="3" width="1280"/>
+            <Representation bandwidth="1496000" codecs="avc1.4d401e" height="360" id="2" width="640"/>
+        </AdaptationSet>
+        <AdaptationSet lang="eng" mimeType="audio/mp4" segmentAlignment="false">
+            <SegmentTemplate initialization="asset_$RepresentationID$_init.mp4" media="asset_$RepresentationID$_$Number%09d$.mp4" startNumber="1" timescale="48000">
+                <SegmentTimeline>
+                    <S d="98304" t="0"/>
+                    <S d="50176" t="98304"/>
+                </SegmentTimeline>
+            </SegmentTemplate>
+            <Label>eng</Label>
+            <Representation audioSamplingRate="48000" bandwidth="128000" codecs="mp4a.40.2" id="1">
+                <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2"/>
+            </Representation>
+        </AdaptationSet>
+    </Period>
+    <Period id="86185544_7" start="PT48855H4M52.393S">
+        <BaseURL>https://11901bf79f2b46f7842656281de4c494.mediatailor.us-east-1.amazonaws.com/v1/dashsegment/e6d234965645b411ad572802b6c9d5a10799c9c1/All_Reference_Streams/a9674811-0147-49d3-85e2-34306e0aadd0/86185544/86185544_7/</BaseURL>
+        <AdaptationSet bitstreamSwitching="false" frameRate="25/1" mimeType="video/mp4" segmentAlignment="true" startWithSAP="1" subsegmentAlignment="true" subsegmentStartsWithSAP="1">
+            <SegmentTemplate initialization="asset_$RepresentationID$_init.mp4" media="asset_$RepresentationID$_$Number%09d$.mp4" startNumber="1" timescale="25">
+                <SegmentTimeline>
+                    <S d="50" t="0"/>
+                </SegmentTimeline>
+            </SegmentTemplate>
+            <Representation bandwidth="5000000" codecs="avc1.4d4028" height="1080" id="4" width="1920"/>
+            <Representation bandwidth="3000000" codecs="avc1.4d401f" height="720" id="3" width="1280"/>
+            <Representation bandwidth="1496000" codecs="avc1.4d401e" height="360" id="2" width="640"/>
+        </AdaptationSet>
+        <AdaptationSet lang="eng" mimeType="audio/mp4" segmentAlignment="false">
+            <SegmentTemplate initialization="asset_$RepresentationID$_init.mp4" media="asset_$RepresentationID$_$Number%09d$.mp4" startNumber="1" timescale="48000">
+                <SegmentTimeline>
+                    <S d="98304" t="0"/>
+                </SegmentTimeline>
+            </SegmentTemplate>
+            <Label>eng</Label>
+            <Representation audioSamplingRate="48000" bandwidth="128000" codecs="mp4a.40.2" id="1">
+                <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2"/>
+            </Representation>
+        </AdaptationSet>
+    </Period>
+    <UTCTiming schemeIdUri="urn:mpeg:dash:utc:http-iso:2014" value="https://time.akamai.com/?iso%24ms"/>
+</MPD>

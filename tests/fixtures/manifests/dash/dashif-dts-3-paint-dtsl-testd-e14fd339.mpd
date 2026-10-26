@@ -1,0 +1,63 @@
+<?xml version="1.0"?>
+<MPD
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns="urn:mpeg:dash:schema:mpd:2011"
+    type="static"
+    mediaPresentationDuration="PT0H1M19S"
+    minBufferTime="PT9S"
+    profiles="urn:mpeg:dash:profile:isoff-live:2011,urn:com:dashif:dash264">
+    
+    <!--
+        Test Case:      D) Playback of Audio/Video content with multiple bitrates adaptation sets
+        Audio Codec:    DTS-HD Master Audio ('dtsl')
+    -->
+    
+    <BaseURL>../segments/</BaseURL>
+    
+    <Period start="PT0S">
+        
+        <!-- Video -->
+        <AdaptationSet 
+            mimeType="video/mp4" 
+            codecs="avc1.42c01e" 
+            segmentAlignment="true" 
+            startWithSAP="1"
+            width="854"
+            height="480"
+            frameRate="24000/1001"
+            par="16:9">
+            <SegmentTemplate 
+                timescale="48000"
+                media="$RepresentationID$.$Number%03d$"
+                initialization="$RepresentationID$.000">
+                <SegmentTimeline>
+                    <S t="0" d="144144" r="26"/>
+                </SegmentTimeline>
+            </SegmentTemplate>
+            <Representation id="Paint_t01_V_480p23_baseL3_2000Kbps.mp4" bandwidth="2000000" sar="1:1"/>
+        </AdaptationSet>
+        
+        <!-- Audio -->
+        <AdaptationSet 
+            mimeType="audio/mp4" 
+            codecs="dtsl" 
+            lang="en" 
+            segmentAlignment="true" 
+            startWithSAP="1"
+            audioSamplingRate="48000">
+            <AudioChannelConfiguration 
+                schemeIdUri="urn:dts:dash:audio_channel_configuration:2012" 
+                value="6"/>
+            <SegmentTemplate 
+                timescale="48000"
+                media="$RepresentationID$.$Number%03d$"
+                initialization="$RepresentationID$.000">
+                <SegmentTimeline>
+                    <S t="0" d="144000" r="26"/>
+                </SegmentTimeline>
+            </SegmentTemplate>
+            <Representation id="Paint_t09_A_5-1ch_MA_16bit.mp4" bandwidth="3112500"/>
+            <Representation id="Paint_t10_A_5-1ch_MA_24bit.mp4" bandwidth="5430000"/>
+        </AdaptationSet>
+    </Period>
+</MPD>

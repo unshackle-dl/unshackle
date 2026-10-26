@@ -288,9 +288,14 @@ class HLS:
                 codec: Union[Audio.Codec, Subtitle.Codec, None] = HLS.select_audio_codec(
                     audio_codecs_by_group_id.get(media.group_id), media.uri
                 )
-                if media.channels and media.channels.endswith("/JOC"):
-                    joc = int(media.channels.split("/JOC")[0])
-                    media.channels = "5.1"
+                if media.channels:
+                    # the channel count, then /-separated coding (JOC) and usage identifiers (RFC 8216bis)
+                    count, *identifiers = media.channels.split("/")
+                    if identifiers and "JOC" in identifiers[0].split(","):
+                        joc = int(count)
+                        media.channels = "5.1"
+                    else:
+                        media.channels = count
             else:
                 track_type = Subtitle
                 codec = Subtitle.Codec.WebVTT  # assuming WebVTT, codec info isn't shown

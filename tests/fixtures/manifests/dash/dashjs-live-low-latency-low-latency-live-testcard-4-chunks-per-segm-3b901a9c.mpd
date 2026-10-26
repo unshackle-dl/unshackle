@@ -1,0 +1,149 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011" xmlns:dvb="urn:dvb:dash-extensions:2014-1" type="dynamic" profiles="urn:dvb:dash:profile:dvb-dash:2014,urn:dvb:dash:profile:dvb-dash:isoff-ext-live:2014" minBufferTime="PT1.3S" maxSegmentDuration="PT3.84S" availabilityStartTime="1970-01-01T00:00:00Z" timeShiftBufferDepth="PT15M" minimumUpdatePeriod="P1D" publishTime="2021-07-27T11:11:00Z">
+  <!-- BBC Live Testcard DASH Stream -->
+  <!-- Email dash@rd.bbc.co.uk -->
+  <!-- Copyright (c) British Broadcasting Corporation MMXXI. All rights reserved.-->
+  <!-- This stream is made available for engineering test purposes only. -->
+  <!-- Redistribution is not permitted. -->
+  <ProgramInformation>
+    <Title>BBC Live Testcard DASH Stream</Title>
+    <Source>BBC</Source>
+    <Copyright>(c) British Broadcasting Corporation MMXXI. All rights reserved</Copyright>
+  </ProgramInformation>
+  <BaseURL serviceLocation="C" dvb:priority="1" dvb:weight="1">https://vs-dash-ww-rd.live.cf.md.bbci.co.uk/cpl/testcard2020/</BaseURL>
+  <ServiceDescription id="0">
+    <Scope schemeIdUri="urn:dvb:dash:lowlatency:scope:2019"/>
+    <Latency min="960" max="30960" target="2960" referenceId="7"/>
+    <PlaybackRate min="0.96" max="1.04"/>
+  </ServiceDescription>
+  <Period id="first" start="PT0S">
+    <AdaptationSet startWithSAP="2" segmentAlignment="true" par="16:9" sar="1:1" id="79" contentType="video" mimeType="video/mp4" scanType="progressive">
+      <InbandEventStream schemeIdUri="tag:rdmedia.bbc.co.uk,2014:events/ballposition" value="1"/>
+      <ProducerReferenceTime id="7" wallClockTime="1970-01-01T00:00:00Z" presentationTime="0" type="application">
+        <UTCTiming schemeIdUri="urn:mpeg:dash:utc:http-xsdate:2014" value="https://time.akamai.com/?iso&amp;ms"/>
+      </ProducerReferenceTime>
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"/>
+      <SegmentTemplate timescale="200" duration="768" media="$RepresentationID$/$Number%06d$.m4s" initialization="$RepresentationID$/IS.mp4" availabilityTimeOffset="2.88" availabilityTimeComplete="false"/>
+      <Representation id="hevc-1920x1080p50" codecs="hev1.2.4.L123.90" height="1080" width="1920" frameRate="50" bandwidth="7297008"/>
+      <Representation id="hevc-1280x720p50" codecs="hev1.2.4.L120.90" height="720" width="1280" frameRate="50" bandwidth="4440472"/>
+      <Representation id="hevc-960x540p50" codecs="hev1.2.4.L93.90" height="540" width="960" frameRate="50" bandwidth="3110472"/>
+      <Representation id="hevc-768x432p50" codecs="hev1.2.4.L90.90" height="432" width="768" frameRate="50" bandwidth="1816136"/>
+    </AdaptationSet>
+    <AdaptationSet startWithSAP="2" segmentAlignment="true" id="4" codecs="mp4a.40.2" audioSamplingRate="48000" contentType="audio" lang="eng" mimeType="audio/mp4">
+      <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2"/>
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"/>
+      <SegmentTemplate timescale="1000" duration="3840" media="$RepresentationID$/$Number%06d$.m4s" initialization="$RepresentationID$/IS.mp4" availabilityTimeOffset="2.88" availabilityTimeComplete="false"/>
+      <Representation id="en-320kbps-2_0" bandwidth="318816"/>
+      <Representation id="en-128kbps" bandwidth="126536"/>
+    </AdaptationSet>
+    <AdaptationSet startWithSAP="2" segmentAlignment="true" id="6" codecs="mp4a.40.2" audioSamplingRate="48000" contentType="audio" lang="eng" mimeType="audio/mp4">
+      <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="6"/>
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="alternate"/>
+      <SegmentTemplate timescale="1000" duration="3840" media="$RepresentationID$/$Number%06d$.m4s" initialization="$RepresentationID$/IS.mp4" availabilityTimeOffset="2.88" availabilityTimeComplete="false"/>
+      <Representation id="en-320kbps-5_1" bandwidth="319528"/>
+    </AdaptationSet>
+    <AdaptationSet startWithSAP="2" segmentAlignment="true" id="5" codecs="mp4a.40.2" audioSamplingRate="48000" contentType="audio" lang="eng" mimeType="audio/mp4">
+      <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2"/>
+      <Accessibility schemeIdUri="urn:tva:metadata:cs:AudioPurposeCS:2007" value="1"/>
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="alternate"/>
+      <SegmentTemplate timescale="1000" duration="3840" media="$RepresentationID$/$Number%06d$.m4s" initialization="$RepresentationID$/IS.mp4" availabilityTimeOffset="2.88" availabilityTimeComplete="false"/>
+      <Representation id="en-bm-320kbps-2_0" bandwidth="318816"/>
+      <Representation id="en-bm-128kbps" bandwidth="126400"/>
+    </AdaptationSet>
+    <AdaptationSet startWithSAP="2" segmentAlignment="true" id="7" codecs="mp4a.40.2" audioSamplingRate="48000" contentType="audio" lang="eng" mimeType="audio/mp4">
+      <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="6"/>
+      <Accessibility schemeIdUri="urn:tva:metadata:cs:AudioPurposeCS:2007" value="1"/>
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="alternate"/>
+      <SegmentTemplate timescale="1000" duration="3840" media="$RepresentationID$/$Number%06d$.m4s" initialization="$RepresentationID$/IS.mp4" availabilityTimeOffset="2.88" availabilityTimeComplete="false"/>
+      <Representation id="en-bm-320kbps-5_1" bandwidth="319544"/>
+    </AdaptationSet>
+    <AdaptationSet startWithSAP="2" segmentAlignment="true" id="888" codecs="stpp.ttml.etd1|im1t" lang="eng" contentType="text" mimeType="application/mp4">
+      <SupplementalProperty schemeIdUri="urn:dvb:dash:fontdownload:2014" value="1" dvb:url="https://rdmedia.bbc.co.uk/fonts/BBCReithSans_W_Rg.woff" dvb:mimeType="application/font-woff" dvb:fontFamily="ReithSans"/>
+      <Accessibility schemeIdUri="urn:tva:metadata:cs:AudioPurposeCS:2007" value="2"/>
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"/>
+      <SegmentTemplate timescale="200" duration="768" media="$RepresentationID$/$Number%06d$.m4s" initialization="$RepresentationID$/IS.mp4" availabilityTimeOffset="2.88" availabilityTimeComplete="false"/>
+      <Representation id="en-subs-ll" bandwidth="30896"/>
+    </AdaptationSet>
+    <AdaptationSet startWithSAP="2" segmentAlignment="true" id="14" codecs="mp4a.40.2" audioSamplingRate="48000" contentType="audio" lang="deu" mimeType="audio/mp4">
+      <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2"/>
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="dub"/>
+      <SegmentTemplate timescale="1000" duration="3840" media="$RepresentationID$/$Number%06d$.m4s" initialization="$RepresentationID$/IS.mp4" availabilityTimeOffset="2.88" availabilityTimeComplete="false"/>
+      <Representation id="de-320kbps-2_0" bandwidth="318816"/>
+      <Representation id="de-128kbps" bandwidth="126536"/>
+    </AdaptationSet>
+    <AdaptationSet startWithSAP="2" segmentAlignment="true" id="16" codecs="mp4a.40.2" audioSamplingRate="48000" contentType="audio" lang="deu" mimeType="audio/mp4">
+      <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="6"/>
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="dub"/>
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="alternate"/>
+      <SegmentTemplate timescale="1000" duration="3840" media="$RepresentationID$/$Number%06d$.m4s" initialization="$RepresentationID$/IS.mp4" availabilityTimeOffset="2.88" availabilityTimeComplete="false"/>
+      <Representation id="de-320kbps-5_1" bandwidth="319528"/>
+    </AdaptationSet>
+    <AdaptationSet startWithSAP="2" segmentAlignment="true" id="15" codecs="mp4a.40.2" audioSamplingRate="48000" contentType="audio" lang="deu" mimeType="audio/mp4">
+      <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2"/>
+      <Accessibility schemeIdUri="urn:tva:metadata:cs:AudioPurposeCS:2007" value="1"/>
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="dub"/>
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="alternate"/>
+      <SegmentTemplate timescale="1000" duration="3840" media="$RepresentationID$/$Number%06d$.m4s" initialization="$RepresentationID$/IS.mp4" availabilityTimeOffset="2.88" availabilityTimeComplete="false"/>
+      <Representation id="de-bm-320kbps-2_0" bandwidth="318816"/>
+      <Representation id="de-bm-128kbps" bandwidth="126400"/>
+    </AdaptationSet>
+    <AdaptationSet startWithSAP="2" segmentAlignment="true" id="17" codecs="mp4a.40.2" audioSamplingRate="48000" contentType="audio" lang="deu" mimeType="audio/mp4">
+      <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="6"/>
+      <Accessibility schemeIdUri="urn:tva:metadata:cs:AudioPurposeCS:2007" value="1"/>
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="dub"/>
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="alternate"/>
+      <SegmentTemplate timescale="1000" duration="3840" media="$RepresentationID$/$Number%06d$.m4s" initialization="$RepresentationID$/IS.mp4" availabilityTimeOffset="2.88" availabilityTimeComplete="false"/>
+      <Representation id="de-bm-320kbps-5_1" bandwidth="319544"/>
+    </AdaptationSet>
+    <AdaptationSet startWithSAP="2" segmentAlignment="true" id="881" codecs="stpp.ttml.etd1|im1t" lang="deu" contentType="text" mimeType="application/mp4">
+      <SupplementalProperty schemeIdUri="urn:dvb:dash:fontdownload:2014" value="1" dvb:url="https://rdmedia.bbc.co.uk/fonts/BBCReithSans_W_Rg.woff" dvb:mimeType="application/font-woff" dvb:fontFamily="ReithSans"/>
+      <Accessibility schemeIdUri="urn:tva:metadata:cs:AudioPurposeCS:2007" value="2"/>
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="dub"/>
+      <SegmentTemplate timescale="200" duration="768" media="$RepresentationID$/$Number%06d$.m4s" initialization="$RepresentationID$/IS.mp4" availabilityTimeOffset="2.88" availabilityTimeComplete="false"/>
+      <Representation id="de-subs-ll" bandwidth="30896"/>
+    </AdaptationSet>
+    <AdaptationSet startWithSAP="2" segmentAlignment="true" id="24" codecs="mp4a.40.2" audioSamplingRate="48000" contentType="audio" lang="fra" mimeType="audio/mp4">
+      <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2"/>
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="dub"/>
+      <SegmentTemplate timescale="1000" duration="3840" media="$RepresentationID$/$Number%06d$.m4s" initialization="$RepresentationID$/IS.mp4" availabilityTimeOffset="2.88" availabilityTimeComplete="false"/>
+      <Representation id="fr-320kbps-2_0" bandwidth="318816"/>
+      <Representation id="fr-128kbps" bandwidth="126536"/>
+    </AdaptationSet>
+    <AdaptationSet startWithSAP="2" segmentAlignment="true" id="26" codecs="mp4a.40.2" audioSamplingRate="48000" contentType="audio" lang="fra" mimeType="audio/mp4">
+      <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="6"/>
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="dub"/>
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="alternate"/>
+      <SegmentTemplate timescale="1000" duration="3840" media="$RepresentationID$/$Number%06d$.m4s" initialization="$RepresentationID$/IS.mp4" availabilityTimeOffset="2.88" availabilityTimeComplete="false"/>
+      <Representation id="fr-320kbps-5_1" bandwidth="319528"/>
+    </AdaptationSet>
+    <AdaptationSet startWithSAP="2" segmentAlignment="true" id="25" codecs="mp4a.40.2" audioSamplingRate="48000" contentType="audio" lang="fra" mimeType="audio/mp4">
+      <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2"/>
+      <Accessibility schemeIdUri="urn:tva:metadata:cs:AudioPurposeCS:2007" value="1"/>
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="dub"/>
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="alternate"/>
+      <SegmentTemplate timescale="1000" duration="3840" media="$RepresentationID$/$Number%06d$.m4s" initialization="$RepresentationID$/IS.mp4" availabilityTimeOffset="2.88" availabilityTimeComplete="false"/>
+      <Representation id="fr-bm-320kbps-2_0" bandwidth="318816"/>
+      <Representation id="fr-bm-128kbps" bandwidth="126400"/>
+    </AdaptationSet>
+    <AdaptationSet startWithSAP="2" segmentAlignment="true" id="27" codecs="mp4a.40.2" audioSamplingRate="48000" contentType="audio" lang="fra" mimeType="audio/mp4">
+      <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="6"/>
+      <Accessibility schemeIdUri="urn:tva:metadata:cs:AudioPurposeCS:2007" value="1"/>
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="dub"/>
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="alternate"/>
+      <SegmentTemplate timescale="1000" duration="3840" media="$RepresentationID$/$Number%06d$.m4s" initialization="$RepresentationID$/IS.mp4" availabilityTimeOffset="2.88" availabilityTimeComplete="false"/>
+      <Representation id="fr-bm-320kbps-5_1" bandwidth="319544"/>
+    </AdaptationSet>
+    <AdaptationSet startWithSAP="2" segmentAlignment="true" id="882" codecs="stpp.ttml.etd1|im1t" lang="fra" contentType="text" mimeType="application/mp4">
+      <SupplementalProperty schemeIdUri="urn:dvb:dash:fontdownload:2014" value="1" dvb:url="https://rdmedia.bbc.co.uk/fonts/BBCReithSans_W_Rg.woff" dvb:mimeType="application/font-woff" dvb:fontFamily="ReithSans"/>
+      <Accessibility schemeIdUri="urn:tva:metadata:cs:AudioPurposeCS:2007" value="2"/>
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="dub"/>
+      <SegmentTemplate timescale="200" duration="768" media="$RepresentationID$/$Number%06d$.m4s" initialization="$RepresentationID$/IS.mp4" availabilityTimeOffset="2.88" availabilityTimeComplete="false"/>
+      <Representation id="fr-subs-ll" bandwidth="31080"/>
+    </AdaptationSet>
+  </Period>
+  <Metrics metrics="DVBErrors">
+    <Reporting schemeIdUri="urn:dvb:dash:reporting:2014" value="1" dvb:reportingUrl="https://rdmedia.api.bbc.co.uk/dvb-errors/errors" dvb:probability="500"/>
+  </Metrics>
+  <UTCTiming schemeIdUri="urn:mpeg:dash:utc:http-xsdate:2014" value="https://time.akamai.com/?iso&amp;ms"/>
+  <LeapSecondInformation availabilityStartLeapOffset="0"/>
+</MPD>

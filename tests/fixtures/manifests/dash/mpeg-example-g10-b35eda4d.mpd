@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="urn:mpeg:dash:schema:mpd:2011 DASH-MPD.xsd" type="dynamic" availabilityStartTime="2015-05-30T09:30:10Z" minimumUpdatePeriod="PT10S" minBufferTime="PT1S" profiles="urn:mpeg:dash:profile:isoff-live:2011" publishTime="2015-05-30T09:30:10Z">
+  <ProgramInformation>
+    <Title>Example of a DASH Media Presentation Description using Spatial Relationships Description to indicate tiles of a video</Title>
+  </ProgramInformation>
+  <Period id="1">
+    <!-- Mosaic Video -->
+    <AdaptationSet segmentAlignment="true" subsegmentAlignment="true" subsegmentStartsWithSAP="1">
+      <SupplementalProperty schemeIdUri="urn:mpeg:dash:srd:2014" value="0,0,0,2,2,2,2"/>
+      <SupplementalProperty schemeIdUri="urn:mpeg:dash:sai:2015" value="1"/>
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"/>
+      <Representation id="1" mimeType="video/mp4" codecs="avc1.42c01e" width="640" height="360" bandwidth="226597" startWithSAP="1">
+        <BaseURL> full_video_small.mp4</BaseURL>
+        <SegmentBase indexRangeExact="true" indexRange="837-988"/>
+      </Representation>
+      <Representation id="2" mimeType="video/mp4" codecs="avc1.42c01f" width="1280" height="720" bandwidth="553833" startWithSAP="1">
+        <BaseURL> full_video_hd.mp4</BaseURL>
+        <SegmentBase indexRangeExact="true" indexRange="838-989"/>
+      </Representation>
+      <Representation id="3" mimeType="video/mp4" codecs="avc1.42c033" width="3840" height="2160" bandwidth="1055223" startWithSAP="1">
+        <BaseURL> full_video_4k.mp4</BaseURL>
+        <SegmentBase indexRangeExact="true" indexRange="839-990"/>
+      </Representation>
+    </AdaptationSet>
+    <!-- Tile 1/Service1 -->
+    <EmptyAdaptationSet>
+      <EssentialProperty schemeIdUri="urn:mpeg:dash:mpd-as-linking:2015" value="http://example.com/service1/my.mpd#period=1&amp;as=video"/>
+      <SupplementalProperty schemeIdUri="urn:mpeg:dash:srd:2014" value="0,0,0,1,1,2,2"/>
+    </EmptyAdaptationSet>
+    <!--Tile /Service 2 -->
+    <EmptyAdaptationSet>
+      <EssentialProperty schemeIdUri="urn:mpeg:dash:mpd-as-linking:2015" value="http://example.com/service2/my.mpd#period=1&amp;as=video timeOffset=70000"/>
+      <SupplementalProperty schemeIdUri="urn:mpeg:dash:srd:2014" value="0,1,0,1,1"/>
+    </EmptyAdaptationSet>
+    <!--Tile 3/Service 3 -->
+    <EmptyAdaptationSet>
+      <EssentialProperty schemeIdUri="urn:mpeg:dash:mpd-as-linking:2015" value="http://example.com/service3/my.mpd#period=1&amp;as=video timeOffset=100000"/>
+      <SupplementalProperty schemeIdUri="urn:mpeg:dash:srd:2014" value="0,0,1,1,1"/>
+    </EmptyAdaptationSet>
+    <!--Tile 4/Service 4 -->
+    <EmptyAdaptationSet>
+      <EssentialProperty schemeIdUri="urn:mpeg:dash:mpd-as-linking:2015" value="http://example.com/service4/my.mpd#period=1&amp;as=video timeOffset=120000"/>
+      <SupplementalProperty schemeIdUri="urn:mpeg:dash:srd:2014" value="0,1,1,1,1"/>
+    </EmptyAdaptationSet>
+  </Period>
+</MPD>

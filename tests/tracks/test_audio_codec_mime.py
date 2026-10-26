@@ -27,6 +27,15 @@ def test_dts_uhd_sample_entries_map_to_dtsx(mime: str) -> None:
     assert Audio.Codec.DTSX.value == "DTS-X", "':' is not a legal path character on Windows"
 
 
+@pytest.mark.parametrize(
+    ("mime", "codec"),
+    [("dtsh", Audio.Codec.DTSHD), ("dtsl", Audio.Codec.DTSHD), ("dtse", Audio.Codec.DTSHD)]
+    + [(m, Audio.Codec.MPEGH) for m in ("mha1", "mha2", "mhm1", "mhm2.0x0C")],
+)
+def test_dts_hd_and_mpeg_h_sample_entries_map(mime: str, codec: Audio.Codec) -> None:
+    assert Audio.Codec.from_mime(mime) == codec
+
+
 def test_unknown_mime_still_raises() -> None:
     with pytest.raises(ValueError):
         Audio.Codec.from_mime("dtsz")
@@ -115,3 +124,15 @@ def test_the_group_fallback_does_not_depend_on_variant_order() -> None:
         manifest = header + "\n".join(order) + "\n"
         tracks = HLS.from_text(manifest, "https://example.test/master.m3u8").to_tracks("en")
         assert [t.codec for t in tracks.audio] == [Audio.Codec.DTSX], f"variant order decided the codec: {order[0]!r}"
+
+
+def test_channels_keep_only_the_count_before_the_identifiers() -> None:
+    manifest = textwrap.dedent("""\
+        #EXTM3U
+        #EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="A",NAME="Main",LANGUAGE="en",CHANNELS="2/BED-2",URI="a.m3u8"
+        #EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="A",NAME="Atmos",LANGUAGE="en",CHANNELS="16/JOC",URI="b.m3u8"
+        #EXT-X-STREAM-INF:BANDWIDTH=1,CODECS="avc1.640028,ec-3",AUDIO="A"
+        v.m3u8
+    """)
+    audio = HLS.from_text(manifest, "https://example.test/master.m3u8").to_tracks("en").audio
+    assert sorted((a.channels, a.joc) for a in audio) == [(2.0, 0), (5.1, 16)]

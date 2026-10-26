@@ -284,7 +284,7 @@ do not give a `name`, unshackle derives a human-readable name from the language.
 `Video` adds `codec`, `range`, `bitrate`, `width`, `height`, `fps`, `scan_type`, and
 closed-caption descriptors. The relevant enums:
 
-- **`Video.Codec`**: `AVC` (H.264), `HEVC` (H.265), `VC1`, `VP8`, `VP9`, `AV1`.
+- **`Video.Codec`**: `AVC` (H.264), `HEVC` (H.265), `VC1`, `VP8`, `VP9`, `AV1`, `LCEVC`.
 - **`Video.Range`**: `SDR`, `HLG`, `HDR10`, `HDR10P` (HDR10+), `DV` (Dolby Vision), and
   `HYBRID`. `HYBRID` is special: it tells the pipeline to select both an HDR10(+) base and
   a DV track and merge the DV RPU onto the HDR10 track with `dovi_tool` (see
@@ -298,7 +298,7 @@ closed-caption descriptors. The relevant enums:
 
 `Audio` adds `bitrate`, `channels`, `joc` (Joint Object Coding, the Atmos indicator),
 and `descriptive`. `Audio.Codec` covers `AAC`, `AC3` (`DD`), `EC3` (`DD+`), `AC4`,
-`OPUS`, `OGG` (Vorbis), `DTS`, `DTSX`, `ALAC`, and `FLAC`. The `atmos` property is `True` when
+`OPUS`, `OGG` (Vorbis), `DTS`, `DTSX`, `DTSHD`, `MPEGH`, `ALAC`, and `FLAC`. The `atmos` property is `True` when
 `joc` is set (or when `extra` flags it).
 
 ### `Subtitle`

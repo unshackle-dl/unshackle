@@ -1,0 +1,252 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--Generated with https://github.com/google/shaka-packager version 53aa775e-release-->
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="urn:mpeg:dash:schema:mpd:2011 DASH-MPD.xsd" profiles="urn:mpeg:dash:profile:isoff-on-demand:2011" minBufferTime="PT2S" type="static" mediaPresentationDuration="PT888S">
+  <Period id="0">
+    <AdaptationSet id="0" contentType="text" lang="de" subsegmentAlignment="true">
+      <Representation id="0" bandwidth="256" mimeType="text/vtt">
+        <BaseURL>s-ger.webvtt</BaseURL>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="1" contentType="text" lang="en" subsegmentAlignment="true">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"/>
+      <Representation id="1" bandwidth="256" mimeType="text/vtt">
+        <BaseURL>s-eng.webvtt</BaseURL>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="2" contentType="text" lang="es" subsegmentAlignment="true">
+      <Representation id="2" bandwidth="256" mimeType="text/vtt">
+        <BaseURL>s-spa.webvtt</BaseURL>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="3" contentType="text" lang="fr" subsegmentAlignment="true">
+      <Representation id="3" bandwidth="256" mimeType="text/vtt">
+        <BaseURL>s-fre.webvtt</BaseURL>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="4" contentType="text" lang="it" subsegmentAlignment="true">
+      <Representation id="4" bandwidth="256" mimeType="text/vtt">
+        <BaseURL>s-ita.webvtt</BaseURL>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="5" contentType="text" lang="nl" subsegmentAlignment="true">
+      <Representation id="5" bandwidth="256" mimeType="text/vtt">
+        <BaseURL>s-dut.webvtt</BaseURL>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="6" contentType="text" lang="pl" subsegmentAlignment="true">
+      <Representation id="6" bandwidth="256" mimeType="text/vtt">
+        <BaseURL>s-pol.webvtt</BaseURL>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="7" contentType="text" lang="pt" subsegmentAlignment="true">
+      <Representation id="7" bandwidth="256" mimeType="text/vtt">
+        <BaseURL>s-por.webvtt</BaseURL>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="8" contentType="text" lang="ru" subsegmentAlignment="true">
+      <Representation id="8" bandwidth="256" mimeType="text/vtt">
+        <BaseURL>s-rus.webvtt</BaseURL>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="9" contentType="text" lang="vi" subsegmentAlignment="true">
+      <Representation id="9" bandwidth="256" mimeType="text/vtt">
+        <BaseURL>s-vie.webvtt</BaseURL>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="10" contentType="text" lang="af" subsegmentAlignment="true">
+      <Representation id="10" bandwidth="256" mimeType="text/vtt">
+        <BaseURL>s-af.webvtt</BaseURL>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="11" contentType="text" lang="ar" subsegmentAlignment="true">
+      <Representation id="11" bandwidth="256" mimeType="text/vtt">
+        <BaseURL>s-ar.webvtt</BaseURL>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="12" contentType="text" lang="bg" subsegmentAlignment="true">
+      <Representation id="12" bandwidth="256" mimeType="text/vtt">
+        <BaseURL>s-bg.webvtt</BaseURL>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="13" contentType="text" lang="bn" subsegmentAlignment="true">
+      <Representation id="13" bandwidth="256" mimeType="text/vtt">
+        <BaseURL>s-bn.webvtt</BaseURL>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="14" contentType="text" lang="cs" subsegmentAlignment="true">
+      <Representation id="14" bandwidth="256" mimeType="text/vtt">
+        <BaseURL>s-cs.webvtt</BaseURL>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="15" contentType="text" lang="da" subsegmentAlignment="true">
+      <Representation id="15" bandwidth="256" mimeType="text/vtt">
+        <BaseURL>s-da.webvtt</BaseURL>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="16" contentType="text" lang="eo" subsegmentAlignment="true">
+      <Representation id="16" bandwidth="256" mimeType="text/vtt">
+        <BaseURL>s-eo.webvtt</BaseURL>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="17" contentType="text" lang="fa" subsegmentAlignment="true">
+      <Representation id="17" bandwidth="256" mimeType="text/vtt">
+        <BaseURL>s-fa.webvtt</BaseURL>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="18" contentType="text" lang="fi" subsegmentAlignment="true">
+      <Representation id="18" bandwidth="256" mimeType="text/vtt">
+        <BaseURL>s-fi.webvtt</BaseURL>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="19" contentType="text" lang="gl" subsegmentAlignment="true">
+      <Representation id="19" bandwidth="256" mimeType="text/vtt">
+        <BaseURL>s-gl.webvtt</BaseURL>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="20" contentType="text" lang="el" subsegmentAlignment="true">
+      <Representation id="20" bandwidth="256" mimeType="text/vtt">
+        <BaseURL>s-el.webvtt</BaseURL>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="21" contentType="text" lang="he" subsegmentAlignment="true">
+      <Representation id="21" bandwidth="256" mimeType="text/vtt">
+        <BaseURL>s-he.webvtt</BaseURL>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="22" contentType="text" lang="hr" subsegmentAlignment="true">
+      <Representation id="22" bandwidth="256" mimeType="text/vtt">
+        <BaseURL>s-hr.webvtt</BaseURL>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="23" contentType="text" lang="hu" subsegmentAlignment="true">
+      <Representation id="23" bandwidth="256" mimeType="text/vtt">
+        <BaseURL>s-hu.webvtt</BaseURL>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="24" contentType="text" lang="id" subsegmentAlignment="true">
+      <Representation id="24" bandwidth="256" mimeType="text/vtt">
+        <BaseURL>s-id.webvtt</BaseURL>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="25" contentType="text" lang="ja" subsegmentAlignment="true">
+      <Representation id="25" bandwidth="256" mimeType="text/vtt">
+        <BaseURL>s-ja.webvtt</BaseURL>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="26" contentType="text" lang="ko" subsegmentAlignment="true">
+      <Representation id="26" bandwidth="256" mimeType="text/vtt">
+        <BaseURL>s-ko.webvtt</BaseURL>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="27" contentType="text" lang="ku" subsegmentAlignment="true">
+      <Representation id="27" bandwidth="256" mimeType="text/vtt">
+        <BaseURL>s-ku.webvtt</BaseURL>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="28" contentType="text" lang="la" subsegmentAlignment="true">
+      <Representation id="28" bandwidth="256" mimeType="text/vtt">
+        <BaseURL>s-la.webvtt</BaseURL>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="29" contentType="text" lang="lv" subsegmentAlignment="true">
+      <Representation id="29" bandwidth="256" mimeType="text/vtt">
+        <BaseURL>s-lv.webvtt</BaseURL>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="30" contentType="text" lang="mk" subsegmentAlignment="true">
+      <Representation id="30" bandwidth="256" mimeType="text/vtt">
+        <BaseURL>s-mk.webvtt</BaseURL>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="31" contentType="text" lang="ml" subsegmentAlignment="true">
+      <Representation id="31" bandwidth="256" mimeType="text/vtt">
+        <BaseURL>s-ml.webvtt</BaseURL>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="32" contentType="text" lang="nb-NO" subsegmentAlignment="true">
+      <Representation id="32" bandwidth="256" mimeType="text/vtt">
+        <BaseURL>s-nb-NO.webvtt</BaseURL>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="33" contentType="text" lang="no" subsegmentAlignment="true">
+      <Representation id="33" bandwidth="256" mimeType="text/vtt">
+        <BaseURL>s-no.webvtt</BaseURL>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="34" contentType="text" lang="pa" subsegmentAlignment="true">
+      <Representation id="34" bandwidth="256" mimeType="text/vtt">
+        <BaseURL>s-pa.webvtt</BaseURL>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="35" contentType="text" lang="ro" subsegmentAlignment="true">
+      <Representation id="35" bandwidth="256" mimeType="text/vtt">
+        <BaseURL>s-ro.webvtt</BaseURL>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="36" contentType="text" lang="sk" subsegmentAlignment="true">
+      <Representation id="36" bandwidth="256" mimeType="text/vtt">
+        <BaseURL>s-sk.webvtt</BaseURL>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="37" contentType="text" lang="sr" subsegmentAlignment="true">
+      <Representation id="37" bandwidth="256" mimeType="text/vtt">
+        <BaseURL>s-sr.webvtt</BaseURL>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="38" contentType="text" lang="sv" subsegmentAlignment="true">
+      <Representation id="38" bandwidth="256" mimeType="text/vtt">
+        <BaseURL>s-sv.webvtt</BaseURL>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="39" contentType="text" lang="th" subsegmentAlignment="true">
+      <Representation id="39" bandwidth="256" mimeType="text/vtt">
+        <BaseURL>s-th.webvtt</BaseURL>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="40" contentType="text" lang="tr" subsegmentAlignment="true">
+      <Representation id="40" bandwidth="256" mimeType="text/vtt">
+        <BaseURL>s-tr.webvtt</BaseURL>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="41" contentType="text" lang="uk" subsegmentAlignment="true">
+      <Representation id="41" bandwidth="256" mimeType="text/vtt">
+        <BaseURL>s-uk.webvtt</BaseURL>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="42" contentType="text" lang="zh-Hans" subsegmentAlignment="true">
+      <Representation id="42" bandwidth="256" mimeType="text/vtt">
+        <BaseURL>s-zh-Hans.webvtt</BaseURL>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="43" contentType="text" lang="zh-Hant" subsegmentAlignment="true">
+      <Representation id="43" bandwidth="256" mimeType="text/vtt">
+        <BaseURL>s-zh-Hant.webvtt</BaseURL>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="44" contentType="audio" lang="en" subsegmentAlignment="true">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"/>
+      <Representation id="44" bandwidth="131526" codecs="mp4a.40.2" mimeType="audio/mp4" audioSamplingRate="48000">
+        <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2"/>
+        <BaseURL>a-eng-0128k-aac-2c.mp4</BaseURL>
+        <SegmentBase indexRange="816-3523" timescale="48000">
+          <Initialization range="0-815"/>
+        </SegmentBase>
+      </Representation>
+      <Representation id="45" bandwidth="387555" codecs="mp4a.40.2" mimeType="audio/mp4" audioSamplingRate="48000">
+        <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="6"/>
+        <BaseURL>a-eng-0384k-aac-6c.mp4</BaseURL>
+        <SegmentBase indexRange="816-3523" timescale="48000">
+          <Initialization range="0-815"/>
+        </SegmentBase>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="45" contentType="video" width="854" height="364" frameRate="12288/512" subsegmentAlignment="true" par="40:17">
+      <Representation id="46" bandwidth="1045290" codecs="avc1.4d401f" mimeType="video/mp4" sar="3803:3799">
+        <BaseURL>v-0480p-1000k-libx264.mp4</BaseURL>
+        <SegmentBase indexRange="837-3532" timescale="12288">
+          <Initialization range="0-836"/>
+        </SegmentBase>
+      </Representation>
+    </AdaptationSet>
+  </Period>
+</MPD>

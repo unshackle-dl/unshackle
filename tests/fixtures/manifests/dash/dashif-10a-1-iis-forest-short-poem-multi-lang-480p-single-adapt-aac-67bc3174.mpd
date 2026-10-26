@@ -1,0 +1,32 @@
+<?xml version="1.0" ?>
+<MPD mediaPresentationDuration="PT68.4583333333S" minBufferTime="PT2S" profiles="http://dashif.org/guidelines/dash264,urn:mpeg:dash:profile:isoff-on-demand:2011" type="static" xmlns="urn:mpeg:dash:schema:mpd:2011" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="urn:mpeg:DASH:schema:MPD:2011 DASH-MPD.xsd">
+ <BaseURL>./</BaseURL>
+ <Period>
+  <AdaptationSet codecs="avc1.42c01e" contentType="video" frameRate="24/1" height="476" mimeType="video/mp4" par="16:9" scanType="progressive" subsegmentAlignment="true" subsegmentStartsWithSAP="1" width="848">
+   <Representation bandwidth="1501687" id="German_Forest_SHORT_1v0-avc1.42c01e-68s-848x476-h264-1500000bps_seg" sar="1:1">
+    <BaseURL>German_Forest_SHORT_1v0-avc1.42c01e-68s-848x476-h264-1500000bps_seg.mp4</BaseURL>
+    <SegmentBase indexRange="686-885">
+     <Initialization range="0-685"/>
+    </SegmentBase>
+   </Representation>
+  </AdaptationSet>
+  <AdaptationSet codecs="mp4a.40.2" contentType="audio" lang="en" mimeType="audio/mp4" subsegmentAlignment="true" subsegmentStartsWithSAP="1">
+   <AudioChannelConfiguration schemeIdUri="urn:mpeg:mpegB:cicp:ChannelConfiguration" value="2"/>
+   <Representation audioSamplingRate="48000" bandwidth="131152" id="German_Forest_Short_Poem_english-en-68s-2-lc-128000bps_seg">
+    <BaseURL>German_Forest_Short_Poem_english-en-68s-2-lc-128000bps_seg.mp4</BaseURL>
+    <SegmentBase indexRange="606-805">
+     <Initialization range="0-605"/>
+    </SegmentBase>
+   </Representation>
+  </AdaptationSet>
+  <AdaptationSet codecs="mp4a.40.2" contentType="audio" lang="de" mimeType="audio/mp4" subsegmentAlignment="true" subsegmentStartsWithSAP="1">
+   <AudioChannelConfiguration schemeIdUri="urn:mpeg:mpegB:cicp:ChannelConfiguration" value="2"/>
+   <Representation audioSamplingRate="48000" bandwidth="131152" id="German_Forest_Short_Poem_german-de-68s-2-lc-128000bps_seg">
+    <BaseURL>German_Forest_Short_Poem_german-de-68s-2-lc-128000bps_seg.mp4</BaseURL>
+    <SegmentBase indexRange="606-805">
+     <Initialization range="0-605"/>
+    </SegmentBase>
+   </Representation>
+  </AdaptationSet>
+ </Period>
+</MPD>

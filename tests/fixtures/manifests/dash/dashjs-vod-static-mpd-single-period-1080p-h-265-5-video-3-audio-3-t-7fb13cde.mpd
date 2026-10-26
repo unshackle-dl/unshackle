@@ -1,0 +1,92 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="urn:mpeg:dash:schema:mpd:2011 DASH-MPD.xsd" profiles="urn:mpeg:dash:profile:isoff-on-demand:2011" minBufferTime="PT2S" type="static" mediaPresentationDuration="PT734.1666870117188S">
+  <Period id="0">
+    <AdaptationSet contentType="audio" lang="en" subsegmentAlignment="true" group="1" label="English">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main" />
+      <Label>English</Label>
+      <Representation id="0" bandwidth="134352" codecs="mp4a.40.2" mimeType="audio/mp4" audioSamplingRate="44100">
+        <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2" />
+        <BaseURL>audio-en-audio-en-mp4a.mp4</BaseURL>
+        <SegmentBase indexRange="822-2329" timescale="44100">
+          <Initialization range="0-821" />
+        </SegmentBase>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet contentType="audio" lang="en-low" subsegmentAlignment="true" group="2" label="English-low">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main" />
+      <Label>English-low</Label>
+      <Representation id="1" bandwidth="133675" codecs="mp4a.40.2" mimeType="audio/mp4" audioSamplingRate="44100">
+        <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2" />
+        <BaseURL>audio-de-audio-de-mp4a.mp4</BaseURL>
+        <SegmentBase indexRange="822-2329" timescale="44100">
+          <Initialization range="0-821" />
+        </SegmentBase>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet contentType="audio" lang="en-high" subsegmentAlignment="true" group="3" label="English-high">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main" />
+      <Label>English-high</Label>
+      <Representation id="2" bandwidth="133550" codecs="mp4a.40.2" mimeType="audio/mp4" audioSamplingRate="44100">
+        <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2" />
+        <BaseURL>audio-fr-audio-fr-mp4a.mp4</BaseURL>
+        <SegmentBase indexRange="822-2329" timescale="44100">
+          <Initialization range="0-821" />
+        </SegmentBase>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet contentType="video" maxWidth="1920" maxHeight="1080" frameRate="12288/512" par="16:9" group="4">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main" />
+      <Representation id="3" bandwidth="493435" codecs="hvc1.1.6.L63.90" mimeType="video/mp4" sar="1:1" width="512" height="288">
+        <BaseURL>video-H265-288-400k-video-hvc1.mp4</BaseURL>
+        <SegmentBase indexRange="2952-4459" timescale="12288">
+          <Initialization range="0-2951" />
+        </SegmentBase>
+      </Representation>
+      <Representation id="4" bandwidth="975735" codecs="hvc1.1.6.L63.90" mimeType="video/mp4" sar="1:1" width="640" height="360">
+        <BaseURL>video-H265-360-800k-video-hvc1.mp4</BaseURL>
+        <SegmentBase indexRange="2953-4460" timescale="12288">
+          <Initialization range="0-2952" />
+        </SegmentBase>
+      </Representation>
+      <Representation id="5" bandwidth="1441487" codecs="hvc1.1.6.L90.90" mimeType="video/mp4" sar="640:639" width="852" height="480">
+        <BaseURL>video-H265-480-1200k-video-hvc1.mp4</BaseURL>
+        <SegmentBase indexRange="2972-4479" timescale="12288">
+          <Initialization range="0-2971" />
+        </SegmentBase>
+      </Representation>
+      <Representation id="6" bandwidth="2537572" codecs="hvc1.1.6.L93.90" mimeType="video/mp4" sar="1:1" width="1280" height="720">
+        <BaseURL>video-H265-720-2100k-video-hvc1.mp4</BaseURL>
+        <SegmentBase indexRange="2958-4465" timescale="12288">
+          <Initialization range="0-2957" />
+        </SegmentBase>
+      </Representation>
+      <Representation id="7" bandwidth="3631824" codecs="hvc1.1.6.L120.90" mimeType="video/mp4" sar="1:1" width="1920" height="1080">
+        <BaseURL>video-H265-1080-3000k-video-hvc1.mp4</BaseURL>
+        <SegmentBase indexRange="2960-4467" timescale="12288">
+          <Initialization range="0-2959" />
+        </SegmentBase>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet contentType="text" mimeType="text/vtt" lang="en" group="5" label="English">
+      <Label>English</Label>
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="subtitle" />
+      <Representation bandwidth="1119" id="8">
+        <BaseURL>subtitle-en.vtt</BaseURL>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet contentType="text" mimeType="text/vtt" lang="fr" group="6" label="French">
+      <Label>French</Label>
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="subtitle" />
+      <Representation bandwidth="1165" id="9">
+        <BaseURL>subtitle-fr.vtt</BaseURL>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet contentType="text" mimeType="text/vtt" lang="de" group="7" label="German">
+      <Label>German</Label>
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="subtitle" />
+      <Representation bandwidth="1225" id="10">
+        <BaseURL>subtitle-de.vtt</BaseURL>
+      </Representation>
+    </AdaptationSet>
+  </Period>
+</MPD>

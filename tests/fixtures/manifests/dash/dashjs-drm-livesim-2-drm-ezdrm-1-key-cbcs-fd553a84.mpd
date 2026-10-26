@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="urn:mpeg:dash:schema:mpd:2011 DASH-MPD.xsd" profiles="urn:mpeg:dash:profile:isoff-live:2011,http://dashif.org/guidelines/dash-if-simple" type="dynamic" availabilityStartTime="1970-01-01T00:00:00Z" publishTime="1970-01-01T00:00:00Z" minimumUpdatePeriod="PT2S" minBufferTime="PT2S" timeShiftBufferDepth="PT1M" maxSegmentDuration="PT2.006S">
+  <ProgramInformation moreInformationURL="https://github.com/dash-Industry-Forum/livesim-content">
+    <Title>Basic MPD with 640x480@30 video at 300kbp and 48kbps audio</Title>
+    <Source>VoD source for DASH-IF livesim2</Source>
+  </ProgramInformation>
+  <Period id="P0" start="PT0S">
+    <AdaptationSet id="2" lang="en" contentType="audio" segmentAlignment="true" mimeType="audio/mp4" startWithSAP="1">
+      <ContentProtection xmlns:cenc="urn:mpeg:cenc:2013" cenc:default_KID="01234567-89ab-cdef-0123-456789abcdef" schemeIdUri="urn:mpeg:dash:mp4protection:2011" value="cbcs"></ContentProtection>
+      <ContentProtection schemeIdUri="urn:uuid:edef8ba9-79d6-4ace-a3c8-27dcd51d21ed" value="Widevine">
+        <cenc:pssh xmlns:cenc="urn:mpeg:cenc:2013">AAAAP3Bzc2gAAAAA7e+LqXnWSs6jyCfc1R0h7QAAAB8SEAEjRWeJq83vASNFZ4mrze8aBWV6ZHJtSPPGiZsG</cenc:pssh>
+        <dashif:Laurl xmlns:dashif="https://dashif.org/CPS" licenseType="EME-1.0">https://widevine-dash.ezdrm.com/proxy?pX=3B0669</dashif:Laurl>
+      </ContentProtection>
+      <ContentProtection schemeIdUri="urn:uuid:9a04f079-9840-4286-ab92-e65be0885f95" value="MSPR 2.0">
+        <cenc:pssh xmlns:cenc="urn:mpeg:cenc:2013">AAACvnBzc2gAAAAAmgTweZhAQoarkuZb4IhflQAAAp6eAgAAAQABAJQCPABXAFIATQBIAEUAQQBEAEUAUgAgAHgAbQBsAG4AcwA9ACIAaAB0AHQAcAA6AC8ALwBzAGMAaABlAG0AYQBzAC4AbQBpAGMAcgBvAHMAbwBmAHQALgBjAG8AbQAvAEQAUgBNAC8AMgAwADAANwAvADAAMwAvAFAAbABhAHkAUgBlAGEAZAB5AEgAZQBhAGQAZQByACIAIAB2AGUAcgBzAGkAbwBuAD0AIgA0AC4AMwAuADAALgAwACIAPgA8AEQAQQBUAEEAPgA8AFAAUgBPAFQARQBDAFQASQBOAEYATwA+ADwASwBJAEQAUwA+ADwASwBJAEQAIABBAEwARwBJAEQAPQAiAEEARQBTAEMAQgBDACIAIABWAEEATABVAEUAPQAiAFoAMABVAGoAQQBhAHUASgA3ADgAMABCAEkAMABWAG4AaQBhAHYATgA3AHcAPQA9ACIAPgA8AC8ASwBJAEQAPgA8AC8ASwBJAEQAUwA+ADwALwBQAFIATwBUAEUAQwBUAEkATgBGAE8APgA8AEwAQQBfAFUAUgBMAD4AaAB0AHQAcABzADoALwAvAHAAbABhAHkAcgBlAGEAZAB5AC4AZQB6AGQAcgBtAC4AYwBvAG0ALwBjAGUAbgBjAHkALwBwAHIAZQBhAHUAdABoAC4AYQBzAHAAeAA/AHAAWAA9ADIANwA0AEYARgA0ADwALwBMAEEAXwBVAFIATAA+ADwARABTAF8ASQBEAD4AVgBsAFIANwBJAGQAcwBJAEoARQB1AFIAZAAwADYATABhAHEAcwAyAGoAdwA9AD0APAAvAEQAUwBfAEkARAA+ADwALwBEAEEAVABBAD4APAAvAFcAUgBNAEgARQBBAEQARQBSAD4A</cenc:pssh>
+        <mspr:pro xmlns:mspr="urn:microsoft:playready">ngIAAAEAAQCUAjwAVwBSAE0ASABFAEEARABFAFIAIAB4AG0AbABuAHMAPQAiAGgAdAB0AHAAOgAvAC8AcwBjAGgAZQBtAGEAcwAuAG0AaQBjAHIAbwBzAG8AZgB0AC4AYwBvAG0ALwBEAFIATQAvADIAMAAwADcALwAwADMALwBQAGwAYQB5AFIAZQBhAGQAeQBIAGUAYQBkAGUAcgAiACAAdgBlAHIAcwBpAG8AbgA9ACIANAAuADMALgAwAC4AMAAiAD4APABEAEEAVABBAD4APABQAFIATwBUAEUAQwBUAEkATgBGAE8APgA8AEsASQBEAFMAPgA8AEsASQBEACAAQQBMAEcASQBEAD0AIgBBAEUAUwBDAEIAQwAiACAAVgBBAEwAVQBFAD0AIgBaADAAVQBqAEEAYQB1AEoANwA4ADAAQgBJADAAVgBuAGkAYQB2AE4ANwB3AD0APQAiAD4APAAvAEsASQBEAD4APAAvAEsASQBEAFMAPgA8AC8AUABSAE8AVABFAEMAVABJAE4ARgBPAD4APABMAEEAXwBVAFIATAA+AGgAdAB0AHAAcwA6AC8ALwBwAGwAYQB5AHIAZQBhAGQAeQAuAGUAegBkAHIAbQAuAGMAbwBtAC8AYwBlAG4AYwB5AC8AcAByAGUAYQB1AHQAaAAuAGEAcwBwAHgAPwBwAFgAPQAyADcANABGAEYANAA8AC8ATABBAF8AVQBSAEwAPgA8AEQAUwBfAEkARAA+AFYAbABSADcASQBkAHMASQBKAEUAdQBSAGQAMAA2AEwAYQBxAHMAMgBqAHcAPQA9ADwALwBEAFMAXwBJAEQAPgA8AC8ARABBAFQAQQA+ADwALwBXAFIATQBIAEUAQQBEAEUAUgA+AA==</mspr:pro>
+        <dashif:Laurl xmlns:dashif="https://dashif.org/CPS" licenseType="EME-1.0">https://playready.ezdrm.com/cency/preauth.aspx?pX=274FF4</dashif:Laurl>
+      </ContentProtection>
+      <ContentProtection schemeIdUri="urn:uuid:94ce86fb-07ff-4f43-adb8-93d2fa968ca2" value="Fairplay">
+        <dashif:Laurl xmlns:dashif="https://dashif.org/CPS" licenseType="EME-1.0">https://fps.ezdrm.com/api/licenses/auth?px=A552CE&amp;assetID=01234567-89AB-CDEF-0123-456789ABCDEF</dashif:Laurl>
+        <dashif:Certurl xmlns:dashif="https://dashif.org/CPS">https://na-fps.ezdrm.com/demo/video/eleisure.cer</dashif:Certurl>
+      </ContentProtection>
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"></Role>
+      <SegmentTemplate media="$RepresentationID$/$Number$.m4s" initialization="$RepresentationID$/init.mp4" duration="2" startNumber="0"></SegmentTemplate>
+      <Representation id="A48" bandwidth="48000" audioSamplingRate="48000" codecs="mp4a.40.2">
+        <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2"></AudioChannelConfiguration>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="1" contentType="video" par="16:9" minWidth="640" maxWidth="640" minHeight="360" maxHeight="360" maxFrameRate="60/2" segmentAlignment="true" mimeType="video/mp4" startWithSAP="1">
+      <ContentProtection xmlns:cenc="urn:mpeg:cenc:2013" cenc:default_KID="01234567-89ab-cdef-0123-456789abcdef" schemeIdUri="urn:mpeg:dash:mp4protection:2011" value="cbcs"></ContentProtection>
+      <ContentProtection schemeIdUri="urn:uuid:edef8ba9-79d6-4ace-a3c8-27dcd51d21ed" value="Widevine">
+        <cenc:pssh xmlns:cenc="urn:mpeg:cenc:2013">AAAAP3Bzc2gAAAAA7e+LqXnWSs6jyCfc1R0h7QAAAB8SEAEjRWeJq83vASNFZ4mrze8aBWV6ZHJtSPPGiZsG</cenc:pssh>
+        <dashif:Laurl xmlns:dashif="https://dashif.org/CPS" licenseType="EME-1.0">https://widevine-dash.ezdrm.com/proxy?pX=3B0669</dashif:Laurl>
+      </ContentProtection>
+      <ContentProtection schemeIdUri="urn:uuid:9a04f079-9840-4286-ab92-e65be0885f95" value="MSPR 2.0">
+        <cenc:pssh xmlns:cenc="urn:mpeg:cenc:2013">AAACvnBzc2gAAAAAmgTweZhAQoarkuZb4IhflQAAAp6eAgAAAQABAJQCPABXAFIATQBIAEUAQQBEAEUAUgAgAHgAbQBsAG4AcwA9ACIAaAB0AHQAcAA6AC8ALwBzAGMAaABlAG0AYQBzAC4AbQBpAGMAcgBvAHMAbwBmAHQALgBjAG8AbQAvAEQAUgBNAC8AMgAwADAANwAvADAAMwAvAFAAbABhAHkAUgBlAGEAZAB5AEgAZQBhAGQAZQByACIAIAB2AGUAcgBzAGkAbwBuAD0AIgA0AC4AMwAuADAALgAwACIAPgA8AEQAQQBUAEEAPgA8AFAAUgBPAFQARQBDAFQASQBOAEYATwA+ADwASwBJAEQAUwA+ADwASwBJAEQAIABBAEwARwBJAEQAPQAiAEEARQBTAEMAQgBDACIAIABWAEEATABVAEUAPQAiAFoAMABVAGoAQQBhAHUASgA3ADgAMABCAEkAMABWAG4AaQBhAHYATgA3AHcAPQA9ACIAPgA8AC8ASwBJAEQAPgA8AC8ASwBJAEQAUwA+ADwALwBQAFIATwBUAEUAQwBUAEkATgBGAE8APgA8AEwAQQBfAFUAUgBMAD4AaAB0AHQAcABzADoALwAvAHAAbABhAHkAcgBlAGEAZAB5AC4AZQB6AGQAcgBtAC4AYwBvAG0ALwBjAGUAbgBjAHkALwBwAHIAZQBhAHUAdABoAC4AYQBzAHAAeAA/AHAAWAA9ADIANwA0AEYARgA0ADwALwBMAEEAXwBVAFIATAA+ADwARABTAF8ASQBEAD4AVgBsAFIANwBJAGQAcwBJAEoARQB1AFIAZAAwADYATABhAHEAcwAyAGoAdwA9AD0APAAvAEQAUwBfAEkARAA+ADwALwBEAEEAVABBAD4APAAvAFcAUgBNAEgARQBBAEQARQBSAD4A</cenc:pssh>
+        <mspr:pro xmlns:mspr="urn:microsoft:playready">ngIAAAEAAQCUAjwAVwBSAE0ASABFAEEARABFAFIAIAB4AG0AbABuAHMAPQAiAGgAdAB0AHAAOgAvAC8AcwBjAGgAZQBtAGEAcwAuAG0AaQBjAHIAbwBzAG8AZgB0AC4AYwBvAG0ALwBEAFIATQAvADIAMAAwADcALwAwADMALwBQAGwAYQB5AFIAZQBhAGQAeQBIAGUAYQBkAGUAcgAiACAAdgBlAHIAcwBpAG8AbgA9ACIANAAuADMALgAwAC4AMAAiAD4APABEAEEAVABBAD4APABQAFIATwBUAEUAQwBUAEkATgBGAE8APgA8AEsASQBEAFMAPgA8AEsASQBEACAAQQBMAEcASQBEAD0AIgBBAEUAUwBDAEIAQwAiACAAVgBBAEwAVQBFAD0AIgBaADAAVQBqAEEAYQB1AEoANwA4ADAAQgBJADAAVgBuAGkAYQB2AE4ANwB3AD0APQAiAD4APAAvAEsASQBEAD4APAAvAEsASQBEAFMAPgA8AC8AUABSAE8AVABFAEMAVABJAE4ARgBPAD4APABMAEEAXwBVAFIATAA+AGgAdAB0AHAAcwA6AC8ALwBwAGwAYQB5AHIAZQBhAGQAeQAuAGUAegBkAHIAbQAuAGMAbwBtAC8AYwBlAG4AYwB5AC8AcAByAGUAYQB1AHQAaAAuAGEAcwBwAHgAPwBwAFgAPQAyADcANABGAEYANAA8AC8ATABBAF8AVQBSAEwAPgA8AEQAUwBfAEkARAA+AFYAbABSADcASQBkAHMASQBKAEUAdQBSAGQAMAA2AEwAYQBxAHMAMgBqAHcAPQA9ADwALwBEAFMAXwBJAEQAPgA8AC8ARABBAFQAQQA+ADwALwBXAFIATQBIAEUAQQBEAEUAUgA+AA==</mspr:pro>
+        <dashif:Laurl xmlns:dashif="https://dashif.org/CPS" licenseType="EME-1.0">https://playready.ezdrm.com/cency/preauth.aspx?pX=274FF4</dashif:Laurl>
+      </ContentProtection>
+      <ContentProtection schemeIdUri="urn:uuid:94ce86fb-07ff-4f43-adb8-93d2fa968ca2" value="Fairplay">
+        <dashif:Laurl xmlns:dashif="https://dashif.org/CPS" licenseType="EME-1.0">https://fps.ezdrm.com/api/licenses/auth?px=A552CE&amp;assetID=01234567-89AB-CDEF-0123-456789ABCDEF</dashif:Laurl>
+        <dashif:Certurl xmlns:dashif="https://dashif.org/CPS">https://na-fps.ezdrm.com/demo/video/eleisure.cer</dashif:Certurl>
+      </ContentProtection>
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"></Role>
+      <SegmentTemplate media="$RepresentationID$/$Number$.m4s" initialization="$RepresentationID$/init.mp4" duration="2" startNumber="0"></SegmentTemplate>
+      <Representation id="V300" bandwidth="300000" width="640" height="360" sar="1:1" frameRate="60/2" codecs="avc1.64001e"></Representation>
+    </AdaptationSet>
+  </Period>
+  <UTCTiming schemeIdUri="urn:mpeg:dash:utc:http-xsdate:2014" value="https://time.akamai.com/?iso&amp;ms"></UTCTiming>
+</MPD>

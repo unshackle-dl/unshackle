@@ -1,0 +1,47 @@
+<?xml version="1.0" ?>
+<MPD mediaPresentationDuration="PT653.696S" minBufferTime="PT2S" profiles="http://dashif.org/guidelines/dash264,urn:mpeg:dash:profile:isoff-on-demand:2011" type="static" xmlns="urn:mpeg:dash:schema:mpd:2011" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="urn:mpeg:DASH:schema:MPD:2011 DASH-MPD.xsd">
+ <BaseURL>./</BaseURL>
+ <Period>
+  <AdaptationSet codecs="avc1.42c01e" contentType="video" frameRate="24/1" height="480" mimeType="video/mp4" par="16:9" scanType="progressive" subsegmentAlignment="true" subsegmentStartsWithSAP="1" width="854">
+   <Representation bandwidth="1501684" id="ED_SD_480p_reenc-avc1.42c01e-0s-854x480-h264-1500000bps_seg" sar="1:1">
+    <BaseURL>ED_SD_480p_reenc-avc1.42c01e-0s-854x480-h264-1500000bps_seg.mp4</BaseURL>
+    <SegmentBase indexRange="686-2289">
+     <Initialization range="0-685"/>
+    </SegmentBase>
+   </Representation>
+  </AdaptationSet>
+  <AdaptationSet codecs="mp4a.40.5" contentType="audio" lang="en" mimeType="audio/mp4" subsegmentAlignment="true" subsegmentStartsWithSAP="1">
+   <AudioChannelConfiguration schemeIdUri="urn:mpeg:mpegB:cicp:ChannelConfiguration" value="2"/>
+   <Representation audioSamplingRate="48000" bandwidth="27288" id="ED-CM-St-16bit_length_fixed-en-653s-2-heaac-24000bps_seg">
+    <BaseURL>ED-CM-St-16bit_length_fixed-en-653s-2-heaac-24000bps_seg.mp4</BaseURL>
+    <SegmentBase indexRange="609-2212">
+     <Initialization range="0-608"/>
+    </SegmentBase>
+   </Representation>
+   <Representation audioSamplingRate="48000" bandwidth="99283" id="ED-CM-St-16bit_length_fixed-en-653s-2-heaac-96000bps_seg">
+    <BaseURL>ED-CM-St-16bit_length_fixed-en-653s-2-heaac-96000bps_seg.mp4</BaseURL>
+    <SegmentBase indexRange="609-2212">
+     <Initialization range="0-608"/>
+    </SegmentBase>
+   </Representation>
+   <Representation audioSamplingRate="48000" bandwidth="35287" id="ED-CM-St-16bit_length_fixed-en-653s-2-heaac-32000bps_seg">
+    <BaseURL>ED-CM-St-16bit_length_fixed-en-653s-2-heaac-32000bps_seg.mp4</BaseURL>
+    <SegmentBase indexRange="609-2212">
+     <Initialization range="0-608"/>
+    </SegmentBase>
+   </Representation>
+   <Representation audioSamplingRate="48000" bandwidth="67285" id="ED-CM-St-16bit_length_fixed-en-653s-2-heaac-64000bps_seg">
+    <BaseURL>ED-CM-St-16bit_length_fixed-en-653s-2-heaac-64000bps_seg.mp4</BaseURL>
+    <SegmentBase indexRange="609-2212">
+     <Initialization range="0-608"/>
+    </SegmentBase>
+   </Representation>
+   <Representation audioSamplingRate="48000" bandwidth="51285" id="ED-CM-St-16bit_length_fixed-en-653s-2-heaac-48000bps_seg">
+    <BaseURL>ED-CM-St-16bit_length_fixed-en-653s-2-heaac-48000bps_seg.mp4</BaseURL>
+    <SegmentBase indexRange="609-2212">
+     <Initialization range="0-608"/>
+    </SegmentBase>
+   </Representation>
+  </AdaptationSet>
+ </Period>
+</MPD>

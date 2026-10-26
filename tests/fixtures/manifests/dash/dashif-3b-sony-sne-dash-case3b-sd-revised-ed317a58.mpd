@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?><MPD xmlns="urn:mpeg:dash:schema:mpd:2011" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" maxSubsegmentDuration="PT5.0S" mediaPresentationDuration="PT9M57S" minBufferTime="PT5.0S" profiles="urn:mpeg:dash:profile:isoff-on-demand:2011,http://xmlns.sony.net/metadata/mpeg/dash/profile/senvu/2012" type="static" xsi:schemaLocation="urn:mpeg:dash:schema:mpd:2011 DASH-MPD.xsd">
+  <Period duration="PT9M57S" id="P1">
+    <!-- Adaptation Set for main audio -->
+    <AdaptationSet audioSamplingRate="48000" codecs="mp4a.40.5" contentType="audio" group="2" id="2" lang="en" mimeType="audio/mp4" subsegmentAlignment="true" subsegmentStartsWithSAP="1">
+      <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2"/>
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"/>
+      <Representation bandwidth="64000" id="2_1">
+        <BaseURL>DASH_vodaudio_Track7.m4a</BaseURL>
+      </Representation>
+    </AdaptationSet>
+    <!-- Adaptation Set for main audio -->
+    <AdaptationSet audioSamplingRate="48000" codecs="mp4a.40.5" contentType="audio" group="2" id="3" lang="en" mimeType="audio/mp4" subsegmentAlignment="true" subsegmentStartsWithSAP="1">
+      <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="6"/>
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"/>
+      <Representation bandwidth="128000" id="3_2">
+        <BaseURL>DASH_vodaudio_Track8.m4a</BaseURL>
+      </Representation>
+    </AdaptationSet>
+    <!-- Adaptation Set for video -->
+    <AdaptationSet contentType="video" frameRate="24000/1001" group="1" id="1" maxBandwidth="4276224" maxHeight="1080" maxWidth="1920" maximumSAPPeriod="5.0" mimeType="video/mp4" minBandwidth="704512" minHeight="180" minWidth="320" par="16:9" sar="1:1" subsegmentAlignment="true" subsegmentStartsWithSAP="1">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"/>
+      <Representation bandwidth="704512" codecs="avc1.4D401E" height="180" id="1_1" mediaStreamStructureId="1" width="320">
+        <BaseURL>DASH_vodvideo_Track6.m4v</BaseURL>
+      </Representation>
+      <Representation bandwidth="2011136" codecs="avc1.4D4028" height="720" id="1_2" mediaStreamStructureId="1" width="1280">
+        <BaseURL>DASH_vodvideo_Track3.m4v</BaseURL>
+      </Representation>
+      <Representation bandwidth="3018752" codecs="avc1.4D4028" height="900" id="1_3" mediaStreamStructureId="1" width="1600">
+        <BaseURL>DASH_vodvideo_Track2.m4v</BaseURL>
+      </Representation>
+      <Representation bandwidth="1005568" codecs="avc1.4D401E" height="360" id="1_4" mediaStreamStructureId="1" width="640">
+        <BaseURL>DASH_vodvideo_Track5.m4v</BaseURL>
+      </Representation>
+      <Representation bandwidth="4276224" codecs="avc1.4D4028" height="1080" id="1_5" mediaStreamStructureId="1" width="1920">
+        <BaseURL>DASH_vodvideo_Track1.m4v</BaseURL>
+      </Representation>
+      <Representation bandwidth="1609728" codecs="avc1.4D401E" height="480" id="1_6" mediaStreamStructureId="1" width="854">
+        <BaseURL>DASH_vodvideo_Track4.m4v</BaseURL>
+      </Representation>
+    </AdaptationSet>
+  </Period>
+</MPD>

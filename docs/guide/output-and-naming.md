@@ -15,7 +15,7 @@ When a download finishes, unshackle builds the final path from three pieces:
 - **Output directory**: `directories.downloads` from your config, or whatever you pass to `-o/--output` on the command line for a single run.
 - **Folder template**: an optional per-title subfolder. unshackle **always** puts TV episodes and songs in a folder. Movies only get one if you define a `movies` folder template, or a single-string `folder` template that applies to all title kinds (see [Folder templates](#folder-templates)).
 - **Filename template**: the `output_template` for the title kind (movie, series, or song).
-- **Extension**: chosen by the muxer for a movie or an episode: `.mkv` for video, `.mka` for audio-only, `.mks` for subtitle-only, `.mp4` for [DTS:X Profile 2 audio](#dtsx-profile-2-output). unshackle does not mux a song. It remuxes a song into the container of its codec, such as `.flac`, `.opus`, or `.m4a`. Read [Music output files](#music-output-files).
+- **Extension**: chosen by the muxer for a movie or an episode: `.mkv` for video, `.mka` for audio-only, `.mks` for subtitle-only, `.mp4` for [DTS:X Profile 2 and MPEG-H audio](#dtsx-profile-2-and-mpeg-h-output). unshackle does not mux a song. It remuxes a song into the container of its codec, such as `.flac`, `.opus`, or `.m4a`. Read [Music output files](#music-output-files).
 
 !!! example "A typical episode path"
     ```text
@@ -359,11 +359,12 @@ name `Original` or `Japanese (original)` stays as it is.
     out the language when the name already contains it, so an English name shows once. A native name
     such as `日本語` shows next to `Japanese` in an English interface.
 
-### DTS:X Profile 2 output
+### DTS:X Profile 2 and MPEG-H output
 
-A title whose audio holds a `dtsx` or `dtsy` sample entry (DTS:X Profile 2, DTS-UHD) muxes
-to MP4 with [MP4Box](../getting-started/installation.md), because Matroska has no CodecID
-for it. Without MP4Box installed the mux stops.
+A title whose audio holds a `dtsx` or `dtsy` sample entry (DTS:X Profile 2, DTS-UHD), or an
+MPEG-H sample entry (`mha1`, `mha2`, `mhm1`, `mhm2`), muxes to MP4 with
+[MP4Box](../getting-started/installation.md), because Matroska has no CodecID for it.
+Without MP4Box installed the mux stops.
 
 DTS:X Profile 1 is DTS-HD Master Audio and muxes to MKV as usual.
 

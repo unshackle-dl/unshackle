@@ -26,7 +26,7 @@ from unshackle.core.tracks.attachment import Attachment
 from unshackle.core.tracks.audio import Audio
 from unshackle.core.tracks.chapters import Chapter, Chapters
 from unshackle.core.tracks.subtitle import Subtitle
-from unshackle.core.tracks.track import Track, has_dts_uhd_sample_entry, strip_duplicate_init_boxes
+from unshackle.core.tracks.track import Track, has_mp4_only_audio_entry, strip_duplicate_init_boxes
 from unshackle.core.tracks.video import Video
 from unshackle.core.utilities import (
     is_close_match,
@@ -574,7 +574,7 @@ class Tracks:
         """
         Multiplex the Tracks into an MP4 Container with MP4Box.
 
-        Only used for a codec Matroska cannot name, currently DTS-UHD, because MP4 carries
+        Only used for a codec Matroska cannot carry, DTS-UHD or MPEG-H, because MP4 carries
         far less: it drops the forced, hearing-impaired and original flags, holds no
         attachments at all, and leaves out a subtitle it has no format for rather than
         mangling it. Losing those beats shipping audio no player can name.
@@ -583,7 +583,7 @@ class Tracks:
         """
         mp4box = getattr(binaries, "MP4Box", None)
         if not mp4box:
-            raise RuntimeError("MP4Box (GPAC) not found, muxing DTS-UHD (DTS:X Profile 2) audio needs it")
+            raise RuntimeError("MP4Box (GPAC) not found, muxing DTS-UHD or MPEG-H audio needs it")
 
         progress = progress or partial(lambda **kwargs: None)
 
@@ -669,7 +669,7 @@ class Tracks:
                 "muxer": str(mp4box),
                 "command": full_command,
                 "container": "mp4",
-                "reason": "DTS-UHD audio has no Matroska CodecID",
+                "reason": "DTS-UHD or MPEG-H audio has no Matroska CodecID",
             },
         )
 
@@ -788,7 +788,7 @@ class Tracks:
                     video.needs_repack = True
                     video.data["audio_language"] = lang_code
 
-        if any(at.path and at.path.exists() and has_dts_uhd_sample_entry(at.path) for at in self.audio):
+        if any(at.path and at.path.exists() and has_mp4_only_audio_entry(at.path) for at in self.audio):
             return self._mux_mp4(
                 title=title,
                 delete=delete,

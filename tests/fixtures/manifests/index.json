@@ -1,0 +1,3458 @@
+[
+  {
+    "file": "dash/dashif-1-1-chid-voices-51-256-ddp-31c36440.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "1/1/ChID_voices_51_256_ddp",
+    "url": "http://dash.akamaized.net/dash264/TestCasesMCA/dolby/1/1/ChID_voices_51_256_ddp.mpd",
+    "expect": {
+      "max_num_video": 1,
+      "max_num_audio": 1,
+      "video_codec": "avc1.42801e",
+      "audio_codec": "ec-3"
+    }
+  },
+  {
+    "file": "dash/dashif-1-6chid-6chid-480p-single-adapt-heaac5-1-sidx-2f8131cb.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "1/6chID/6chId_480p_single_adapt_heaac5_1_sidx",
+    "url": "http://dash.akamaized.net/dash264/TestCasesMCA/fraunhofer/HE-AACv2_Multichannel/1/6chID/6chId_480p_single_adapt_heaac5_1_sidx.mpd",
+    "expect": {
+      "max_num_video": 1,
+      "max_num_audio": 1,
+      "video_codec": "avc1.42c01e",
+      "audio_codec": "mp4a.40.5"
+    }
+  },
+  {
+    "file": "dash/dashif-1-6chid-6chid-480p-single-adapt-mps5-1-sidx-9ec6ab10.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "1/6chID/6chId_480p_single_adapt_mps5_1_sidx",
+    "url": "http://dash.akamaized.net/dash264/TestCasesMCA/fraunhofer/MPEG_Surround/1/6chID/6chId_480p_single_adapt_mps5_1_sidx.mpd",
+    "expect": {
+      "max_num_video": 1,
+      "max_num_audio": 1,
+      "video_codec": "avc1.42c01e",
+      "audio_codec": "mp4a.40.30"
+    }
+  },
+  {
+    "file": "dash/dashif-10a-1-iis-forest-short-poem-multi-lang-480p-single-adapt-aac-67bc3174.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "10a/1/iis_forest_short_poem_multi_lang_480p_single_adapt_aaclc_sidx",
+    "url": "http://dash.akamaized.net/dash264/TestCases/10a/1/iis_forest_short_poem_multi_lang_480p_single_adapt_aaclc_sidx.mpd",
+    "expect": {
+      "max_num_video": 1,
+      "max_num_audio": 1,
+      "video_codec": "avc1.42c01e",
+      "audio_codec": "mp4a.40.2"
+    }
+  },
+  {
+    "file": "dash/dashif-1a-1-tos-ondemand-hevc-multirate-ebd73a08.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "1a/1/TOS_OnDemand_HEVC_MultiRate",
+    "url": "http://dash.akamaized.net/dash264/TestCasesHEVC/1a/1/TOS_OnDemand_HEVC_MultiRate.mpd",
+    "expect": {
+      "max_num_video": 3,
+      "max_num_audio": 1,
+      "video_codec": "hev1.1.6.L93.90",
+      "audio_codec": "mp4a.40.29"
+    }
+  },
+  {
+    "file": "dash/dashif-1a-2-bbb-ondemand-hevc-multirate-33676437.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "1a/2/BBB_OnDemand_HEVC_MultiRate",
+    "url": "http://dash.akamaized.net/dash264/TestCasesHEVC/1a/2/BBB_OnDemand_HEVC_MultiRate.mpd",
+    "expect": {
+      "max_num_video": 3,
+      "max_num_audio": 1,
+      "video_codec": "hev1.1.6.L93.90",
+      "audio_codec": "mp4a.40.29"
+    }
+  },
+  {
+    "file": "dash/dashif-1a-9-tos-ondemand-multirate-hvc-e8be7bfd.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "1a/9/tos_ondemand_multirate_hvc",
+    "url": "http://dash.akamaized.net/dash264/TestCasesHEVC/1a/9/tos_ondemand_multirate_hvc.mpd",
+    "expect": {
+      "max_num_video": 3,
+      "max_num_audio": 1,
+      "video_codec": "hvc1.1.6.L93.90",
+      "audio_codec": "mp4a.40.2"
+    }
+  },
+  {
+    "file": "dash/dashif-1a-netflix-exmpd-bip-tc1-890aa81d.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "1a/netflix/exMPD_BIP_TC1",
+    "url": "http://dash.akamaized.net/dash264/TestCases/1a/netflix/exMPD_BIP_TC1.mpd",
+    "expect": {
+      "max_num_video": 4,
+      "max_num_audio": 1,
+      "video_codec": "avc1.42401E",
+      "audio_codec": "mp4a.40.5"
+    }
+  },
+  {
+    "file": "dash/dashif-1a-sony-sne-dash-sd-case1a-revised-29ca4095.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "1a/sony/SNE_DASH_SD_CASE1A_REVISED",
+    "url": "http://dash.akamaized.net/dash264/TestCases/1a/sony/SNE_DASH_SD_CASE1A_REVISED.mpd",
+    "expect": {
+      "max_num_video": 4,
+      "max_num_audio": 1,
+      "video_codec": "avc1.4D401E",
+      "audio_codec": "mp4a.40.5"
+    }
+  },
+  {
+    "file": "dash/dashif-1b-1-tos-live-hevc-multirate-d56c7c19.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "1b/1/TOS_Live_HEVC_MultiRate",
+    "url": "http://dash.akamaized.net/dash264/TestCasesHEVC/1b/1/TOS_Live_HEVC_MultiRate.mpd",
+    "expect": {
+      "max_num_video": 3,
+      "max_num_audio": 1,
+      "video_codec": "hev1.1.6.L93.90",
+      "audio_codec": "mp4a.40.29"
+    }
+  },
+  {
+    "file": "dash/dashif-1b-10-tos-live-multirate-hvc-3a4efd9f.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "1b/10/tos_live_multirate_hvc",
+    "url": "http://dash.akamaized.net/dash264/TestCasesHEVC/1b/10/tos_live_multirate_hvc.mpd",
+    "expect": {
+      "max_num_video": 3,
+      "max_num_audio": 1,
+      "video_codec": "hvc1.1.6.L93.90",
+      "audio_codec": "mp4a.40.2"
+    }
+  },
+  {
+    "file": "dash/dashif-1b-2-bbb-live-hevc-multirate-91720e15.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "1b/2/BBB_Live_HEVC_MultiRate",
+    "url": "http://dash.akamaized.net/dash264/TestCasesHEVC/1b/2/BBB_Live_HEVC_MultiRate.mpd",
+    "expect": {
+      "max_num_video": 3,
+      "max_num_audio": 1,
+      "video_codec": "hev1.1.6.L93.90",
+      "audio_codec": "mp4a.40.29"
+    }
+  },
+  {
+    "file": "dash/dashif-2-1-chid-voices-71-768-ddp-baca5e94.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "2/1/ChID_voices_71_768_ddp",
+    "url": "http://dash.akamaized.net/dash264/TestCasesMCA/dolby/2/1/ChID_voices_71_768_ddp.mpd",
+    "expect": {
+      "max_num_video": 1,
+      "max_num_audio": 1,
+      "video_codec": "avc1.42801e",
+      "audio_codec": "ec-3"
+    }
+  },
+  {
+    "file": "dash/dashif-2-8chid-8ch-id-480p-single-adapt-heaac7-1-cf12-sidx-195cab62.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "2/8chID/8ch_id_480p_single_adapt_heaac7_1_cf12_sidx",
+    "url": "http://dash.akamaized.net/dash264/TestCasesMCA/fraunhofer/HE-AACv2_Multichannel/2/8chID/8ch_id_480p_single_adapt_heaac7_1_cf12_sidx.mpd",
+    "expect": {
+      "max_num_video": 1,
+      "max_num_audio": 1,
+      "video_codec": "avc1.42c01e",
+      "audio_codec": "mp4a.40.5"
+    }
+  },
+  {
+    "file": "dash/dashif-2-elephantsdream-6ch-elephants-dream-480p-mps5-1-sidx-fd164c68.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "2/ElephantsDream_6ch/elephants_dream_480p_mps5_1_sidx",
+    "url": "http://dash.akamaized.net/dash264/TestCasesMCA/fraunhofer/MPEG_Surround/2/ElephantsDream_6ch/elephants_dream_480p_mps5_1_sidx.mpd",
+    "expect": {
+      "max_num_video": 1,
+      "max_num_audio": 5,
+      "video_codec": "avc1.42c01e",
+      "audio_codec": "mp4a.40.30"
+    }
+  },
+  {
+    "file": "dash/dashif-2-sintel-6ch-sintel-480p-mps5-1-sidx-6a86a3dc.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "2/Sintel_6ch/sintel_480p_mps5_1_sidx",
+    "url": "http://dash.akamaized.net/dash264/TestCasesMCA/fraunhofer/MPEG_Surround/2/Sintel_6ch/sintel_480p_mps5_1_sidx.mpd",
+    "expect": {
+      "max_num_video": 1,
+      "max_num_audio": 5,
+      "video_codec": "avc1.42c01e",
+      "audio_codec": "mp4a.40.30"
+    }
+  },
+  {
+    "file": "dash/dashif-2a-1-tos-ondemand-hevc-multires-6f154c09.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "2a/1/TOS_OnDemand_HEVC_MultiRes",
+    "url": "http://dash.akamaized.net/dash264/TestCasesHEVC/2a/1/TOS_OnDemand_HEVC_MultiRes.mpd",
+    "expect": {
+      "max_num_video": 4,
+      "max_num_audio": 1,
+      "video_codec": "hev1.1.6.L63.90,hev1.1.6.L90.90,hev1.1.6.L93.90,hev1.1.6.L120.90",
+      "audio_codec": "mp4a.40.29"
+    }
+  },
+  {
+    "file": "dash/dashif-2a-11-tos-ondemand-multires-hvc-c2ed6c43.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "2a/11/tos_ondemand_multires_hvc",
+    "url": "http://dash.akamaized.net/dash264/TestCasesHEVC/2a/11/tos_ondemand_multires_hvc.mpd",
+    "expect": {
+      "max_num_video": 4,
+      "max_num_audio": 1,
+      "video_codec": "hvc1.1.6.L63.90,hvc1.1.6.L90.90,hvc1.1.6.L93.90,hvc1.1.6.L120.90",
+      "audio_codec": "mp4a.40.2"
+    }
+  },
+  {
+    "file": "dash/dashif-2a-12-tos-ondemand-multires-10bit-hev-f49d3e78.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "2a/12/tos_ondemand_multires_10bit_hev",
+    "url": "http://dash.akamaized.net/dash264/TestCasesHEVC/2a/12/tos_ondemand_multires_10bit_hev.mpd",
+    "expect": {
+      "max_num_video": 4,
+      "max_num_audio": 1,
+      "video_codec": "hev1.2.4.L63.90,hev1.2.4.L90.90,hev1.2.4.L93.90,hev1.2.4.L120.90",
+      "audio_codec": "mp4a.40.2"
+    }
+  },
+  {
+    "file": "dash/dashif-2a-13-tos-ondemand-multires-10bit-hvc-17121377.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "2a/13/tos_ondemand_multires_10bit_hvc",
+    "url": "http://dash.akamaized.net/dash264/TestCasesHEVC/2a/13/tos_ondemand_multires_10bit_hvc.mpd",
+    "expect": {
+      "max_num_video": 4,
+      "max_num_audio": 1,
+      "video_codec": "hvc1.2.4.L63.90,hvc1.2.4.L90.90,hvc1.2.4.L93.90,hvc1.2.4.L120.90",
+      "audio_codec": "mp4a.40.2"
+    }
+  },
+  {
+    "file": "dash/dashif-2a-2-bbb-ondemand-hevc-multires-fb6a2031.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "2a/2/BBB_OnDemand_HEVC_MultiRes",
+    "url": "http://dash.akamaized.net/dash264/TestCasesHEVC/2a/2/BBB_OnDemand_HEVC_MultiRes.mpd",
+    "expect": {
+      "max_num_video": 4,
+      "max_num_audio": 1,
+      "video_codec": "hev1.1.6.L63.90,hev1.1.6.L90.90,hev1.1.6.L93.90,hev1.1.6.L120.90",
+      "audio_codec": "mp4a.40.29"
+    }
+  },
+  {
+    "file": "dash/dashif-2b-1-tos-live-hevc-multires-9c544af2.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "2b/1/TOS_Live_HEVC_MultiRes",
+    "url": "http://dash.akamaized.net/dash264/TestCasesHEVC/2b/1/TOS_Live_HEVC_MultiRes.mpd",
+    "expect": {
+      "max_num_video": 4,
+      "max_num_audio": 1,
+      "video_codec": "hev1.1.6.L63.90,hev1.1.6.L90.90,hev1.1.6.L93.90,hev1.1.6.L120.90",
+      "audio_codec": "mp4a.40.29"
+    }
+  },
+  {
+    "file": "dash/dashif-2b-14-tos-live-multires-hvc-40b48425.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "2b/14/tos_live_multires_hvc",
+    "url": "http://dash.akamaized.net/dash264/TestCasesHEVC/2b/14/tos_live_multires_hvc.mpd",
+    "expect": {
+      "max_num_video": 4,
+      "max_num_audio": 1,
+      "video_codec": "hvc1.1.6.L63.90,hvc1.1.6.L90.90,hvc1.1.6.L93.90,hvc1.1.6.L120.90",
+      "audio_codec": "mp4a.40.2"
+    }
+  },
+  {
+    "file": "dash/dashif-2b-15-tos-live-multires-10bit-hev-aa30bfa2.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "2b/15/tos_live_multires_10bit_hev",
+    "url": "http://dash.akamaized.net/dash264/TestCasesHEVC/2b/15/tos_live_multires_10bit_hev.mpd",
+    "expect": {
+      "max_num_video": 4,
+      "max_num_audio": 1,
+      "video_codec": "hev1.2.4.L63.90,hev1.2.4.L90.90,hev1.2.4.L93.90,hev1.2.4.L120.90",
+      "audio_codec": "mp4a.40.2"
+    }
+  },
+  {
+    "file": "dash/dashif-2b-16-tos-live-multires-10bit-hvc-a6f7862c.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "2b/16/tos_live_multires_10bit_hvc",
+    "url": "http://dash.akamaized.net/dash264/TestCasesHEVC/2b/16/tos_live_multires_10bit_hvc.mpd",
+    "expect": {
+      "max_num_video": 4,
+      "max_num_audio": 1,
+      "video_codec": "hvc1.2.4.L63.90,hvc1.2.4.L90.90,hvc1.2.4.L93.90,hvc1.2.4.L120.90",
+      "audio_codec": "mp4a.40.2"
+    }
+  },
+  {
+    "file": "dash/dashif-2b-17-bbb-live-multires-10bit-hev-66118475.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "2b/17/bbb_live_multires_10bit_hev",
+    "url": "http://dash.akamaized.net/dash264/TestCasesHEVC/2b/17/bbb_live_multires_10bit_hev.mpd",
+    "expect": {
+      "max_num_video": 4,
+      "max_num_audio": 1,
+      "video_codec": "hev1.2.4.L63.90,hev1.2.4.L90.90,hev1.2.4.L93.90,hev1.2.4.L120.90",
+      "audio_codec": "mp4a.40.2"
+    }
+  },
+  {
+    "file": "dash/dashif-2b-18-bbb-live-multires-10bit-hvc-1013a05d.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "2b/18/bbb_live_multires_10bit_hvc",
+    "url": "http://dash.akamaized.net/dash264/TestCasesHEVC/2b/18/bbb_live_multires_10bit_hvc.mpd",
+    "expect": {
+      "max_num_video": 4,
+      "max_num_audio": 1,
+      "video_codec": "hvc1.2.4.L63.90,hvc1.2.4.L90.90,hvc1.2.4.L93.90,hvc1.2.4.L120.90",
+      "audio_codec": "mp4a.40.2"
+    }
+  },
+  {
+    "file": "dash/dashif-2b-2-bbb-live-hevc-multires-ebe00d78.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "2b/2/BBB_Live_HEVC_MultiRes",
+    "url": "http://dash.akamaized.net/dash264/TestCasesHEVC/2b/2/BBB_Live_HEVC_MultiRes.mpd",
+    "expect": {
+      "max_num_video": 4,
+      "max_num_audio": 1,
+      "video_codec": "hev1.1.6.L63.90,hev1.1.6.L90.90,hev1.1.6.L93.90,hev1.1.6.L120.90",
+      "audio_codec": "mp4a.40.29"
+    }
+  },
+  {
+    "file": "dash/dashif-3-1-chid-voices-20-128-ddp-20b293d4.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "3/1/ChID_voices_20_128_ddp",
+    "url": "http://dash.akamaized.net/dash264/TestCasesMCA/dolby/3/1/ChID_voices_20_128_ddp.mpd",
+    "expect": {
+      "max_num_video": 1,
+      "max_num_audio": 1,
+      "video_codec": "avc1.42801e",
+      "audio_codec": "ec-3"
+    }
+  },
+  {
+    "file": "dash/dashif-3-elephantsdream-6ch-elephants-dream-480p-heaac5-1-sidx-9715c526.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "3/ElephantsDream_6ch/elephants_dream_480p_heaac5_1_sidx",
+    "url": "http://dash.akamaized.net/dash264/TestCasesMCA/fraunhofer/HE-AACv2_Multichannel/3/ElephantsDream_6ch/elephants_dream_480p_heaac5_1_sidx.mpd",
+    "expect": {
+      "max_num_video": 1,
+      "max_num_audio": 5,
+      "video_codec": "avc1.42c01e",
+      "audio_codec": "mp4a.40.5"
+    }
+  },
+  {
+    "file": "dash/dashif-3-sintel-6ch-sintel-480p-heaac5-1-sidx-6c76ac48.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "3/Sintel_6ch/sintel_480p_heaac5_1_sidx",
+    "url": "http://dash.akamaized.net/dash264/TestCasesMCA/fraunhofer/HE-AACv2_Multichannel/3/Sintel_6ch/sintel_480p_heaac5_1_sidx.mpd",
+    "expect": {
+      "max_num_video": 1,
+      "max_num_audio": 5,
+      "video_codec": "avc1.42c01e",
+      "audio_codec": "mp4a.40.5"
+    }
+  },
+  {
+    "file": "dash/dashif-3-sintel-8ch-sintel-480p-heaac7-1-cf12-sidx-1b94af12.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "3/Sintel_8ch/sintel_480p_heaac7_1_cf12_sidx",
+    "url": "http://dash.akamaized.net/dash264/TestCasesMCA/fraunhofer/HE-AACv2_Multichannel/3/Sintel_8ch/sintel_480p_heaac7_1_cf12_sidx.mpd",
+    "expect": {
+      "max_num_video": 1,
+      "max_num_audio": 5,
+      "video_codec": "avc1.42c01e",
+      "audio_codec": "mp4a.40.5"
+    }
+  },
+  {
+    "file": "dash/dashif-3b-sony-sne-dash-case3b-sd-revised-ed317a58.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "3b/sony/SNE_DASH_CASE3B_SD_REVISED",
+    "url": "http://dash.akamaized.net/dash264/TestCases/3b/sony/SNE_DASH_CASE3B_SD_REVISED.mpd",
+    "expect": {
+      "max_num_video": 6,
+      "max_num_audio": 1,
+      "video_codec": "avc1.4D401E,avc1.4D4028",
+      "audio_codec": "mp4a.40.5"
+    }
+  },
+  {
+    "file": "dash/dashif-4-1-chid-voices-71-384-448-768-ddp-c3e503ff.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "4/1/ChID_voices_71_384_448_768_ddp",
+    "url": "http://dash.akamaized.net/dash264/TestCasesMCA/dolby/4/1/ChID_voices_71_384_448_768_ddp.mpd",
+    "expect": {
+      "max_num_video": 1,
+      "max_num_audio": 3,
+      "video_codec": "avc1.42801e",
+      "audio_codec": "ec-3"
+    }
+  },
+  {
+    "file": "dash/dashif-4c-1-dash-0d3d9cd0.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "4c/1/dash",
+    "url": "http://dash.akamaized.net/dash264/TestCases/4c/1/dash.mpd",
+    "expect": {
+      "max_num_video": 4,
+      "max_num_audio": 2,
+      "video_codec": "avc1.64001f,avc1.640020,avc1.4d401e",
+      "audio_codec": "mp4a.40.2"
+    }
+  },
+  {
+    "file": "dash/dashif-5a-nomor-1-8768d40b.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "5a/nomor/1",
+    "url": "http://dash.akamaized.net/dash264/TestCases/5a/nomor/1.mpd"
+  },
+  {
+    "file": "dash/dashif-5a-nomor-3-571fffd3.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "5a/nomor/3",
+    "url": "http://dash.akamaized.net/dash264/TestCases/5a/nomor/3.mpd"
+  },
+  {
+    "file": "dash/dashif-5a-nomor-4-ed109c01.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "5a/nomor/4",
+    "url": "http://dash.akamaized.net/dash264/TestCases/5a/nomor/4.mpd"
+  },
+  {
+    "file": "dash/dashif-5a-nomor-5-afe91467.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "5a/nomor/5",
+    "url": "http://dash.akamaized.net/dash264/TestCases/5a/nomor/5.mpd"
+  },
+  {
+    "file": "dash/dashif-5b-nomor-1-a07dac6f.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "5b/nomor/1",
+    "url": "http://dash.akamaized.net/dash264/TestCases/5b/nomor/1.mpd"
+  },
+  {
+    "file": "dash/dashif-5b-nomor-10-647ebee6.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "5b/nomor/10",
+    "url": "http://dash.akamaized.net/dash264/TestCases/5b/nomor/10.mpd"
+  },
+  {
+    "file": "dash/dashif-5b-nomor-11-519a32db.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "5b/nomor/11",
+    "url": "http://dash.akamaized.net/dash264/TestCases/5b/nomor/11.mpd"
+  },
+  {
+    "file": "dash/dashif-5b-nomor-2-37e15df5.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "5b/nomor/2",
+    "url": "http://dash.akamaized.net/dash264/TestCases/5b/nomor/2.mpd"
+  },
+  {
+    "file": "dash/dashif-5b-nomor-3-2b1fb294.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "5b/nomor/3",
+    "url": "http://dash.akamaized.net/dash264/TestCases/5b/nomor/3.mpd"
+  },
+  {
+    "file": "dash/dashif-5b-nomor-4-729683e3.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "5b/nomor/4",
+    "url": "http://dash.akamaized.net/dash264/TestCases/5b/nomor/4.mpd"
+  },
+  {
+    "file": "dash/dashif-5b-nomor-5-7707a3bd.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "5b/nomor/5",
+    "url": "http://dash.akamaized.net/dash264/TestCases/5b/nomor/5.mpd"
+  },
+  {
+    "file": "dash/dashif-5b-nomor-6-ccaa8a05.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "5b/nomor/6",
+    "url": "http://dash.akamaized.net/dash264/TestCases/5b/nomor/6.mpd"
+  },
+  {
+    "file": "dash/dashif-5b-nomor-7-523aa2aa.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "5b/nomor/7",
+    "url": "http://dash.akamaized.net/dash264/TestCases/5b/nomor/7.mpd"
+  },
+  {
+    "file": "dash/dashif-5b-nomor-8-44e0ab96.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "5b/nomor/8",
+    "url": "http://dash.akamaized.net/dash264/TestCases/5b/nomor/8.mpd"
+  },
+  {
+    "file": "dash/dashif-5b-nomor-9-b47e6a74.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "5b/nomor/9",
+    "url": "http://dash.akamaized.net/dash264/TestCases/5b/nomor/9.mpd"
+  },
+  {
+    "file": "dash/dashif-5c-nomor-4-1a-04156322.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "5c/nomor/4_1a",
+    "url": "http://dash.akamaized.net/dash264/TestCases/5c/nomor/4_1a.mpd"
+  },
+  {
+    "file": "dash/dashif-5c-nomor-4-1b-a0c7f993.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "5c/nomor/4_1b",
+    "url": "http://dash.akamaized.net/dash264/TestCases/5c/nomor/4_1b.mpd"
+  },
+  {
+    "file": "dash/dashif-5c-nomor-4-1c-28c88eda.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "5c/nomor/4_1c",
+    "url": "http://dash.akamaized.net/dash264/TestCases/5c/nomor/4_1c.mpd"
+  },
+  {
+    "file": "dash/dashif-5c-nomor-4-1d-4590b084.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "5c/nomor/4_1d",
+    "url": "http://dash.akamaized.net/dash264/TestCases/5c/nomor/4_1d.mpd"
+  },
+  {
+    "file": "dash/dashif-5c-nomor-4-1e-481d3167.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "5c/nomor/4_1e",
+    "url": "http://dash.akamaized.net/dash264/TestCases/5c/nomor/4_1e.mpd"
+  },
+  {
+    "file": "dash/dashif-5c-nomor-4-1f-9d14a8f2.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "5c/nomor/4_1f",
+    "url": "http://dash.akamaized.net/dash264/TestCases/5c/nomor/4_1f.mpd"
+  },
+  {
+    "file": "dash/dashif-5c-nomor-5-1a-91d97f8f.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "5c/nomor/5_1a",
+    "url": "http://dash.akamaized.net/dash264/TestCases/5c/nomor/5_1a.mpd"
+  },
+  {
+    "file": "dash/dashif-5c-nomor-5-1b-578f6918.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "5c/nomor/5_1b",
+    "url": "http://dash.akamaized.net/dash264/TestCases/5c/nomor/5_1b.mpd"
+  },
+  {
+    "file": "dash/dashif-5c-nomor-5-1c-250fa836.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "5c/nomor/5_1c",
+    "url": "http://dash.akamaized.net/dash264/TestCases/5c/nomor/5_1c.mpd"
+  },
+  {
+    "file": "dash/dashif-5c-nomor-5-1d-07b13bef.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "5c/nomor/5_1d",
+    "url": "http://dash.akamaized.net/dash264/TestCases/5c/nomor/5_1d.mpd"
+  },
+  {
+    "file": "dash/dashif-5c-nomor-5-1e-8cadd6b0.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "5c/nomor/5_1e",
+    "url": "http://dash.akamaized.net/dash264/TestCases/5c/nomor/5_1e.mpd"
+  },
+  {
+    "file": "dash/dashif-5c-nomor-5-1f-28afbac6.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "5c/nomor/5_1f",
+    "url": "http://dash.akamaized.net/dash264/TestCases/5c/nomor/5_1f.mpd"
+  },
+  {
+    "file": "dash/dashif-6c-envivio-manifest-84f712b8.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "6c/envivio/manifest",
+    "url": "http://dash.akamaized.net/dash264/TestCases/6c/envivio/manifest.mpd",
+    "expect": {
+      "max_num_video": 4,
+      "max_num_audio": 1,
+      "video_codec": "avc1.4D401F,avc1.4D401E,avc1.4D400D",
+      "audio_codec": "mp4a.40.5"
+    }
+  },
+  {
+    "file": "dash/dashif-6c-envivio-manifest2-b4cac228.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "6c/envivio/manifest2",
+    "url": "http://dash.akamaized.net/dash264/TestCases/6c/envivio/manifest2.mpd",
+    "expect": {
+      "max_num_video": 4,
+      "max_num_audio": 1,
+      "video_codec": "avc1.4D401F,avc1.4D401E,avc1.4D400D",
+      "audio_codec": "mp4a.40.5"
+    }
+  },
+  {
+    "file": "dash/dashif-aac-lc-stereo-with-video-elephantsdream-elephants-dream-480p-95bf045b.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "aac-lc_stereo_with_video/ElephantsDream/elephants_dream_480p_aaclc_stereo_sidx",
+    "url": "http://dash.akamaized.net/dash264/TestCases/3b/fraunhofer/aac-lc_stereo_with_video/ElephantsDream/elephants_dream_480p_aaclc_stereo_sidx.mpd",
+    "expect": {
+      "max_num_video": 1,
+      "max_num_audio": 5,
+      "video_codec": "avc1.42c01e",
+      "audio_codec": "mp4a.40.2"
+    }
+  },
+  {
+    "file": "dash/dashif-aac-lc-stereo-with-video-sintel-sintel-480p-aaclc-stereo-sid-2071de6b.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "aac-lc_stereo_with_video/Sintel/sintel_480p_aaclc_stereo_sidx",
+    "url": "http://dash.akamaized.net/dash264/TestCases/3b/fraunhofer/aac-lc_stereo_with_video/Sintel/sintel_480p_aaclc_stereo_sidx.mpd",
+    "expect": {
+      "max_num_video": 1,
+      "max_num_audio": 5,
+      "video_codec": "avc1.42c01e",
+      "audio_codec": "mp4a.40.2"
+    }
+  },
+  {
+    "file": "dash/dashif-aac-lc-stereo-without-video-elephantsdream-elephants-dream-a-93d1e407.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "aac-lc_stereo_without_video/ElephantsDream/elephants_dream_audio_only_aaclc_stereo_sidx",
+    "url": "http://dash.akamaized.net/dash264/TestCases/3a/fraunhofer/aac-lc_stereo_without_video/ElephantsDream/elephants_dream_audio_only_aaclc_stereo_sidx.mpd",
+    "expect": {
+      "max_num_video": 0,
+      "max_num_audio": 5,
+      "video_codec": "",
+      "audio_codec": "mp4a.40.2"
+    }
+  },
+  {
+    "file": "dash/dashif-aac-lc-stereo-without-video-sintel-sintel-audio-only-aaclc-s-982a6e19.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "aac-lc_stereo_without_video/Sintel/sintel_audio_only_aaclc_stereo_sidx",
+    "url": "http://dash.akamaized.net/dash264/TestCases/3a/fraunhofer/aac-lc_stereo_without_video/Sintel/sintel_audio_only_aaclc_stereo_sidx.mpd",
+    "expect": {
+      "max_num_video": 0,
+      "max_num_audio": 5,
+      "video_codec": "",
+      "audio_codec": "mp4a.40.2"
+    }
+  },
+  {
+    "file": "dash/dashif-dts-1-paint-dtsc-testa-ce4cbb0a.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "dts/1/Paint_dtsc_testA",
+    "url": "http://dash.akamaized.net/dash264/TestCasesMCA/dts/1/Paint_dtsc_testA.mpd",
+    "expect": {
+      "max_num_video": 1,
+      "max_num_audio": 1,
+      "video_codec": "avc1.42c01e",
+      "audio_codec": "dtsc"
+    }
+  },
+  {
+    "file": "dash/dashif-dts-1-paint-dtse-testa-a88fac5b.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "dts/1/Paint_dtse_testA",
+    "url": "http://dash.akamaized.net/dash264/TestCasesMCA/dts/1/Paint_dtse_testA.mpd",
+    "expect": {
+      "max_num_video": 1,
+      "max_num_audio": 1,
+      "video_codec": "avc1.42c01e",
+      "audio_codec": "dtse"
+    }
+  },
+  {
+    "file": "dash/dashif-dts-1-paint-dtsh-testa-a9cba772.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "dts/1/Paint_dtsh_testA",
+    "url": "http://dash.akamaized.net/dash264/TestCasesMCA/dts/1/Paint_dtsh_testA.mpd",
+    "expect": {
+      "max_num_video": 1,
+      "max_num_audio": 1,
+      "video_codec": "avc1.42c01e",
+      "audio_codec": "dtsh"
+    }
+  },
+  {
+    "file": "dash/dashif-dts-1-paint-dtsl-testa-12296664.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "dts/1/Paint_dtsl_testA",
+    "url": "http://dash.akamaized.net/dash264/TestCasesMCA/dts/1/Paint_dtsl_testA.mpd",
+    "expect": {
+      "max_num_video": 1,
+      "max_num_audio": 1,
+      "video_codec": "avc1.42c01e",
+      "audio_codec": "dtsl"
+    }
+  },
+  {
+    "file": "dash/dashif-dts-2-paint-dtsc-testb-61060d8d.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "dts/2/Paint_dtsc_testB",
+    "url": "http://dash.akamaized.net/dash264/TestCasesMCA/dts/2/Paint_dtsc_testB.mpd",
+    "expect": {
+      "max_num_video": 1,
+      "max_num_audio": 1,
+      "video_codec": "avc1.42c01e",
+      "audio_codec": "dtsc"
+    }
+  },
+  {
+    "file": "dash/dashif-dts-2-paint-dtse-testb-15585048.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "dts/2/Paint_dtse_testB",
+    "url": "http://dash.akamaized.net/dash264/TestCasesMCA/dts/2/Paint_dtse_testB.mpd",
+    "expect": {
+      "max_num_video": 1,
+      "max_num_audio": 1,
+      "video_codec": "avc1.42c01e",
+      "audio_codec": "dtse"
+    }
+  },
+  {
+    "file": "dash/dashif-dts-2-paint-dtsl-testb-59889c79.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "dts/2/Paint_dtsl_testB",
+    "url": "http://dash.akamaized.net/dash264/TestCasesMCA/dts/2/Paint_dtsl_testB.mpd",
+    "expect": {
+      "max_num_video": 1,
+      "max_num_audio": 1,
+      "video_codec": "avc1.42c01e",
+      "audio_codec": "dtsl"
+    }
+  },
+  {
+    "file": "dash/dashif-dts-3-paint-dtsc-testd-8e52bc9f.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "dts/3/Paint_dtsc_testD",
+    "url": "http://dash.akamaized.net/dash264/TestCasesMCA/dts/3/Paint_dtsc_testD.mpd",
+    "expect": {
+      "max_num_video": 1,
+      "max_num_audio": 2,
+      "video_codec": "avc1.42c01e",
+      "audio_codec": "dtsc"
+    }
+  },
+  {
+    "file": "dash/dashif-dts-3-paint-dtse-testd-50d8ec46.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "dts/3/Paint_dtse_testD",
+    "url": "http://dash.akamaized.net/dash264/TestCasesMCA/dts/3/Paint_dtse_testD.mpd",
+    "expect": {
+      "max_num_video": 1,
+      "max_num_audio": 2,
+      "video_codec": "avc1.42c01e",
+      "audio_codec": "dtse"
+    }
+  },
+  {
+    "file": "dash/dashif-dts-3-paint-dtsh-testd-b8a8ce30.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "dts/3/Paint_dtsh_testD",
+    "url": "http://dash.akamaized.net/dash264/TestCasesMCA/dts/3/Paint_dtsh_testD.mpd",
+    "expect": {
+      "max_num_video": 1,
+      "max_num_audio": 2,
+      "video_codec": "avc1.42c01e",
+      "audio_codec": "dtsh"
+    }
+  },
+  {
+    "file": "dash/dashif-dts-3-paint-dtsl-testd-e14fd339.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "dts/3/Paint_dtsl_testD",
+    "url": "http://dash.akamaized.net/dash264/TestCasesMCA/dts/3/Paint_dtsl_testD.mpd",
+    "expect": {
+      "max_num_video": 1,
+      "max_num_audio": 2,
+      "video_codec": "avc1.42c01e",
+      "audio_codec": "dtsl"
+    }
+  },
+  {
+    "file": "dash/dashif-dtv-1-live-62209f4f.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "DTV/1/live",
+    "url": "http://dash.akamaized.net/dash264/TestCasesHD/2b/DTV/1/live.mpd",
+    "expect": {
+      "max_num_video": 2,
+      "max_num_audio": 1,
+      "video_codec": "avc1.64001f,avc1.640028",
+      "audio_codec": "mp4a.40.5"
+    }
+  },
+  {
+    "file": "dash/dashif-heaac-stereo-with-video-elephantsdream-elephants-dream-480p-33764fc1.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "heaac_stereo_with_video/ElephantsDream/elephants_dream_480p_heaac_stereo_sidx",
+    "url": "http://dash.akamaized.net/dash264/TestCases/3b/fraunhofer/heaac_stereo_with_video/ElephantsDream/elephants_dream_480p_heaac_stereo_sidx.mpd",
+    "expect": {
+      "max_num_video": 1,
+      "max_num_audio": 5,
+      "video_codec": "avc1.42c01e",
+      "audio_codec": "mp4a.40.5"
+    }
+  },
+  {
+    "file": "dash/dashif-heaac-stereo-with-video-sintel-sintel-480p-heaac-stereo-sidx-2c52ba82.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "heaac_stereo_with_video/Sintel/sintel_480p_heaac_stereo_sidx",
+    "url": "http://dash.akamaized.net/dash264/TestCases/3b/fraunhofer/heaac_stereo_with_video/Sintel/sintel_480p_heaac_stereo_sidx.mpd",
+    "expect": {
+      "max_num_video": 1,
+      "max_num_audio": 5,
+      "video_codec": "avc1.42c01e",
+      "audio_codec": "mp4a.40.5"
+    }
+  },
+  {
+    "file": "dash/dashif-heaac-stereo-without-video-elephantsdream-elephants-dream-au-8ee87e2f.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "heaac_stereo_without_video/ElephantsDream/elephants_dream_audio_only_heaac_stereo_sidx",
+    "url": "http://dash.akamaized.net/dash264/TestCases/3a/fraunhofer/heaac_stereo_without_video/ElephantsDream/elephants_dream_audio_only_heaac_stereo_sidx.mpd",
+    "expect": {
+      "max_num_video": 0,
+      "max_num_audio": 5,
+      "video_codec": "",
+      "audio_codec": "mp4a.40.5"
+    }
+  },
+  {
+    "file": "dash/dashif-heaac-stereo-without-video-sintel-sintel-audio-only-heaac-st-43fb3bab.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "heaac_stereo_without_video/Sintel/sintel_audio_only_heaac_stereo_sidx",
+    "url": "http://dash.akamaized.net/dash264/TestCases/3a/fraunhofer/heaac_stereo_without_video/Sintel/sintel_audio_only_heaac_stereo_sidx.mpd",
+    "expect": {
+      "max_num_video": 0,
+      "max_num_audio": 5,
+      "video_codec": "",
+      "audio_codec": "mp4a.40.5"
+    }
+  },
+  {
+    "file": "dash/dashif-heaacv2-stereo-with-video-elephantsdream-elephants-dream-480-0277e6c9.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "heaacv2_stereo_with_video/ElephantsDream/elephants_dream_480p_heaacv2_stereo_sidx",
+    "url": "http://dash.akamaized.net/dash264/TestCases/3b/fraunhofer/heaacv2_stereo_with_video/ElephantsDream/elephants_dream_480p_heaacv2_stereo_sidx.mpd",
+    "expect": {
+      "max_num_video": 1,
+      "max_num_audio": 5,
+      "video_codec": "avc1.42c01e",
+      "audio_codec": "mp4a.40.29"
+    }
+  },
+  {
+    "file": "dash/dashif-heaacv2-stereo-with-video-sintel-sintel-480p-heaacv2-stereo-cfe770f8.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "heaacv2_stereo_with_video/Sintel/sintel_480p_heaacv2_stereo_sidx",
+    "url": "http://dash.akamaized.net/dash264/TestCases/3b/fraunhofer/heaacv2_stereo_with_video/Sintel/sintel_480p_heaacv2_stereo_sidx.mpd",
+    "expect": {
+      "max_num_video": 1,
+      "max_num_audio": 5,
+      "video_codec": "avc1.42c01e",
+      "audio_codec": "mp4a.40.29"
+    }
+  },
+  {
+    "file": "dash/dashif-heaacv2-stereo-without-video-elephantsdream-elephants-dream-9828da33.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "heaacv2_stereo_without_video/ElephantsDream/elephants_dream_audio_only_heaacv2_stereo_sidx",
+    "url": "http://dash.akamaized.net/dash264/TestCases/3a/fraunhofer/heaacv2_stereo_without_video/ElephantsDream/elephants_dream_audio_only_heaacv2_stereo_sidx.mpd",
+    "expect": {
+      "max_num_video": 0,
+      "max_num_audio": 5,
+      "video_codec": "",
+      "audio_codec": "mp4a.40.29"
+    }
+  },
+  {
+    "file": "dash/dashif-heaacv2-stereo-without-video-sintel-sintel-audio-only-heaacv-0ea07c7c.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "heaacv2_stereo_without_video/Sintel/sintel_audio_only_heaacv2_stereo_sidx",
+    "url": "http://dash.akamaized.net/dash264/TestCases/3a/fraunhofer/heaacv2_stereo_without_video/Sintel/sintel_audio_only_heaacv2_stereo_sidx.mpd",
+    "expect": {
+      "max_num_video": 0,
+      "max_num_audio": 5,
+      "video_codec": "",
+      "audio_codec": "mp4a.40.29"
+    }
+  },
+  {
+    "file": "dash/dashif-microsoft-cenc-hd-time-cenc-hd-time-mpd-9f819977.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "microsoft/CENC_HD_Time/CENC_HD_time_MPD",
+    "url": "http://dash.akamaized.net/dash264/TestCases/6b/microsoft/CENC_HD_Time/CENC_HD_time_MPD.mpd",
+    "expect": {
+      "max_num_video": 8,
+      "max_num_audio": 1,
+      "video_codec": "avc1.640028",
+      "audio_codec": "mp4a.40.2"
+    }
+  },
+  {
+    "file": "dash/dashif-microsoft-cenc-sd-time-cenc-sd-time-mpd-f125a1d8.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "microsoft/CENC_SD_Time/CENC_SD_time_MPD",
+    "url": "http://dash.akamaized.net/dash264/TestCases/6b/microsoft/CENC_SD_Time/CENC_SD_time_MPD.mpd",
+    "expect": {
+      "max_num_video": 6,
+      "max_num_audio": 1,
+      "video_codec": "avc1.4D4020",
+      "audio_codec": "mp4a.40.2"
+    }
+  },
+  {
+    "file": "dash/dashif-mpegh-51-1-sintel-audio-video-mpegh-5-1-brs-sidx-d39d150c.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "MPEGH_51/1/sintel_audio_video_mpegh_5_1_brs_sidx",
+    "url": "http://dash.akamaized.net/dash264/TestCasesMCA/fraunhofer/MPEGH_51/1/sintel_audio_video_mpegh_5_1_brs_sidx.mpd",
+    "expect": {
+      "max_num_video": 1,
+      "max_num_audio": 4,
+      "video_codec": "avc1.42c01e",
+      "audio_codec": "mha1"
+    }
+  },
+  {
+    "file": "dash/dashif-mpegh-714-1-sintel-audio-video-mpegh-7-1-4-sidx-8184fb5d.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "MPEGH_714/1/sintel_audio_video_mpegh_7_1_4_sidx",
+    "url": "http://dash.akamaized.net/dash264/TestCasesMCA/fraunhofer/MPEGH_714/1/sintel_audio_video_mpegh_7_1_4_sidx.mpd",
+    "expect": {
+      "max_num_video": 1,
+      "max_num_audio": 1,
+      "video_codec": "avc1.42c01e",
+      "audio_codec": "mha1"
+    }
+  },
+  {
+    "file": "dash/dashif-mpegh-stereo-1-sintel-audio-video-mpegh-stereo-sidx-9f49d40c.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "MPEGH_Stereo/1/sintel_audio_video_mpegh_stereo_sidx",
+    "url": "http://dash.akamaized.net/dash264/TestCasesMCA/fraunhofer/MPEGH_Stereo/1/sintel_audio_video_mpegh_stereo_sidx.mpd",
+    "expect": {
+      "max_num_video": 1,
+      "max_num_audio": 4,
+      "video_codec": "avc1.42c01e",
+      "audio_codec": "mha1"
+    }
+  },
+  {
+    "file": "dash/dashif-qualcomm-1-ed-ondemand-5secseg-subtitles-606f727d.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "qualcomm/1/ED_OnDemand_5SecSeg_Subtitles",
+    "url": "http://dash.akamaized.net/dash264/TestCases/4b/qualcomm/1/ED_OnDemand_5SecSeg_Subtitles.mpd",
+    "expect": {
+      "max_num_video": 3,
+      "max_num_audio": 3,
+      "video_codec": "avc1.4d401f",
+      "audio_codec": "mp4a.40.5"
+    }
+  },
+  {
+    "file": "dash/dashif-qualcomm-1-multirate-02847e50.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "qualcomm/1/MultiRate",
+    "url": "http://dash.akamaized.net/dash264/TestCasesHD/1c/qualcomm/1/MultiRate.mpd",
+    "expect": {
+      "max_num_video": 4,
+      "max_num_audio": 1,
+      "video_codec": "avc1.640028",
+      "audio_codec": "mp4a.40.29"
+    }
+  },
+  {
+    "file": "dash/dashif-qualcomm-1-multirate-05ad0dd2.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "qualcomm/1/MultiRate",
+    "url": "http://dash.akamaized.net/dash264/TestCases/1a/qualcomm/1/MultiRate.mpd",
+    "expect": {
+      "max_num_video": 3,
+      "max_num_audio": 1,
+      "video_codec": "avc1.4d401f",
+      "audio_codec": "mp4a.40.29"
+    }
+  },
+  {
+    "file": "dash/dashif-qualcomm-1-multirate-377cca83.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "qualcomm/1/MultiRate",
+    "url": "http://dash.akamaized.net/dash264/TestCases/9b/qualcomm/1/MultiRate.mpd",
+    "expect": {
+      "max_num_video": 3,
+      "max_num_audio": 1,
+      "video_codec": "avc1.4d401f",
+      "audio_codec": "mp4a.40.29"
+    }
+  },
+  {
+    "file": "dash/dashif-qualcomm-1-multirate-37964e9f.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "qualcomm/1/MultiRate",
+    "url": "http://dash.akamaized.net/dash264/TestCases/9c/qualcomm/1/MultiRate.mpd",
+    "expect": {
+      "max_num_video": 3,
+      "max_num_audio": 1,
+      "video_codec": "avc1.4d401f",
+      "audio_codec": "mp4a.40.29"
+    }
+  },
+  {
+    "file": "dash/dashif-qualcomm-1-multirate-4a2b5830.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "qualcomm/1/MultiRate",
+    "url": "http://dash.akamaized.net/dash264/TestCasesHD/1b/qualcomm/1/MultiRate.mpd",
+    "expect": {
+      "max_num_video": 4,
+      "max_num_audio": 1,
+      "video_codec": "avc1.640028",
+      "audio_codec": "mp4a.40.29"
+    }
+  },
+  {
+    "file": "dash/dashif-qualcomm-1-multirate-642312c3.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "qualcomm/1/MultiRate",
+    "url": "http://dash.akamaized.net/dash264/TestCases/1c/qualcomm/1/MultiRate.mpd",
+    "expect": {
+      "max_num_video": 3,
+      "max_num_audio": 1,
+      "video_codec": "avc1.42c01f",
+      "audio_codec": "mp4a.40.29"
+    }
+  },
+  {
+    "file": "dash/dashif-qualcomm-1-multirate-79242660.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "qualcomm/1/MultiRate",
+    "url": "http://dash.akamaized.net/dash264/TestCasesHD/1a/qualcomm/1/MultiRate.mpd",
+    "expect": {
+      "max_num_video": 4,
+      "max_num_audio": 1,
+      "video_codec": "avc1.640028",
+      "audio_codec": "mp4a.40.29"
+    }
+  },
+  {
+    "file": "dash/dashif-qualcomm-1-multirate-7c166fe0.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "qualcomm/1/MultiRate",
+    "url": "http://dash.akamaized.net/dash264/TestCases/9a/qualcomm/1/MultiRate.mpd",
+    "expect": {
+      "max_num_video": 3,
+      "max_num_audio": 1,
+      "video_codec": "avc1.4d401f",
+      "audio_codec": "mp4a.40.29"
+    }
+  },
+  {
+    "file": "dash/dashif-qualcomm-1-multiratepatched-27ec1bff.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "qualcomm/1/MultiRatePatched",
+    "url": "http://dash.akamaized.net/dash264/TestCases/1b/qualcomm/1/MultiRatePatched.mpd",
+    "expect": {
+      "max_num_video": 3,
+      "max_num_audio": 1,
+      "video_codec": "avc1.4d401f",
+      "audio_codec": "mp4a.40.29"
+    }
+  },
+  {
+    "file": "dash/dashif-qualcomm-1-multiresmpeg2-32642bd3.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "qualcomm/1/MultiResMPEG2",
+    "url": "http://dash.akamaized.net/dash264/TestCasesHD/2b/qualcomm/1/MultiResMPEG2.mpd",
+    "expect": {
+      "max_num_video": 4,
+      "max_num_audio": 1,
+      "video_codec": "avc1.640028",
+      "audio_codec": "mp4a.40.29"
+    }
+  },
+  {
+    "file": "dash/dashif-qualcomm-1-multiresmpeg2-36d62023.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "qualcomm/1/MultiResMPEG2",
+    "url": "http://dash.akamaized.net/dash264/TestCases/2a/qualcomm/1/MultiResMPEG2.mpd",
+    "expect": {
+      "max_num_video": 3,
+      "max_num_audio": 1,
+      "video_codec": "avc1.4d401f",
+      "audio_codec": "mp4a.40.29"
+    }
+  },
+  {
+    "file": "dash/dashif-qualcomm-1-multiresmpeg2-99c12b25.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "qualcomm/1/MultiResMPEG2",
+    "url": "http://dash.akamaized.net/dash264/TestCasesHD/2a/qualcomm/1/MultiResMPEG2.mpd",
+    "expect": {
+      "max_num_video": 4,
+      "max_num_audio": 1,
+      "video_codec": "avc1.640028",
+      "audio_codec": "mp4a.40.29"
+    }
+  },
+  {
+    "file": "dash/dashif-qualcomm-1-multiresmpeg2-a204fcc1.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "qualcomm/1/MultiResMPEG2",
+    "url": "http://dash.akamaized.net/dash264/TestCases/2c/qualcomm/1/MultiResMPEG2.mpd",
+    "expect": {
+      "max_num_video": 3,
+      "max_num_audio": 1,
+      "video_codec": "avc1.42c01f",
+      "audio_codec": "mp4a.40.29"
+    }
+  },
+  {
+    "file": "dash/dashif-qualcomm-1-multiresmpeg2-a7bd2d56.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "qualcomm/1/MultiResMPEG2",
+    "url": "http://dash.akamaized.net/dash264/TestCases/2b/qualcomm/1/MultiResMPEG2.mpd",
+    "expect": {
+      "max_num_video": 3,
+      "max_num_audio": 1,
+      "video_codec": "avc1.4d401f",
+      "audio_codec": "mp4a.40.29"
+    }
+  },
+  {
+    "file": "dash/dashif-qualcomm-1-multiresmpeg2-c5e6576a.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "qualcomm/1/MultiResMPEG2",
+    "url": "http://dash.akamaized.net/dash264/TestCasesHD/2c/qualcomm/1/MultiResMPEG2.mpd",
+    "expect": {
+      "max_num_video": 4,
+      "max_num_audio": 1,
+      "video_codec": "avc1.640028",
+      "audio_codec": "mp4a.40.29"
+    }
+  },
+  {
+    "file": "dash/dashif-qualcomm-2-multirate-2105a3b8.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "qualcomm/2/MultiRate",
+    "url": "http://dash.akamaized.net/dash264/TestCasesHD/1b/qualcomm/2/MultiRate.mpd",
+    "expect": {
+      "max_num_video": 4,
+      "max_num_audio": 1,
+      "video_codec": "avc1.640028",
+      "audio_codec": "mp4a.40.29"
+    }
+  },
+  {
+    "file": "dash/dashif-qualcomm-2-multirate-26a9a652.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "qualcomm/2/MultiRate",
+    "url": "http://dash.akamaized.net/dash264/TestCasesHD/1a/qualcomm/2/MultiRate.mpd",
+    "expect": {
+      "max_num_video": 4,
+      "max_num_audio": 1,
+      "video_codec": "avc1.640028",
+      "audio_codec": "mp4a.40.29"
+    }
+  },
+  {
+    "file": "dash/dashif-qualcomm-2-multirate-648ffa82.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "qualcomm/2/MultiRate",
+    "url": "http://dash.akamaized.net/dash264/TestCases/1b/qualcomm/2/MultiRate.mpd",
+    "expect": {
+      "max_num_video": 3,
+      "max_num_audio": 1,
+      "video_codec": "avc1.4d401f",
+      "audio_codec": "mp4a.40.29"
+    }
+  },
+  {
+    "file": "dash/dashif-qualcomm-2-multirate-859c52cf.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "qualcomm/2/MultiRate",
+    "url": "http://dash.akamaized.net/dash264/TestCases/1a/qualcomm/2/MultiRate.mpd",
+    "expect": {
+      "max_num_video": 3,
+      "max_num_audio": 1,
+      "video_codec": "avc1.4d401f",
+      "audio_codec": "mp4a.40.29"
+    }
+  },
+  {
+    "file": "dash/dashif-qualcomm-2-multirate-8e3a7665.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "qualcomm/2/MultiRate",
+    "url": "http://dash.akamaized.net/dash264/TestCases/9a/qualcomm/2/MultiRate.mpd",
+    "expect": {
+      "max_num_video": 3,
+      "max_num_audio": 1,
+      "video_codec": "avc1.4d401f",
+      "audio_codec": "mp4a.40.29"
+    }
+  },
+  {
+    "file": "dash/dashif-qualcomm-2-multirate-a3e1cf14.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "qualcomm/2/MultiRate",
+    "url": "http://dash.akamaized.net/dash264/TestCases/9b/qualcomm/2/MultiRate.mpd",
+    "expect": {
+      "max_num_video": 3,
+      "max_num_audio": 1,
+      "video_codec": "avc1.4d401f",
+      "audio_codec": "mp4a.40.29"
+    }
+  },
+  {
+    "file": "dash/dashif-qualcomm-2-multirate-ced775c3.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "qualcomm/2/MultiRate",
+    "url": "http://dash.akamaized.net/dash264/TestCases/1c/qualcomm/2/MultiRate.mpd",
+    "expect": {
+      "max_num_video": 3,
+      "max_num_audio": 1,
+      "video_codec": "avc1.42c01f",
+      "audio_codec": "mp4a.40.29"
+    }
+  },
+  {
+    "file": "dash/dashif-qualcomm-2-multires-15f9121b.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "qualcomm/2/MultiRes",
+    "url": "http://dash.akamaized.net/dash264/TestCases/2b/qualcomm/2/MultiRes.mpd",
+    "expect": {
+      "max_num_video": 3,
+      "max_num_audio": 1,
+      "video_codec": "avc1.4d401f",
+      "audio_codec": "mp4a.40.29"
+    }
+  },
+  {
+    "file": "dash/dashif-qualcomm-2-multires-4d58e52b.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "qualcomm/2/MultiRes",
+    "url": "http://dash.akamaized.net/dash264/TestCases/2a/qualcomm/2/MultiRes.mpd",
+    "expect": {
+      "max_num_video": 3,
+      "max_num_audio": 1,
+      "video_codec": "avc1.4d401f",
+      "audio_codec": "mp4a.40.29"
+    }
+  },
+  {
+    "file": "dash/dashif-qualcomm-2-multires-8676c08e.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "qualcomm/2/MultiRes",
+    "url": "http://dash.akamaized.net/dash264/TestCasesHD/2a/qualcomm/2/MultiRes.mpd",
+    "expect": {
+      "max_num_video": 4,
+      "max_num_audio": 1,
+      "video_codec": "avc1.640028",
+      "audio_codec": "mp4a.40.29"
+    }
+  },
+  {
+    "file": "dash/dashif-qualcomm-2-multires-e743315f.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "qualcomm/2/MultiRes",
+    "url": "http://dash.akamaized.net/dash264/TestCases/2c/qualcomm/2/MultiRes.mpd",
+    "expect": {
+      "max_num_video": 3,
+      "max_num_audio": 1,
+      "video_codec": "avc1.42c01f",
+      "audio_codec": "mp4a.40.29"
+    }
+  },
+  {
+    "file": "dash/dashif-qualcomm-2-multires-fa6a3d65.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "qualcomm/2/MultiRes",
+    "url": "http://dash.akamaized.net/dash264/TestCasesHD/2b/qualcomm/2/MultiRes.mpd",
+    "expect": {
+      "max_num_video": 4,
+      "max_num_audio": 1,
+      "video_codec": "avc1.640028",
+      "audio_codec": "mp4a.40.29"
+    }
+  },
+  {
+    "file": "dash/dashif-qualcomm-2-tearsofsteel-ondem5secsegsubtitles-07493581.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "qualcomm/2/TearsOfSteel_onDem5secSegSubTitles",
+    "url": "http://dash.akamaized.net/dash264/TestCases/4b/qualcomm/2/TearsOfSteel_onDem5secSegSubTitles.mpd",
+    "expect": {
+      "max_num_video": 3,
+      "max_num_audio": 1,
+      "video_codec": "avc1.4d401f",
+      "audio_codec": "mp4a.40.5"
+    }
+  },
+  {
+    "file": "dash/dashif-qualcomm-3-solekai-598f9ff4.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "qualcomm/3/Solekai",
+    "url": "http://dash.akamaized.net/dash264/TestCases/4b/qualcomm/3/Solekai.mpd",
+    "expect": {
+      "max_num_video": 2,
+      "max_num_audio": 0,
+      "video_codec": "avc1.4d401f",
+      "audio_codec": ""
+    }
+  },
+  {
+    "file": "dash/dashif-testcasesnegative-1-1-833aa36d.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "TestCasesNegative/1/1",
+    "url": "http://dash.akamaized.net/dash264/TestCasesNegative/1/1.mpd",
+    "expect": {
+      "max_num_video": 3,
+      "max_num_audio": 1,
+      "video_codec": "avc1.4d401f",
+      "audio_codec": "mp4a.40.29"
+    }
+  },
+  {
+    "file": "dash/dashif-testcasesnegative-1-2-5fcef5da.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "TestCasesNegative/1/2",
+    "url": "http://dash.akamaized.net/dash264/TestCasesNegative/1/2.mpd",
+    "expect": {
+      "max_num_video": 3,
+      "max_num_audio": 1,
+      "video_codec": "avc1.4d401f",
+      "audio_codec": "mp4a.40.29"
+    }
+  },
+  {
+    "file": "dash/dashif-testcasesnegative-2-1-cc244e89.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "TestCasesNegative/2/1",
+    "url": "http://dash.akamaized.net/dash264/TestCasesNegative/2/1.mpd",
+    "expect": {
+      "max_num_video": 3,
+      "max_num_audio": 1,
+      "video_codec": "avc1.4d401f",
+      "audio_codec": "mp4a.40.29"
+    }
+  },
+  {
+    "file": "dash/dashif-testcasesnegative-2-2-3ff92eb8.mpd",
+    "kind": "dash",
+    "source": "dashif",
+    "name": "TestCasesNegative/2/2",
+    "url": "http://dash.akamaized.net/dash264/TestCasesNegative/2/2.mpd",
+    "expect": {
+      "max_num_video": 3,
+      "max_num_audio": 1,
+      "video_codec": "avc1.4d401f",
+      "audio_codec": "mp4a.40.29"
+    }
+  },
+  {
+    "file": "dash/dashjs-audio-only-48k-aac-lc-stereo-beeps-live-293486f8.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "Audio-only/48k AAC-LC Stereo Beeps (Live)",
+    "url": "https://livesim2.dashif.org/livesim2/testpic_2s/audio.mpd"
+  },
+  {
+    "file": "dash/dashjs-audio-only-48k-aac-lc-stereo-beeps-ondemand-31395a8f.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "Audio-only/48k AAC-LC Stereo Beeps (Ondemand)",
+    "url": "https://livesim2.dashif.org/vod/testpic_2s/audio.mpd"
+  },
+  {
+    "file": "dash/dashjs-audio-only-audio-without-encryption-405b66aa.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "Audio-only/Audio without encryption",
+    "url": "https://media.axprod.net/TestVectors/v7-Clear/Manifest_AudioOnly.mpd"
+  },
+  {
+    "file": "dash/dashjs-audio-only-live-testcard-audio-aac-lc-stereo-in-english-bdb1560a.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "Audio-only/Live Testcard Audio - AAC-LC Stereo in English",
+    "url": "https://vs-dash-ww-rd-live.akamaized.net/pl/testcard2020/radio-lc-en.mpd"
+  },
+  {
+    "file": "dash/dashjs-audio-only-live-testcard-audio-he-aac-stereo-in-english-cacde957.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "Audio-only/Live Testcard Audio - HE-AAC Stereo in English",
+    "url": "https://vs-dash-ww-rd-live.akamaized.net/pl/testcard2020/radio-he-en.mpd"
+  },
+  {
+    "file": "dash/dashjs-audio-only-multi-period-audio-without-encryption-ac410331.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "Audio-only/Multi-period audio without encryption",
+    "url": "https://media.axprod.net/TestVectors/v7-Clear/Manifest_MultiPeriod_AudioOnly.mpd"
+  },
+  {
+    "file": "dash/dashjs-audio-only-on-demand-testcard-audio-aac-lc-surround-4-active-5c4d32a4.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "Audio-only/On-demand Testcard Audio - AAC-LC Surround (4 active channels) in English",
+    "url": "https://vod-dash-ww-rd-live.akamaized.net/testcard/2/manifests/radio-surround-en.mpd"
+  },
+  {
+    "file": "dash/dashjs-drm-1080p-with-playready-and-widevine-drm-multiple-keys-4f9768f0.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "DRM/1080p with PlayReady and Widevine DRM, multiple keys",
+    "url": "https://media.axprod.net/TestVectors/v7-MultiDRM-MultiKey/Manifest_1080p.mpd"
+  },
+  {
+    "file": "dash/dashjs-drm-1080p-with-w3c-clear-key-multiple-keys-eb3872b1.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "DRM/1080p with W3C Clear Key, multiple keys",
+    "url": "https://media.axprod.net/TestVectors/v7-MultiDRM-MultiKey/Manifest_1080p_ClearKey.mpd"
+  },
+  {
+    "file": "dash/dashjs-drm-1080p-with-w3c-clear-key-single-key-0378f1da.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "DRM/1080p with W3C Clear Key, single key",
+    "url": "https://media.axprod.net/TestVectors/v7-MultiDRM-SingleKey/Manifest_1080p_ClearKey.mpd"
+  },
+  {
+    "file": "dash/dashjs-drm-1080p-with-widevine-drm-license-expired-after-60s-c55d345b.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "DRM/1080p with Widevine DRM, license expired after 60s",
+    "url": "https://media.axprod.net/TestVectors/v7-MultiDRM-SingleKey/Manifest_1080p.mpd"
+  },
+  {
+    "file": "dash/dashjs-drm-2160p-with-playready-and-widevine-drm-multiple-keys-a02b9580.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "DRM/2160p with PlayReady and Widevine DRM, multiple keys",
+    "url": "https://media.axprod.net/TestVectors/v7-MultiDRM-MultiKey/Manifest.mpd"
+  },
+  {
+    "file": "dash/dashjs-drm-2160p-with-playready-and-widevine-drm-single-key-405a4082.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "DRM/2160p with PlayReady and Widevine DRM, single key",
+    "url": "https://media.axprod.net/TestVectors/v7-MultiDRM-SingleKey/Manifest.mpd"
+  },
+  {
+    "file": "dash/dashjs-drm-2160p-with-w3c-clear-key-multiple-keys-44295ca4.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "DRM/2160p with W3C Clear Key, multiple keys",
+    "url": "https://media.axprod.net/TestVectors/v7-MultiDRM-MultiKey/Manifest_ClearKey.mpd"
+  },
+  {
+    "file": "dash/dashjs-drm-2160p-with-w3c-clear-key-single-key-7fa7cb21.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "DRM/2160p with W3C Clear Key, single key",
+    "url": "https://media.axprod.net/TestVectors/v7-MultiDRM-SingleKey/Manifest_ClearKey.mpd"
+  },
+  {
+    "file": "dash/dashjs-drm-audio-with-playready-and-widevine-drm-multiple-keys-e84abeaa.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "DRM/Audio with PlayReady and Widevine DRM, multiple keys",
+    "url": "https://media.axprod.net/TestVectors/v7-MultiDRM-MultiKey/Manifest_AudioOnly.mpd"
+  },
+  {
+    "file": "dash/dashjs-drm-audio-with-playready-and-widevine-drm-single-key-825cfdde.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "DRM/Audio with PlayReady and Widevine DRM, single key",
+    "url": "https://media.axprod.net/TestVectors/v7-MultiDRM-SingleKey/Manifest_AudioOnly.mpd"
+  },
+  {
+    "file": "dash/dashjs-drm-audio-with-w3c-clear-key-multiple-keys-1bf4c52e.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "DRM/Audio with W3C Clear Key, multiple keys",
+    "url": "https://media.axprod.net/TestVectors/v7-MultiDRM-MultiKey/Manifest_AudioOnly_ClearKey.mpd"
+  },
+  {
+    "file": "dash/dashjs-drm-audio-with-w3c-clear-key-single-key-caf4b068.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "DRM/Audio with W3C Clear Key, single key",
+    "url": "https://media.axprod.net/TestVectors/v7-MultiDRM-SingleKey/Manifest_AudioOnly_ClearKey.mpd"
+  },
+  {
+    "file": "dash/dashjs-drm-complex-multi-period-with-different-content-encrypted-cf936908.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "DRM/Complex multi-period with different content, encrypted",
+    "url": "https://media.axprod.net/TestVectors/v8-MultiContent/Encrypted/Manifest.mpd"
+  },
+  {
+    "file": "dash/dashjs-drm-live-dash-wv-and-pr-starting-in-unencrypted-ad-preroll-m-7a1c051b.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "DRM/Live Dash WV and PR - Starting in unencrypted ad (preroll) - Moving into encrypted content - Keys never change",
+    "url": "https://content.uplynk.com/playlist/4f1a9815a1af43d5ba64465d85bf11cf.mpd?ad=sintelads"
+  },
+  {
+    "file": "dash/dashjs-drm-live-dash-wv-and-pr-with-unencrypted-ad-breaks-always-st-f64f6b71.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "DRM/Live Dash WV and PR with unencrypted ad breaks -- Always starts in encrypted content - Keys never change",
+    "url": "https://content.uplynk.com/playlist/6c526d97954b41deb90fe64328647a71.mpd?ad=bbbads&delay=25"
+  },
+  {
+    "file": "dash/dashjs-drm-livesim-2-drm-ezdrm-1-key-cbcs-fd553a84.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "DRM/Livesim 2 DRM EZDRM-1-key-cbcs",
+    "url": "https://livesim2.dashif.org/livesim2/drm_EZDRM-1-key-cbcs/testpic_2s/Manifest.mpd"
+  },
+  {
+    "file": "dash/dashjs-drm-livesim-2-drm-ezdrm-2-keys-cbcs-1d545136.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "DRM/Livesim 2 DRM EZDRM-2-keys-cbcs",
+    "url": "https://livesim2.dashif.org/livesim2/drm_EZDRM-2-keys-cbcs/testpic_2s/Manifest.mpd"
+  },
+  {
+    "file": "dash/dashjs-drm-livesim-2-eccp-with-cbcs-encryption-and-dashif-laurl-c0992ff2.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "DRM/Livesim 2 ECCP with CBCS encryption and dashif:Laurl",
+    "url": "https://livesim2.dashif.org/livesim2/eccp_cbcs/testpic_2s/Manifest.mpd"
+  },
+  {
+    "file": "dash/dashjs-drm-livesim-2-eccp-with-cenc-encryption-and-dashif-laurl-25fc7d70.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "DRM/Livesim 2 ECCP with CENC encryption and dashif:Laurl",
+    "url": "https://livesim2.dashif.org/livesim2/eccp_cenc/testpic_2s/Manifest.mpd"
+  },
+  {
+    "file": "dash/dashjs-drm-multi-period-1080p-with-playready-and-widevine-drm-multi-a79daf63.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "DRM/Multi-period 1080p with PlayReady and Widevine DRM, multiple keys",
+    "url": "https://media.axprod.net/TestVectors/v7-MultiDRM-MultiKey-MultiPeriod/Manifest_1080p.mpd"
+  },
+  {
+    "file": "dash/dashjs-drm-multi-period-1080p-with-w3c-clear-key-multiple-keys-abf01c6e.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "DRM/Multi-period 1080p with W3C Clear Key, multiple keys",
+    "url": "https://media.axprod.net/TestVectors/v7-MultiDRM-MultiKey-MultiPeriod/Manifest_1080p_ClearKey.mpd"
+  },
+  {
+    "file": "dash/dashjs-drm-multi-period-2160p-with-playready-and-widevine-drm-multi-2f65399c.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "DRM/Multi-period 2160p with PlayReady and Widevine DRM, multiple keys",
+    "url": "https://media.axprod.net/TestVectors/v7-MultiDRM-MultiKey-MultiPeriod/Manifest.mpd"
+  },
+  {
+    "file": "dash/dashjs-drm-multi-period-2160p-with-w3c-clear-key-multiple-keys-ecbbed92.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "DRM/Multi-period 2160p with W3C Clear Key, multiple keys",
+    "url": "https://media.axprod.net/TestVectors/v7-MultiDRM-MultiKey-MultiPeriod/Manifest_ClearKey.mpd"
+  },
+  {
+    "file": "dash/dashjs-drm-multi-period-audio-with-playready-and-widevine-drm-multi-c9bb942c.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "DRM/Multi-period audio with PlayReady and Widevine DRM, multiple keys",
+    "url": "https://media.axprod.net/TestVectors/v7-MultiDRM-MultiKey-MultiPeriod/Manifest_AudioOnly.mpd"
+  },
+  {
+    "file": "dash/dashjs-drm-multi-period-audio-with-w3c-clear-key-multiple-keys-e316b2b1.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "DRM/Multi-period audio with W3C Clear Key, multiple keys",
+    "url": "https://media.axprod.net/TestVectors/v7-MultiDRM-MultiKey-MultiPeriod/Manifest_AudioOnly_ClearKey.mpd"
+  },
+  {
+    "file": "dash/dashjs-drm-multiperiod-contentprotection-reference-a73bd54c.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "DRM/Multiperiod - ContentProtection Reference",
+    "url": "https://d24rwxnt7vw9qb.cloudfront.net/out/v1/feb9354da126479386ae8d47ba103cf8/index.mpd"
+  },
+  {
+    "file": "dash/dashjs-drm-multiperiod-number-timeline-compact-manifest-thumbnails-69f7f59e.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "DRM/Multiperiod - Number + Timeline - Compact manifest - Thumbnails (1 track) - Encryption (1 key) PlayReady/Widevine (DRMtoday) - Key rotation (60s)",
+    "url": "https://d24rwxnt7vw9qb.cloudfront.net/v1/dash/e6d234965645b411ad572802b6c9d5a10799c9c1/All_Reference_Streams/2fc23947945841b9b1be9768f9c13e75/index.mpd?aws.sessionId=4c99cc7c-5b35-4731-9d37-fb71932ac0ec"
+  },
+  {
+    "file": "dash/dashjs-drm-multiperiod-number-timeline-compact-manifest-thumbnails-98894ba3.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "DRM/Multiperiod - Number + Timeline - Compact manifest - Thumbnails (1 track) - Encryption (2 keys : audio + video) - No key rotation",
+    "url": "https://d24rwxnt7vw9qb.cloudfront.net/v1/dash/e6d234965645b411ad572802b6c9d5a10799c9c1/All_Reference_Streams//6e16c26536564c2f9dbc5f725a820cff/index.mpd?aws.sessionId=9b533bf2-7ca4-4bc1-a8ef-af0a6cf54399"
+  },
+  {
+    "file": "dash/dashjs-drm-multiperiod-supplemental-property-urn-mpeg-dash-adaptati-93af8f05.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "DRM/Multiperiod - Supplemental Property \"urn:mpeg:dash:adaptation-set-switching:2016\" ",
+    "url": "https://d24rwxnt7vw9qb.cloudfront.net/out/v1/d0409ade052145c5a639d8db3c5ce4b4/index.mpd"
+  },
+  {
+    "file": "dash/dashjs-drm-shaka-demo-assets-angel-one-widevine-07e9de1f.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "DRM/Shaka Demo Assets: Angel-One Widevine",
+    "url": "https://storage.googleapis.com/shaka-demo-assets/angel-one-widevine/dash.mpd"
+  },
+  {
+    "file": "dash/dashjs-drm-single-period-1080p-h-264-5-video-3-audio-3-text-tracks-1c66ab24.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "DRM/Single-period, 1080p, H.264, 5 video, 3 audio, 3 text tracks, DASH, cenc encryption, single key, Widevine+PlayReady",
+    "url": "https://media.axprod.net/TestVectors/Dash/protected_dash_1080p_h264_singlekey/manifest.mpd"
+  },
+  {
+    "file": "dash/dashjs-drm-single-period-1080p-h-264-5-video-3-audio-3-text-tracks-37be5cc6.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "DRM/Single-period, 1080p, H.264, 5 video, 3 audio, 3 text tracks, CMAF, cbcs encryption, single key, Widevine+PlayReady",
+    "url": "https://media.axprod.net/TestVectors/Cmaf/protected_1080p_h264_cbcs/manifest.mpd"
+  },
+  {
+    "file": "dash/dashjs-drm-single-period-1080p-h-264-5-video-3-audio-3-text-tracks-6c7d280e.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "DRM/Single-period, 1080p, H.264, 5 video, 3 audio, 3 text tracks, DASH, cenc encryption, multi key, Widevine+PlayReady",
+    "url": "https://media.axprod.net/TestVectors/MultiKey/Dash_h264_1080p_cenc/manifest.mpd"
+  },
+  {
+    "file": "dash/dashjs-drm-single-period-1080p-h-264-5-video-3-audio-3-text-tracks-f06f4f86.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "DRM/Single-period, 1080p, H.264, 5 video, 3 audio, 3 text tracks, CMAF, cbcs encryption, multi key, Widevine+PlayReady",
+    "url": "https://media.axprod.net/TestVectors/MultiKey/Cmaf_h264_1080p_cbcs/manifest.mpd"
+  },
+  {
+    "file": "dash/dashjs-drm-single-period-1080p-h-265-5-video-3-audio-3-text-tracks-1495ce7d.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "DRM/Single-period, 1080p, H.265, 5 video, 3 audio, 3 text tracks, CMAF, cbcs encryption, multi key, Widevine+PlayReady",
+    "url": "https://media.axprod.net/TestVectors/H265/protected_cmaf_1080p_h265_multikey/manifest.mpd"
+  },
+  {
+    "file": "dash/dashjs-drm-single-period-1080p-h-265-5-video-3-audio-3-text-tracks-89f25e17.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "DRM/Single-period, 1080p, H.265, 5 video, 3 audio, 3 text tracks, DASH, cenc encryption, single key, Widevine+PlayReady",
+    "url": "https://media.axprod.net/TestVectors/H265/protected_dash_1080p_h265_singlekey/manifest.mpd"
+  },
+  {
+    "file": "dash/dashjs-drm-single-period-1080p-h-265-5-video-3-audio-3-text-tracks-e19610b6.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "DRM/Single-period, 1080p, H.265, 5 video, 3 audio, 3 text tracks, CMAF, cbcs encryption, single key, Widevine+PlayReady",
+    "url": "https://media.axprod.net/TestVectors/H265/protected_cmaf_1080p_h265_singlekey/manifest.mpd"
+  },
+  {
+    "file": "dash/dashjs-drm-unified-streaming-widevine-persistent-00b56811.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "DRM/Unified Streaming (Widevine, persistent)",
+    "url": "https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel-dash-widevine.ism/.mpd"
+  },
+  {
+    "file": "dash/dashjs-live-dynamic-mpd-10-seconds-availabilitytimeoffset-livesim-ac6eec3f.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "LIVE (Dynamic MPD)/10 seconds availabilityTimeOffset (livesim)",
+    "url": "https://livesim2.dashif.org/livesim2/ato_10/testpic_2s/Manifest.mpd"
+  },
+  {
+    "file": "dash/dashjs-live-dynamic-mpd-annex-i-query-parameters-in-the-video-adapt-ffcf85ee.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "LIVE (Dynamic MPD)/Annex I query parameters in the Video AdaptationSet",
+    "url": "https://livesim.dashif.org/livesim2/annexI_dashjs=rocks/testpic_6s/Manifest.mpd?dashjs=rocks"
+  },
+  {
+    "file": "dash/dashjs-live-dynamic-mpd-dynamic-to-static-transition-with-livesim2-c6e86cf2.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "LIVE (Dynamic MPD)/Dynamic to static transition with LiveSim2 using an MPD Location element",
+    "url": "https://livesim2.dashif.org/livesim2/startrel_-20/stoprel_6/testpic_2s/Manifest.mpd"
+  },
+  {
+    "file": "dash/dashjs-live-dynamic-mpd-infinite-offset-all-segments-available-at-a-70102007.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "LIVE (Dynamic MPD)/Infinite offset - all segments available at availability start (livesim)",
+    "url": "https://livesim2.dashif.org/livesim2/ato_inf/testpic_2s/Manifest.mpd"
+  },
+  {
+    "file": "dash/dashjs-live-dynamic-mpd-live-testcard-multiple-languages-avc-video-1d57287a.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "LIVE (Dynamic MPD)/Live Testcard - Multiple Languages, AVC Video",
+    "url": "https://vs-dash-ww-rd-live.akamaized.net/pl/testcard2020/avc-full.mpd"
+  },
+  {
+    "file": "dash/dashjs-live-dynamic-mpd-live-testcard-multiple-languages-hevc-video-5926b4ac.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "LIVE (Dynamic MPD)/Live Testcard - Multiple Languages, HEVC Video",
+    "url": "https://vs-dash-ww-rd-live.akamaized.net/pl/testcard2020/hevc-ctv.mpd"
+  },
+  {
+    "file": "dash/dashjs-live-dynamic-mpd-main-3-video-bitrates-2-audio-languages-3-s-cf311304.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "LIVE (Dynamic MPD)/Main (3 video bitrates, 2 audio languages,3 subtitle languages) + Advertisement, Multiperiod",
+    "url": "https://refapp.hbbtv.org/videos/multiperiod_v8.php?drm=0&advert=1&emsg=0&video=v1,v2,v3&audiolang=eng,fin&sublang=eng,fin,swe&mup=2&spd=8"
+  },
+  {
+    "file": "dash/dashjs-live-dynamic-mpd-multiperiod-number-timeline-compact-manifes-4a00ffe3.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "LIVE (Dynamic MPD)/Multiperiod - Number + Timeline - Compact manifest - Thumbnails (1 track) - In-the-clear",
+    "url": "https://d24rwxnt7vw9qb.cloudfront.net/v1/dash/e6d234965645b411ad572802b6c9d5a10799c9c1/All_Reference_Streams/4577dca5f8a44756875ab5cc913cd1f1/index.mpd?aws.sessionId=a9674811-0147-49d3-85e2-34306e0aadd0"
+  },
+  {
+    "file": "dash/dashjs-live-dynamic-mpd-multiperiod-number-timeline-full-manifest-t-f0dad30b.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "LIVE (Dynamic MPD)/Multiperiod - Number + Timeline - Full manifest - Thumbnails (1 track) - In-the-clear",
+    "url": "https://d24rwxnt7vw9qb.cloudfront.net/v1/dash/e6d234965645b411ad572802b6c9d5a10799c9c1/All_Reference_Streams/ee565ea510cb4b4d8df5f48918c3d6dc/index.mpd?aws.sessionId=cdf0042c-7f02-42a8-bf40-bff96b0053eb"
+  },
+  {
+    "file": "dash/dashjs-live-dynamic-mpd-multiperiod-segmenttemplate-new-period-ever-cbe0b75f.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "LIVE (Dynamic MPD)/Multiperiod SegmentTemplate. New period every minute (livesim)",
+    "url": "https://livesim2.dashif.org/livesim2/periods_60/continuous_1/testpic_2s/Manifest.mpd"
+  },
+  {
+    "file": "dash/dashjs-live-dynamic-mpd-multiperiod-segmenttemplate-with-manifest-u-5a8b0eb0.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "LIVE (Dynamic MPD)/Multiperiod SegmentTemplate with manifest updates provided via MPD patches",
+    "url": "https://livesim2.dashif.org/livesim2/segtimeline_0/patch_60/periods_60/testpic_2s/Manifest.mpd"
+  },
+  {
+    "file": "dash/dashjs-live-dynamic-mpd-multiperiod-time-timeline-compact-manifest-5e09034d.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "LIVE (Dynamic MPD)/Multiperiod - Time + Timeline - Compact manifest - Thumbnails (1 track) - In-the-clear",
+    "url": "https://d24rwxnt7vw9qb.cloudfront.net/v1/dash/e6d234965645b411ad572802b6c9d5a10799c9c1/All_Reference_Streams/91d37b0389de47e0b5266736d3633077/index.mpd?aws.sessionId=1b293109-6d7e-4c88-8ca0-0f27d18cceb8"
+  },
+  {
+    "file": "dash/dashjs-live-dynamic-mpd-multiperiod-time-timeline-full-manifest-thu-aca6a6f9.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "LIVE (Dynamic MPD)/Multiperiod - Time + Timeline - Full manifest - Thumbnails (1 track) - In-the-clear",
+    "url": "https://d24rwxnt7vw9qb.cloudfront.net/v1/dash/e6d234965645b411ad572802b6c9d5a10799c9c1/All_Reference_Streams/6ba06d17f65b4e1cbd1238eaa05c02c1/index.mpd?aws.sessionId=56200ebf-8949-41d8-ab08-d1673bb23d7d"
+  },
+  {
+    "file": "dash/dashjs-live-dynamic-mpd-scte35-events-17edddec.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "LIVE (Dynamic MPD)/SCTE35 events",
+    "url": "https://livesim2.dashif.org/livesim2/scte35_2/testpic_2s/Manifest.mpd"
+  },
+  {
+    "file": "dash/dashjs-live-dynamic-mpd-segmenttemplate-with-manifest-updates-every-f90b5db7.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "LIVE (Dynamic MPD)/SegmentTemplate with manifest updates every 30s (livesim)",
+    "url": "https://livesim2.dashif.org/livesim2/mup_30/testpic_2s/Manifest.mpd"
+  },
+  {
+    "file": "dash/dashjs-live-dynamic-mpd-segmenttemplate-without-manifest-updates-li-40ad891a.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "LIVE (Dynamic MPD)/SegmentTemplate without manifest updates (livesim)",
+    "url": "https://livesim2.dashif.org/livesim2/testpic_2s/Manifest.mpd"
+  },
+  {
+    "file": "dash/dashjs-live-dynamic-mpd-segmenttimeline-with-manifest-updates-provi-b3b708a7.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "LIVE (Dynamic MPD)/SegmentTimeline with manifest updates provided via MPD patches",
+    "url": "https://livesim2.dashif.org/livesim2/segtimeline_1/patch_60/testpic_2s/Manifest.mpd"
+  },
+  {
+    "file": "dash/dashjs-live-dynamic-mpd-segmenttimeline-with-number-livesim-fa94593e.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "LIVE (Dynamic MPD)/SegmentTimeline with $number (livesim)",
+    "url": "https://livesim2.dashif.org/livesim2/segtimelinenr_1/testpic_2s/Manifest.mpd"
+  },
+  {
+    "file": "dash/dashjs-live-dynamic-mpd-segmenttimeline-with-time-livesim-ab7f69a0.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "LIVE (Dynamic MPD)/SegmentTimeline with $time (livesim)",
+    "url": "https://livesim2.dashif.org/livesim2/segtimeline_1/testpic_2s/Manifest.mpd"
+  },
+  {
+    "file": "dash/dashjs-live-dynamic-mpd-single-period-number-duration-full-manifest-2000c413.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "LIVE (Dynamic MPD)/Single period - Number + Duration - Full manifest - Thumbnails (2 tracks: 174p/1080p) - In-the-clear",
+    "url": "https://d10gktn8v7end7.cloudfront.net/out/v1/6ee19df3afa24fe190a8ae16c2c88560/index.mpd"
+  },
+  {
+    "file": "dash/dashjs-live-dynamic-mpd-unified-streaming-reference-stream-with-sct-7b09e30b.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "LIVE (Dynamic MPD)/Unified Streaming reference stream with scte35 markers",
+    "url": "https://demo.unified-streaming.com/k8s/live/scte35.isml/.mpd"
+  },
+  {
+    "file": "dash/dashjs-live-low-latency-akamai-low-latency-stream-multi-rate-54d7b2f1.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "Live Low Latency/Akamai Low Latency Stream (Multi Rate)",
+    "url": "https://cmafref.akamaized.net/cmaf/live-ull/2006350/akambr/out.mpd"
+  },
+  {
+    "file": "dash/dashjs-live-low-latency-akamai-low-latency-stream-single-rate-32c22494.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "Live Low Latency/Akamai Low Latency Stream (Single Rate)",
+    "url": "https://akamaibroadcasteruseast.akamaized.net/cmaf/live/657078/akasource/out.mpd"
+  },
+  {
+    "file": "dash/dashjs-live-low-latency-live-low-latency-segmenttemplate-cmsd-e83e761d.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "Live Low Latency/Live low latency (SegmentTemplate, CMSD)",
+    "url": "https://explo.broadpeak.tv:8343/bpk-tv/spring/lowlat/index.mpd"
+  },
+  {
+    "file": "dash/dashjs-live-low-latency-live-low-latency-segmenttimeline-cmsd-4498dcbf.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "Live Low Latency/Live low latency (SegmentTimeline, CMSD)",
+    "url": "https://explo.broadpeak.tv:8343/bpk-tv/spring/lowlat/index_timeline.mpd"
+  },
+  {
+    "file": "dash/dashjs-live-low-latency-livesim2-l3d-dash-03fc3c7d.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "Live Low Latency/LiveSim2 L3D-DASH",
+    "url": "https://livesim2.dashif.org/livesim2/segtimelinenr_1/chunkdur_0.5/ssras_2,1/chunkdurssr_2,0.2/testpic_2s_low_delay/Manifest.mpd"
+  },
+  {
+    "file": "dash/dashjs-live-low-latency-low-latency-live-testcard-4-chunks-per-segm-3b901a9c.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "Live Low Latency/Low-Latency Live Testcard - 4 Chunks per Segment, Multiple Languages, HEVC Video",
+    "url": "https://vs-dash-ww-rd.live.cf.md.bbci.co.uk/cpl/testcard2020/ll-hevc-ctv.mpd"
+  },
+  {
+    "file": "dash/dashjs-live-low-latency-low-latency-live-testcard-4-chunks-per-segm-8cb0bb3c.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "Live Low Latency/Low-Latency Live Testcard - 4 Chunks per Segment, Multiple Languages, AVC Video",
+    "url": "https://vs-dash-ww-rd.live.cf.md.bbci.co.uk/cpl/testcard2020/ll-avc-full.mpd"
+  },
+  {
+    "file": "dash/dashjs-live-low-latency-low-latency-multi-rate-livesim-chunked-a650f6a4.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "Live Low Latency/Low Latency (Multi-Rate) (livesim-chunked)",
+    "url": "https://livesim2.dashif.org/livesim2/chunkdur_1/ato_7/testpic4_8s/Manifest.mpd"
+  },
+  {
+    "file": "dash/dashjs-live-low-latency-low-latency-single-rate-livesim-chunked-44db2db9.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "Live Low Latency/Low Latency (Single-Rate) (livesim-chunked)",
+    "url": "https://livesim2.dashif.org/livesim2/chunkdur_1/ato_7/testpic4_8s/Manifest300.mpd"
+  },
+  {
+    "file": "dash/dashjs-mpeg-5-part-2-lcevc-scalable-carriage-c3e7e622.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "MPEG-5 Part 2 - LCEVC/Scalable Carriage",
+    "url": "https://s3.eu-west-1.amazonaws.com/origin-prod-lon-v-nova.com/lcevcDualTrack/1080p30_4Mbps_no_dR/master.mpd"
+  },
+  {
+    "file": "dash/dashjs-mpeg-5-part-2-lcevc-scalable-with-debug-residuals-7a3c6e3c.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "MPEG-5 Part 2 - LCEVC/Scalable with Debug Residuals",
+    "url": "https://s3.eu-west-1.amazonaws.com/origin-prod-lon-v-nova.com/lcevcDualTrack/1080p30_4Mbps_with_dR/master.mpd"
+  },
+  {
+    "file": "dash/dashjs-subtitles-and-captions-embedded-cea-608-cc1-wall-clock-paint-87e5ae4d.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "Subtitles and Captions/Embedded CEA-608 CC1 wall-clock paint-on captions (Live with LiveSim2)",
+    "url": "https://livesim2.dashif.org/livesim2/segtimeline_1/timecc608_CC1-eng/testpic_2s/Manifest.mpd"
+  },
+  {
+    "file": "dash/dashjs-subtitles-and-captions-embedded-cea-608-closed-captions-and-6ae721cb.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "Subtitles and Captions/Embedded CEA-608 Closed Captions and TTML segments Live (Live with LiveSim2)",
+    "url": "https://livesim2.dashif.org/livesim2/testpic_2s/cea608_and_segs.mpd"
+  },
+  {
+    "file": "dash/dashjs-subtitles-and-captions-embedded-cea-608-closed-captions-and-e9ed431d.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "Subtitles and Captions/Embedded CEA-608 Closed Captions and TTML segments (VoD)",
+    "url": "https://livesim2.dashif.org/vod/testpic_2s/cea608_and_segs.mpd"
+  },
+  {
+    "file": "dash/dashjs-subtitles-and-captions-embedded-cea-608-closed-captions-live-bd64ae44.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "Subtitles and Captions/Embedded CEA-608 Closed Captions (Live with LiveSim2)",
+    "url": "https://livesim2.dashif.org/livesim2/testpic_2s/cea608.mpd"
+  },
+  {
+    "file": "dash/dashjs-subtitles-and-captions-embedded-cea-608-closed-captions-vod-c4b3d624.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "Subtitles and Captions/Embedded CEA-608 Closed Captions (VoD)",
+    "url": "https://livesim2.dashif.org/vod/testpic_2s/cea608.mpd"
+  },
+  {
+    "file": "dash/dashjs-subtitles-and-captions-external-vtt-subtitle-file-959566ce.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "Subtitles and Captions/External VTT subtitle file",
+    "url": "https://dash.akamaized.net/akamai/test/caption_test/ElephantsDream/elephants_dream_480p_heaac5_1_https.mpd"
+  },
+  {
+    "file": "dash/dashjs-subtitles-and-captions-imsc1-cmaf-image-subtitles-a073065c.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "Subtitles and Captions/IMSC1 (CMAF) Image Subtitles",
+    "url": "https://livesim2.dashif.org/vod/testpic_2s/imsc1_img.mpd"
+  },
+  {
+    "file": "dash/dashjs-subtitles-and-captions-imsc1-text-subtitles-via-sidecar-file-f45be402.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "Subtitles and Captions/IMSC1 Text Subtitles via sidecar file",
+    "url": "https://dash.akamaized.net/dash264/CTA/imsc1/IT1-20171027_dash.mpd"
+  },
+  {
+    "file": "dash/dashjs-subtitles-and-captions-live-testcard-multiple-subtitle-langu-cde6d2c3.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "Subtitles and Captions/Live Testcard - Multiple Subtitle Languages and Downloadable Font Signalling",
+    "url": "https://vs-dash-ww-rd-live.akamaized.net/pl/testcard2020/avc-ctv.mpd"
+  },
+  {
+    "file": "dash/dashjs-subtitles-and-captions-live-testcard-woff-font-download-sign-2b2f76e2.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "Subtitles and Captions/Live Testcard - WOFF Font Download signalled with essential property descriptor",
+    "url": "https://vs-dash-ww-rd-live.akamaized.net/pl/testcard2020/avc-ctv-stereo-en-efdt-woff.mpd"
+  },
+  {
+    "file": "dash/dashjs-subtitles-and-captions-live-testcard-woff-font-download-sign-fdcef018.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "Subtitles and Captions/Live Testcard - WOFF Font Download signalled with supplemental property descriptor",
+    "url": "https://vs-dash-ww-rd-live.akamaized.net/pl/testcard2020/avc-ctv-stereo-en-sfdt-woff.mpd"
+  },
+  {
+    "file": "dash/dashjs-subtitles-and-captions-on-demand-elephant-s-dream-with-ebu-t-63323ab4.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "Subtitles and Captions/On-demand Elephant's Dream - with EBU-TT-D Subtitle Track in English",
+    "url": "https://vod-dash-ww-rd-live.akamaized.net/elephants_dream/1/client_manifest-all.mpd"
+  },
+  {
+    "file": "dash/dashjs-subtitles-and-captions-on-demand-elephant-s-dream-with-ebu-t-ccc2f3eb.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "Subtitles and Captions/On-demand Elephant's Dream - with EBU-TT-D 'Snaking' Subtitle Track (random text) - lines grow over time simulating live subtitles",
+    "url": "https://vod-dash-ww-rd-live.akamaized.net/elephants_dream/1/client_manifest-snake.mpd"
+  },
+  {
+    "file": "dash/dashjs-subtitles-and-captions-on-demand-testcard-woff-font-download-1851be07.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "Subtitles and Captions/On-demand Testcard - WOFF Font Download signalled with essential property descriptor",
+    "url": "https://vod-dash-ww-rd-live.akamaized.net/testcard/2/manifests/avc-ctv-stereo-en-efdt-woff.mpd"
+  },
+  {
+    "file": "dash/dashjs-subtitles-and-captions-on-demand-testcard-woff-font-download-c2de68a3.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "Subtitles and Captions/On-demand Testcard - WOFF Font Download signalled with supplemental property descriptor",
+    "url": "https://vod-dash-ww-rd-live.akamaized.net/testcard/2/manifests/avc-ctv-stereo-en-sfdt-woff.mpd"
+  },
+  {
+    "file": "dash/dashjs-subtitles-and-captions-ttml-image-subtitles-embedded-vod-5e1cac91.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "Subtitles and Captions/TTML Image Subtitles embedded (VoD)",
+    "url": "https://livesim2.dashif.org/vod/testpic_2s/img_subs.mpd"
+  },
+  {
+    "file": "dash/dashjs-subtitles-and-captions-ttml-segmented-subtitles-live-livesim-04665370.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "Subtitles and Captions/TTML Segmented Subtitles Live (livesim)",
+    "url": "https://livesim2.dashif.org/livesim2/testpic_2s/multi_subs.mpd"
+  },
+  {
+    "file": "dash/dashjs-subtitles-and-captions-ttml-segmented-subtitles-vod-d73f6a9c.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "Subtitles and Captions/TTML Segmented Subtitles VoD",
+    "url": "https://livesim2.dashif.org/vod/testpic_2s/multi_subs.mpd"
+  },
+  {
+    "file": "dash/dashjs-subtitles-and-captions-ttml-sideloaded-xml-subtitles-bb7291a9.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "Subtitles and Captions/TTML Sideloaded XML Subtitles",
+    "url": "https://livesim2.dashif.org/vod/testpic_2s/ttml_subs.mpd"
+  },
+  {
+    "file": "dash/dashjs-thumbnails-live-stream-single-adaptation-set-1x1-tiles-lives-d7c9933a.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "Thumbnails/Live stream, Single adaptation set, 1x1 tiles (livesim)",
+    "url": "https://livesim2.dashif.org/livesim2/testpic_2s/Manifest_thumbs.mpd"
+  },
+  {
+    "file": "dash/dashjs-thumbnails-segmentnumber-b2ac3891.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "Thumbnails/SegmentNumber",
+    "url": "https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel-tiled-thumbnails-numbered.ism/.mpd"
+  },
+  {
+    "file": "dash/dashjs-thumbnails-segmenttemplate-with-segmenttimeline-79ee4449.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "Thumbnails/SegmentTemplate with SegmentTimeline",
+    "url": "https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel-tiled-thumbnails-timeline.ism/.mpd"
+  },
+  {
+    "file": "dash/dashjs-thumbnails-single-adaption-set-1-tile-at-10x20-each-thumb-10-0acecc30.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "Thumbnails/Single adaption set, 1 tile at 10x20, each thumb 102x58",
+    "url": "https://dash.akamaized.net/akamai/bbb_30fps/bbb_with_tiled_thumbnails_2.mpd"
+  },
+  {
+    "file": "dash/dashjs-thumbnails-single-adaption-set-4-tiles-at-10x1-each-thumb-20-c0d48a0a.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "Thumbnails/Single adaption set, 4 tiles at 10x1, each thumb 205x115",
+    "url": "https://dash.akamaized.net/akamai/bbb_30fps/bbb_with_4_tiles_thumbnails.mpd"
+  },
+  {
+    "file": "dash/dashjs-thumbnails-single-adaption-set-7-tiles-at-10x1-each-thumb-32-e9de2837.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "Thumbnails/Single adaption set, 7 tiles at 10x1, each thumb 320x180",
+    "url": "https://dash.akamaized.net/akamai/bbb_30fps/bbb_with_tiled_thumbnails.mpd"
+  },
+  {
+    "file": "dash/dashjs-thumbnails-two-adaption-sets-with-different-thumb-resolution-22062d1d.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "Thumbnails/Two adaption sets with different thumb resolutions",
+    "url": "https://dash.akamaized.net/akamai/bbb_30fps/bbb_with_multiple_tiled_thumbnails.mpd"
+  },
+  {
+    "file": "dash/dashjs-vod-static-mpd-1080p-without-encryption-7dac7bee.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "VOD (Static MPD)/1080p without encryption",
+    "url": "https://media.axprod.net/TestVectors/v7-Clear/Manifest_1080p.mpd"
+  },
+  {
+    "file": "dash/dashjs-vod-static-mpd-2160p-without-encryption-0d07fa47.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "VOD (Static MPD)/2160p without encryption",
+    "url": "https://media.axprod.net/TestVectors/v7-Clear/Manifest.mpd"
+  },
+  {
+    "file": "dash/dashjs-vod-static-mpd-4k-segmentbase-2174b152.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "VOD (Static MPD)/4K SegmentBase ",
+    "url": "https://dash.akamaized.net/akamai/streamroot/050714/Spring_4Ktest.mpd"
+  },
+  {
+    "file": "dash/dashjs-vod-static-mpd-caminandes-01-llama-drama-25fps-75gop-1080p-22267b97.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "VOD (Static MPD)/Caminandes 01, Llama Drama (25fps, 75gop, 1080p) ",
+    "url": "http://refapp.hbbtv.org/videos/01_llama_drama_1080p_25f75g6sv3/manifest.mpd"
+  },
+  {
+    "file": "dash/dashjs-vod-static-mpd-caminandes-02-gran-dillama-25fps-75gop-1080p-025ea798.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "VOD (Static MPD)/Caminandes 02, Gran Dillama (25fps, 75gop, 1080p, KID=1236), multiaudio v4",
+    "url": "http://refapp.hbbtv.org/videos/02_gran_dillama_1080p_ma_25f75g6sv4/manifest_subob_evtib.mpd"
+  },
+  {
+    "file": "dash/dashjs-vod-static-mpd-caminandes-02-gran-dillama-25fps-75gop-1080p-b1b3c6b7.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "VOD (Static MPD)/Caminandes 02, Gran Dillama (25fps, 75gop, 1080p, KID=1236), multiaudio v5",
+    "url": "http://refapp.hbbtv.org/videos/02_gran_dillama_1080p_ma_25f75g6sv5/manifest.mpd"
+  },
+  {
+    "file": "dash/dashjs-vod-static-mpd-caminandes-02-gran-dillama-25fps-75gop-1080p-d1997f71.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "VOD (Static MPD)/Caminandes 02, Gran Dillama (25fps, 75gop, 1080p, KID=1236, subob,evtib) v5 ",
+    "url": "http://refapp.hbbtv.org/videos/02_gran_dillama_1080p_25f75g6sv5/manifest_subob_evtib.mpd"
+  },
+  {
+    "file": "dash/dashjs-vod-static-mpd-complex-multi-period-with-different-content-c-5d7b4648.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "VOD (Static MPD)/Complex multi-period with different content, clear",
+    "url": "https://media.axprod.net/TestVectors/v8-MultiContent/Clear/Manifest.mpd"
+  },
+  {
+    "file": "dash/dashjs-vod-static-mpd-multi-period-1080p-without-encryption-3e4d8fd4.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "VOD (Static MPD)/Multi-period 1080p without encryption",
+    "url": "https://media.axprod.net/TestVectors/v7-Clear/Manifest_MultiPeriod_1080p.mpd"
+  },
+  {
+    "file": "dash/dashjs-vod-static-mpd-multi-period-2160p-without-encryption-b5b514a6.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "VOD (Static MPD)/Multi-period 2160p without encryption",
+    "url": "https://media.axprod.net/TestVectors/v7-Clear/Manifest_MultiPeriod.mpd"
+  },
+  {
+    "file": "dash/dashjs-vod-static-mpd-multiperiod-2-periods-segmenttemplate-number-36d25bba.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "VOD (Static MPD)/Multiperiod, 2 periods, SegmentTemplate $number",
+    "url": "https://dash.akamaized.net/dash264/TestCases/5a/nomor/1.mpd"
+  },
+  {
+    "file": "dash/dashjs-vod-static-mpd-multiple-adaptationsets-50806b76.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "VOD (Static MPD)/Multiple AdaptationSets",
+    "url": "https://ott.dolby.com/webapi/testasset_dashjs/multiAudio.mpd"
+  },
+  {
+    "file": "dash/dashjs-vod-static-mpd-on-demand-testcard-multiple-languages-aac-ste-609c11e5.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "VOD (Static MPD)/On-demand Testcard - Multiple Languages, AAC Stereo and Surround, Audio Description, AVC Video",
+    "url": "https://vod-dash-ww-rd-live.akamaized.net/testcard/2/manifests/avc-full.mpd"
+  },
+  {
+    "file": "dash/dashjs-vod-static-mpd-segmentbase-ondemand-profile-1af87186.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "VOD (Static MPD)/SegmentBase, ondemand profile",
+    "url": "https://dash.akamaized.net/dash264/TestCases/1a/sony/SNE_DASH_SD_CASE1A_REVISED.mpd"
+  },
+  {
+    "file": "dash/dashjs-vod-static-mpd-segmenttemplate-live-profile-77bc08b3.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "VOD (Static MPD)/SegmentTemplate, live profile",
+    "url": "https://dash.akamaized.net/envivio/EnvivioDash3/manifest.mpd"
+  },
+  {
+    "file": "dash/dashjs-vod-static-mpd-segmenttemplate-number-live-profile-250kbps-u-37a92937.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "VOD (Static MPD)/SegmentTemplate/Number, live profile, 250kbps up to 15Mbps@4K.",
+    "url": "https://dash.akamaized.net/akamai/bbb_30fps/bbb_30fps.mpd"
+  },
+  {
+    "file": "dash/dashjs-vod-static-mpd-segmenttemplate-segmenttimeline-time-ondemand-1983685b.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "VOD (Static MPD)/SegmentTemplate/SegmentTimeline $time, ondemand profile",
+    "url": "https://dash.akamaized.net/dash264/TestCases/2c/qualcomm/1/MultiResMPEG2.mpd"
+  },
+  {
+    "file": "dash/dashjs-vod-static-mpd-single-period-1080p-h-264-5-video-3-audio-3-t-bf6073c1.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "VOD (Static MPD)/Single-period, 1080p, H.264, 5 video, 3 audio, 3 text tracks, CMAF, no encryption",
+    "url": "https://media.axprod.net/TestVectors/Cmaf/clear_1080p_h264/manifest.mpd"
+  },
+  {
+    "file": "dash/dashjs-vod-static-mpd-single-period-1080p-h-264-5-video-3-audio-3-t-e9a699a5.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "VOD (Static MPD)/Single-period, 1080p, H.264, 5 video, 3 audio, 3 text tracks, DASH, no encryption",
+    "url": "https://media.axprod.net/TestVectors/Dash/not_protected_dash_1080p_h264/manifest.mpd"
+  },
+  {
+    "file": "dash/dashjs-vod-static-mpd-single-period-1080p-h-265-5-video-3-audio-3-t-7fb13cde.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "VOD (Static MPD)/Single-period, 1080p, H.265, 5 video, 3 audio, 3 text tracks, CMAF, no encryption",
+    "url": "https://media.axprod.net/TestVectors/H265/clear_cmaf_1080p_h265/manifest.mpd"
+  },
+  {
+    "file": "dash/dashjs-vod-static-mpd-single-period-1080p-h-265-5-video-3-audio-3-t-b0361fc0.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "VOD (Static MPD)/Single-period, 1080p, H.265, 5 video, 3 audio, 3 text tracks, DASH, no encryption",
+    "url": "https://media.axprod.net/TestVectors/H265/clear_dash_1080p_h265/manifest.mpd"
+  },
+  {
+    "file": "dash/dashjs-vod-static-mpd-spring-25fps-75gop-1920x804-2-40-h264-kid-148-0f727a5a.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "VOD (Static MPD)/Spring (25fps, 75gop, 1920x804(2.40) h264, KID=148D) v1",
+    "url": "http://refapp.hbbtv.org/videos/spring_804p_v1/manifest.mpd"
+  },
+  {
+    "file": "dash/dashjs-vod-static-mpd-tears-of-steel-25fps-75gop-1080p-kid-1237-v3-907d2a86.mpd",
+    "kind": "dash",
+    "source": "dashjs",
+    "name": "VOD (Static MPD)/Tears of Steel (25fps, 75gop, 1080p, KID=1237) v3",
+    "url": "http://refapp.hbbtv.org/videos/tears_of_steel_1080p_25f75g6sv3/manifest.mpd"
+  },
+  {
+    "file": "dash/mpeg-example-g1-702d39c9.mpd",
+    "kind": "dash",
+    "source": "mpeg",
+    "name": "example_G1",
+    "url": "https://raw.githubusercontent.com/MPEGGroup/DASHSchema/6th-Ed/example_G1.mpd"
+  },
+  {
+    "file": "dash/mpeg-example-g10-b35eda4d.mpd",
+    "kind": "dash",
+    "source": "mpeg",
+    "name": "example_G10",
+    "url": "https://raw.githubusercontent.com/MPEGGroup/DASHSchema/6th-Ed/example_G10.mpd"
+  },
+  {
+    "file": "dash/mpeg-example-g11-4d93ffb7.mpd",
+    "kind": "dash",
+    "source": "mpeg",
+    "name": "example_G11",
+    "url": "https://raw.githubusercontent.com/MPEGGroup/DASHSchema/6th-Ed/example_G11.mpd"
+  },
+  {
+    "file": "dash/mpeg-example-g12-60a7717f.mpd",
+    "kind": "dash",
+    "source": "mpeg",
+    "name": "example_G12",
+    "url": "https://raw.githubusercontent.com/MPEGGroup/DASHSchema/6th-Ed/example_G12.mpd"
+  },
+  {
+    "file": "dash/mpeg-example-g13-1-9d67e374.mpd",
+    "kind": "dash",
+    "source": "mpeg",
+    "name": "example_G13-1",
+    "url": "https://raw.githubusercontent.com/MPEGGroup/DASHSchema/6th-Ed/example_G13-1.mpd"
+  },
+  {
+    "file": "dash/mpeg-example-g13-2-556c5714.mpd",
+    "kind": "dash",
+    "source": "mpeg",
+    "name": "example_G13-2",
+    "url": "https://raw.githubusercontent.com/MPEGGroup/DASHSchema/6th-Ed/example_G13-2.mpd"
+  },
+  {
+    "file": "dash/mpeg-example-g14-943aa723.mpd",
+    "kind": "dash",
+    "source": "mpeg",
+    "name": "example_G14",
+    "url": "https://raw.githubusercontent.com/MPEGGroup/DASHSchema/6th-Ed/example_G14.mpd"
+  },
+  {
+    "file": "dash/mpeg-example-g15-0d7e53ff.mpd",
+    "kind": "dash",
+    "source": "mpeg",
+    "name": "example_G15",
+    "url": "https://raw.githubusercontent.com/MPEGGroup/DASHSchema/6th-Ed/example_G15.mpd"
+  },
+  {
+    "file": "dash/mpeg-example-g16-7df36f2b.mpd",
+    "kind": "dash",
+    "source": "mpeg",
+    "name": "example_G16",
+    "url": "https://raw.githubusercontent.com/MPEGGroup/DASHSchema/6th-Ed/example_G16.mpd"
+  },
+  {
+    "file": "dash/mpeg-example-g17-d3502f84.mpd",
+    "kind": "dash",
+    "source": "mpeg",
+    "name": "example_G17",
+    "url": "https://raw.githubusercontent.com/MPEGGroup/DASHSchema/6th-Ed/example_G17.mpd"
+  },
+  {
+    "file": "dash/mpeg-example-g18-3b737090.mpd",
+    "kind": "dash",
+    "source": "mpeg",
+    "name": "example_G18",
+    "url": "https://raw.githubusercontent.com/MPEGGroup/DASHSchema/6th-Ed/example_G18.mpd"
+  },
+  {
+    "file": "dash/mpeg-example-g19-d1997cc8.mpd",
+    "kind": "dash",
+    "source": "mpeg",
+    "name": "example_G19",
+    "url": "https://raw.githubusercontent.com/MPEGGroup/DASHSchema/6th-Ed/example_G19.mpd"
+  },
+  {
+    "file": "dash/mpeg-example-g2-65401bb0.mpd",
+    "kind": "dash",
+    "source": "mpeg",
+    "name": "example_G2",
+    "url": "https://raw.githubusercontent.com/MPEGGroup/DASHSchema/6th-Ed/example_G2.mpd"
+  },
+  {
+    "file": "dash/mpeg-example-g20-838189e0.mpd",
+    "kind": "dash",
+    "source": "mpeg",
+    "name": "example_G20",
+    "url": "https://raw.githubusercontent.com/MPEGGroup/DASHSchema/6th-Ed/example_G20.mpd"
+  },
+  {
+    "file": "dash/mpeg-example-g21-patch-base-d9b1254d.mpd",
+    "kind": "dash",
+    "source": "mpeg",
+    "name": "example_G21_patch_base",
+    "url": "https://raw.githubusercontent.com/MPEGGroup/DASHSchema/6th-Ed/example_G21_patch_base.mpd"
+  },
+  {
+    "file": "dash/mpeg-example-g22-9a99d34a.mpd",
+    "kind": "dash",
+    "source": "mpeg",
+    "name": "example_G22",
+    "url": "https://raw.githubusercontent.com/MPEGGroup/DASHSchema/6th-Ed/example_G22.mpd"
+  },
+  {
+    "file": "dash/mpeg-example-g23-f012f6a4.mpd",
+    "kind": "dash",
+    "source": "mpeg",
+    "name": "example_G23",
+    "url": "https://raw.githubusercontent.com/MPEGGroup/DASHSchema/6th-Ed/example_G23.mpd"
+  },
+  {
+    "file": "dash/mpeg-example-g25-eb556700.mpd",
+    "kind": "dash",
+    "source": "mpeg",
+    "name": "example_G25",
+    "url": "https://raw.githubusercontent.com/MPEGGroup/DASHSchema/6th-Ed/example_G25.mpd"
+  },
+  {
+    "file": "dash/mpeg-example-g26-1-28a11127.mpd",
+    "kind": "dash",
+    "source": "mpeg",
+    "name": "example_G26-1",
+    "url": "https://raw.githubusercontent.com/MPEGGroup/DASHSchema/6th-Ed/example_G26-1.mpd"
+  },
+  {
+    "file": "dash/mpeg-example-g26-2-29c06001.mpd",
+    "kind": "dash",
+    "source": "mpeg",
+    "name": "example_G26-2",
+    "url": "https://raw.githubusercontent.com/MPEGGroup/DASHSchema/6th-Ed/example_G26-2.mpd"
+  },
+  {
+    "file": "dash/mpeg-example-g27-b7ab8735.mpd",
+    "kind": "dash",
+    "source": "mpeg",
+    "name": "example_G27",
+    "url": "https://raw.githubusercontent.com/MPEGGroup/DASHSchema/6th-Ed/example_G27.mpd"
+  },
+  {
+    "file": "dash/mpeg-example-g28-1-e5fc6ad2.mpd",
+    "kind": "dash",
+    "source": "mpeg",
+    "name": "example_G28-1",
+    "url": "https://raw.githubusercontent.com/MPEGGroup/DASHSchema/6th-Ed/example_G28-1.mpd"
+  },
+  {
+    "file": "dash/mpeg-example-g28-2-a7665ca7.mpd",
+    "kind": "dash",
+    "source": "mpeg",
+    "name": "example_G28-2",
+    "url": "https://raw.githubusercontent.com/MPEGGroup/DASHSchema/6th-Ed/example_G28-2.mpd"
+  },
+  {
+    "file": "dash/mpeg-example-g28-3-6fa78c93.mpd",
+    "kind": "dash",
+    "source": "mpeg",
+    "name": "example_G28-3",
+    "url": "https://raw.githubusercontent.com/MPEGGroup/DASHSchema/6th-Ed/example_G28-3.mpd"
+  },
+  {
+    "file": "dash/mpeg-example-g28-4-5e65654c.mpd",
+    "kind": "dash",
+    "source": "mpeg",
+    "name": "example_G28-4",
+    "url": "https://raw.githubusercontent.com/MPEGGroup/DASHSchema/6th-Ed/example_G28-4.mpd"
+  },
+  {
+    "file": "dash/mpeg-example-g28-5-169b27ca.mpd",
+    "kind": "dash",
+    "source": "mpeg",
+    "name": "example_G28-5",
+    "url": "https://raw.githubusercontent.com/MPEGGroup/DASHSchema/6th-Ed/example_G28-5.mpd"
+  },
+  {
+    "file": "dash/mpeg-example-g29-1-34fedd1f.mpd",
+    "kind": "dash",
+    "source": "mpeg",
+    "name": "example_G29-1",
+    "url": "https://raw.githubusercontent.com/MPEGGroup/DASHSchema/6th-Ed/example_G29-1.mpd"
+  },
+  {
+    "file": "dash/mpeg-example-g3-bd962af9.mpd",
+    "kind": "dash",
+    "source": "mpeg",
+    "name": "example_G3",
+    "url": "https://raw.githubusercontent.com/MPEGGroup/DASHSchema/6th-Ed/example_G3.mpd"
+  },
+  {
+    "file": "dash/mpeg-example-g30-1-f6b47708.mpd",
+    "kind": "dash",
+    "source": "mpeg",
+    "name": "example_G30-1",
+    "url": "https://raw.githubusercontent.com/MPEGGroup/DASHSchema/6th-Ed/example_G30-1.mpd"
+  },
+  {
+    "file": "dash/mpeg-example-g30-2-86e8458f.mpd",
+    "kind": "dash",
+    "source": "mpeg",
+    "name": "example_G30-2",
+    "url": "https://raw.githubusercontent.com/MPEGGroup/DASHSchema/6th-Ed/example_G30-2.mpd"
+  },
+  {
+    "file": "dash/mpeg-example-g5-9d3e24ca.mpd",
+    "kind": "dash",
+    "source": "mpeg",
+    "name": "example_G5",
+    "url": "https://raw.githubusercontent.com/MPEGGroup/DASHSchema/6th-Ed/example_G5.mpd"
+  },
+  {
+    "file": "dash/mpeg-example-g6-9608b3e6.mpd",
+    "kind": "dash",
+    "source": "mpeg",
+    "name": "example_G6",
+    "url": "https://raw.githubusercontent.com/MPEGGroup/DASHSchema/6th-Ed/example_G6.mpd"
+  },
+  {
+    "file": "dash/mpeg-example-g7-c1a18dc6.mpd",
+    "kind": "dash",
+    "source": "mpeg",
+    "name": "example_G7",
+    "url": "https://raw.githubusercontent.com/MPEGGroup/DASHSchema/6th-Ed/example_G7.mpd"
+  },
+  {
+    "file": "dash/mpeg-example-g9-05f277fe.mpd",
+    "kind": "dash",
+    "source": "mpeg",
+    "name": "example_G9",
+    "url": "https://raw.githubusercontent.com/MPEGGroup/DASHSchema/6th-Ed/example_G9.mpd"
+  },
+  {
+    "file": "dash/mpeg-example-h1-635ea7f7.mpd",
+    "kind": "dash",
+    "source": "mpeg",
+    "name": "example_H1",
+    "url": "https://raw.githubusercontent.com/MPEGGroup/DASHSchema/6th-Ed/example_H1.mpd"
+  },
+  {
+    "file": "dash/mpeg-example-h2-92d2c6a7.mpd",
+    "kind": "dash",
+    "source": "mpeg",
+    "name": "example_H2",
+    "url": "https://raw.githubusercontent.com/MPEGGroup/DASHSchema/6th-Ed/example_H2.mpd"
+  },
+  {
+    "file": "dash/shaka-angel-one-multicodec-multilingual-013a2207.mpd",
+    "kind": "dash",
+    "source": "shaka",
+    "name": "Angel One (multicodec, multilingual)",
+    "url": "https://storage.googleapis.com/shaka-demo-assets/angel-one/dash.mpd"
+  },
+  {
+    "file": "dash/shaka-angel-one-multicodec-multilingual-clearkey-server-1061a743.mpd",
+    "kind": "dash",
+    "source": "shaka",
+    "name": "Angel One (multicodec, multilingual, ClearKey server)",
+    "url": "https://storage.googleapis.com/shaka-demo-assets/angel-one-clearkey/dash.mpd"
+  },
+  {
+    "file": "dash/shaka-angel-one-multicodec-multilingual-mpd-chaining-85265dba.mpd",
+    "kind": "dash",
+    "source": "shaka",
+    "name": "Angel One (multicodec, multilingual, mpd chaining)",
+    "url": "https://storage.googleapis.com/shaka-demo-assets/angel-one/dash_chaining.mpd"
+  },
+  {
+    "file": "dash/shaka-big-buck-bunny-cbcs-av1-dash-playready-5dfbdf90.mpd",
+    "kind": "dash",
+    "source": "shaka",
+    "name": "Big Buck Bunny CBCS AV1 (DASH - PlayReady)",
+    "url": "https://test.playready.microsoft.com/media/dash/BBBAV1CBC/manifest.mpd"
+  },
+  {
+    "file": "dash/shaka-big-buck-bunny-cenc-av1-dash-playready-aa887d19.mpd",
+    "kind": "dash",
+    "source": "shaka",
+    "name": "Big Buck Bunny CENC AV1 (DASH - PlayReady)",
+    "url": "https://test.playready.microsoft.com/media/dash/BBBAV1/manifest.mpd"
+  },
+  {
+    "file": "dash/shaka-big-buck-bunny-cenc-dash-playready-b341c798.mpd",
+    "kind": "dash",
+    "source": "shaka",
+    "name": "Big Buck Bunny CENC (DASH - PlayReady)",
+    "url": "https://test.playready.microsoft.com/media/dash/APPLEENC_CBCS_BBB_1080p/1080p.mpd"
+  },
+  {
+    "file": "dash/shaka-big-buck-bunny-dash-if-b43d76c4.mpd",
+    "kind": "dash",
+    "source": "shaka",
+    "name": "Big Buck Bunny (DASH-IF)",
+    "url": "https://dash.akamaized.net/dash264/TestCases/1c/qualcomm/2/MultiRate.mpd"
+  },
+  {
+    "file": "dash/shaka-big-buck-bunny-lcevc-h264-dash-mp4-750936de.mpd",
+    "kind": "dash",
+    "source": "shaka",
+    "name": "Big Buck Bunny LCEVC H264 (DASH, MP4)",
+    "url": "https://d3mfda3gpj3dw1.cloudfront.net/vn9s0p86SVbJorX6/master.mpd"
+  },
+  {
+    "file": "dash/shaka-big-buck-bunny-nimble-dash-6fd12708.mpd",
+    "kind": "dash",
+    "source": "shaka",
+    "name": "Big Buck Bunny (Nimble, DASH)",
+    "url": "https://cf-sf-video.wmspanel.com/local/raw/BigBuckBunny_320x180.mp4/manifest.mpd"
+  },
+  {
+    "file": "dash/shaka-big-buck-bunny-the-dark-truths-of-a-video-dev-cartoon-dash-934e1611.mpd",
+    "kind": "dash",
+    "source": "shaka",
+    "name": "Big Buck Bunny: the Dark Truths of a Video Dev Cartoon (DASH)",
+    "url": "https://storage.googleapis.com/shaka-demo-assets/bbb-dark-truths/dash.mpd"
+  },
+  {
+    "file": "dash/shaka-dash-if-dash-annex-i-de26d975.mpd",
+    "kind": "dash",
+    "source": "shaka",
+    "name": "DASH-IF - DASH Annex I",
+    "url": "https://livesim2.dashif.org/livesim2/annexI_a=X,b=Y/testpic_2s/Manifest.mpd?a=X&b=Y"
+  },
+  {
+    "file": "dash/shaka-dash-if-mpd-patch-segmenttemplate-with-number-livesim-c4472681.mpd",
+    "kind": "dash",
+    "source": "shaka",
+    "name": "DASH-IF MPD Patch - SegmentTemplate with $Number$ (livesim)",
+    "url": "https://livesim2.dashif.org/livesim2/patch_60/testpic_2s/Manifest.mpd"
+  },
+  {
+    "file": "dash/shaka-dash-if-mpd-patch-segmenttemplate-with-number-multiperiod-li-ba307e53.mpd",
+    "kind": "dash",
+    "source": "shaka",
+    "name": "DASH-IF MPD Patch - SegmentTemplate with $Number$, multiperiod (livesim)",
+    "url": "https://livesim2.dashif.org/livesim2/patch_60/periods_60/testpic_2s/Manifest.mpd"
+  },
+  {
+    "file": "dash/shaka-dash-if-mpd-patch-segmenttimeline-with-number-livesim-9ed9deda.mpd",
+    "kind": "dash",
+    "source": "shaka",
+    "name": "DASH-IF MPD Patch - SegmentTimeline with $Number$ (livesim)",
+    "url": "https://livesim2.dashif.org/livesim2/patch_60/segtimelinenr_1/testpic_2s/Manifest.mpd"
+  },
+  {
+    "file": "dash/shaka-dash-if-mpd-patch-segmenttimeline-with-number-multiperiod-li-687d2062.mpd",
+    "kind": "dash",
+    "source": "shaka",
+    "name": "DASH-IF MPD Patch - SegmentTimeline with $Number$, multiperiod (livesim)",
+    "url": "https://livesim2.dashif.org/livesim2/patch_60/segtimelinenr_1/periods_60/testpic_2s/Manifest.mpd"
+  },
+  {
+    "file": "dash/shaka-dash-if-mpd-patch-segmenttimeline-with-time-livesim-eab1d092.mpd",
+    "kind": "dash",
+    "source": "shaka",
+    "name": "DASH-IF MPD Patch - SegmentTimeline with $Time$ (livesim)",
+    "url": "https://livesim2.dashif.org/livesim2/patch_60/segtimeline_1/testpic_2s/Manifest.mpd"
+  },
+  {
+    "file": "dash/shaka-dash-if-mpd-patch-segmenttimeline-with-time-multiperiod-live-ade30e5f.mpd",
+    "kind": "dash",
+    "source": "shaka",
+    "name": "DASH-IF MPD Patch - SegmentTimeline with $Time$, multiperiod (livesim)",
+    "url": "https://livesim2.dashif.org/livesim2/patch_60/segtimeline_1/periods_60/testpic_2s/Manifest.mpd"
+  },
+  {
+    "file": "dash/shaka-dash-if-regular-chaining-904c56ac.mpd",
+    "kind": "dash",
+    "source": "shaka",
+    "name": "DASH-IF - Regular chaining",
+    "url": "https://dash.akamaized.net/dash264/TestCasesIOP33/MPDChaining/regular_chain/1/manifest_regular_MPDChaining_live.mpd"
+  },
+  {
+    "file": "dash/shaka-dash-if-trick-mode-81d178b6.mpd",
+    "kind": "dash",
+    "source": "shaka",
+    "name": "DASH-IF - trick mode",
+    "url": "https://livesim2.dashif.org/vod/testpic_2s/Manifest_trickmode.mpd"
+  },
+  {
+    "file": "dash/shaka-dash-if-trick-mode-livesim-ca2b7213.mpd",
+    "kind": "dash",
+    "source": "shaka",
+    "name": "DASH-IF - trick mode (livesim)",
+    "url": "https://livesim2.dashif.org/livesim2/testpic_2s/Manifest_trickmode.mpd"
+  },
+  {
+    "file": "dash/shaka-dig-the-uke-by-stefan-kartenberg-audio-only-multicodec-9d553082.mpd",
+    "kind": "dash",
+    "source": "shaka",
+    "name": "\"Dig the Uke\" by Stefan Kartenberg (audio only, multicodec)",
+    "url": "https://storage.googleapis.com/shaka-demo-assets/dig-the-uke-clear/dash.mpd"
+  },
+  {
+    "file": "dash/shaka-dig-the-uke-by-stefan-kartenberg-audio-only-multicodec-wide-e5722096.mpd",
+    "kind": "dash",
+    "source": "shaka",
+    "name": "\"Dig the Uke\" by Stefan Kartenberg (audio only, multicodec, Widevine)",
+    "url": "https://storage.googleapis.com/shaka-demo-assets/dig-the-uke/dash.mpd"
+  },
+  {
+    "file": "dash/shaka-esports-lcevc-hevc-dash-mp4-9f96054f.mpd",
+    "kind": "dash",
+    "source": "shaka",
+    "name": " eSports LCEVC HEVC (DASH, MP4)",
+    "url": "https://d3mfda3gpj3dw1.cloudfront.net/vnCTVqNpUs9400xP/master.mpd"
+  },
+  {
+    "file": "dash/shaka-heliocentrism-multicodec-multiperiod-95a7930d.mpd",
+    "kind": "dash",
+    "source": "shaka",
+    "name": "Heliocentrism (multicodec, multiperiod)",
+    "url": "https://storage.googleapis.com/shaka-demo-assets/heliocentrism/heliocentrism.mpd"
+  },
+  {
+    "file": "dash/shaka-heliocentrism-multiperiod-with-forced-mimetype-codec-changes-fedd4917.mpd",
+    "kind": "dash",
+    "source": "shaka",
+    "name": "Heliocentrism (multiperiod with forced mimeType/codec changes)",
+    "url": "https://storage.googleapis.com/shaka-demo-assets/heliocentrism-mixed-codec/heliocentrism.mpd"
+  },
+  {
+    "file": "dash/shaka-live-profile-with-five-periods-9557c350.mpd",
+    "kind": "dash",
+    "source": "shaka",
+    "name": "live profile with five periods",
+    "url": "https://download.tsi.telecom-paristech.fr/gpac/DASH_CONFORMANCE/TelecomParisTech/mp4-live-periods/mp4-live-periods-mpd.mpd"
+  },
+  {
+    "file": "dash/shaka-live-sim-2s-segments-4f7edb43.mpd",
+    "kind": "dash",
+    "source": "shaka",
+    "name": "Live sim (2s segments)",
+    "url": "https://livesim2.dashif.org/livesim2/utc_head/testpic_2s/Manifest.mpd"
+  },
+  {
+    "file": "dash/shaka-live-sim-content-steering-ed89f8c9.mpd",
+    "kind": "dash",
+    "source": "shaka",
+    "name": "Live sim Content-Steering",
+    "url": "https://livesim2.dashif.org/livesim2/steer_alpha,beta;ttl=20/testpic_2s/Manifest.mpd?sessionId=alice"
+  },
+  {
+    "file": "dash/shaka-live-sim-segmenttemplate-duration-multi-period-60s-1836715a.mpd",
+    "kind": "dash",
+    "source": "shaka",
+    "name": "Live sim SegmentTemplate Duration (multi-period 60s)",
+    "url": "https://livesim2.dashif.org/livesim2/utc_head/periods_60/testpic_2s/Manifest.mpd"
+  },
+  {
+    "file": "dash/shaka-live-sim-segmenttimeline-startover-20s-20s-2s-segments-8f89635d.mpd",
+    "kind": "dash",
+    "source": "shaka",
+    "name": "Live sim SegmentTimeline StartOver [-20s, +20s] (2s segments)",
+    "url": "https://livesim2.dashif.org/livesim2/segtimeline_1/startrel_-20/stoprel_20/timeoffset_0/testpic_2s/Manifest.mpd"
+  },
+  {
+    "file": "dash/shaka-live-sim-segmenttimeline-w-number-6s-segments-13753b58.mpd",
+    "kind": "dash",
+    "source": "shaka",
+    "name": "Live sim SegmentTimeline w/ $Number$ (6s segments)",
+    "url": "https://livesim2.dashif.org/livesim2/segtimelinenr_1/utc_head/testpic_6s/Manifest.mpd"
+  },
+  {
+    "file": "dash/shaka-live-sim-segmenttimeline-w-number-using-pattern-for-audio-f9d00242.mpd",
+    "kind": "dash",
+    "source": "shaka",
+    "name": "Live sim SegmentTimeline w/ $Number$ using Pattern for audio",
+    "url": "https://livesim2.dashif.org/livesim2/segtimelinenr_pattern/testpic_2s/Manifest.mpd"
+  },
+  {
+    "file": "dash/shaka-live-sim-segmenttimeline-w-time-6s-segments-d3967da8.mpd",
+    "kind": "dash",
+    "source": "shaka",
+    "name": "Live sim SegmentTimeline w/ $Time$ (6s segments)",
+    "url": "https://livesim2.dashif.org/livesim2/segtimeline_1/utc_head/testpic_6s/Manifest.mpd"
+  },
+  {
+    "file": "dash/shaka-live-sim-segmenttimeline-w-time-using-pattern-for-audio-b104e57b.mpd",
+    "kind": "dash",
+    "source": "shaka",
+    "name": "Live sim SegmentTimeline w/ $Time$ using Pattern for audio",
+    "url": "https://livesim2.dashif.org/livesim2/segtimeline_pattern/testpic_2s/Manifest.mpd"
+  },
+  {
+    "file": "dash/shaka-live-sim-server-guided-ad-insertion-using-dash-6th-edition-a-5e5311a9.mpd",
+    "kind": "dash",
+    "source": "shaka",
+    "name": "Live sim Server-Guided Ad Insertion using DASH 6th-edition Alternative-MPD Replace events",
+    "url": "https://livesim2.dashif.org/livesim2/sgai_p60:20/testpic_2s/Manifest.mpd?sessionId=alice&interests=travel,sailing"
+  },
+  {
+    "file": "dash/shaka-live-sim-startover-segmenttemplate-duration-20s-20s-2s-segme-deb20ab1.mpd",
+    "kind": "dash",
+    "source": "shaka",
+    "name": "Live sim StartOver SegmentTemplate Duration [-20s, +20s] (2s segments)",
+    "url": "https://livesim2.dashif.org/livesim2/startrel_-20/stoprel_20/timeoffset_0/testpic_2s/Manifest.mpd"
+  },
+  {
+    "file": "dash/shaka-live-sim-with-svta2053-2-ads-a59f6767.mpd",
+    "kind": "dash",
+    "source": "shaka",
+    "name": "Live sim with SVTA2053-2 ads",
+    "url": "https://livesim2.dashif.org/livesim2/svta_p60:20;ads=2/testpic_2s/Manifest.mpd?sessionId=shaka"
+  },
+  {
+    "file": "dash/shaka-main-profile-single-file-6c52eebe.mpd",
+    "kind": "dash",
+    "source": "shaka",
+    "name": "main profile, single file",
+    "url": "https://download.tsi.telecom-paristech.fr/gpac/DASH_CONFORMANCE/TelecomParisTech/mp4-main-single/mp4-main-single-mpd-AV-NBS.mpd"
+  },
+  {
+    "file": "dash/shaka-multi-drm-8-byte-iv-a9fdd8fb.mpd",
+    "kind": "dash",
+    "source": "shaka",
+    "name": "Multi DRM - 8 Byte IV",
+    "url": "https://content.uplynk.com/847859273a4b4a81959d8fea181672a4.mpd?pr.version=2&pr.playenabler=B621D91F-EDCC-4035-8D4B-DC71760D43E9&pr.securitylevel=150"
+  },
+  {
+    "file": "dash/shaka-on-demand-testcard-audio-dash-flac-stereo-in-english-d77527d6.mpd",
+    "kind": "dash",
+    "source": "shaka",
+    "name": "On-demand Testcard Audio - DASH - FLAC Stereo in English",
+    "url": "https://vod-dash-ww-rd-live.akamaized.net/testcard/2/manifests/radio-flac-en.mpd"
+  },
+  {
+    "file": "dash/shaka-on-demand-testcard-woff-font-download-signalled-with-essenti-ea5815ee.mpd",
+    "kind": "dash",
+    "source": "shaka",
+    "name": "On-demand Testcard - WOFF Font Download signalled with essential property descriptor with relative url",
+    "url": "https://vod-dash-ww-rd-live.akamaized.net/testcard/2/manifests/avc-ctv-stereo-en-efdt-woff-bur.mpd"
+  },
+  {
+    "file": "dash/shaka-ondemand-profile-359208b8.mpd",
+    "kind": "dash",
+    "source": "shaka",
+    "name": "onDemand profile",
+    "url": "https://download.tsi.telecom-paristech.fr/gpac/DASH_CONFORMANCE/TelecomParisTech/mp4-onDemand/mp4-onDemand-mpd-AV.mpd"
+  },
+  {
+    "file": "dash/shaka-shaka-player-history-h264-vp9-av1-live-dash-88d2ae20.mpd",
+    "kind": "dash",
+    "source": "shaka",
+    "name": "Shaka Player History (H264, VP9, AV1, live, DASH)",
+    "url": "https://storage.googleapis.com/shaka-live-assets/player-source.mpd"
+  },
+  {
+    "file": "dash/shaka-sintel-4k-mp4-only-500436e5.mpd",
+    "kind": "dash",
+    "source": "shaka",
+    "name": "Sintel 4k (MP4 only)",
+    "url": "https://storage.googleapis.com/shaka-demo-assets/sintel-mp4-only/dash.mpd"
+  },
+  {
+    "file": "dash/shaka-sintel-4k-mp4-vtt-in-mp4-cd21fb05.mpd",
+    "kind": "dash",
+    "source": "shaka",
+    "name": "Sintel 4k (MP4, VTT in MP4)",
+    "url": "https://storage.googleapis.com/shaka-demo-assets/sintel-mp4-wvtt/dash.mpd"
+  },
+  {
+    "file": "dash/shaka-sintel-4k-multicodec-93951b5e.mpd",
+    "kind": "dash",
+    "source": "shaka",
+    "name": "Sintel 4k (multicodec)",
+    "url": "https://storage.googleapis.com/shaka-demo-assets/sintel/dash.mpd"
+  },
+  {
+    "file": "dash/shaka-sintel-4k-multicodec-widevine-832022fc.mpd",
+    "kind": "dash",
+    "source": "shaka",
+    "name": "Sintel 4k (multicodec, Widevine)",
+    "url": "https://storage.googleapis.com/shaka-demo-assets/sintel-widevine/dash.mpd"
+  },
+  {
+    "file": "dash/shaka-sintel-4k-multiperiod-mixed-encryption-clear-first-b428641b.mpd",
+    "kind": "dash",
+    "source": "shaka",
+    "name": "Sintel 4k (multiperiod, mixed encryption, clear first)",
+    "url": "https://storage.googleapis.com/shaka-demo-assets/sintel-mixed-encryption/clear-enc-clear.mpd"
+  },
+  {
+    "file": "dash/shaka-sintel-4k-multiperiod-mixed-encryption-encrypted-first-ff1716a3.mpd",
+    "kind": "dash",
+    "source": "shaka",
+    "name": "Sintel 4k (multiperiod, mixed encryption, encrypted first)",
+    "url": "https://storage.googleapis.com/shaka-demo-assets/sintel-mixed-encryption/enc-clear-enc.mpd"
+  },
+  {
+    "file": "dash/shaka-sintel-4k-webm-only-3bfa703f.mpd",
+    "kind": "dash",
+    "source": "shaka",
+    "name": "Sintel 4k (WebM only)",
+    "url": "https://storage.googleapis.com/shaka-demo-assets/sintel-webm-only/dash.mpd"
+  },
+  {
+    "file": "dash/shaka-sintel-w-44-subtitle-languages-d6bc57c0.mpd",
+    "kind": "dash",
+    "source": "shaka",
+    "name": "Sintel w/ 44 subtitle languages",
+    "url": "https://storage.googleapis.com/shaka-demo-assets/sintel-many-subs/dash.mpd"
+  },
+  {
+    "file": "dash/shaka-sintel-w-trick-mode-mp4-only-720p-868a8865.mpd",
+    "kind": "dash",
+    "source": "shaka",
+    "name": "Sintel w/ trick mode (MP4 only, 720p)",
+    "url": "https://storage.googleapis.com/shaka-demo-assets/sintel-trickplay/dash.mpd"
+  },
+  {
+    "file": "dash/shaka-tears-of-steel-dash-playready-6d07c6db.mpd",
+    "kind": "dash",
+    "source": "shaka",
+    "name": "Tears of Steel (DASH - PlayReady)",
+    "url": "https://test.playready.microsoft.com/media/profficialsite/tearsofsteel_4k.ism/manifest.mpd"
+  },
+  {
+    "file": "dash/shaka-tears-of-steel-multicodec-surround-stereo-1fa8de1e.mpd",
+    "kind": "dash",
+    "source": "shaka",
+    "name": "Tears of Steel (multicodec, surround + stereo)",
+    "url": "https://storage.googleapis.com/shaka-demo-assets/tos-surround/dash.mpd"
+  },
+  {
+    "file": "dash/shaka-tears-of-steel-multicodec-ttml-168a402f.mpd",
+    "kind": "dash",
+    "source": "shaka",
+    "name": "Tears of Steel (multicodec, TTML)",
+    "url": "https://storage.googleapis.com/shaka-demo-assets/tos-ttml/dash.mpd"
+  },
+  {
+    "file": "dash/shaka-widevine-16-byte-iv-9ce1e634.mpd",
+    "kind": "dash",
+    "source": "shaka",
+    "name": "Widevine - 16 Byte IV",
+    "url": "https://content.uplynk.com/224ac8717e714b68831997ab6cea4015.mpd"
+  },
+  {
+    "file": "dash/shaka-widevine-16-byte-iv-mix-of-encrypted-and-unencrypted-periods-c3fc0cac.mpd",
+    "kind": "dash",
+    "source": "shaka",
+    "name": "Widevine - 16 Byte IV - (mix of encrypted and unencrypted periods)",
+    "url": "https://content.uplynk.com/1eb40d8e64234f5c9879db7045c3d48c.mpd?ad=cleardash&rays=cdefg"
+  },
+  {
+    "file": "dash/ytdlp-mpd-float-duration-mpd-adf0b838.mpd",
+    "kind": "dash",
+    "source": "ytdlp",
+    "name": "mpd/float_duration.mpd",
+    "url": "https://raw.githubusercontent.com/yt-dlp/yt-dlp/master/test/testdata/mpd/float_duration.mpd"
+  },
+  {
+    "file": "dash/ytdlp-mpd-subtitles-mpd-bb9a7122.mpd",
+    "kind": "dash",
+    "source": "ytdlp",
+    "name": "mpd/subtitles.mpd",
+    "url": "https://raw.githubusercontent.com/yt-dlp/yt-dlp/master/test/testdata/mpd/subtitles.mpd"
+  },
+  {
+    "file": "dash/ytdlp-mpd-supplemental-codecs-mpd-7e4253c3.mpd",
+    "kind": "dash",
+    "source": "ytdlp",
+    "name": "mpd/supplemental_codecs.mpd",
+    "url": "https://raw.githubusercontent.com/yt-dlp/yt-dlp/master/test/testdata/mpd/supplemental_codecs.mpd"
+  },
+  {
+    "file": "dash/ytdlp-mpd-unfragmented-mpd-c9048fca.mpd",
+    "kind": "dash",
+    "source": "ytdlp",
+    "name": "mpd/unfragmented.mpd",
+    "url": "https://raw.githubusercontent.com/yt-dlp/yt-dlp/master/test/testdata/mpd/unfragmented.mpd"
+  },
+  {
+    "file": "dash/ytdlp-mpd-urls-only-mpd-b53399f4.mpd",
+    "kind": "dash",
+    "source": "ytdlp",
+    "name": "mpd/urls_only.mpd",
+    "url": "https://raw.githubusercontent.com/yt-dlp/yt-dlp/master/test/testdata/mpd/urls_only.mpd"
+  },
+  {
+    "file": "hls/hlsjs-altaudioandtracks-1087ec6f.m3u8",
+    "kind": "hls",
+    "source": "hlsjs",
+    "name": "altAudioAndTracks",
+    "url": "https://playertest.longtailvideo.com/adaptive/elephants_dream_v4/index.m3u8"
+  },
+  {
+    "file": "hls/hlsjs-altaudioaudioonly-06a275a8.m3u8",
+    "kind": "hls",
+    "source": "hlsjs",
+    "name": "altAudioAudioOnly",
+    "url": "https://playertest.longtailvideo.com/adaptive/alt-audio-no-video/sintel/playlist.m3u8"
+  },
+  {
+    "file": "hls/hlsjs-altaudiomultiaudioonly-fd5ae246.m3u8",
+    "kind": "hls",
+    "source": "hlsjs",
+    "name": "altAudioMultiAudioOnly",
+    "url": "https://playertest.longtailvideo.com/adaptive/alt-audio-no-video/angel-one.m3u8"
+  },
+  {
+    "file": "hls/hlsjs-altaudiowithpdtandstartgap-d6e26b8a.m3u8",
+    "kind": "hls",
+    "source": "hlsjs",
+    "name": "altAudioWithPdtAndStartGap",
+    "url": "https://playertest.longtailvideo.com/adaptive/hls-test-streams/test-audio-pdt/playlist.m3u8"
+  },
+  {
+    "file": "hls/hlsjs-arte-31694319.m3u8",
+    "kind": "hls",
+    "source": "hlsjs",
+    "name": "arte",
+    "url": "https://test-streams.mux.dev/test_001/stream.m3u8"
+  },
+  {
+    "file": "hls/hlsjs-audioonlymultiplelevels-bdad7fdc.m3u8",
+    "kind": "hls",
+    "source": "hlsjs",
+    "name": "audioOnlyMultipleLevels",
+    "url": "https://s3.amazonaws.com/qa.jwplayer.com/~alex/121628/new_master.m3u8"
+  },
+  {
+    "file": "hls/hlsjs-bbb-7c4ba1b4.m3u8",
+    "kind": "hls",
+    "source": "hlsjs",
+    "name": "bbb",
+    "url": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8"
+  },
+  {
+    "file": "hls/hlsjs-fdr-261eeacb.m3u8",
+    "kind": "hls",
+    "source": "hlsjs",
+    "name": "fdr",
+    "url": "https://cdn.jwplayer.com/manifests/pZxWPRg4.m3u8"
+  },
+  {
+    "file": "hls/hlsjs-groupids-606bf83c.m3u8",
+    "kind": "hls",
+    "source": "hlsjs",
+    "name": "groupIds",
+    "url": "https://mtoczko.github.io/hls-test-streams/test-group/playlist.m3u8"
+  },
+  {
+    "file": "hls/hlsjs-mpegaudioonly-637bb7ff.m3u8",
+    "kind": "hls",
+    "source": "hlsjs",
+    "name": "mpegAudioOnly",
+    "url": "https://pl.streamingvideoprovider.com/mp3-playlist/playlist.m3u8"
+  },
+  {
+    "file": "hls/hlsjs-mpegtshevchls-1fa6574f.m3u8",
+    "kind": "hls",
+    "source": "hlsjs",
+    "name": "mpegTsHevcHls",
+    "url": "https://devoldemar.github.io/streams/hls/bipbop/hevc.m3u8"
+  },
+  {
+    "file": "hls/hlsjs-muxlowlatencyhls-6845451a.m3u8",
+    "kind": "hls",
+    "source": "hlsjs",
+    "name": "MuxLowLatencyHls",
+    "url": "https://stream.mux.com/v69RSHhFelSm4701snP22dYz2jICy4E4FUyk02rW4gxRM.m3u8"
+  },
+  {
+    "file": "hls/hlsjs-notrackintersection-f8ac10a4.m3u8",
+    "kind": "hls",
+    "source": "hlsjs",
+    "name": "noTrackIntersection",
+    "url": "https://s3.amazonaws.com/qa.jwplayer.com/~alex/123633/new_master.m3u8"
+  },
+  {
+    "file": "hls/hlsjs-oceansaes-83784a7b.m3u8",
+    "kind": "hls",
+    "source": "hlsjs",
+    "name": "oceansAES",
+    "url": "https://playertest.longtailvideo.com/adaptive/oceans_aes/oceans_aes.m3u8"
+  },
+  {
+    "file": "hls/hlsjs-offset-pts-fe204ac8.m3u8",
+    "kind": "hls",
+    "source": "hlsjs",
+    "name": "offset_pts",
+    "url": "https://test-streams.mux.dev/pts_shift/master.m3u8"
+  },
+  {
+    "file": "hls/hlsjs-pdtbadvalues-f298a61d.m3u8",
+    "kind": "hls",
+    "source": "hlsjs",
+    "name": "pdtBadValues",
+    "url": "https://playertest.longtailvideo.com/adaptive/progdatime/playlist2.m3u8"
+  },
+  {
+    "file": "hls/hlsjs-redundantlevelswithtrackgroups-028c19c5.m3u8",
+    "kind": "hls",
+    "source": "hlsjs",
+    "name": "redundantLevelsWithTrackGroups",
+    "url": "https://playertest.longtailvideo.com/adaptive/elephants_dream_v4/redundant.m3u8"
+  },
+  {
+    "file": "hls/hlsjs-trackswithaes-5e263453.m3u8",
+    "kind": "hls",
+    "source": "hlsjs",
+    "name": "tracksWithAES",
+    "url": "https://playertest.longtailvideo.com/adaptive/aes-with-tracks/master.m3u8"
+  },
+  {
+    "file": "hls/shaka-3d-movie-stream-5a9d33fc.m3u8",
+    "kind": "hls",
+    "source": "shaka",
+    "name": "3D movie stream",
+    "url": "https://devstreaming-cdn.apple.com/videos/streaming/examples/historic_planet_content_2023-10-26-3d-video/main.m3u8"
+  },
+  {
+    "file": "hls/shaka-advanced-stream-hls-stream-av1-1499faa7.m3u8",
+    "kind": "hls",
+    "source": "shaka",
+    "name": "Advanced stream HLS Stream (AV1)",
+    "url": "https://devstreaming-cdn.apple.com/videos/streaming/examples/av1-sample/av1-sample.m3u8"
+  },
+  {
+    "file": "hls/shaka-advanced-stream-hls-stream-interstitial-d964a942.m3u8",
+    "kind": "hls",
+    "source": "shaka",
+    "name": "Advanced stream HLS Stream (Interstitial)",
+    "url": "https://devstreaming-cdn.apple.com/videos/streaming/examples/interstitial-sample/mvp_interstitial_sample.m3u8"
+  },
+  {
+    "file": "hls/shaka-advanced-stream-hls-stream-uhd-4k-hdr-atmos-52e8ca80.m3u8",
+    "kind": "hls",
+    "source": "shaka",
+    "name": "Advanced stream HLS Stream (UHD/4K/HDR/ATMOS)",
+    "url": "https://devstreaming-cdn.apple.com/videos/streaming/examples/adv_dv_atmos/main.m3u8"
+  },
+  {
+    "file": "hls/shaka-angel-one-hls-mp4-multilingual-c6aa0b81.m3u8",
+    "kind": "hls",
+    "source": "shaka",
+    "name": "Angel One (HLS, MP4, multilingual)",
+    "url": "https://storage.googleapis.com/shaka-demo-assets/angel-one-hls/hls.m3u8"
+  },
+  {
+    "file": "hls/shaka-angel-one-hls-mp4-multilingual-widevine-30c1e901.m3u8",
+    "kind": "hls",
+    "source": "shaka",
+    "name": "Angel One (HLS, MP4, multilingual, Widevine)",
+    "url": "https://storage.googleapis.com/shaka-demo-assets/angel-one-widevine-hls/hls.m3u8"
+  },
+  {
+    "file": "hls/shaka-angel-one-hls-mp4-sample-aes-ctr-multi-key-1722fa01.m3u8",
+    "kind": "hls",
+    "source": "shaka",
+    "name": "Angel One (HLS, MP4, SAMPLE-AES-CTR, multi-key)",
+    "url": "https://storage.googleapis.com/shaka-demo-assets/angel-one-sample-aes-ctr-multiple-key/manifest.m3u8"
+  },
+  {
+    "file": "hls/shaka-apple-advanced-hls-stream-fmp4-b79d11d2.m3u8",
+    "kind": "hls",
+    "source": "shaka",
+    "name": "Apple Advanced HLS Stream (fMP4)",
+    "url": "https://storage.googleapis.com/shaka-demo-assets/apple-advanced-stream-fmp4/master.m3u8"
+  },
+  {
+    "file": "hls/shaka-apple-advanced-hls-stream-hevc-da343425.m3u8",
+    "kind": "hls",
+    "source": "shaka",
+    "name": "Apple Advanced HLS Stream (HEVC)",
+    "url": "https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_adv_example_hevc/master.m3u8"
+  },
+  {
+    "file": "hls/shaka-apple-advanced-hls-stream-ts-ef7b4f1b.m3u8",
+    "kind": "hls",
+    "source": "shaka",
+    "name": "Apple Advanced HLS Stream (TS)",
+    "url": "https://storage.googleapis.com/shaka-demo-assets/apple-advanced-stream-ts/master.m3u8"
+  },
+  {
+    "file": "hls/shaka-apple-advanced-hls-stream-ts-with-raw-aac-f99c29d5.m3u8",
+    "kind": "hls",
+    "source": "shaka",
+    "name": "Apple Advanced HLS Stream (TS) with raw AAC",
+    "url": "https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_ts/master.m3u8"
+  },
+  {
+    "file": "hls/shaka-apple-immersive-video-stream-f1eb1942.m3u8",
+    "kind": "hls",
+    "source": "shaka",
+    "name": "Apple Immersive Video stream",
+    "url": "https://devstreaming-cdn.apple.com/videos/streaming/examples/immersive-media/apple-immersive-video/primary.m3u8"
+  },
+  {
+    "file": "hls/shaka-audio-only-hls-with-raw-aac-928eb782.m3u8",
+    "kind": "hls",
+    "source": "shaka",
+    "name": "Audio only HLS with raw AAC",
+    "url": "https://storage.googleapis.com/shaka-demo-assets/raw-hls-audio-only/manifest.m3u8"
+  },
+  {
+    "file": "hls/shaka-big-buck-bunny-fairplay-1b257531.m3u8",
+    "kind": "hls",
+    "source": "shaka",
+    "name": "Big Buck Bunny (FairPlay)",
+    "url": "https://na-fps.ezdrm.com/demo/ezdrm/master.m3u8"
+  },
+  {
+    "file": "hls/shaka-big-buck-bunny-nimble-hls-dbe95dad.m3u8",
+    "kind": "hls",
+    "source": "shaka",
+    "name": "Big Buck Bunny (Nimble, HLS)",
+    "url": "https://cf-sf-video.wmspanel.com/local/raw/BigBuckBunny_320x180.mp4/playlist.m3u8"
+  },
+  {
+    "file": "hls/shaka-big-buck-bunny-the-dark-truths-of-a-video-dev-cartoon-hls-7f5be4f3.m3u8",
+    "kind": "hls",
+    "source": "shaka",
+    "name": "Big Buck Bunny: the Dark Truths of a Video Dev Cartoon (HLS)",
+    "url": "https://storage.googleapis.com/shaka-demo-assets/bbb-dark-truths-hls/hls.m3u8"
+  },
+  {
+    "file": "hls/shaka-big-buck-bunny-the-dark-truths-of-a-video-dev-cartoon-hls-pl-50316c6a.m3u8",
+    "kind": "hls",
+    "source": "shaka",
+    "name": "Big Buck Bunny: the Dark Truths of a Video Dev Cartoon (HLS - PlayReady)",
+    "url": "https://test.playready.microsoft.com/media/dash/APPLEENC_CBCS_BBB_1080p/1080p_alternate.m3u8"
+  },
+  {
+    "file": "hls/shaka-esports-lcevc-h264-hls-ts-ec251b11.m3u8",
+    "kind": "hls",
+    "source": "shaka",
+    "name": "eSports LCEVC H264 (HLS, TS)",
+    "url": "https://d3mfda3gpj3dw1.cloudfront.net/vnmITf0oAwlErGf9/master.m3u8"
+  },
+  {
+    "file": "hls/shaka-hls-ts-muxed-audio-in-video-f257826a.m3u8",
+    "kind": "hls",
+    "source": "shaka",
+    "name": "HLS TS (Muxed Audio in Video)",
+    "url": "https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/bipbop_16x9_variant.m3u8"
+  },
+  {
+    "file": "hls/shaka-national-geographic-hls-vr-equirectangular-46338140.m3u8",
+    "kind": "hls",
+    "source": "shaka",
+    "name": "National Geographic (HLS, VR equirectangular)",
+    "url": "https://demo.theoplayer.com/hubfs/videos/natgeo/playlist.m3u8"
+  },
+  {
+    "file": "hls/shaka-on-demand-testcard-audio-hls-flac-stereo-in-english-7556fea3.m3u8",
+    "kind": "hls",
+    "source": "shaka",
+    "name": "On-demand Testcard Audio - HLS - FLAC Stereo in English",
+    "url": "https://vod-dash-ww-rd-live.akamaized.net/testcard/2/manifests/radio-flac-en.m3u8"
+  },
+  {
+    "file": "hls/shaka-shaka-player-history-h264-vp9-av1-live-hls-5253acf2.m3u8",
+    "kind": "hls",
+    "source": "shaka",
+    "name": "Shaka Player History (H264, VP9, AV1, live, HLS)",
+    "url": "https://storage.googleapis.com/shaka-live-assets/player-source.m3u8"
+  },
+  {
+    "file": "hls/shaka-sintel-hls-fmp4-aes-128-f99d448b.m3u8",
+    "kind": "hls",
+    "source": "shaka",
+    "name": "Sintel (HLS, FMP4, AES-128)",
+    "url": "https://storage.googleapis.com/shaka-demo-assets/sintel-fmp4-aes/master.m3u8"
+  },
+  {
+    "file": "hls/shaka-sintel-hls-ts-aes-128-key-rotation-7de24343.m3u8",
+    "kind": "hls",
+    "source": "shaka",
+    "name": "Sintel (HLS, TS, AES-128 key rotation)",
+    "url": "https://storage.googleapis.com/shaka-demo-assets/sintel-ts-aes-key-rotation/master.m3u8"
+  },
+  {
+    "file": "hls/shaka-spatial-video-stream-98d5a239.m3u8",
+    "kind": "hls",
+    "source": "shaka",
+    "name": "Spatial video stream",
+    "url": "https://devstreaming-cdn.apple.com/videos/streaming/examples/immersive-media/spatialLighthouseFlowersWaves/mvp.m3u8"
+  },
+  {
+    "file": "hls/shaka-tears-of-steel-hls-avc-fairplay-multikey-129181a7.m3u8",
+    "kind": "hls",
+    "source": "shaka",
+    "name": "Tears of Steel (HLS AVC - FairPlay - MultiKey)",
+    "url": "https://media.axprod.net/TestVectors/MultiKey/Hls_h264_1080p_cenc/manifest.m3u8"
+  },
+  {
+    "file": "hls/shaka-tears-of-steel-hls-avc-fairplay-singlekey-b2b46622.m3u8",
+    "kind": "hls",
+    "source": "shaka",
+    "name": "Tears of Steel (HLS AVC - FairPlay - SingleKey)",
+    "url": "https://media.axprod.net/TestVectors/Hls/protected_hls_1080p_h264_singlekey/manifest.m3u8"
+  },
+  {
+    "file": "hls/shaka-tears-of-steel-hls-hevc-fairplay-multikey-ad18b43f.m3u8",
+    "kind": "hls",
+    "source": "shaka",
+    "name": "Tears of Steel (HLS HEVC - FairPlay - MultiKey)",
+    "url": "https://media.axprod.net/TestVectors/H265/protected_hls_1080p_h265_multikey/manifest.m3u8"
+  },
+  {
+    "file": "hls/shaka-tears-of-steel-hls-hevc-fairplay-singlekey-104d8c96.m3u8",
+    "kind": "hls",
+    "source": "shaka",
+    "name": "Tears of Steel (HLS HEVC - FairPlay - SingleKey)",
+    "url": "https://media.axprod.net/TestVectors/H265/protected_hls_1080p_h265_singlekey/manifest.m3u8"
+  },
+  {
+    "file": "hls/shaka-tears-of-steel-hls-server-side-ads-ebcf7032.m3u8",
+    "kind": "hls",
+    "source": "shaka",
+    "name": "Tears of Steel (HLS, Server Side ads)",
+    "url": "https://storage.googleapis.com/shaka-demo-assets/tos/hls.m3u8"
+  },
+  {
+    "file": "hls/shaka-tears-of-steel-lcevc-h264-hls-mp4-656dfa06.m3u8",
+    "kind": "hls",
+    "source": "shaka",
+    "name": "Tears of Steel LCEVC H264 (HLS, MP4)",
+    "url": "https://d3mfda3gpj3dw1.cloudfront.net/vn2LvEps745ShGtQ/master.m3u8"
+  },
+  {
+    "file": "hls/shaka-view-180-6cc2f103.m3u8",
+    "kind": "hls",
+    "source": "shaka",
+    "name": "View 180°",
+    "url": "https://devstreaming-cdn.apple.com/videos/streaming/examples/immersive-media/180Lighthouse/mvp.m3u8"
+  },
+  {
+    "file": "hls/shaka-view-360-283a2b6f.m3u8",
+    "kind": "hls",
+    "source": "shaka",
+    "name": "View 360°",
+    "url": "https://devstreaming-cdn.apple.com/videos/streaming/examples/immersive-media/360Lighthouse/mvp.m3u8"
+  },
+  {
+    "file": "hls/shaka-view-wide-fov-184a2716.m3u8",
+    "kind": "hls",
+    "source": "shaka",
+    "name": "View wide fov",
+    "url": "https://devstreaming-cdn.apple.com/videos/streaming/examples/immersive-media/wfovCausewayWalk/mvp.m3u8"
+  },
+  {
+    "file": "hls/ytdlp-m3u8-bipbop-16x9-m3u8-dec74c19.m3u8",
+    "kind": "hls",
+    "source": "ytdlp",
+    "name": "m3u8/bipbop_16x9.m3u8",
+    "url": "https://raw.githubusercontent.com/yt-dlp/yt-dlp/master/test/testdata/m3u8/bipbop_16x9.m3u8"
+  },
+  {
+    "file": "hls/ytdlp-m3u8-img-bipbop-adv-example-fmp4-m3u8-31238fb0.m3u8",
+    "kind": "hls",
+    "source": "ytdlp",
+    "name": "m3u8/img_bipbop_adv_example_fmp4.m3u8",
+    "url": "https://raw.githubusercontent.com/yt-dlp/yt-dlp/master/test/testdata/m3u8/img_bipbop_adv_example_fmp4.m3u8"
+  },
+  {
+    "file": "ism/dashjs-smooth-streaming-super-speedway-56f06438.ism.xml",
+    "kind": "ism",
+    "source": "dashjs",
+    "name": "Smooth Streaming/Super Speedway",
+    "url": "https://playready.directtaps.net/smoothstreaming/SSWSS720H264/SuperSpeedway_720.ism/Manifest"
+  },
+  {
+    "file": "ism/ytdlp-ism-ec-3-test-manifest-17a6904b.ism.xml",
+    "kind": "ism",
+    "source": "ytdlp",
+    "name": "ism/ec-3_test.Manifest",
+    "url": "https://raw.githubusercontent.com/yt-dlp/yt-dlp/master/test/testdata/ism/ec-3_test.Manifest"
+  },
+  {
+    "file": "ism/ytdlp-ism-sintel-manifest-51665fed.ism.xml",
+    "kind": "ism",
+    "source": "ytdlp",
+    "name": "ism/sintel.Manifest",
+    "url": "https://raw.githubusercontent.com/yt-dlp/yt-dlp/master/test/testdata/ism/sintel.Manifest"
+  }
+]

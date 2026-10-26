@@ -268,7 +268,7 @@ download. For example, `dovi_tool` only matters if you download Dolby Vision vid
 | Tool | Binary looked up | Why it is needed |
 | --- | --- | --- |
 | Bento4 (`mp4decrypt`) | `mp4decrypt` | Alternative DRM decryptor to shaka-packager |
-| MP4Box (GPAC) | `MP4Box` | Muxing DTS:X Profile 2 (DTS-UHD) audio |
+| MP4Box (GPAC) | `MP4Box` | Muxing DTS:X Profile 2 (DTS-UHD) and MPEG-H audio |
 | dovi_tool | `dovi_tool` | Dolby Vision metadata handling |
 | HDR10Plus_tool | `hdr10plus_tool` | HDR10+ metadata handling |
 | SubtitleEdit | `seconv`, `SubtitleEdit` | Subtitle conversion (the `SeConv` CLI from 5.x) |
@@ -280,8 +280,8 @@ download. For example, `dovi_tool` only matters if you download Dolby Vision vid
 | Docker | `docker` | Gluetun VPN proxy support |
 | Git | `git` | Fetching and updating remote service repositories |
 
-!!! info "MP4Box is only used for DTS:X Profile 2"
-    Titles with DTS:X Profile 2 (DTS-UHD) audio mux to MP4; everything else muxes to MKV
+!!! info "MP4Box is only used for DTS:X Profile 2 and MPEG-H"
+    Titles with DTS:X Profile 2 (DTS-UHD) or MPEG-H audio mux to MP4; everything else muxes to MKV
     with `mkvmerge`. Install with `apt install gpac`.
 
 !!! tip "SubtitleEdit specifics"

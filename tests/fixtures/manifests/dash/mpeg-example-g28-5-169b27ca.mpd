@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" availabilityStartTime="2022-11-09T17:26:18Z" maxSegmentDuration="PT1.92S" minBufferTime="PT1S" minimumUpdatePeriod="PT1S" profiles="urn:mpeg:dash:profile:advanced-linear:2025" publishTime="2022-11-09T18:55:02Z" timeShiftBufferDepth="PT11S" type="dynamic" xsi:schemaLocation="urn:mpeg:dash:schema:mpd:2011 DASH-MPD.xsd">
+  <ServiceDescription id="420">
+    <ContentSteering defaultServiceLocation="beta" queryBeforeStart="true">
+      https://steeringservice.com/app/instance1234 </ContentSteering>
+  </ServiceDescription>
+  <Period id="P0" start="PT0S">
+    <AdaptationSet contentType="video" id="0" mimeType="video/mp4" par="16:9" segmentAlignment="true" startWithSAP="1">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"/>
+      <RequestParam includeInRequests="steering" queryTemplate="$querypart$&amp;_HLS_pathway=$urn:mpeg:dash:service-location$&amp;_HLS_throughput=$urn:mpeg:dash:throughput$" useMPDUrlQuery="true"/>
+      <SegmentTemplate duration="96" startNumber="868757698" timescale="50" initialization="$RepresentationID$-init.mp4" media="$RepresentationID$-$Number$.mp4"/>
+      <Representation bandwidth="500000" codecs="hvc1.1.6.L63.B0" frameRate="25" height="360" id="0" width="640"/>
+      <Representation bandwidth="1200000" codecs="hvc1.1.6.L93.B0" frameRate="50" height="540" id="1" width="960"/>
+    </AdaptationSet>
+  </Period>
+</MPD>

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?> 
+<MPD xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="urn:mpeg:dash:schema:mpd:2011" profiles="urn:mpeg:dash:profile:advanced-linear:2025" xsi:schemaLocation="urn:mpeg:dash:schema:mpd:2011 DASH-MPD.xsd" type="dynamic" minimumUpdatePeriod="PT2S" timeShiftBufferDepth="PT30M" minBufferTime="PT4S" availabilityStartTime="2023-12-25T12:30:00" publishTime="2023-12-25T12:30:00">
+  <BaseURL>http://cdn1.example.com/</BaseURL>
+  <Period id="1">
+    <EventStream timescale="90000" schemeIdUri="urn:mpeg:dash:event:alternativeMPD:replace:2025">
+      <Event presentationTime="3780000" duration="1350000" id="42">
+        <ReplacePresentation uri="http://cdn1.example.com/ad1.mpd?dur=15" earliestResolutionTimeOffset="378000" maxDuration="1350000" clip="true" executeOnce="true" noJump="2"/>
+      </Event>
+      <RequestParam includeInRequests="altmpd" queryTemplate="prta=$urn:mpeg:dash:state:execution-delta#42$"/>
+    </EventStream>
+    <AdaptationSet mimeType="video/mp4" codecs="avc1.4D401F" frameRate="30000/1001" segmentAlignment="true" startWithSAP="1">
+      <SegmentTemplate timescale="90000" initialization="$Bandwidth$/init.mp4v" media="$Bandwidth$/$Time$.mp4v">
+        <SegmentTimeline>
+          <S t="0" d="180180" r="432"/>
+        </SegmentTimeline>
+      </SegmentTemplate>
+      <Representation id="v0" width="320" height="240" bandwidth="250000"/>
+      <Representation id="v1" width="640" height="480" bandwidth="500000"/>
+      <Representation id="v2" width="960" height="720" bandwidth="1000000"/>
+    </AdaptationSet>
+  </Period>
+  <!-- Requirement for Annex I URL parameters -->
+  <EssentialProperty schemeIdUri="urn:mpeg:dash:urlparam:2025"/>
+</MPD>

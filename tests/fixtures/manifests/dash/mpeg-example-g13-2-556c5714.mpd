@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="urn:mpeg:dash:schema:mpd:2011 DASH-MPD.xsd" mediaPresentationDuration="PT3256S" minBufferTime="PT1.500000S" profiles="urn:mpeg:dash:profile:isoff-ext-live:2014">
+  <Period>
+    <AdaptationSet id="1" segmentAlignment="true" sar="1:1" mimeType="video/mp4" startWithSAP="2" maxPlayoutRate="1">
+      <InbandEventStream schemeIdUri="tag:rdmedia.bbc.co.uk,2014:events/ballposition" value="1"/>
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"/>
+      <BaseURL>avc3-events/</BaseURL>
+      <SegmentTemplate media="$RepresentationID$/$Number%06d$.m4s" timescale="1000" duration="3840" startNumber="1"/>
+      <Representation id="960x540p50" bandwidth="2814440" width="960" height="540" frameRate="50" codecs="avc3.64001f" maxPlayoutRate="1" scanType="progressive">
+        <SegmentTemplate initialization="data:video/mp4;base64,AAAAHGZ0eXBpc282AAAAAWF2YzFpc29tZGFzaAAAAldtb292...AAAAAAAAAAAAAAAQc3RjbwAAAAAAAAAA"/>
+      </Representation>
+      <Representation id="192x108p6_25" bandwidth="31368" width="192" height="108" frameRate="25" codecs="avc3.42c015" maxPlayoutRate="1" scanType="progressive">
+        <SegmentTemplate initialization="data:video/mp4;base64,AAAAHGZ0eXBpc282AAAAAWF2YzFpc29tZGFzaAAAAlNtb292...AAAAAAAAABBzdHNjAAAAAAAAAAAAAAAUc3RzegAAAAAAAAAAAAAAAAAAABBzdGNvAAAAAAAAAAA="/>
+      </Representation>
+    </AdaptationSet>
+  </Period>
+</MPD>
