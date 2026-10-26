@@ -3004,7 +3004,7 @@ do not give a <code>name</code>, unshackle derives a human-readable name from th
 <p><code>Video</code> adds <code>codec</code>, <code>range</code>, <code>bitrate</code>, <code>width</code>, <code>height</code>, <code>fps</code>, <code>scan_type</code>, and
 closed-caption descriptors. The relevant enums:</p>
 <ul>
-<li><strong><code>Video.Codec</code></strong>: <code>AVC</code> (H.264), <code>HEVC</code> (H.265), <code>VC1</code>, <code>VP8</code>, <code>VP9</code>, <code>AV1</code>.</li>
+<li><strong><code>Video.Codec</code></strong>: <code>AVC</code> (H.264), <code>HEVC</code> (H.265), <code>VC1</code>, <code>VP8</code>, <code>VP9</code>, <code>AV1</code>, <code>LCEVC</code>.</li>
 <li><strong><code>Video.Range</code></strong>: <code>SDR</code>, <code>HLG</code>, <code>HDR10</code>, <code>HDR10P</code> (HDR10+), <code>DV</code> (Dolby Vision), and
   <code>HYBRID</code>. <code>HYBRID</code> is special: it tells the pipeline to select both an HDR10(+) base and
   a DV track and merge the DV RPU onto the HDR10 track with <code>dovi_tool</code> (see
@@ -3018,7 +3018,7 @@ string form displays kb/s, and <code>--vbitrate</code> and <code>--abitrate</cod
 <h3 id="audio"><code>Audio</code><a class="headerlink" href="#audio" title="Permanent link">&para;</a></h3>
 <p><code>Audio</code> adds <code>bitrate</code>, <code>channels</code>, <code>joc</code> (Joint Object Coding, the Atmos indicator),
 and <code>descriptive</code>. <code>Audio.Codec</code> covers <code>AAC</code>, <code>AC3</code> (<code>DD</code>), <code>EC3</code> (<code>DD+</code>), <code>AC4</code>,
-<code>OPUS</code>, <code>OGG</code> (Vorbis), <code>DTS</code>, <code>DTSX</code>, <code>ALAC</code>, and <code>FLAC</code>. The <code>atmos</code> property is <code>True</code> when
+<code>OPUS</code>, <code>OGG</code> (Vorbis), <code>DTS</code>, <code>DTSX</code>, <code>DTSHD</code>, <code>MPEGH</code>, <code>ALAC</code>, and <code>FLAC</code>. The <code>atmos</code> property is <code>True</code> when
 <code>joc</code> is set (or when <code>extra</code> flags it).</p>
 <h3 id="subtitle"><code>Subtitle</code><a class="headerlink" href="#subtitle" title="Permanent link">&para;</a></h3>
 <p><code>Subtitle</code> adds three mutually-constrained flags: <code>cc</code> (closed captions), <code>sdh</code>

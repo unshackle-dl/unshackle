@@ -1058,10 +1058,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#dtsx-profile-2-output" class="md-nav__link">
+  <a href="#dtsx-profile-2-and-mpeg-h-output" class="md-nav__link">
     <span class="md-ellipsis">
       
-        DTS:X Profile 2 output
+        DTS:X Profile 2 and MPEG-H output
       
     </span>
   </a>
@@ -2454,10 +2454,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#dtsx-profile-2-output" class="md-nav__link">
+  <a href="#dtsx-profile-2-and-mpeg-h-output" class="md-nav__link">
     <span class="md-ellipsis">
       
-        DTS:X Profile 2 output
+        DTS:X Profile 2 and MPEG-H output
       
     </span>
   </a>
@@ -2605,7 +2605,7 @@
 <li><strong>Output directory</strong>: <code>directories.downloads</code> from your config, or whatever you pass to <code>-o/--output</code> on the command line for a single run.</li>
 <li><strong>Folder template</strong>: an optional per-title subfolder. unshackle <strong>always</strong> puts TV episodes and songs in a folder. Movies only get one if you define a <code>movies</code> folder template, or a single-string <code>folder</code> template that applies to all title kinds (see <a href="#folder-templates">Folder templates</a>).</li>
 <li><strong>Filename template</strong>: the <code>output_template</code> for the title kind (movie, series, or song).</li>
-<li><strong>Extension</strong>: chosen by the muxer for a movie or an episode: <code>.mkv</code> for video, <code>.mka</code> for audio-only, <code>.mks</code> for subtitle-only, <code>.mp4</code> for <a href="#dtsx-profile-2-output">DTS:X Profile 2 audio</a>. unshackle does not mux a song. It remuxes a song into the container of its codec, such as <code>.flac</code>, <code>.opus</code>, or <code>.m4a</code>. Read <a href="#music-output-files">Music output files</a>.</li>
+<li><strong>Extension</strong>: chosen by the muxer for a movie or an episode: <code>.mkv</code> for video, <code>.mka</code> for audio-only, <code>.mks</code> for subtitle-only, <code>.mp4</code> for <a href="#dtsx-profile-2-and-mpeg-h-output">DTS:X Profile 2 and MPEG-H audio</a>. unshackle does not mux a song. It remuxes a song into the container of its codec, such as <code>.flac</code>, <code>.opus</code>, or <code>.m4a</code>. Read <a href="#music-output-files">Music output files</a>.</li>
 </ul>
 <div class="admonition example">
 <p class="admonition-title">A typical episode path</p>
@@ -3192,10 +3192,11 @@ name already contains the word. It adds none to a subtitle. A label in another l
 out the language when the name already contains it, so an English name shows once. A native name
 such as <code>日本語</code> shows next to <code>Japanese</code> in an English interface.</p>
 </div>
-<h3 id="dtsx-profile-2-output">DTS:X Profile 2 output<a class="headerlink" href="#dtsx-profile-2-output" title="Permanent link">&para;</a></h3>
-<p>A title whose audio holds a <code>dtsx</code> or <code>dtsy</code> sample entry (DTS:X Profile 2, DTS-UHD) muxes
-to MP4 with <a href="../../getting-started/installation/">MP4Box</a>, because Matroska has no CodecID
-for it. Without MP4Box installed the mux stops.</p>
+<h3 id="dtsx-profile-2-and-mpeg-h-output">DTS:X Profile 2 and MPEG-H output<a class="headerlink" href="#dtsx-profile-2-and-mpeg-h-output" title="Permanent link">&para;</a></h3>
+<p>A title whose audio holds a <code>dtsx</code> or <code>dtsy</code> sample entry (DTS:X Profile 2, DTS-UHD), or an
+MPEG-H sample entry (<code>mha1</code>, <code>mha2</code>, <code>mhm1</code>, <code>mhm2</code>), muxes to MP4 with
+<a href="../../getting-started/installation/">MP4Box</a>, because Matroska has no CodecID for it.
+Without MP4Box installed the mux stops.</p>
 <p>DTS:X Profile 1 is DTS-HD Master Audio and muxes to MKV as usual.</p>
 <p>An MP4 title loses:</p>
 <ul>
