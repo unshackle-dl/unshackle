@@ -3126,6 +3126,7 @@
 </div>
 <p><code>code_hash</code> fingerprints the framework source the server operates, so it names the code itself rather than the release. It is the same value for a git checkout and for an installed package built from that checkout. It changes when you edit anything under <code>unshackle/core</code>, <code>unshackle/commands</code>, <code>unshackle/utils</code>, or <code>unshackle/vaults</code>. Service modules are not included. unshackle sets the value to <code>null</code> only when it cannot read the source files.</p>
 <p><code>draining</code> is <code>true</code> while the server refuses new remote sessions and jobs before a restart.</p>
+<p>The server asks GitHub for the latest release at most once per <a href="../../../reference/configuration/misc/#caching-updates"><code>update_check_interval</code></a> hours and answers from its cache between checks.</p>
 <p>If the update check fails (for example, no network), <code>update_available</code> and <code>latest_version</code> are <code>null</code> while <code>current_version</code> still reports the installed version.</p>
 <table>
 <thead>
