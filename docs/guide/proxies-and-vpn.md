@@ -315,14 +315,17 @@ machine opens none, because the client opens the connection to the server. A NAT
 firewall, or a Cloudflare tunnel in front of the server does not stop it.
 
 The service traffic stays encrypted from the server to the service, so the client relays only
-encrypted bytes. The client refuses to connect to `localhost`, and to a host name or IP address
-that resolves only to a loopback, private or link-local address, so the server cannot reach
-your local network.
-A VPN or proxy app in TUN mode with fake-IP DNS answers a host name with an address from
-`198.18.0.0/15` or `2001:2::/48` and maps it back to the real host. The client accepts that
-address for a host name, but not as an IP address from the server. An app set to a different
-fake-IP range does not work with `--local-proxy`. With fake-IP DNS, the client cannot see the
-real address of a host name, so it cannot stop a host name that points into your local network.
+encrypted bytes. The client refuses to connect to `localhost`, and to a host name that resolves
+only to an address on your machine or local network: loopback, private, link-local, CGNAT
+(`100.64.0.0/10`) or multicast. An IP address that the server sends must also be public, and
+the client closes a connection that reaches one of its own addresses. Other devices on your
+network that have a public IPv6 address, and your router's public address, are not blocked.
+
+Some VPN and proxy apps answer a host name with a synthetic address, for example fake-IP DNS in
+TUN mode (`198.18.0.0/15`), and map it back to the real host. The client accepts any such
+address for a host name, so `--local-proxy` works with these apps. The client cannot see the
+real address behind a synthetic one, so it cannot stop a host name that points into your local
+network.
 
 !!! note "Each request crosses the tunnel twice"
     A request from the server goes to your machine and then to the service, so it takes

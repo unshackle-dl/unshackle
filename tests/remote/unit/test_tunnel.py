@@ -28,7 +28,8 @@ from unshackle.core.tunnel import (
     TunnelClient,
     connect_public,
     frame,
-    is_fake_ip,
+    is_ip_literal,
+    is_local_ip,
     is_public_ip,
     tunnel_proxy,
 )
@@ -78,6 +79,7 @@ def test_requests_through_the_tunnel_reach_the_client_side_target(
     server: str, target: int, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(tunnel, "is_public_ip", lambda address: True)  # the test target is on loopback
+    monkeypatch.setattr(tunnel, "dialled_itself", lambda writer: False)
     client = TunnelClient(server, {"X-Secret-Key": "alice"})
     tunnel_id = client.start()
 
@@ -114,6 +116,7 @@ def test_the_client_refuses_a_target_on_its_own_network(server: str, target: int
         ("10.0.0.1", False),
         ("::1", False),
         ("198.18.2.36", False),
+        ("64:ff9b::c0a8:101", False),
     ],
 )
 def test_is_public_ip(address: str, public: bool) -> None:
@@ -121,35 +124,99 @@ def test_is_public_ip(address: str, public: bool) -> None:
 
 
 @pytest.mark.parametrize(
-    ("address", "fake"),
+    ("address", "local"),
     [
-        ("198.18.2.36", True),
-        ("198.19.255.1", True),
-        ("198.20.0.1", False),
-        ("::ffff:198.18.0.1", False),
-        ("2001:2::1", True),
-        ("2001:2:1::1", False),
-        ("fdfe:dcba:9876::1", False),
+        ("8.8.8.8", False),
+        ("198.18.2.36", False),
+        ("2001:2::1", False),
+        ("192.0.0.69", False),
+        ("192.0.0.88", False),
+        ("127.0.0.1", True),
+        ("10.0.0.1", True),
+        ("172.16.0.1", True),
+        ("192.168.1.1", True),
+        ("169.254.169.254", True),
+        ("100.64.0.1", True),
+        ("192.0.0.1", True),
+        ("0.0.0.0", True),
+        ("224.0.0.1", True),
+        ("::1", True),
+        ("fdfe:dcba:9876::1", True),
+        ("fe80::1%eth0", True),
+        ("::ffff:192.168.1.1", True),
+        ("64:ff9b::c0a8:101", True),
+        ("64:ff9b::808:808", False),
+        ("::", True),
+        ("::7f00:1", True),
+        ("::ffff:0:7f00:1", True),
+        ("64:ff9b:1::c0a8:101", True),
+        ("192.0.0.9", True),
+        ("192.0.0.10", True),
+        ("not-an-address", True),
     ],
 )
-def test_is_fake_ip(address: str, fake: bool) -> None:
-    assert is_fake_ip(address) is fake
+def test_is_local_ip(address: str, local: bool) -> None:
+    assert is_local_ip(address) is local
 
 
-def test_a_name_that_resolves_to_a_fake_ip_is_dialled(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize("address", ["198.18.2.36", "192.0.0.69", "2001:2::1", "8.8.8.8"])
+def test_a_name_that_resolves_to_a_non_local_address_is_dialled(monkeypatch: pytest.MonkeyPatch, address: str) -> None:
     async def resolve(self: object, host: str, port: int, **_: object) -> list:
-        return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("198.18.2.36", port))]
+        return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", (address, port))]
 
     dialled: list[str] = []
 
     async def open_connection(address: str, port: int) -> tuple:
         dialled.append(address)
-        return None, None
+        return None, FakeWriter(("10.0.0.2", 50000), (address, port))
 
     monkeypatch.setattr(asyncio.BaseEventLoop, "getaddrinfo", resolve)
     monkeypatch.setattr(asyncio, "open_connection", open_connection)
     asyncio.run(connect_public("api.example", 443))
-    assert dialled == ["198.18.2.36"]
+    assert dialled == [address]
+
+
+class FakeWriter:
+    def __init__(self, sockname: tuple, peername: tuple) -> None:
+        self.extra = {"sockname": sockname, "peername": peername}
+        self.closed = False
+
+    def get_extra_info(self, name: str) -> tuple:
+        return self.extra[name]
+
+    def close(self) -> None:
+        self.closed = True
+
+
+@pytest.mark.parametrize(
+    ("host", "literal"),
+    [
+        ("8.8.8.8", True),
+        ("::1", True),
+        ("198.18.1", True),
+        ("3323068417", True),
+        ("0x7f.1", True),
+        ("api.example", False),
+    ],
+)
+def test_is_ip_literal(host: str, literal: bool) -> None:
+    assert is_ip_literal(host) is literal
+
+
+def test_a_dial_that_reaches_the_client_itself_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def resolve(self: object, host: str, port: int, **_: object) -> list:
+        return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("198.18.0.1", port))]
+
+    writer = FakeWriter(("198.18.0.1", 50000), ("198.18.0.1", 443))
+
+    async def open_connection(address: str, port: int) -> tuple:
+        return None, writer
+
+    monkeypatch.setattr(asyncio.BaseEventLoop, "getaddrinfo", resolve)
+    monkeypatch.setattr(asyncio, "open_connection", open_connection)
+    with pytest.raises(PermissionError, match="this machine"):
+        asyncio.run(connect_public("tun.example", 443))
+    assert writer.closed
 
 
 def test_localhost_is_refused() -> None:
@@ -157,7 +224,18 @@ def test_localhost_is_refused() -> None:
         asyncio.run(connect_public("localhost", 443))
 
 
-@pytest.mark.parametrize(("host", "address"), [("rebind.example", "192.168.1.1"), ("198.18.0.1", "198.18.0.1")])
+@pytest.mark.parametrize(
+    ("host", "address"),
+    [
+        ("rebind.example", "192.168.1.1"),
+        ("metadata.example", "169.254.169.254"),
+        ("nat64.example", "64:ff9b::c0a8:101"),
+        ("198.18.0.1", "198.18.0.1"),
+        ("192.0.0.69", "192.0.0.69"),
+        ("198.18.1", "198.18.0.1"),
+        ("3221225541", "192.0.0.69"),
+    ],
+)
 def test_a_target_that_resolves_to_a_local_address_is_refused(
     monkeypatch: pytest.MonkeyPatch, host: str, address: str
 ) -> None:
@@ -202,6 +280,7 @@ def test_the_tunnel_port_refuses_a_proxy_uri_without_the_tunnel_credentials(
     server: str, target: int, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(tunnel, "is_public_ip", lambda address: True)
+    monkeypatch.setattr(tunnel, "dialled_itself", lambda writer: False)
     client = TunnelClient(server, {"X-Secret-Key": "alice"})
     tunnel_id = client.start()
     port = TUNNELS[tunnel_id].port
@@ -371,6 +450,7 @@ def test_a_dial_the_server_gave_up_on_is_dropped_by_the_client(
 ) -> None:
     """When the server times out an OPEN, the client must not keep the connection it makes later."""
     monkeypatch.setattr(tunnel, "is_public_ip", lambda address: True)
+    monkeypatch.setattr(tunnel, "dialled_itself", lambda writer: False)
     monkeypatch.setattr(tunnel, "OPEN_TIMEOUT", 0.3)
     real_connect = tunnel.connect_public
 

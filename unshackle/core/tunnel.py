@@ -30,7 +30,30 @@ HEARTBEAT = 20
 GRACE = 60
 RELINK_WAIT = 10
 OPEN_TIMEOUT = 15
-FAKE_IP_POOLS = (ipaddress.ip_network("198.18.0.0/15"), ipaddress.ip_network("2001:2::/48"))
+LOCAL_NETWORKS = tuple(
+    ipaddress.ip_network(n)
+    for n in (
+        "0.0.0.0/8",
+        "10.0.0.0/8",
+        "100.64.0.0/10",  # CGNAT, also tailnets
+        "127.0.0.0/8",
+        "169.254.0.0/16",
+        "172.16.0.0/12",
+        "192.0.0.0/29",  # DS-Lite endpoints on the user's router
+        "192.0.0.9/32",  # port-control and TURN anycast, answered by the user's ISP or router
+        "192.0.0.10/32",
+        "192.168.0.0/16",
+        "224.0.0.0/4",
+        "255.255.255.255/32",
+        "::/96",  # also IPv4-compatible addresses, which some stacks route to the embedded IPv4
+        "::ffff:0:0:0/96",  # IPv4-translated
+        "fc00::/7",
+        "fe80::/10",
+        "fec0::/10",
+        "ff00::/8",
+    )
+)
+NAT64 = (ipaddress.ip_network("64:ff9b::/96"), ipaddress.ip_network("64:ff9b:1::/48"))
 MAX_TUNNELS = 4
 MAX_STREAMS = 256
 CHUNK = 65536
@@ -290,31 +313,64 @@ def parse_ip(address: str) -> Optional[ipaddress.IPv4Address | ipaddress.IPv6Add
         return None
 
 
+def is_local_ip(address: str) -> bool:
+    """True for an address on the client's own machine or LAN, or one that is not an address. An IPv4 address
+    inside an IPv4-mapped or NAT64 address counts as itself."""
+    ip = parse_ip(address)
+    if isinstance(ip, ipaddress.IPv6Address):
+        if ip.ipv4_mapped:
+            ip = ip.ipv4_mapped
+        elif any(ip in prefix for prefix in NAT64):
+            ip = ipaddress.IPv4Address(int(ip) & 0xFFFFFFFF)
+    return ip is None or any(ip in network for network in LOCAL_NETWORKS)
+
+
 def is_public_ip(address: str) -> bool:
-    return (ip := parse_ip(address)) is not None and ip.is_global
+    return (ip := parse_ip(address)) is not None and ip.is_global and not is_local_ip(address)
 
 
-def is_fake_ip(address: str) -> bool:
-    """True for an address from a pool that fake-IP DNS in a TUN-mode VPN or proxy hands out for a name."""
-    return (ip := parse_ip(address)) is not None and any(ip in pool for pool in FAKE_IP_POOLS)
+def is_ip_literal(host: str) -> bool:
+    """True when the resolver reads ``host`` as a number, which includes short forms such as ``10.1``."""
+    if parse_ip(host):
+        return True
+    try:
+        socket.inet_aton(host)
+    except (OSError, ValueError):
+        return False
+    return True
+
+
+def dialled_itself(writer: asyncio.StreamWriter) -> bool:
+    """True when the connection runs from one of the client's own addresses to the same address."""
+    return parse_ip(str(writer.get_extra_info("sockname")[0])) == parse_ip(str(writer.get_extra_info("peername")[0]))
 
 
 async def connect_public(host: str, port: int) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
-    """Connect to the first public address of ``host``. The server picks the targets, so a name that resolves
-    only to the client's own machine or LAN is refused. A fake IP passes only when it comes from a name lookup:
-    the TUN maps it back to the real host, which the client cannot check."""
+    """Connect to the first allowed address of ``host``. The server picks the targets, so the client never dials
+    its own machine or LAN. A name may resolve to any other address, because a VPN app's DNS can answer with a
+    synthetic one (such as fake-IP DNS in a TUN) and map it back to the real host, which the client cannot
+    check. An IP address from the server must be public."""
     infos = await asyncio.get_running_loop().getaddrinfo(host, port, type=socket.SOCK_STREAM)
     resolved = [str(info[4][0]) for info in infos]
-    from_name = parse_ip(host) is None
-    addresses = [a for a in resolved if is_public_ip(a) or (from_name and is_fake_ip(a))]
-    if not addresses:
-        raise PermissionError(f"{host} resolves only to local addresses ({', '.join(resolved)})")
+    if is_ip_literal(host):
+        addresses = [a for a in resolved if is_public_ip(a)]
+        if not addresses:
+            raise PermissionError(f"{host} is not a public address")
+    else:
+        addresses = [a for a in resolved if not is_local_ip(a)]
+        if not addresses:
+            raise PermissionError(f"{host} resolves only to local addresses ({', '.join(resolved)})")
     error: OSError = OSError(f"could not connect to {host}")
     for address in addresses:
         try:
-            return await asyncio.wait_for(asyncio.open_connection(address, port), 10)
+            reader, writer = await asyncio.wait_for(asyncio.open_connection(address, port), 10)
         except (OSError, asyncio.TimeoutError) as e:
             error = OSError(str(e))
+            continue
+        if not dialled_itself(writer):
+            return reader, writer
+        writer.close()
+        error = PermissionError(f"{host} resolves to this machine ({address})")
     raise error
 
 
