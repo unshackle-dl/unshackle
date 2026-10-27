@@ -58,6 +58,8 @@ Health check. **This is the only route exempt from authentication**: you can cal
 
 `draining` is `true` while the server refuses new remote sessions and jobs before a restart.
 
+The server asks GitHub for the latest release at most once per [`update_check_interval`](../../reference/configuration/misc.md#caching-updates) hours and answers from its cache between checks.
+
 If the update check fails (for example, no network), `update_available` and `latest_version` are `null` while `current_version` still reports the installed version.
 
 | Status | Meaning |

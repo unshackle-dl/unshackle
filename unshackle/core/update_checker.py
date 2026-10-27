@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import json
 import time
 from pathlib import Path
@@ -194,31 +193,6 @@ class UpdateChecker:
             return False
         except (ValueError, AttributeError):
             return False
-
-    @classmethod
-    async def check_for_updates(cls, current_version: str) -> Optional[str]:
-        """
-        Examine GitHub for a newer version.
-
-        Args:
-            current_version: The current version string (e.g., "1.1.0")
-
-        Returns:
-            The latest version string if an update is available, None otherwise
-        """
-        if not cls.is_valid_version(current_version):
-            return None
-
-        try:
-            latest_version = await asyncio.to_thread(cls.fetch_latest_version)
-
-            if latest_version and cls.compare_versions(current_version, latest_version):
-                return latest_version
-
-        except Exception:
-            pass
-
-        return None
 
     @classmethod
     def get_cached_update_info(cls, current_version: str) -> Optional[str]:

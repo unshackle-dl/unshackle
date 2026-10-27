@@ -223,7 +223,7 @@ async def health(request: web.Request) -> web.Response:
                       nullable: true
     """
     try:
-        latest_version = await UpdateChecker.check_for_updates(__version__)
+        latest_version = await asyncio.to_thread(UpdateChecker.check_for_updates_sync, __version__)
         update_info = {
             "update_available": latest_version is not None,
             "current_version": __version__,

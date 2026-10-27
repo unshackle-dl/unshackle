@@ -121,6 +121,7 @@ def test_remote_get_tracks_scopes_server_cookies():
     service.__dict__.update(
         _tracks_by_title={},
         _chapters_by_title={},
+        _title_alias={},
         _sample_decrypt_tracks=set(),
         _server_cdm=None,
         _session=requests.Session(),

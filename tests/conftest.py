@@ -37,10 +37,7 @@ def loopback_only(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatc
 def no_update_check(monkeypatch: pytest.MonkeyPatch) -> None:
     """Keep the release lookup of the health route off the network."""
 
-    async def no_release(*args: Any, **kwargs: Any) -> None:
-        return None
-
-    monkeypatch.setattr(UpdateChecker, "check_for_updates", no_release)
+    monkeypatch.setattr(UpdateChecker, "check_for_updates_sync", lambda *args, **kwargs: None)
 
 
 @pytest.fixture(autouse=True)
