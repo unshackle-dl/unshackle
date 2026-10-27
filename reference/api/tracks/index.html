@@ -8469,8 +8469,9 @@ share a video list must pass distinct paths to avoid clobbering each other.</p>
 </span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>    <span class="n">closed_captions</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
 </span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>    <span class="n">dv_compatible_bitstream</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
 </span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>    <span class="n">hdr10plus</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
-</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>    <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
-</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="p">)</span>
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>    <span class="n">hdr10_base</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>    <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="p">)</span>
 </span></code></pre></div>
 
     <div class="doc doc-contents ">
@@ -8611,6 +8612,22 @@ All strings will be cast to either a number or float.</p>
                   <code>False</code>
             </td>
           </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>hdr10_base</code>
+            </td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The DV track has an HDR10 base layer, as DV profile 8.1 does.</p>
+              </div>
+            </td>
+            <td>
+                  <code>False</code>
+            </td>
+          </tr>
       </tbody>
     </table>
         <p>Note: If codec, bitrate, width, height, or fps is not specified, unshackle can
@@ -8700,7 +8717,7 @@ skip some checks or assume a value. Give as much information as possible.</p>
 
     <div class="doc doc-contents ">
 
-        <p>The range that <code>-r</code> selects the track by, then any second format it carries: HDR10+DV, DV+HDR10P.</p>
+        <p>The range that <code>-r</code> selects the track by, then any second format it carries: HDR10+DV, DV+HDR10, DV+HDR10P.</p>
 
     </div>
 

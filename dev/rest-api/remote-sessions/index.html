@@ -2964,7 +2964,7 @@ answers CDM calls), <code>cdm_system_id</code> and <code>cdm_device_type</code> 
 object the dashboard shows as sent), and the track-selection hints <code>range_</code>, <code>vcodec</code>,
 <code>quality</code>, <code>best_available</code>, <code>generate_dv</code>, plus arbitrary service CLI options
 (<code>additionalProperties: true</code>).</p>
-<p><code>dl_params</code> holds the <code>dl</code> track selection: <code>lang</code>, <code>v_lang</code> and <code>a_lang</code>
+<p><code>dl_params</code> holds the <code>dl</code> track selection: <code>lang</code>, <code>v_lang</code>, <code>a_lang</code> and <code>s_lang</code>
 (arrays of language strings), <code>acodec</code> (an array of audio codec names, such as
 <code>EC3</code>), and <code>forced_subs</code> and <code>exact_lang</code> (booleans). The server gives these values to the
 service in <code>ctx.parent.params</code>, never as service options, so a service option
