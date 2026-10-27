@@ -317,6 +317,16 @@ $ unshackle kv copy local shared community
 
 `--service` and `--local-only` are mutually exclusive.
 
+To import an SQLite vault file that is not in the config, give its path as the source:
+
+```console
+$ unshackle kv copy local ~/Downloads/key_store.db -s EXAMPLE
+```
+
+`kv copy` only reads from a source, so the file stays unchanged. `kv sync` also accepts a path, but it writes content keys into that file.
+
+With `--service`, `kv copy` reads the table named by the service's vault tag and the table named by its plain tag. It writes both into the vault-tag table, which is the table a download reads. Without `--service`, each table keeps its name.
+
 A pair the destination vault has flagged in `bad_keys` is left behind, so a copy does not undo a flag. `bad_keys` is never treated as a service, so its rows are never copied into a service table.
 
 ### `kv sync`: mirror vaults both ways

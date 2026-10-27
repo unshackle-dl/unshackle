@@ -28,12 +28,15 @@ from unshackle.core.vaults import Vaults
 
 
 def load_vaults(vault_names: list[str]) -> Vaults:
-    """Load and validate vaults by name."""
+    """Load and validate vaults by config name, or by the path of an SQLite vault file."""
     vaults = Vaults()
     for vault_name in vault_names:
         vault_config = next((x for x in config.key_vaults if x["name"] == vault_name), None)
         if not vault_config:
-            raise click.ClickException(f"Vault ({vault_name}) is not defined in the config.")
+            path = Path(vault_name).expanduser()
+            if not path.is_file():
+                raise click.ClickException(f"Vault ({vault_name}) is not defined in the config or an existing file.")
+            vault_config = {"type": "SQLite", "name": path.stem, "path": path}
 
         vault_type = vault_config["type"]
         vault_args = vault_config.copy()
@@ -99,8 +102,10 @@ def add_keys_with_progress(vault: Vault, service: str, kid_keys: dict[str, str],
     return added
 
 
-def copy_service_data(to_vault: Vault, from_vault: Vault, service: str, log: logging.Logger) -> int:
-    """Copy data for a single service between vaults."""
+def copy_service_data(
+    to_vault: Vault, from_vault: Vault, service: str, log: logging.Logger, to_service: Optional[str] = None
+) -> int:
+    """Copy data for a single service between vaults, into the `to_service` table when given."""
     if service.lower() == "bad_keys":
         return 0
     try:
@@ -117,7 +122,7 @@ def copy_service_data(to_vault: Vault, from_vault: Vault, service: str, log: log
         return 0
 
     try:
-        added = add_keys_with_progress(to_vault, service, content_keys, log)
+        added = add_keys_with_progress(to_vault, to_service or service, content_keys, log)
     except PermissionError:
         log.warning(f"{service}: No permission to create table in {to_vault}, skipped")
         return 0
@@ -165,7 +170,8 @@ def copy(
     It should be the name of a Key Vault defined in the config.
 
     The `from_vault_names` argument is the key vault(s) you wish to take
-    data from. You may supply multiple key vaults.
+    data from. You may supply multiple key vaults. Each one is a vault name
+    from the config, or the path to an SQLite vault file.
     """
     if not from_vault_names:
         raise click.ClickException("No Vaults were specified to copy data from.")
@@ -184,8 +190,11 @@ def copy(
     if service and local_only:
         raise click.UsageError("--service and --local-only are mutually exclusive.")
 
+    source_tables: Optional[list[str]] = None
     if service:
-        service = Services.get_vault_tag(service)
+        tag, service = Services.get_tag(service), Services.get_vault_tag(service)
+        # a vault filled outside unshackle can hold the keys under the plain tag, not the VAULT_TAG
+        source_tables = [service] if tag.lower() == service.lower() else [service, tag]
         log.info(f"Filtering by service: {service}")
 
     installed: Optional[set[str]] = None
@@ -195,8 +204,8 @@ def copy(
 
     total_added = 0
     for from_vault in from_vaults:
-        if service:
-            services_to_copy = [service]
+        if source_tables:
+            services_to_copy = source_tables
         else:
             try:
                 services_to_copy = list(from_vault.get_services())
@@ -212,7 +221,7 @@ def copy(
                 log.info(f"{from_vault.name}: skipping {skipped} service(s) not installed locally")
 
         for service_tag in services_to_copy:
-            added = copy_service_data(to_vault, from_vault, service_tag, log)
+            added = copy_service_data(to_vault, from_vault, service_tag, log, to_service=service)
             total_added += added
 
     if total_added > 0:

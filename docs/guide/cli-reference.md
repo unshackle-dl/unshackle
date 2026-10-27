@@ -429,6 +429,8 @@ unshackle kv COMMAND [ARGS]...
 
 Copy content keys from one or more source vaults into a destination vault. unshackle skips rows whose KIDs match, unless the existing row has no content key. unshackle never alters or deletes existing data.
 
+A vault argument is the name of a vault in the config, or the path to an SQLite vault file. Use a path to import a vault file that is not in the config.
+
 | Option | Description |
 |---|---|
 | `-s`, `--service` | Only copy data for a specific service. |
@@ -462,6 +464,7 @@ Make service tables on vaults that use tables, for every installed service, wher
     ```shell
     unshackle kv copy main backup1 backup2
     unshackle kv copy main backup -s EXAMPLE
+    unshackle kv copy main ~/Downloads/key_store.db -s EXAMPLE
     unshackle kv sync main mysql_vault
     unshackle kv add keys.txt EXAMPLE main backup
     unshackle kv search 0123456789abcdef0123456789abcdef -s EXAMPLE -v main
