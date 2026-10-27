@@ -276,6 +276,36 @@ class Tracks:
         if duplicates:
             log.debug(f" - Found and skipped {duplicates} duplicate tracks...")
 
+    @staticmethod
+    def signature(track: AnyTrack) -> tuple:
+        """The attributes that listing and selection read. Two tracks with one signature look and select the same."""
+        if isinstance(track, Video):
+            return Video, track.codec, track.range, track.width, track.height, track.fps, track.bitrate, track.name
+        if isinstance(track, Audio):
+            return (
+                Audio,
+                str(track.language),
+                track.codec,
+                track.channels,
+                track.joc,
+                track.descriptive,
+                track.bitrate,
+                track.name,
+            )
+        return type(track), str(track.language), track.codec, track.forced, track.sdh, track.cc, track.name
+
+    def dedupe(self) -> None:
+        """Drop each video, audio or subtitle track whose signature matches an earlier track."""
+        seen: set[tuple] = set()
+        for kind in ("videos", "audio", "subtitles"):
+            kept = []
+            for track in getattr(self, kind):
+                key = self.signature(track)
+                if key not in seen:
+                    seen.add(key)
+                    kept.append(track)
+            setattr(self, kind, kept)
+
     def sort_videos(
         self, by_language: Optional[Sequence[Union[str, Language]]] = None, exact_match: bool = False
     ) -> None:

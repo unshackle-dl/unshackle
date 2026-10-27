@@ -319,14 +319,19 @@ class Service(metaclass=ABCMeta):
     ) -> Tracks:
         """Call fetch_fn for each codec/range combo in track_request, merge results.
 
+        Video, audio and subtitles merge from every combo, so a track that only one manifest
+        offers is kept. The helper skips a later track whose ``Tracks.signature`` matches a held
+        one, because its ID can differ between manifests. Chapters and attachments come from the
+        first combo only.
+
         Services that need separate API calls per codec/range combo can use this
         helper from their get_tracks() implementation.
 
         The fetch_fn signature should be: (title, codec, range_) -> Tracks
 
         For HYBRID range, this helper calls fetch_fn with HDR10 and DV separately,
-        then merges the DV video tracks into the HDR10 result. With no DV and
-        ``generate_dv`` requested, it merges the HDR10P video tracks instead.
+        then merges the DV tracks into the HDR10 result. With no DV video and
+        ``generate_dv`` requested, it merges the HDR10P tracks instead.
 
         Args:
             title: The title to process.
@@ -335,12 +340,21 @@ class Service(metaclass=ABCMeta):
         all_tracks = Tracks()
         first = True
 
+        def merge(tracks: Tracks) -> None:
+            nonlocal first
+            if first:
+                all_tracks.add(tracks, warn_only=True)
+                first = False
+                return
+            held = {Tracks.signature(track) for track in all_tracks}
+            all_tracks.add([track for track in tracks if Tracks.signature(track) not in held], warn_only=True)
+
         codecs = self.track_request.codecs or [None]
         ranges = self.track_request.ranges or [Video.Range.SDR]
 
         for range_val in ranges:
             if range_val == Video.Range.HYBRID:
-                # HYBRID: fetch HDR10 first (full tracks), then DV (video only)
+                # HYBRID: fetch HDR10 first, then DV
                 for codec_val in codecs:
                     try:
                         hdr_tracks = fetch_fn(title, codec=codec_val, range_=Video.Range.HDR10)
@@ -349,29 +363,23 @@ class Service(metaclass=ABCMeta):
                             self.log.warning(f" - HDR10 not available for HYBRID, skipping ({e})")
                             continue
                         raise
-                    if first:
-                        all_tracks.add(hdr_tracks, warn_only=True)
-                        if hdr_tracks.manifest_url and not all_tracks.manifest_url:
-                            all_tracks.manifest_url = hdr_tracks.manifest_url
-                        first = False
-                    else:
-                        for video in hdr_tracks.videos:
-                            all_tracks.add(video, warn_only=True)
+                    merge(hdr_tracks)
 
                     try:
-                        dv_videos = fetch_fn(title, codec=codec_val, range_=Video.Range.DV).videos
+                        dv_tracks = fetch_fn(title, codec=codec_val, range_=Video.Range.DV)
                     except (ValueError, SystemExit):
                         self.log.info(" - No DolbyVision manifest available for HYBRID")
-                        dv_videos = []
+                        dv_tracks = Tracks()
+                    merge(dv_tracks)
                     has_hdr10p = any(v.range == Video.Range.HDR10P for v in all_tracks.videos)
-                    if not dv_videos and self.track_request.generate_dv and not has_hdr10p:
+                    if not dv_tracks.videos and self.track_request.generate_dv and not has_hdr10p:
                         # the HDR10 request may not return HDR10+, which the conversion needs as its base
                         try:
-                            dv_videos = fetch_fn(title, codec=codec_val, range_=Video.Range.HDR10P).videos
+                            hdr10p_tracks = fetch_fn(title, codec=codec_val, range_=Video.Range.HDR10P)
                         except (ValueError, SystemExit):
                             self.log.info(" - No HDR10+ manifest available for HYBRID")
-                    for video in dv_videos:
-                        all_tracks.add(video, warn_only=True)
+                        else:
+                            merge(hdr10p_tracks)
             else:
                 for codec_val in codecs:
                     try:
@@ -382,14 +390,7 @@ class Service(metaclass=ABCMeta):
                             self.log.warning(f" - {range_val.name}/{codec_name} not available, skipping ({e})")
                             continue
                         raise
-                    if first:
-                        all_tracks.add(tracks, warn_only=True)
-                        if tracks.manifest_url and not all_tracks.manifest_url:
-                            all_tracks.manifest_url = tracks.manifest_url
-                        first = False
-                    else:
-                        for video in tracks.videos:
-                            all_tracks.add(video, warn_only=True)
+                    merge(tracks)
 
         return all_tracks
 
@@ -584,7 +585,7 @@ class Service(metaclass=ABCMeta):
         :return: The JWK Set license as a dict, JSON str, or raw bytes. Return None (the default)
             to let the framework POST the challenge to the manifest-provided Laurl, if any.
             Services with no license server can instead pre-populate the DRM object's
-            `content_keys` in get_tracks.
+            `signatures` in get_tracks.
         """
         return None
 

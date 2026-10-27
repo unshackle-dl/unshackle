@@ -147,3 +147,25 @@ def test_sort_audio_codec_priority_beats_bitrate() -> None:
     best = Tracks.by_language(tracks.audio, ["en"])[0]
     # EC3 is prioritized even though the AC3 track has the higher bitrate
     assert best.id == "ec3-320"
+
+
+def test_dedupe_keeps_the_first_copy_and_every_track_that_differs() -> None:
+    tracks = Tracks()
+    tracks.audio = [
+        make_audio("ec3-a", codec=Audio.Codec.EC3, bitrate=128_000),
+        make_audio("ec3-b", codec=Audio.Codec.EC3, bitrate=128_000),
+        make_audio("aac", codec=Audio.Codec.AAC, bitrate=128_000),
+        make_audio("ec3-desc", codec=Audio.Codec.EC3, bitrate=128_000, descriptive=True),
+        make_audio("ec3-atmos", codec=Audio.Codec.EC3, bitrate=128_000, joc=16),
+        make_audio("ec3-de", codec=Audio.Codec.EC3, bitrate=128_000, language="de"),
+    ]
+    tracks.videos = [
+        make_video("hevc-a", height=1080, bitrate=5_000_000, width=1920),
+        make_video("hevc-b", height=1080, bitrate=5_000_000, width=1920),
+        make_video("hevc-hi", height=1080, bitrate=8_000_000, width=1920),
+    ]
+
+    tracks.dedupe()
+
+    assert [a.id for a in tracks.audio] == ["ec3-a", "aac", "ec3-desc", "ec3-atmos", "ec3-de"]
+    assert [v.id for v in tracks.videos] == ["hevc-a", "hevc-hi"]

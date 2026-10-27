@@ -31,7 +31,7 @@ from unshackle.core.api.handlers import validate_download_parameters
 from unshackle.core.config import config
 from unshackle.core.service import Service, TrackRequest
 from unshackle.core.services import Services
-from unshackle.core.tracks import Tracks, Video
+from unshackle.core.tracks import Audio, Chapter, Subtitle, Tracks, Video
 from unshackle.core.tracks import hybrid as hybrid_mod
 from unshackle.core.tracks.hybrid import Hybrid, hdr10plus_mean_pq, hdr10plus_shots, nits_to_pq
 
@@ -731,3 +731,50 @@ def test_a_native_hybrid_passes_the_gate_and_takes_no_base_at_its_resolution() -
 
     assert [v.id for v in bases] == ["h1080"]
     assert dv is not None and dv.id == "dvp2160"
+
+
+@pytest.mark.parametrize(
+    "ranges, codecs, surround_on",
+    [
+        ([Video.Range.SDR, Video.Range.HDR10], [], Video.Range.HDR10),
+        ([Video.Range.HYBRID], [Video.Codec.AVC, Video.Codec.HEVC], Video.Range.DV),
+    ],
+)
+def test_variants_merge_every_manifest_but_skip_a_subtitle_copy_and_later_chapters(
+    ranges: list[Video.Range], codecs: list[Video.Codec], surround_on: Video.Range
+) -> None:
+    """Audio and a subtitle language that only a later manifest offers are kept. A track whose ID
+    differs per manifest (a signed URL) is not duplicated, and later chapters do not clash."""
+    fetches = 0
+
+    def fetch(title: Any, codec: Any, range_: Video.Range) -> Tracks:
+        nonlocal fetches
+        fetches += 1
+        tracks = Tracks()
+        tracks.add(
+            Video(
+                url="https://example.invalid/v", language="en", id_=f"{range_.name}{codec}", codec=codec, range_=range_
+            )
+        )
+        tracks.add(Audio(url="https://example.invalid/a2", language="en", id_=f"stereo{fetches}", channels=2))
+        if range_ == surround_on:
+            tracks.add(Audio(url="https://example.invalid/a6", language="en", id_="surround", channels=6))
+        tracks.add(Subtitle(url=f"https://example.invalid/s?tok={fetches}", language="en", id_=f"sub{fetches}"))
+        if range_ == surround_on:
+            tracks.add(Subtitle(url=f"https://example.invalid/j?tok={fetches}", language="ja", id_=f"ja{fetches}"))
+        tracks.add(Chapter(0))
+        return tracks
+
+    service = SimpleNamespace(
+        track_request=TrackRequest(codecs=codecs, ranges=ranges),
+        log=logging.getLogger("variants-test"),
+    )
+
+    tracks = Service.get_tracks_for_variants(service, None, fetch)  # type: ignore[arg-type]
+
+    assert fetches > 1
+    assert sorted(a.id for a in tracks.audio) == ["stereo1", "surround"]
+    assert [str(s.language) for s in tracks.subtitles] == ["en", "ja"]
+    assert tracks.subtitles[0].id == "sub1"
+    assert len(tracks.chapters) == 1
+    assert len(tracks.videos) == fetches

@@ -491,6 +491,25 @@ def get_tracks(self, title: Title_T) -> Tracks:
     return self.get_tracks_for_variants(title, fetch_variant)
 ```
 
+!!! note "What the helper merges"
+    The helper adds the video, audio and subtitle tracks of every manifest.
+    From a later manifest, it skips a track that has the ID of a held track. It
+    also skips a track whose `Tracks.signature` matches a held track, because
+    the same track can have a different ID in each manifest. Chapters and
+    attachments come from the first manifest only.
+
+    - `signature` holds the attributes that the track list and selection
+      read: codec, range, resolution, frame rate, bitrate and name for video;
+      language, codec, channels, JOC, descriptive, bitrate and name for audio;
+      language, codec, flags and name for subtitles.
+    - The helper does not remove copies inside one manifest. To remove them,
+      call `tracks.dedupe()`. Two tracks that differ only in a value outside
+      the signature, such as a dialogue-boost mix, become one track, so remove the
+      track you do not want before you call it.
+    - The audio that `dl` selects can come from a different manifest than the
+      video. Keep licence data on each track (`track.data`), not in one value
+      per title that the next fetch overwrites.
+
 After parsing, you may **correct** track metadata the manifest gets wrong:
 stamp the real `video.range`, fix odd audio channel counts, mark descriptive
 audio, add hand-built subtitles or an `Attachment` (e.g. cover art). Do *not*
@@ -595,7 +614,7 @@ def get_widevine_license(self, *, challenge: bytes, title, track):
        `get_clearkey_license` to do the POST yourself.
     3. **Keys arrive obfuscated or through a bespoke channel**: fetch and unwrap
        the content key in `get_tracks` and pre-populate
-       `drm.content_keys[kid] = key_hex` on the track's `ClearKeyCENC`. The
+       `drm.signatures[kid] = key_hex` on the track's `ClearKeyCENC`. The
        non-obvious payoff: when every KID is already keyed, the framework skips
        the license round-trip entirely.
 
