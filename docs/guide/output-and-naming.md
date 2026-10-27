@@ -236,6 +236,7 @@ final path.
 | FLAC | `.flac` |
 | Opus | `.opus` |
 | Vorbis | `.ogg` |
+| MP3 | `.mp3` |
 | AAC, ALAC, and all other codecs | `.m4a` |
 
 unshackle re-encodes FLAC in this step. The audio does not change, but the new file states its

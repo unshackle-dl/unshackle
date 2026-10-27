@@ -15,6 +15,7 @@ import pytest
 from unshackle.core.api import handlers
 from unshackle.core.api.errors import APIError
 from unshackle.core.api.session_store import SessionEntry
+from unshackle.core.drm import BlowfishStripe
 from unshackle.core.remote_service import RemoteService, ServerVault
 
 pytestmark = pytest.mark.unit
@@ -245,3 +246,30 @@ def test_a_cdm_licence_unflags_a_pair_a_client_reported(monkeypatch, tmp_path):
     handlers.cache_to_vaults({KID.hex: "ab" * 16}, "SVC")
     assert not local.is_bad_key(KID, "ab" * 16)
     assert local.get_key(KID, "SVC") == "ab" * 16
+
+
+async def test_a_stripe_cipher_track_is_clear_and_never_licensed(monkeypatch):
+    """A track whose only DRM needs no licence goes to clear_tracks and keeps its DRM for the client."""
+    track = SimpleNamespace(id="aud", drm=[BlowfishStripe(bytes(16))])
+    session = SessionEntry(session_id="sess", service_tag="SVC", service_instance=SimpleNamespace())
+    session.tracks = {"aud": track}
+
+    async def validated(sid, req):
+        return session
+
+    monkeypatch.setattr(handlers, "get_validated_session", validated)
+    monkeypatch.setattr(handlers, "server_cdm_allowed", lambda request, tag: True)
+    monkeypatch.setattr(handlers, "ensure_track_drm", lambda track, session=None, init_data=None: None)
+    monkeypatch.setattr(handlers, "find_title_for_track", lambda tid, session: SimpleNamespace())
+    monkeypatch.setattr(handlers, "detect_cdm_type_for_service", lambda tag, cfg: "widevine")
+    monkeypatch.setattr(handlers, "resolve_device_name", lambda *a, **k: "dev")
+    monkeypatch.setattr(handlers, "fetch_init_segment", lambda track, sess: None)
+    monkeypatch.setattr(handlers, "handle_single_server_cdm", lambda *a, **k: pytest.fail("licensed a clear track"))
+    monkeypatch.setattr(handlers.config, "serve", {"users": {}}, raising=False)
+
+    resp = await handlers.session_license_handler(
+        {"mode": "server_cdm", "track_ids": ["aud"], "drm_type": "widevine"}, "sess", None
+    )
+
+    assert json.loads(resp.body)["clear_tracks"] == ["aud"]
+    assert isinstance(track.drm[0], BlowfishStripe)

@@ -44,6 +44,7 @@ class Audio(Track):
         MPEGH = "MPEG-H"  # https://en.wikipedia.org/wiki/MPEG-H_3D_Audio
         ALAC = "ALAC"  # https://en.wikipedia.org/wiki/Apple_Lossless_Audio_Codec
         FLAC = "FLAC"  # https://en.wikipedia.org/wiki/FLAC
+        MP3 = "MP3"  # https://en.wikipedia.org/wiki/MP3
 
         @property
         def extension(self) -> str:
@@ -282,6 +283,7 @@ class Audio(Track):
             Audio.Codec.FLAC: ".flac",
             Audio.Codec.OPUS: ".opus",
             Audio.Codec.OGG: ".ogg",
+            Audio.Codec.MP3: ".mp3",
         }
         extension = containers.get(self.codec, ".m4a")
         original_path = self.path

@@ -30,7 +30,7 @@ from unshackle.core.cacher import Cacher
 from unshackle.core.cdm.detect import cdm_type_stub
 from unshackle.core.config import config, load_yaml
 from unshackle.core.constants import AUDIO_CODEC_MAP, DYNAMIC_RANGE_MAP, VIDEO_CODEC_MAP
-from unshackle.core.drm import cbcs
+from unshackle.core.drm import BlowfishStripe, cbcs
 from unshackle.core.providers.anilist import parse_anilist_ref
 from unshackle.core.proxies.resolve import initialize_proxy_providers, resolve_proxy
 from unshackle.core.services import Services
@@ -1632,6 +1632,8 @@ def serialize_drm(drm_list) -> Optional[List[Dict[str, Any]]]:
         drm_info = {}
         drm_class = drm.__class__.__name__
         drm_info["type"] = drm_class.lower()
+        if isinstance(drm, BlowfishStripe):
+            drm_info["key"] = drm.key.hex()
 
         # pywidevine exposes dumps(); pyplayready's PSSH does not, so PlayReady falls back
         # to the base64 it was built from. Without it the client drops every PlayReady
@@ -5424,8 +5426,8 @@ def license_response(
             svc_session = getattr(service, "session", None)
             init_data = fetch_init_segment(track, svc_session)
             ensure_track_drm(track, svc_session, init_data)
-            if not track.drm:
-                log.info(f"Track {sanitize_log(tid[:12])} carries no DRM, so it has no keys to resolve")
+            if not track.drm or all(isinstance(d, BlowfishStripe) for d in track.drm):
+                log.info(f"Track {sanitize_log(tid[:12])} needs no licence, so it has no keys to resolve")
                 clear_tracks.append(tid)
                 continue
 

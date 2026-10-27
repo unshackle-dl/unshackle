@@ -67,6 +67,7 @@ def header_length(path: Path) -> float:
         (Audio.Codec.ALAC, "alac", ".m4a"),
         (Audio.Codec.FLAC, "flac", ".flac"),
         (Audio.Codec.OPUS, "libopus", ".opus"),
+        (Audio.Codec.MP3, "libmp3lame", ".mp3"),
     ],
 )
 def test_remux_states_the_full_length_in_the_codec_container(

@@ -288,6 +288,7 @@ bitrate for the top renditions, overriding the manifest value:
 | `MPEGH` | `MPEG-H` | MPEG-H 3D Audio |
 | `ALAC` | `ALAC` | Apple Lossless |
 | `FLAC` | `FLAC` | FLAC |
+| `MP3` | `MP3` | MPEG-1 Audio Layer III |
 
 unshackle accepts names, values, and a few aliases: `eac3` and `ddp` both give `EC3`,
 and `vorbis` gives `OGG`.

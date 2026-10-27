@@ -27,7 +27,7 @@ from unshackle.core.cdm.detect import is_playready_cdm, is_widevine_cdm
 from unshackle.core.config import config
 from unshackle.core.constants import DOWNLOAD_ALL_DRM, DOWNLOAD_CANCELLED, DOWNLOAD_LICENCE_ONLY, DownloadCancelled
 from unshackle.core.downloaders import requests
-from unshackle.core.drm import DRM_T, ClearKeyCENC, PlayReady, Widevine
+from unshackle.core.drm import DRM_T, BlowfishStripe, ClearKeyCENC, PlayReady, Widevine
 from unshackle.core.drm.verify import decrypt_track, has_encrypted_entry, senc_protects_samples
 from unshackle.core.events import events
 from unshackle.core.session import MAX_BACKOFF, RnetSession, utf8_text
@@ -811,8 +811,8 @@ class Track:
                                     log.debug("No Widevine or PlayReady PSSH was found for this track, is it DRM free?")
 
                     if self.drm:
-                        track_kid = self.get_key_id(session=session)
                         drm = self.get_drm_for_cdm(cdm)
+                        track_kid = None if isinstance(drm, BlowfishStripe) else self.get_key_id(session=session)
                         if isinstance(drm, Widevine):
                             if not prepare_drm:
                                 raise ValueError("prepare_drm func must be supplied to use Widevine DRM")
@@ -879,7 +879,8 @@ class Track:
                         if drm:
                             progress(downloaded="Decrypting", completed=0, total=None)
                             decrypt_track(drm, save_path, prepare_drm, track_kid)
-                            assert_fragments_decrypted(save_path)
+                            if not isinstance(drm, BlowfishStripe):
+                                assert_fragments_decrypted(save_path)
                             self.drm = None
                             events.emit(events.Types.TRACK_DECRYPTED, track=self, drm=drm, segment=None)
                             progress(downloaded="Decrypted", completed=100, total=100)

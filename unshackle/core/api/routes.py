@@ -904,7 +904,7 @@ async def download(request: web.Request) -> web.Response:
                   - type: array
                     items:
                       type: string
-                description: Audio codec(s) to download (e.g., "AAC" or ["AAC", "EC3"]) - accepts AAC, AC3, DD, EC3, DD+, EAC3, DDP, AC4, AC-4, OPUS, OGG, VORB, VORBIS, DTS, DTSX, DTS-X, DTSHD, DTS-HD, MPEGH, MPEG-H, ALAC, FLAC (default - None)
+                description: Audio codec(s) to download (e.g., "AAC" or ["AAC", "EC3"]) - accepts AAC, AC3, DD, EC3, DD+, EAC3, DDP, AC4, AC-4, OPUS, OGG, VORB, VORBIS, DTS, DTSX, DTS-X, DTSHD, DTS-HD, MPEGH, MPEG-H, ALAC, FLAC, MP3 (default - None)
               vbitrate:
                 type: integer
                 description: Video bitrate in kbps (default - None)

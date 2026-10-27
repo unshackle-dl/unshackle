@@ -39,7 +39,7 @@ from unshackle.core.config import config
 from unshackle.core.console import console, prompt_user, show_notice
 from unshackle.core.constants import AnyTrack
 from unshackle.core.credential import Credential
-from unshackle.core.drm import cbcs, real_kids
+from unshackle.core.drm import BlowfishStripe, cbcs, real_kids
 from unshackle.core.proxies.resolve import is_loopback
 from unshackle.core.search_result import SearchResult
 from unshackle.core.session import MAX_BACKOFF
@@ -328,14 +328,16 @@ def reconstruct_drm(drm_list: Optional[list]) -> list:
     """Reconstruct DRM objects from serialized API data."""
     if not drm_list:
         return []
-    result = []
+    result: list[Any] = []
     for drm_info in drm_list:
         drm_type = drm_info.get("type", "")
         pssh_str = drm_info.get("pssh")
-        if not pssh_str:
+        if not pssh_str and drm_type != "blowfishstripe":
             continue
         try:
-            if drm_type == "widevine":
+            if drm_type == "blowfishstripe":
+                result.append(BlowfishStripe(drm_info["key"]))
+            elif drm_type == "widevine":
                 from pywidevine.pssh import PSSH as WidevinePSSH
 
                 from unshackle.core.drm import Widevine

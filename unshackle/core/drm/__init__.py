@@ -2,12 +2,14 @@ import base64
 from typing import Any, Union
 from uuid import UUID
 
+from unshackle.core.drm.blowfish_stripe import BlowfishStripe
 from unshackle.core.drm.clearkey import ClearKey
 from unshackle.core.drm.clearkey_cenc import ClearKeyCENC
 from unshackle.core.drm.monalisa import MonaLisa
 from unshackle.core.drm.playready import PlayReady
 from unshackle.core.drm.widevine import Widevine
 
+# BlowfishStripe stays out: the licensing paths typed on DRM_T never receive a DRM that needs no licence
 DRM_T = Union[ClearKey, ClearKeyCENC, Widevine, PlayReady, MonaLisa]
 
 
@@ -61,6 +63,7 @@ def own_kids(drm: Any) -> list[UUID]:
 
 
 __all__ = (
+    "BlowfishStripe",
     "ClearKey",
     "ClearKeyCENC",
     "Widevine",

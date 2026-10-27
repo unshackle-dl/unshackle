@@ -298,7 +298,7 @@ closed-caption descriptors. The relevant enums:
 
 `Audio` adds `bitrate`, `channels`, `joc` (Joint Object Coding, the Atmos indicator),
 and `descriptive`. `Audio.Codec` covers `AAC`, `AC3` (`DD`), `EC3` (`DD+`), `AC4`,
-`OPUS`, `OGG` (Vorbis), `DTS`, `DTSX`, `DTSHD`, `MPEGH`, `ALAC`, and `FLAC`. The `atmos` property is `True` when
+`OPUS`, `OGG` (Vorbis), `DTS`, `DTSX`, `DTSHD`, `MPEGH`, `ALAC`, `FLAC`, and `MP3`. The `atmos` property is `True` when
 `joc` is set (or when `extra` flags it).
 
 ### `Subtitle`
@@ -388,7 +388,7 @@ A typical `get_tracks` therefore looks like fetching the manifest text with
 ## DRM hooks
 
 If a track carries DRM, the framework licenses and decrypts it, but it needs your
-service to talk to the platform's license server. unshackle recognizes five DRM systems:
+service to talk to the platform's license server. unshackle recognizes six DRM systems:
 
 | DRM class | System | License flow |
 |---|---|---|
@@ -397,6 +397,7 @@ service to talk to the platform's license server. unshackle recognizes five DRM 
 | `ClearKeyCENC` | W3C `org.w3.clearkey` over CENC | JSON KID request → JWK set; no CDM |
 | `ClearKey` | HLS AES-128 | content key fetched directly from a URI; no CDM, no challenge |
 | `MonaLisa` | Proprietary WASM DRM | keys extracted locally; no license server |
+| `BlowfishStripe` | Blowfish CBC stripe cipher | the service gives the per-track key; no CDM, no license server |
 
 !!! warning "`ClearKey` vs `ClearKeyCENC`"
     Despite the shared prefix these are entirely different systems. `ClearKey` is HLS
