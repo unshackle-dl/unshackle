@@ -3132,10 +3132,13 @@ existing file as a directory, and logs a warning.</p>
 </span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="w">  </span><span class="nt">"service"</span><span class="p">:</span><span class="w"> </span><span class="s2">"EXAMPLE"</span><span class="p">,</span>
 </span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="w">  </span><span class="nt">"valid"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
 </span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="w">  </span><span class="nt">"expires_in"</span><span class="p">:</span><span class="w"> </span><span class="mi">300</span><span class="p">,</span>
-</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="w">  </span><span class="nt">"track_count"</span><span class="p">:</span><span class="w"> </span><span class="mi">12</span><span class="p">,</span>
-</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="w">  </span><span class="nt">"title_count"</span><span class="p">:</span><span class="w"> </span><span class="mi">40</span>
-</span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a><span class="p">}</span>
+</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="w">  </span><span class="nt">"draining"</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span>
+</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="w">  </span><span class="nt">"track_count"</span><span class="p">:</span><span class="w"> </span><span class="mi">12</span><span class="p">,</span>
+</span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a><span class="w">  </span><span class="nt">"title_count"</span><span class="p">:</span><span class="w"> </span><span class="mi">40</span>
+</span><span id="__span-11-9"><a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a><span class="p">}</span>
 </span></code></pre></div>
+<p><code>draining</code> is <code>true</code> after the operator starts a drain before a restart. The client reads
+it before each title, so it knows of the restart before it occurs.</p>
 <div class="admonition warning">
 <p class="admonition-title"><code>expires_in</code> is the configured TTL, not time remaining</p>
 <p>The <code>expires_in</code> value reports the store's configured <code>session_ttl</code>, not the
@@ -3166,9 +3169,32 @@ remote session API and a good template for any client.</p>
   (merging returned <code>session_headers</code>/<code>session_cookie_jar</code>, re-parsing <code>manifests</code>) →
   get the licence in proxy mode or <code>server_cdm</code> mode → <code>close()</code> (<code>DELETE</code>, saving any returned
   <code>cache</code>).</li>
-<li><strong>Server resolution.</strong> <code>resolve_server()</code> reads <code>config.remote_services.&lt;name&gt;</code>
+<li>
+<p><strong>Server restarts.</strong> The server keeps remote sessions in memory only, so a restart
+  loses them all. The client recovers in two ways:</p>
+<ul>
+<li>A drain announced through <code>draining</code>: the client finishes the current title, then
+  closes its remote session, so the drain can end and the refreshed cache comes back.
+  It waits until <code>/api/health</code> reports the restarted server without <code>draining</code>,
+  opens a new remote session, and continues with the next title.</li>
+<li>A lost remote session (<code>SESSION_NOT_FOUND</code>, a connection error, a timeout, a closed
+  tunnel or a gateway error page): the client waits for <code>/api/health</code>, then checks the
+  old remote session. A live remote session takes the call again only after a connection
+  error, because a timed-out call can already have run. A lost one is replaced: the
+  client opens a new remote session, sends <code>titles</code> and the current title's <code>tracks</code>
+  again, and then sends the failed call again. A title or track that the new remote
+  session gives another ID keeps its old ID on the client, and the client sends the
+  new ID. The client matches a title by season and episode number, and a track by its
+  attributes.</li>
+</ul>
+<p>The client waits up to 30 minutes for the server, which covers a deploy's drain. It
+stops with an error if the new remote session licenses differently from the old one,
+for example after a change to the API key's <code>server_cdm</code> grant. An interactive login
+asks for its input again.
+- <strong>Server resolution.</strong> <code>resolve_server()</code> reads <code>config.remote_services.&lt;name&gt;</code>
   into <code>{url, api_key, services, server_cdm}</code>, injecting the <code>server_cdm</code> flag into
-  the services map as <code>_server_cdm</code>.</li>
+  the services map as <code>_server_cdm</code>.</p>
+</li>
 </ul>
 <hr />
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
