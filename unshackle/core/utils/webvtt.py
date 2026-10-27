@@ -79,14 +79,15 @@ def merge_segmented_webvtt(vtt_raw: str, segment_durations: Optional[list[int]] 
     return "WEBVTT\n\n" + "\n\n".join(blocks) + "\n"
 
 
-def rebase_webvtt(text: str, offset_ms: int) -> str:
+def rebase_webvtt(text: str, offset_ms: int, segment_ms: int = 0) -> str:
     """
     Subtract offset_ms from every cue time when the cues sit on the media timeline of a DASH
     period whose presentationTimeOffset is offset_ms, as a live replay's do. Cues that start
-    below the offset are already presentation times, so the text stays as it is.
+    more than one segment below the offset are already presentation times, so the text stays
+    as it is. A cue carried into the first segment can start up to one segment early.
     """
     first = CUE_TIMES.search(text)
-    if offset_ms <= 0 or not first or timestamp_ms(first[2]) < offset_ms:
+    if offset_ms <= 0 or not first or timestamp_ms(first[2]) < offset_ms - segment_ms:
         return text
 
     def shift(ts: str) -> str:

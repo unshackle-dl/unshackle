@@ -126,6 +126,18 @@ def test_rebase_moves_live_clock_cues_to_zero():
     assert "00:05:29.600 --> 00:05:30.129 line:0.01%\nText" in out
 
 
+def test_rebase_moves_cues_when_the_first_is_carried_over_from_before_the_offset():
+    vtt = "WEBVTT\n\n03:59:43.500 --> 03:59:45.000\nCarried\n\n04:03:32.598 --> 04:03:32.698\nNext\n"
+    out = rebase_webvtt(vtt, timestamp_ms("03:59:44.000"), 2002)
+    assert "00:00:00.000 --> 00:00:01.000\nCarried" in out
+    assert "00:03:48.598 --> 00:03:48.698\nNext" in out
+
+
+def test_rebase_leaves_a_later_period_with_a_small_offset_alone():
+    vtt = "WEBVTT\n\n00:00:05.000 --> 00:00:12.000\nText\n"
+    assert rebase_webvtt(vtt, 10_000, 2000) == vtt
+
+
 def test_rebase_leaves_presentation_time_cues_alone():
     # a second pass, or a VOD period with a non-zero offset, must not shift again
     vtt = "WEBVTT\n\n00:05:29.600 --> 00:05:30.129\nText\n"

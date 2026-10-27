@@ -286,8 +286,12 @@ class Subtitle(Track):
                     self.data["dash"]["adaptation_set"], self.data["dash"]["representation"]
                 )
                 if template is not None:
-                    offset = template.get("presentationTimeOffset", "0")
-                    text = rebase_webvtt(text, int(offset) * 1000 // int(template.get("timescale", "1")))
+                    timescale = int(template.get("timescale", "1"))
+                    text = rebase_webvtt(
+                        text,
+                        int(template.get("presentationTimeOffset", "0")) * 1000 // timescale,
+                        int(template.get("duration", "0")) * 1000 // timescale,
+                    )
                 if len(self.data["dash"]["segment_durations"]) > 1:
                     text = merge_segmented_webvtt(
                         text,

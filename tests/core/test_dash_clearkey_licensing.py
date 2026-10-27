@@ -56,11 +56,8 @@ class RecordingLicence:
             drm.content_keys[kid] = KEY.hex()
 
 
-def test_download_track_licenses_clearkey_cenc(tmp_path, monkeypatch) -> None:
-    track = DASH.from_text(MPD, MANIFEST_URL).to_tracks().videos[0]
-    # KID normally comes from the init segment; short-circuit the probe (offline).
-    monkeypatch.setattr(track, "get_key_id", lambda *args, **kwargs: KID)
-
+def licence_only(track: Any, tmp_path: Any) -> RecordingLicence:
+    """Run download_track as far as licensing and return the licence callback it used."""
     licence = RecordingLicence()
     ctx = DownloadContext(
         save_path=tmp_path / "video.mp4",
@@ -69,12 +66,20 @@ def test_download_track_licenses_clearkey_cenc(tmp_path, monkeypatch) -> None:
         license_widevine=licence,
         cdm=None,
     )
-
     DOWNLOAD_LICENCE_ONLY.set()
     try:
         DASH.download_track(track=track, ctx=ctx)
     finally:
         DOWNLOAD_LICENCE_ONLY.clear()
+    return licence
+
+
+def test_download_track_licenses_clearkey_cenc(tmp_path, monkeypatch) -> None:
+    track = DASH.from_text(MPD, MANIFEST_URL).to_tracks().videos[0]
+    # KID normally comes from the init segment; short-circuit the probe (offline).
+    monkeypatch.setattr(track, "get_key_id", lambda *args, **kwargs: KID)
+
+    licence = licence_only(track, tmp_path)
 
     assert len(licence.calls) == 1, "ClearKeyCENC track was never licensed"
     drm, track_kid = licence.calls[0]
@@ -82,3 +87,17 @@ def test_download_track_licenses_clearkey_cenc(tmp_path, monkeypatch) -> None:
     assert track_kid == KID
     # with content keys populated, decrypt has what it needs
     assert drm.content_keys == {KID: KEY.hex()}
+
+
+def test_download_track_keeps_service_drm_when_manifest_has_none(tmp_path, monkeypatch) -> None:
+    """A service-set non-Widevine DRM survives a manifest with no ContentProtection, and is licensed."""
+    service_drm = [ClearKeyCENC([KID], LAURL)]
+    bare_mpd = MPD.split("<ContentProtection")[0] + MPD.split("</ContentProtection>")[1]
+    track = DASH.from_text(bare_mpd, MANIFEST_URL).to_tracks().videos[0]
+    track.drm = service_drm
+    monkeypatch.setattr(track, "get_key_id", lambda *args, **kwargs: KID)
+
+    licence = licence_only(track, tmp_path)
+
+    assert track.drm == service_drm
+    assert len(licence.calls) == 1

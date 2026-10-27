@@ -401,7 +401,7 @@ class DASH:
         # Only override existing DRM if:
         # 1. No existing DRM was set, OR
         # 2. Existing DRM contains same type as manifest DRM, OR
-        # 3. Existing DRM is not Widevine (preserve Widevine when service explicitly set it)
+        # 3. Existing DRM is not Widevine and the manifest has DRM to replace it with
         should_override_drm = (
             not existing_drm
             or (
@@ -409,7 +409,7 @@ class DASH:
                 and manifest_drm
                 and any(isinstance(existing, type(manifest)) for existing in existing_drm for manifest in manifest_drm)
             )
-            or (existing_drm and not any(isinstance(drm, Widevine) for drm in existing_drm))
+            or (existing_drm and manifest_drm and not any(isinstance(drm, Widevine) for drm in existing_drm))
         )
 
         pre_existing_keys = {}

@@ -1560,11 +1560,12 @@ def extract_manifests(tracks) -> List[Dict[str, Any]]:
 
 
 def extract_track_manifests(tracks) -> List[Dict[str, Any]]:
-    """Build a one-AdaptationSet MPD for each track whose AdaptationSet the served manifest does not contain.
+    """Build a one-AdaptationSet MPD for each track the client cannot find again in the served manifest.
 
     A service can build an AdaptationSet of its own, out of merged segment timelines or
-    copied nodes, that never joins the manifest tree the server serialises. The client's
-    re-parse of that manifest cannot find it, so each of those tracks gets its own MPD.
+    copied nodes, that never joins the manifest tree the server serialises. A service can also
+    build a manifest that holds only its own track, which the client's attribute match cannot
+    tell apart from others. Each of those tracks gets its own MPD, matched by track id.
     """
     import base64
     import zlib
@@ -1583,7 +1584,7 @@ def extract_track_manifests(tracks) -> List[Dict[str, Any]]:
         adaptation_set = dash.get("adaptation_set")
         if manifest is None or adaptation_set is None:
             continue
-        if adaptation_set.getroottree().getroot() is manifest:
+        if adaptation_set.getroottree().getroot() is manifest and len(manifest.findall(".//Representation")) > 1:
             continue
 
         root = etree.Element("MPD", dict(manifest.attrib))
