@@ -54,6 +54,8 @@ LOCAL_NETWORKS = tuple(
     )
 )
 NAT64 = (ipaddress.ip_network("64:ff9b::/96"), ipaddress.ip_network("64:ff9b:1::/48"))
+# is_global counts these as global before Python 3.11.10; drop once requires-python is >=3.11.10
+NOT_GLOBAL = (ipaddress.ip_network("192.0.0.0/24"), ipaddress.ip_network("2002::/16"))
 MAX_TUNNELS = 4
 MAX_STREAMS = 256
 CHUNK = 65536
@@ -326,7 +328,8 @@ def is_local_ip(address: str) -> bool:
 
 
 def is_public_ip(address: str) -> bool:
-    return (ip := parse_ip(address)) is not None and ip.is_global and not is_local_ip(address)
+    ip = parse_ip(address)
+    return ip is not None and ip.is_global and not any(ip in n for n in NOT_GLOBAL) and not is_local_ip(address)
 
 
 def is_ip_literal(host: str) -> bool:
