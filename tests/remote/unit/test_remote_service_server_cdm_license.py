@@ -47,6 +47,8 @@ class _Client:
 
 def _service(server_type, answer):
     svc = RemoteService.__new__(RemoteService)
+    svc._track_alias = {}
+    svc._title_alias = {}
     svc._server_cdm = True
     svc._server_cdm_type = server_type
     svc.client_licensed = set()

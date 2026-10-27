@@ -45,6 +45,7 @@ Health check. **This is the only route exempt from authentication**: you can cal
       "status": "ok",
       "version": "5.3.0",
       "code_hash": "1d22a1e",
+      "draining": false,
       "update_check": {
         "update_available": false,
         "current_version": "5.3.0",
@@ -54,6 +55,8 @@ Health check. **This is the only route exempt from authentication**: you can cal
     ```
 
 `code_hash` fingerprints the framework source the server operates, so it names the code itself rather than the release. It is the same value for a git checkout and for an installed package built from that checkout. It changes when you edit anything under `unshackle/core`, `unshackle/commands`, `unshackle/utils`, or `unshackle/vaults`. Service modules are not included. unshackle sets the value to `null` only when it cannot read the source files.
+
+`draining` is `true` while the server refuses new remote sessions and jobs before a restart.
 
 If the update check fails (for example, no network), `update_available` and `latest_version` are `null` while `current_version` still reports the installed version.
 
@@ -1243,6 +1246,7 @@ Return remote session metadata and validity.
       "service": "EXAMPLE",
       "valid": true,
       "expires_in": 300,
+      "draining": false,
       "track_count": 4,
       "title_count": 10
     }

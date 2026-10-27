@@ -5656,6 +5656,7 @@ async def session_info_handler(session_id: str, request: Optional[web.Request] =
             "service": session.service_tag,
             "valid": True,
             "expires_in": get_session_store().ttl,
+            "draining": get_session_store().draining,
             "track_count": len(session.tracks),
             "title_count": len(session.title_map),
         }

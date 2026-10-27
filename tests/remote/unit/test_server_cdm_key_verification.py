@@ -26,6 +26,8 @@ CDM_KID = UUID("43de497c6d1945f49acc2951696ec628")
 
 def remote_service() -> RemoteService:
     svc = RemoteService.__new__(RemoteService)
+    svc._track_alias = {}
+    svc._title_alias = {}
     svc.server_vault_keys = {}
     svc.server_vault = ServerVault(svc)
     svc._session_id = "sess"

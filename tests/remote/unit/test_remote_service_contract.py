@@ -44,4 +44,6 @@ def test_get_clearkey_license_returns_none() -> None:
     # framework POSTs the manifest Laurl itself. __new__ skips the networked
     # __init__, so the method must not touch self.
     svc = RemoteService.__new__(RemoteService)
+    svc._track_alias = {}
+    svc._title_alias = {}
     assert svc.get_clearkey_license(challenge=b"", title=None, track=None) is None

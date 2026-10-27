@@ -13,6 +13,7 @@ import contextlib
 import hashlib
 import json
 import logging
+import random
 import re
 import shlex
 import sys
@@ -22,8 +23,8 @@ from datetime import date as date_
 from enum import Enum
 from http.cookiejar import CookieJar
 from pathlib import Path
-from threading import Event, Lock, Thread
-from typing import Any, Callable, Dict, Iterable, Iterator, Optional, Union
+from threading import Event, Lock, Thread, local
+from typing import Any, Callable, Dict, Iterable, Iterator, Optional, TypeVar, Union
 from urllib.parse import urlencode
 from uuid import UUID
 
@@ -62,6 +63,26 @@ SENSITIVE_DATA_KEYS = ("credential", "credentials", "password", "token", "api_ke
 
 DEFAULT_AUTH_HEADERS = ["X-Secret-Key", "X-Api-Key"]
 
+# error kinds after which the remote session may be gone: the server restarted, or the tunnel it used closed
+SESSION_LOST = ("SESSION_NOT_FOUND", "CONNECT", "TIMEOUT", "TUNNEL_CLOSED")
+# what a recovering call can meet on its way, so these log only once the recovery fails
+RECOVERABLE = (*SESSION_LOST, "SERVER_DRAINING")
+REOPEN_WAIT = 1800.0  # seconds a lost session waits for its server to come back; covers a deploy's whole drain
+
+_recovering = local()
+
+T = TypeVar("T")
+
+
+@contextlib.contextmanager
+def recovering() -> Iterator[None]:
+    """Mark this thread's remote calls as recoverable, so a RECOVERABLE error logs at debug level."""
+    _recovering.on = True
+    try:
+        yield
+    finally:
+        _recovering.on = False
+
 
 def redact_secrets(text: str, data: Optional[Dict[str, Any]] = None) -> str:
     """Mask URL userinfo and any request-payload secrets before unshackle writes the text to the log."""
@@ -81,12 +102,13 @@ class RemoteError(SystemExit):
         super().__init__(1)
         self.message = message
         self.kind = kind
-        log.error(message)
+        quiet = getattr(_recovering, "on", False) and kind in RECOVERABLE
+        (log.debug if quiet else log.error)(message)
 
     @property
     def session_broke(self) -> bool:
         """Whether the remote session itself is gone, not just this one call."""
-        return self.kind in ("SESSION_NOT_FOUND", "CONNECT", "TIMEOUT")
+        return self.kind in SESSION_LOST
 
 
 class RemoteClient:
@@ -186,10 +208,13 @@ class RemoteClient:
             page_title = re.search(r"<title>(.*?)</title>", resp.text, re.S) if not detail else None
             fallback = f"HTTP {resp.status_code}: {page_title.group(1).strip()}" if page_title else resp.text
             error_msg = redact_secrets(str(detail.get("message", fallback)), data)
-            error_code = detail.get("error_code", "UNKNOWN")
+            # a gateway's own error page means the server behind it is down, as when it restarts
+            error_code = detail.get("error_code") or (
+                "CONNECT" if resp.status_code >= 500 and not detail else "UNKNOWN"
+            )
             if error_code in expect:
                 return detail
-            if optional:
+            if optional and error_code != "SESSION_NOT_FOUND":
                 log.debug(f"Optional endpoint {endpoint} unavailable [{error_code}]: {error_msg}")
                 return {}
             if self.tunnel and self.tunnel.lost:
@@ -732,6 +757,15 @@ def build_title(info: Dict[str, Any], service_tag: str, fallback_id: str) -> Tit
     return title
 
 
+def title_key(title: Title_T) -> tuple:
+    """What tells a title apart from the others in one listing, other than its id: a service may vary the id per listing."""
+    if isinstance(title, Episode):
+        return (title.season, title.number, title.part)
+    if isinstance(title, Song):
+        return (title.disc, title.track)
+    return (getattr(title, "year", None),)
+
+
 def resolve_auth_headers(svc: dict, server_name: str) -> list[str]:
     """Configured header names first, then the defaults as fallbacks."""
     auth_headers = svc.get("auth_headers")
@@ -1117,6 +1151,11 @@ class RemoteService:
         self.auth_notice: Optional[str] = None
         self._log_drain_lock = Lock()
         self._keepalive_stop = Event()
+        self._reopen_lock = Lock()
+        self._current_title: Optional[Title_T] = None
+        # client title and track id -> the id a reopened session gave the same title or track
+        self._title_alias: Dict[str, str] = {}
+        self._track_alias: Dict[str, str] = {}
 
         self._session = requests.Session()
         self._session.headers.update(config.headers)
@@ -1465,21 +1504,145 @@ class RemoteService:
         """Send keep-alive requests so that a long download or mux operation does not outlive the server's idle TTL.
 
         ``GET /api/session/{session_id}`` refreshes the idle timer and reports the TTL, so the thread sends
-        a request at an interval of one third of it. The thread stops when ``close()`` runs. A client that
-        dies stops sending requests, so the server still expires an abandoned remote session.
+        a request at an interval of one third of it. The thread stops when ``close()`` or a reopen runs. A client
+        that dies stops sending requests, so the server still expires an abandoned remote session.
         """
         info = self.client.get_optional(f"/api/session/{self._session_id}")
         interval = max(float(info.get("expires_in") or 300) / 3, 5.0)
         url = f"{self.client.server_url}/api/session/{self._session_id}"
+        stop = self._keepalive_stop = Event()
 
         def ping() -> None:
-            while not self._keepalive_stop.wait(interval):
+            while not stop.wait(interval):
                 try:
                     self.client.session.get(url, timeout=30)
                 except requests.RequestException:
                     pass
 
         Thread(target=ping, name=f"{self.service_tag}-keepalive", daemon=True).start()
+
+    def session_call(self, call: Callable[[Optional[str]], T]) -> T:
+        """Run ``call`` with the session id, and once more on a new session when the server lost the old one."""
+        session_id = self._session_id
+        if getattr(_recovering, "on", False):
+            return call(session_id)
+        try:
+            with recovering():
+                return call(session_id)
+        except RemoteError as e:
+            if not e.session_broke:
+                raise
+            lost = e
+        if not self.recover(session_id, lost.kind):
+            log.error(lost.message)
+            raise lost
+        return call(self._session_id)
+
+    def recover(self, session_id: Optional[str], kind: str) -> bool:
+        """Whether a call that failed with ``kind`` can run again, on the same session or on a new one.
+
+        The same session takes the call again only after a connect error, as a timed-out call may have run.
+        """
+        with self._reopen_lock:
+            if self._session_id != session_id:  # another thread already reopened it
+                return self._session_id is not None
+            if session_id is None or not self.wait_for_server(accepting=False):
+                return False
+            url = f"{self.client.server_url}/api/session/{session_id}"
+            try:
+                alive = kind != "TUNNEL_CLOSED" and self.client.session.get(url, timeout=30).ok
+            except requests.RequestException:
+                alive = False
+            if alive:
+                return kind == "CONNECT"
+            self.log.warning("The remote session was lost, opening a new one")
+            return self.reopen()
+
+    def wait_for_server(self, accepting: bool) -> bool:
+        """Wait until the server answers, and with ``accepting`` until it also takes new sessions. False on timeout."""
+        deadline = time.monotonic() + REOPEN_WAIT
+        delay = 1.0
+        warned = False
+        while True:
+            try:
+                health = self.client.session.get(f"{self.client.server_url}/api/health", timeout=30).json()
+                if health.get("status") == "ok" and not (accepting and health.get("draining")):
+                    return True
+            except (requests.RequestException, ValueError, AttributeError):
+                pass
+            if time.monotonic() >= deadline:
+                return False
+            if not warned:
+                self.log.warning(f"Waiting for the remote server at {safe_display_url(self.client.server_url)}")
+                warned = True
+            # jittered, so the clients of a restarted server do not all log in again at the same moment
+            time.sleep(random.uniform(delay / 2, delay))  # nosec B311
+            delay = min(delay * 2, 30.0)
+
+    def reopen(self) -> bool:
+        """Open a new remote session after the server lost this one, and load the current title's tracks on it again.
+
+        A track the new remote session gives another id keeps its old one here, and calls translate it.
+        """
+        grants = (self._server_cdm, self._server_device, self._server_vault)
+        self._keepalive_stop.set()
+        self._session_id = None
+        if self.client.tunnel:  # the server forgot the tunnel too
+            self.client.tunnel.stop()
+            self.client.tunnel = None
+        self._log_seq = 0
+        self._segment_filters.clear()
+        if not self.wait_for_server(accepting=True):
+            return False
+        try:
+            with recovering():
+                self.authenticate(credential=self.credential)
+                listing = self.client.get(f"/api/session/{self._session_id}/titles").get("titles", [])
+                fresh_titles = [build_title(t, self.service_tag, self.title_id) for t in listing]
+                for old in self._titles or []:
+                    same = [t for t in fresh_titles if title_key(t) == title_key(old)]
+                    if len(same) == 1 and str(same[0].id) != str(old.id):
+                        self._title_alias[str(old.id)] = str(same[0].id)
+                title = self._current_title
+                if title is not None:
+                    held = self._tracks_by_title.pop(str(title.id), None)
+                    try:
+                        fresh = list(self.get_tracks(title))
+                    finally:  # dl holds the old track objects, so the cache keeps them
+                        if held is not None:
+                            self._tracks_by_title[str(title.id)] = held
+                    for track in held or []:
+                        match = match_track(track, fresh)
+                        if match is not None and str(match.id) != str(track.id):
+                            self._track_alias[str(track.id)] = str(match.id)
+        except RemoteError as e:
+            if e.kind not in RECOVERABLE:
+                raise
+            return False
+        if (self._server_cdm, self._server_device, self._server_vault) != grants:
+            raise RemoteError("The new remote session licenses differently from the lost one", "GRANTS_CHANGED")
+        return True
+
+    def reopen_after_drain(self) -> None:
+        """Close the remote session before the server's announced restart, so its drain can end, then open a new one."""
+        with self._reopen_lock:
+            self.log.info("The remote server restarts for an update, reopening the session after it")
+            self.close()
+            self._current_title = None
+            if not self.reopen():
+                raise RemoteError(f"The remote server did not come back within {REOPEN_WAIT:.0f}s", "CONNECT")
+
+    def server_draining(self) -> bool:
+        """Whether the server announced a restart; asked once per title, as an episode can be shorter than the keepalive."""
+        try:
+            url = f"{self.client.server_url}/api/session/{self._session_id}"
+            return bool(self._session_id and self.client.session.get(url, timeout=30).json().get("draining"))
+        except (requests.RequestException, ValueError, AttributeError):
+            return False
+
+    def server_track_id(self, track_id: Any) -> str:
+        """The id the current remote session knows the track with this client id by."""
+        return self._track_alias.get(str(track_id), str(track_id))
 
     def drain_server_logs(self) -> None:
         """Fetch the service's server-side log records for this remote session and re-emit them locally.
@@ -1620,7 +1783,7 @@ class RemoteService:
         if self._titles is not None:
             return self._titles
         try:
-            result = self.client.get(f"/api/session/{self._session_id}/titles")
+            result = self.session_call(lambda sid: self.client.get(f"/api/session/{sid}/titles"))
         finally:
             self.drain_server_logs()
         titles_list = [build_title(t, self.service_tag, self.title_id) for t in result.get("titles", [])]
@@ -1644,10 +1807,17 @@ class RemoteService:
 
     def get_tracks(self, title: Title_T) -> Tracks:
         title_id = str(title.id)
+        if title_id not in self._tracks_by_title and self.server_draining():  # dl has finished the title before
+            self.reopen_after_drain()
+        self._current_title = title
         if title_id in self._tracks_by_title:
             return self._tracks_by_title[title_id]
         try:
-            result = self.client.post(f"/api/session/{self._session_id}/tracks", {"title_id": title_id})
+            result = self.session_call(
+                lambda sid: self.client.post(
+                    f"/api/session/{sid}/tracks", {"title_id": self._title_alias.get(title_id, title_id)}
+                )
+            )
         finally:
             self.drain_server_logs()
         tracks = build_tracks(result)
@@ -1687,19 +1857,26 @@ class RemoteService:
         return tracks
 
     def decrypts_samples(self, track: AnyTrack) -> bool:
-        return str(track.id) in self._sample_decrypt_tracks
+        return self.server_track_id(track.id) in self._sample_decrypt_tracks
 
     def get_sample_decrypter(self, track: AnyTrack, entry: int) -> Union[bytes, cbcs.SampleDecrypter]:
         """Ask the server how `entry` decrypts. A decrypter sends the samples to the server in batches."""
-        endpoint = f"/api/session/{self._session_id}/samples?{urlencode({'track_id': str(track.id), 'entry': entry})}"
-        answer = self.client.request("post", endpoint, body=b"")
+
+        def samples(body: bytes) -> Dict[str, Any]:
+            def call(sid: Optional[str]) -> Dict[str, Any]:
+                query = urlencode({"track_id": self.server_track_id(track.id), "entry": entry})
+                return self.client.request("post", f"/api/session/{sid}/samples?{query}", body=body)
+
+            return self.session_call(call)
+
+        answer = samples(b"")
         if answer.get("key"):
             return bytes.fromhex(answer["key"])
 
-        def decrypt(samples: list[bytes]) -> list[bytes]:
+        def decrypt(batches: list[bytes]) -> list[bytes]:
             plaintexts: list[bytes] = []
-            for batch in sample_batches(samples):
-                frame = self.client.request("post", endpoint, body=cbcs.pack_samples(batch))["body"]
+            for batch in sample_batches(batches):
+                frame = samples(cbcs.pack_samples(batch))["body"]
                 plaintexts.extend(cbcs.unpack_samples(frame))
             return plaintexts
 
@@ -1715,8 +1892,9 @@ class RemoteService:
         def segment_filter(segment: Any) -> bool:
             unwanted = self._segment_filters.get(track_id)
             if unwanted is None:
-                result = self.client.post_optional(
-                    f"/api/session/{self._session_id}/segment_filter", {"track_id": track_id}
+                server_id = self.server_track_id(track_id)
+                result = self.session_call(
+                    lambda sid: self.client.post_optional(f"/api/session/{sid}/segment_filter", {"track_id": server_id})
                 )
                 unwanted = segment_uri_filter(result.get("unwanted") or [])
                 self._segment_filters[track_id] = unwanted
@@ -1739,8 +1917,8 @@ class RemoteService:
 
         from uuid import UUID
 
-        track_ids = [str(t.id) for t in title.tracks.videos + title.tracks.audio]
-        if not track_ids:
+        keyed = title.tracks.videos + title.tracks.audio
+        if not keyed:
             return
 
         drm_type = getattr(self, "_server_cdm_type", "widevine")
@@ -1753,14 +1931,17 @@ class RemoteService:
         capped: Dict[str, Any] = {}
         try:
             with console.status("Retrieving Remote License...", spinner="dots"):
-                resp = self.client.post(
-                    f"/api/session/{self._session_id}/license",
-                    {
-                        "track_ids": track_ids,
-                        "mode": "server_cdm",
-                        "drm_type": drm_type,
-                    },
+                resp = self.session_call(
+                    lambda sid: self.client.post(
+                        f"/api/session/{sid}/license",
+                        {
+                            "track_ids": [self.server_track_id(t.id) for t in keyed],
+                            "mode": "server_cdm",
+                            "drm_type": drm_type,
+                        },
+                    )
                 )
+            track_ids = [self.server_track_id(t.id) for t in keyed]
             self.drain_server_logs()
             keys_by_track = resp.get("keys", {})
             clear_tracks = set(resp.get("clear_tracks", []))
@@ -1774,14 +1955,15 @@ class RemoteService:
             self.log.debug(f"Server responded with drm_type={server_drm_type}, keys for {len(keys_by_track)} track(s)")
 
             for track in title.tracks:
-                track_keys = keys_by_track.get(str(track.id), {})
+                server_id = self.server_track_id(track.id)
+                track_keys = keys_by_track.get(server_id, {})
                 if not track_keys:
-                    if str(track.id) in track_ids and str(track.id) not in clear_tracks | set(capped):
+                    if server_id in track_ids and server_id not in clear_tracks | set(capped):
                         self.log.warning(f"Server CDM returned no content keys for track {track.id}")
                     continue
 
                 named = {kid.hex for drm in track.drm or [] for kid in real_kids(drm)} & track_keys.keys()
-                track_drm_type = drm_types_by_track.get(str(track.id), server_drm_type)
+                track_drm_type = drm_types_by_track.get(server_id, server_drm_type)
                 drm_obj = self.create_drm_stub(track_drm_type, sorted(named) or list(track_keys))
                 for kid_hex, key_hex in track_keys.items():
                     drm_obj.content_keys[UUID(hex=kid_hex)] = key_hex
@@ -1797,8 +1979,9 @@ class RemoteService:
 
         for track in title.tracks:
             # a lent-device miss still gets the local vaults, which dl reads before asking the server again
-            if str(track.id) in capped and capped[str(track.id)].get("reason") != "server_device":
-                self.license_locally(track, capped[str(track.id)])
+            refusal = capped.get(self.server_track_id(track.id))
+            if refusal is not None and refusal.get("reason") != "server_device":
+                self.license_locally(track, refusal)
 
     def license_locally(self, track: AnyTrack, refusal: Dict[str, Any]) -> None:
         """Hand a track the server CDM refused to license live to this machine's own device.
@@ -1849,8 +2032,10 @@ class RemoteService:
     def report_bad_key(self, kid: UUID, key: str) -> None:
         """Tell the server a vault key it served did not decrypt, so it flags its own row."""
         try:
-            self.client.post_optional(f"/api/session/{self._session_id}/keys/bad", {"kid": kid.hex, "key": key})
-        except Exception as e:
+            self.session_call(
+                lambda sid: self.client.post_optional(f"/api/session/{sid}/keys/bad", {"kid": kid.hex, "key": key})
+            )
+        except (Exception, RemoteError) as e:
             self.log.warning(f"Could not report the bad content key to the server: {e!r}")
 
     @staticmethod
@@ -1928,14 +2113,16 @@ class RemoteService:
         track: AnyTrack,
     ) -> Optional[Union[bytes, str]]:
         # a missing certificate is legal (services may not use one), so a failed fetch continues without one
-        resp = self.client.post_optional(
-            f"/api/session/{self._session_id}/license",
-            {
-                "track_id": str(track.id),
-                "challenge": base64.b64encode(challenge).decode("ascii"),
-                "drm_type": "widevine",
-                "is_certificate": True,
-            },
+        resp = self.session_call(
+            lambda sid: self.client.post_optional(
+                f"/api/session/{sid}/license",
+                {
+                    "track_id": self.server_track_id(track.id),
+                    "challenge": base64.b64encode(challenge).decode("ascii"),
+                    "drm_type": "widevine",
+                    "is_certificate": True,
+                },
+            )
         )
         return base64.b64decode(resp["license"]) if resp.get("license") else None
 
@@ -1956,15 +2143,13 @@ class RemoteService:
             refusal: Optional[Dict[str, Any]] = None
             if pssh_b64:
                 try:
-                    resp = self.client.post(
-                        f"/api/session/{self._session_id}/license",
-                        {
-                            "track_id": str(track.id),
-                            "drm_type": drm_type,
-                            "mode": "server_cdm",
-                            "pssh": pssh_b64,
-                        },
-                        expect=("SERVER_CDM_CAPPED",),
+                    request = {"drm_type": drm_type, "mode": "server_cdm", "pssh": pssh_b64}
+                    resp = self.session_call(
+                        lambda sid: self.client.post(
+                            f"/api/session/{sid}/license",
+                            {**request, "track_id": self.server_track_id(track.id)},
+                            expect=("SERVER_CDM_CAPPED",),
+                        )
                     )
                     if resp.get("error_code") == "SERVER_CDM_CAPPED":
                         refusal = resp.get("details") or {}
@@ -1989,7 +2174,6 @@ class RemoteService:
         pssh_b64 = track_pssh(track, drm_type)
 
         payload = {
-            "track_id": str(track.id),
             "challenge": base64.b64encode(challenge).decode("ascii"),
             "drm_type": drm_type,
         }
@@ -1997,7 +2181,11 @@ class RemoteService:
             payload["pssh"] = pssh_b64
 
         try:
-            resp = self.client.post(f"/api/session/{self._session_id}/license", payload)
+            resp = self.session_call(
+                lambda sid: self.client.post(
+                    f"/api/session/{sid}/license", {**payload, "track_id": self.server_track_id(track.id)}
+                )
+            )
         finally:
             self.drain_server_logs()
         return base64.b64decode(resp["license"])

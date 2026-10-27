@@ -203,6 +203,8 @@ _WV.__name__ = "Widevine"
 
 def remote(local_cdm, answer):
     svc = RemoteService.__new__(RemoteService)
+    svc._track_alias = {}
+    svc._title_alias = {}
     svc._server_cdm = True
     svc._server_cdm_type = "playready"
     svc._session_id = "sess"

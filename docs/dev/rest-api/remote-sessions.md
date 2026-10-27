@@ -625,10 +625,14 @@ existing file as a directory, and logs a warning.
   "service": "EXAMPLE",
   "valid": true,
   "expires_in": 300,
+  "draining": false,
   "track_count": 12,
   "title_count": 40
 }
 ```
+
+`draining` is `true` after the operator starts a drain before a restart. The client reads
+it before each title, so it knows of the restart before it occurs.
 
 !!! warning "`expires_in` is the configured TTL, not time remaining"
     The `expires_in` value reports the store's configured `session_ttl`, not the
@@ -660,6 +664,26 @@ remote session API and a good template for any client.
   (merging returned `session_headers`/`session_cookie_jar`, re-parsing `manifests`) →
   get the licence in proxy mode or `server_cdm` mode → `close()` (`DELETE`, saving any returned
   `cache`).
+- **Server restarts.** The server keeps remote sessions in memory only, so a restart
+  loses them all. The client recovers in two ways:
+    - A drain announced through `draining`: the client finishes the current title, then
+      closes its remote session, so the drain can end and the refreshed cache comes back.
+      It waits until `/api/health` reports the restarted server without `draining`,
+      opens a new remote session, and continues with the next title.
+    - A lost remote session (`SESSION_NOT_FOUND`, a connection error, a timeout, a closed
+      tunnel or a gateway error page): the client waits for `/api/health`, then checks the
+      old remote session. A live remote session takes the call again only after a connection
+      error, because a timed-out call can already have run. A lost one is replaced: the
+      client opens a new remote session, sends `titles` and the current title's `tracks`
+      again, and then sends the failed call again. A title or track that the new remote
+      session gives another ID keeps its old ID on the client, and the client sends the
+      new ID. The client matches a title by season and episode number, and a track by its
+      attributes.
+
+    The client waits up to 30 minutes for the server, which covers a deploy's drain. It
+    stops with an error if the new remote session licenses differently from the old one,
+    for example after a change to the API key's `server_cdm` grant. An interactive login
+    asks for its input again.
 - **Server resolution.** `resolve_server()` reads `config.remote_services.<name>`
   into `{url, api_key, services, server_cdm}`, injecting the `server_cdm` flag into
   the services map as `_server_cdm`.

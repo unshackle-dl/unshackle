@@ -207,6 +207,9 @@ async def health(request: web.Request) -> web.Response:
                   type: string
                   nullable: true
                   example: "1d22a1e"
+                draining:
+                  type: boolean
+                  description: True while the server refuses new sessions before a restart
                 update_check:
                   type: object
                   properties:
@@ -230,8 +233,16 @@ async def health(request: web.Request) -> web.Response:
         log.warning(f"Failed to check for updates: {e}")
         update_info = {"update_available": None, "current_version": __version__, "latest_version": None}
 
+    from unshackle.core.api.session_store import get_session_store
+
     return web.json_response(
-        {"status": "ok", "version": __version__, "code_hash": __code_hash__ or None, "update_check": update_info}
+        {
+            "status": "ok",
+            "version": __version__,
+            "code_hash": __code_hash__ or None,
+            "draining": get_session_store().draining,
+            "update_check": update_info,
+        }
     )
 
 

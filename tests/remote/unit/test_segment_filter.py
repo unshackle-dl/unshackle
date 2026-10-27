@@ -61,6 +61,8 @@ async def test_handler_returns_null_without_a_filter(monkeypatch):
 
 def make_service(unwanted, status=200):
     service = RemoteService.__new__(RemoteService)
+    service._track_alias = {}
+    service._title_alias = {}
     service.client = RemoteClient(server_url="http://srv:8786", api_key="k")
     service._session_id = "s1"
     service._segment_filters = {}
