@@ -3018,7 +3018,7 @@ string form displays kb/s, and <code>--vbitrate</code> and <code>--abitrate</cod
 <h3 id="audio"><code>Audio</code><a class="headerlink" href="#audio" title="Permanent link">&para;</a></h3>
 <p><code>Audio</code> adds <code>bitrate</code>, <code>channels</code>, <code>joc</code> (Joint Object Coding, the Atmos indicator),
 and <code>descriptive</code>. <code>Audio.Codec</code> covers <code>AAC</code>, <code>AC3</code> (<code>DD</code>), <code>EC3</code> (<code>DD+</code>), <code>AC4</code>,
-<code>OPUS</code>, <code>OGG</code> (Vorbis), <code>DTS</code>, <code>DTSX</code>, <code>DTSHD</code>, <code>MPEGH</code>, <code>ALAC</code>, and <code>FLAC</code>. The <code>atmos</code> property is <code>True</code> when
+<code>OPUS</code>, <code>OGG</code> (Vorbis), <code>DTS</code>, <code>DTSX</code>, <code>DTSHD</code>, <code>MPEGH</code>, <code>ALAC</code>, <code>FLAC</code>, and <code>MP3</code>. The <code>atmos</code> property is <code>True</code> when
 <code>joc</code> is set (or when <code>extra</code> flags it).</p>
 <h3 id="subtitle"><code>Subtitle</code><a class="headerlink" href="#subtitle" title="Permanent link">&para;</a></h3>
 <p><code>Subtitle</code> adds three mutually-constrained flags: <code>cc</code> (closed captions), <code>sdh</code>
@@ -3120,7 +3120,7 @@ because HLS variants carry no language.</p>
 </ul>
 <h2 id="drm-hooks">DRM hooks<a class="headerlink" href="#drm-hooks" title="Permanent link">&para;</a></h2>
 <p>If a track carries DRM, the framework licenses and decrypts it, but it needs your
-service to talk to the platform's license server. unshackle recognizes five DRM systems:</p>
+service to talk to the platform's license server. unshackle recognizes six DRM systems:</p>
 <table>
 <thead>
 <tr>
@@ -3154,6 +3154,11 @@ service to talk to the platform's license server. unshackle recognizes five DRM 
 <td><code>MonaLisa</code></td>
 <td>Proprietary WASM DRM</td>
 <td>keys extracted locally; no license server</td>
+</tr>
+<tr>
+<td><code>BlowfishStripe</code></td>
+<td>Blowfish CBC stripe cipher</td>
+<td>the service gives the per-track key; no CDM, no license server</td>
 </tr>
 </tbody>
 </table>

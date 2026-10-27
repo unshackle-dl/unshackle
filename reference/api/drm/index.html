@@ -1932,6 +1932,45 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#unshackle.core.drm.BlowfishStripe" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;BlowfishStripe
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" BlowfishStripe">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#unshackle.core.drm.BlowfishStripe.decrypt_chunk" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;decrypt_chunk
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unshackle.core.drm.BlowfishStripe.decrypt" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;decrypt
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#unshackle.core.drm.ClearKey" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2781,6 +2820,45 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#unshackle.core.drm.BlowfishStripe" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;BlowfishStripe
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" BlowfishStripe">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#unshackle.core.drm.BlowfishStripe.decrypt_chunk" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;decrypt_chunk
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unshackle.core.drm.BlowfishStripe.decrypt" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;decrypt
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#unshackle.core.drm.ClearKey" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3626,6 +3704,94 @@ For configuring DRM as a user, see <a href="../../../guide/drm-and-cdm/">DRM &am
 
 
 
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="unshackle.core.drm.BlowfishStripe" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <span class="doc doc-object-name doc-class-name">BlowfishStripe</span>
+
+
+<a href="#unshackle.core.drm.BlowfishStripe" class="headerlink" title="Permanent link">&para;</a></h2>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">BlowfishStripe</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+
+
+        <p>Blowfish CBC stripe cipher: the service encrypts every third full 2048-byte chunk and leaves the rest clear.</p>
+<p>Each encrypted chunk is its own CBC run with a fixed IV. The service gives the content key, so there is no licence.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="unshackle.core.drm.BlowfishStripe.decrypt_chunk" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">decrypt_chunk</span>
+
+
+<a href="#unshackle.core.drm.BlowfishStripe.decrypt_chunk" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">decrypt_chunk</span><span class="p">(</span><span class="n">chunk</span><span class="p">)</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Decrypt one encrypted chunk.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="unshackle.core.drm.BlowfishStripe.decrypt" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">decrypt</span>
+
+
+<a href="#unshackle.core.drm.BlowfishStripe.decrypt" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">decrypt</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Decrypt the file to a new file that then replaces it. A short trailing chunk stays clear.</p>
+
+
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
 
 <div class="doc doc-object doc-class">
 

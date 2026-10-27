@@ -2622,7 +2622,7 @@ from the track, asks the CDM for a license challenge, sends that challenge to th
 service's license server, hands the response back to the CDM to extract the keys, and
 then decrypts the file with those keys.</p>
 <h2 id="supported-drm-systems">Supported DRM systems<a class="headerlink" href="#supported-drm-systems" title="Permanent link">&para;</a></h2>
-<p>unshackle implements five DRM systems. Only the first two need a device file and a
+<p>unshackle implements six DRM systems. Only the first two need a device file and a
 license-server handshake. The rest are special cases.</p>
 <table>
 <thead>
@@ -2663,6 +2663,12 @@ license-server handshake. The rest are special cases.</p>
 <td><code>.mld</code></td>
 <td>Ticket from the service API; keys extracted locally via WASM. No license server.</td>
 <td>ML-Worker binary + AES-ECB, per segment</td>
+</tr>
+<tr>
+<td><strong>Blowfish stripe</strong></td>
+<td>none</td>
+<td>The service gives the per-track key. No CDM, no license server.</td>
+<td>in-process Blowfish-CBC on every third 2048-byte chunk</td>
 </tr>
 </tbody>
 </table>
