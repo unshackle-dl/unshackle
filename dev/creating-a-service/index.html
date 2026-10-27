@@ -2884,6 +2884,27 @@ merge) and <code>--best-available</code> skip-on-error handling:</p>
 </span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">fetch_dash_manifest</span><span class="p">(</span><span class="n">title</span><span class="p">,</span> <span class="n">vcodec</span><span class="o">=</span><span class="n">vcodec</span><span class="p">,</span> <span class="n">range_</span><span class="o">=</span><span class="n">range_</span><span class="p">)</span>
 </span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_tracks_for_variants</span><span class="p">(</span><span class="n">title</span><span class="p">,</span> <span class="n">fetch_variant</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">What the helper merges</p>
+<p>The helper adds the video, audio and subtitle tracks of every manifest.
+From a later manifest, it skips a track that has the ID of a held track. It
+also skips a track whose <code>Tracks.signature</code> matches a held track, because
+the same track can have a different ID in each manifest. Chapters and
+attachments come from the first manifest only.</p>
+<ul>
+<li><code>signature</code> holds the attributes that the track list and selection
+  read: codec, range, resolution, frame rate, bitrate and name for video;
+  language, codec, channels, JOC, descriptive, bitrate and name for audio;
+  language, codec, flags and name for subtitles.</li>
+<li>The helper does not remove copies inside one manifest. To remove them,
+  call <code>tracks.dedupe()</code>. Two tracks that differ only in a value outside
+  the signature, such as a dialogue-boost mix, become one track, so remove the
+  track you do not want before you call it.</li>
+<li>The audio that <code>dl</code> selects can come from a different manifest than the
+  video. Keep licence data on each track (<code>track.data</code>), not in one value
+  per title that the next fetch overwrites.</li>
+</ul>
+</div>
 <p>After parsing, you may <strong>correct</strong> track metadata the manifest gets wrong:
 stamp the real <code>video.range</code>, fix odd audio channel counts, mark descriptive
 audio, add hand-built subtitles or an <code>Attachment</code> (e.g. cover art). Do <em>not</em>
@@ -3009,7 +3030,7 @@ flagged, banned, or downgraded.</p>
    <code>get_clearkey_license</code> to do the POST yourself.</li>
 <li><strong>Keys arrive obfuscated or through a bespoke channel</strong>: fetch and unwrap
    the content key in <code>get_tracks</code> and pre-populate
-   <code>drm.content_keys[kid] = key_hex</code> on the track's <code>ClearKeyCENC</code>. The
+   <code>drm.signatures[kid] = key_hex</code> on the track's <code>ClearKeyCENC</code>. The
    non-obvious payoff: when every KID is already keyed, the framework skips
    the license round-trip entirely.</li>
 </ol>
