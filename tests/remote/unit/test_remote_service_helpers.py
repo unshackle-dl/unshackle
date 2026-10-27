@@ -6,6 +6,7 @@ from enum import Enum
 
 import pytest
 
+from unshackle.core.api.handlers import serialize_video_track
 from unshackle.core.remote_service import (
     RemoteService,
     build_title,
@@ -50,6 +51,11 @@ def test_deserialize_video_minimal() -> None:
     assert v.width == 1920
     assert v.height == 1080
     assert v.range is Video.Range.SDR
+
+
+def test_a_dv_track_keeps_its_hdr10_base_label_over_remote() -> None:
+    v = Video(url="https://x/v.mp4", language="en", codec=Video.Codec.HEVC, range_=Video.Range.DV, hdr10_base=True)
+    assert deserialize_video(serialize_video_track(v)).range_label == "DV+HDR10"
 
 
 def test_deserialize_video_unknown_codec_falls_back_to_none() -> None:
@@ -624,6 +630,7 @@ def test_dl_selection_travels_nested_and_a_service_option_cannot_override_it() -
         "lang": ["orig", "es-419"],
         "v_lang": [],
         "a_lang": [],
+        "s_lang": ["ko"],
         "acodec": [Audio.Codec.EC3],
         "forced_subs": True,
         "exact_lang": True,
@@ -633,6 +640,7 @@ def test_dl_selection_travels_nested_and_a_service_option_cannot_override_it() -
         "lang": ["orig", "es-419"],
         "v_lang": [],
         "a_lang": [],
+        "s_lang": ["ko"],
         "acodec": ["EC3"],
         "forced_subs": True,
         "exact_lang": True,

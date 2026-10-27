@@ -1752,6 +1752,7 @@ def serialize_video_track(track: Video, include_url: bool = False) -> Dict[str, 
         "closed_captions": list(getattr(track, "closed_captions", None) or []),
         "dv_compatible_bitstream": bool(getattr(track, "dv_compatible_bitstream", False)),
         "hdr10plus": bool(getattr(track, "hdr10plus", False)),
+        "hdr10_base": bool(getattr(track, "hdr10_base", False)),
     }
     result.update(serialize_track_common(track))
     if include_url and hasattr(track, "url") and track.url:
@@ -3653,7 +3654,7 @@ def forwarded_dl_params(data: Dict[str, Any]) -> Dict[str, Any]:
         return None
 
     params: Dict[str, Any] = {}
-    for key in ("lang", "v_lang", "a_lang"):
+    for key in ("lang", "v_lang", "a_lang", "s_lang"):
         langs = str_list(key)
         params[key] = langs if langs is not None else list(cast(List[str], DEFAULT_DOWNLOAD_PARAMS[key]))
     # the dl CLI default is [], and some services test membership in it

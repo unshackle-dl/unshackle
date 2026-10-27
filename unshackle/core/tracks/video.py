@@ -237,6 +237,7 @@ class Video(Track):
         closed_captions: Optional[list[dict[str, Any]]] = None,
         dv_compatible_bitstream: bool = False,
         hdr10plus: bool = False,
+        hdr10_base: bool = False,
         **kwargs: Any,
     ) -> None:
         """
@@ -256,6 +257,7 @@ class Video(Track):
                 Strings may represent numbers, floats, or a fraction (num/den).
                 All strings will be cast to either a number or float.
             hdr10plus: The DV track also carries HDR10+ metadata. The HDR10+ probe sets it.
+            hdr10_base: The DV track has an HDR10 base layer, as DV profile 8.1 does.
 
         Note: If codec, bitrate, width, height, or fps is not specified, unshackle can
         skip some checks or assume a value. Give as much information as possible.
@@ -305,6 +307,7 @@ class Video(Track):
         self.needs_duration_fix = False
         self.dv_compatible_bitstream = dv_compatible_bitstream
         self.hdr10plus = hdr10plus
+        self.hdr10_base = hdr10_base
         self.hybrid_base_only = False
         self.native_hybrid = False
 
@@ -321,6 +324,7 @@ class Video(Track):
                 "scan_type": self.scan_type.name if self.scan_type else None,
                 "dv_compatible_bitstream": self.dv_compatible_bitstream,
                 "hdr10plus": self.hdr10plus,
+                "hdr10_base": self.hdr10_base,
             }
         )
         return data
@@ -339,6 +343,7 @@ class Video(Track):
             scan_type=Video.ScanType[data["scan_type"]] if data.get("scan_type") else None,
             dv_compatible_bitstream=data.get("dv_compatible_bitstream", False),
             hdr10plus=data.get("hdr10plus", False),
+            hdr10_base=data.get("hdr10_base", False),
         )
 
     @staticmethod
@@ -377,8 +382,8 @@ class Video(Track):
 
     @property
     def range_label(self) -> str:
-        """The range that ``-r`` selects the track by, then any second format it carries: HDR10+DV, DV+HDR10P."""
-        label = self.range.name + ("+HDR10P" if self.hdr10plus else "")
+        """The range that ``-r`` selects the track by, then any second format it carries: HDR10+DV, DV+HDR10, DV+HDR10P."""
+        label = self.range.name + ("+HDR10P" if self.hdr10plus else "+HDR10" if self.hdr10_base else "")
         return f"{label}+DV" if self.dv_compatible_bitstream and self.range != Video.Range.DV else label
 
     def __str__(self) -> str:

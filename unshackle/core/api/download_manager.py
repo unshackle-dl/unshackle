@@ -511,6 +511,7 @@ def perform_download(
         "lang": params.get("lang", ["orig"]),
         "v_lang": params.get("v_lang", []),
         "a_lang": params.get("a_lang", []),
+        "s_lang": params.get("s_lang", ["all"]),
         "forced_subs": params.get("forced_subs", False),
         "exact_lang": params.get("exact_lang", False),
         # dl skips the local service config and guards the proxy for a remote_services server

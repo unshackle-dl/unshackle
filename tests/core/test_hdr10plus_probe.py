@@ -215,3 +215,9 @@ def test_a_quoted_dl_workers_value_works_like_the_cli(monkeypatch: pytest.Monkey
     service = SimpleNamespace(get_tracks=lambda title: SimpleNamespace(videos=[hevc("v", 2160)]), session=None)
     monkeypatch.setitem(config.dl, "workers", "8")
     assert probe_calls(monkeypatch, service) == [8]
+
+
+def test_a_dv_track_with_an_hdr10_base_lists_as_dv_plus_hdr10() -> None:
+    video = Video(url="https://x/v.mp4", language="en", codec=Video.Codec.HEVC, range_=Video.Range.DV, hdr10_base=True)
+    assert "[H.265, DV+HDR10]" in str(video)
+    assert Video.from_dict(video.to_dict()).hdr10_base

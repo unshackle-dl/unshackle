@@ -287,6 +287,7 @@ def deserialize_video(data: Dict[str, Any]) -> Video:
         closed_captions=data.get("closed_captions") or None,
         dv_compatible_bitstream=bool(data.get("dv_compatible_bitstream", False)),
         hdr10plus=bool(data.get("hdr10plus", False)),
+        hdr10_base=bool(data.get("hdr10_base", False)),
     )
 
 
@@ -1329,7 +1330,7 @@ class RemoteService:
             params = self.ctx.parent.params
             dl_params: dict[str, Any] = {
                 key: [str(x) for x in params[key]]
-                for key in ("lang", "v_lang", "a_lang")
+                for key in ("lang", "v_lang", "a_lang", "s_lang")
                 if params.get(key) is not None
             }
             if params.get("acodec") is not None:

@@ -457,6 +457,7 @@ the API surface.
 Two DV mechanisms sit on top of the track model. **DV fixup** re-exposes DV signalling on
 HLS and DASH streams that carry a valid DV RPU but advertise plain HEVC, with DV only in the
 supplemental codecs (`dv_compatible_bitstream`). `--list` shows such a track as `HDR10+DV` or `HDR10P+DV`.
+A service sets `hdr10_base` on a DV track that has an HDR10 base layer (DV profile 8.1), and `--list` shows it as `DV+HDR10`.
 **Hybrid** processing (`Video.Range.HYBRID`) selects an HDR10(+) base and a DV donor,
 extracts the RPU with `dovi_tool`, and injects it onto the base layer, to make a single
 track that carries both HDR10 metadata and the DV RPU. Both are automatic once the

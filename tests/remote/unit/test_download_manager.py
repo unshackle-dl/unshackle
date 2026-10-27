@@ -192,17 +192,18 @@ class _CapturedCtx(Exception):
 @pytest.mark.parametrize(
     ("params", "expected"),
     [
-        ({}, (["orig"], [], [], [], False, False)),
+        ({}, (["orig"], [], [], ["all"], [], False, False)),
         (
             {
                 "lang": ["es-419"],
                 "v_lang": ["en"],
                 "a_lang": ["ja"],
+                "s_lang": ["ko"],
                 "acodec": "AAC,EC3",
                 "forced_subs": True,
                 "exact_lang": True,
             },
-            (["es-419"], ["en"], ["ja"], ["AAC", "EC3"], True, True),
+            (["es-419"], ["en"], ["ja"], ["ko"], ["AAC", "EC3"], True, True),
         ),
     ],
 )
@@ -231,7 +232,8 @@ def test_perform_download_puts_the_lang_selection_in_the_service_ctx(
 
     ctx = exc.value.args[0]
     p = ctx.params
-    selection = (p["lang"], p["v_lang"], p["a_lang"], [c.name for c in p["acodec"]], p["forced_subs"], p["exact_lang"])
+    acodec = [c.name for c in p["acodec"]]
+    selection = (p["lang"], p["v_lang"], p["a_lang"], p["s_lang"], acodec, p["forced_subs"], p["exact_lang"])
     assert selection == expected
 
 

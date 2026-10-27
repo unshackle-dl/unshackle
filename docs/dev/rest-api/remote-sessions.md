@@ -467,7 +467,7 @@ object the dashboard shows as sent), and the track-selection hints `range_`, `vc
 `quality`, `best_available`, `generate_dv`, plus arbitrary service CLI options
 (`additionalProperties: true`).
 
-`dl_params` holds the `dl` track selection: `lang`, `v_lang` and `a_lang`
+`dl_params` holds the `dl` track selection: `lang`, `v_lang`, `a_lang` and `s_lang`
 (arrays of language strings), `acodec` (an array of audio codec names, such as
 `EC3`), and `forced_subs` and `exact_lang` (booleans). The server gives these values to the
 service in `ctx.parent.params`, never as service options, so a service option
