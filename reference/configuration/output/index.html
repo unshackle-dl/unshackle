@@ -1158,6 +1158,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#codec_names" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        codec_names
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#tag_rules" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2037,6 +2048,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#codec_names" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        codec_names
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#tag_rules" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2185,6 +2207,29 @@ Use <code>{absolute?}</code> so the name stays clean when it is unknown.</p>
 </tr>
 </tbody>
 </table>
+<h2 id="codec_names"><code>codec_names</code><a class="headerlink" href="#codec_names" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Type:</strong> <code>dict</code> &nbsp;·&nbsp; <strong>Default:</strong> <code>{}</code></li>
+</ul>
+<p>Renames the codec and HDR names in the filename. Each map key is a name that unshackle writes by
+default, and its value is the name to write instead. The map applies to the <code>video</code>, <code>audio</code>,
+and <code>hdr</code> <a href="../../../guide/output-and-naming/#template-variables">template variables</a>, and so
+also to <code>audio_full</code>. A name that is not in the map stays as it is, and an empty value removes
+the name. You can also set <code>codec_names</code> for one service under <code>services</code>.</p>
+<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nt">codec_names</span><span class="p">:</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span><span class="nt">DDP</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">EAC3</span><span class="w">      </span><span class="c1"># DDP5.1  -&gt; EAC3.5.1</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">  </span><span class="nt">DD</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">AC3</span><span class="w">        </span><span class="c1"># DD5.1   -&gt; AC3.5.1</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">  </span><span class="nt">H.265</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">HEVC</span><span class="w">    </span><span class="c1"># H.265   -&gt; HEVC</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">  </span><span class="nt">HDR10P</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">HDR10+</span><span class="w"> </span><span class="c1"># DV.HDR10P -&gt; DV.HDR10+</span>
+</span></code></pre></div>
+<p>For <code>hdr</code>, unshackle renames each part of a Dolby Vision label separately, so <code>HDR10P</code> also
+changes <code>DV.HDR10P</code> to <code>DV.HDR10+</code>. When an audio name ends in a digit, <code>audio_full</code> puts a
+separator before the channels: <code>EAC3.5.1</code>, not <code>EAC35.1</code>.</p>
+<div class="admonition note">
+<p class="admonition-title"><code>tag_rules</code> see the new names</p>
+<p>unshackle evaluates <a href="#tag_rules"><code>tag_rules</code></a> after the rename. With the example above, a
+rule must match <code>audio: EAC3</code>, not <code>audio: DDP</code>.</p>
+</div>
 <h2 id="tag_rules"><code>tag_rules</code><a class="headerlink" href="#tag_rules" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong>Type:</strong> <code>list</code> &nbsp;·&nbsp; <strong>Default:</strong> <code>[]</code></li>
@@ -2192,11 +2237,11 @@ Use <code>{absolute?}</code> so the name stays clean when it is unknown.</p>
 <p>Conditionally replaces <a href="#tagging-naming-keys"><code>tag</code></a> for a given download. Each rule pairs a <code>when</code>
 dict of conditions with the <code>tag</code> to use when they hold. unshackle evaluates the rules in
 order and the first match wins. If no rule matches, the global <code>tag</code> stays.</p>
-<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nt">tag_rules</span><span class="p">:</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">when</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> title_type</span><span class="p">:</span><span class="w"> </span><span class="nv">movie</span><span class="p p-Indicator">,</span><span class="nt"> lang_tag</span><span class="p">:</span><span class="w"> </span><span class="nv">SUBBED</span><span class="w"> </span><span class="p p-Indicator">}</span>
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">    </span><span class="nt">tag</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">SUBMOVIES</span>
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">when</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> quality</span><span class="p">:</span><span class="w"> </span><span class="nv">2160p</span><span class="p p-Indicator">,</span><span class="nt"> hdr</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">DV</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">DV.HDR</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">DV.HDR10P</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">HDR</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">HDR10P</span><span class="p p-Indicator">]</span><span class="w"> </span><span class="p p-Indicator">}</span>
-</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">    </span><span class="nt">tag</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">UHDGROUP</span>
+<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nt">tag_rules</span><span class="p">:</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">when</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> title_type</span><span class="p">:</span><span class="w"> </span><span class="nv">movie</span><span class="p p-Indicator">,</span><span class="nt"> lang_tag</span><span class="p">:</span><span class="w"> </span><span class="nv">SUBBED</span><span class="w"> </span><span class="p p-Indicator">}</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">    </span><span class="nt">tag</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">SUBMOVIES</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">when</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> quality</span><span class="p">:</span><span class="w"> </span><span class="nv">2160p</span><span class="p p-Indicator">,</span><span class="nt"> hdr</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">DV</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">DV.HDR</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">DV.HDR10P</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">HDR</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">HDR10P</span><span class="p p-Indicator">]</span><span class="w"> </span><span class="p p-Indicator">}</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">    </span><span class="nt">tag</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">UHDGROUP</span>
 </span></code></pre></div>
 <p>Rule semantics:</p>
 <ul>
@@ -2225,13 +2270,13 @@ also that HDR10 gives <code>HDR</code>, not <code>HDR10</code>. The full set of 
 <h3 id="operators">Operators<a class="headerlink" href="#operators" title="Permanent link">&para;</a></h3>
 <p>A condition value can start with a comparison operator, which unshackle applies to the rest of
 the value:</p>
-<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nt">tag_rules</span><span class="p">:</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">when</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> resolution</span><span class="p">:</span><span class="w"> </span><span class="s">"&lt;1080"</span><span class="w"> </span><span class="p p-Indicator">}</span>
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">    </span><span class="nt">tag</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">SDGROUP</span>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">when</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> quality</span><span class="p">:</span><span class="w"> </span><span class="s">"&gt;=2160"</span><span class="w"> </span><span class="p p-Indicator">}</span>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">    </span><span class="nt">tag</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">UHDGROUP</span>
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">when</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> video</span><span class="p">:</span><span class="w"> </span><span class="s">"!=H.265"</span><span class="w"> </span><span class="p p-Indicator">}</span>
-</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="w">    </span><span class="nt">tag</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">AVCGROUP</span>
+<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nt">tag_rules</span><span class="p">:</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">when</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> resolution</span><span class="p">:</span><span class="w"> </span><span class="s">"&lt;1080"</span><span class="w"> </span><span class="p p-Indicator">}</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">    </span><span class="nt">tag</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">SDGROUP</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">when</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> quality</span><span class="p">:</span><span class="w"> </span><span class="s">"&gt;=2160"</span><span class="w"> </span><span class="p p-Indicator">}</span>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="w">    </span><span class="nt">tag</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">UHDGROUP</span>
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">when</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> video</span><span class="p">:</span><span class="w"> </span><span class="s">"!=H.265"</span><span class="w"> </span><span class="p p-Indicator">}</span>
+</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="w">    </span><span class="nt">tag</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">AVCGROUP</span>
 </span></code></pre></div>
 <ul>
 <li><code>&gt;</code>, <code>&lt;</code>, <code>&gt;=</code>, <code>&lt;=</code> compare numbers. unshackle reads the first number out of the actual
@@ -2263,11 +2308,11 @@ true. Give a negation as a single value, not as a list entry.</p>
 </div>
 <p><code>title_type</code> is the media kind of the title: <code>movie</code>, <code>series</code>, or <code>music</code>. It is useful to
 give each kind its own group:</p>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nt">tag_rules</span><span class="p">:</span>
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">when</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> title_type</span><span class="p">:</span><span class="w"> </span><span class="nv">movie</span><span class="w"> </span><span class="p p-Indicator">}</span>
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">    </span><span class="nt">tag</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">MOVIEGRP</span>
-</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">when</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> title_type</span><span class="p">:</span><span class="w"> </span><span class="nv">series</span><span class="w"> </span><span class="p p-Indicator">}</span>
-</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="w">    </span><span class="nt">tag</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">TVGRP</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nt">tag_rules</span><span class="p">:</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">when</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> title_type</span><span class="p">:</span><span class="w"> </span><span class="nv">movie</span><span class="w"> </span><span class="p p-Indicator">}</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">    </span><span class="nt">tag</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">MOVIEGRP</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">when</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> title_type</span><span class="p">:</span><span class="w"> </span><span class="nv">series</span><span class="w"> </span><span class="p p-Indicator">}</span>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">    </span><span class="nt">tag</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">TVGRP</span>
 </span></code></pre></div>
 <p>The resolved tag applies to the <code>{tag}</code> filename variable only. The <code>Group</code> metadata tag
 written into MKV and music files always uses <a href="#tagging-naming-keys"><code>tag</code></a>.</p>
