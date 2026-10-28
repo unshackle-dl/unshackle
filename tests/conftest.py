@@ -46,6 +46,12 @@ def default_muxing(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(config, "muxing", {})
 
 
+@pytest.fixture(autouse=True)
+def default_codec_names(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Name codecs with the built-in labels, whatever codec_names the local unshackle.yaml sets."""
+    monkeypatch.setattr(config, "codec_names", {})
+
+
 @pytest.fixture
 def mux_args(monkeypatch: pytest.MonkeyPatch) -> Callable[..., list[str]]:
     """Run Tracks.mux up to mkvmerge and return its arguments; ``ids`` is what the track ID probe reports."""

@@ -16,6 +16,12 @@ from unshackle.core.constants import (
 from unshackle.core.tracks import Tracks
 
 
+def rename(name: Optional[str]) -> str:
+    """Return the user's `codec_names` override for a filename label, read here so per-service overrides are covered."""
+    value = config.codec_names.get(name, name) if name else name
+    return "" if value is None else str(value)
+
+
 class Title:
     def __init__(
         self, id_: Any, service: type, language: Optional[Union[str, Language]] = None, data: Optional[Any] = None
@@ -147,7 +153,7 @@ class Title:
                 {
                     "quality": f"{resolution}{scan_suffix}",
                     "resolution": str(resolution),
-                    "video": VIDEO_CODEC_MAP.get(primary_video_track.format, primary_video_track.format),
+                    "video": rename(VIDEO_CODEC_MAP.get(primary_video_track.format, primary_video_track.format)),
                 }
             )
 
@@ -167,6 +173,7 @@ class Title:
                 context["hdr"] = "HLG"
             else:
                 context["hdr"] = ""
+            context["hdr"] = ".".join(filter(None, map(rename, context["hdr"].split("."))))
 
             frame_rate = float(primary_video_track.frame_rate) if primary_video_track.frame_rate else 0.0
             context["hfr"] = "HFR" if frame_rate > 30 else ""
@@ -191,8 +198,9 @@ class Title:
                 channels_str = f"{len(positions) - heights - lfe}.{lfe}.{heights}"
             else:
                 channels_str = f"{channels:.1f}"
-            audio = AUDIO_CODEC_MAP.get(codec, codec)
-            spacer = " " if audio in SPACED_AUDIO_CODECS else ""
+            builtin = AUDIO_CODEC_MAP.get(codec, codec)
+            audio = rename(builtin)
+            spacer = " " if builtin in SPACED_AUDIO_CODECS or audio[-1:].isdigit() else ""
 
             context.update(
                 {

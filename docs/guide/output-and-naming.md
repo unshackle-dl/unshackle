@@ -163,9 +163,9 @@ For custom templates there is also a standalone [`{part}`](../reference/configur
 
 | Variable | Meaning | Example |
 |---|---|---|
-| `audio` | Audio codec | `DDP`, `DD`, `AAC`, `DTS-X` |
+| `audio` | Audio codec; rename it with [`codec_names`](../reference/configuration/output.md#codec_names) | `DDP`, `DD`, `AAC`, `DTS-X` |
 | `audio_channels` | Channel layout; bed.LFE.heights when the track has height channels | `5.1`, `2.0`, `5.1.4` |
-| `audio_full` | Codec + channels combined | `DDP5.1`, `DTS-X.5.1.4` |
+| `audio_full` | Codec + channels combined; a name that ends in a digit gets a separator | `DDP5.1`, `DTS-X.5.1.4`, `AC-4.2.0` |
 | `atmos` | `Atmos` when any track carries JOC | `Atmos` |
 | `dual` | `DUAL` for two audio languages (see [`dual_multi_mode`](../reference/configuration/download.md#dual_multi_mode)) | `DUAL` |
 | `multi` | `MULTi` for more than two audio languages | `MULTi` |

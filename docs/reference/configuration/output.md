@@ -69,6 +69,32 @@ folder-kind keys.
 | `chapter_fallback_name` | str | `""` | Fallback template for chapter names, e.g. `"Chapter {i:02}"`. |
 | `unicode_filenames` | bool | `false` | Allow Unicode in filenames; when `false`, names are ASCII-sanitised. |
 
+## `codec_names`
+
+- **Type:** `dict` &nbsp;·&nbsp; **Default:** `{}`
+
+Renames the codec and HDR names in the filename. Each map key is a name that unshackle writes by
+default, and its value is the name to write instead. The map applies to the `video`, `audio`,
+and `hdr` [template variables](../../guide/output-and-naming.md#template-variables), and so
+also to `audio_full`. A name that is not in the map stays as it is, and an empty value removes
+the name. You can also set `codec_names` for one service under `services`.
+
+```yaml title="unshackle.yaml"
+codec_names:
+  DDP: EAC3      # DDP5.1  -> EAC3.5.1
+  DD: AC3        # DD5.1   -> AC3.5.1
+  H.265: HEVC    # H.265   -> HEVC
+  HDR10P: HDR10+ # DV.HDR10P -> DV.HDR10+
+```
+
+For `hdr`, unshackle renames each part of a Dolby Vision label separately, so `HDR10P` also
+changes `DV.HDR10P` to `DV.HDR10+`. When an audio name ends in a digit, `audio_full` puts a
+separator before the channels: `EAC3.5.1`, not `EAC35.1`.
+
+!!! note "`tag_rules` see the new names"
+    unshackle evaluates [`tag_rules`](#tag_rules) after the rename. With the example above, a
+    rule must match `audio: EAC3`, not `audio: DDP`.
+
 ## `tag_rules`
 
 - **Type:** `list` &nbsp;·&nbsp; **Default:** `[]`

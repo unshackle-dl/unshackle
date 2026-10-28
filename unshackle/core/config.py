@@ -199,6 +199,9 @@ class Config:
 
         self.language_tags: dict = kwargs.get("language_tags") or {}
         self.tag_rules: list = kwargs.get("tag_rules") or []
+        self.codec_names: dict = kwargs.get("codec_names") or {}
+        if not isinstance(self.codec_names, dict):
+            raise SystemExit(f"ERROR: codec_names must be a mapping, not {self.codec_names!r}")
         self.dual_multi_mode: str = (kwargs.get("dual_multi_mode") or "strict").lower()
         self.generate_dv_mode: str = str(kwargs.get("generate_dv_mode") or "v29").lower()
         self.hdr10plus_probe: bool = kwargs.get("hdr10plus_probe", True)
