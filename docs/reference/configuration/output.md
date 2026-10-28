@@ -91,6 +91,9 @@ For `hdr`, unshackle renames each part of a Dolby Vision label separately, so `H
 changes `DV.HDR10P` to `DV.HDR10+`. When an audio name ends in a digit, `audio_full` puts a
 separator before the channels: `EAC3.5.1`, not `EAC35.1`.
 
+The REST API fields `codec_display` and `range_display` use the same names and the same map.
+The `dl --export` file name does not use `codec_names`.
+
 !!! note "`tag_rules` see the new names"
     unshackle evaluates [`tag_rules`](#tag_rules) after the rename. With the example above, a
     rule must match `audio: EAC3`, not `audio: DDP`.

@@ -333,10 +333,10 @@ When you give both `season` and `episode`, the server combines them into a `"{se
       "title": { "type": "movie", "name": "Example Movie", "id": "12345", "year": 2021 },
       "video": [
         {
-          "id": "v-1", "codec": "H265", "codec_display": "HEVC",
+          "id": "v-1", "codec": "HEVC", "codec_display": "H.265",
           "bitrate": 8000, "bitrate_bps": 8000000, "width": 3840, "height": 2160,
           "resolution": "2160p", "fps": "24", "range": "HDR10",
-          "range_display": "HDR10", "scan_type": null, "closed_captions": [],
+          "range_display": "HDR", "scan_type": null, "closed_captions": [],
           "dv_compatible_bitstream": false, "hdr10plus": false, "hdr10_base": false, "language": "en",
           "is_original_lang": true,
           "name": null, "track_name": "English", "needs_repack": false, "edition": [], "data": null,
@@ -345,7 +345,7 @@ When you give both `season` and `episode`, the server combines them into a `"{se
       ],
       "audio": [
         {
-          "id": "a-1", "codec": "EC3", "codec_display": "DD+",
+          "id": "a-1", "codec": "EC3", "codec_display": "DDP",
           "bitrate": 640, "bitrate_bps": 640000, "channels": "5.1", "language": "en",
           "is_original": true, "is_original_lang": true, "atmos": false, "joc": 0,
           "descriptive": false, "name": null, "track_name": "English", "needs_repack": false, "edition": [],

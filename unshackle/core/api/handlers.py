@@ -37,6 +37,7 @@ from unshackle.core.services import Services
 from unshackle.core.session import RnetSession, utf8_text
 from unshackle.core.titles import Episode, Movie, Song, Title_T
 from unshackle.core.titles.music import SONG_FIELDS
+from unshackle.core.titles.title import rename
 from unshackle.core.tracks import Audio, Subtitle, Tracks, Video
 from unshackle.core.tunnel import HEARTBEAT, MAX_MESSAGE, MAX_TUNNELS, TUNNELS, Tunnel, tunnel_proxy
 from unshackle.core.utilities import declared_kwargs, kind_only_conflict, original_tag
@@ -1734,12 +1735,13 @@ def serialize_track_common(track: Any) -> Dict[str, Any]:
 def serialize_video_track(track: Video, include_url: bool = False) -> Dict[str, Any]:
     """Convert video track to JSON-serializable dict."""
     codec_name = enum_name(track.codec)
+    codec_value = track.codec.value if track.codec else codec_name
     range_name = enum_name(track.range)
 
     result = {
         "id": str(track.id),
         "codec": codec_name,
-        "codec_display": VIDEO_CODEC_MAP.get(codec_name, codec_name),
+        "codec_display": rename(VIDEO_CODEC_MAP.get(codec_name, codec_value)),
         "bitrate": int(track.bitrate / 1000) if track.bitrate else None,
         "bitrate_bps": track.bitrate or None,
         "width": track.width,
@@ -1747,7 +1749,7 @@ def serialize_video_track(track: Video, include_url: bool = False) -> Dict[str, 
         "resolution": f"{track.width}x{track.height}" if track.width and track.height else None,
         "fps": track.fps if track.fps else None,
         "range": range_name,
-        "range_display": DYNAMIC_RANGE_MAP.get(track.range_label, track.range_label),
+        "range_display": "+".join(rename(DYNAMIC_RANGE_MAP.get(p, p)) for p in track.range_label.split("+")),
         "scan_type": enum_name(track.scan_type) if track.scan_type else None,
         "closed_captions": list(getattr(track, "closed_captions", None) or []),
         "dv_compatible_bitstream": bool(getattr(track, "dv_compatible_bitstream", False)),
@@ -1779,11 +1781,12 @@ def serialize_audio_track(track: Audio, include_url: bool = False, is_original: 
     track 'orig' would download.
     """
     codec_name = enum_name(track.codec)
+    codec_value = track.codec.value if track.codec else codec_name
 
     result = {
         "id": str(track.id),
         "codec": codec_name,
-        "codec_display": AUDIO_CODEC_MAP.get(codec_name, codec_name),
+        "codec_display": rename(AUDIO_CODEC_MAP.get(codec_value, codec_value)),
         "bitrate": int(track.bitrate / 1000) if track.bitrate else None,
         "bitrate_bps": track.bitrate or None,
         "channels": track.channels if track.channels else None,

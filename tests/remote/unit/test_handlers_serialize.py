@@ -22,6 +22,7 @@ from unshackle.core.api.handlers import (
     validate_download_parameters,
     validate_service,
 )
+from unshackle.core.config import config
 from unshackle.core.titles.episode import Episode
 from unshackle.core.titles.movie import Movie
 from unshackle.core.tracks import Audio, Subtitle, Video
@@ -170,6 +171,22 @@ def test_serialize_video_track_basic() -> None:
     assert d["language"] == "en"
     assert d["drm"] is None
     assert "url" not in d
+
+
+def test_display_labels_match_the_filename_labels(monkeypatch: pytest.MonkeyPatch) -> None:
+    """codec_display and range_display use the filename names, after any codec_names override."""
+    hevc = video(codec=Video.Codec.HEVC, range_=Video.Range.DV)
+    hevc.hdr10_base = True
+    assert serialize_audio_track(audio(codec=Audio.Codec.EC3))["codec_display"] == "DDP"
+    assert (serialize_video_track(hevc)["codec_display"], serialize_video_track(hevc)["range_display"]) == (
+        "H.265",
+        "DV+HDR",
+    )
+    assert serialize_video_track(video(codec=Video.Codec.VC1))["codec_display"] == "VC-1"
+
+    monkeypatch.setattr(config, "codec_names", {"DDP": "EAC3", "H.265": "HEVC"})
+    assert serialize_audio_track(audio(codec=Audio.Codec.EC3))["codec_display"] == "EAC3"
+    assert serialize_video_track(hevc)["codec_display"] == "HEVC"
 
 
 def test_serialize_video_track_include_url() -> None:
