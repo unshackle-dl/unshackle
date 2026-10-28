@@ -2225,6 +2225,8 @@ the name. You can also set <code>codec_names</code> for one service under <code>
 <p>For <code>hdr</code>, unshackle renames each part of a Dolby Vision label separately, so <code>HDR10P</code> also
 changes <code>DV.HDR10P</code> to <code>DV.HDR10+</code>. When an audio name ends in a digit, <code>audio_full</code> puts a
 separator before the channels: <code>EAC3.5.1</code>, not <code>EAC35.1</code>.</p>
+<p>The REST API fields <code>codec_display</code> and <code>range_display</code> use the same names and the same map.
+The <code>dl --export</code> file name does not use <code>codec_names</code>.</p>
 <div class="admonition note">
 <p class="admonition-title"><code>tag_rules</code> see the new names</p>
 <p>unshackle evaluates <a href="#tag_rules"><code>tag_rules</code></a> after the rename. With the example above, a
