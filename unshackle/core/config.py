@@ -30,6 +30,7 @@ LANGUAGE_KEYS = frozenset(
         "default_language",
         "video",
         "audio",
+        "audio_contain_all",
         "subtitle",
         "subs_contain",
         "subs_contain_all",

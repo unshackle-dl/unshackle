@@ -26,6 +26,8 @@ language_tags:
   rules:
     - audio: no
       tag: NORDIC
+    - audio_contain_all: [no, da]
+      tag: NORDIC2
 update_checks: no
 """
 
@@ -55,6 +57,10 @@ def test_a_real_boolean_option_stays_false(tmp_path: Path) -> None:
 def test_a_no_rule_tags_a_norwegian_track(tmp_path: Path) -> None:
     rules = _load(tmp_path).language_tags["rules"]
     assert evaluate_language_tag(rules, [Language.get("no")], []) == "NORDIC"
+
+
+def test_a_no_entry_survives_in_an_audio_contain_all_list(tmp_path: Path) -> None:
+    assert _load(tmp_path).language_tags["rules"][1]["audio_contain_all"] == ["no", "da"]
 
 
 def test_tag_rules_keep_their_own_booleans(tmp_path: Path) -> None:

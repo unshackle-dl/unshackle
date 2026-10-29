@@ -312,17 +312,18 @@ Language-tag remapping and the rule engine behind the `{lang_tag}` filename vari
 | Condition | Meaning |
 |-----------|---------|
 | `audio` | At least one audio language matches. |
+| `audio_contain_all` | Every listed language must be present in the audio. |
 | `subs_contain` | At least one subtitle language matches. |
-| `subs_contain_all` | Every listed language must be present. |
+| `subs_contain_all` | Every listed language must be present in the subtitles. |
 | `dual` / `multi` / `dubbed` | `true` matches when that filename variable is set, `false` when it is not. |
 
 Each language condition takes one language tag or a list of them. A list matches when **any**
-entry matches, except `subs_contain_all`, which needs them all. An entry that is not a valid
-language tag (for example `japanese`) never matches. A tag with a region matches only that
-variant, so `audio: es-419` does not match `es-ES` audio. `dual`, `multi` and `dubbed` take a bare
-`true` or `false`, not a quoted string. unshackle skips a rule with a condition name it does
-not know, or with any other value in a boolean condition. It logs a warning in each of these
-cases and tries the next rule.
+entry matches, except `audio_contain_all` and `subs_contain_all`, which need them all. An empty
+list never matches. An entry that is not a valid language tag (for example `japanese`) never
+matches. A tag with a region matches only that variant, so `audio: es-419` does not match
+`es-ES` audio. `dual`, `multi` and `dubbed` take a bare `true` or `false`, not a quoted string.
+unshackle skips a rule with a condition name it does not know, or with any other value in a
+boolean condition. It logs a warning in each of these cases and tries the next rule.
 
 `dual`, `multi` and `dubbed` carry the same meaning as the
 [filename variables of those names](#dual_multi_mode). Pair one with a language to name a
@@ -342,6 +343,24 @@ language_tags:
       dual: true
       tag: "THAIDUAL"
 ```
+
+unshackle examines the rules in order, so put a rule that needs more languages before a rule that
+needs fewer. Here, a release with both French dubs gets `VF2`, not `VFQ`:
+
+```yaml
+language_tags:
+  rules:
+    - audio_contain_all: [fr-FR, fr-CA]
+      tag: "VF2"
+    - audio: fr-CA
+      tag: "VFQ"
+    - audio: fr-FR
+      tag: "VFF"
+```
+
+!!! tip "Give regional tags in an `_all` list"
+    A tag without a region also matches a regional track, so one `fr-CA` track satisfies both
+    entries of `[fr, fr-CA]`. Use `[fr-FR, fr-CA]` to require two different tracks.
 
 !!! note "Put `{lang_tag}` where you want the name"
     These rules fill `{lang_tag}`. To use your own name in place of the fixed text, keep

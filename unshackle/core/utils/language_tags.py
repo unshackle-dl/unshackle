@@ -14,7 +14,13 @@ log = logging.getLogger(__name__)
 
 # Conditions that test a filename variable of the same name rather than a language.
 STATE_CONDITIONS = ("dual", "multi", "dubbed")
-LANGUAGE_CONDITIONS = ("audio", "subs_contain", "subs_contain_all")
+# Each language condition: whether it tests the subtitles, and whether any or all of its entries must match.
+LANGUAGE_CONDITIONS = {
+    "audio": (False, any),
+    "audio_contain_all": (False, all),
+    "subs_contain": (True, any),
+    "subs_contain_all": (True, all),
+}
 
 
 def evaluate_language_tag(
@@ -73,23 +79,13 @@ def rule_matches(
 
     has_condition = False
 
-    audio_lang = rule.get("audio")
-    if audio_lang is not None:
-        has_condition = True
-        if not any(_matches(lang, audio_languages) for lang in _as_list(audio_lang)):
-            return False
-
-    subs_contain = rule.get("subs_contain")
-    if subs_contain is not None:
-        has_condition = True
-        if not any(_matches(lang, subtitle_languages) for lang in _as_list(subs_contain)):
-            return False
-
-    subs_contain_all = rule.get("subs_contain_all")
-    if subs_contain_all is not None:
-        has_condition = True
-        for lang in _as_list(subs_contain_all):
-            if not _matches(lang, subtitle_languages):
+    for name, (subs, quantifier) in LANGUAGE_CONDITIONS.items():
+        wanted = rule.get(name)
+        if wanted is not None:
+            has_condition = True
+            wanted_langs = _as_list(wanted)
+            languages = subtitle_languages if subs else audio_languages
+            if not wanted_langs or not quantifier(_matches(lang, languages) for lang in wanted_langs):
                 return False
 
     for name in STATE_CONDITIONS:
