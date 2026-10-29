@@ -15,7 +15,7 @@ from datetime import date as date_
 from functools import partial
 from http.cookiejar import CookieJar
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterable, List, Optional, cast
+from typing import Any, Callable, Dict, Iterable, List, Optional, Set, cast
 
 import click
 from aiohttp import web
@@ -1088,6 +1088,8 @@ def live_licence_refusal(session: Any, track: Any) -> Optional[APIError]:
 
 
 _account_counters: Dict[str, int] = {}
+# the event loop holds only weak references to tasks, so a running login task needs a strong one
+_auth_tasks: Set["asyncio.Task[None]"] = set()
 
 
 def validate_server_accounts() -> Dict[str, Any]:
@@ -1885,6 +1887,14 @@ async def search_handler(data: Dict[str, Any], request: Optional[web.Request] = 
     try:
         results = await asyncio.to_thread(run_service_search, data, normalized_service, query, request, request_cache)
         return request_cache.json_response({"results": results, "count": len(results)})
+    except APIError:
+        raise
+    except (Exception, SystemExit) as e:
+        log.exception("Error searching")
+        debug_mode = request.app.get("debug_api", False) if request else False
+        return handle_api_exception(
+            e, context={"operation": "search", "service": normalized_service}, debug_mode=debug_mode
+        )
     finally:
         request_cache.cleanup()
 
@@ -3987,7 +3997,9 @@ async def session_create_handler(data: Dict[str, Any], request: Optional[web.Req
                 if store.peek(session_id) is not session:
                     SessionStore.cleanup_cache_dir(session_cache_tag)
 
-        asyncio.create_task(run_auth())
+        auth_task = asyncio.create_task(run_auth())
+        _auth_tasks.add(auth_task)
+        auth_task.add_done_callback(_auth_tasks.discard)
 
         return web.json_response(
             {
@@ -4173,7 +4185,7 @@ async def session_tracks_handler(
             try:
                 chapters = await asyncio.to_thread(service_instance.get_chapters, title)
                 session.chapters_by_title[str(title_id)] = chapters if chapters else []
-            except (NotImplementedError, Exception):
+            except (Exception, SystemExit):
                 session.chapters_by_title[str(title_id)] = []
 
             video_tracks = sorted(tracks.videos, key=lambda t: t.bitrate or 0, reverse=True)
@@ -5271,14 +5283,14 @@ async def session_samples_handler(
             details={"track_id": track_id, "session_id": session_id},
         )
     service = session.service_instance
-    if not service.decrypts_samples(track):
-        raise APIError(APIErrorCode.INVALID_INPUT, f"The service does not decrypt the samples of track {track_id}")
     if not server_cdm_allowed(request, session.service_tag):
         raise APIError(
             APIErrorCode.FORBIDDEN, f"This API key may not decrypt {session.service_tag} samples on the server"
         )
 
     def run() -> web.Response:
+        if not service.decrypts_samples(track):
+            raise APIError(APIErrorCode.INVALID_INPUT, f"The service does not decrypt the samples of track {track_id}")
         decrypter = service.get_sample_decrypter(track, index)
         if isinstance(decrypter, (bytes, bytearray)):
             return web.json_response({"key": bytes(decrypter).hex()})

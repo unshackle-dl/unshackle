@@ -127,7 +127,7 @@ while the server restarts.
 | `TRACK_NOT_FOUND` | 404 | A referenced track ID is not present in the remote session. |
 | `CONFLICT` | 409 | The target resource is in a state that disallows the action (retrying a running job, prioritising a non-queued job, clearing cache during an active download). |
 | `SERVER_DRAINING` | 409 | The server is about to restart and starts no new remote session or download job. Open work continues. Retryable after the restart. A `dl --remote` client waits for the restart and opens a new remote session. |
-| `SERVICE_ERROR` | 422 | The streaming service's API returned an error, or the service does not support the requested operation. |
+| `SERVICE_ERROR` | 422 | The streaming service's API returned an error, or the service does not support the requested operation, or the service code exited (`sys.exit`). |
 | `DRM_ERROR` | 422 | DRM or license acquisition failed. |
 | `RATE_LIMITED` | 429 | The streaming service is rate-limiting requests. Retryable. |
 

@@ -216,3 +216,9 @@ async def test_outer_middleware_never_answers_5xx(aiohttp_client) -> None:
     resp = await client.get("/subapp")
     assert resp.status == 422 and (await resp.json())["message"] == "device error"
     assert (await client.get("/missing")).status == 404
+
+
+def test_categorize_system_exit_is_a_service_error() -> None:
+    err = categorize_exception(SystemExit(1), {"service": "EXAMPLE"})
+    assert err.error_code == APIErrorCode.SERVICE_ERROR
+    assert err.message == "Service EXAMPLE exited"

@@ -11,7 +11,13 @@ from aiohttp_swagger3 import SwaggerDocs, SwaggerInfo, SwaggerUiSettings
 
 from unshackle.core import __code_hash__, __version__
 from unshackle.core import services as services_module
-from unshackle.core.api.errors import APIError, APIErrorCode, build_error_response, handle_api_exception
+from unshackle.core.api.errors import (
+    APIError,
+    APIErrorCode,
+    build_error_response,
+    categorize_exception,
+    handle_api_exception,
+)
 from unshackle.core.api.handlers import (
     CORS_HEADERS,
     DASHBOARD_EVENTS_ROUTE,
@@ -104,12 +110,13 @@ async def no_5xx_middleware(
     """Answer an uncaught exception or any unsent 5xx (a CDM subapplication's own) as a 422; see errors.py."""
     try:
         response = await handler(request)
-    except Exception as e:
+    except (Exception, SystemExit) as e:
         if isinstance(e, web.HTTPException) and e.status < 500:
             raise
         # the exception text can hold a caller's key, so the answer gets a generic message
         log.exception(f"Unhandled error in {sanitize_log(request.path)}")
-        response = build_error_response(APIError(APIErrorCode.INTERNAL_ERROR, "Internal server error"))
+        error = categorize_exception(e) if isinstance(e, SystemExit) else None
+        response = build_error_response(error or APIError(APIErrorCode.INTERNAL_ERROR, "Internal server error"))
     if response.status >= 500 and not response.prepared:
         response.set_status(APIError.default_http_status(APIErrorCode.INTERNAL_ERROR))
     return response
@@ -147,9 +154,17 @@ def heartbeat(handler: Handler) -> Handler:
     work continues if the client disconnects, so the remote session state stays complete.
     """
 
+    async def guarded(request: web.Request) -> web.StreamResponse:
+        # a SystemExit leaving any task is re-raised into the event loop, so it must stop inside the task
+        try:
+            return await handler(request)
+        except SystemExit as e:
+            log.exception(f"Service exited in {sanitize_log(request.path)}")
+            raise categorize_exception(e) from e
+
     @functools.wraps(handler)
     async def wrapper(request: web.Request) -> web.StreamResponse:
-        task = asyncio.ensure_future(handler(request))
+        task = asyncio.ensure_future(guarded(request))
         done, _ = await asyncio.wait({task}, timeout=HEARTBEAT_INTERVAL)
         if done:
             return task.result()

@@ -179,7 +179,7 @@ def build_error_response(
 
 
 def categorize_exception(
-    exc: Exception,
+    exc: BaseException,
     context: dict[str, Any] | None = None,
 ) -> APIError:
     """
@@ -196,6 +196,14 @@ def categorize_exception(
         APIError with appropriate error code and details
     """
     context = context or {}
+    if isinstance(exc, SystemExit):
+        exited = f"Service {context['service']} exited" if context.get("service") else "Service exited"
+        return APIError(
+            error_code=APIErrorCode.SERVICE_ERROR,
+            message=redact_secrets(getattr(exc, "message", None)) or exited,
+            details={**context, "reason": "service_exit"},
+            retryable=False,
+        )
     root = exc.__cause__ or exc
     exc_str = f"{exc} {root}".lower()
     exc_type = type(root).__name__
@@ -296,7 +304,7 @@ def categorize_exception(
 
 
 def handle_api_exception(
-    exc: Exception,
+    exc: BaseException,
     context: dict[str, Any] | None = None,
     debug_mode: bool = False,
     extra_debug_info: dict[str, Any] | None = None,

@@ -121,3 +121,11 @@ def test_overdue_staged_service_applies_while_busy(service_dir: Path, monkeypatc
     assert services.apply_pending(busy={"FOO"}) == ["FOO"]
     assert services.MODULES["FOO"].VERSION == 2
     assert services.PENDING == set() and "FOO" not in services.PENDING_SINCE
+
+
+def test_service_that_exits_on_import_fails_its_reload_only(service_dir: Path):
+    """A service calling sys.exit at import time is a load error, not a stop of the process."""
+    (service_dir / "FOO" / "__init__.py").write_text("import sys\nsys.exit(1)\n")
+    os.utime(service_dir / "FOO" / "__init__.py", (time.time() + 9, time.time() + 9))
+    services.reload_services(["FOO"])
+    assert services.LOAD_ERRORS and services.LOAD_ERRORS[-1].startswith("FOO: failed to import - SystemExit")

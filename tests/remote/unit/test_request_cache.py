@@ -4,8 +4,10 @@ The directory holds only what the client sent, goes back to the client when it l
 itself, and is always removed when the request ends.
 """
 
+import asyncio
 import base64
 import json
+import types
 import zlib
 
 import click
@@ -124,6 +126,17 @@ async def test_cache_dir_removed_on_error(seen, tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_search_answers_a_service_sys_exit_with_an_error(seen, tmp_path, monkeypatch):
+    def search(self):
+        raise SystemExit(1)
+
+    monkeypatch.setattr(_CacheService, "search", search)
+    response = await handlers.search_handler({"service": "EXAMPLE", "query": "q"})
+    assert json.loads(response.body)["error_code"] == "SERVICE_ERROR"
+    assert not request_dirs(tmp_path)
+
+
+@pytest.mark.asyncio
 async def test_invalid_client_cache_still_removes_the_dir(seen, tmp_path):
     data = {"service": "EXAMPLE", "query": "q", "cache": {"tokens": 1}}
     with pytest.raises(handlers.APIError):
@@ -192,3 +205,24 @@ async def test_list_tracks_service_sees_dl_params(seen):
 async def test_search_service_gets_no_dl_params(seen):
     await handlers.search_handler({"service": "EXAMPLE", "query": "q", "dl_params": {"a_lang": ["es-419"]}})
     assert "a_lang" not in seen["parent_params"]
+
+
+@pytest.mark.asyncio
+async def test_samples_answers_a_service_exit_in_decrypts_samples(monkeypatch):
+    class Service:
+        def decrypts_samples(self, track):
+            raise SystemExit(1)
+
+    session = types.SimpleNamespace(
+        tracks={"t": object()}, service_instance=Service(), service_tag="EXAMPLE", lock=asyncio.Lock()
+    )
+
+    async def get_session(session_id, request=None):
+        return session
+
+    monkeypatch.setattr(handlers, "get_validated_session", get_session)
+    monkeypatch.setattr(handlers, "require_authenticated", lambda s: None)
+    monkeypatch.setattr(handlers, "server_cdm_allowed", lambda request, tag: True)
+    with pytest.raises(handlers.APIError) as e:
+        await handlers.session_samples_handler("sid", "t", "1", b"")
+    assert e.value.error_code.value == "SERVICE_ERROR"

@@ -175,6 +175,41 @@ async def test_heartbeat_keeps_slow_request_alive(aiohttp_client, monkeypatch: p
     assert resp.status == 200 and body["status"] == "error" and body["error_code"] == "SERVICE_ERROR"
 
 
+@pytest.mark.parametrize("delay", [0, 0.2])
+async def test_heartbeat_answers_a_service_exit_and_keeps_serving(
+    aiohttp_client, monkeypatch: pytest.MonkeyPatch, delay: float
+) -> None:
+    """A SystemExit inside the heartbeat task becomes a SERVICE_ERROR instead of stopping the event loop."""
+    monkeypatch.setattr(routes, "HEARTBEAT_INTERVAL", 0.05)
+
+    @heartbeat
+    async def exits(request: web.Request) -> web.Response:
+        await asyncio.sleep(delay)
+        raise SystemExit(1)
+
+    app = web.Application()
+    app["debug_api"] = False
+    app.router.add_get("/exits", api_handler(exits))
+    client = await aiohttp_client(app)
+
+    for _ in range(2):
+        resp = await client.get("/exits")
+        assert json.loads(await resp.text())["error_code"] == "SERVICE_ERROR"
+
+
+async def test_unguarded_route_answers_a_service_exit(aiohttp_client) -> None:
+    async def exits(request: web.Request) -> web.Response:
+        raise SystemExit(1)
+
+    app = web.Application(middlewares=[routes.no_5xx_middleware])
+    app.router.add_get("/exits", exits)
+    client = await aiohttp_client(app)
+
+    for _ in range(2):
+        resp = await client.get("/exits")
+        assert resp.status == 422 and (await resp.json())["error_code"] == "SERVICE_ERROR"
+
+
 async def test_heartbeat_late_error_counts_as_rejected(aiohttp_client, monkeypatch: pytest.MonkeyPatch) -> None:
     """Stats count a late failure by its real status and the bytes the stream sent (with framing), not as an empty 200."""
     from unshackle.core.api.stats import stats, stats_middleware
