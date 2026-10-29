@@ -2144,8 +2144,10 @@ run and skips any quality or Widevine/PlayReady sub-entries.</p>
 CDM. A per-service entry does the same when it names a device without a quality: a device name,
 a <code>widevine</code> or <code>playready</code> sub-entry, or a profile or <code>default</code> sub-entry. A per-service entry
 that selects only by quality, or only for a different profile, loads no device when the run
-starts. unshackle then shows a warning, and the server decides who licenses the remote session.
-With only the top-level <code>default</code> entry, the server CDM licenses when the API key has it. See
+starts. When <code>server_cdm</code> is unset, unshackle then shows a warning, and the server decides who
+licenses the remote session.
+With only the top-level <code>default</code> entry, the server CDM licenses when the API key has it. Set
+<code>server_cdm: true</code> on the server entry to keep a per-service entry for local runs only. See
 <a href="../services/#remote_services"><code>remote_services</code></a>.</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">cdm</span><span class="p">:</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="nt">default</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">chromecdm_l3</span>
