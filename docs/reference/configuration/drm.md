@@ -17,8 +17,10 @@ Over `--remote`, an override also makes your device license the remote session, 
 CDM. A per-service entry does the same when it names a device without a quality: a device name,
 a `widevine` or `playready` sub-entry, or a profile or `default` sub-entry. A per-service entry
 that selects only by quality, or only for a different profile, loads no device when the run
-starts. unshackle then shows a warning, and the server decides who licenses the remote session.
-With only the top-level `default` entry, the server CDM licenses when the API key has it. See
+starts. When `server_cdm` is unset, unshackle then shows a warning, and the server decides who
+licenses the remote session.
+With only the top-level `default` entry, the server CDM licenses when the API key has it. Set
+`server_cdm: true` on the server entry to keep a per-service entry for local runs only. See
 [`remote_services`](services.md#remote_services).
 
 ```yaml

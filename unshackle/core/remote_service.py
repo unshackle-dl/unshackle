@@ -897,12 +897,17 @@ def make_remote_service(
     ``apply_overrides`` False keeps the per-service ``remote_services.<name>.services`` overrides out of this
     process's global config.
     """
-    url, api_key, services_config = resolve_server(server_name)
+    url, api_key, live = resolve_server(server_name)
+    own = ci_get(live, service_tag)
     # resolve_server hands back the live config dict; concurrent requests for other tags must not share it
-    services_config = dict(services_config)
-    if not apply_overrides:
-        services_config.pop(service_tag, None)
-    info = next((s for s in remote_service_list(server_name) or [] if s.get("tag") == service_tag), {})
+    tag = service_tag.lower()
+    services_config = {k: v for k, v in live.items() if not (isinstance(k, str) and k.lower() == tag)}
+    if isinstance(own, dict) and "server_cdm" in own:
+        own = dict(own)
+        services_config["_server_cdm"] = own.pop("server_cdm")
+    if apply_overrides and own is not None:
+        services_config[service_tag] = own
+    info = next((s for s in remote_service_list(server_name) or [] if str(s.get("tag", "")).lower() == tag), {})
     services_config["_server_accounts"] = info.get("server_accounts")
     services_config["_client_config"] = info.get("client_config")
     services_config["_anonymous_search"] = info.get("anonymous_search")
@@ -1387,8 +1392,8 @@ class RemoteService:
         # sent with the server CDM too: a capped server hands the tracks above its cap to this device
         cdm = self.local_cdm
         cdm_name = self.ctx.parent and self.ctx.parent.params.get("cdm_name")
-        cdm_entry = cdm is not None and self.ctx.obj.cdm_entry and self._server_cdm is not False
-        if not (cdm_entry or cdm_name or self._server_cdm is False) and ci_get(config.cdm, self.service_tag):
+        cdm_entry = cdm is not None and self.ctx.obj.cdm_entry and self._server_cdm is None
+        if not (cdm_entry or cdm_name or self._server_cdm is not None) and ci_get(config.cdm, self.service_tag):
             self.log.warning(
                 f"The cdm entry for {self.service_tag} did not load a device for this remote session, "
                 "so the server decides who licenses it"
@@ -1471,6 +1476,17 @@ class RemoteService:
         """True for a remote session on the server's device whose API key cannot read the server vault."""
         return getattr(self, "_local_vaults_only", False)
 
+    def report_local_fallback(self) -> None:
+        """Say the local CDM licenses because the server CDM is not granted.
+
+        Only info when the service's own cdm entry loaded that device, since the entry is the configured fallback.
+        """
+        log = self.log.info if getattr(self.ctx.obj, "cdm_entry", False) else self.log.warning
+        log(
+            f"{self.service_tag} is not available for server CDM licensing with this API key, "
+            "falling back to the local CDM"
+        )
+
     def adopt_session_cdm(self, server_cdm: bool, max_height: Optional[int]) -> None:
         """Take the server's choice of who licenses this remote session, and say why when a cap made it.
 
@@ -1486,10 +1502,7 @@ class RemoteService:
             self.log.warning("The server CDM licenses this remote session, so your own device is not used")
             return
         if self._server_cdm and not server_cdm and max_height is None:
-            self.log.warning(
-                f"{self.service_tag} is not available for server CDM licensing with this API key, "
-                "falling back to the local CDM"
-            )
+            self.report_local_fallback()
         self._server_cdm = server_cdm
         if max_height is None:
             return
@@ -1840,10 +1853,7 @@ class RemoteService:
             self._server_cdm = server_cdm
         elif self._server_cdm and not server_cdm:
             self._server_cdm = False
-            self.log.warning(
-                f"{self.service_tag} is not available for server CDM licensing with this API key, "
-                "falling back to the local CDM"
-            )
+            self.report_local_fallback()
         self._server_cdm_type = result.get("server_cdm_type", "widevine")
         self._sample_decrypt_tracks.update(result.get("sample_decrypt_tracks") or [])
 

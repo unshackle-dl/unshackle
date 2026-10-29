@@ -698,9 +698,18 @@ def test_the_client_declines_the_server_cdm_when_the_user_picked_a_device(server
 
 
 def test_a_device_loaded_from_the_services_cdm_entry_declines_the_server_cdm():
-    svc, data = sent_create(True, cdm_entry=True, cdm_map={"EXAMPLE1": "my_device"})
+    svc, data = sent_create(None, cdm_entry=True, cdm_map={"EXAMPLE1": "my_device"})
     assert data["server_cdm"] is False
     assert svc._server_cdm is False
+
+
+def test_server_cdm_true_outranks_the_services_cdm_entry(caplog):
+    with caplog.at_level(logging.WARNING):
+        svc, data = sent_create(True, cdm_entry=True, cdm_map={"EXAMPLE1": "my_device"})
+    assert "server_cdm" not in data
+    assert data["cdm_relay"] is True
+    assert svc._server_cdm is True
+    assert not caplog.text
 
 
 def test_cdm_over_an_existing_cdm_entry_declines_without_a_warning(caplog):
@@ -721,10 +730,17 @@ def test_a_device_loaded_from_the_default_cdm_entry_does_not_decline(caplog):
 @pytest.mark.parametrize("local_cdm", [SimpleNamespace(is_playready=False), None])
 def test_a_cdm_entry_that_did_not_load_the_device_warns_and_does_not_decline(local_cdm, caplog):
     with caplog.at_level(logging.WARNING):
-        svc, data = sent_create(True, local_cdm=local_cdm, cdm_map={"example1": {">=1080": "my_device"}})
+        svc, data = sent_create(None, local_cdm=local_cdm, cdm_map={"example1": {">=1080": "my_device"}})
     assert "server_cdm" not in data
-    assert svc._server_cdm is True
+    assert svc._server_cdm is None
     assert "cdm entry for EXAMPLE1" in caplog.text
+
+
+def test_server_cdm_true_does_not_warn_about_a_cdm_entry_that_loaded_no_device(caplog):
+    with caplog.at_level(logging.WARNING):
+        _, data = sent_create(True, cdm_map={"example1": {">=1080": "my_device"}})
+    assert "server_cdm" not in data
+    assert not caplog.text
 
 
 @pytest.mark.parametrize(
@@ -751,8 +767,8 @@ def test_a_client_with_no_device_does_not_decline():
 
 def created(answer):
     """Run ``authenticate()`` to its end for a device the service's cdm entry loaded."""
-    svc, _ = sent_create(True, cdm_entry=True, cdm_map={"EXAMPLE1": "my_device"})
-    svc._server_cdm = True
+    svc, _ = sent_create(None, cdm_entry=True, cdm_map={"EXAMPLE1": "my_device"})
+    svc._server_cdm = None
     svc.client = SimpleNamespace(post=lambda path, data: {"session_id": "sess", **answer})
     svc.close = svc.start_keepalive = lambda: None
     svc.authenticate()
@@ -808,3 +824,64 @@ def test_a_declined_server_cdm_that_the_server_keeps_is_reported(max_height, cap
     with caplog.at_level(logging.WARNING):
         svc.adopt_session_cdm(True, max_height)
     assert "your own device is not used" not in caplog.text
+
+
+@pytest.mark.parametrize(("cdm_entry", "level"), [(True, logging.INFO), (False, logging.WARNING)])
+def test_a_refused_server_cdm_warns_only_when_no_cdm_entry_loaded_the_fallback(cdm_entry, level, caplog):
+    svc = remote(SimpleNamespace(is_playready=False), {})
+    svc.service_tag = "EXAMPLE1"
+    svc.ctx.obj.cdm_entry = cdm_entry
+    with caplog.at_level(logging.INFO):
+        svc.adopt_session_cdm(False, None)
+    assert svc._server_cdm is False
+    [record] = [r for r in caplog.records if "falling back to the local CDM" in r.getMessage()]
+    assert record.levelno == level
+
+
+@pytest.mark.parametrize("apply_overrides", [True, False])
+@pytest.mark.parametrize(
+    ("server_level", "service_entry", "expected"),
+    [
+        (True, {"server_cdm": False}, False),
+        (False, {"server_cdm": True}, True),
+        (True, {}, True),
+        (None, {}, None),
+    ],
+)
+def test_a_per_service_server_cdm_overrides_the_server_entry(
+    server_level, service_entry, expected, apply_overrides, monkeypatch
+):
+    import unshackle.core.remote_service as remote_mod
+
+    live = {"EXAMPLE1": {**service_entry, "title_map": {"a": "b"}}, "_server_cdm": server_level}
+    monkeypatch.setattr(remote_mod, "resolve_server", lambda name: ("http://127.0.0.1:1", "", live))
+    monkeypatch.setattr(remote_mod, "remote_service_list", lambda name: [])
+    monkeypatch.setattr(handlers.config, "services", {})
+    name = RemoteService.__name__
+    try:
+        svc = remote_mod.make_remote_service(
+            SimpleNamespace(obj=None), None, "EXAMPLE1", "t1", {}, apply_overrides=apply_overrides
+        )
+    finally:
+        RemoteService.__name__ = name  # the constructor renames the class
+    assert svc._server_cdm is expected
+    assert handlers.config.services.get("EXAMPLE1") == ({"title_map": {"a": "b"}} if apply_overrides else None)
+    assert live["EXAMPLE1"] == {**service_entry, "title_map": {"a": "b"}}
+
+
+@pytest.mark.parametrize(("config_key", "tag"), [("example1", "EXAMPLE1"), ("EXAMPLE1", "example1")])
+def test_a_per_service_entry_matches_the_tag_in_any_case(config_key, tag, monkeypatch):
+    import unshackle.core.remote_service as remote_mod
+
+    live = {config_key: {"server_cdm": False, "title_map": {"a": "b"}}, "_server_cdm": True}
+    monkeypatch.setattr(remote_mod, "resolve_server", lambda name: ("http://127.0.0.1:1", "", live))
+    monkeypatch.setattr(remote_mod, "remote_service_list", lambda name: [{"tag": "EXAMPLE1", "anonymous_search": True}])
+    monkeypatch.setattr(handlers.config, "services", {})
+    name = RemoteService.__name__
+    try:
+        svc = remote_mod.make_remote_service(SimpleNamespace(obj=None), None, tag, "t1", {})
+    finally:
+        RemoteService.__name__ = name  # the constructor renames the class
+    assert svc._server_cdm is False
+    assert svc._anonymous_search is True
+    assert handlers.config.services == {tag: {"title_map": {"a": "b"}}}

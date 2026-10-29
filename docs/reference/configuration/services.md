@@ -89,16 +89,35 @@ Definitions of remote unshackle service servers, used by the `--remote` mode. Ea
 named by you (pick it with `--server`, or do not write that flag when you configure only one) and gives
 the server's `url` (required), an optional `api_key`, an optional `auth_headers` list, an
 optional `server_cdm` boolean, an optional `timeout` in seconds, and an optional `services` sub-dict of per-service local
-overrides such as `title_map`.
+overrides such as `title_map`, keyed by service tag in any case. A `server_cdm` in a `services` entry replaces the `server_cdm` of
+the server entry for that service.
 
 Leave `server_cdm` unset and the client follows the server: it uses the server CDM for each
 service the API key has it on, and the local CDM for the others. `true` asks for the server CDM
 and falls back to the local CDM when the server refuses; `false` always uses the local CDM.
 `dl --cdm <name>` on a remote run has the same effect as `false` for that run: the device you
-name licenses the remote session. A [`cdm`](drm.md#cdm) entry for the service has the same
-effect for that service when it names the device that unshackle loaded. Both take priority over
-`server_cdm: true`. Remove the entry to use the server CDM for that service. The `default`
-entry does not count.
+name licenses the remote session, and it takes priority over `server_cdm: true`. When
+`server_cdm` is unset, a [`cdm`](drm.md#cdm) entry for the service has the same effect for that
+service when it names the device that unshackle loaded. The `default` entry does not count.
+With `server_cdm: true`, the server CDM licenses the remote session, and the device of the entry
+licenses only when the server refuses. Thus the entry applies to local runs and the server CDM
+applies to remote runs:
+
+```yaml
+cdm:
+  EXAMPLE1: my_device          # local runs of EXAMPLE1
+
+remote_services:
+  my_server:
+    url: https://example.com
+    server_cdm: true           # remote runs of EXAMPLE1 use the server CDM
+    services:
+      EXAMPLE2:
+        server_cdm: false      # remote runs of EXAMPLE2 use your own device
+```
+
+When the server refuses the server CDM for a service whose `cdm` entry loaded the device,
+unshackle logs the fallback to that device as info, not as a warning.
 
 The server has the last word. When it keeps the server CDM for a remote session that your
 device was to license, unshackle shows a warning. This occurs with a server that does not read
@@ -180,8 +199,8 @@ an API key without `server_cdm` for that service also cannot submit or retry `/a
 jobs. Keys that have no `users` entry, such as `api_secret`, keep server CDM access.
 
 A remote client that picks its own device licenses the remote session with that device. It picks
-with `dl --cdm`, with a `cdm` entry for the service, or with `server_cdm: false` in its
-`remote_services` entry. The server CDM makes no licence for that remote session, with or without
+with `dl --cdm`, with `server_cdm: false` in its `remote_services` entry or in the `services`
+entry for the service, or with a `cdm` entry for the service when `server_cdm` is unset. The server CDM makes no licence for that remote session, with or without
 a limit. A service option that runs the remote session on the server's device, such as a
 server-identity flag, keeps the server CDM.
 

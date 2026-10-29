@@ -62,10 +62,11 @@ remote_services:
     url: "https://my-box.example:8786"
     api_key: "your-api-key"
     # Optional: let the server's CDM do the licensing instead of a local CDM
-    server_cdm: false
-    # Optional: per-service config overrides applied locally (title_map, cdm, etc.)
+    server_cdm: true
+    # Optional: per-service config overrides applied locally (title_map, cdm, server_cdm, etc.)
     services:
       EXAMPLE:
+        server_cdm: false        # this service licenses with your local CDM
         title_map:
           "0ABCDEF": "The Show (Renamed Locally)"
 ```
@@ -74,8 +75,8 @@ remote_services:
 |---|---|---|
 | `url` | yes | Base URL of the `unshackle serve` instance (no trailing slash needed) |
 | `api_key` | no | Sent as the `X-Secret-Key` header on every request |
-| `server_cdm` | no | When `true`, DRM keys are resolved by the server's CDM rather than a local device (default `false`) |
-| `services` | no | Per-service local config overrides, keyed by service tag |
+| `server_cdm` | no | `true` asks for the server's CDM, `false` uses your local device; unset follows the API key's server CDM grant |
+| `services` | no | Per-service local config overrides, keyed by service tag in any case; a `server_cdm` here replaces the server entry's value for that service |
 
 !!! warning "Port default"
     The `unshackle serve` default port is **`8786`** (not `8080`). Use the port
@@ -267,16 +268,17 @@ hood the client walks a remote session through its lifecycle.
 
 There are two ways DRM keys get resolved, chosen by the client's `server_cdm` flag.
 
-=== "Proxied CDM (default)"
+=== "Proxied CDM (server_cdm: false)"
 
     Your **local CDM** builds the license challenge. The client sends that challenge
     to `POST /api/session/{id}/license`, the server forwards it to the service, and
     the raw license bytes come back for your local CDM to parse.
 
     - Keeps your CDM local. The server only relays the license request.
-    - Used when `server_cdm` is `false` (the default).
-    - Also used for a run with `dl --cdm <name>`, and for a service whose own entry in
-      your `cdm` config named the loaded device. In each case the client sends
+    - Used when `server_cdm` is `false`, or when it is unset and the API key has no server
+      CDM for the service.
+    - Also used for a run with `dl --cdm <name>`, and, when `server_cdm` is unset, for a
+      service whose own entry in your `cdm` config named the loaded device. In each case the client sends
       `server_cdm: false` when it creates the remote session, and the server builds the
       service on your device even when the API key has the server CDM.
     - A service option that the service lists in `SERVER_DEVICE_OPTIONS` keeps the server
