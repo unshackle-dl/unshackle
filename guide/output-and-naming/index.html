@@ -3112,6 +3112,36 @@ but <code>en-GB</code> is <code>English (United Kingdom)</code>. A name from the
 <p>A tag without a region, such as <code>zh</code>, gets no script because the region is what tells the script.
 unshackle writes audio tags as the service gives them, because a script applies only to written text.
 Track selection, <code>--list</code> tags and file names use the service tag.</p>
+<p>A service that knows the spoken language, such as Mandarin or Cantonese, gives the title language and
+the audio a region and no script, and gives the subtitles a script:</p>
+<table>
+<thead>
+<tr>
+<th>Tracks</th>
+<th>Mandarin, Taiwan</th>
+<th>Cantonese, Hong Kong</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Title language and audio</td>
+<td><code>cmn-TW</code></td>
+<td><code>yue-HK</code></td>
+</tr>
+<tr>
+<td>Subtitles</td>
+<td><code>zh-Hant</code> or <code>cmn-Hant</code></td>
+<td><code>yue-Hant</code></td>
+</tr>
+</tbody>
+</table>
+<p>With these tags, <code>-l orig</code> selects the audio and <code>-sl orig</code> selects the Traditional subtitles. Do not
+mix the forms. A bare <code>cmn</code> implies Simplified Chinese, so a <code>cmn</code> title language makes <code>-sl orig</code>
+select Simplified subtitles. A <code>zh-TW</code> title language with <code>cmn</code> audio selects no audio, because
+<code>zh-TW</code> implies Traditional Chinese. Cantonese and Chinese never match, so <code>-sl orig</code> on a <code>yue-HK</code>
+title does not select <code>zh-Hant</code> subtitles; select them with <code>-sl zh-Hant</code>.</p>
+<p>The <code>{dual}</code>, <code>{multi}</code> and <code>{dubbed}</code> file name tags count <code>cmn</code> as <code>zh</code> and keep <code>yue</code> separate
+(see <a href="../../reference/configuration/download/#dual_multi_mode"><code>dual_multi_mode</code></a>).</p>
 <p>Set <code>muxing.track_names</code> to <code>native</code> to name each track in its own language. The same rules apply
 to the script and the region:</p>
 <div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="nt">muxing</span><span class="p">:</span>

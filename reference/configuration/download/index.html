@@ -2906,7 +2906,10 @@ entries of <code>[fr, fr-CA]</code>. Use <code>[fr-FR, fr-CA]</code> to require 
 <div class="admonition note">
 <p class="admonition-title">Dialects count as one language</p>
 <p>Regional variants of the same base language (e.g. <code>en-US</code> and <code>en-GB</code>) collapse to a single
-language in both modes, so they never trigger <code>{dual}</code> on their own.</p>
+language in both modes, so they never trigger <code>{dual}</code> on their own. An individual language
+counts as its macrolanguage: <code>cmn</code> and <code>zh</code> are one language, and so are <code>arb</code> and <code>ar</code>.
+Norwegian <code>nb</code> (Bokmål) and <code>nn</code> (Nynorsk) count as <code>no</code>.
+Cantonese (<code>yue</code>) stays separate, so <code>cmn</code> and <code>yue</code> audio give <code>{dual}</code>.</p>
 </div>
 <h2 id="hdr10plus_probe"><code>hdr10plus_probe</code><a class="headerlink" href="#hdr10plus_probe" title="Permanent link">&para;</a></h2>
 <ul>
