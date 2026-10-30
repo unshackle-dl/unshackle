@@ -103,3 +103,19 @@ def test_client_sent_keys_uses_the_stamp():
 
 def test_client_sent_keys_without_stamp_counts_all_keys():
     assert dm.client_sent_keys({"workers": 1, "quality": None}) == {"workers", "quality"}
+
+
+def test_service_defaults_and_options_travel_nested(env, monkeypatch):
+    import click
+
+    @click.command()
+    @click.option("--profile", type=int, default=1)
+    @click.option("--device", default="chrome")
+    def cli(**kwargs):
+        pass
+
+    monkeypatch.setattr(handlers.Services, "load", lambda service: SimpleNamespace(cli=cli))
+    params = env(body={"profile": "work", "service_params": {"profile": 2}})
+    assert params["profile"] == "work"
+    assert params["service_params"] == {"profile": 2, "device": "chrome"}
+    assert env(body={"device": "tv"})["service_params"] == {"profile": 1, "device": "tv"}

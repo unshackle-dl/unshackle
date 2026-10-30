@@ -2,6 +2,7 @@
 
 import json
 import logging
+from datetime import datetime
 from types import SimpleNamespace
 from uuid import UUID
 
@@ -97,8 +98,8 @@ def test_a_server_device_option_keeps_the_server_cdm_against_the_clients_choice(
 
     nested = {"cdm_type": "widevine", "server_cdm": False, "service_params": {"server_side": True}}
     assert handlers.choose_session_cdm(request("flat"), "EXAMPLE1", nested) == (True, 1080)
-    # service_params wins over the flat key, as it does when the service is built
-    nested["server_side"], nested["service_params"] = True, {"server_side": False}
+    # with service_params present a flat key is a dl value, as it is when the service is built
+    nested["server_side"], nested["service_params"] = True, {}
     assert handlers.choose_session_cdm(request("flat"), "EXAMPLE1", nested) == (False, None)
 
 
@@ -318,8 +319,8 @@ def test_a_capped_download_job_cannot_ask_for_hybrid(hdr_range):
     handlers.enforce_download_gates({"service": "EXAMPLE1", "quality": [1080], "range": ["HDR10"]}, request("flat"))
 
 
-def test_the_download_gate_reads_the_service_click_defaults(monkeypatch):
-    """A service's own click default overrides the serve default, and the gate sees what the job runs with."""
+def test_a_service_click_default_stays_out_of_the_download_gate(monkeypatch):
+    """A service's own option is not the dl option of the same name, so its default never trips the gate."""
     import asyncio
 
     from unshackle.core.api import download_manager as dm
@@ -329,15 +330,21 @@ def test_the_download_gate_reads_the_service_click_defaults(monkeypatch):
     monkeypatch.setattr(
         handlers.Services, "load", lambda service: SimpleNamespace(cli=SimpleNamespace(params=[option]))
     )
+    jobs = []
 
-    def no_job():
-        raise AssertionError("a refused job must not reach the download manager")
+    class Manager:
+        async def start_workers(self):
+            pass
 
-    monkeypatch.setattr(dm, "get_download_manager", no_job)
+        def create_job(self, service, title_id, owner_key=None, **params):
+            jobs.append(params)
+            return SimpleNamespace(job_id="j", status=SimpleNamespace(value="queued"), created_time=datetime.now())
+
+    monkeypatch.setattr(dm, "get_download_manager", Manager)
     body = {"service": "EXAMPLE1", "title_id": "t1", "quality": [1080]}
-    with pytest.raises(APIError) as ei:
-        asyncio.run(handlers.download_handler(body, request("flat")))
-    assert ei.value.error_code is APIErrorCode.SERVER_CDM_CAPPED
+    asyncio.run(handlers.download_handler(body, request("flat")))
+    assert jobs[0]["service_params"] == {"best_available": True}
+    assert not jobs[0].get("best_available")
 
 
 @pytest.fixture

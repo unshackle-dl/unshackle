@@ -205,7 +205,8 @@ Get the list of titles behind a title ID, for example episodes or a movie, witho
 | `cdm_type` | string | no | Preferred CDM type. |
 | `credentials`, `cookies`, `cache` | - | no | Your own login material, on a `--remote-only` server only. See [Client cache on a remote-only server](#client-cache-on-a-remote-only-server). |
 
-You can also pass service-specific CLI options as additional keys.
+You can also pass a service's own CLI options, in a nested `service_params` object or as
+additional keys. When the body has `service_params`, the server reads service options only from it.
 
 #### Logins that need the user
 
@@ -490,9 +491,10 @@ Make a download job. It requires `service` and `title_id`. Every other field is 
 **Validation.** Invalid values return `400 INVALID_PARAMETERS`. `vcodec`, `acodec` and `sub_format` take the same spellings as the CLI options of the same name (`unshackle dl --help` prints each list). The API and the CLI read one list, so they cannot disagree. `range` must be one of SDR/HDR10/HDR10P/DV/HLG/HYBRID, and `HDR10+` is also valid. The bitrate, download worker, and download counts must be positive integers. You may set at most one of the `*_only` flags. You cannot combine `no_subs` with `subs_only`, or `no_audio` with `audio_only`.
 
 **Service options.** A service's own CLI options travel in the same body. Send them in a nested
-`service_params` object, or as flat top-level keys. `service_params` wins over a flat key of the
-same name. An option you leave out takes the default declared on the service's `cli` command, so
-the job matches the equivalent `dl` run. `profile` at the top level always means the credential
+`service_params` object, or as flat top-level keys. When the body has `service_params`, the server
+reads service options only from it, and every flat key is a `dl` value. An option you leave out
+takes the default declared on the service's `cli` command, so the job matches the equivalent `dl`
+run. `profile` at the top level always means the credential
 profile, never a service's own `--profile` option.
 
 === "Request"
@@ -969,7 +971,7 @@ Make a remote session for a service and title. Authentication runs asynchronousl
 
 `dl_params` is an object with the `dl` track selection: `lang`, `v_lang`, `a_lang` and `s_lang` (arrays of language strings), `acodec` (an array of audio codec names or `dl -a` aliases such as `ddp`), and `forced_subs` and `exact_lang` (booleans). The service reads these values from `ctx.parent.params`. The server uses the `dl` default for each absent or malformed value, and drops an unknown codec name.
 
-Service CLI options also travel in a nested `service_params` object, which wins over a flat key with the same name. `profile` at the top level always means the credentials profile, never a service's own `--profile` option.
+Service CLI options also travel in a nested `service_params` object. When the body has `service_params`, the server reads service options only from it, and a flat key with the same name stays a `dl` value. `profile` at the top level always means the credentials profile, never a service's own `--profile` option.
 
 The `proxy` value must be a full proxy URI, unless the operator gives your API key `server_proxy` in the `serve.users` config. Without `server_proxy`, the server does not resolve country codes with its own proxy providers. It rejects the request with `INVALID_PROXY` when no `proxy` is set and the reported `client_region` differs from the server's region. A request that reports no `client_region` is not blocked. Pass `proxy` with your own proxy, or `no_proxy` to accept the server's own connection. With `server_proxy`, the server resolves a country code and picks a proxy for your `client_region` itself. A Control D resolver, `controld://<resolver>@dns.controld.com`, counts as a full proxy URI: the server runs a forwarder for it and needs no Control D configuration of its own.
 

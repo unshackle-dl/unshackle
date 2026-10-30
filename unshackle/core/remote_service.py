@@ -55,6 +55,7 @@ from unshackle.core.tunnel import TunnelClient
 from unshackle.core.utils import run_proxy
 from unshackle.core.utils.collections import ci_get
 from unshackle.core.utils.redact import redact_path, redact_text, safe_display_url
+from unshackle.core.utils.service_params import service_options
 from unshackle.core.vault import Vault
 
 log = logging.getLogger("remote_service")
@@ -873,15 +874,9 @@ def find_remote_service(services: list[dict], name: str) -> Optional[dict]:
 
 
 def remote_service_params(info: dict, data: Dict[str, Any]) -> Dict[str, Any]:
-    """The service options to send: ``data["service_params"]``, else the ``data`` keys naming a cli option.
-
-    Only the remote service's cli option names pass, either way: RemoteService merges them into the
-    session-create body, where a key such as ``service`` or ``proxy`` would override the checked value.
-    """
+    """The remote service's cli options in ``data``, read by ``service_options``."""
     names = {p.get("name") for p in info.get("cli_params") or [] if p.get("kind") == "option"}
-    names -= {"title", "service", "title_id", "profile", "proxy", "no_proxy"}
-    source = data.get("service_params") if isinstance(data.get("service_params"), dict) else data
-    return {k: v for k, v in source.items() if k in names and v is not None and v is not False}
+    return {k: v for k, v in service_options(data, names).items() if v is not None and v is not False}
 
 
 def make_remote_service(
@@ -1385,9 +1380,8 @@ class RemoteService:
             if dl_params:
                 create_data["dl_params"] = dl_params
 
-        if self._service_params:
-            create_data.update(self._service_params)
-            create_data["service_params"] = self._service_params
+        # sent even empty: without it the server reads service options from the flat dl keys
+        create_data["service_params"] = self._service_params
 
         # sent with the server CDM too: a capped server hands the tracks above its cap to this device
         cdm = self.local_cdm

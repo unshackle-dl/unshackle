@@ -21,6 +21,7 @@ from unshackle.core.api.events import bus, publish_service_event
 from unshackle.core.api.sanitize import sanitize_log
 from unshackle.core.utils.click_types import AUDIO_CODEC_LIST, QUALITY_LIST, VIDEO_CODEC_LIST
 from unshackle.core.utils.redact import REDACTED, URL_USERINFO_RE, redact_all, redact_path, redact_text
+from unshackle.core.utils.service_params import service_options
 
 log = logging.getLogger("download_manager")
 
@@ -574,14 +575,7 @@ def perform_download(
             if "title" in service_init_params:
                 service_kwargs["title"] = title_id
 
-            for key, value in params.items():
-                if key in service_init_params and key not in ["service", "title_id", "profile", "service_params"]:
-                    service_kwargs[key] = value
-            service_params = params.get("service_params")
-            if isinstance(service_params, dict):
-                for key, value in service_params.items():
-                    if key in service_init_params and key != "title":
-                        service_kwargs[key] = value
+            service_kwargs.update(service_options(params, service_init_params.keys() - {"title"}))
 
             for param_name, param_info in service_init_params.items():
                 if param_name not in service_kwargs and param_name not in ["self", "ctx"]:

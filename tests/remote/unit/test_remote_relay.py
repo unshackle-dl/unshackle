@@ -136,6 +136,12 @@ def test_make_remote_service_passes_only_cli_options(remote_config, monkeypatch)
     assert built["args"][5]["EXAMPLE"] == {"x": 1}
 
 
+def test_a_service_option_named_like_a_dl_value_passes_only_nested():
+    info = {"cli_params": [{"kind": "option", "name": "profile"}]}
+    assert remote_service.remote_service_params(info, {"service_params": {"profile": "QC"}}) == {"profile": "QC"}
+    assert remote_service.remote_service_params(info, {"profile": "QC"}) == {}
+
+
 def test_remote_error_carries_its_reason_and_exits_a_cli_run():
     err = remote_service.RemoteError("Server error [SESSION_NOT_FOUND]: gone", "SESSION_NOT_FOUND")
     assert isinstance(err, SystemExit) and err.code == 1 and err.kind == "SESSION_NOT_FOUND"

@@ -645,8 +645,14 @@ def test_dl_selection_travels_nested_and_a_service_option_cannot_override_it() -
         "forced_subs": True,
         "exact_lang": True,
     }
-    assert data["lang"] == 3
+    assert "lang" not in data and "a_lang" not in data
     assert data["service_params"] == {"lang": 3, "a_lang": "x"}
+
+
+def test_a_service_profile_option_travels_nested_and_keeps_the_credential_profile() -> None:
+    data = _sent_create_data({"profile": "work"}, {"profile": "QC"})
+    assert data["profile"] == "work"
+    assert data["service_params"] == {"profile": "QC"}
 
 
 def test_no_dl_params_when_the_ctx_has_no_selection() -> None:

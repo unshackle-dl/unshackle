@@ -15,7 +15,7 @@ from datetime import date as date_
 from functools import partial
 from http.cookiejar import CookieJar
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterable, List, Optional, Set, cast
+from typing import AbstractSet, Any, Callable, Dict, Iterable, List, Optional, Set, cast
 
 import click
 from aiohttp import web
@@ -45,6 +45,7 @@ from unshackle.core.utils.click_types import AUDIO_CODEC_LIST, QUALITY_LIST, SUB
 from unshackle.core.utils.collections import ci_get
 from unshackle.core.utils.hdr10plus import probed_tracks
 from unshackle.core.utils.redact import REDACTED, URL_USERINFO_RE, redact_all, redact_secrets, redact_text
+from unshackle.core.utils.service_params import service_options
 
 log = logging.getLogger("api")
 
@@ -246,30 +247,26 @@ def instantiate_service(
     service_module: Any,
     title: str,
     data: Optional[Dict[str, Any]] = None,
-    transport_keys: Optional[set] = None,
+    transport_keys: AbstractSet[str] = frozenset(),
 ) -> Any:
-    """Instantiate a service by invoking its click cli through Click.
+    """Instantiate a service by invoking its click cli with the ``service_options`` in ``data``.
 
-    Click fills option defaults through ``param.get_default()`` and runs type coercion,
-    so we no longer have to inspect ``__init__`` or stitch defaults by hand. This function
-    pulls extra kwargs from the ``data`` entries whose names match a cli option name
-    and are not in the transport-key blocklist.
+    Click fills the option defaults, but ``ctx.invoke`` passes the given kwargs uncast, so each value
+    goes through its option's type here: JSON or a remote client's str-typed stub can send "1" for an int.
     """
     cli_params = getattr(getattr(service_module, "cli", None), "params", []) or []
-    cli_param_names = {p.name for p in cli_params if hasattr(p, "name") and p.name}
-    transport_keys = transport_keys or set()
+    params_by_name = {p.name: p for p in cli_params if getattr(p, "name", None) and p.name != "title"}
     extras: Dict[str, Any] = {}
     if data:
-        for k, v in data.items():
-            if k in cli_param_names and k not in transport_keys and k != "title":
-                extras[k] = v
-        service_params = data.get("service_params")
-        if isinstance(service_params, dict):
-            for k, v in service_params.items():
-                if k in cli_param_names and k != "title":
-                    extras[k] = v
-        elif service_params is None:
-            for k in cli_param_names & transport_keys & set(data):
+        for k, v in service_options(data, params_by_name, transport_keys).items():
+            try:
+                extras[k] = params_by_name[k].type_cast_value(parent_ctx, v)
+            except click.BadParameter as e:
+                raise APIError(
+                    APIErrorCode.INVALID_PARAMETERS, f"Invalid service option '{sanitize_log(k)}': {e.message}"
+                ) from e
+        if data.get("service_params") is None:
+            for k in params_by_name.keys() & transport_keys & data.keys():
                 if k not in ("service", "title_id", "proxy", "no_proxy") and data.get(k) is not None:
                     log.warning(
                         f"Ignoring flat '{sanitize_log(k)}' as a service option, send it under 'service_params'"
@@ -1044,9 +1041,7 @@ def choose_session_cdm(
         return False, None
     if data.get("server_cdm") is False and data.get("cdm_type"):
         server_device_options = getattr(Services.load(service), "SERVER_DEVICE_OPTIONS", ())
-        service_params = data.get("service_params")
-        options = {**data, **service_params} if isinstance(service_params, dict) else data
-        if not any(options.get(option) for option in server_device_options):
+        if not any(service_options(data, server_device_options).values()):
             return False, None
     cap = server_cdm_max_height(request, service)
     wanted = requested_height(data.get("quality"))
@@ -2456,16 +2451,19 @@ async def download_handler(data: Dict[str, Any], request: Optional[web.Request] 
 
     try:
         service_module = None if server else Services.load(normalized_service)
-        service_specific_defaults = {}
+        service_params: Optional[Dict[str, Any]] = None
 
-        # Skip None defaults here: this dict overlays into job params; injecting
-        # None for keys like `profile` would clobber serve-config overrides.
-        # Missing required __init__ params are handled in download_manager.perform_download.
+        # Service defaults and options travel nested: flat, a service default would overwrite the dl value of
+        # the same name. Missing required __init__ params are handled in download_manager.perform_download.
         # A remote service applies its own defaults on the remote server.
-        if hasattr(service_module, "cli") and hasattr(service_module.cli, "params"):
-            for param in service_module.cli.params:
-                if hasattr(param, "name") and param.default is not None and not isinstance(param.default, enum.Enum):
-                    service_specific_defaults[param.name] = param.default
+        cli_params = getattr(getattr(service_module, "cli", None), "params", None)
+        if cli_params is not None:
+            defaults = {
+                param.name: param.default
+                for param in cli_params
+                if param.name and param.default is not None and not isinstance(param.default, enum.Enum)
+            }
+            service_params = {**defaults, **service_options(data, {param.name for param in cli_params})}
 
         filtered_params = {k: v for k, v in data.items() if k not in ["service", "title_id"]}
         # Overlay any dl-relevant keys from `serve:` config (e.g. downloads, workers) so the API
@@ -2478,10 +2476,11 @@ async def download_handler(data: Dict[str, Any], request: Optional[web.Request] 
         params_with_defaults = {
             **DEFAULT_DOWNLOAD_PARAMS,
             **serve_overrides,
-            **service_specific_defaults,
             **service_dl,
             **filtered_params,
         }
+        if service_params is not None:
+            params_with_defaults["service_params"] = service_params
         await asyncio.to_thread(enforce_download_gates, {**params_with_defaults, "service": service_tag}, request)
 
         manager = get_download_manager()

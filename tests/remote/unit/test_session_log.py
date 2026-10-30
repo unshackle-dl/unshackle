@@ -121,6 +121,31 @@ def test_transport_keys_block_profile_and_service_params() -> None:
     assert "service_params" in LIST_HANDLER_TRANSPORT_KEYS
 
 
+def test_service_params_are_the_only_service_options_when_present() -> None:
+    import click
+
+    from unshackle.core.api.errors import APIError
+    from unshackle.core.api.handlers import SESSION_TRANSPORT_KEYS, instantiate_service
+
+    @click.command()
+    @click.argument("title")
+    @click.option("--profile", default=None)
+    @click.option("--device", default=None)
+    @click.option("--count", type=int, default=1)
+    def cli(title: str, **kwargs: object) -> dict:
+        return kwargs
+
+    def build(data: dict) -> dict:
+        return instantiate_service(click.Context(click.Command("dl")), module, "t", data, SESSION_TRANSPORT_KEYS)
+
+    module = type("Svc", (), {"cli": cli})
+    nested = {"profile": "work", "device": "tv", "service_params": {"profile": "QC", "count": "2"}}
+    assert build(nested) == {"profile": "QC", "device": None, "count": 2}
+    assert build({"profile": "work", "device": "tv"}) == {"profile": None, "device": "tv", "count": 1}
+    with pytest.raises(APIError):
+        build({"service_params": {"count": "x"}})
+
+
 def test_drain_server_logs_survives_client_systemexit() -> None:
     """RemoteClient raises SystemExit on transport errors; the drain must swallow it."""
     from unshackle.core.remote_service import RemoteService

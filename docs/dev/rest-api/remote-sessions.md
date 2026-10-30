@@ -282,9 +282,9 @@ There are two ways DRM keys get resolved, chosen by the client's `server_cdm` fl
       `server_cdm: false` when it creates the remote session, and the server builds the
       service on your device even when the API key has the server CDM.
     - A service option that the service lists in `SERVER_DEVICE_OPTIONS` keeps the server
-      CDM. The server reads the option from `service_params`, then from the top level of
-      the request. The create response gives the result in `server_cdm`, and the client
-      shows a warning when the server did not apply its choice.
+      CDM. The server reads the option from `service_params`, or from the top level of
+      a request that has no `service_params`. The create response gives the result in
+      `server_cdm`, and the client shows a warning when the server did not apply its choice.
     - The service on the server sees your device, not the server's: its DRM system,
       security level, system ID and device type. A CDM call that the service makes
       (for example a session-key exchange at login) goes to your client as a `cdm_call`,
