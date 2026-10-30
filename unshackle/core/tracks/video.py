@@ -412,6 +412,7 @@ class Video(Track):
                         )
                     ),
                     ", ".join(self.edition) if self.edition else None,
+                    self.note,
                 ],
             )
         )

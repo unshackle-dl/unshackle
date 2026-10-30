@@ -6,7 +6,7 @@ from enum import Enum
 
 import pytest
 
-from unshackle.core.api.handlers import serialize_video_track
+from unshackle.core.api.handlers import serialize_audio_track, serialize_subtitle_track, serialize_video_track
 from unshackle.core.remote_service import (
     RemoteService,
     build_title,
@@ -56,6 +56,24 @@ def test_deserialize_video_minimal() -> None:
 def test_a_dv_track_keeps_its_hdr10_base_label_over_remote() -> None:
     v = Video(url="https://x/v.mp4", language="en", codec=Video.Codec.HEVC, range_=Video.Range.DV, hdr10_base=True)
     assert deserialize_video(serialize_video_track(v)).range_label == "DV+HDR10"
+
+
+def test_a_track_note_shows_over_remote_and_export_and_is_not_an_edition() -> None:
+    from unshackle.core.tracks.track import Track
+
+    v = Video(url="https://x/v.mp4", language="ja", codec=Video.Codec.AVC, note="h264mpl40-dash")
+    a = Audio(url="https://x/a.mp4", language="ja", codec=Audio.Codec.AAC, note="heaac-2-dash")
+    s = Subtitle(url="https://x/s.vtt", language="en", codec=Subtitle.Codec.WebVTT, note="webvtt-lssdh")
+    copies = [deserialize_video(serialize_video_track(v)), deserialize_audio(serialize_audio_track(a))]
+    copies += [deserialize_subtitle(serialize_subtitle_track(s))]
+    copies += [Track.from_dict(t.to_dict()) for t in (v, a, s)]
+    for copy in copies:
+        assert copy.note and str(copy).endswith(f"| {copy.note}")
+        assert copy.edition == []
+
+
+def test_a_note_that_is_not_text_is_dropped_not_fatal() -> None:
+    assert deserialize_video({"id": "v1", "codec": "AVC", "width": 1, "height": 1, "note": {"x": 1}}).note is None
 
 
 def test_deserialize_video_unknown_codec_falls_back_to_none() -> None:

@@ -288,6 +288,7 @@ def base_track_kwargs(data: Dict[str, Any]) -> Dict[str, Any]:
         "needs_repack": bool(data.get("needs_repack", False)),
         "name": data.get("name"),
         "edition": data.get("edition") or None,
+        "note": data["note"] if isinstance(data.get("note"), str) else None,
         "id_": data.get("id"),
     }
 

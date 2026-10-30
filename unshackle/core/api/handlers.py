@@ -1722,6 +1722,7 @@ def serialize_track_common(track: Any) -> Dict[str, Any]:
         "track_name": track.get_track_name(),
         "needs_repack": bool(getattr(track, "needs_repack", False)),
         "edition": list(getattr(track, "edition", None) or []),
+        "note": getattr(track, "note", None),
         "descriptor": descriptor_name(track),
         "drm": serialize_drm(track.drm) if getattr(track, "drm", None) else None,
         "drm_preference": getattr(track, "drm_preference", None),

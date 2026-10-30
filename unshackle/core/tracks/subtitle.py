@@ -231,7 +231,13 @@ class Subtitle(Track):
         return " | ".join(
             filter(
                 bool,
-                ["SUB", f"[{self.codec.value}]" if self.codec else None, str(self.language), self.get_track_name()],
+                [
+                    "SUB",
+                    f"[{self.codec.value}]" if self.codec else None,
+                    str(self.language),
+                    self.get_track_name(),
+                    self.note,
+                ],
             )
         )
 

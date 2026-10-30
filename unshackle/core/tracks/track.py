@@ -427,6 +427,7 @@ class Track:
         name: Optional[str] = None,
         drm: Optional[Iterable[DRM_T]] = None,
         edition: Optional[str] = None,
+        note: Optional[str] = None,
         session: Optional[Union[Session, "RnetSession"]] = None,
         downloader: Optional[Callable] = None,
         downloader_args: Optional[dict] = None,
@@ -451,6 +452,8 @@ class Track:
             raise TypeError(f"Expected id_ to be a {str}, not {type(id_)}")
         if not isinstance(edition, (str, list, type(None))):
             raise TypeError(f"Expected edition to be a {str}, {list}, or None, not {type(edition)}")
+        if not isinstance(note, (str, type(None))):
+            raise TypeError(f"Expected note to be a {str}, not {type(note)}")
         if not isinstance(downloader, (Callable, type(None))):
             raise TypeError(f"Expected downloader to be a {Callable}, not {type(downloader)}")
         if not isinstance(downloader_args, (dict, type(None))):
@@ -483,6 +486,7 @@ class Track:
         self.drm = drm
         self._drm_preference: Optional[str] = None
         self.edition: list[str] = [edition] if isinstance(edition, str) else (edition or [])
+        self.note = note
         self.session = session
         self.downloader = downloader
         self.downloader_args = downloader_args
@@ -981,6 +985,7 @@ class Track:
             "needs_repack": self.needs_repack,
             "name": self.name,
             "edition": self.edition,
+            "note": self.note,
         }
         return data
 
@@ -999,6 +1004,7 @@ class Track:
             "needs_repack": data.get("needs_repack", False),
             "name": data.get("name"),
             "edition": data.get("edition") or None,
+            "note": data.get("note"),
             "id_": data.get("id"),
         }
 
