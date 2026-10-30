@@ -752,6 +752,11 @@ class Subtitle(Track):
             elif codec == Subtitle.Codec.TimedTextMarkupLang:
                 text = try_ensure_utf8(data).decode("utf8")
                 text = text.replace("tt:", "")
+                text = re.sub(
+                    r"tts:(?:extent|origin|padding)=(\"[^\"]*\"|'[^']*')",
+                    lambda m: re.sub(r"(?<=\d)[vr][wh]\b", "%", m[0]),
+                    text,
+                )
                 # negative size values aren't allowed in TTML/DFXP spec, replace with 0
                 text = re.sub(r"-(\d+(?:\.\d+)?)(px|em|%|c|pt)", r"0\2", text)
                 caption_set = pycaption.DFXPReader().read(text)

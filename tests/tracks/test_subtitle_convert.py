@@ -16,6 +16,7 @@ import pathlib
 import re
 import struct
 
+import pycaption
 import pytest
 
 from unshackle.core import binaries
@@ -371,3 +372,40 @@ def test_segmented_fttml_parses_and_converts(tmp_path, monkeypatch):
     assert sub.codec == Codec.TimedTextMarkupLang
     out = sub.convert(Codec.SubRip, forced=True)
     assert cue_count(out) == 2
+
+
+def test_fttml_with_viewport_units_converts(tmp_path, monkeypatch):
+    """TTML2 ``vw``/``vh`` and ``rw``/``rh`` sizes, which pycaption rejects, still parse and convert.
+
+    Only the size attributes pycaption parses are rewritten: a negative one becomes 0, while an ``rh``
+    font size and the same units in cue text stay as they are.
+    """
+    monkeypatch.setattr("unshackle.core.config.config.subtitle", {}, raising=False)
+    frag = (
+        '<?xml version="1.0" encoding="utf-8"?>'
+        '<tt xmlns="http://www.w3.org/ns/ttml" xmlns:tts="http://www.w3.org/ns/ttml#styling"'
+        ' xmlns:ttp="http://www.w3.org/ns/ttml#parameter" xml:lang="ja" ttp:version="2">'
+        '<head><styling><style xml:id="s1" tts:fontSize="5.33rh"/></styling><layout>'
+        '<region xml:id="bottom" tts:extent="80vw 15vh" tts:position="center bottom 10vh"/>'
+        '<region xml:id="side" tts:extent="15rw 80rh" tts:position="right 10vw center" tts:writingMode="tbrl"/>'
+        "<region xml:id='edge' tts:origin='-5vw 80vh' tts:extent='90vw 10vh' tts:padding='1vh 2vw'/>"
+        "</layout></head>"
+        '<body region="bottom"><div>'
+        '<p begin="00:00:01.000" end="00:00:02.000" style="s1">Speed 10vw</p>'
+        '<p begin="00:00:03.000" end="00:00:04.000" region="side">Line 2</p>'
+        '<p begin="00:00:05.000" end="00:00:06.000" region="edge">Line 3</p>'
+        "</div></body></tt>"
+    )
+    # The fTTML merge keeps no style sheet, so the font size is checked on a plain TTML read.
+    styled = pycaption.DFXPWriter().write(Subtitle.parse(frag.encode(), Codec.TimedTextMarkupLang))
+    assert 'tts:fontSize="5.33rh"' in styled
+
+    seg = tmp_path / "seg.stpp"
+    seg.write_bytes(build_stpp_mp4(frag))
+    sub = Subtitle(url="https://example.test/x", language="ja", codec=Codec.fTTML)
+    sub.path = seg
+
+    sub.convert(Codec.TimedTextMarkupLang)
+    out = sub.convert(Codec.SubRip, forced=True)
+    assert cue_count(out) == 3
+    assert "Speed 10vw" in out.read_text("utf8")
