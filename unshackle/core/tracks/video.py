@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import json
 import logging
 import math
 import re
 import subprocess
 import time
 from enum import Enum
+from fractions import Fraction
 from pathlib import Path
 from typing import Any, Optional, Union
 
@@ -483,22 +485,14 @@ class Video(Track):
         if self.range in (Video.Range.SDR, Video.Range.DV, Video.Range.HYBRID):
             return None
 
-        vui = {
-            Video.Range.HDR10: (9, 16, 9),
-            Video.Range.HDR10P: (9, 16, 9),
-            Video.Range.HLG: (9, 18, 9),
-        }.get(self.range)
-        if not vui:
+        transfer_name = HDR_TRANSFER.get(self.range)
+        if not transfer_name:
             return None
 
         # Skip the rewrite when the bitstream VUI already matches the target, which avoids a full
         # bitstream pass on services that already ship correct colour metadata
-        expected = {
-            Video.Range.HDR10: ("bt2020", "smpte2084", "bt2020nc"),
-            Video.Range.HDR10P: ("bt2020", "smpte2084", "bt2020nc"),
-            Video.Range.HLG: ("bt2020", "arib-std-b67", "bt2020nc"),
-        }.get(self.range)
-        if expected and binaries.FFProbe:
+        expected = ("bt2020", transfer_name, "bt2020nc")
+        if binaries.FFProbe:
             probe = subprocess.run(
                 [
                     binaries.FFProbe,
@@ -522,7 +516,7 @@ class Video(Track):
             if current == expected:
                 return None
 
-        primaries, transfer, matrix = vui
+        primaries, transfer, matrix = TRANSFER_CICP[transfer_name]
         filter_key = {Video.Codec.AVC: "h264_metadata", Video.Codec.HEVC: "hevc_metadata"}[self.codec]
         return (
             f"{filter_key}=colour_primaries={primaries}"
@@ -589,6 +583,78 @@ class Video(Track):
             },
         )
         return True
+
+    def vp9_colour_args(self, track_id: int) -> list[str]:
+        """Return mkvmerge colour args for an HDR VP9 track.
+
+        mkvmerge drops the MP4 vpcC/SmDm/CoLL colour boxes of VP9, which leaves an HDR10 file tagged as SDR.
+        The transfer the file states wins; ``self.range`` applies only when the file states none.
+        """
+        stream = self._probe_colour()
+        transfer = stream.get("color_transfer", "unknown")
+        codes = TRANSFER_CICP.get(transfer if transfer != "unknown" else HDR_TRANSFER.get(self.range, ""))
+        if not codes:
+            return []
+
+        opts: dict[str, object] = dict(
+            zip(("--colour-primaries", "--colour-transfer-characteristics", "--colour-matrix-coefficients"), codes)
+        )
+        for data in stream.get("side_data_list", []):
+            # ffprobe leaves out the fields a source does not carry, so a partial entry adds nothing
+            try:
+                if data.get("side_data_type") == "Mastering display metadata":
+                    xy = ("red_x", "red_y", "green_x", "green_y", "blue_x", "blue_y", "white_point_x", "white_point_y")
+                    coords = [f"{float(Fraction(data[key])):.5f}" for key in xy]
+                    opts.update(
+                        {
+                            "--chromaticity-coordinates": ",".join(coords[:6]),
+                            "--white-colour-coordinates": ",".join(coords[6:]),
+                            "--max-luminance": f"{float(Fraction(data['max_luminance'])):.6f}",
+                            "--min-luminance": f"{float(Fraction(data['min_luminance'])):.6f}",
+                        }
+                    )
+                elif data.get("side_data_type") == "Content light level metadata" and data.get("max_content"):
+                    opts.update(
+                        {"--max-content-light": int(data["max_content"]), "--max-frame-light": int(data["max_average"])}
+                    )
+            except (KeyError, TypeError, ValueError, ZeroDivisionError):
+                continue
+        return [arg for flag, value in opts.items() for arg in (flag, f"{track_id}:{value}")]
+
+    def _probe_colour(self) -> dict[str, Any]:
+        """Return the FFprobe colour transfer and side data of the first video track, or {} when it cannot probe."""
+        if not binaries.FFProbe or not self.path or not self.path.exists():
+            return {}
+        probe_start = time.monotonic()
+        probe = subprocess.run(
+            [
+                binaries.FFProbe,
+                "-v",
+                "error",
+                # without it ffprobe walks every moof of a fragmented MP4 to read the header
+                "-seekable",
+                "0",
+                "-select_streams",
+                "v:0",
+                "-show_entries",
+                "stream=color_transfer:stream_side_data",
+                "-of",
+                "json",
+                str(self.path),
+            ],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+        log_tool_run(
+            "ffprobe colour", "ffprobe", probe.returncode, duration_ms=round((time.monotonic() - probe_start) * 1000, 1)
+        )
+        try:
+            stream: dict[str, Any] = json.loads(probe.stdout)["streams"][0]
+        except (ValueError, KeyError, IndexError, TypeError):
+            return {}
+        return stream
 
     def ccextractor(
         self, track_id: Any, out_path: Union[Path, str], language: Language, original: bool = False
@@ -763,5 +829,12 @@ class Video(Track):
 
         return True
 
+
+HDR_TRANSFER = {
+    Video.Range.HDR10: "smpte2084",
+    Video.Range.HDR10P: "smpte2084",
+    Video.Range.HLG: "arib-std-b67",
+}
+TRANSFER_CICP = {"smpte2084": (9, 16, 9), "arib-std-b67": (9, 18, 9)}
 
 __all__ = ("Video",)

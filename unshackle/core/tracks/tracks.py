@@ -899,7 +899,9 @@ class Tracks:
                     ]
                 )
 
-            if hasattr(vt, "range") and vt.range == Video.Range.HLG:
+            if vt.codec == Video.Codec.VP9:
+                video_args.extend(vt.vp9_colour_args(v))
+            elif hasattr(vt, "range") and vt.range == Video.Range.HLG:
                 video_args.extend(
                     [
                         "--color-transfer-characteristics",
