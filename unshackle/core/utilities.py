@@ -172,6 +172,21 @@ def valid_language(language: Any) -> Optional[str]:
     return str(language)
 
 
+def spoken_language(tag: Any) -> str:
+    """
+    Return the language a tag names, under its macrolanguage: cmn and zh-TW give zh, yue stays yue.
+
+    nb and nn give no by hand, because CLDR makes no their parent outside its macrolanguage data.
+    """
+    if not tag:
+        return ""
+    try:
+        language = Language.get(str(tag)).prefer_macrolanguage().language or ""
+    except LanguageTagError:
+        return ""
+    return "no" if language in ("nb", "nn") else language
+
+
 @cache
 def multi_script_languages() -> frozenset[str]:
     """Return the languages whose likely script changes with the region in CLDR (zh, yue, sr, ...)."""

@@ -306,6 +306,23 @@ A tag without a region, such as `zh`, gets no script because the region is what 
 unshackle writes audio tags as the service gives them, because a script applies only to written text.
 Track selection, `--list` tags and file names use the service tag.
 
+A service that knows the spoken language, such as Mandarin or Cantonese, gives the title language and
+the audio a region and no script, and gives the subtitles a script:
+
+| Tracks | Mandarin, Taiwan | Cantonese, Hong Kong |
+|--------|------------------|----------------------|
+| Title language and audio | `cmn-TW` | `yue-HK` |
+| Subtitles | `zh-Hant` or `cmn-Hant` | `yue-Hant` |
+
+With these tags, `-l orig` selects the audio and `-sl orig` selects the Traditional subtitles. Do not
+mix the forms. A bare `cmn` implies Simplified Chinese, so a `cmn` title language makes `-sl orig`
+select Simplified subtitles. A `zh-TW` title language with `cmn` audio selects no audio, because
+`zh-TW` implies Traditional Chinese. Cantonese and Chinese never match, so `-sl orig` on a `yue-HK`
+title does not select `zh-Hant` subtitles; select them with `-sl zh-Hant`.
+
+The `{dual}`, `{multi}` and `{dubbed}` file name tags count `cmn` as `zh` and keep `yue` separate
+(see [`dual_multi_mode`](../reference/configuration/download.md#dual_multi_mode)).
+
 Set `muxing.track_names` to `native` to name each track in its own language. The same rules apply
 to the script and the region:
 

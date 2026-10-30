@@ -394,7 +394,10 @@ dual_multi_mode: strict
 
 !!! note "Dialects count as one language"
     Regional variants of the same base language (e.g. `en-US` and `en-GB`) collapse to a single
-    language in both modes, so they never trigger `{dual}` on their own.
+    language in both modes, so they never trigger `{dual}` on their own. An individual language
+    counts as its macrolanguage: `cmn` and `zh` are one language, and so are `arb` and `ar`.
+    Norwegian `nb` (Bokmål) and `nn` (Nynorsk) count as `no`.
+    Cantonese (`yue`) stays separate, so `cmn` and `yue` audio give `{dual}`.
 
 ## `hdr10plus_probe`
 

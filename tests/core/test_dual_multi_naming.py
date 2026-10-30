@@ -99,6 +99,33 @@ def test_strict_single_unknown_original_no_dubbed(strict_mode):
     assert c["multi"] == ""
 
 
+@pytest.mark.parametrize(
+    ("language", "languages", "tags"),
+    [
+        ("zh", ["cmn"], set()),
+        ("zh-TW", ["cmn-TW"], set()),
+        ("cmn", ["zh-CN"], set()),
+        ("zh", ["zh", "cmn"], set()),
+        ("zh", ["cmn", "yue"], {"dual"}),
+        ("cmn", ["yue"], {"dubbed"}),
+        ("yue", ["cmn"], {"dubbed"}),
+        ("ar", ["arb"], set()),
+        ("no", ["nb-NO"], set()),
+        ("nb", ["nn"], set()),
+        ("no", ["nb", "da"], {"dual"}),
+    ],
+)
+def test_strict_counts_an_individual_language_as_its_macrolanguage(strict_mode, language, languages, tags):
+    c = ctx(language, languages)
+    assert {name for name in ("dual", "multi", "dubbed") if c[name]} == tags
+
+
+def test_the_primary_audio_is_the_original_language_under_its_macrolanguage(strict_mode):
+    media_info = make_media_info(["yue", "cmn"])
+    media_info.audio_tracks[1].channel_s = 6
+    assert make_movie("zh").build_base_template_context(media_info)["audio_channels"] == "6.0"
+
+
 def test_count_dual_ignores_original(count_mode):
     c = ctx(None, ["en", "es"])
     assert c["dual"] == "DUAL"

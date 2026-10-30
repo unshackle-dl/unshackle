@@ -14,6 +14,7 @@ from unshackle.core.constants import (
     VIDEO_CODEC_MAP,
 )
 from unshackle.core.tracks import Tracks
+from unshackle.core.utilities import spoken_language
 
 
 def rename(name: Optional[str]) -> str:
@@ -74,21 +75,18 @@ class Title:
         returned dict with their specific fields (e.g., season/episode).
         """
         primary_video_track = next(iter(media_info.video_tracks), None)
-        original_lang_tag = str(self.language).split("-")[0].lower() if self.language else ""
-        primary_audio_track = None
-        if original_lang_tag:
-            primary_audio_track = next(
-                (
-                    t
-                    for t in media_info.audio_tracks
-                    if t.language and t.language.split("-")[0].lower() == original_lang_tag
-                ),
-                None,
-            )
-        if primary_audio_track is None:
-            primary_audio_track = next(iter(media_info.audio_tracks), None)
-        audio_lang_bases = {x.language.split("-")[0].lower() for x in media_info.audio_tracks if x.language}
-        unique_audio_languages = len(audio_lang_bases)
+        original_lang_tag = spoken_language(self.language)
+        spoken_audio = [spoken_language(t.language) for t in media_info.audio_tracks]
+        primary_audio_track = next(
+            (
+                t
+                for t, lang in zip(media_info.audio_tracks, spoken_audio)
+                if original_lang_tag and lang == original_lang_tag
+            ),
+            next(iter(media_info.audio_tracks), None),
+        )
+        audio_languages = set(spoken_audio) - {""}
+        unique_audio_languages = len(audio_languages)
 
         context: dict[str, Any] = {
             "source": self.service.__name__ if show_service else "",
@@ -215,10 +213,10 @@ class Title:
         if unique_audio_languages > 2:
             context["multi"] = "MULTi"
         elif unique_audio_languages == 2:
-            if not strict or (original_lang_tag and original_lang_tag in audio_lang_bases):
+            if not strict or (original_lang_tag and original_lang_tag in audio_languages):
                 context["dual"] = "DUAL"
         elif unique_audio_languages == 1 and strict:
-            if original_lang_tag and original_lang_tag not in audio_lang_bases:
+            if original_lang_tag and original_lang_tag not in audio_languages:
                 context["dubbed"] = "DUBBED"
 
         language_tags = config.language_tags if isinstance(config.language_tags, dict) else {}
