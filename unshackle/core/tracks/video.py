@@ -655,9 +655,9 @@ class Video(Track):
             raise EnvironmentError("ccextractor executable was not found.")
 
         out_path = Path(out_path)
-        video_path, ccextractor = self.path, binaries.CCExtractor
+        ccextractor = binaries.CCExtractor
 
-        def run_ccextractor(fallback: str) -> bool:
+        def run_ccextractor(video_path: Path, fallback: str) -> bool:
             cc_start = time.monotonic()
             try:
                 subprocess.run(
@@ -692,9 +692,10 @@ class Video(Track):
 
         # Try on the original file first (preserves container-level CC data like c608 boxes),
         # then fall back to repacked file (ccextractor can fail on some container formats).
-        if not run_ccextractor("retrying on a repackaged copy"):
+        if not run_ccextractor(self.path, "retrying on a repackaged copy"):
+            # repackage() deletes the original file and moves self.path to the repacked copy
             self.repackage()
-            run_ccextractor("skipping CC extraction")
+            run_ccextractor(self.path, "skipping CC extraction")
 
         if out_path.exists():
             cc_track = Subtitle(
