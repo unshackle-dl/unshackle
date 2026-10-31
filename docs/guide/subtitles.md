@@ -441,6 +441,7 @@ subtitle:
 | `sidecar_format` | `srt` | a format name (e.g. `srt`, `vtt`) or `original` | Format used for sidecar files. |
 | `group_by` | `type` | `type`, `language` | Whether all tracks of one type stay together, or each language stays next to its own variants. |
 | `language_priority` | *(unset)* | a list of languages | Languages to sort to the top. The rest keep the default order. Nothing is removed. |
+| `dedupe_codecs` | *(unset)* | a list of codecs, e.g. `[VTT, STPP, WVTT]` | Keep one copy of a subtitle that the service sends in several codecs: the earliest listed codec wins. |
 
 ### Which settings to change
 
@@ -454,6 +455,7 @@ only when you want something the defaults do not do:
 | Music and lyric lines stripped along with the sound effects | `sdh_method: filter-subs` |
 | Lyric lines kept | `sdh_method: subby`, or install SubtitleEdit |
 | No stripped copies made at all | `strip_sdh: false` |
+| One copy of each subtitle when the service sends the same one in several codecs | `dedupe_codecs: [VTT, STPP, WVTT]` |
 | One backend for every conversion, whatever you install | `conversion_method: <backend>` |
 
 Two keys read as if they control markup, and do not:

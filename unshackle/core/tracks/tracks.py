@@ -308,6 +308,23 @@ class Tracks:
                     kept.append(track)
             setattr(self, kind, kept)
 
+    def dedupe_subtitle_codecs(self, priority: Sequence[Subtitle.Codec]) -> None:
+        """
+        Drop a subtitle when the same language, flag set and name exists in a codec earlier in priority.
+        A subtitle in an unlisted codec is always kept.
+        """
+        rank = {codec: i for i, codec in reversed(list(enumerate(priority)))}
+
+        def variant(sub: Subtitle) -> tuple:
+            signature = self.signature(sub)
+            return signature[:2] + signature[3:]  # the signature without its codec
+
+        best: dict[tuple, int] = {}
+        for sub in self.subtitles:
+            if sub.codec in rank:
+                best[variant(sub)] = min(best.get(variant(sub), rank[sub.codec]), rank[sub.codec])
+        self.subtitles = [s for s in self.subtitles if s.codec not in rank or rank[s.codec] == best[variant(s)]]
+
     def sort_videos(
         self, by_language: Optional[Sequence[Union[str, Language]]] = None, exact_match: bool = False
     ) -> None:

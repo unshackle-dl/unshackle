@@ -2453,6 +2453,10 @@ class dl:
                         level="INFO", operation="get_tracks", service=self.service, context=tracks_info
                     )
 
+            if dedupe_codecs := config.subtitle.get("dedupe_codecs"):
+                codecs = map(SUBTITLE_CODEC.convert, dedupe_codecs)
+                title.tracks.dedupe_subtitle_codecs([c for c in codecs if isinstance(c, Subtitle.Codec)])
+
             # a plain track covers an SDH track only when it is the same variant, as -sl selects them,
             # so en-US SDH is stripped next to a plain en-GB: -sl en-US would otherwise keep only the SDH
             if config.subtitle.get("strip_sdh", True):

@@ -3,11 +3,19 @@ import pytest
 from unshackle.core.tracks import Subtitle, Tracks
 
 
-def sub(lang: str, forced: bool = False, sdh: bool = False, cc: bool = False, orig: bool = False) -> Subtitle:
+def sub(
+    lang: str,
+    forced: bool = False,
+    sdh: bool = False,
+    cc: bool = False,
+    orig: bool = False,
+    codec: Subtitle.Codec = Subtitle.Codec.SubRip,
+    tag: str = "",
+) -> Subtitle:
     track = Subtitle(
-        url=f"https://example.test/{lang}-{forced}-{sdh}-{cc}",
+        url=f"https://example.test/{lang}-{forced}-{sdh}-{cc}-{codec.value}{tag}",
         language=lang,
-        codec=Subtitle.Codec.SubRip,
+        codec=codec,
         forced=forced,
         sdh=sdh,
         cc=cc,
@@ -266,3 +274,20 @@ def test_all_sorts_the_original_track_then_its_other_regional_forms() -> None:
     )
     t.sort_audio(by_language=["all"])
     assert [str(a.language) for a in t.audio] == ["fr-CA", "fr-FR", "en"]
+
+
+def test_dedupe_subtitle_codecs_keeps_the_first_listed_codec_of_each_variant() -> None:
+    codec = Subtitle.Codec
+    vtt = sub("en", codec=codec.WebVTT)
+    wvtt = sub("en", codec=codec.fVTT)
+    stpp = sub("en", codec=codec.fTTML)
+    stpp_cc = sub("en", cc=True, codec=codec.fTTML)
+    srt = sub("en")  # unlisted codec: always kept
+    de_wvtt = sub("de", codec=codec.fVTT)
+    vtt_second = sub("en", codec=codec.WebVTT, tag="-second")  # same winning codec: kept, it may differ in content
+    tracks = Tracks()
+    tracks.subtitles = [wvtt, stpp, vtt, stpp_cc, srt, de_wvtt, vtt_second]
+
+    tracks.dedupe_subtitle_codecs([codec.WebVTT, codec.fTTML, codec.fVTT])
+
+    assert tracks.subtitles == [vtt, stpp_cc, srt, de_wvtt, vtt_second]

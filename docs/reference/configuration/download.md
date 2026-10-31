@@ -194,6 +194,7 @@ in or writes them as sidecar files. See [Subtitles](../../guide/subtitles.md) fo
 | `type_priority` | list | *(unset)* | Ordered ranking of subtitle types (`forced`, `normal`, `sdh`; CC counts as SDH). Types you leave out fall to the end. |
 | `group_by` | str | `"type"` | Which key groups the subtitle tracks. `type` puts all forced tracks together, then all normal, then all SDH. `language` keeps each language next to its own variants. |
 | `language_priority` | list | *(unset)* | Languages to sort to the top, in the order you give. The rest keep the default order: original language first, then alphabetical. Nothing is removed. |
+| `dedupe_codecs` | list | *(unset)* | Subtitle codecs in order of preference, by value or name, for example `[VTT, STPP, WVTT]`. When tracks of the same language, forced/SDH/CC type and name come in several listed codecs, unshackle drops the ones in a later codec. It always keeps codecs you leave out. Unset keeps every track. |
 
 ```yaml
 subtitle:
