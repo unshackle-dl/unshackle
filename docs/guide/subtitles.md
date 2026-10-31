@@ -52,7 +52,7 @@ format-appropriate clean-up to make a single, valid file:
   `&lrm;` / `&rlm;` bidirectional entities.
 - **Segment merging**: when a WebVTT or boxed subtitle arrives as many DASH/HLS
   segments, unshackle merges the segments back into one continuous document with
-  correct timing.
+  correct timing. A cue that a segment boundary cuts in two comes out as one cue.
 - **WebVTT sanitization**: merged WebVTT runs through a repair pipeline that clamps
   negative timestamps to `00:00:00.000`, removes stray cue identifiers (like `Q0`, `Q1`)
   that confuse downstream parsers, and merges multi-line cues that a service split into

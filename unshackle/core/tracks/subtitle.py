@@ -377,6 +377,14 @@ class Subtitle(Track):
         return [box.data for box in boxes if box.type == b"mdat"]
 
     @staticmethod
+    def append_cue(kept: CaptionList, caption: Caption) -> None:
+        """Append caption to kept, or extend the last cue that a segment boundary cut and caption carries on."""
+        if kept and kept[-1].end == caption.start and kept[-1].get_text() == caption.get_text():
+            kept[-1].end = caption.end
+        else:
+            kept.append(caption)
+
+    @staticmethod
     def first_cue_start(caption_set: pycaption.CaptionSet) -> Optional[int]:
         """The start of the first cue, in microseconds, looking past empty languages; None with no cues."""
         return next(
@@ -413,10 +421,8 @@ class Subtitle(Track):
                     for caption in fragment.get_captions(language):
                         caption.start = max(caption.start + shift, 0)
                         caption.end += shift
-                        if kept and kept[-1].end == caption.start and kept[-1].get_text() == caption.get_text():
-                            kept[-1].end = caption.end  # a cue carried into the next fragment
-                        elif caption.end > 0:
-                            kept.append(caption)
+                        if caption.end > 0:
+                            Subtitle.append_cue(kept, caption)
         if not any(captions.values()):
             logging.getLogger("Subtitle").debug(f"ISM text: {len(payloads)} fragments, {len(times)} fragment times")
             self.convert(Subtitle.Codec.TimedTextMarkupLang)
@@ -837,7 +843,8 @@ class Subtitle(Track):
                     for payload in Subtitle.mdat_payloads(data)
                 ):
                     for lang in segment.get_languages():
-                        caption_lists[lang].extend(segment.get_captions(lang))
+                        for caption in segment.get_captions(lang):
+                            Subtitle.append_cue(caption_lists[lang], caption)
                 caption_set = pycaption.CaptionSet(caption_lists)
             elif codec == Subtitle.Codec.TimedTextMarkupLang:
                 text = try_ensure_utf8(data).decode("utf8")
@@ -1109,12 +1116,7 @@ class Subtitle(Track):
                             nodes=nodes,
                             layout_info=layout,
                         )
-                        p_caption = captions[-1] if captions else None
-                        if p_caption and caption.start == p_caption.end and str(caption.nodes) == str(p_caption.nodes):
-                            # it's a duplicate, but lets take its end time
-                            p_caption.end = caption.end
-                            continue
-                        captions.append(caption)
+                        Subtitle.append_cue(captions, caption)
 
         return captions, language
 

@@ -208,7 +208,10 @@ def categorize_exception(
     exc_str = f"{exc} {root}".lower()
     exc_type = type(root).__name__
 
-    if any(keyword in exc_str for keyword in ["geofence", "geoblock", "region", "not available in", "territory"]):
+    if any(
+        keyword in exc_str
+        for keyword in ["geofence", "geoblock", "geo-block", "geolocation", "region", "not available in", "territory"]
+    ):
         return APIError(
             error_code=APIErrorCode.GEOFENCE,
             message=f"Content not available in your region: {redact_secrets(str(exc))}",

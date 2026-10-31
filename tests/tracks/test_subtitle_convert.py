@@ -351,6 +351,20 @@ def test_segmented_fvtt_parses_and_converts(tmp_path, monkeypatch):
     assert cue_count(out) == 2
 
 
+def test_segmented_fttml_joins_a_cue_split_at_a_segment_boundary():
+    data = build_stpp_mp4(
+        ttml_fragment(("00:00:01.000", "00:00:02.000", "Carried")),
+        ttml_fragment(("00:00:02.000", "00:00:03.500", "Carried"), ("00:00:03.500", "00:00:04.000", "Next")),
+    )
+
+    captions = Subtitle.parse(data, Codec.fTTML).get_captions("en")
+
+    assert [(c.start / 1e6, c.end / 1e6, c.get_text()) for c in captions] == [
+        (1.0, 3.5, "Carried"),
+        (3.5, 4.0, "Next"),
+    ]
+
+
 def test_segmented_fttml_parses_and_converts(tmp_path, monkeypatch):
     monkeypatch.setattr("unshackle.core.config.config.subtitle", {}, raising=False)
     frag = (
@@ -448,8 +462,8 @@ def test_dash_fvtt_cues_lose_the_presentation_time_offset(tmp_path, monkeypatch)
     assert "00:00:02.000 --> 00:00:03.000" in text
 
 
-def ttml_fragment(*cues: tuple[str, str]) -> str:
-    body = "".join(f'<p begin="{begin}" end="{end}">Line</p>' for begin, end in cues)
+def ttml_fragment(*cues: tuple[str, ...]) -> str:
+    body = "".join(f'<p begin="{cue[0]}" end="{cue[1]}">{cue[2] if len(cue) > 2 else "Line"}</p>' for cue in cues)
     return f'<tt xmlns="http://www.w3.org/ns/ttml" xml:lang="en"><body><div>{body}</div></body></tt>'
 
 

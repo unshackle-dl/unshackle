@@ -114,6 +114,8 @@ def test_build_error_response_debug_mode_includes_traceback() -> None:
         (TimeoutError("read timeout"), APIErrorCode.NETWORK_ERROR),
         (Exception("Not available in your region"), APIErrorCode.GEOFENCE),
         (Exception("Service is geoblocked in GB"), APIErrorCode.GEOFENCE),
+        (Exception("Content is geo-blocked."), APIErrorCode.GEOFENCE),
+        (Exception("Manifest request failed: GeoLocationBlocked"), APIErrorCode.GEOFENCE),
         (
             Exception("Service is not available in your region (GB)"),
             APIErrorCode.GEOFENCE,
