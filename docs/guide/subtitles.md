@@ -35,7 +35,9 @@ shown in track listings. The **Extension** column is the file extension used on 
     `fTTML` (STPP) and `fVTT` (WVTT) are the fragmented, MP4-box-encapsulated forms that
     DASH and HLS deliver. You never keep these as-is: right after download they are
     unwrapped into their plain counterparts (`fTTML` becomes TTML and `fVTT` becomes
-    WebVTT), so you always end up with an editable text subtitle. Note that this is a
+    WebVTT), so you always end up with an editable text subtitle. For a DASH track, the
+    unwrap also subtracts the manifest's `presentationTimeOffset` from the cue times, so the
+    subtitles stay in sync with the video. Note that this is a
     one-way, source-only relationship: you can convert *from* these boxed formats, but no
     backend can write them as an output target, so they can never be a conversion
     destination.

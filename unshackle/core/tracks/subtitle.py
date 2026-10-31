@@ -271,24 +271,15 @@ class Subtitle(Track):
 
         if self.codec == Subtitle.Codec.fTTML:
             self.convert(Subtitle.Codec.TimedTextMarkupLang)
+            self.rebase_ttml(*self.dash_offset_ms())
         elif self.codec == Subtitle.Codec.fVTT:
             self.convert(Subtitle.Codec.WebVTT)
+            self.path.write_text(rebase_webvtt(self.path.read_text("utf8"), *self.dash_offset_ms()), encoding="utf8")
         elif self.codec == Subtitle.Codec.WebVTT:
             text = self.path.read_text("utf8")
             text = Subtitle.strip_webvtt_timestamp_map(text)
             if self.descriptor == Track.Descriptor.DASH:
-                from unshackle.core.manifests import DASH
-
-                template = DASH.merge_segment_templates(
-                    self.data["dash"]["adaptation_set"], self.data["dash"]["representation"]
-                )
-                if template is not None:
-                    timescale = int(template.get("timescale", "1"))
-                    text = rebase_webvtt(
-                        text,
-                        int(template.get("presentationTimeOffset", "0")) * 1000 // timescale,
-                        int(template.get("duration", "0")) * 1000 // timescale,
-                    )
+                text = rebase_webvtt(text, *self.dash_offset_ms())
                 if len(self.data["dash"]["segment_durations"]) > 1:
                     text = merge_segmented_webvtt(
                         text,
@@ -333,6 +324,48 @@ class Subtitle(Track):
                     except Exception:
                         # Keep the sanitized version even if parsing failed
                         self.path.write_text(text, encoding="utf8")
+
+    def dash_offset_ms(self) -> tuple[int, int]:
+        """
+        The DASH presentationTimeOffset and one segment's length, in ms, from the merged SegmentTemplate.
+        Returns (0, 0) for a track that is not DASH or has no SegmentTemplate.
+        """
+        if self.descriptor != Track.Descriptor.DASH:
+            return 0, 0
+        from unshackle.core.manifests import DASH
+
+        # SegmentBase/SegmentList offsets and later periods of a multi-period MPD are not read;
+        # add them when a stream needs it.
+        dash = self.data["dash"]
+        template = DASH.merge_segment_templates(dash["adaptation_set"], dash["representation"])
+        if template is None:
+            return 0, 0
+        timescale = int(template.get("timescale", "1"))
+        first = template.find("SegmentTimeline/S")
+        duration = template.get("duration") or (first is not None and first.get("d")) or "0"
+        return int(template.get("presentationTimeOffset", "0")) * 1000 // timescale, int(duration) * 1000 // timescale
+
+    def rebase_ttml(self, offset_ms: int, segment_ms: int) -> None:
+        """
+        Move the TTML cues back by offset_ms, under the same first-cue guard as rebase_webvtt.
+        A cue carried in from before the offset starts at 0; this method drops a cue that ends by then.
+        """
+        if offset_ms <= 0 or not self.path:
+            return
+        caption_set = Subtitle.parse(self.path.read_bytes(), Subtitle.Codec.TimedTextMarkupLang)
+        languages = caption_set.get_languages()
+        offset_us = offset_ms * 1000
+        if not languages or caption_set.get_captions(languages[0])[0].start < offset_us - segment_ms * 1000:
+            return
+        for language in languages:
+            kept = CaptionList()
+            for caption in caption_set.get_captions(language):
+                caption.start = max(caption.start - offset_us, 0)
+                caption.end -= offset_us
+                if caption.end > 0:
+                    kept.append(caption)
+            caption_set.set_captions(language, kept)
+        self.path.write_text(pycaption.DFXPWriter().write(caption_set), encoding="utf8")
 
     @staticmethod
     def strip_webvtt_cue_classes(text: str) -> str:

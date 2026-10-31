@@ -85,6 +85,8 @@ def rebase_webvtt(text: str, offset_ms: int, segment_ms: int = 0) -> str:
     period whose presentationTimeOffset is offset_ms, as a live replay's do. Cues that start
     more than one segment below the offset are already presentation times, so the text stays
     as it is. A cue carried into the first segment can start up to one segment early.
+    The guard only tells the two timelines apart when the offset is much larger than a segment,
+    as a live clock is. It always subtracts an offset smaller than a segment.
     """
     first = CUE_TIMES.search(text)
     if offset_ms <= 0 or not first or timestamp_ms(first[2]) < offset_ms - segment_ms:

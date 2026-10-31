@@ -374,6 +374,82 @@ def test_segmented_fttml_parses_and_converts(tmp_path, monkeypatch):
     assert cue_count(out) == 2
 
 
+def dash_subtitle(tmp_path, monkeypatch, codec, data: bytes, template: str):
+    """A DASH Subtitle whose base download is a no-op, so download() runs only the post-processing on data."""
+    from lxml import etree
+
+    from unshackle.core.tracks.track import Track
+
+    monkeypatch.setattr("unshackle.core.config.config.subtitle", {}, raising=False)
+    monkeypatch.setattr(Track, "download", lambda *args, **kwargs: None)
+    sub = Subtitle(
+        url="https://example.test/x",
+        language="en",
+        codec=codec,
+        descriptor=Track.Descriptor.DASH,
+        data={
+            "dash": {
+                "adaptation_set": etree.fromstring(f"<AdaptationSet>{template}</AdaptationSet>"),
+                "representation": etree.fromstring("<Representation/>"),
+                "segment_durations": [],
+            }
+        },
+    )
+    sub.path = tmp_path / f"seg.{codec.extension}"
+    sub.path.write_bytes(data)
+    return sub
+
+
+STPP_CUE = (
+    '<?xml version="1.0" encoding="utf-8"?>'
+    '<tt xmlns="http://www.w3.org/ns/ttml" xmlns:ttp="http://www.w3.org/ns/ttml#parameter"'
+    ' ttp:timeBase="media" xml:lang="en"><body><div>'
+    '<p begin="00:06:02.000" end="00:06:02.839">Line</p>'
+    "</div></body></tt>"
+)
+
+
+@pytest.mark.parametrize(
+    "template, offset, times",
+    [
+        (
+            '<SegmentTemplate timescale="90000" presentationTimeOffset="180000">'
+            '<SegmentTimeline><S t="180000" d="540000" r="10"/></SegmentTimeline></SegmentTemplate>',
+            (2000, 6000),
+            (360_000_000, 360_839_000),
+        ),
+        # cues already on presentation time stay where they are
+        (
+            '<SegmentTemplate timescale="1000" presentationTimeOffset="3600000" duration="6000"/>',
+            (3_600_000, 6000),
+            (362_000_000, 362_839_000),
+        ),
+    ],
+)
+def test_dash_fttml_cues_lose_the_presentation_time_offset(tmp_path, monkeypatch, template, offset, times):
+    sub = dash_subtitle(tmp_path, monkeypatch, Codec.fTTML, build_stpp_mp4(STPP_CUE), template)
+    assert sub.dash_offset_ms() == offset
+
+    sub.download(None, None)  # type: ignore[arg-type]
+
+    assert sub.codec == Codec.TimedTextMarkupLang
+    (caption,) = Subtitle.parse(sub.path.read_bytes(), Codec.TimedTextMarkupLang).get_captions("en")
+    assert (caption.start, caption.end) == times
+
+
+def test_dash_fvtt_cues_lose_the_presentation_time_offset(tmp_path, monkeypatch):
+    template = '<SegmentTemplate timescale="1000" presentationTimeOffset="1000" duration="2000"/>'
+    data = (FIXTURES / "segmented.wvtt.mp4").read_bytes()
+    sub = dash_subtitle(tmp_path, monkeypatch, Codec.fVTT, data, template)
+
+    sub.download(None, None)  # type: ignore[arg-type]
+
+    assert sub.codec == Codec.WebVTT
+    text = sub.path.read_text("utf8")
+    assert "00:00:00.000 --> 00:00:01.000" in text
+    assert "00:00:02.000 --> 00:00:03.000" in text
+
+
 def test_fttml_with_viewport_units_converts(tmp_path, monkeypatch):
     """TTML2 ``vw``/``vh`` and ``rw``/``rh`` sizes, which pycaption rejects, still parse and convert.
 
