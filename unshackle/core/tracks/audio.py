@@ -45,6 +45,7 @@ class Audio(Track):
         ALAC = "ALAC"  # https://en.wikipedia.org/wiki/Apple_Lossless_Audio_Codec
         FLAC = "FLAC"  # https://en.wikipedia.org/wiki/FLAC
         MP3 = "MP3"  # https://en.wikipedia.org/wiki/MP3
+        PCM = "PCM"  # https://en.wikipedia.org/wiki/Pulse-code_modulation
 
         @property
         def extension(self) -> str:
@@ -86,21 +87,6 @@ class Audio(Track):
                 except ValueError:
                     pass
             raise ValueError(f"No MIME types matched any supported Audio Codecs in '{codecs}'")
-
-        @staticmethod
-        def from_netflix_profile(profile: str) -> Audio.Codec:
-            profile = profile.lower().strip()
-            if profile.startswith("heaac") or profile.startswith("xheaac"):
-                return Audio.Codec.AAC
-            if profile.startswith("dd-"):
-                return Audio.Codec.AC3
-            if profile.startswith("ddplus"):
-                return Audio.Codec.EC3
-            if profile.startswith("ac4"):
-                return Audio.Codec.AC4
-            if profile.startswith("playready-oggvorbis"):
-                return Audio.Codec.OGG
-            raise ValueError(f"The Content Profile '{profile}' is not a supported Audio Codec")
 
     def __init__(
         self,
