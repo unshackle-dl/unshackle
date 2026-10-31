@@ -27,6 +27,7 @@ class Video(Track):
     class Codec(str, Enum):
         AVC = "H.264"
         HEVC = "H.265"
+        VVC = "H.266"
         VC1 = "VC-1"
         VP8 = "VP8"
         VP9 = "VP9"
@@ -83,19 +84,6 @@ class Video(Track):
                 except ValueError:
                     pass
             raise ValueError(f"No MIME types matched any supported Video Codecs in '{codecs}'")
-
-        @staticmethod
-        def from_netflix_profile(profile: str) -> Video.Codec:
-            profile = profile.lower().strip()
-            if profile.startswith(("h264", "playready-h264")):
-                return Video.Codec.AVC
-            if profile.startswith("hevc"):
-                return Video.Codec.HEVC
-            if profile.startswith("vp9"):
-                return Video.Codec.VP9
-            if profile.startswith("av1"):
-                return Video.Codec.AV1
-            raise ValueError(f"The Content Profile '{profile}' is not a supported Video Codec")
 
     class Range(str, Enum):
         SDR = "SDR"  # No Dynamic Range

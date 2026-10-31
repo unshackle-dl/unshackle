@@ -89,15 +89,6 @@ class Subtitle(Track):
                     pass
             raise ValueError(f"No MIME types matched any supported Subtitle Codecs in '{codecs}'")
 
-        @staticmethod
-        def from_netflix_profile(profile: str) -> Subtitle.Codec:
-            profile = profile.lower().strip()
-            if profile.startswith("webvtt"):
-                return Subtitle.Codec.WebVTT
-            if profile.startswith("dfxp"):
-                return Subtitle.Codec.TimedTextMarkupLang
-            raise ValueError(f"The Content Profile '{profile}' is not a supported Subtitle Codec")
-
     # WebVTT sanitization patterns (compiled once for performance)
     CUE_ID_PATTERN = re.compile(r"^[A-Za-z]+\d+$")
     TIMING_START_PATTERN = re.compile(r"^\d+:\d+[:\.]")
