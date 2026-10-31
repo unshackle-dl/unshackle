@@ -269,7 +269,9 @@ class Subtitle(Track):
         if not self.path:
             return
 
-        if self.codec == Subtitle.Codec.fTTML:
+        if self.codec == Subtitle.Codec.fTTML and self.descriptor == Track.Descriptor.ISM:
+            self.unwrap_ism_ttml()
+        elif self.codec == Subtitle.Codec.fTTML:
             self.convert(Subtitle.Codec.TimedTextMarkupLang)
             self.rebase_ttml(*self.dash_offset_ms())
         elif self.codec == Subtitle.Codec.fVTT:
@@ -353,11 +355,11 @@ class Subtitle(Track):
         if offset_ms <= 0 or not self.path:
             return
         caption_set = Subtitle.parse(self.path.read_bytes(), Subtitle.Codec.TimedTextMarkupLang)
-        languages = caption_set.get_languages()
         offset_us = offset_ms * 1000
-        if not languages or caption_set.get_captions(languages[0])[0].start < offset_us - segment_ms * 1000:
+        first = Subtitle.first_cue_start(caption_set)
+        if first is None or first < offset_us - segment_ms * 1000:
             return
-        for language in languages:
+        for language in caption_set.get_languages():
             kept = CaptionList()
             for caption in caption_set.get_captions(language):
                 caption.start = max(caption.start - offset_us, 0)
@@ -366,6 +368,65 @@ class Subtitle(Track):
                     kept.append(caption)
             caption_set.set_captions(language, kept)
         self.path.write_text(pycaption.DFXPWriter().write(caption_set), encoding="utf8")
+
+    @staticmethod
+    def mdat_payloads(data: bytes) -> list[bytes]:
+        """The payload of every mdat box in a fragmented MP4 file, in file order."""
+        with PYMP4_LOCK:
+            boxes = MP4.parse_stream(BytesIO(data))
+        return [box.data for box in boxes if box.type == b"mdat"]
+
+    @staticmethod
+    def first_cue_start(caption_set: pycaption.CaptionSet) -> Optional[int]:
+        """The start of the first cue, in microseconds, looking past empty languages; None with no cues."""
+        return next(
+            (c.start for language in caption_set.get_languages() for c in caption_set.get_captions(language)[:1]),
+            None,
+        )
+
+    def unwrap_ism_ttml(self) -> None:
+        """
+        Convert ISM fTTML to TTML with every cue on the stream timeline, counted from its first fragment.
+        Smooth Streaming packagers often time the cues of a fragment from that fragment's start. A cue
+        that starts before the previous fragment does marks the stream as timed that way.
+        """
+        from unshackle.core.tracks.subtitle_convert import finalize
+
+        if not self.path:
+            return
+        ism = self.data["ism"]
+        times = ism.get("fragment_times") or []
+        payloads = Subtitle.mdat_payloads(self.path.read_bytes()) if times else []
+        captions: dict[str, CaptionList] = defaultdict(CaptionList)
+        if times and len(payloads) == len(times):
+            fragments = [Subtitle.parse(payload, Subtitle.Codec.TimedTextMarkupLang) for payload in payloads]
+            starts = [t * 1_000_000 // ism["timescale"] for t in times]
+            origin = ism["segment_times"][0] * 1_000_000 // ism["timescale"]
+            relative = any(
+                (first := Subtitle.first_cue_start(fragment)) is not None and first < previous
+                for previous, fragment in zip(starts, fragments[1:])
+            )
+            for start, fragment in zip(starts, fragments):
+                shift = (start if relative else 0) - origin
+                for language in fragment.get_languages():
+                    kept = captions[language]
+                    for caption in fragment.get_captions(language):
+                        caption.start = max(caption.start + shift, 0)
+                        caption.end += shift
+                        if kept and kept[-1].end == caption.start and kept[-1].get_text() == caption.get_text():
+                            kept[-1].end = caption.end  # a cue carried into the next fragment
+                        elif caption.end > 0:
+                            kept.append(caption)
+        if not any(captions.values()):
+            logging.getLogger("Subtitle").debug(f"ISM text: {len(payloads)} fragments, {len(times)} fragment times")
+            self.convert(Subtitle.Codec.TimedTextMarkupLang)
+            return
+
+        caption_set = pycaption.CaptionSet(captions)
+        Subtitle.merge_same_cues(caption_set)
+        out = self.path.with_suffix(f".{Subtitle.Codec.TimedTextMarkupLang.value.lower()}")
+        out.write_text(pycaption.DFXPWriter().write(caption_set), encoding="utf8")
+        finalize(self, Subtitle.Codec.TimedTextMarkupLang, out)
 
     @staticmethod
     def strip_webvtt_cue_classes(text: str) -> str:
@@ -771,10 +832,9 @@ class Subtitle(Track):
                 caption_set = pycaption.SRTReader().read(text)
             elif codec == Subtitle.Codec.fTTML:
                 caption_lists: dict[Optional[str], pycaption.CaptionList] = defaultdict(pycaption.CaptionList)
-                with PYMP4_LOCK:
-                    boxes = MP4.parse_stream(BytesIO(data))
                 for segment in (
-                    Subtitle.parse(box.data, Subtitle.Codec.TimedTextMarkupLang) for box in boxes if box.type == b"mdat"
+                    Subtitle.parse(payload, Subtitle.Codec.TimedTextMarkupLang)
+                    for payload in Subtitle.mdat_payloads(data)
                 ):
                     for lang in segment.get_languages():
                         caption_lists[lang].extend(segment.get_captions(lang))

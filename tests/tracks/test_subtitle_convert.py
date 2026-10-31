@@ -22,6 +22,7 @@ import pytest
 from unshackle.core import binaries
 from unshackle.core.tracks import subtitle_convert as sc
 from unshackle.core.tracks.subtitle import Subtitle
+from unshackle.core.tracks.track import Track
 
 Codec = Subtitle.Codec
 
@@ -374,30 +375,27 @@ def test_segmented_fttml_parses_and_converts(tmp_path, monkeypatch):
     assert cue_count(out) == 2
 
 
-def dash_subtitle(tmp_path, monkeypatch, codec, data: bytes, template: str):
-    """A DASH Subtitle whose base download is a no-op, so download() runs only the post-processing on data."""
-    from lxml import etree
-
-    from unshackle.core.tracks.track import Track
-
+def downloaded_subtitle(tmp_path, monkeypatch, codec, data: bytes, descriptor: Track.Descriptor, track_data: dict):
+    """A Subtitle whose base download is a no-op, so download() runs only the post-processing on data."""
     monkeypatch.setattr("unshackle.core.config.config.subtitle", {}, raising=False)
     monkeypatch.setattr(Track, "download", lambda *args, **kwargs: None)
-    sub = Subtitle(
-        url="https://example.test/x",
-        language="en",
-        codec=codec,
-        descriptor=Track.Descriptor.DASH,
-        data={
-            "dash": {
-                "adaptation_set": etree.fromstring(f"<AdaptationSet>{template}</AdaptationSet>"),
-                "representation": etree.fromstring("<Representation/>"),
-                "segment_durations": [],
-            }
-        },
-    )
+    sub = Subtitle(url="https://example.test/x", language="en", codec=codec, descriptor=descriptor, data=track_data)
     sub.path = tmp_path / f"seg.{codec.extension}"
     sub.path.write_bytes(data)
     return sub
+
+
+def dash_subtitle(tmp_path, monkeypatch, codec, data: bytes, template: str):
+    from lxml import etree
+
+    track_data = {
+        "dash": {
+            "adaptation_set": etree.fromstring(f"<AdaptationSet>{template}</AdaptationSet>"),
+            "representation": etree.fromstring("<Representation/>"),
+            "segment_durations": [],
+        }
+    }
+    return downloaded_subtitle(tmp_path, monkeypatch, codec, data, Track.Descriptor.DASH, track_data)
 
 
 STPP_CUE = (
@@ -448,6 +446,66 @@ def test_dash_fvtt_cues_lose_the_presentation_time_offset(tmp_path, monkeypatch)
     text = sub.path.read_text("utf8")
     assert "00:00:00.000 --> 00:00:01.000" in text
     assert "00:00:02.000 --> 00:00:03.000" in text
+
+
+def ttml_fragment(*cues: tuple[str, str]) -> str:
+    body = "".join(f'<p begin="{begin}" end="{end}">Line</p>' for begin, end in cues)
+    return f'<tt xmlns="http://www.w3.org/ns/ttml" xml:lang="en"><body><div>{body}</div></body></tt>'
+
+
+def test_dash_fttml_with_no_cues_converts(tmp_path, monkeypatch):
+    template = '<SegmentTemplate timescale="1000" presentationTimeOffset="2000" duration="6000"/>'
+    sub = dash_subtitle(tmp_path, monkeypatch, Codec.fTTML, build_stpp_mp4(ttml_fragment()), template)
+
+    sub.download(None, None)  # type: ignore[arg-type]
+
+    assert sub.codec == Codec.TimedTextMarkupLang
+
+
+@pytest.mark.parametrize(
+    "fragments, expected",
+    [
+        # timed from each fragment's start, as Smooth Streaming packagers write it
+        (
+            [
+                ttml_fragment(),
+                ttml_fragment(("00:00:06.000", "00:00:07.000")),
+                ttml_fragment(("00:00:00.500", "00:00:01.000")),
+            ],
+            [(14.0, 15.0), (16.5, 17.0)],
+        ),
+        # already on the stream timeline
+        (
+            [
+                ttml_fragment(),
+                ttml_fragment(("00:00:14.000", "00:00:15.000")),
+                ttml_fragment(("00:00:16.500", "00:00:17.000")),
+            ],
+            [(14.0, 15.0), (16.5, 17.0)],
+        ),
+        # one cue carried across a fragment boundary comes out whole
+        (
+            [
+                ttml_fragment(),
+                ttml_fragment(("00:00:07.000", "00:00:08.000")),
+                ttml_fragment(("00:00:00.000", "00:00:01.000")),
+            ],
+            [(15.0, 17.0)],
+        ),
+    ],
+)
+def test_ism_fttml_cues_land_on_the_stream_timeline(tmp_path, monkeypatch, fragments, expected):
+    times = [0, 80_000_000, 160_000_000]
+    track_data = {"ism": {"segment_times": times, "fragment_times": times, "timescale": 10_000_000}}
+    sub = downloaded_subtitle(
+        tmp_path, monkeypatch, Codec.fTTML, build_stpp_mp4(*fragments), Track.Descriptor.ISM, track_data
+    )
+
+    sub.download(None, None)  # type: ignore[arg-type]
+
+    assert sub.codec == Codec.TimedTextMarkupLang
+    captions = Subtitle.parse(sub.path.read_bytes(), Codec.TimedTextMarkupLang).get_captions("en")
+    assert [(c.start / 1e6, c.end / 1e6) for c in captions] == expected
 
 
 def test_fttml_with_viewport_units_converts(tmp_path, monkeypatch):

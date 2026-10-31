@@ -416,7 +416,9 @@ class ISM:
         segments: list[str] = track.data["ism"]["segments"]
         segment_times: list[int] = track.data["ism"].get("segment_times") or []
         if segment_times:
-            segments = segments[track.sample_slice(segment_times, track.data["ism"]["timescale"], config.sample)]
+            kept = track.sample_slice(segment_times, track.data["ism"]["timescale"], config.sample)
+            segments = segments[kept]
+            track.data["ism"]["fragment_times"] = segment_times[kept]
 
         session_drm = None
         if track.drm:
