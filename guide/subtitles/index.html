@@ -2539,7 +2539,8 @@ DASH and HLS deliver. You never keep these as-is: right after download they are
 unwrapped into their plain counterparts (<code>fTTML</code> becomes TTML and <code>fVTT</code> becomes
 WebVTT), so you always end up with an editable text subtitle. For a DASH track, the
 unwrap also subtracts the manifest's <code>presentationTimeOffset</code> from the cue times, so the
-subtitles stay in sync with the video. Note that this is a
+subtitles stay in sync with the video. For an ISM track whose cues count from the start of
+each fragment, the unwrap moves every cue onto the timeline of the track. Note that this is a
 one-way, source-only relationship: you can convert <em>from</em> these boxed formats, but no
 backend can write them as an output target, so they can never be a conversion
 destination.</p>
