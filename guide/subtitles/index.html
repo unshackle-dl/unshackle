@@ -3083,6 +3083,12 @@ relevant font packages.</p>
 <td>a list of languages</td>
 <td>Languages to sort to the top. The rest keep the default order. Nothing is removed.</td>
 </tr>
+<tr>
+<td><code>dedupe_codecs</code></td>
+<td><em>(unset)</em></td>
+<td>a list of codecs, e.g. <code>[VTT, STPP, WVTT]</code></td>
+<td>Keep one copy of a subtitle that the service sends in several codecs: the earliest listed codec wins.</td>
+</tr>
 </tbody>
 </table>
 <h3 id="which-settings-to-change">Which settings to change<a class="headerlink" href="#which-settings-to-change" title="Permanent link">&para;</a></h3>
@@ -3115,6 +3121,10 @@ only when you want something the defaults do not do:</p>
 <tr>
 <td>No stripped copies made at all</td>
 <td><code>strip_sdh: false</code></td>
+</tr>
+<tr>
+<td>One copy of each subtitle when the service sends the same one in several codecs</td>
+<td><code>dedupe_codecs: [VTT, STPP, WVTT]</code></td>
 </tr>
 <tr>
 <td>One backend for every conversion, whatever you install</td>

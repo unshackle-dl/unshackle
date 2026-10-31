@@ -2595,6 +2595,12 @@ in or writes them as sidecar files. See <a href="../../../guide/subtitles/">Subt
 <td><em>(unset)</em></td>
 <td>Languages to sort to the top, in the order you give. The rest keep the default order: original language first, then alphabetical. Nothing is removed.</td>
 </tr>
+<tr>
+<td><code>dedupe_codecs</code></td>
+<td>list</td>
+<td><em>(unset)</em></td>
+<td>Subtitle codecs in order of preference, by value or name, for example <code>[VTT, STPP, WVTT]</code>. When tracks of the same language, forced/SDH/CC type and name come in several listed codecs, unshackle drops the ones in a later codec. It always keeps codecs you leave out. Unset keeps every track.</td>
+</tr>
 </tbody>
 </table>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nt">subtitle</span><span class="p">:</span>
