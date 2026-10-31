@@ -4785,18 +4785,74 @@ class dl:
         if DOWNLOAD_CANCELLED.is_set():
             raise DownloadCancelled()
         for kid in kids:
-            key = self.LICENSE_KEY_CACHE.get(kid)
-            if not key or kid in drm.content_keys:
-                continue
-            drm.content_keys[kid] = key
-            if cek_tree is not None and not any(f"{kid.hex}:{key}" in str(x.label) for x in cek_tree.children):
-                cek_tree.add(f"[text2]{kid.hex}:{key}{['', '*'][kid == track_kid]} from cache")
-            log_event(
-                "license_cache_hit",
-                level="INFO",
+            if kid not in drm.content_keys:
+                self.take_cached_key(drm, kid, track, track_kid, cek_tree)
+
+    def take_cached_key(
+        self,
+        drm: Union[ClearKeyCENC, Widevine, PlayReady, MonaLisa],
+        kid: UUID,
+        track: AnyTrack,
+        track_kid: Optional[UUID],
+        cek_tree: Optional[Tree],
+    ) -> bool:
+        """Give the DRM the content key LICENSE_KEY_CACHE holds for ``kid``, and return whether it held one."""
+        key = self.LICENSE_KEY_CACHE.get(kid)
+        if not key:
+            return False
+        drm.content_keys[kid] = key
+        if cek_tree is not None:
+            self.add_key_label(cek_tree, kid, key, track_kid, "from cache")
+        log_event(
+            "license_cache_hit",
+            level="INFO",
+            service=self.service,
+            context={"kid": kid.hex, "content_key": key, "track": str(track), "drm_type": type(drm).__name__},
+        )
+        return True
+
+    def take_vault_key(
+        self,
+        drm: Union[ClearKeyCENC, Widevine, PlayReady, MonaLisa],
+        kid: UUID,
+        track: AnyTrack,
+        track_kid: Optional[UUID],
+        cek_tree: Optional[Tree],
+    ) -> bool:
+        """Give the DRM the content key a key vault holds for ``kid``, cache it for the run, and return whether one did."""
+        key, vault = self.vaults.get_key(kid)
+        if not key:
+            return False
+        drm.content_keys[kid] = key
+        self.LICENSE_KEY_CACHE[kid] = key
+        if cek_tree is not None:
+            self.add_key_label(cek_tree, kid, key, track_kid, f"from {vault}")
+        if self.debug_logger:
+            self.debug_logger.log_vault_query(
+                vault_name=str(vault),
+                operation="get_key_success",
                 service=self.service,
-                context={"kid": kid.hex, "content_key": key, "track": str(track), "drm_type": type(drm).__name__},
+                context={
+                    "kid": kid.hex,
+                    "content_key": key,
+                    "track": str(track),
+                    "from_cache": True,
+                    "drm_type": type(drm).__name__,
+                },
             )
+        return True
+
+    @staticmethod
+    def add_key_label(tree: Tree, kid: UUID, key: str, track_kid: Optional[UUID] = None, source: str = "") -> None:
+        """Add ``kid:key`` to a content key tree once, with ``*`` on the track's own KID and ``source`` after it."""
+        if any(f"{kid.hex}:{key}" in str(x.label) for x in tree.children):
+            return
+        label = f"[text2]{kid.hex}:{key}"
+        if kid == track_kid:
+            label += "*"
+        if source:
+            label += f" {source}"
+        tree.add(label)
 
     def service_licence(self, service: Service, drm_system: Optional[str] = None, **kwargs: Any) -> Any:
         """Call the service's licence function for the track's DRM system.
@@ -4948,14 +5004,10 @@ class dl:
                 if track_kid and track_kid not in vault_kids:
                     vault_kids.append(track_kid)
                 for kid in vault_kids:
-                    if kid in drm.content_keys:
+                    if kid in drm.content_keys or self.take_cached_key(drm, kid, track, track_kid, None):
                         continue
-                    content_key = self.LICENSE_KEY_CACHE.get(kid)
-                    if not content_key and not cdm_only:
-                        content_key, vault_used = self.vaults.get_key(kid)
-                    if content_key:
-                        drm.content_keys[kid] = content_key
-                        self.LICENSE_KEY_CACHE[kid] = content_key
+                    if not cdm_only:
+                        self.take_vault_key(drm, kid, track, track_kid, None)
 
                 def missing_track_key() -> bool:
                     return not drm.content_keys or bool(track_kid and track_kid not in drm.content_keys)
@@ -5039,12 +5091,10 @@ class dl:
                     all_kids.append(track_kid)
                 for kid in all_kids:
                     if kid in drm.content_keys:
-                        is_track_kid = ["", "*"][kid == track_kid]
-                        key = drm.content_keys[kid]
-                        cek_tree.add(f"[text2]{kid.hex}:{key}{is_track_kid}")
+                        self.add_key_label(cek_tree, kid, drm.content_keys[kid], track_kid)
                 for kid, key in drm.content_keys.items():
                     if kid not in all_kids:
-                        cek_tree.add(f"[text2]{kid.hex}:{key}")
+                        self.add_key_label(cek_tree, kid, key)
                 if not any(isinstance(x, Tree) and x.label == cek_tree.label for x in table.columns[0].cells):
                     table.add_row(cek_tree)
             if export:
@@ -5131,56 +5181,16 @@ class dl:
 
                 for kid in all_kids:
                     if kid in drm.content_keys:
-                        is_track_kid = ["", "*"][kid == track_kid]
-                        key = drm.content_keys[kid]
-                        label = f"[text2]{kid.hex}:{key}{is_track_kid}"
-                        if not any(f"{kid.hex}:{key}" in str(x.label) for x in cek_tree.children):
-                            cek_tree.add(label)
+                        self.add_key_label(cek_tree, kid, drm.content_keys[kid], track_kid)
                         continue
 
-                    is_track_kid = ["", "*"][kid == track_kid]
-
-                    cached_key = None if force else self.LICENSE_KEY_CACHE.get(kid)
-                    if cached_key:
-                        drm.content_keys[kid] = cached_key
-                        label = f"[text2]{kid.hex}:{cached_key}{is_track_kid} from cache"
-                        if not any(f"{kid.hex}:{cached_key}" in str(x.label) for x in cek_tree.children):
-                            cek_tree.add(label)
-                        log_event(
-                            "license_cache_hit",
-                            level="INFO",
-                            service=self.service,
-                            context={
-                                "kid": kid.hex,
-                                "content_key": cached_key,
-                                "track": str(track),
-                                "drm_type": "Widevine",
-                            },
-                        )
+                    if not force and self.take_cached_key(drm, kid, track, track_kid, cek_tree):
                         continue
 
-                    if not cdm_only:
-                        content_key, vault_used = self.vaults.get_key(kid)
-                        if content_key:
-                            drm.content_keys[kid] = content_key
-                            label = f"[text2]{kid.hex}:{content_key}{is_track_kid} from {vault_used}"
-                            if not any(f"{kid.hex}:{content_key}" in str(x.label) for x in cek_tree.children):
-                                cek_tree.add(label)
-                            self.LICENSE_KEY_CACHE[kid] = content_key
-
-                            if self.debug_logger:
-                                self.debug_logger.log_vault_query(
-                                    vault_name=str(vault_used),
-                                    operation="get_key_success",
-                                    service=self.service,
-                                    context={
-                                        "kid": kid.hex,
-                                        "content_key": content_key,
-                                        "track": str(track),
-                                        "from_cache": True,
-                                    },
-                                )
-                        elif vaults_only:
+                    if cdm_only:
+                        need_license = True
+                    elif not self.take_vault_key(drm, kid, track, track_kid, cek_tree):
+                        if vaults_only:
                             msg = f"No Vault has a Key for {kid.hex} and --vaults-only was used"
                             cek_tree.add(f"[logging.level.error]{msg}")
                             if not pre_existing_tree:
@@ -5194,16 +5204,12 @@ class dl:
                             )
                             self.flush_vault_writes(pending_vault_writes)
                             raise Widevine.Exceptions.CEKNotFound(msg)
-                        else:
-                            need_license = True
-
-                    if kid not in drm.content_keys and cdm_only:
                         need_license = True
 
                 if need_license:
+                    # force licenses again, so the turn takes no cached keys
                     self.take_licence_turn(licence_turn, drm, [] if force else all_kids, track, track_kid, cek_tree)
-                if need_license and all(kid in drm.content_keys for kid in all_kids):
-                    need_license = False
+                    need_license = not all(kid in drm.content_keys for kid in all_kids)
 
                 if need_license and not vaults_only:
                     from_vaults = drm.content_keys.copy()
@@ -5256,10 +5262,7 @@ class dl:
                     for kid_, key in drm.content_keys.items():
                         if key == "0" * 32:
                             key = f"[red]{key}[/]"
-                        is_track_kid_marker = ["", "*"][kid_ == track_kid]
-                        label = f"[text2]{kid_.hex}:{key}{is_track_kid_marker}"
-                        if not any(f"{kid_.hex}:{key}" in str(x.label) for x in cek_tree.children):
-                            cek_tree.add(label)
+                        self.add_key_label(cek_tree, kid_, key, track_kid)
 
                     drm.content_keys = {
                         kid_: key for kid_, key in drm.content_keys.items() if key and key.count("0") != len(key)
@@ -5332,57 +5335,16 @@ class dl:
 
                 for kid in all_kids:
                     if kid in drm.content_keys:
-                        is_track_kid = ["", "*"][kid == track_kid]
-                        key = drm.content_keys[kid]
-                        label = f"[text2]{kid.hex}:{key}{is_track_kid}"
-                        if not any(f"{kid.hex}:{key}" in str(x.label) for x in cek_tree.children):
-                            cek_tree.add(label)
+                        self.add_key_label(cek_tree, kid, drm.content_keys[kid], track_kid)
                         continue
 
-                    is_track_kid = ["", "*"][kid == track_kid]
-
-                    cached_key = None if force else self.LICENSE_KEY_CACHE.get(kid)
-                    if cached_key:
-                        drm.content_keys[kid] = cached_key
-                        label = f"[text2]{kid.hex}:{cached_key}{is_track_kid} from cache"
-                        if not any(f"{kid.hex}:{cached_key}" in str(x.label) for x in cek_tree.children):
-                            cek_tree.add(label)
-                        log_event(
-                            "license_cache_hit",
-                            level="INFO",
-                            service=self.service,
-                            context={
-                                "kid": kid.hex,
-                                "content_key": cached_key,
-                                "track": str(track),
-                                "drm_type": "PlayReady",
-                            },
-                        )
+                    if not force and self.take_cached_key(drm, kid, track, track_kid, cek_tree):
                         continue
 
-                    if not cdm_only:
-                        content_key, vault_used = self.vaults.get_key(kid)
-                        if content_key:
-                            drm.content_keys[kid] = content_key
-                            label = f"[text2]{kid.hex}:{content_key}{is_track_kid} from {vault_used}"
-                            if not any(f"{kid.hex}:{content_key}" in str(x.label) for x in cek_tree.children):
-                                cek_tree.add(label)
-                            self.LICENSE_KEY_CACHE[kid] = content_key
-
-                            if self.debug_logger:
-                                self.debug_logger.log_vault_query(
-                                    vault_name=str(vault_used),
-                                    operation="get_key_success",
-                                    service=self.service,
-                                    context={
-                                        "kid": kid.hex,
-                                        "content_key": content_key,
-                                        "track": str(track),
-                                        "from_cache": True,
-                                        "drm_type": "PlayReady",
-                                    },
-                                )
-                        elif vaults_only:
+                    if cdm_only:
+                        need_license = True
+                    elif not self.take_vault_key(drm, kid, track, track_kid, cek_tree):
+                        if vaults_only:
                             msg = f"No Vault has a Key for {kid.hex} and --vaults-only was used"
                             cek_tree.add(f"[logging.level.error]{msg}")
                             if not pre_existing_tree:
@@ -5396,16 +5358,12 @@ class dl:
                             )
                             self.flush_vault_writes(pending_vault_writes)
                             raise PlayReady.Exceptions.CEKNotFound(msg)
-                        else:
-                            need_license = True
-
-                    if kid not in drm.content_keys and cdm_only:
                         need_license = True
 
                 if need_license:
+                    # force licenses again, so the turn takes no cached keys
                     self.take_licence_turn(licence_turn, drm, [] if force else all_kids, track, track_kid, cek_tree)
-                if need_license and all(kid in drm.content_keys for kid in all_kids):
-                    need_license = False
+                    need_license = not all(kid in drm.content_keys for kid in all_kids)
 
                 if need_license and not vaults_only:
                     from_vaults = drm.content_keys.copy()
@@ -5438,10 +5396,7 @@ class dl:
                             raise e
 
                     for kid_, key in drm.content_keys.items():
-                        is_track_kid_marker = ["", "*"][kid_ == track_kid]
-                        label = f"[text2]{kid_.hex}:{key}{is_track_kid_marker}"
-                        if not any(f"{kid_.hex}:{key}" in str(x.label) for x in cek_tree.children):
-                            cek_tree.add(label)
+                        self.add_key_label(cek_tree, kid_, key, track_kid)
 
                     drm.content_keys.update(from_vaults)
 
@@ -5487,43 +5442,16 @@ class dl:
 
                 for kid in all_kids:
                     if kid in drm.content_keys:
-                        is_track_kid = ["", "*"][kid == track_kid]
-                        key = drm.content_keys[kid]
-                        label = f"[text2]{kid.hex}:{key}{is_track_kid}"
-                        if not any(f"{kid.hex}:{key}" in str(x.label) for x in cek_tree.children):
-                            cek_tree.add(label)
+                        self.add_key_label(cek_tree, kid, drm.content_keys[kid], track_kid)
                         continue
 
-                    is_track_kid = ["", "*"][kid == track_kid]
-
-                    cached_key = self.LICENSE_KEY_CACHE.get(kid)
-                    if cached_key:
-                        drm.content_keys[kid] = cached_key
-                        label = f"[text2]{kid.hex}:{cached_key}{is_track_kid} from cache"
-                        if not any(f"{kid.hex}:{cached_key}" in str(x.label) for x in cek_tree.children):
-                            cek_tree.add(label)
-                        log_event(
-                            "license_cache_hit",
-                            level="INFO",
-                            service=self.service,
-                            context={
-                                "kid": kid.hex,
-                                "content_key": cached_key,
-                                "track": str(track),
-                                "drm_type": "ClearKeyCENC",
-                            },
-                        )
+                    if self.take_cached_key(drm, kid, track, track_kid, cek_tree):
                         continue
 
-                    if not cdm_only:
-                        content_key, vault_used = self.vaults.get_key(kid)
-                        if content_key:
-                            drm.content_keys[kid] = content_key
-                            label = f"[text2]{kid.hex}:{content_key}{is_track_kid} from {vault_used}"
-                            if not any(f"{kid.hex}:{content_key}" in str(x.label) for x in cek_tree.children):
-                                cek_tree.add(label)
-                            self.LICENSE_KEY_CACHE[kid] = content_key
-                        elif vaults_only:
+                    if cdm_only:
+                        need_license = True
+                    elif not self.take_vault_key(drm, kid, track, track_kid, cek_tree):
+                        if vaults_only:
                             msg = f"No Vault has a Key for {kid.hex} and --vaults-only was used"
                             cek_tree.add(f"[logging.level.error]{msg}")
                             if not pre_existing_tree:
@@ -5537,16 +5465,12 @@ class dl:
                             )
                             self.flush_vault_writes(pending_vault_writes)
                             raise ClearKeyCENC.Exceptions.CEKNotFound(msg)
-                        else:
-                            need_license = True
-
-                    if kid not in drm.content_keys and cdm_only:
                         need_license = True
 
                 if need_license:
+                    # force licenses again, so the turn takes no cached keys
                     self.take_licence_turn(licence_turn, drm, [] if force else all_kids, track, track_kid, cek_tree)
-                if need_license and all(kid in drm.content_keys for kid in all_kids):
-                    need_license = False
+                    need_license = not all(kid in drm.content_keys for kid in all_kids)
 
                 if need_license and not vaults_only:
                     from_vaults = drm.content_keys.copy()
@@ -5581,10 +5505,7 @@ class dl:
                             raise e
 
                     for kid_, key in drm.content_keys.items():
-                        is_track_kid_marker = ["", "*"][kid_ == track_kid]
-                        label = f"[text2]{kid_.hex}:{key}{is_track_kid_marker}"
-                        if not any(f"{kid_.hex}:{key}" in str(x.label) for x in cek_tree.children):
-                            cek_tree.add(label)
+                        self.add_key_label(cek_tree, kid_, key, track_kid)
 
                     drm.content_keys.update(from_vaults)
 
@@ -5625,9 +5546,7 @@ class dl:
                     cek_tree = pre_existing_tree
 
                 for kid_, key in drm.content_keys.items():
-                    label = f"[text2]{kid_.hex}:{key}*"
-                    if not any(f"{kid_.hex}:{key}" in str(x.label) for x in cek_tree.children):
-                        cek_tree.add(label)
+                    self.add_key_label(cek_tree, kid_, key, track_kid=kid_)  # every MonaLisa key is the track's own
 
                 if cek_tree.children and not pre_existing_tree:
                     table.add_row()

@@ -12,6 +12,7 @@ from uuid import UUID
 import pytest
 from pywidevine.pssh import PSSH
 from rich.table import Table
+from rich.tree import Tree
 
 from unshackle.commands.dl import dl
 from unshackle.core.cdm.detect import cdm_type_stub
@@ -107,7 +108,7 @@ def run_together(cmd: dl, *jobs: tuple[Widevine, UUID]) -> tuple[Table, list[Bas
 
 
 def tree_labels(table: Table, kid: UUID) -> list[str]:
-    trees = [cell for cell in table.columns[0].cells if hasattr(cell, "children")]
+    trees = [cell for cell in table.columns[0].cells if isinstance(cell, Tree)]
     return [str(child.label) for tree in trees for child in tree.children if kid.hex in str(child.label)]
 
 
@@ -119,8 +120,7 @@ def test_one_licence_for_two_pssh_with_different_kids(cmd: dl, licences: list[st
     assert not errors
     assert len(licences) == 1
     assert first.content_keys[KID_A] == KEYS[KID_A] and second.content_keys[KID_C] == KEYS[KID_C]
-    from_cache = [label for kid in (KID_A, KID_C) for label in tree_labels(table, kid) if label.endswith(" from cache")]
-    assert from_cache
+    assert any(label.endswith(" from cache") for kid in (KID_A, KID_C) for label in tree_labels(table, kid))
 
 
 def test_a_track_waiting_for_its_turn_sends_no_licence_after_a_failure(cmd: dl, licences: list[str]) -> None:
@@ -138,3 +138,16 @@ def test_force_licenses_again_although_the_keys_are_cached(cmd: dl, licences: li
     prepare(cmd, widevine(KID_C), KID_C, new_table(), force=True)
 
     assert len(licences) == 1
+
+
+def test_a_key_label_is_added_once_with_its_marker_and_source() -> None:
+    tree = Tree("Widevine")
+
+    dl.add_key_label(tree, KID_A, KEYS[KID_A], KID_A, "from cache")
+    dl.add_key_label(tree, KID_A, KEYS[KID_A])
+    dl.add_key_label(tree, KID_B, KEYS[KID_B], KID_A)
+
+    assert [str(child.label) for child in tree.children] == [
+        f"[text2]{KID_A.hex}:{KEYS[KID_A]}* from cache",
+        f"[text2]{KID_B.hex}:{KEYS[KID_B]}",
+    ]

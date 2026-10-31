@@ -67,6 +67,7 @@ def make_cmd(vaults):
     cmd.service = "TEST"
     cmd.vaults = vaults
     cmd.vault_cache_tally = None
+    cmd.debug_logger = None
     cmd._remote_service = SimpleNamespace(_server_cdm=True, _server_cdm_type="widevine")
     dl.LICENSE_KEY_CACHE.clear()
     dl.DRM_LOCKS.clear()
@@ -120,6 +121,7 @@ def test_batch_resolved_keys_are_cached_before_download():
     cmd.service = "TEST"
     cmd.vaults = vaults
     cmd.vault_cache_tally = None
+    cmd.debug_logger = None
     dl.LICENSE_KEY_CACHE.clear()
 
     drm = FakeWidevine([NEW])
