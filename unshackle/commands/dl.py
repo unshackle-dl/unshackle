@@ -14,6 +14,7 @@ from collections import Counter, defaultdict
 from collections.abc import Iterable
 from concurrent import futures
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import ExitStack
 from copy import deepcopy
 from datetime import date, timedelta
 from functools import partial
@@ -50,6 +51,7 @@ from unshackle.core.constants import (
     DOWNLOAD_CANCELLED,
     DOWNLOAD_LICENCE_ONLY,
     AnyTrack,
+    DownloadCancelled,
     context_settings,
 )
 from unshackle.core.credential import Credential
@@ -1241,6 +1243,7 @@ class dl:
 
     DRM_LOCKS: dict[str, Lock] = {}
     DRM_LOCKS_GUARD = Lock()
+    LICENCE_LOCK = Lock()
     VAULT_WRITER = ThreadPoolExecutor(1, thread_name_prefix="vault-writer")
     EXPORT_LOCK = Lock()
     LICENSE_KEY_CACHE: dict[UUID, str] = {}
@@ -4749,8 +4752,8 @@ class dl:
         """Return the lock for one DRM's set of content keys.
 
         Tracks that share KIDs still take turns, so the second one finds the content keys in
-        LICENSE_KEY_CACHE and skips the challenge. Tracks with different KIDs send a challenge
-        and query the key vaults at the same time.
+        LICENSE_KEY_CACHE and skips the challenge. Tracks with different KIDs query the key vaults
+        at the same time; their licences take turns under ``take_licence_turn``.
 
         Callers take the lock after get_drm_for_cdm(), which folds a track's sibling PlayReady
         objects into the returned one, so the KID set is complete for that track's DRM list
@@ -4763,6 +4766,37 @@ class dl:
         key = ",".join(sorted(getattr(k, "hex", str(k)) for k in kids)) or getattr(drm, "content_id", None)
         with cls.DRM_LOCKS_GUARD:
             return cls.DRM_LOCKS.setdefault(key or type(drm).__name__, Lock())
+
+    def take_licence_turn(
+        self,
+        turn: ExitStack,
+        drm: Union[ClearKeyCENC, Widevine, PlayReady, MonaLisa],
+        kids: list[UUID],
+        track: AnyTrack,
+        track_kid: Optional[UUID],
+        cek_tree: Optional[Tree],
+    ) -> None:
+        """Hold LICENCE_LOCK until ``turn`` closes, then take the content keys of ``kids`` an earlier licence cached.
+
+        One licence can carry the keys of a DRM with other KIDs, so licences take turns. The caller
+        holds its ``drm_lock`` first, so the vault lookups before this still run at the same time.
+        """
+        turn.enter_context(self.LICENCE_LOCK)
+        if DOWNLOAD_CANCELLED.is_set():
+            raise DownloadCancelled()
+        for kid in kids:
+            key = self.LICENSE_KEY_CACHE.get(kid)
+            if not key or kid in drm.content_keys:
+                continue
+            drm.content_keys[kid] = key
+            if cek_tree is not None and not any(f"{kid.hex}:{key}" in str(x.label) for x in cek_tree.children):
+                cek_tree.add(f"[text2]{kid.hex}:{key}{['', '*'][kid == track_kid]} from cache")
+            log_event(
+                "license_cache_hit",
+                level="INFO",
+                service=self.service,
+                context={"kid": kid.hex, "content_key": key, "track": str(track), "drm_type": type(drm).__name__},
+            )
 
     def service_licence(self, service: Service, drm_system: Optional[str] = None, **kwargs: Any) -> Any:
         """Call the service's licence function for the track's DRM system.
@@ -4908,7 +4942,7 @@ class dl:
         licensed_locally = bool(client_licensed) and str(track.id) in client_licensed
 
         if server_cdm and not licensed_locally:
-            with self.drm_lock(drm):
+            with self.drm_lock(drm), ExitStack() as licence_turn:
                 pending_vault_writes: list[Callable[[], Any]] = []
                 vault_kids = list(getattr(drm, "kids", None) or [])
                 if track_kid and track_kid not in vault_kids:
@@ -4923,10 +4957,12 @@ class dl:
                         drm.content_keys[kid] = content_key
                         self.LICENSE_KEY_CACHE[kid] = content_key
 
-                known_keys = set(drm.content_keys)
-
                 def missing_track_key() -> bool:
                     return not drm.content_keys or bool(track_kid and track_kid not in drm.content_keys)
+
+                if missing_track_key():
+                    self.take_licence_turn(licence_turn, drm, vault_kids, track, track_kid, None)
+                known_keys = set(drm.content_keys)
 
                 if missing_track_key():
                     from unshackle.core.remote_service import RemoteError
@@ -5079,7 +5115,7 @@ class dl:
                 )
 
             pending_vault_writes = []
-            with self.drm_lock(drm):
+            with self.drm_lock(drm), ExitStack() as licence_turn:
                 pssh_display = self.truncate_pssh_for_display(drm.pssh.dumps(), "Widevine")
                 cek_tree = Tree(Text.assemble(("Widevine", "cyan"), (f"({pssh_display})", "text"), overflow="fold"))
                 pre_existing_tree = next(
@@ -5164,6 +5200,8 @@ class dl:
                     if kid not in drm.content_keys and cdm_only:
                         need_license = True
 
+                if need_license:
+                    self.take_licence_turn(licence_turn, drm, [] if force else all_kids, track, track_kid, cek_tree)
                 if need_license and all(kid in drm.content_keys for kid in all_kids):
                     need_license = False
 
@@ -5272,7 +5310,7 @@ class dl:
                 )
 
             pending_vault_writes = []
-            with self.drm_lock(drm):
+            with self.drm_lock(drm), ExitStack() as licence_turn:
                 pssh_display = self.truncate_pssh_for_display(drm.pssh_b64 or "", "PlayReady")
                 cek_tree = Tree(
                     Text.assemble(
@@ -5364,6 +5402,8 @@ class dl:
                     if kid not in drm.content_keys and cdm_only:
                         need_license = True
 
+                if need_license:
+                    self.take_licence_turn(licence_turn, drm, [] if force else all_kids, track, track_kid, cek_tree)
                 if need_license and all(kid in drm.content_keys for kid in all_kids):
                     need_license = False
 
@@ -5432,7 +5472,7 @@ class dl:
 
         elif isinstance(drm, ClearKeyCENC):
             pending_vault_writes = []
-            with self.drm_lock(drm):
+            with self.drm_lock(drm), ExitStack() as licence_turn:
                 cek_tree = Tree(Text.assemble(("ClearKey", "cyan"), overflow="fold"))
                 pre_existing_tree = next(
                     (x for x in table.columns[0].cells if isinstance(x, Tree) and x.label == cek_tree.label), None
@@ -5503,6 +5543,8 @@ class dl:
                     if kid not in drm.content_keys and cdm_only:
                         need_license = True
 
+                if need_license:
+                    self.take_licence_turn(licence_turn, drm, [] if force else all_kids, track, track_kid, cek_tree)
                 if need_license and all(kid in drm.content_keys for kid in all_kids):
                     need_license = False
 
