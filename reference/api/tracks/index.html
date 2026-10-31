@@ -1984,6 +1984,28 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#unshackle.core.tracks.Audio.dolby_channel_layout" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;dolby_channel_layout
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unshackle.core.tracks.Audio.channels_from_count" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;channels_from_count
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#unshackle.core.tracks.Audio.channel_total" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2265,6 +2287,28 @@
     <span class="md-ellipsis">
       
         <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;get_track_name
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unshackle.core.tracks.Subtitle.dash_offset_ms" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;dash_offset_ms
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unshackle.core.tracks.Subtitle.rebase_ttml" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;rebase_ttml
       
     </span>
   </a>
@@ -3109,6 +3153,17 @@
     <span class="md-ellipsis">
       
         <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;normalize_vui
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unshackle.core.tracks.Video.vp9_colour_args" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;vp9_colour_args
       
     </span>
   </a>
@@ -3369,6 +3424,28 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#unshackle.core.tracks.Audio.dolby_channel_layout" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;dolby_channel_layout
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unshackle.core.tracks.Audio.channels_from_count" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;channels_from_count
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#unshackle.core.tracks.Audio.channel_total" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3650,6 +3727,28 @@
     <span class="md-ellipsis">
       
         <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;get_track_name
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unshackle.core.tracks.Subtitle.dash_offset_ms" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;dash_offset_ms
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unshackle.core.tracks.Subtitle.rebase_ttml" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;rebase_ttml
       
     </span>
   </a>
@@ -4501,6 +4600,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#unshackle.core.tracks.Video.vp9_colour_args" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;vp9_colour_args
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#unshackle.core.tracks.Video.ccextractor" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4717,7 +4827,7 @@ If mime_type is not provided, it will try to guess it.</p>
                 <code>session</code>
             </td>
             <td>
-                  <code><span title="typing.Optional">Optional</span>[<span title="unshackle.core.tracks.attachment.AnySession">AnySession</span>]</code>
+                  <code><span title="typing.Optional">Optional</span>[<span title="unshackle.core.session.AnySession">AnySession</span>]</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -4947,7 +5057,7 @@ If mime_type is not provided, it will try to guess it.</p>
                 <code>session</code>
             </td>
             <td>
-                  <code><span title="typing.Optional">Optional</span>[<span title="unshackle.core.tracks.attachment.AnySession">AnySession</span>]</code>
+                  <code><span title="typing.Optional">Optional</span>[<span title="unshackle.core.session.AnySession">AnySession</span>]</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -5197,6 +5307,56 @@ which no float can hold, so it stays the string it came as. Use channel_total fo
 arithmetic on either form.</p>
 <p>This does not validate channel strings as genuine channel counts or valid layouts.
 It does not convert the value to assume a sub speaker channel layout, e.g. 5.1-&gt;6.0.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="unshackle.core.tracks.Audio.dolby_channel_layout" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">dolby_channel_layout</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-staticmethod"><code>staticmethod</code></small>
+  </span>
+
+<a href="#unshackle.core.tracks.Audio.dolby_channel_layout" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">dolby_channel_layout</span><span class="p">(</span><span class="n">mask</span><span class="p">)</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Channel layout of a Dolby DASH channel configuration mask, e.g. 0xF801 -&gt; 5.1.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="unshackle.core.tracks.Audio.channels_from_count" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">channels_from_count</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-staticmethod"><code>staticmethod</code></small>
+  </span>
+
+<a href="#unshackle.core.tracks.Audio.channels_from_count" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">channels_from_count</span><span class="p">(</span><span class="n">count</span><span class="p">)</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Channel layout for a bare number of channels, as HLS CHANNELS, Smooth Streaming and most DASH schemes give it.</p>
+<p>A count does not say which channel is the LFE, so 6, 7 and 8 take the 5.1, 6.1 and 7.1 layouts those streams
+carry in practice. Any other value goes back as-is, for parse_channels to read.</p>
 
 
     </div>
@@ -6063,6 +6223,48 @@ explanation list above.</p>
     <div class="doc doc-contents ">
 
         <p>Return the base Track Name.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="unshackle.core.tracks.Subtitle.dash_offset_ms" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">dash_offset_ms</span>
+
+
+<a href="#unshackle.core.tracks.Subtitle.dash_offset_ms" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">dash_offset_ms</span><span class="p">()</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>The DASH presentationTimeOffset and one segment's length, in ms, from the merged SegmentTemplate.
+Returns (0, 0) for a track that is not DASH or has no SegmentTemplate.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="unshackle.core.tracks.Subtitle.rebase_ttml" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">rebase_ttml</span>
+
+
+<a href="#unshackle.core.tracks.Subtitle.rebase_ttml" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">rebase_ttml</span><span class="p">(</span><span class="n">offset_ms</span><span class="p">,</span> <span class="n">segment_ms</span><span class="p">)</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Move the TTML cues back by offset_ms, under the same first-cue guard as rebase_webvtt.
+A cue carried in from before the offset starts at 0; this method drops a cue that ends by then.</p>
 
 
     </div>
@@ -7826,7 +8028,7 @@ is larger than it. Use a value of 20000 (20KB) or higher.</p>
                 <code>session</code>
             </td>
             <td>
-                  <code><span title="typing.Optional">Optional</span>[<span title="requests.Session">Session</span>]</code>
+                  <code><span title="typing.Optional">Optional</span>[<span title="unshackle.core.session.AnySession">AnySession</span>]</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -8946,6 +9148,28 @@ returns a <code>{h264,hevc}_metadata=...</code> string suitable for FFmpeg <code
 downstream tools mis-classify the file. The manifest-derived range is the
 source of truth. Skips SDR, DV, and HYBRID. Returns True if unshackle rewrote
 the bitstream.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="unshackle.core.tracks.Video.vp9_colour_args" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">vp9_colour_args</span>
+
+
+<a href="#unshackle.core.tracks.Video.vp9_colour_args" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">vp9_colour_args</span><span class="p">(</span><span class="n">track_id</span><span class="p">)</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Return mkvmerge colour args for an HDR VP9 track.</p>
+<p>mkvmerge drops the MP4 vpcC/SmDm/CoLL colour boxes of VP9, which leaves an HDR10 file tagged as SDR.
+The transfer the file states wins; <code>self.range</code> applies only when the file states none.</p>
 
 
     </div>
