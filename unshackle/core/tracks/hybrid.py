@@ -6,7 +6,7 @@ import subprocess
 from collections import Counter
 from concurrent import futures
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from rich.padding import Padding
 from rich.rule import Rule
@@ -17,6 +17,9 @@ from unshackle.core.console import console
 from unshackle.core.utilities import log_event
 from unshackle.core.utils import dovi
 from unshackle.core.utils.subprocess import run_step
+
+if TYPE_CHECKING:
+    from unshackle.core.tracks.video import Video
 
 # HDR10+ histogram slots that form the maxRGB distribution, as (DistributionIndex, fraction of pixels).
 # Index 99 holds the 99.98% percentile. Index 5 (a luminance-Y value) and index 10 (the share of pixels
@@ -111,7 +114,7 @@ def hdr10plus_shots(metadata: dict, active_fraction: float = 1.0) -> list[dict]:
 
 
 class Hybrid:
-    def __init__(self, videos, source, output_name: Optional[str] = None) -> None:
+    def __init__(self, videos: list["Video"], source: str, output_name: Optional[str] = None) -> None:
         self.log = logging.getLogger("hybrid")
 
         """
@@ -237,7 +240,7 @@ class Hybrid:
             Path.unlink(config.directories.temp / "hdr10.mkv")
             Path.unlink(config.directories.temp / "dv.mkv")
 
-    def extract_stream(self, save_path, type_):
+    def extract_stream(self, save_path: Path, type_: str) -> None:
         output = Path(config.directories.temp / f"{type_}.hevc")
         try:
             run_step(
@@ -263,7 +266,7 @@ class Hybrid:
             success=True,
         )
 
-    def extract_rpu(self, video, untouched=False):
+    def extract_rpu(self, video: "Video", untouched: bool = False) -> None:
         if os.path.isfile(config.directories.temp / "RPU.bin") or os.path.isfile(
             config.directories.temp / "RPU_UNT.bin"
         ):
@@ -512,7 +515,7 @@ class Hybrid:
             max_fall = max_cll
         return max_mdl, min_mdl, max_cll, max_fall
 
-    def level_6(self):
+    def level_6(self) -> None:
         """Edit RPU Level 6 values using the static L6 luminance data from the RPU."""
         if os.path.isfile(config.directories.temp / "RPU_L6.bin"):
             self.rpu_file = "RPU_L6.bin"
@@ -531,7 +534,7 @@ class Hybrid:
             raise ValueError("Failed reading RPU metadata for Level 6 values")
 
         blocks = rpu_info.get("vdr_dm_data", {}).get("cmv29_metadata", {}).get("ext_metadata_blocks", [])
-        level6 = next((b["Level6"] for b in blocks if isinstance(b, dict) and "Level6" in b), {})
+        level6: dict[str, Any] = next((b["Level6"] for b in blocks if isinstance(b, dict) and "Level6" in b), {})
 
         max_cll = level6.get("max_content_light_level")
         max_fall = level6.get("max_frame_average_light_level")
@@ -623,7 +626,7 @@ class Hybrid:
         )
         self.rpu_file = "RPU_L6.bin"
 
-    def injecting(self):
+    def injecting(self) -> None:
         if os.path.isfile(config.directories.temp / self.hevc_file):
             return
 
@@ -656,7 +659,7 @@ class Hybrid:
             success=True,
         )
 
-    def extract_hdr10plus(self, video):
+    def extract_hdr10plus(self, video: "Video") -> None:
         """Extract HDR10+ metadata from the video track"""
         if os.path.isfile(config.directories.temp / self.hdr10plus_file):
             return
@@ -706,7 +709,7 @@ class Hybrid:
             success=True,
         )
 
-    def probe_hdr_metadata(self):
+    def probe_hdr_metadata(self) -> tuple[int, int, int, int]:
         """Extract mastering display and Content Light Level metadata from the HDR10 track with FFprobe.
 
         Returns (max_mdl, min_mdl, max_cll, max_fall) in dovi_tool level6 units:
@@ -793,9 +796,8 @@ class Hybrid:
                 # one entry per frame: a feature film is hundreds of MB of objects, freed before dovi_tool runs
                 del metadata
 
-                max_mdl, min_mdl, max_cll, max_fall = self.probe_hdr_metadata()
-                max_mdl, min_mdl, max_cll, max_fall = self.sanitize_l6(max_mdl, min_mdl, max_cll, max_fall)
-                generator_config = {
+                max_mdl, min_mdl, max_cll, max_fall = self.sanitize_l6(*self.probe_hdr_metadata())
+                generator_config: dict[str, Any] = {
                     "cm_version": "V29",
                     "level6": {
                         "max_display_mastering_luminance": max_mdl,

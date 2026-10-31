@@ -1,5 +1,7 @@
+from __future__ import annotations
+
 import threading
-from typing import Iterator, Optional, Union
+from typing import Any, Iterator, Optional, Union
 from uuid import UUID
 
 import pymysql
@@ -12,7 +14,9 @@ from unshackle.core.vault import Vault
 class MySQL(Vault):
     """Key Vault using a remotely-accessed mysql database connection."""
 
-    def __init__(self, name: str, host: str, database: str, username: str, no_push: bool = False, **kwargs):
+    def __init__(
+        self, name: str, host: str, database: str, username: str, no_push: bool = False, **kwargs: Any
+    ) -> None:
         """
         All extra arguments given through **kwargs will be sent to pymysql.connect.
         Use this to give more specific connection information.
@@ -208,11 +212,13 @@ class MySQL(Vault):
                 "SELECT count(TABLE_NAME) FROM information_schema.TABLES WHERE TABLE_SCHEMA=%s AND TABLE_NAME=%s",
                 (conn.db, name),
             )
-            return list(cursor.fetchone().values())[0] == 1
+            row = cursor.fetchone()
+            assert row is not None  # COUNT() always returns one row
+            return list(row.values())[0] == 1
         finally:
             cursor.close()
 
-    def create_table(self, name: str):
+    def create_table(self, name: str) -> None:
         """Make a Table with the specified name if it does not exist yet."""
         if self.has_table(name):
             return
@@ -246,8 +252,7 @@ class MySQL(Vault):
 
         try:
             cursor.execute("SHOW GRANTS")
-            grants = cursor.fetchall()
-            grants = [next(iter(x.values())) for x in grants]
+            grants = [next(iter(x.values())) for x in cursor.fetchall()]
             grants = [tuple(x[6:].split(" TO ")[0].split(" ON ")) for x in list(grants)]
             grants = [
                 (
@@ -272,14 +277,14 @@ class MySQL(Vault):
 
 
 class ConnectionFactory:
-    def __init__(self, con: dict):
+    def __init__(self, con: dict) -> None:
         self._con = con
         self._store = threading.local()
 
-    def create_connection(self) -> pymysql.Connection:
+    def create_connection(self) -> pymysql.Connection[DictCursor]:
         return pymysql.connect(**self._con)
 
-    def get(self) -> pymysql.Connection:
+    def get(self) -> pymysql.Connection[DictCursor]:
         if not hasattr(self._store, "conn"):
             self._store.conn = self.create_connection()
         return self._store.conn

@@ -35,6 +35,11 @@ jobs:
         run: uv run ruff format --check .
       - name: Import order
         run: uv run isort --check-only unshackle tests --skip-glob "*/services/*"
+      - name: Type check
+        run: |
+          out=$(uv run mypy unshackle) || true
+          echo "$out"
+          echo "$out" | sed -nE 's/^([^:]+):([0-9]+): error: (.*)$/::warning file=\1,line=\2::\3/p'
 
   test:
     strategy:

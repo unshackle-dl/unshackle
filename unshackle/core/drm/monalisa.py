@@ -41,7 +41,7 @@ class MonaLisa:
         device_path: Path,
         tool_path: Optional[Path] = None,
         **kwargs: Any,
-    ):
+    ) -> None:
         """
         Initialise MonaLisa DRM.
 

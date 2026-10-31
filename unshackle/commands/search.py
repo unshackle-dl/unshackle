@@ -73,7 +73,7 @@ def search(
     local_proxy: bool = False,
     remote: bool = False,
     server: Optional[str] = None,
-):
+) -> None:
     if not ctx.invoked_subcommand:
         raise ValueError("A subcommand to invoke was not specified, the main code cannot continue.")
 

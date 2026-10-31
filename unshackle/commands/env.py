@@ -367,7 +367,7 @@ def info() -> None:
     table.add_column("Path", style="text2", no_wrap=False, overflow="fold")
 
     path_vars = {
-        x: Path(os.getenv(x))
+        x: Path(os.environ[x])
         for x in ("TEMP", "APPDATA", "LOCALAPPDATA", "USERPROFILE")
         if sys.platform == "win32" and os.getenv(x)
     }
@@ -386,11 +386,12 @@ def info() -> None:
             table.add_row(name.title(), paths_str)
         else:
             path = attr_value.resolve()
+            shown = str(path)
             for var, var_path in path_vars.items():
                 if path.is_relative_to(var_path):
-                    path = rf"%{var}%\{path.relative_to(var_path)}"
+                    shown = rf"%{var}%\{path.relative_to(var_path)}"
                     break
-            table.add_row(name.title(), str(path))
+            table.add_row(name.title(), shown)
 
     print_wide(table)
 

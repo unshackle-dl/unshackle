@@ -32,7 +32,7 @@ class HTTP(Vault):
         api_mode: str = "query",
         no_push: bool = False,
         timeout: float = 10.0,
-    ):
+    ) -> None:
         """
         Initialise HTTP Vault.
 
@@ -55,7 +55,7 @@ class HTTP(Vault):
         self.username = username
         self.api_mode = api_mode.lower()
         self.batch_insert = True
-        self.current_title = None
+        self.current_title: Optional[str] = None
         self.session = vault_session(timeout)
         self.api_session_id = None
 
@@ -69,7 +69,7 @@ class HTTP(Vault):
         elif self.api_mode not in ["query", "json", "decrypt_labs"]:
             raise ValueError("api_mode must be either 'query', 'json', or 'decrypt_labs'")
 
-    def request(self, method: str, params: dict = None) -> dict:
+    def request(self, method: str, params: Optional[dict] = None) -> dict:
         """Make a request to the JSON API vault."""
         if self.api_mode != "json":
             raise ValueError("request method is only available in json mode")
@@ -165,10 +165,10 @@ class HTTP(Vault):
                     "service": service.lower(),
                 }
 
-                response = self.request("GetKey", params)
-                if response.get("status") == "not_found":
+                res = self.request("GetKey", params)
+                if res.get("status") == "not_found":
                     return None
-                keys = response.get("keys", [])
+                keys = res.get("keys", [])
                 for key_entry in keys:
                     if isinstance(key_entry, str) and ":" in key_entry:
                         entry_kid, entry_key = key_entry.split(":", 1)
@@ -197,11 +197,11 @@ class HTTP(Vault):
 
     def get_keys(self, service: str) -> Iterator[tuple[str, str]]:
         if self.api_mode == "decrypt_labs":
-            return iter([])
+            return
         elif self.api_mode == "json":
             # JSON API doesn't support getting all keys, so return empty iterator
             # This will cause the copy command to rely on the API's internal duplicate handling
-            return iter([])
+            return
         else:
             response = self.session.get(
                 self.url,
@@ -231,7 +231,7 @@ class HTTP(Vault):
 
         if self.api_mode == "json":
             try:
-                response = self.request(
+                res = self.request(
                     "InsertKey",
                     {
                         "kid": kid,
@@ -240,9 +240,9 @@ class HTTP(Vault):
                         "title": title,
                     },
                 )
-                if response.get("status") == "not_found":
+                if res.get("status") == "not_found":
                     return False
-                return response.get("inserted", False)
+                return res.get("inserted", False)
             except Exception:
                 return False
         else:
@@ -282,18 +282,18 @@ class HTTP(Vault):
         if self.api_mode == "json":
             if self.batch_insert:
                 try:
-                    response = self.request(
+                    res = self.request(
                         "InsertKeys", {"keys": processed_kid_keys, "service": service.lower(), "title": title}
                     )
-                    if response.get("status") != "not_found":
-                        return int(response.get("inserted", 0))
+                    if res.get("status") != "not_found":
+                        return int(res.get("inserted", 0))
                     self.batch_insert = False
                 except ValueError as e:
                     if "unknown" in str(e).lower() and "method" in str(e).lower():
                         self.batch_insert = False
             for kid, key in processed_kid_keys.items():
                 try:
-                    response = self.request(
+                    res = self.request(
                         "InsertKey",
                         {
                             "kid": kid,
@@ -302,9 +302,9 @@ class HTTP(Vault):
                             "title": title,
                         },
                     )
-                    if response.get("status") == "not_found":
+                    if res.get("status") == "not_found":
                         continue
-                    if response.get("inserted", False):
+                    if res.get("inserted", False):
                         inserted_count += 1
                 except ValueError as e:
                     failures.append(e)
@@ -334,15 +334,15 @@ class HTTP(Vault):
 
     def get_services(self) -> Iterator[str]:
         if self.api_mode == "decrypt_labs":
-            return iter([])
+            return
         elif self.api_mode == "json":
             try:
-                response = self.request("GetServices")
-                services = response.get("services", [])
+                res = self.request("GetServices")
+                services = res.get("services", [])
                 for service in services:
                     yield service
             except Exception:
-                return iter([])
+                return
         else:
             response = self.session.get(
                 self.url,
@@ -359,7 +359,7 @@ class HTTP(Vault):
             for service in services:
                 yield service
 
-    def set_title(self, title: str):
+    def set_title(self, title: str) -> None:
         """
         Set a title for the next content key insertions.
         This is optional and will be sent with add_key requests if available.
@@ -388,7 +388,7 @@ class HTTP(Vault):
 
         if self.api_mode == "json":
             try:
-                response = self.request(
+                res = self.request(
                     "InsertKey",
                     {
                         "kid": kid,
@@ -398,10 +398,10 @@ class HTTP(Vault):
                     },
                 )
 
-                if response.get("status") == "not_found":
+                if res.get("status") == "not_found":
                     return InsertResult.FAILURE
 
-                if response.get("inserted", False):
+                if res.get("inserted", False):
                     return InsertResult.SUCCESS
                 else:
                     return InsertResult.ALREADY_EXISTS

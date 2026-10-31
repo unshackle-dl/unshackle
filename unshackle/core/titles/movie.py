@@ -61,7 +61,7 @@ class Movie(Title):
 
     def get_filename(self, media_info: MediaInfo, folder: bool = False, show_service: bool = True) -> str:
         if folder:
-            template = config.get_folder_template("movies")
+            template: Optional[str] = config.get_folder_template("movies")
             if template:
                 context = self.build_template_context(media_info, show_service)
                 spacer = detect_spacer(template)  # one style for the whole path
@@ -86,7 +86,7 @@ class Movie(Title):
 
 
 class Movies(SortedKeyList, ABC):
-    def __init__(self, iterable: Optional[Iterable] = None):
+    def __init__(self, iterable: Optional[Iterable] = None) -> None:
         super().__init__(iterable, key=lambda x: x.year or 0)
 
     def __str__(self) -> str:

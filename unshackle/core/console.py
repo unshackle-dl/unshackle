@@ -8,7 +8,7 @@ import unicodedata
 from datetime import datetime
 from functools import lru_cache
 from types import ModuleType
-from typing import IO, Any, Callable, Iterable, List, Literal, Mapping, Optional, TextIO, Union
+from typing import IO, Any, Callable, Iterable, List, Literal, Mapping, Optional, Sized, TextIO, Union, cast
 
 import rich.cells
 from rich import box
@@ -213,7 +213,7 @@ class ComfyConsole(Console):
         get_time: Optional[Callable[[], float]] = None,
         _environ: Optional[Mapping[str, str]] = None,
         log_renderer: Optional[LogRender] = None,
-    ):
+    ) -> None:
         super().__init__(
             color_system=color_system,
             force_terminal=force_terminal,
@@ -247,12 +247,12 @@ class ComfyConsole(Console):
         if log_renderer:
             self._log_render = log_renderer
 
-    def status(
+    def status(  # type: ignore[override]
         self,
         status: RenderableType,
         *,
         spinner: str = "dots",
-        spinner_style: str = "status.spinner",
+        spinner_style: StyleType = "status.spinner",
         speed: float = 1.0,
         refresh_per_second: float = 12.5,
         pad: PaddingDimensions = (0, 5),
@@ -282,8 +282,8 @@ class ComfyConsole(Console):
         if pad:
             top, right, bottom, left = Padding.unpack(pad)
 
-            renderable_width = len(status_renderable.status)
-            spinner_width = len(status_renderable.renderable.text)
+            renderable_width = len(cast(Sized, status_renderable.status))
+            spinner_width = len(cast(Sized, status_renderable.renderable.text))
             status_width = spinner_width + renderable_width
 
             available_width = self.width - status_width
@@ -327,8 +327,8 @@ class ComfyConsole(Console):
                 live.start()
 
 
-primary_scheme = resolve_palette(config.theme)
-if primary_scheme is None:
+primary_scheme: dict[str, str] = resolve_palette(config.theme) or {}
+if not primary_scheme:
     logging.getLogger("console").warning(
         "Unknown theme %r, falling back to %s (available: %s)",
         config.theme,
@@ -431,9 +431,9 @@ _JOINING_VIRAMAS = frozenset("्্્୍్്")
 _rich_cell_len = rich.cells._cell_len
 
 
-def _cell_len(text: str, *args: str) -> int:
+def _cell_len(text: str, unicode_version: str) -> int:
     """Count a consonant joined by a virama (the न्द in हिन्दी) as no cell: terminals draw the conjunct in one."""
-    width = _rich_cell_len(text, *args)
+    width = _rich_cell_len(text, unicode_version)
     if _JOINING_VIRAMAS.isdisjoint(text):
         return width
     return width - sum(

@@ -13,11 +13,11 @@ from collections.abc import Iterator, MutableMapping
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from http.cookiejar import CookieJar
-from typing import Any, Optional
+from typing import Any, Optional, Union
 from urllib.parse import urlencode, urlparse, urlunparse
 
 import rnet
-from requests import HTTPError, Request, Response
+from requests import HTTPError, Request, Response, Session
 from requests.cookies import create_cookie
 from requests.structures import CaseInsensitiveDict
 
@@ -102,13 +102,13 @@ class RnetResponseHeaders(MutableMapping):
     def __len__(self) -> int:
         return self._map.keys_len()
 
-    def get(self, key: str, default: Optional[str] = None) -> Optional[str]:
+    def get(self, key: str, default: Optional[str] = None) -> Optional[str]:  # type: ignore[override]
         val = self._map.get(key)
         if val is None:
             return default
         return self.decode(val)
 
-    def items(self) -> list[tuple[str, str]]:
+    def items(self) -> list[tuple[str, str]]:  # type: ignore[override]
         return [(self.decode(k), self.decode(v)) for k, v in self._map.items()]
 
 
@@ -196,7 +196,7 @@ class RnetResponse:
         if not self.ok:
             raise HTTPError(
                 f"{self.status_code} {self.reason}: {self.url}",
-                response=self,
+                response=self,  # type: ignore[arg-type]
             )
 
     def iter_content(self, chunk_size: Optional[int] = None) -> Iterator[bytes]:
@@ -358,7 +358,7 @@ class RnetCookieAdapter(MutableMapping):
             jar.set_cookie(cookie)
         return jar
 
-    def update(self, other: Any = None, **kwargs: Any) -> None:
+    def update(self, other: Any = None, /, **kwargs: Any) -> None:
         if other is None:
             other = {}
         if isinstance(other, CookieJar):
@@ -385,7 +385,7 @@ class RnetCookieAdapter(MutableMapping):
             self._flat[name] = value
             self.set_cookie_on_client("https://localhost", name, value)
 
-    def get(
+    def get(  # type: ignore[override]
         self, name: str, default: Optional[str] = None, domain: Optional[str] = None, path: Optional[str] = None
     ) -> Optional[str]:
         if domain and domain in self._cookies:
@@ -484,13 +484,13 @@ class RnetCookieAdapter(MutableMapping):
             if self._client is not None:
                 self._client.clear_cookies()
 
-    def items(self) -> list[tuple[str, str]]:
+    def items(self) -> list[tuple[str, str]]:  # type: ignore[override]
         return list(self._flat.items())
 
-    def keys(self) -> list[str]:
+    def keys(self) -> list[str]:  # type: ignore[override]
         return list(self._flat.keys())
 
-    def values(self) -> list[str]:
+    def values(self) -> list[str]:  # type: ignore[override]
         return list(self._flat.values())
 
 
@@ -892,7 +892,10 @@ class RnetSession:
 
                 if response.status_code not in self.status_forcelist:
                     return response
-                last_exception = HTTPError(f"Received status code: {response.status_code}", response=response)
+                last_exception = HTTPError(
+                    f"Received status code: {response.status_code}",
+                    response=response,  # type: ignore[arg-type]
+                )
                 failure = failure_reason(last_exception)
 
             except self.catch_exceptions as e:
@@ -953,8 +956,8 @@ class RnetSession:
         send_kwargs: dict[str, Any] = {}
         if req.headers:
             send_kwargs["headers"] = dict(req.headers)
-        if req.body:
-            send_kwargs["data"] = req.body
+        if req.data:
+            send_kwargs["data"] = req.data
         if req.json:
             send_kwargs["json"] = req.json
 
@@ -968,6 +971,9 @@ class RnetSession:
     def close(self) -> None:
         """No-op. rnet manages its own resources."""
         pass
+
+
+AnySession = Union[Session, RnetSession]
 
 
 def session(

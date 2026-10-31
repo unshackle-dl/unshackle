@@ -8,13 +8,13 @@ from unshackle.core.proxies.proxy import Proxy
 
 
 class Hola(Proxy):
-    def __init__(self):
+    def __init__(self) -> None:
         """
         Proxy provider that uses Hola's direct connections through the hola-proxy binary.
         """
-        self.binary = binaries.HolaProxy
-        if not self.binary:
+        if not binaries.HolaProxy:
             raise EnvironmentError("hola-proxy executable not found but is required for the Hola proxy provider.")
+        self.binary = binaries.HolaProxy
 
         self.countries = self.get_countries()
 

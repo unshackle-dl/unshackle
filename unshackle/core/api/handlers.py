@@ -29,7 +29,7 @@ from unshackle.core.api.session_store import SessionStore
 from unshackle.core.cacher import Cacher
 from unshackle.core.cdm.detect import cdm_type_stub
 from unshackle.core.config import config, load_yaml
-from unshackle.core.constants import AUDIO_CODEC_MAP, DYNAMIC_RANGE_MAP, VIDEO_CODEC_MAP
+from unshackle.core.constants import AUDIO_CODEC_MAP, DYNAMIC_RANGE_MAP, VIDEO_CODEC_MAP, AnyTrack
 from unshackle.core.drm import BlowfishStripe, cbcs
 from unshackle.core.providers.anilist import parse_anilist_ref
 from unshackle.core.proxies.resolve import initialize_proxy_providers, resolve_proxy
@@ -199,7 +199,7 @@ def load_service_yaml(normalized_service: str) -> dict:
         service_config = load_yaml(service_config_path) or {}
     else:
         service_config = {}
-    merge_dict(config.services.get(normalized_service), service_config)
+    merge_dict(config.services.get(normalized_service) or {}, service_config)
     return service_config
 
 
@@ -295,7 +295,7 @@ def server_login_material(
     cred_data = data.get("credentials")
     if isinstance(cred_data, dict) and cred_data.get("username") is not None:
         credential = Credential(
-            username=cred_data["username"], password=cred_data.get("password"), extra=cred_data.get("extra")
+            username=cred_data["username"], password=cred_data.get("password") or "", extra=cred_data.get("extra")
         )
     return load_client_cookies(data.get("cookies")), credential
 
@@ -463,7 +463,10 @@ async def relay_target(
     geofence proxy; ``(None, None, data)`` for a local one."""
     if not data.get("remote"):
         return None, None, data
-    server, info = await asyncio.to_thread(remote_server, data, request)
+    relay = await asyncio.to_thread(remote_server, data, request)
+    if relay is None:
+        return None, None, data
+    server, info = relay
     return server, info, {**data, "service": info["tag"], **geofence_proxy(data, info, request)}
 
 
@@ -1450,7 +1453,7 @@ def serialize_title(title: Title_T) -> Dict[str, Any]:
     is_episode = isinstance(title, Episode)
     is_song = isinstance(title, Song)
     episode_part = title.part if isinstance(title, Episode) else None
-    if is_episode:
+    if isinstance(title, Episode):
         # no part suffix here: remote_service.build_title rebuilds the Episode from this dict, so a
         # suffixed name plus the structural `part` below would render the part twice in the filename
         name = title.name if title.name else f"Episode {title.number:02d}"
@@ -1507,7 +1510,7 @@ def stamp_service_flags(serialized: Dict[str, Any], service_instance: Any) -> Di
     return serialized
 
 
-def extract_manifests(tracks) -> List[Dict[str, Any]]:
+def extract_manifests(tracks: Tracks) -> List[Dict[str, Any]]:
     """Extract manifest data from tracks for client-side re-parsing.
 
     Serializes DASH and ISM manifest XML as zlib-compressed base64 strings
@@ -1557,7 +1560,7 @@ def extract_manifests(tracks) -> List[Dict[str, Any]]:
     return manifests
 
 
-def extract_track_manifests(tracks) -> List[Dict[str, Any]]:
+def extract_track_manifests(tracks: Tracks) -> List[Dict[str, Any]]:
     """Build a one-AdaptationSet MPD for each track the client cannot find again in the served manifest.
 
     A service can build an AdaptationSet of its own, out of merged segment timelines or
@@ -1618,7 +1621,7 @@ def extract_track_manifests(tracks) -> List[Dict[str, Any]]:
     return fragments
 
 
-def serialize_drm(drm_list) -> Optional[List[Dict[str, Any]]]:
+def serialize_drm(drm_list: Any) -> Optional[List[Dict[str, Any]]]:
     """Serialise DRM objects to JSON-serializable list."""
     if not drm_list:
         return None
@@ -1898,8 +1901,8 @@ async def search_handler(data: Dict[str, Any], request: Optional[web.Request] = 
 async def list_titles_handler(data: Dict[str, Any], request: Optional[web.Request] = None) -> web.Response:
     """Answer the list-titles request."""
     require_fields(data, "service", "title_id")
-    service_tag = data.get("service")
-    title_id = data.get("title_id")
+    service_tag = data["service"]
+    title_id = data["title_id"]
     profile = client_profile(data)
 
     server, info, data = await relay_target(data, request)
@@ -1914,7 +1917,7 @@ async def list_titles_handler(data: Dict[str, Any], request: Optional[web.Reques
     request_cache = RequestCache()
     lease = None
     try:
-        if server:
+        if server and info:
             lease, titles = await leased_titles(data, server, info, profile, title_id, request, True)
             service_instance = lease.service
         else:
@@ -1946,8 +1949,8 @@ async def list_titles_handler(data: Dict[str, Any], request: Optional[web.Reques
 async def list_tracks_handler(data: Dict[str, Any], request: Optional[web.Request] = None) -> web.Response:
     """Answer the list-tracks request."""
     require_fields(data, "service", "title_id")
-    service_tag = data.get("service")
-    title_id = data.get("title_id")
+    service_tag = data["service"]
+    title_id = data["title_id"]
     profile = client_profile(data)
 
     server, info, data = await relay_target(data, request)
@@ -1962,7 +1965,7 @@ async def list_tracks_handler(data: Dict[str, Any], request: Optional[web.Reques
     request_cache = RequestCache()
     lease = None
     try:
-        if server:
+        if server and info:
             lease, titles = await leased_titles(data, server, info, profile, title_id, request, False)
             service_instance = lease.service
             call: Callable[..., Any] = partial(remote_call, lease)
@@ -2076,7 +2079,7 @@ async def list_tracks_handler(data: Dict[str, Any], request: Optional[web.Reques
                             continue
 
                     if episodes_data:
-                        response = {"episodes": episodes_data}
+                        response: Dict[str, Any] = {"episodes": episodes_data}
                         if failed_episodes:
                             response["unavailable_episodes"] = failed_episodes
                         return request_cache.json_response(response)
@@ -2430,8 +2433,8 @@ async def download_handler(data: Dict[str, Any], request: Optional[web.Request] 
     from unshackle.core.api.download_manager import get_download_manager
 
     require_fields(data, "service", "title_id")
-    service_tag = data.get("service")
-    title_id = data.get("title_id")
+    service_tag = data["service"]
+    title_id = data["title_id"]
 
     server, info, data = await relay_target(data, request)
     normalized_service = info["tag"] if info else validate_service(service_tag, request)
@@ -2544,7 +2547,7 @@ async def list_download_jobs_handler(data: Dict[str, Any], request: Optional[web
 
         reverse = sort_order == "desc"
 
-        def get_sort_key(job):
+        def get_sort_key(job: Any) -> Any:
             """Get the value to sort on, and give a None value a default."""
             value = getattr(job, sort_by, None)
             if value is None:
@@ -4170,6 +4173,7 @@ async def session_tracks_handler(
                 session.touch()
 
             title_tracks: Dict[str, Any] = {}
+            track: AnyTrack
             for track in tracks.videos:
                 title_tracks[str(track.id)] = track
                 session.tracks[str(track.id)] = track

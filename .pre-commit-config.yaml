@@ -33,3 +33,12 @@ repos:
       - id: end-of-file-fixer
       - id: trailing-whitespace
         args: [--markdown-linebreak-ext=md]
+  - repo: local
+    hooks:
+      - id: mypy
+        name: mypy
+        entry: uv run mypy unshackle
+        language: system
+        types: [python]
+        files: ^unshackle/
+        pass_filenames: false

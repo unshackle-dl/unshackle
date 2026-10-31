@@ -14,7 +14,7 @@ COMMANDS = sorted(
 )
 
 
-def load_command(path: Path) -> object:
+def load_command(path: Path) -> click.Command:
     """Load one command module, returning its stem-named attribute.
 
     Raises a concise, single-line error naming the command and the real cause so
@@ -32,14 +32,14 @@ def load_command(path: Path) -> object:
         ) from e
 
 
-def load_commands(paths: list[Path]) -> tuple[dict[str, object], list[str]]:
+def load_commands(paths: list[Path]) -> tuple[dict[str, click.Command], list[str]]:
     """Load every command, returning the good ones plus a list of load errors.
 
     Importing this module must never raise (it runs at CLI startup, before unshackle
     installs Rich, so a raise here prints an ugly pre-setup traceback). Instead we
     collect failures and surface them once, cleanly, when the user operates the CLI.
     """
-    modules: dict[str, object] = {}
+    modules: dict[str, click.Command] = {}
     errors: list[str] = []
     for path in paths:
         try:

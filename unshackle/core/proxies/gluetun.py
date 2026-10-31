@@ -7,7 +7,7 @@ import subprocess
 import tempfile
 import threading
 import time
-from typing import Optional
+from typing import Any, Optional
 
 import requests
 
@@ -22,7 +22,7 @@ cleanup_lock = threading.Lock()
 cleanup_registered = False
 
 
-def cleanup_all_gluetun_containers():
+def cleanup_all_gluetun_containers() -> None:
     """Cleanup all Gluetun containers on exit."""
     # Get instances without holding the lock during cleanup
     with cleanup_lock:
@@ -37,7 +37,7 @@ def cleanup_all_gluetun_containers():
             pass
 
 
-def register_cleanup():
+def register_cleanup() -> None:
     """Add the cleanup handlers to atexit, one time only."""
     global cleanup_registered
     with cleanup_lock:
@@ -168,8 +168,8 @@ class Gluetun(Proxy):
         auth_user: Optional[str] = None,
         auth_password: Optional[str] = None,
         verify_ip: bool = True,
-        **kwargs,
-    ):
+        **kwargs: Any,
+    ) -> None:
         """
         Initialise the Gluetun proxy provider that can use more than one VPN provider.
 
@@ -202,7 +202,7 @@ class Gluetun(Proxy):
         self.verify_ip = verify_ip
 
         # Track active containers: {query_key: {"container_name": ..., "port": ..., ...}}
-        self.active_containers = {}
+        self.active_containers: dict[str, dict[str, Any]] = {}
 
         self._port_lock = threading.Lock()
 
@@ -367,7 +367,7 @@ class Gluetun(Proxy):
                 del self.active_containers[query_key]
             raise RuntimeError(f"Failed to create Gluetun container: {e}")
 
-    def cleanup(self):
+    def cleanup(self) -> None:
         """Stop and remove all managed Gluetun containers."""
         container_count = len(self.active_containers)
 
@@ -438,7 +438,7 @@ class Gluetun(Proxy):
             "org": container.get("ip_org"),
         }
 
-    def validate_provider_config(self, provider_name: str, config: dict):
+    def validate_provider_config(self, provider_name: str, config: dict) -> None:
         """Validate a provider's configuration."""
         vpn_type = config.get("vpn_type", "wireguard").lower()
         credentials = config.get("credentials", {})
@@ -600,7 +600,7 @@ class Gluetun(Proxy):
         country: Optional[str] = None,
         city: Optional[str] = None,
         hostname: Optional[str] = None,
-    ):
+    ) -> None:
         """
         Make and start a Gluetun Docker container.
 
@@ -1073,7 +1073,7 @@ class Gluetun(Proxy):
         except (subprocess.TimeoutExpired, FileNotFoundError):
             return ""
 
-    def verify_container(self, query_key: str, max_retries: int = 3):
+    def verify_container(self, query_key: str, max_retries: int = 3) -> None:
         """
         Make sure that the container's VPN IP and region are correct with an ipinfo.io lookup.
 
@@ -1271,7 +1271,7 @@ class Gluetun(Proxy):
         except (subprocess.TimeoutExpired, FileNotFoundError):
             return False
 
-    def remove_container(self, container_name: str):
+    def remove_container(self, container_name: str) -> None:
         """Stop and remove a Docker container."""
         try:
             if self.auto_cleanup:
@@ -1311,7 +1311,7 @@ class Gluetun(Proxy):
             return f"http://{self.auth_user}:{self.auth_password}@localhost:{port}"
         return f"http://localhost:{port}"
 
-    def __del__(self):
+    def __del__(self) -> None:
         """Cleanup containers on object destruction."""
         if hasattr(self, "auto_cleanup") and self.auto_cleanup:
             try:

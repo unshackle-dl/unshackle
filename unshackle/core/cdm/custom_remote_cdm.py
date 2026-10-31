@@ -17,7 +17,7 @@ from unshackle.core.vaults import Vaults
 class MockCertificateChain:
     """Mock certificate chain for PlayReady compatibility."""
 
-    def __init__(self, name: str):
+    def __init__(self, name: str) -> None:
         self._name = name
 
     def get_name(self) -> str:
@@ -33,7 +33,7 @@ class Key:
         key: Union[str, bytes],
         type_: str = "CONTENT",
         permissions: Optional[List[str]] = None,
-    ):
+    ) -> None:
         if isinstance(kid, str):
             clean_kid = kid.replace("-", "")
             if len(clean_kid) == 32:
@@ -127,8 +127,8 @@ class CustomRemoteCDM:
         caching: Optional[Dict[str, Any]] = None,
         legacy: Optional[Dict[str, Any]] = None,
         timeout: int = 30,
-        **kwargs,
-    ):
+        **kwargs: Any,
+    ) -> None:
         """
         Initialise Custom Remote CDM with highly configurable options.
 
@@ -212,7 +212,7 @@ class CustomRemoteCDM:
         self.legacy_config = legacy or {"enabled": False}
 
         self._sessions: Dict[bytes, Dict[str, Any]] = {}
-        self._pssh_b64 = None
+        self._pssh_b64: Optional[str] = None
         self._required_kids: Optional[List[str]] = None
 
         self._http_session = Session()
@@ -224,7 +224,7 @@ class CustomRemoteCDM:
         if custom_headers:
             self._http_session.headers.update(custom_headers)
 
-    def get_device_type_enum(self, device_type: str):
+    def get_device_type_enum(self, device_type: str) -> DeviceTypes:
         """Convert device type string to enum for compatibility."""
         device_type_upper = device_type.upper()
         if device_type_upper == "ANDROID":
@@ -802,7 +802,7 @@ class CustomRemoteCDM:
 
         required_kids_list = session.get("required_kids") or self._required_kids
 
-        if self.use_vaults and required_kids_list:
+        if self.use_vaults and self.vaults is not None and required_kids_list:
             vault_keys = []
             for kid_str in required_kids_list:
                 try:
@@ -872,10 +872,10 @@ class CustomRemoteCDM:
             session["tried_cache"] = True
 
             if required_kids_list:
-                available_kids = set()
-                for key in all_available_keys:
-                    if isinstance(key, dict) and "kid" in key:
-                        available_kids.add(key["kid"].replace("-", "").lower())
+                available_kids: set[str] = set()
+                for cached_key in all_available_keys:
+                    if isinstance(cached_key, dict) and "kid" in cached_key:
+                        available_kids.add(cached_key["kid"].replace("-", "").lower())
 
                 required_kids = set(required_kids_list)
                 missing_kids = required_kids - available_kids
@@ -896,10 +896,11 @@ class CustomRemoteCDM:
 
         if challenge and remote_session_id:
             if isinstance(challenge, str):
+                challenge_text = challenge
                 try:
-                    challenge = base64.b64decode(challenge)
+                    challenge = base64.b64decode(challenge_text)
                 except ValueError:
-                    challenge = challenge.encode("utf-8")
+                    challenge = challenge_text.encode("utf-8")
 
             session["challenge"] = challenge
             session["remote_session_id"] = remote_session_id
@@ -943,10 +944,11 @@ class CustomRemoteCDM:
             if self.is_playready and license_message.lstrip().startswith("<"):
                 license_message = license_message.encode("utf-8")
             else:
+                license_text = license_message
                 try:
-                    license_message = base64.b64decode(license_message)
+                    license_message = base64.b64decode(license_text)
                 except ValueError:
-                    license_message = license_message.encode("utf-8")
+                    license_message = license_text.encode("utf-8")
 
         pssh = session["pssh"]
         init_data = self.get_init_data_from_pssh(pssh, session.get("pssh_b64"))
@@ -1008,8 +1010,8 @@ class CustomRemoteCDM:
         session.pop("cached_keys", None)
         session.pop("vault_keys", None)
 
-        if self.use_vaults and session["keys"]:
-            key_dict = {}
+        if self.use_vaults and self.vaults is not None and session["keys"]:
+            key_dict: dict[UUID | str, str] = {}
             for key in session["keys"]:
                 if key["type"] == "CONTENT":
                     try:

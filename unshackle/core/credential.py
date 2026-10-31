@@ -10,7 +10,7 @@ from typing import Optional, Union
 class Credential:
     """Username (or Email) and Password Credential."""
 
-    def __init__(self, username: str, password: str, extra: Optional[str] = None):
+    def __init__(self, username: str, password: str, extra: Optional[str] = None) -> None:
         self.username = username
         self.password = password
         self.extra = extra

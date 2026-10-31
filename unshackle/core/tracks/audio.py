@@ -111,7 +111,7 @@ class Audio(Track):
         joc: Optional[int] = None,
         descriptive: Union[bool, int] = False,
         **kwargs: Any,
-    ):
+    ) -> None:
         """
         Make a new Audio track object.
 
@@ -196,14 +196,14 @@ class Audio(Track):
     def __str__(self) -> str:
         return " | ".join(
             filter(
-                bool,
+                None,
                 [
                     "AUD",
                     f"[{self.codec.value}]" if self.codec else None,
                     str(self.language),
                     ", ".join(
                         filter(
-                            bool,
+                            None,
                             [
                                 str(self.channels) if self.channels else None,
                                 "Atmos" if self.atmos else None,

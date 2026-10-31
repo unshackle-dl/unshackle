@@ -9,6 +9,7 @@ import sys
 import time
 from pathlib import Path
 from typing import Optional
+from urllib.parse import quote
 
 import requests
 
@@ -62,7 +63,7 @@ class ProtonVPN(Proxy):
         cache_path: Optional[str] = None,
         timeout: float = 10.0,
         enable: bool = False,
-    ):
+    ) -> None:
         self.server_map = {str(k).lower().strip(): str(v).lower().strip() for k, v in (server_map or {}).items()}
         self.timeout = timeout
         self.enable = enable
@@ -109,7 +110,7 @@ class ProtonVPN(Proxy):
         self.last_host = host = str(server.get("Domain") or "")
         port = self.SECURE_CORE_PORT if int(server.get("Features") or 0) & self.SECURE_CORE_FEATURE else self.PROXY_PORT
         # Username (a JWT) and Password are URL-safe, but quote so requests rebuilds Basic auth cleanly
-        user, pwd = (requests.utils.quote(c, safe="") for c in creds)
+        user, pwd = (quote(c, safe="") for c in creds)
         return f"https://{user}:{pwd}@{host}:{port}"
 
     def last_connection_display(self) -> Optional[str]:

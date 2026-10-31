@@ -1,5 +1,5 @@
 import ssl
-from typing import Optional
+from typing import Any, Optional
 
 from requests.adapters import HTTPAdapter
 
@@ -46,7 +46,7 @@ class SSLCiphers(HTTPAdapter):
 
     __attrs__ = [*HTTPAdapter.__attrs__, "_ssl_context"]
 
-    def __init__(self, cipher_list: Optional[str] = None, security_level: int = 0, *args, **kwargs):
+    def __init__(self, cipher_list: Optional[str] = None, security_level: int = 0, *args: Any, **kwargs: Any) -> None:
         if cipher_list:
             if not isinstance(cipher_list, str):
                 raise TypeError(f"Expected cipher_list to be a str, not {cipher_list!r}")
@@ -70,10 +70,10 @@ class SSLCiphers(HTTPAdapter):
         self._ssl_context = ctx
         super().__init__(*args, **kwargs)
 
-    def init_poolmanager(self, *args, **kwargs):
+    def init_poolmanager(self, *args: Any, **kwargs: Any) -> None:
         kwargs["ssl_context"] = self._ssl_context
         return super().init_poolmanager(*args, **kwargs)
 
-    def proxy_manager_for(self, *args, **kwargs):
+    def proxy_manager_for(self, *args: Any, **kwargs: Any) -> Any:
         kwargs["ssl_context"] = self._ssl_context
         return super().proxy_manager_for(*args, **kwargs)

@@ -1,4 +1,5 @@
 import sys
+from typing import Any, Literal, overload
 
 import click
 from rich.console import Group
@@ -10,8 +11,6 @@ from rich.text import Text
 from unshackle.core.console import console
 
 IS_WINDOWS = sys.platform == "win32"
-if IS_WINDOWS:
-    import msvcrt
 
 
 class Selector:
@@ -27,9 +26,9 @@ class Selector:
         text_style: str = "text",
         page_size: int = 8,
         minimal_count: int = 0,
-        dependencies: dict[int, list[int]] = None,
+        dependencies: dict[int, list[int]] | None = None,
         collapse_on_start: bool = False,
-    ):
+    ) -> None:
         """
         Initialise the Selector.
 
@@ -49,16 +48,16 @@ class Selector:
         self.minimal_count = minimal_count
         self.dependencies = dependencies or {}
 
-        self.child_to_parent = {}
+        self.child_to_parent: dict[int, int] = {}
         for parent, children in self.dependencies.items():
             for child in children:
                 self.child_to_parent[child] = parent
 
         self.cursor_index = 0
-        self.selected_indices = set()
+        self.selected_indices: set[int] = set()
         self.scroll_offset = 0
 
-        self.expanded_headers = set()
+        self.expanded_headers: set[int] = set()
         if not collapse_on_start:
             self.expanded_headers.update(self.dependencies.keys())
 
@@ -77,7 +76,7 @@ class Selector:
                 visible.append(idx)
         return visible
 
-    def get_renderable(self):
+    def get_renderable(self) -> Padding:
         """
         Constructs and returns the renderable object (Table + Info) for the current state.
         """
@@ -144,7 +143,7 @@ class Selector:
 
         return Padding(Group(table, info_text), (0, 5))
 
-    def move_cursor(self, delta: int):
+    def move_cursor(self, delta: int) -> None:
         """
         Moves the cursor up or down through VISIBLE items only.
         """
@@ -160,7 +159,7 @@ class Selector:
         new_visual_idx = (current_visual_idx + delta) % len(visible_indices)
         self.cursor_index = visible_indices[new_visual_idx]
 
-    def change_page(self, delta: int):
+    def change_page(self, delta: int) -> None:
         """
         Changes the current page view by the specified delta (previous/next page).
         """
@@ -190,7 +189,7 @@ class Selector:
             except IndexError:
                 pass
 
-    def toggle_selection(self):
+    def toggle_selection(self) -> None:
         """
         Toggles the selection state of the item currently under the cursor.
         """
@@ -206,7 +205,7 @@ class Selector:
         else:
             self.selected_indices.difference_update(target_indices)
 
-    def toggle_expand(self):
+    def toggle_expand(self) -> None:
         """
         Expands or collapses the current header.
         """
@@ -216,7 +215,7 @@ class Selector:
             else:
                 self.expanded_headers.add(self.cursor_index)
 
-    def toggle_expand_all(self):
+    def toggle_expand_all(self) -> None:
         """
         Toggles expansion state of ALL headers.
         If every header shows its children -> Collapse all.
@@ -230,7 +229,7 @@ class Selector:
         else:
             self.expanded_headers = all_headers.copy()
 
-    def toggle_all(self):
+    def toggle_all(self) -> None:
         """
         Toggles the selection of all items.
         """
@@ -239,11 +238,15 @@ class Selector:
         else:
             self.selected_indices = set(range(len(self.options)))
 
-    def get_input_windows(self):
+    def get_input_windows(self) -> str | None:
         """
         Captures and parses keyboard input on Windows systems using msvcrt.
         Returns command strings such as 'UP', 'DOWN', or 'ENTER'.
         """
+        if sys.platform != "win32":
+            raise OSError("msvcrt key input is only available on Windows")
+        import msvcrt
+
         key = msvcrt.getch()
         # Ctrl+C (0x03) or ESC (0x1b)
         if key == b"\x03" or key == b"\x1b":
@@ -290,7 +293,7 @@ class Selector:
             return "RIGHT"
         return None
 
-    def get_input_unix(self):
+    def get_input_unix(self) -> str | None:
         """
         Captures and parses keyboard input on Unix/Linux systems using click.getchar().
         Returns command strings such as 'UP', 'DOWN', or 'ENTER'.
@@ -390,6 +393,31 @@ class Selector:
             return []
 
 
+@overload
+def select_multiple(
+    options: list[str],
+    minimal_count: int = ...,
+    page_size: int = ...,
+    return_indices: Literal[True] = ...,
+    cursor_style: str = ...,
+    collapse_on_start: bool = ...,
+    **kwargs: Any,
+) -> list[int]: ...
+
+
+@overload
+def select_multiple(
+    options: list[str],
+    minimal_count: int = ...,
+    page_size: int = ...,
+    *,
+    return_indices: Literal[False],
+    cursor_style: str = ...,
+    collapse_on_start: bool = ...,
+    **kwargs: Any,
+) -> list[str]: ...
+
+
 def select_multiple(
     options: list[str],
     minimal_count: int = 1,
@@ -397,8 +425,8 @@ def select_multiple(
     return_indices: bool = True,
     cursor_style: str = "pink",
     collapse_on_start: bool = False,
-    **kwargs,
-) -> list[int]:
+    **kwargs: Any,
+) -> list[int] | list[str]:
     """
     Drop-in replacement using custom Selector with global console.
 

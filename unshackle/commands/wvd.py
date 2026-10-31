@@ -265,8 +265,8 @@ def new(
 
     log.info("VMP:")
     if device.client_id.vmp_data:
-        file_hashes = FileHashes()
-        file_hashes.ParseFromString(device.client_id.vmp_data)
-        log.info(str(file_hashes))
+        vmp = FileHashes()
+        vmp.ParseFromString(device.client_id.vmp_data)
+        log.info(str(vmp))
     else:
         log.info("None")

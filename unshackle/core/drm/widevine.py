@@ -14,7 +14,6 @@ from construct import Container
 from pymp4.parser import Box
 from pywidevine.cdm import Cdm as WidevineCdm
 from pywidevine.pssh import PSSH
-from requests import Session
 from rich.text import Text
 
 from unshackle.core import binaries
@@ -22,7 +21,7 @@ from unshackle.core.config import config
 from unshackle.core.console import console
 from unshackle.core.constants import AnyTrack
 from unshackle.core.drm import key_args as drm_key_args
-from unshackle.core.session import utf8_text
+from unshackle.core.session import AnySession, utf8_text
 from unshackle.core.utilities import get_boxes, log_event
 from unshackle.core.utils import run_proxy
 from unshackle.core.utils.subprocess import ffprobe
@@ -37,7 +36,7 @@ class Widevine:
         UUID("00010203-0405-0607-0809-101112131415"),  # Shaka Packager test pattern
     }
 
-    def __init__(self, pssh: PSSH, kid: Union[UUID, str, bytes, None] = None, **kwargs: Any):
+    def __init__(self, pssh: PSSH, kid: Union[UUID, str, bytes, None] = None, **kwargs: Any) -> None:
         if not pssh:
             raise ValueError("Provided PSSH is empty.")
         if not isinstance(pssh, PSSH):
@@ -69,7 +68,7 @@ class Widevine:
         self.data: dict = kwargs or {}
 
     @classmethod
-    def from_track(cls, track: AnyTrack, session: Optional[Session] = None) -> Widevine:
+    def from_track(cls, track: AnyTrack, session: Optional[AnySession] = None) -> Widevine:
         """
         Get PSSH and KID from within the Initiation Segment of the Track Data.
         It also tries to get PSSH and KID from other track data like M3U8 data
@@ -96,6 +95,7 @@ class Widevine:
 
         if track.descriptor == track.Descriptor.HLS:
             m3u_url = track.url
+            assert isinstance(m3u_url, str)
             master = m3u8.loads(utf8_text(session.get(m3u_url)), uri=m3u_url)
             pssh_boxes.extend(
                 Box.parse(base64.b64decode(x.uri.split(",")[-1]))
@@ -380,7 +380,7 @@ class Widevine:
         config.directories.temp.mkdir(parents=True, exist_ok=True)
 
         try:
-            arguments = [
+            arguments: list[str | Path] = [
                 f"input={path},stream=0,output={output_path},output_format=MP4",
                 "--enable_raw_key_decryption",
                 "--keys",
@@ -402,6 +402,7 @@ class Widevine:
             had_error = False
 
             shaka_log_buffer = ""
+            assert p.stderr is not None
             for line in iter(p.stderr.readline, ""):
                 line = line.strip()
                 if not line:

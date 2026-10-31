@@ -94,6 +94,7 @@ dev = [
     "types-requests>=2.31.0.20240406,<3",
     "isort>=5.13.2,<8",
     "ruff>=0.15.12,<0.16",
+    "types-pyyaml>=6.0,<7",
 ]
 test = [
     "pytest>=8.3.0,<9",
@@ -160,6 +161,7 @@ line_length = 118
 check_untyped_defs = true
 disallow_incomplete_defs = true
 explicit_package_bases = true
+exclude = ["^unshackle/services/_repos/"]
 disallow_untyped_defs = true
 follow_imports = "silent"
 ignore_missing_imports = true

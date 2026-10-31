@@ -213,7 +213,7 @@ class Episode(Title):
 
     def get_filename(self, media_info: MediaInfo, folder: bool = False, show_service: bool = True) -> str:
         if folder:
-            template = config.get_folder_template("series")
+            template: Optional[str] = config.get_folder_template("series")
             if template:
                 # all parts of an episode land in the same season folder
                 context = self.build_template_context(media_info, show_service, include_part=False)
@@ -268,7 +268,7 @@ class Episode(Title):
 
 
 class Series(SortedKeyList, ABC):
-    def __init__(self, iterable: Optional[Iterable] = None):
+    def __init__(self, iterable: Optional[Iterable] = None) -> None:
         # part slots before year so existing ties still resolve by year
         super().__init__(iterable, key=lambda x: (x.season, x.number, x.part or 0, x.year or 0))
 

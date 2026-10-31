@@ -765,7 +765,6 @@ def build_init_segment(
         raise ValueError(f"Unsupported stream type: {stream_type}")
     fourcc = (fourcc or "").upper()
     cpd = binascii.unhexlify(codec_private_data) if codec_private_data else b""
-    encrypted = kid is not None
     # mdhd packs exactly three a-z letters; anything else (2-letter tags,
     # uppercase) would underflow the 5-bit fields, so fall back to "und".
     lang = (language or "").lower()
@@ -876,7 +875,7 @@ def build_init_segment(
         else:
             raise NotImplementedError(f"Unsupported video FourCC: {fourcc}")
         sample_entry_payload += config_box
-        if encrypted:
+        if kid is not None:
             sample_entry_payload += build_sinf(codec_fourcc, kid, iv_size, constant_iv)
             sample_entry_box = box(b"encv", sample_entry_payload)
         else:
@@ -904,7 +903,7 @@ def build_init_segment(
             codec_fourcc = b"ec-3"
         else:
             raise NotImplementedError(f"Unsupported audio FourCC: {fourcc}")
-        if encrypted:
+        if kid is not None:
             sample_entry_payload += build_sinf(codec_fourcc, kid, iv_size, constant_iv)
             sample_entry_box = box(b"enca", sample_entry_payload)
         else:

@@ -1,10 +1,10 @@
 from abc import abstractmethod
-from typing import Optional
+from typing import Any, Optional
 
 
 class Proxy:
     @abstractmethod
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs: Any) -> None:
         """
         The constructor initializes the Service using passed configuration data.
 

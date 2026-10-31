@@ -16,7 +16,7 @@ log = logging.getLogger("services")
 class DirtyServiceRepo(Exception):
     """A clone has uncommitted or unpushed local changes. unshackle refuses to refresh it, to protect them."""
 
-    def __init__(self, path: Path):
+    def __init__(self, path: Path) -> None:
         self.path = path
         super().__init__(str(path))
 

@@ -17,7 +17,7 @@ class API(Vault):
         no_push: bool = False,
         headers: Optional[dict[str, str]] = None,
         timeout: float = 10.0,
-    ):
+    ) -> None:
         super().__init__(name, no_push)
         self.uri = uri.rstrip("/")
         self.timeout = timeout

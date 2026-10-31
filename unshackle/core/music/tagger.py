@@ -39,11 +39,11 @@ try:
     from mutagen.oggopus import OggOpus
     from mutagen.oggvorbis import OggVorbis
 except ImportError:  # pragma: no cover - optional tagging dependency
-    FLAC = Picture = None
-    MP3 = MP4 = MP4Cover = OggOpus = OggVorbis = None  # type: ignore[assignment]
-    ID3NoHeaderError = Exception
-    APIC = COMM = TALB = TCOM = TCON = TCOP = TDRC = TIT2 = TPE1 = TPE2 = TPOS = TRCK = TSRC = TXXX = None
-    USLT = None
+    FLAC = Picture = None  # type: ignore[assignment, misc]
+    MP3 = MP4 = MP4Cover = OggOpus = OggVorbis = None  # type: ignore[assignment, misc]
+    ID3NoHeaderError = Exception  # type: ignore[assignment, misc]
+    APIC = COMM = TALB = TCOM = TCON = TCOP = TDRC = TIT2 = TPE1 = TPE2 = TPOS = TRCK = TSRC = TXXX = None  # type: ignore[assignment, misc]
+    USLT = None  # type: ignore[assignment, misc]
 
 
 log = logging.getLogger("MUSIC_TAGGER")
@@ -202,6 +202,7 @@ def write_mp3_tags(path: Path, tags: dict[str, str], cover_data: Optional[bytes]
         audio.add_tags()
     if audio.tags is None:
         audio.add_tags()
+    assert audio.tags is not None
 
     frame_map = {
         "TITLE": ("TIT2", TIT2),

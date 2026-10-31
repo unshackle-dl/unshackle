@@ -16,7 +16,7 @@ import json
 import subprocess
 import time
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union
 
 from unshackle.core import binaries
 from unshackle.core.utils.subprocess import log_tool_run, run_step
@@ -137,7 +137,7 @@ def generate(
 ) -> bytes:
     """Build a DV RPU from a dovi_tool generator config, and from hdr10plus_tool JSON when given."""
     tool = require_dovi_tool()
-    extra = ["--hdr10plus-json", hdr10plus_json] if hdr10plus_json else []
+    extra: list[Union[str, Path]] = ["--hdr10plus-json", hdr10plus_json] if hdr10plus_json else []
     return run_step(
         [tool, "generate", "-j", config_json, *extra, "-o", output],
         status=status,

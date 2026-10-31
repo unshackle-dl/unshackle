@@ -45,7 +45,7 @@ class ClearKeyCENC:
         laurl: Optional[str] = None,
         content_keys: Optional[dict[UUID, str]] = None,
         **kwargs: Any,
-    ):
+    ) -> None:
         kid_list: list[UUID] = []
         for kid in kids or []:
             if isinstance(kid, str):
@@ -279,7 +279,7 @@ class ClearKeyCENC:
         config.directories.temp.mkdir(parents=True, exist_ok=True)
 
         try:
-            arguments = [
+            arguments: list[str | Path] = [
                 f"input={path},stream=0,output={output_path},output_format=MP4",
                 "--enable_raw_key_decryption",
                 "--keys",
@@ -304,6 +304,7 @@ class ClearKeyCENC:
             had_error = False
 
             shaka_log_buffer = ""
+            assert p.stderr is not None
             for line in iter(p.stderr.readline, ""):
                 line = line.strip()
                 if not line:

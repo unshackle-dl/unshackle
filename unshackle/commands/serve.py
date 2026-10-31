@@ -297,6 +297,8 @@ def _install_config_reload(app: web.Application, *, no_key: bool, serve_widevine
         reload = partial(
             reload_config, _app, no_key=no_key, serve_widevine=serve_widevine, serve_playready=serve_playready
         )
+        if sys.platform == "win32":
+            return
         try:
             asyncio.get_running_loop().add_signal_handler(signal.SIGHUP, reload)
         except (AttributeError, NotImplementedError):
@@ -536,9 +538,9 @@ def serve(
                 cdm_parts.append("pyplayready CDM")
             log.info(f"Starting integrated server ({' + '.join(cdm_parts)} + REST API)")
 
-            def create_serve_authentication(serve_playready_flag: bool):
+            def create_serve_authentication(serve_playready_flag: bool) -> Any:
                 @web.middleware
-                async def serve_authentication(request: web.Request, handler) -> web.StreamResponse:
+                async def serve_authentication(request: web.Request, handler: Any) -> web.StreamResponse:
                     secret_key = request_secret_key(request)
                     if request.path.startswith(DASHBOARD_PREFIX):
                         return await handler(request)

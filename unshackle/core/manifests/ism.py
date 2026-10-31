@@ -446,6 +446,7 @@ class ISM:
         use_rolling_merge = config.merge_segments and not isinstance(track, Subtitle)
         can_resume = config.continue_downloads and not use_rolling_merge
 
+        assert isinstance(track.url, str)
         digest = resume.fingerprint(track.url, [(url, None) for url in segments])
         if not (can_resume and resume.reusable(save_dir, digest)):
             shutil.rmtree(save_dir, ignore_errors=True)
@@ -453,7 +454,7 @@ class ISM:
         if can_resume:
             resume.write_sidecar(save_dir, digest)
 
-        downloader_args = dict(
+        downloader_args: dict[str, Any] = dict(
             urls=[{"url": url} for url in segments],
             output_dir=save_dir,
             filename="{i:0%d}.mp4" % len(str(len(segments))),

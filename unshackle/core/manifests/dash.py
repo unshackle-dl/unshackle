@@ -11,7 +11,7 @@ from contextlib import ExitStack, closing
 from copy import deepcopy
 from functools import lru_cache, partial
 from pathlib import Path
-from typing import Any, BinaryIO, Callable, Optional, Union
+from typing import Any, BinaryIO, Callable, Optional, Union, cast
 from urllib.parse import urljoin, urlparse
 from uuid import UUID
 from zlib import crc32
@@ -29,13 +29,14 @@ from unshackle.core.config import config
 from unshackle.core.constants import DOWNLOAD_ALL_DRM, DOWNLOAD_CANCELLED, DOWNLOAD_LICENCE_ONLY, AnyTrack
 from unshackle.core.downloaders.requests import parse_content_range
 from unshackle.core.drm import DRM_T, ClearKeyCENC, PlayReady, Widevine
-from unshackle.core.drm.segment_decrypt import SegmentDecrypter, can_use
+from unshackle.core.drm.segment_decrypt import SEGMENT_DRM_T, SegmentDecrypter, can_use
 from unshackle.core.drm.verify import decrypt_track
 from unshackle.core.events import events
 from unshackle.core.session import RnetSession
 from unshackle.core.tracks import Audio, DownloadContext, Subtitle, Tracks, Video, resume
 from unshackle.core.tracks.track import (
     DRM_PREFERENCE_TYPES,
+    Track,
     assert_fragments_decrypted,
     parse_sidx,
 )
@@ -117,7 +118,7 @@ class RollingMerge:
 
 
 class DASH:
-    def __init__(self, manifest, url: str):
+    def __init__(self, manifest: Element, url: str) -> None:
         if manifest is None:
             raise ValueError("DASH manifest must be provided.")
         if manifest.tag != "MPD":
@@ -149,7 +150,7 @@ class DASH:
             url = res.url
 
         if not res.ok:
-            raise requests.ConnectionError("Failed to request the MPD document.", response=res)
+            raise requests.ConnectionError("Failed to request the MPD document.", response=res)  # type: ignore[arg-type]
 
         log_event(
             "manifest_dash_fetch",
@@ -237,7 +238,7 @@ class DASH:
                         # likely mp4-boxed subtitles
                         # TODO: It may not actually be subtitles
                         try:
-                            real_codec = Subtitle.Codec.from_mime(codecs)
+                            real_codec = Subtitle.Codec.from_mime(codecs or "")
                             content_type = "text"
                             mime_type = f"application/mp4; codecs='{real_codec.value.lower()}'"
                         except ValueError:
@@ -248,9 +249,12 @@ class DASH:
                         codecs = mime_type.split("/")[1]
 
                     video_args: dict[str, Any] = {}
+                    track_type: type[Video] | type[Audio] | type[Subtitle]
+                    track_codec: Any  # always the Codec of track_type, a pairing mypy cannot express
+                    track_args: dict[str, Any]
                     if content_type == "video":
                         track_type = Video
-                        track_codec = Video.Codec.from_codecs(codecs)
+                        track_codec = Video.Codec.from_codecs(codecs or "")
                         track_fps = get("frameRate")
                         if not track_fps and segment_base is not None:
                             track_fps = segment_base.get("timescale")
@@ -262,7 +266,7 @@ class DASH:
 
                         track_args = dict(
                             range_=self.get_video_range(
-                                codecs, findall("SupplementalProperty"), findall("EssentialProperty")
+                                codecs or "", findall("SupplementalProperty"), findall("EssentialProperty")
                             ),
                             bitrate=get("bandwidth") or None,
                             width=get("width") or 0,
@@ -275,7 +279,7 @@ class DASH:
                         )
                     elif content_type == "audio":
                         track_type = Audio
-                        track_codec = Audio.Codec.from_codecs(codecs)
+                        track_codec = Audio.Codec.from_codecs(codecs or "")
                         track_args = dict(
                             bitrate=get("bandwidth") or None,
                             channels=next(
@@ -384,6 +388,7 @@ class DASH:
             session.proxies.update({"all": proxy})
 
         log = logging.getLogger("DASH")
+        assert isinstance(track.url, str)
 
         manifest: ElementTree = track.data["dash"]["manifest"]
         adaptation_set: Element = track.data["dash"]["adaptation_set"]
@@ -412,7 +417,7 @@ class DASH:
             or (existing_drm and manifest_drm and not any(isinstance(drm, Widevine) for drm in existing_drm))
         )
 
-        pre_existing_keys = {}
+        pre_existing_keys: dict[UUID, str] = {}
         if existing_drm:
             for drm_obj in existing_drm:
                 if hasattr(drm_obj, "content_keys") and drm_obj.content_keys:
@@ -421,6 +426,7 @@ class DASH:
         if should_override_drm:
             track.drm = manifest_drm
         else:
+            assert existing_drm is not None
             track.drm = existing_drm
             if DOWNLOAD_ALL_DRM.is_set():
                 track.drm = [
@@ -592,6 +598,7 @@ class DASH:
             if can_resume:
                 resume.write_sidecar(save_dir, digest)
 
+        downloader_args: dict[str, Any]
         if collapse_single_url:
             # must carry no Range header, or the downloader would skip its ranged-parallel path
             downloader_args = dict(
@@ -644,7 +651,7 @@ class DASH:
 
         decrypter: Optional[SegmentDecrypter] = None
         if use_segment_decrypt and init_data:
-            decrypter = SegmentDecrypter(drm, init_data, save_dir.parent, max_workers)
+            decrypter = SegmentDecrypter(cast(SEGMENT_DRM_T, drm), init_data, save_dir.parent, max_workers)
 
         merger: Optional[RollingMerge] = None
         try:
@@ -796,7 +803,7 @@ class DASH:
         return element if element is not None else adaptation_set.find(name)
 
     @staticmethod
-    def has_segment_timing(track: AnyTrack) -> bool:
+    def has_segment_timing(track: Track) -> bool:
         """Return False when the manifest gives the track as one file with no index, so a sample cannot cut it."""
         dash = track.data.get("dash") or {}
         representation, adaptation_set = dash.get("representation"), dash.get("adaptation_set")
@@ -921,7 +928,7 @@ class DASH:
         adaptation_set: Element,
         representation: Element,
         manifest: ElementTree,
-        track: AnyTrack,
+        track: Track,
         track_url: str,
         session: Union[Session, RnetSession],
         probe_kid: bool = True,
@@ -1225,6 +1232,7 @@ class DASH:
             if not tag_is_valid(option) or option.startswith("und"):
                 continue
             return Language.get(option)
+        return None
 
     @staticmethod
     def get_video_range(

@@ -8,7 +8,7 @@ TIMESTAMP_FORMAT = re.compile(r"^(?P<hour>\d{2}):(?P<minute>\d{2}):(?P<second>\d
 
 
 class Chapter:
-    def __init__(self, timestamp: Union[str, int, float], name: Optional[str] = None):
+    def __init__(self, timestamp: Union[str, int, float], name: Optional[str] = None) -> None:
         """
         Make a new Chapter with a Timestamp and optional name.
 
@@ -31,6 +31,9 @@ class Chapter:
             raise TypeError(f"Expected name to be {str}, not {type(name)}")
 
         if not isinstance(timestamp, str):
+            hours: float
+            minutes: float
+            remainder: float
             if isinstance(timestamp, int):  # ms
                 hours, remainder = divmod(timestamp, 1000 * 60 * 60)
                 minutes, remainder = divmod(remainder, 1000 * 60)
@@ -47,8 +50,8 @@ class Chapter:
         if not timestamp_m:
             raise ValueError(f"The timestamp format is invalid: {timestamp}")
 
-        hour, minute, second, ms = timestamp_m.groups()
-        if not ms:
+        hour, minute, second, ms_group = timestamp_m.groups()
+        if not ms_group:
             timestamp += ".000"
 
         self.timestamp = timestamp
@@ -60,7 +63,7 @@ class Chapter:
         )
 
     def __str__(self) -> str:
-        return " | ".join(filter(bool, ["CHP", self.timestamp, self.name]))
+        return " | ".join(filter(None, ["CHP", self.timestamp, self.name]))
 
     @property
     def id(self) -> str:

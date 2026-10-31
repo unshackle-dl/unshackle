@@ -14,7 +14,7 @@ import re
 import sys
 import uuid
 from pathlib import Path
-from typing import Dict, Union
+from typing import Any, Dict, Union
 
 import wasmtime
 
@@ -46,7 +46,7 @@ class MonaLisaCDM:
         "_=./this.program",
     )
 
-    def __init__(self, device_path: Path):
+    def __init__(self, device_path: Path) -> None:
         """
         Initialise the MonaLisa CDM.
 
@@ -85,10 +85,10 @@ class MonaLisaCDM:
         except Exception as e:
             raise RuntimeError(f"Failed to load WASM module: {e}")
 
-        self.store = None
-        self.memory = None
-        self.instance = None
-        self.exports = {}
+        self.store: wasmtime.Store | None = None
+        self.memory: wasmtime.Memory | None = None
+        self.instance: wasmtime.Instance | None = None
+        self.exports: dict[str, Any] = {}
         self.ctx = None
 
     def open(self) -> int:
@@ -225,6 +225,7 @@ class MonaLisaCDM:
 
     def extract_license_key_bytes(self) -> bytes:
         """Extract the 16-byte content key from WASM memory."""
+        assert self.memory is not None and self.store is not None
         data_ptr = self.memory.data_ptr(self.store)
         data_len = self.memory.data_len(self.store)
 
@@ -237,7 +238,7 @@ class MonaLisaCDM:
 
         return bytes(mem_ptr.contents[start:end])
 
-    def ccall(self, func_name: str, return_type: type, *args):
+    def ccall(self, func_name: str, return_type: type, *args: Any) -> Any:
         """Call a WASM function with automatic string conversion."""
         stack = 0
         converted_args = []
@@ -274,6 +275,7 @@ class MonaLisaCDM:
         """Write a 32-bit integer to WASM memory."""
         if addr % 4 != 0:
             raise ValueError(f"Unaligned i32 write: addr={addr} (must be 4-byte aligned)")
+        assert self.memory is not None and self.store is not None
 
         data_len = self.memory.data_len(self.store)
         if addr < 0 or addr + 4 > data_len:
@@ -287,6 +289,7 @@ class MonaLisaCDM:
         """Convert string to UTF-8 and write to WASM memory."""
         encoded = data.encode("utf-8")
         write_length = min(len(encoded), max_length - 1)
+        assert self.memory is not None and self.store is not None
 
         mem_data = self.memory.data_ptr(self.store)
         mem_ptr = ctypes.cast(mem_data, ctypes.POINTER(ctypes.c_ubyte))
@@ -298,6 +301,7 @@ class MonaLisaCDM:
 
     def write_ascii_to_memory(self, string: str, buffer: int, dont_add_null: int = 0) -> None:
         """Write ASCII string to WASM memory."""
+        assert self.memory is not None and self.store is not None
         mem_data = self.memory.data_ptr(self.store)
         mem_ptr = ctypes.cast(mem_data, ctypes.POINTER(ctypes.c_ubyte))
 
@@ -308,55 +312,58 @@ class MonaLisaCDM:
         if dont_add_null == 0:
             mem_ptr[buffer + len(encoded)] = 0
 
-    def build_imports(self):
+    def build_imports(self) -> list[wasmtime.Func | wasmtime.Memory]:
         """Assemble the WASM import stubs the MonaLisa module needs."""
+        assert self.memory is not None and self.store is not None
+        store, memory = self.store, self.memory
 
-        def sys_fcntl64(a, b, c):
+        def sys_fcntl64(a: int, b: int, c: int) -> int:
             return 0
 
-        def fd_write(a, b, c, d):
+        def fd_write(a: int, b: int, c: int, d: int) -> int:
             return 0
 
-        def fd_close(a):
+        def fd_close(a: int) -> int:
             return 0
 
-        def sys_ioctl(a, b, c):
+        def sys_ioctl(a: int, b: int, c: int) -> int:
             return 0
 
-        def sys_open(a, b, c):
+        def sys_open(a: int, b: int, c: int) -> int:
             return 0
 
-        def sys_rmdir(a):
+        def sys_rmdir(a: int) -> int:
             return 0
 
-        def sys_unlink(a):
+        def sys_unlink(a: int) -> int:
             return 0
 
-        def clock():
+        def clock() -> int:
             return 0
 
-        def time(a):
+        def time(a: int) -> int:
             return 0
 
-        def emscripten_run_script(a):
+        def emscripten_run_script(a: int) -> None:
             return None
 
-        def fd_seek(a, b, c, d, e):
+        def fd_seek(a: int, b: int, c: int, d: int, e: int) -> int:
             return 0
 
-        def emscripten_resize_heap(a):
+        def emscripten_resize_heap(a: int) -> int:
             return 0
 
-        def fd_read(a, b, c, d):
+        def fd_read(a: int, b: int, c: int, d: int) -> int:
             return 0
 
-        def emscripten_run_script_string(a):
+        def emscripten_run_script_string(a: int) -> int:
             return 0
 
-        def emscripten_run_script_int(a):
+        def emscripten_run_script_int(a: int) -> int:
             return 1
 
-        def emscripten_memcpy_big(dest, src, num):
+        def emscripten_memcpy_big(dest: int, src: int, num: int | None) -> int:
+            assert self.memory is not None and self.store is not None
             mem_data = self.memory.data_ptr(self.store)
             data_len = self.memory.data_len(self.store)
             if num is None:
@@ -367,7 +374,7 @@ class MonaLisaCDM:
                     mem_ptr[dest + i] = mem_ptr[src + i]
             return dest
 
-        def environ_get(environ_ptr, environ_buf):
+        def environ_get(environ_ptr: int, environ_buf: int) -> int:
             buf_size = 0
             for index, string in enumerate(self.ENV_STRINGS):
                 ptr = environ_buf + buf_size
@@ -376,7 +383,7 @@ class MonaLisaCDM:
                 buf_size += len(string) + 1
             return 0
 
-        def environ_sizes_get(penviron_count, penviron_buf_size):
+        def environ_sizes_get(penviron_count: int, penviron_buf_size: int) -> int:
             self.write_i32(penviron_count, len(self.ENV_STRINGS))
             buf_size = sum(len(s) + 1 for s in self.ENV_STRINGS)
             self.write_i32(penviron_buf_size, buf_size)
@@ -385,23 +392,23 @@ class MonaLisaCDM:
         i32 = wasmtime.ValType.i32()
 
         return [
-            wasmtime.Func(self.store, wasmtime.FuncType([i32, i32, i32], [i32]), sys_fcntl64),
-            wasmtime.Func(self.store, wasmtime.FuncType([i32, i32, i32, i32], [i32]), fd_write),
-            wasmtime.Func(self.store, wasmtime.FuncType([i32], [i32]), fd_close),
-            wasmtime.Func(self.store, wasmtime.FuncType([i32, i32, i32], [i32]), sys_ioctl),
-            wasmtime.Func(self.store, wasmtime.FuncType([i32, i32, i32], [i32]), sys_open),
-            wasmtime.Func(self.store, wasmtime.FuncType([i32], [i32]), sys_rmdir),
-            wasmtime.Func(self.store, wasmtime.FuncType([i32], [i32]), sys_unlink),
-            wasmtime.Func(self.store, wasmtime.FuncType([], [i32]), clock),
-            wasmtime.Func(self.store, wasmtime.FuncType([i32], [i32]), time),
-            wasmtime.Func(self.store, wasmtime.FuncType([i32], []), emscripten_run_script),
-            wasmtime.Func(self.store, wasmtime.FuncType([i32, i32, i32, i32, i32], [i32]), fd_seek),
-            wasmtime.Func(self.store, wasmtime.FuncType([i32, i32, i32], [i32]), emscripten_memcpy_big),
-            wasmtime.Func(self.store, wasmtime.FuncType([i32], [i32]), emscripten_resize_heap),
-            wasmtime.Func(self.store, wasmtime.FuncType([i32, i32], [i32]), environ_get),
-            wasmtime.Func(self.store, wasmtime.FuncType([i32, i32], [i32]), environ_sizes_get),
-            wasmtime.Func(self.store, wasmtime.FuncType([i32, i32, i32, i32], [i32]), fd_read),
-            wasmtime.Func(self.store, wasmtime.FuncType([i32], [i32]), emscripten_run_script_string),
-            wasmtime.Func(self.store, wasmtime.FuncType([i32], [i32]), emscripten_run_script_int),
-            self.memory,
+            wasmtime.Func(store, wasmtime.FuncType([i32, i32, i32], [i32]), sys_fcntl64),
+            wasmtime.Func(store, wasmtime.FuncType([i32, i32, i32, i32], [i32]), fd_write),
+            wasmtime.Func(store, wasmtime.FuncType([i32], [i32]), fd_close),
+            wasmtime.Func(store, wasmtime.FuncType([i32, i32, i32], [i32]), sys_ioctl),
+            wasmtime.Func(store, wasmtime.FuncType([i32, i32, i32], [i32]), sys_open),
+            wasmtime.Func(store, wasmtime.FuncType([i32], [i32]), sys_rmdir),
+            wasmtime.Func(store, wasmtime.FuncType([i32], [i32]), sys_unlink),
+            wasmtime.Func(store, wasmtime.FuncType([], [i32]), clock),
+            wasmtime.Func(store, wasmtime.FuncType([i32], [i32]), time),
+            wasmtime.Func(store, wasmtime.FuncType([i32], []), emscripten_run_script),
+            wasmtime.Func(store, wasmtime.FuncType([i32, i32, i32, i32, i32], [i32]), fd_seek),
+            wasmtime.Func(store, wasmtime.FuncType([i32, i32, i32], [i32]), emscripten_memcpy_big),
+            wasmtime.Func(store, wasmtime.FuncType([i32], [i32]), emscripten_resize_heap),
+            wasmtime.Func(store, wasmtime.FuncType([i32, i32], [i32]), environ_get),
+            wasmtime.Func(store, wasmtime.FuncType([i32, i32], [i32]), environ_sizes_get),
+            wasmtime.Func(store, wasmtime.FuncType([i32, i32, i32, i32], [i32]), fd_read),
+            wasmtime.Func(store, wasmtime.FuncType([i32], [i32]), emscripten_run_script_string),
+            wasmtime.Func(store, wasmtime.FuncType([i32], [i32]), emscripten_run_script_int),
+            memory,
         ]

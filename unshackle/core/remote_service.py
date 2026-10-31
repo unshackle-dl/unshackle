@@ -615,12 +615,14 @@ def match_track(remote_track: Track, local_tracks: list) -> Optional[Track]:
         if str(lt.id) == remote_id:
             return lt
 
+    if not isinstance(remote_track, (Video, Audio, Subtitle)):
+        return None
     for lt in local_tracks:
         if type(lt).__name__ != type(remote_track).__name__:
             continue
         if lt.codec != remote_track.codec or str(lt.language) != str(remote_track.language):
             continue
-        if hasattr(lt, "width") and hasattr(remote_track, "width"):
+        if isinstance(remote_track, Video):
             if (
                 lt.width == remote_track.width
                 and lt.height == remote_track.height
@@ -628,10 +630,10 @@ def match_track(remote_track: Track, local_tracks: list) -> Optional[Track]:
                 and same_bitrate(lt.bitrate, remote_track.bitrate)
             ):
                 return lt
-        elif hasattr(lt, "channels") and hasattr(remote_track, "channels"):
+        elif isinstance(remote_track, Audio):
             if same_bitrate(lt.bitrate, remote_track.bitrate):
                 return lt
-        elif hasattr(lt, "forced"):
+        elif isinstance(remote_track, Subtitle):
             if lt.forced == remote_track.forced and lt.sdh == remote_track.sdh:
                 return lt
     return None
@@ -1074,7 +1076,7 @@ class ServerVault(Vault):
 
     report_now = True
 
-    def __init__(self, service: "RemoteService"):
+    def __init__(self, service: "RemoteService") -> None:
         super().__init__("server_cdm", no_push=True)
         self.service = service
 
@@ -1167,7 +1169,7 @@ class RemoteService:
                     total=5,
                     backoff_factor=0.2,
                     status_forcelist=[429, 500, 502, 503, 504],
-                    retry_after_max=MAX_BACKOFF,
+                    retry_after_max=int(MAX_BACKOFF),
                 ),
                 pool_maxsize=64,
                 pool_block=True,
@@ -1326,7 +1328,7 @@ class RemoteService:
                         f"No local proxy for the server's account region ({', '.join(regions)}), "
                         f"you are in {client_region}"
                     )
-        elif not no_proxy and proxy:
+        elif not no_proxy and proxy and self.ctx.parent:
             resolved_proxy = resolve_remote_proxy_arg(server_proxy_arg(self.ctx.parent.params), providers)
             if resolved_proxy:
                 create_data["proxy"] = resolved_proxy
@@ -1804,7 +1806,7 @@ class RemoteService:
             self._titles = Movies(titles_list)
         return self._titles
 
-    def get_titles_cached(self, title_id: str = None) -> Titles_T:
+    def get_titles_cached(self, title_id: Optional[str] = None) -> Titles_T:
         """Apply the client's local title_map to titles fetched from the remote server.
 
         Lets users rename titles for remote services they do not have installed locally.
@@ -2084,9 +2086,8 @@ class RemoteService:
 
             from unshackle.core.drm import Widevine
 
-            kid_uuids = [UUID(hex=k) for k in kid_hexes]
             WIDEVINE_SYSTEM_ID = UUID("edef8ba9-79d6-4ace-a3c8-27dcd51d21ed")
-            dummy_pssh = WvPSSH.new(system_id=WIDEVINE_SYSTEM_ID, key_ids=kid_uuids)
+            dummy_pssh = WvPSSH.new(system_id=WIDEVINE_SYSTEM_ID, key_ids=[UUID(hex=k) for k in kid_hexes])
             # no kid: the stub names several KIDs, and the first is not the track's own
             return Widevine(pssh=dummy_pssh)
 

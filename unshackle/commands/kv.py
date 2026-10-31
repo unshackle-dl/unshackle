@@ -256,6 +256,7 @@ def sync(
     if not len(vaults) > 1:
         raise click.ClickException("You must provide more than one Vault to sync.")
 
+    assert copy.callback is not None
     ctx.invoke(
         copy.callback,
         to_vault_name=vaults[0],

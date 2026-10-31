@@ -15,10 +15,10 @@ CHARSET_DEFAULT = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxy
 CHARSET_INVERTED = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
 
-def encode(n, charset=CHARSET_DEFAULT):
+def encode(n: int, charset: str = CHARSET_DEFAULT) -> str:
     """Encodes a given integer ``n``."""
 
-    chs = []
+    chs: list[str] = []
     while n > 0:
         n, r = divmod(n, BASE)
         chs.insert(0, charset[r])
@@ -29,7 +29,7 @@ def encode(n, charset=CHARSET_DEFAULT):
     return "".join(chs)
 
 
-def encodebytes(barray, charset=CHARSET_DEFAULT):
+def encodebytes(barray: bytes, charset: str = CHARSET_DEFAULT) -> str:
     """Encodes a bytestring into a base62 string.
 
     :param barray: A byte array
@@ -60,7 +60,7 @@ def encodebytes(barray, charset=CHARSET_DEFAULT):
     return zero_padding + value
 
 
-def decode(encoded, charset=CHARSET_DEFAULT):
+def decode(encoded: str, charset: str = CHARSET_DEFAULT) -> int:
     """Decodes a base62 encoded value ``encoded``.
 
     :type encoded: str
@@ -76,7 +76,7 @@ def decode(encoded, charset=CHARSET_DEFAULT):
     return v
 
 
-def decodebytes(encoded, charset=CHARSET_DEFAULT):
+def decodebytes(encoded: str, charset: str = CHARSET_DEFAULT) -> bytes:
     """Decodes a string of base62 data into a bytes object.
 
     :param encoded: A string to be decoded in base62
@@ -99,7 +99,7 @@ def decodebytes(encoded, charset=CHARSET_DEFAULT):
     return leading_null_bytes + bytes(buf)
 
 
-def value(ch, charset):
+def value(ch: str, charset: str) -> int:
     """Decodes an individual digit of a base62 encoded string."""
 
     try:
@@ -108,7 +108,7 @@ def value(ch, charset):
         raise ValueError("base62: Invalid character (%s)" % ch)
 
 
-def check_type(value, expected_type):
+def check_type(value: object, expected_type: type) -> None:
     """Checks if the input is in an appropriate type."""
 
     if not isinstance(value, expected_type):

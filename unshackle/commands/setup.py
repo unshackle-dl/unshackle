@@ -135,7 +135,7 @@ DATA_DIRS = {
     key: getattr(Config._Directories, key).name
     for key in ("cookies", "wvds", "prds", "cache", "logs", "exports", "dcsl", "temp")
 }
-DATA_DIRS["services"] = Config._Directories.services[0].name
+DATA_DIRS["services"] = Path(Config._Directories.services[0]).name
 
 say = partial(console.print, soft_wrap=True)
 

@@ -19,7 +19,7 @@ from datetime import datetime, timezone
 from functools import cache
 from pathlib import Path
 from types import ModuleType
-from typing import Any, Callable, Mapping, Optional, Sequence, Union
+from typing import Any, Callable, Iterator, Mapping, Optional, Sequence, Union
 from urllib.parse import ParseResult, urlparse
 from uuid import uuid4
 
@@ -101,12 +101,12 @@ def import_module_by_path(path: Path) -> ModuleType:
 
     # compute package hierarchy for relative import support
     if path.is_relative_to(config.directories.core_dir):
-        name = []
+        parts: list[str] = []
         _path = path.parent
         while _path.stem != config.directories.core_dir.stem:
-            name.append(_path.stem)
+            parts.append(_path.stem)
             _path = _path.parent
-        name = ".".join([config.directories.core_dir.stem] + name[::-1])
+        name = ".".join([config.directories.core_dir.stem] + parts[::-1])
     else:
         # is outside the src package
         if str(path.parent.parent) not in sys.path:
@@ -114,6 +114,7 @@ def import_module_by_path(path: Path) -> ModuleType:
         name = path.parent.stem
 
     spec = importlib.util.spec_from_file_location(name, path)
+    assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     sys.modules[name] = module
     spec.loader.exec_module(module)
@@ -544,7 +545,7 @@ def get_boxes(data: bytes, box_type: bytes, as_bytes: bool = False) -> Box:  # t
             raise e
 
 
-def ap_case(text: str, keep_spaces: bool = False, stop_words: tuple[str] = None) -> str:
+def ap_case(text: str, keep_spaces: bool = False, stop_words: Optional[tuple[str, ...]] = None) -> str:
     """
     Convert a string to title case using AP/APA style.
     Based on https://github.com/words/ap-style-title-case
@@ -758,6 +759,7 @@ def get_extension(value: Union[str, Path, ParseResult]) -> Optional[str]:
         ext = os.path.splitext(value_parsed.path)[1]
         if ext and ext != ".":
             return ext
+    return None
 
 
 def extract_font_family(font_path: Path) -> Optional[str]:
@@ -810,6 +812,8 @@ def get_windows_fonts() -> dict[str, Path]:
     Returns:
         Dictionary mapping font family names to their file paths
     """
+    if sys.platform != "win32":
+        raise OSError("Windows font registry is only available on Windows")
     import winreg
 
     with winreg.ConnectRegistry(None, winreg.HKEY_LOCAL_MACHINE) as reg:
@@ -850,7 +854,7 @@ def get_unix_fonts() -> dict[str, Path]:
         Dictionary mapping font family names to their file paths
     """
     log = logging.getLogger("get_system_fonts")
-    fonts = {}
+    fonts: dict[str, Path] = {}
 
     font_dirs = [
         Path("/usr/share/fonts"),
@@ -965,7 +969,7 @@ def find_font_with_fallbacks(font_name: str, system_fonts: dict[str, Path]) -> O
 
 
 # Mapping of font families to system packages that provide them
-FONT_PACKAGES = {
+FONT_PACKAGES: dict[str, dict[str, Any]] = {
     "liberation": {
         "debian": "fonts-liberation fonts-liberation2",
         "fonts": ["Liberation Sans", "Liberation Serif", "Liberation Mono"],
@@ -995,7 +999,7 @@ def suggest_font_packages(missing_fonts: list[str]) -> dict[str, list[str]]:
     Returns:
         Dictionary mapping package names to lists of fonts they would give
     """
-    suggestions = {}
+    suggestions: dict[str, list[str]] = {}
 
     # Check which fonts from aliases would help
     needed_aliases = set()
@@ -1048,7 +1052,7 @@ class DebugLogger:
     This makes it easy to parse, filter, and analyse logs programmatically.
     """
 
-    def __init__(self, log_path: Optional[Path] = None, enabled: bool = False, log_keys: bool = False):
+    def __init__(self, log_path: Optional[Path] = None, enabled: bool = False, log_keys: bool = False) -> None:
         """
         Initialise the debug logger.
 
@@ -1063,12 +1067,12 @@ class DebugLogger:
         self.file_handle = None
         self.log_keys = log_keys
 
-        if self.enabled:
+        if self.enabled and self.log_path is not None:
             self.log_path.parent.mkdir(parents=True, exist_ok=True)
             self.file_handle = open(self.log_path, "a", encoding="utf-8")
             self.log_session_start()
 
-    def log_session_start(self):
+    def log_session_start(self) -> None:
         """Log the ``session_start`` entry, with environment information."""
         import platform
 
@@ -1095,13 +1099,13 @@ class DebugLogger:
         message: str = "",
         context: Optional[dict[str, Any]] = None,
         service: Optional[str] = None,
-        error: Optional[Exception] = None,
+        error: Optional[BaseException] = None,
         request: Optional[dict[str, Any]] = None,
         response: Optional[dict[str, Any]] = None,
         duration_ms: Optional[float] = None,
         success: Optional[bool] = None,
-        **kwargs,
-    ):
+        **kwargs: Any,
+    ) -> None:
         """
         Log a structured JSON entry.
 
@@ -1121,7 +1125,7 @@ class DebugLogger:
         if not self.enabled or not self.file_handle:
             return
 
-        entry = {
+        entry: dict[str, Any] = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "session_id": self.session_id,
             "level": level,
@@ -1219,7 +1223,7 @@ class DebugLogger:
         except Exception:
             return f"[{type(data).__name__}]"
 
-    def log_operation_start(self, operation: str, **kwargs) -> str:
+    def log_operation_start(self, operation: str, **kwargs: Any) -> str:
         """
         Log the start of an operation and return an operation ID.
 
@@ -1241,8 +1245,13 @@ class DebugLogger:
         return op_id
 
     def log_operation_end(
-        self, operation: str, operation_id: str, success: bool = True, duration_ms: Optional[float] = None, **kwargs
-    ):
+        self,
+        operation: str,
+        operation_id: str,
+        success: bool = True,
+        duration_ms: Optional[float] = None,
+        **kwargs: Any,
+    ) -> None:
         """
         Log the end of an operation.
 
@@ -1263,7 +1272,7 @@ class DebugLogger:
             **kwargs,
         )
 
-    def log_service_call(self, method: str, url: str, **kwargs):
+    def log_service_call(self, method: str, url: str, **kwargs: Any) -> None:
         """
         Log a service API call.
 
@@ -1278,7 +1287,7 @@ class DebugLogger:
             level=level, operation="service_call", message=message, request={"method": method, "url": url, **kwargs}
         )
 
-    def log_drm_operation(self, drm_type: str, operation: str, **kwargs):
+    def log_drm_operation(self, drm_type: str, operation: str, **kwargs: Any) -> None:
         """
         Log a DRM operation (PSSH extraction, license request, content key retrieval).
 
@@ -1291,7 +1300,7 @@ class DebugLogger:
         level = kwargs.pop("level", "DEBUG")
         self.log(level=level, operation=f"drm_{operation}", message=message, drm_type=drm_type, **kwargs)
 
-    def log_vault_query(self, vault_name: str, operation: str, **kwargs):
+    def log_vault_query(self, vault_name: str, operation: str, **kwargs: Any) -> None:
         """
         Log a vault query operation.
 
@@ -1310,7 +1319,7 @@ class DebugLogger:
             **kwargs,
         )
 
-    def log_error(self, operation: str, error: Exception, **kwargs):
+    def log_error(self, operation: str, error: Exception, **kwargs: Any) -> None:
         """
         Log an error with full context.
 
@@ -1328,7 +1337,7 @@ class DebugLogger:
             **kwargs,
         )
 
-    def close(self):
+    def close(self) -> None:
         """Close the log file and clean up resources."""
         if self.file_handle:
             self.log(level="INFO", operation="session_end", message="Debug logging session ended")
@@ -1358,7 +1367,7 @@ def log_event(operation: str, *, level: str = "DEBUG", message: str = "", **kwar
 
 
 @contextlib.contextmanager
-def timed_operation(operation: str, *, level: str = "DEBUG", message: str = "", **kwargs: Any):
+def timed_operation(operation: str, *, level: str = "DEBUG", message: str = "", **kwargs: Any) -> Iterator[None]:
     """Time a block and log ``operation`` once it finishes, with ``duration_ms``.
 
     Logs at ``level`` with ``success=True`` on normal exit, or at ERROR with the exception and
@@ -1398,7 +1407,7 @@ def timed_operation(operation: str, *, level: str = "DEBUG", message: str = "", 
     )
 
 
-def init_debug_logger(log_path: Optional[Path] = None, enabled: bool = False, log_keys: bool = False):
+def init_debug_logger(log_path: Optional[Path] = None, enabled: bool = False, log_keys: bool = False) -> None:
     """
     Initialise the global debug logger.
 
@@ -1413,7 +1422,7 @@ def init_debug_logger(log_path: Optional[Path] = None, enabled: bool = False, lo
     debug_logger = DebugLogger(log_path=log_path, enabled=enabled, log_keys=log_keys)
 
 
-def close_debug_logger():
+def close_debug_logger() -> None:
     """Close the global debug logger."""
     global debug_logger
     if debug_logger:

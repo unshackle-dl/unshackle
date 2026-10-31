@@ -32,7 +32,7 @@ class Cacher:
         self.service_tag = service_tag
         self.key = key
         self.version = version
-        self.data = data or {}
+        self.data: Any = data or {}
         self.expiration = expiration
 
         if self.expiration and self.expired:
@@ -45,6 +45,7 @@ class Cacher:
     @property
     def path(self) -> Path:
         """Get the path at which the cache will be read and written."""
+        assert self.key is not None, "Cacher has no key"
         return (config.directories.cache / self.service_tag / self.key).with_suffix(".json")
 
     @property

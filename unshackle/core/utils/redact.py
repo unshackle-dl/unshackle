@@ -6,7 +6,7 @@ import logging
 import re
 import sys
 from pathlib import Path
-from typing import Iterable, Optional
+from typing import Iterable, Optional, overload
 from urllib.parse import urlsplit, urlunsplit
 
 REDACTED = "***"
@@ -116,6 +116,10 @@ def path_redaction_enabled() -> bool:
         return True
 
 
+@overload
+def redact_path(text: str) -> str: ...
+@overload
+def redact_path(text: None) -> None: ...
 def redact_path(text: Optional[str]) -> Optional[str]:
     """Replace local base-directory prefixes (install root, venv, home) in ``text`` with tokens.
 

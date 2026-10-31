@@ -16,7 +16,7 @@ RATE_LIMIT_RETRIES = 3
 class RateLimited(Exception):
     """The vault still answered 429 after the retries."""
 
-    def __init__(self, message: str = f"still rate limited after {RATE_LIMIT_RETRIES} retries"):
+    def __init__(self, message: str = f"still rate limited after {RATE_LIMIT_RETRIES} retries") -> None:
         super().__init__(message)
 
 
@@ -53,7 +53,7 @@ class Vault(metaclass=ABCMeta):
     local: bool = False
     report_now: bool = False
 
-    def __init__(self, name: str, no_push: bool = False):
+    def __init__(self, name: str, no_push: bool = False) -> None:
         self.name = name
         self.no_push = no_push
 

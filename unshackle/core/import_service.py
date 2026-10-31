@@ -16,7 +16,7 @@ from langcodes import tag_is_valid
 from unshackle.core.config import config
 from unshackle.core.constants import AnyTrack
 from unshackle.core.credential import Credential
-from unshackle.core.drm import drm_from_dict, real_kids
+from unshackle.core.drm import ClearKey, MonaLisa, drm_from_dict, real_kids
 from unshackle.core.manifests import DASH, HLS, ISM, MissingLanguageError
 from unshackle.core.remote_service import (
     RemoteService,
@@ -35,7 +35,7 @@ from unshackle.core.utils import run_proxy
 log = logging.getLogger("import")
 E = TypeVar("E", bound=Enum)
 
-PARSERS = {"DASH": DASH, "HLS": HLS, "ISM": ISM}
+PARSERS: dict[str, type[DASH] | type[HLS] | type[ISM]] = {"DASH": DASH, "HLS": HLS, "ISM": ISM}
 MANIFEST_DATA_KEYS = {"DASH": "dash", "ISM": "ism"}
 
 
@@ -399,8 +399,8 @@ class ImportService:
                 )
             except Exception as e:
                 raise click.ClickException(f"Failed to parse the {manifest_type} manifest for '{title}': {e}")
-            for track in parsed:
-                tracks.add(track)
+            for parsed_track in parsed:
+                tracks.add(parsed_track)
             parsed_ids = {str(t.id) for t in tracks}
             url_dicts = [t for t in tracks_map.values() if t.get("descriptor", "URL") == "URL"]
             # Merge back only tracks from another manifest, such as a separate HEVC one; the
@@ -666,7 +666,10 @@ class ImportService:
                     continue
                 keys = {kid: key for kid, key in pool.items() if kid in declared} if declared else pool
             if track.drm:
-                drm_obj = track.drm[0]
+                drm_obj: Any = next(iter(track.drm))
+                # HLS AES-128 fetches its own key, and MonaLisa's content_keys is a read-only view.
+                if isinstance(drm_obj, (ClearKey, MonaLisa)):
+                    continue
             else:
                 drm_obj = RemoteService.create_drm_stub(system, [kid.hex for kid in (declared or pool)])
             for kid, key in keys.items():

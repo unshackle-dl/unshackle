@@ -90,7 +90,7 @@ class Config:
         core_dir = Path(__file__).resolve().parent
         namespace_dir = core_dir.parent
         commands = namespace_dir / "commands"
-        services = [namespace_dir / "services"]
+        services: list[Path | str] = [namespace_dir / "services"]
         vaults = namespace_dir / "vaults"
         fonts = namespace_dir / "fonts"
         user_configs = core_dir.parent
@@ -114,7 +114,9 @@ class Config:
         chapters = "Chapters_{title}_{random}.txt"  # Directories.temp
         subtitle = "Subtitle_{id}_{language}.srt"  # Directories.temp
 
-    def __init__(self, **kwargs: Any):
+    repack: bool = False
+
+    def __init__(self, **kwargs: Any) -> None:
         self.dl: dict = kwargs.get("dl") or {}
         self.cdm: dict = kwargs.get("cdm") or {}
         self.chapter_fallback_name: str = kwargs.get("chapter_fallback_name") or ""

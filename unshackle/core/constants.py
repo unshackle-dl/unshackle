@@ -1,5 +1,8 @@
 from threading import Event
-from typing import TypeVar, Union
+from typing import TYPE_CHECKING, TypeVar, Union
+
+if TYPE_CHECKING:
+    from unshackle.core.tracks import Audio, Subtitle, Track, Video
 
 DOWNLOAD_CANCELLED = Event()
 DOWNLOAD_LICENCE_ONLY = Event()
@@ -46,9 +49,9 @@ context_settings = dict(
 
 # For use in signatures of functions which take one specific type of track at a time
 # (it can't be a list that contains e.g. both Video and Audio objects)
-TrackT = TypeVar("TrackT", bound="Track")  # noqa: F821
+TrackT = TypeVar("TrackT", bound="Track")
 
 # For general use in lists that can contain mixed types of tracks.
 # list[Track] won't work because list is invariant.
 # TODO: Add Chapter?
-AnyTrack = Union["Video", "Audio", "Subtitle"]  # noqa: F821
+AnyTrack = Union["Video", "Audio", "Subtitle"]

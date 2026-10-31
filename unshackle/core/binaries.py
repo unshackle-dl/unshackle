@@ -44,9 +44,9 @@ def find(*names: str, search_dirs: Optional[list[Path]] = None) -> Optional[Path
                         return path
 
         # Fall back to system PATH
-        path = shutil.which(name)
-        if path:
-            return Path(path)
+        found = shutil.which(name)
+        if found:
+            return Path(found)
     return None
 
 

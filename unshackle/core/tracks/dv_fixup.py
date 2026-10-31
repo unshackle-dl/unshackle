@@ -45,6 +45,7 @@ class DVFixup:
         """Demux the elementary HEVC so mkvmerge exposes its DV RPU. Returns the
         elementary-stream path, or the original source on any failure so muxing can
         proceed with the as-downloaded file."""
+        assert FFMPEG and self.video.path, "checked in __init__"
         source = Path(self.video.path)
         height = self.video.height or 0
         console.print(Padding(Rule(f"[rule.text]DV Composite Fixup ({height}p)"), (1, 2)))

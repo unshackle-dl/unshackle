@@ -6,11 +6,11 @@ from datetime import datetime, timedelta
 log = logging.getLogger("NF-ESN")
 
 
-def chrome_esn_generator():
+def chrome_esn_generator() -> str:
     ESN_GEN = "".join(random.choice("0123456789ABCDEF") for _ in range(30))
     esn_file = ".esn"
 
-    def gen_file():
+    def gen_file() -> None:
         with open(esn_file, "w") as file:
             file.write(f"NFCDIE-03-{ESN_GEN}")
 

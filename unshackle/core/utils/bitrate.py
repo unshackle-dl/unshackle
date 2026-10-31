@@ -7,12 +7,13 @@ import time
 from collections import OrderedDict, defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Callable, Hashable, Optional, Union
+from typing import TYPE_CHECKING, Callable, Hashable, Optional, Sequence, Union
 from urllib.parse import urljoin
 
 from requests import Session
 
 from unshackle.core.binaries import FFProbe
+from unshackle.core.constants import TrackT
 from unshackle.core.session import RnetSession, utf8_text
 from unshackle.core.utils.subprocess import log_tool_run
 
@@ -115,11 +116,11 @@ def measure_real_bitrate(
 
 
 def apply_real_bitrates(
-    tracks: list["Track"],
+    tracks: list[TrackT],
     session: Union[Session, RnetSession],
     *,
     log: logging.Logger,
-    group_key: Callable[["Track"], Hashable],
+    group_key: Callable[[TrackT], Hashable],
     per_group: int = 5,
     workers: int = 8,
 ) -> None:
@@ -134,7 +135,7 @@ def apply_real_bitrates(
     outrank a probed one), it probes the next track too, until the probed set is
     safely above the rest. Unprobed tracks keep their manifest-declared bitrate.
     """
-    groups: defaultdict[Hashable, list["Track"]] = defaultdict(list)
+    groups: defaultdict[Hashable, list[TrackT]] = defaultdict(list)
     for track in tracks:
         groups[group_key(track)].append(track)
     for group in groups.values():
@@ -155,7 +156,7 @@ def apply_real_bitrates(
 
 
 def probe_batch(
-    tracks: list["Track"],
+    tracks: Sequence["Track"],
     session: Union[Session, RnetSession],
     *,
     log: logging.Logger,

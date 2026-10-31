@@ -22,7 +22,7 @@ from io import StringIO
 from itertools import product
 from pathlib import Path
 from threading import Lock
-from typing import Any, Callable, Collection, Optional, Sequence, TypedDict, Union
+from typing import Any, Callable, Collection, Optional, Sequence, TypedDict, Union, cast
 from uuid import UUID
 
 import click
@@ -60,7 +60,18 @@ from unshackle.core.downloaders import (
     retries_exhausted,
     set_speed_limit,
 )
-from unshackle.core.drm import DRM_T, ClearKeyCENC, MonaLisa, PlayReady, Widevine, cbcs, own_kids, real_kids, verify
+from unshackle.core.drm import (
+    DRM_T,
+    ClearKey,
+    ClearKeyCENC,
+    MonaLisa,
+    PlayReady,
+    Widevine,
+    cbcs,
+    own_kids,
+    real_kids,
+    verify,
+)
 from unshackle.core.events import events
 from unshackle.core.export_name import ExportNamer, move_export, plural, season_episodes, title_label
 from unshackle.core.providers.anilist import parse_anilist_ref
@@ -501,7 +512,7 @@ def download_tracks_in_passes(
     DOWNLOAD_CANCELLED.clear()
     indexed = list(enumerate(tracks))
     if skip_subtitle_errors:
-        primary = [(i, t) for i, t in indexed if not isinstance(t, Subtitle)]
+        primary: list[tuple[int, AnyTrack]] = [(i, t) for i, t in indexed if not isinstance(t, Subtitle)]
         skippable = [(i, t) for i, t in indexed if isinstance(t, Subtitle)]
     else:
         primary, skippable = indexed, []
@@ -1254,7 +1265,7 @@ class dl:
         proxy_providers: Optional[list[Any]] = None,
         *_: Any,
         **__: Any,
-    ):
+    ) -> None:
         if not ctx.invoked_subcommand:
             raise ValueError("A subcommand to invoke was not specified, the main code cannot continue.")
 
@@ -1357,7 +1368,7 @@ class dl:
                 )
 
                 # Log binary versions for diagnostics
-                binary_versions = {}
+                binary_versions: dict[str, Optional[dict[str, Optional[str]]]] = {}
                 for name, binary in [
                     ("shaka_packager", binaries.ShakaPackager),
                     ("mp4decrypt", binaries.Mp4decrypt),
@@ -1668,21 +1679,21 @@ class dl:
         quality: list[int],
         vcodec: list[Video.Codec],
         acodec: list[Audio.Codec],
-        vbitrate: int,
-        abitrate: int,
+        vbitrate: Optional[int],
+        abitrate: Optional[int],
         vbitrate_range: Optional[str],
         abitrate_range: Optional[str],
         range_: list[Video.Range],
-        channels: float,
+        channels: Optional[float],
         no_atmos: bool,
         select_titles: bool,
         wanted: list[str],
         latest_episode: bool,
         latest_episodes: Optional[int],
         lang: list[str],
-        v_lang: list[str],
-        a_lang: list[str],
-        s_lang: list[str],
+        v_lang: Optional[list[str]],
+        a_lang: Optional[list[str]],
+        s_lang: Optional[list[str]],
         require_audio: list[str],
         require_video: list[str],
         require_subs: list[str],
@@ -1707,7 +1718,7 @@ class dl:
         list_: bool,
         list_titles: bool,
         skip_dl: bool,
-        export: bool,
+        export: Optional[bool],
         cdm_only: Optional[bool],
         no_proxy: bool,
         no_proxy_download: bool,
@@ -1761,7 +1772,7 @@ class dl:
         # a remote session sends --cdm to the server, which can hand it the tracks above its cap
         if self.cdm_override and isinstance(service, ImportService):
             self.log.warning("--cdm is ignored: an import uses the keys in the export")
-        self._remote_service = service if hasattr(service, "_server_cdm") else None
+        self._remote_service: Any = service if hasattr(service, "_server_cdm") else None
         start_time = time.time()
 
         lang, lang_excl = partition_exclusions(lang)
@@ -2110,7 +2121,7 @@ class dl:
             console.print(Padding(Rule("[rule.text]Select Titles"), (1, 2)))
 
             selection_titles = []
-            dependencies = {}
+            dependencies: dict[int, list[int]] = {}
             original_indices = {}
 
             current_season = None
@@ -2232,8 +2243,10 @@ class dl:
                         selected.append(candidates[0])
             # Built via per-tag by_language calls, so overlapping tags can append
             # the same track across iterations; dedupe by id.
-            seen_ids: set[str] = set()
-            return [t for t in selected if not (t.id in seen_ids or seen_ids.add(t.id))]
+            unique: dict[str, Audio] = {}
+            for t in selected:
+                unique.setdefault(t.id, t)
+            return list(unique.values())
 
         base_selection = (v_lang, a_lang, s_lang, range_)
 
@@ -2362,8 +2375,8 @@ class dl:
                 delay = random.randint(slow[0], slow[1])
                 spinner = Spinner("dots", text=f"Delaying by {delay} seconds...")
                 with SyncLive(Padding(spinner, (0, 5)), console=console, refresh_per_second=12.5, transient=True):
-                    for remaining in range(delay, 0, -1):
-                        spinner.update(text=f"Delaying by {remaining} seconds...")
+                    for seconds_left in range(delay, 0, -1):
+                        spinner.update(text=f"Delaying by {seconds_left} seconds...")
                         time.sleep(1)
 
             with console.status("Subscribing to events...", spinner="dots"):
@@ -2579,6 +2592,10 @@ class dl:
                 fsl_excl_r = resolve_sort_langs(fsl_excl, title.language, exact=exact_lang)
 
                 if isinstance(title, (Movie, Episode)):
+                    resolution: Optional[int]
+                    color_range: Optional[Video.Range]
+                    codec: Optional[Video.Codec]
+                    vlang: Optional[str]
                     if keep_videos and vcodec:
                         title.tracks.select_video(lambda x: x.codec in vcodec)
                         missing_codecs = [c for c in vcodec if not any(x.codec == c for x in title.tracks.videos)]
@@ -2609,20 +2626,20 @@ class dl:
                             # In HYBRID mode, only apply bitrate filter to non-DV tracks
                             # DV tracks are kept regardless since they're only used for RPU metadata
                             title.tracks.select_video(
-                                lambda x: x.range == Video.Range.DV or (x.bitrate and x.bitrate // 1000 == vbitrate)
+                                lambda x: x.range == Video.Range.DV or bool(x.bitrate and x.bitrate // 1000 == vbitrate)
                             )
                             if not any(x.range != Video.Range.DV for x in title.tracks.videos):
                                 self.log.error(f"There's no {vbitrate}kbps Video Track...")
                                 sys.exit(1)
                         else:
-                            title.tracks.select_video(lambda x: x.bitrate and x.bitrate // 1000 == vbitrate)
+                            title.tracks.select_video(lambda x: bool(x.bitrate and x.bitrate // 1000 == vbitrate))
                             if not title.tracks.videos:
                                 self.log.error(f"There's no {vbitrate}kbps Video Track...")
                                 sys.exit(1)
 
                     if keep_videos and vbitrate_min is not None and vbitrate_max is not None:
                         title.tracks.select_video(
-                            lambda x: x.bitrate and vbitrate_min <= x.bitrate // 1000 <= vbitrate_max
+                            lambda x: bool(x.bitrate and vbitrate_min <= x.bitrate // 1000 <= vbitrate_max)
                         )
                         if not title.tracks.videos:
                             self.log.error(f"No Video Track in {vbitrate_min}-{vbitrate_max}kbps range...")
@@ -2686,7 +2703,7 @@ class dl:
                             sys.exit(1)
 
                     has_hybrid = any(r == Video.Range.HYBRID for r in range_)
-                    non_hybrid_ranges = [r for r in range_ if r != Video.Range.HYBRID]
+                    non_hybrid_ranges: list[Video.Range] = [r for r in range_ if r != Video.Range.HYBRID]
                     effective_quality = quality
                     if keep_videos and quality:
                         missing_resolutions = []
@@ -2768,7 +2785,7 @@ class dl:
 
                         hybrid_quality = effective_quality
                         if not hybrid_quality:
-                            best_resolution = max((v.height for v in hybrid_candidate_tracks), default=None)
+                            best_resolution = max((v.height for v in hybrid_candidate_tracks if v.height), default=None)
                             hybrid_quality = [best_resolution] if best_resolution else []
                         hybrid_selected = []
                         if hybrid_quality:
@@ -2780,14 +2797,16 @@ class dl:
                                 if not any(at_resolution(v, res) for v in hybrid_selected):
                                     self.log.warning(f"Skipping {res}p: nothing at that resolution can make a hybrid")
 
-                        non_hybrid_selected: list[Video] = []
+                        non_hybrid_selected = []
                         if non_hybrid_ranges and non_hybrid_tracks:
                             if video_multi_lang:
-                                non_hybrid_langs = list(dict.fromkeys(str(v.language) for v in non_hybrid_tracks))
+                                non_hybrid_langs: list[Optional[str]] = list(
+                                    dict.fromkeys(str(v.language) for v in non_hybrid_tracks)
+                                )
                             else:
                                 non_hybrid_langs = [None]
                             for resolution, color_range, codec, vlang in product(
-                                effective_quality or [None], non_hybrid_ranges, vcodec or [None], non_hybrid_langs
+                                effective_quality or (None,), non_hybrid_ranges, vcodec or (None,), non_hybrid_langs
                             ):
                                 candidates = [
                                     t
@@ -2814,11 +2833,13 @@ class dl:
                     elif keep_videos:
                         selected_videos: list[Video] = []
                         if video_multi_lang:
-                            unique_video_langs = list(dict.fromkeys(str(v.language) for v in title.tracks.videos))
+                            unique_video_langs: list[Optional[str]] = list(
+                                dict.fromkeys(str(v.language) for v in title.tracks.videos)
+                            )
                         else:
                             unique_video_langs = [None]
                         for resolution, color_range, codec, vlang in product(
-                            effective_quality or [None], range_ or [None], vcodec or [None], unique_video_langs
+                            effective_quality or (None,), range_ or (None,), vcodec or (None,), unique_video_langs
                         ):
                             candidates = [
                                 t
@@ -2845,7 +2866,7 @@ class dl:
                             self.log.info("No Dolby Vision track: Dolby Vision will be generated from HDR10+")
 
                         if gate_failure:
-                            other_ranges = [r for r in range_ if r != Video.Range.HYBRID]
+                            other_ranges: list[Video.Range] = [r for r in range_ if r != Video.Range.HYBRID]
                             if best_available and other_ranges:
                                 self.log.warning(
                                     f"{gate_failure}; continuing with {', '.join(r.name for r in other_ranges)}"
@@ -2853,12 +2874,14 @@ class dl:
                                 range_ = other_ranges
                                 fallback_pool = pre_hybrid_videos
                                 if video_multi_lang:
-                                    fallback_langs = list(dict.fromkeys(str(v.language) for v in fallback_pool))
+                                    fallback_langs: list[Optional[str]] = list(
+                                        dict.fromkeys(str(v.language) for v in fallback_pool)
+                                    )
                                 else:
                                     fallback_langs = [None]
                                 fallback_selected: list[Video] = []
                                 for resolution, color_range, codec, vlang in product(
-                                    effective_quality or [None], other_ranges, vcodec or [None], fallback_langs
+                                    effective_quality or (None,), other_ranges, vcodec or (None,), fallback_langs
                                 ):
                                     candidates = [
                                         t
@@ -3111,7 +3134,7 @@ class dl:
             download_table = Table.grid()
             download_table.add_row(selected_tracks)
 
-            def prepare_drm_for(track: AnyTrack) -> Callable:
+            def prepare_drm_for(track: AnyTrack) -> partial:
                 prepare = partial(
                     partial(self.prepare_drm, table=download_table),
                     track=track,
@@ -3343,6 +3366,7 @@ class dl:
                     if sidecar_format == "original":
                         config.directories.temp.mkdir(parents=True, exist_ok=True)
                         for subtitle in sidecar_subtitles:
+                            assert subtitle.path is not None
                             original_path = (
                                 config.directories.temp / f"sidecar_original_{subtitle.id}{subtitle.path.suffix}"
                             )
@@ -3626,6 +3650,7 @@ class dl:
                             if len(range_) > 1:
                                 task_description += f" {head.range.name}"
                             if len(vcodec) > 1:
+                                assert head.codec is not None
                                 task_description += f" {head.codec.name}"
 
                         task_tracks = Tracks(title.tracks) + title.tracks.chapters + title.tracks.attachments
@@ -3788,7 +3813,7 @@ class dl:
                                         sidecar_files[first_path] = list(created)
                                         self.log.info(f"Saved {len(created)} sidecar subtitle files")
 
-                                    for muxed_path, base_filename, sidecar_dir in sidecar_targets[1:]:
+                                    for sidecar_path, base_filename, sidecar_dir in sidecar_targets[1:]:
                                         sidecar_dir.mkdir(parents=True, exist_ok=True)
                                         copies = []
                                         for source in created:
@@ -3797,7 +3822,7 @@ class dl:
                                                 shutil.copy2(source, target)
                                             copies.append(target)
                                         if copies:
-                                            sidecar_files[muxed_path] = copies
+                                            sidecar_files[sidecar_path] = copies
                                             self.log.info(f"Saved {len(copies)} sidecar subtitle files")
 
                             for track in title.tracks:
@@ -3865,11 +3890,11 @@ class dl:
                         track = next((t for t in title.tracks if t.path == track_path), None)
                         if track:
                             if isinstance(track, Video):
-                                track_suffix = f".{track.codec.name if hasattr(track.codec, 'name') else 'video'}"
+                                track_suffix = f".{track.codec.name if track.codec is not None else 'video'}"
                             elif isinstance(track, Audio):
                                 lang_suffix = f".{track.language}" if track.language else ""
                                 track_suffix = (
-                                    f"{lang_suffix}.{track.codec.name if hasattr(track.codec, 'name') else 'audio'}"
+                                    f"{lang_suffix}.{track.codec.name if track.codec is not None else 'audio'}"
                                 )
                             elif isinstance(track, Subtitle):
                                 lang_suffix = f".{track.language}" if track.language else ""
@@ -4002,6 +4027,7 @@ class dl:
         The sample starts 2 minutes in. A file shorter than 3 minutes gives its middle 60 seconds.
         """
         duration = float(media_info.general_tracks[0].duration or 0) / 1000
+        start: float
         start, end = DEFAULT_SAMPLE
         length = end - start
         if duration < end:
@@ -4714,7 +4740,7 @@ class dl:
         if not content_keys or not self.vaults:
             return
         self.vaults.clear_licensed_flags(content_keys)
-        successful_caches = self.vaults.add_keys(content_keys)
+        successful_caches = self.vaults.add_keys(cast(dict[Union[UUID, str], str], content_keys))
         kids, caches = self.vault_cache_tally or (set(), successful_caches)
         self.vault_cache_tally = (kids | content_keys.keys(), min(caches, successful_caches))
 
@@ -4764,7 +4790,7 @@ class dl:
             cdm = self.get_cdm(self.service, self.profile, drm=system)
         return cdm
 
-    def licence_one_drm(self, prepare: Callable, drm: DRM_T, track_kid: Optional[UUID]) -> None:
+    def licence_one_drm(self, prepare: Callable, drm: Union[Widevine, PlayReady], track_kid: Optional[UUID]) -> None:
         """Send one challenge for the KIDs of this DRM, also when the DRM or a vault has the content keys.
 
         This is the ``--cdm-only`` path. The challenge goes out the first time a run sees the KIDs
@@ -4805,14 +4831,15 @@ class dl:
         a run. A DRM system that fails stops the title. With ``tolerate`` it is a warning, if the
         other DRM system gave the content key of the track.
         """
-        if type(drm) not in (Widevine, PlayReady):
+        if not isinstance(drm, (Widevine, PlayReady)):
             prepare(drm, track_kid=track_kid)
             return
 
         other_type = PlayReady if type(drm) is Widevine else Widevine
-        others = [d for d in track.drm or [] if type(d) is other_type]
+        others = [d for d in track.drm or [] if isinstance(d, (Widevine, PlayReady)) and type(d) is other_type]
         if other_type is PlayReady and len(others) > 1:
-            others[0].absorb(*others[1:])
+            playready = [d for d in others if isinstance(d, PlayReady)]
+            playready[0].absorb(*playready[1:])
         if not others and other_type.__name__ not in self.all_drm_warned:
             self.all_drm_warned.add(other_type.__name__)
             self.log.warning(
@@ -4851,14 +4878,14 @@ class dl:
 
     def prepare_drm(
         self,
-        drm: DRM_T,
+        drm: Union[ClearKeyCENC, Widevine, PlayReady, MonaLisa],
         track: AnyTrack,
         title: Title_T,
         certificate: Callable,
         licence: Callable,
         clearkey_licence: Optional[Callable] = None,
         track_kid: Optional[UUID] = None,
-        table: Table = None,
+        table: Optional[Table] = None,
         cdm_only: bool = False,
         vaults_only: bool = False,
         export: Optional[Path] = None,
@@ -4873,6 +4900,7 @@ class dl:
         """
         if not drm:
             return
+        assert table is not None
 
         svc_for_cdm = getattr(self, "_remote_service", None)
         server_cdm = getattr(svc_for_cdm, "_server_cdm", getattr(self, "server_cdm", False))
@@ -4916,6 +4944,7 @@ class dl:
                 server_vault_keys = {} if cdm_only else getattr(svc_for_cdm, "server_vault_keys", {})
                 for kid, key in drm.content_keys.items():
                     if server_vault_keys.get(kid) == key:
+                        assert svc_for_cdm is not None
                         self.vaults.sources[kid] = (key, svc_for_cdm.server_vault)
                 new_keys = {
                     kid: key
@@ -4997,6 +5026,7 @@ class dl:
             track_cdm = getattr(svc_for_cdm, "local_cdm", None)
             local_drm = track.get_drm_for_cdm(track_cdm)
             if local_drm is not None and local_drm is not drm:
+                assert not isinstance(local_drm, ClearKey)
                 # a mid-download handover leaves drm on the server's DRM system, and the caller decrypts with it
                 self.prepare_drm(
                     local_drm,
@@ -5048,7 +5078,7 @@ class dl:
                     },
                 )
 
-            pending_vault_writes: list[Callable[[], Any]] = []
+            pending_vault_writes = []
             with self.drm_lock(drm):
                 pssh_display = self.truncate_pssh_for_display(drm.pssh.dumps(), "Widevine")
                 cek_tree = Tree(Text.assemble(("Widevine", "cyan"), (f"({pssh_display})", "text"), overflow="fold"))
@@ -5068,7 +5098,7 @@ class dl:
                         is_track_kid = ["", "*"][kid == track_kid]
                         key = drm.content_keys[kid]
                         label = f"[text2]{kid.hex}:{key}{is_track_kid}"
-                        if not any(f"{kid.hex}:{key}" in x.label for x in cek_tree.children):
+                        if not any(f"{kid.hex}:{key}" in str(x.label) for x in cek_tree.children):
                             cek_tree.add(label)
                         continue
 
@@ -5078,7 +5108,7 @@ class dl:
                     if cached_key:
                         drm.content_keys[kid] = cached_key
                         label = f"[text2]{kid.hex}:{cached_key}{is_track_kid} from cache"
-                        if not any(f"{kid.hex}:{cached_key}" in x.label for x in cek_tree.children):
+                        if not any(f"{kid.hex}:{cached_key}" in str(x.label) for x in cek_tree.children):
                             cek_tree.add(label)
                         log_event(
                             "license_cache_hit",
@@ -5098,13 +5128,13 @@ class dl:
                         if content_key:
                             drm.content_keys[kid] = content_key
                             label = f"[text2]{kid.hex}:{content_key}{is_track_kid} from {vault_used}"
-                            if not any(f"{kid.hex}:{content_key}" in x.label for x in cek_tree.children):
+                            if not any(f"{kid.hex}:{content_key}" in str(x.label) for x in cek_tree.children):
                                 cek_tree.add(label)
                             self.LICENSE_KEY_CACHE[kid] = content_key
 
                             if self.debug_logger:
                                 self.debug_logger.log_vault_query(
-                                    vault_name=vault_used,
+                                    vault_name=str(vault_used),
                                     operation="get_key_success",
                                     service=self.service,
                                     context={
@@ -5190,7 +5220,7 @@ class dl:
                             key = f"[red]{key}[/]"
                         is_track_kid_marker = ["", "*"][kid_ == track_kid]
                         label = f"[text2]{kid_.hex}:{key}{is_track_kid_marker}"
-                        if not any(f"{kid_.hex}:{key}" in x.label for x in cek_tree.children):
+                        if not any(f"{kid_.hex}:{key}" in str(x.label) for x in cek_tree.children):
                             cek_tree.add(label)
 
                     drm.content_keys = {
@@ -5267,7 +5297,7 @@ class dl:
                         is_track_kid = ["", "*"][kid == track_kid]
                         key = drm.content_keys[kid]
                         label = f"[text2]{kid.hex}:{key}{is_track_kid}"
-                        if not any(f"{kid.hex}:{key}" in x.label for x in cek_tree.children):
+                        if not any(f"{kid.hex}:{key}" in str(x.label) for x in cek_tree.children):
                             cek_tree.add(label)
                         continue
 
@@ -5277,7 +5307,7 @@ class dl:
                     if cached_key:
                         drm.content_keys[kid] = cached_key
                         label = f"[text2]{kid.hex}:{cached_key}{is_track_kid} from cache"
-                        if not any(f"{kid.hex}:{cached_key}" in x.label for x in cek_tree.children):
+                        if not any(f"{kid.hex}:{cached_key}" in str(x.label) for x in cek_tree.children):
                             cek_tree.add(label)
                         log_event(
                             "license_cache_hit",
@@ -5297,13 +5327,13 @@ class dl:
                         if content_key:
                             drm.content_keys[kid] = content_key
                             label = f"[text2]{kid.hex}:{content_key}{is_track_kid} from {vault_used}"
-                            if not any(f"{kid.hex}:{content_key}" in x.label for x in cek_tree.children):
+                            if not any(f"{kid.hex}:{content_key}" in str(x.label) for x in cek_tree.children):
                                 cek_tree.add(label)
                             self.LICENSE_KEY_CACHE[kid] = content_key
 
                             if self.debug_logger:
                                 self.debug_logger.log_vault_query(
-                                    vault_name=vault_used,
+                                    vault_name=str(vault_used),
                                     operation="get_key_success",
                                     service=self.service,
                                     context={
@@ -5370,7 +5400,7 @@ class dl:
                     for kid_, key in drm.content_keys.items():
                         is_track_kid_marker = ["", "*"][kid_ == track_kid]
                         label = f"[text2]{kid_.hex}:{key}{is_track_kid_marker}"
-                        if not any(f"{kid_.hex}:{key}" in x.label for x in cek_tree.children):
+                        if not any(f"{kid_.hex}:{key}" in str(x.label) for x in cek_tree.children):
                             cek_tree.add(label)
 
                     drm.content_keys.update(from_vaults)
@@ -5420,7 +5450,7 @@ class dl:
                         is_track_kid = ["", "*"][kid == track_kid]
                         key = drm.content_keys[kid]
                         label = f"[text2]{kid.hex}:{key}{is_track_kid}"
-                        if not any(f"{kid.hex}:{key}" in x.label for x in cek_tree.children):
+                        if not any(f"{kid.hex}:{key}" in str(x.label) for x in cek_tree.children):
                             cek_tree.add(label)
                         continue
 
@@ -5430,7 +5460,7 @@ class dl:
                     if cached_key:
                         drm.content_keys[kid] = cached_key
                         label = f"[text2]{kid.hex}:{cached_key}{is_track_kid} from cache"
-                        if not any(f"{kid.hex}:{cached_key}" in x.label for x in cek_tree.children):
+                        if not any(f"{kid.hex}:{cached_key}" in str(x.label) for x in cek_tree.children):
                             cek_tree.add(label)
                         log_event(
                             "license_cache_hit",
@@ -5450,7 +5480,7 @@ class dl:
                         if content_key:
                             drm.content_keys[kid] = content_key
                             label = f"[text2]{kid.hex}:{content_key}{is_track_kid} from {vault_used}"
-                            if not any(f"{kid.hex}:{content_key}" in x.label for x in cek_tree.children):
+                            if not any(f"{kid.hex}:{content_key}" in str(x.label) for x in cek_tree.children):
                                 cek_tree.add(label)
                             self.LICENSE_KEY_CACHE[kid] = content_key
                         elif vaults_only:
@@ -5511,7 +5541,7 @@ class dl:
                     for kid_, key in drm.content_keys.items():
                         is_track_kid_marker = ["", "*"][kid_ == track_kid]
                         label = f"[text2]{kid_.hex}:{key}{is_track_kid_marker}"
-                        if not any(f"{kid_.hex}:{key}" in x.label for x in cek_tree.children):
+                        if not any(f"{kid_.hex}:{key}" in str(x.label) for x in cek_tree.children):
                             cek_tree.add(label)
 
                     drm.content_keys.update(from_vaults)
@@ -5554,7 +5584,7 @@ class dl:
 
                 for kid_, key in drm.content_keys.items():
                     label = f"[text2]{kid_.hex}:{key}*"
-                    if not any(f"{kid_.hex}:{key}" in x.label for x in cek_tree.children):
+                    if not any(f"{kid_.hex}:{key}" in str(x.label) for x in cek_tree.children):
                         cek_tree.add(label)
 
                 if cek_tree.children and not pre_existing_tree:
@@ -5577,6 +5607,7 @@ class dl:
             return profile_cookie_file
         elif default_cookie_file.exists():
             return default_cookie_file
+        return None
 
     @staticmethod
     def get_cookie_jar(service: str, profile: Optional[str]) -> Optional[CookieJar]:
@@ -5639,7 +5670,7 @@ class dl:
         return cookie_jar
 
     @staticmethod
-    def save_cookies(path: Path, cookies: CookieJar):
+    def save_cookies(path: Path, cookies: CookieJar) -> None:
         if hasattr(cookies, "jar"):
             cookies = cookies.jar
 
@@ -5664,6 +5695,7 @@ class dl:
                 if isinstance(credentials, list):
                     return Credential(*credentials)
                 return Credential.loads(credentials)  # type: ignore
+        return None
 
     def cdm_from_service_entry(self) -> bool:
         """Whether the service's own ``cdm`` entry named the loaded device, not ``--cdm`` or the ``default`` entry."""
@@ -5679,7 +5711,7 @@ class dl:
         profile: Optional[str] = None,
         drm: Optional[str] = None,
         quality: Optional[int] = None,
-    ) -> Optional[object]:
+    ) -> Any:
         """
         Get CDM for a specified service (either Local or Remote CDM).
         Now supports quality-based selection when the caller gives a quality.
@@ -5705,7 +5737,7 @@ class dl:
                     ):
                         quality_keys.append(key)
 
-                def sort_quality_key(key):
+                def sort_quality_key(key: str) -> tuple[int, int]:
                     if key.isdigit():
                         return (0, int(key))  # Exact matches first
                     elif key.startswith(">="):

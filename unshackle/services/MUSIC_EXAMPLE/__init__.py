@@ -102,7 +102,7 @@ class MUSIC_EXAMPLE(Service):
     def cli(ctx: click.Context, **kwargs: Any) -> MUSIC_EXAMPLE:
         return MUSIC_EXAMPLE(ctx, **kwargs)
 
-    def __init__(self, ctx: click.Context, title: str, device: str, lyrics: bool):
+    def __init__(self, ctx: click.Context, title: str, device: str, lyrics: bool) -> None:
         self.title = title
         self.device = device
         self.lyrics = lyrics

@@ -77,7 +77,7 @@ class Tracks:
             Tracks, Sequence[Union[AnyTrack, Chapter, Chapters, Attachment]], Track, Chapter, Chapters, Attachment
         ],
         manifest_url: Optional[str] = None,
-    ):
+    ) -> None:
         self.videos: list[Video] = []
         self.audio: list[Audio] = []
         self.subtitles: list[Subtitle] = []
@@ -109,7 +109,7 @@ class Tracks:
         )
 
     def __str__(self) -> str:
-        rep = {Video: [], Audio: [], Subtitle: [], Chapter: [], Attachment: []}
+        rep: dict[type, list[str]] = {Video: [], Audio: [], Subtitle: [], Chapter: [], Attachment: []}
         tracks = [*list(self), *self.chapters]
 
         for track in sorted(tracks, key=lambda t: self.TRACK_ORDER_MAP[type(t)]):
@@ -125,14 +125,11 @@ class Tracks:
                 )
             rep[type(track)].append(str(track))
 
-        for type_ in list(rep):
-            if not rep[type_]:
-                del rep[type_]
-                continue
-            rep[type_] = "\n".join([rep[type_][0]] + [f"├─ {x}" for x in rep[type_][1:-1]] + [f"└─ {rep[type_][-1]}"])
-        rep = "\n".join(list(rep.values()))
-
-        return rep
+        return "\n".join(
+            "\n".join([lines[0]] + [f"├─ {x}" for x in lines[1:-1]] + [f"└─ {lines[-1]}"])
+            for lines in rep.values()
+            if lines
+        )
 
     def tree(self, add_progress: bool = False) -> tuple[Tree, list[Callable[..., None]]]:
         all_tracks = [*list(self), *self.chapters, *self.attachments]
@@ -236,7 +233,12 @@ class Tracks:
     def add(
         self,
         tracks: Union[
-            Tracks, Sequence[Union[AnyTrack, Chapter, Chapters, Attachment]], Track, Chapter, Chapters, Attachment
+            Tracks,
+            Sequence[Union[Tracks, Sequence[Any], Track, Chapter, Chapters, Attachment]],
+            Track,
+            Chapter,
+            Chapters,
+            Attachment,
         ],
         warn_only: bool = False,
     ) -> None:
@@ -485,7 +487,9 @@ class Tracks:
             if video not in non_hybrid_selected and not video.native_hybrid:
                 video.hybrid_base_only = True
 
-    def select_hybrid(self, tracks, quality, worst: bool = False, generate_dv: bool = False):
+    def select_hybrid(
+        self, tracks: list[Video], quality: list[int], worst: bool = False, generate_dv: bool = False
+    ) -> Callable[[Video], bool]:
         """A filter for the hybrid ingredients of each resolution. It sets ``native_hybrid`` on every track.
 
         A track that already carries DV and an HDR10 or HDR10+ base (DV+HDR10P, HDR10+DV, HDR10P+DV) is a finished
@@ -526,12 +530,14 @@ class Tracks:
         for res in quality:
             candidates = [v for v in base_tracks if at_resolution(v, res)]
             if candidates:
-                chosen = pick(candidates, key=lambda v: v.bitrate)
+                chosen = pick(candidates, key=lambda v: v.bitrate or 0)
                 base_selected.append(chosen)
 
-        lowest_dv = min(dv_tracks, key=lambda v: v.height) if dv_tracks and (base_selected or not natives) else None
+        lowest_dv = (
+            min(dv_tracks, key=lambda v: v.height or 0) if dv_tracks and (base_selected or not natives) else None
+        )
 
-        def select(x):
+        def select(x: Video) -> bool:
             if x in base_selected or x.native_hybrid:
                 return True
             if lowest_dv and x is lowest_dv:
@@ -1017,13 +1023,13 @@ class Tracks:
         if output_path is None:
             output_path = (
                 self.videos[0].path.with_suffix(".muxed.mkv")
-                if self.videos
+                if self.videos and self.videos[0].path
                 else self.audio[0].path.with_suffix(".muxed.mka")
-                if self.audio
+                if self.audio and self.audio[0].path
                 else self.subtitles[0].path.with_suffix(".muxed.mks")
-                if self.subtitles
+                if self.subtitles and self.subtitles[0].path
                 else chapters_path.with_suffix(".muxed.mkv")
-                if self.chapters
+                if self.chapters and chapters_path
                 else None
             )
         if not output_path:
@@ -1063,12 +1069,13 @@ class Tracks:
             warnings = []
             mux_start_time = time.monotonic()
             p = subprocess.Popen(full_command, text=True, encoding="utf-8", errors="replace", stdout=subprocess.PIPE)
+            assert p.stdout is not None
             for line in iter(p.stdout.readline, ""):
                 if line.startswith("#GUI#error") or line.startswith("#GUI#warning"):
                     errors.append(line)
                     if line.startswith("#GUI#warning"):
                         warnings.append(line.strip())
-                if "progress" in line:
+                if progress and "progress" in line:
                     progress(total=100, completed=int(line.strip()[14:-1]))
 
             returncode = p.wait()

@@ -11,7 +11,7 @@ from unshackle.core.utilities import COUNTRY_CODE_ALIASES
 
 
 class NordVPN(Proxy):
-    def __init__(self, username: str, password: str, server_map: Optional[dict[str, Union[int, str]]] = None):
+    def __init__(self, username: str, password: str, server_map: Optional[dict[str, Union[int, str]]] = None) -> None:
         """
         Proxy provider that uses NordVPN Service Credentials.
 
@@ -139,6 +139,7 @@ class NordVPN(Proxy):
                 [by_id is None or country["id"] == int(by_id), by_code is None or country["code"] == by_code.upper()]
             ):
                 return country
+        return None
 
     @staticmethod
     def get_all_servers(country_id: int) -> list[dict]:

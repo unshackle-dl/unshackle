@@ -1,10 +1,9 @@
 import re
 from datetime import date, timedelta
-from typing import Any, Optional, Union
+from typing import Any, Optional, Sequence, Union
 
 import click
 from click.shell_completion import CompletionItem
-from pywidevine.cdm import Cdm as WidevineCdm
 
 from unshackle.core.constants import DEFAULT_SAMPLE
 from unshackle.core.tracks.audio import Audio
@@ -88,7 +87,7 @@ class SubtitleCodecChoice(click.Choice):
     - Common aliases: srt (for SubRip)
     """
 
-    def __init__(self, codec_enum):
+    def __init__(self, codec_enum: type[Subtitle.Codec]) -> None:
         self.codec_enum = codec_enum
         choices = []
         aliases = {}
@@ -135,7 +134,9 @@ class SubtitleCodecChoice(click.Choice):
         self.aliases = aliases
         super().__init__(choices, case_sensitive=False)
 
-    def convert(self, value: Any, param: Optional[click.Parameter] = None, ctx: Optional[click.Context] = None):
+    def convert(
+        self, value: Any, param: Optional[click.Parameter] = None, ctx: Optional[click.Context] = None
+    ) -> Union[Subtitle.Codec, str, None]:
         if not value:
             return None
 
@@ -160,11 +161,11 @@ class ContextData:
     def __init__(
         self,
         config: dict,
-        cdm: WidevineCdm,
+        cdm: Any,
         proxy_providers: list,
         profile: Optional[str] = None,
         cdm_entry: bool = False,
-    ):
+    ) -> None:
         self.config = config
         self.cdm = cdm
         self.proxy_providers = proxy_providers
@@ -342,7 +343,7 @@ class QualityList(click.ParamType):
 
     def convert(
         self,
-        value: Union[str, int, list[Union[str, int]]],
+        value: Union[str, int, Sequence[Union[str, int]]],
         param: Optional[click.Parameter] = None,
         ctx: Optional[click.Context] = None,
     ) -> list[int]:

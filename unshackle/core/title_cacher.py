@@ -3,10 +3,11 @@ from __future__ import annotations
 import hashlib
 import logging
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Callable, Optional
 
 from unshackle.core.cacher import Cacher
 from unshackle.core.config import config
+from unshackle.core.credential import Credential
 from unshackle.core.titles import Titles_T
 
 
@@ -21,7 +22,7 @@ class TitleCacher:
     - Cache hit/miss statistics for debugging
     """
 
-    def __init__(self, service_name: str):
+    def __init__(self, service_name: str) -> None:
         self.service_name = service_name
         self.log = logging.getLogger(f"{service_name}.TitleCache")
         self.cacher = Cacher(service_name)
@@ -61,12 +62,12 @@ class TitleCacher:
     def get_cached_titles(
         self,
         title_id: str,
-        fetch_function,
+        fetch_function: Callable[[], Titles_T],
         region: Optional[str] = None,
         account_hash: Optional[str] = None,
         no_cache: bool = False,
         reset_cache: bool = False,
-    ) -> Optional[Titles_T]:
+    ) -> Titles_T:
         """
         Get titles from the cache, or fetch them from the API with a fallback.
 
@@ -115,7 +116,7 @@ class TitleCacher:
             return titles
 
         except Exception as e:
-            if cache and cache.data:
+            if cache and cache.data and cache.expiration:
                 current_time = datetime.now()
                 max_retention_time = cache.expiration + timedelta(
                     seconds=config.title_cache_max_retention - config.title_cache_time
@@ -140,7 +141,7 @@ class TitleCacher:
 
             raise
 
-    def clear_all_title_cache(self):
+    def clear_all_title_cache(self) -> None:
         """Clear all title caches for this service."""
         cache_dir = config.directories.cache / self.service_name
         if cache_dir.exists():
@@ -265,7 +266,7 @@ class TitleCacher:
         self.log.debug(f"Cached {provider_name} data for {title_id}")
 
 
-def get_account_hash(credential) -> Optional[str]:
+def get_account_hash(credential: Optional[Credential]) -> Optional[str]:
     """
     Make a hash for account identification.
 

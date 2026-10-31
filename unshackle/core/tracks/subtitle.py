@@ -13,7 +13,6 @@ from typing import Any, Callable, Iterable, Optional, Sequence, Union
 
 import click
 import pycaption
-import requests
 from construct import Container
 from langcodes import Language
 from pycaption import Caption, CaptionList, CaptionNode, WebVTTReader
@@ -24,6 +23,7 @@ from subtitle_filter import Subtitles
 
 from unshackle.core import binaries
 from unshackle.core.config import config
+from unshackle.core.session import AnySession
 from unshackle.core.tracks.track import Track
 from unshackle.core.utilities import PYMP4_LOCK, try_ensure_utf8, with_script
 from unshackle.core.utils.subprocess import log_tool_run
@@ -112,7 +112,7 @@ class Subtitle(Track):
         sdh: bool = False,
         forced: bool = False,
         **kwargs: Any,
-    ):
+    ) -> None:
         """
         Make a new Subtitle track object.
 
@@ -230,7 +230,7 @@ class Subtitle(Track):
     def __str__(self) -> str:
         return " | ".join(
             filter(
-                bool,
+                None,
                 [
                     "SUB",
                     f"[{self.codec.value}]" if self.codec else None,
@@ -253,7 +253,7 @@ class Subtitle(Track):
 
     def download(
         self,
-        session: requests.Session,
+        session: AnySession,
         prepare_drm: partial,
         max_workers: Optional[int] = None,
         progress: Optional[partial] = None,
@@ -263,7 +263,7 @@ class Subtitle(Track):
         proxy_download: Optional[str] = None,
         adaptive_workers: bool = False,
         download_processes: int = 1,
-    ):
+    ) -> None:
         super().download(
             session,
             prepare_drm,
@@ -522,7 +522,7 @@ class Subtitle(Track):
             return text
 
         lines = text.split("\n")
-        cues = []
+        cues: list[dict[str, Any]] = []
         header_lines = []
         in_header = True
         i = 0
@@ -746,7 +746,7 @@ class Subtitle(Track):
                 text = try_ensure_utf8(data).decode("utf8")
                 caption_set = pycaption.SRTReader().read(text)
             elif codec == Subtitle.Codec.fTTML:
-                caption_lists: dict[str, pycaption.CaptionList] = defaultdict(pycaption.CaptionList)
+                caption_lists: dict[Optional[str], pycaption.CaptionList] = defaultdict(pycaption.CaptionList)
                 with PYMP4_LOCK:
                     boxes = MP4.parse_stream(BytesIO(data))
                 for segment in (
@@ -754,7 +754,7 @@ class Subtitle(Track):
                 ):
                     for lang in segment.get_languages():
                         caption_lists[lang].extend(segment.get_captions(lang))
-                caption_set: pycaption.CaptionSet = pycaption.CaptionSet(caption_lists)
+                caption_set = pycaption.CaptionSet(caption_lists)
             elif codec == Subtitle.Codec.TimedTextMarkupLang:
                 text = try_ensure_utf8(data).decode("utf8")
                 text = text.replace("tt:", "")
@@ -767,10 +767,10 @@ class Subtitle(Track):
                 text = re.sub(r"-(\d+(?:\.\d+)?)(px|em|%|c|pt)", r"0\2", text)
                 caption_set = pycaption.DFXPReader().read(text)
             elif codec == Subtitle.Codec.fVTT:
-                caption_lists: dict[str, pycaption.CaptionList] = defaultdict(pycaption.CaptionList)
+                caption_lists = defaultdict(pycaption.CaptionList)
                 caption_list, language = Subtitle.merge_segmented_wvtt(data)
                 caption_lists[language] = caption_list
-                caption_set: pycaption.CaptionSet = pycaption.CaptionSet(caption_lists)
+                caption_set = pycaption.CaptionSet(caption_lists)
             elif codec == Subtitle.Codec.WebVTT:
                 text = try_ensure_utf8(data).decode("utf8")
                 text = Subtitle.sanitize_broken_webvtt(text)
@@ -837,7 +837,7 @@ class Subtitle(Track):
         return "\n".join(sanitized_lines)
 
     @staticmethod
-    def space_webvtt_headers(data: Union[str, bytes]):
+    def space_webvtt_headers(data: Union[str, bytes]) -> str:
         """
         Space out the WEBVTT Headers from Captions.
 
@@ -857,7 +857,7 @@ class Subtitle(Track):
         return text
 
     @staticmethod
-    def merge_same_cues(caption_set: pycaption.CaptionSet):
+    def merge_same_cues(caption_set: pycaption.CaptionSet) -> None:
         """Merge captions with the same timecodes and text as one in-place."""
         for lang in caption_set.get_languages():
             captions = caption_set.get_captions(lang)
@@ -882,7 +882,7 @@ class Subtitle(Track):
                 caption_set.set_captions(lang, merged_captions)
 
     @staticmethod
-    def filter_unwanted_cues(caption_set: pycaption.CaptionSet):
+    def filter_unwanted_cues(caption_set: pycaption.CaptionSet) -> None:
         """
         Filter out subtitle cues containing only &nbsp; or whitespace.
         """
@@ -924,7 +924,7 @@ class Subtitle(Track):
         base_time = 0
         # > trun
         saw_trun_box = False
-        samples = []
+        samples: list[Any] = []
 
         def flatten_boxes(box: Container) -> Iterable[Container]:
             for child in box:
@@ -1117,6 +1117,7 @@ class Subtitle(Track):
         if binaries.SubtitleEdit and use_subtitleedit:
             from unshackle.core.tracks.subtitle_convert import SUBTITLE_EDIT_FORMATS, subtitleedit_args
 
+            assert self.codec is not None
             output_format = SUBTITLE_EDIT_FORMATS.get(self.codec, self.codec.name.lower())
             se_start = time.monotonic()
             subprocess.run(
@@ -1177,6 +1178,7 @@ class Subtitle(Track):
 
         from unshackle.core.tracks.subtitle_convert import SUBTITLE_EDIT_FORMATS, subtitleedit_args
 
+        assert self.codec is not None
         output_format = SUBTITLE_EDIT_FORMATS.get(self.codec, self.codec.name.lower())
 
         se_start = time.monotonic()

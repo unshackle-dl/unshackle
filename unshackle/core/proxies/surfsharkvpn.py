@@ -83,7 +83,7 @@ def pinned(ip: str, hostname: str) -> int:
 
 
 class SurfsharkVPN(Proxy):
-    def __init__(self, username: str, password: str, server_map: Optional[dict[str, str]] = None):
+    def __init__(self, username: str, password: str, server_map: Optional[dict[str, str]] = None) -> None:
         """
         Proxy provider that uses SurfsharkVPN Service Credentials.
 

@@ -70,7 +70,7 @@ class APIError(Exception):
         details: dict[str, Any] | None = None,
         retryable: bool = False,
         http_status: int | None = None,
-    ):
+    ) -> None:
         super().__init__(message)
         self.error_code = error_code
         self.message = message

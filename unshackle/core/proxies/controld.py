@@ -91,7 +91,7 @@ class IPv4Adapter(HTTPAdapter):
 
 
 class Resolver:
-    def __init__(self, url: str):
+    def __init__(self, url: str) -> None:
         """Resolve hostnames through one Control D DoH endpoint, caching answers for their TTL."""
         self.url = url
         self.session = requests.Session()
@@ -268,7 +268,7 @@ class Handler(socketserver.StreamRequestHandler):
 class LocalProxy(socketserver.ThreadingTCPServer):
     daemon_threads = True
 
-    def __init__(self, resolver: Resolver):
+    def __init__(self, resolver: Resolver) -> None:
         """An HTTP forward proxy on loopback that resolves every host through `resolver`."""
         super().__init__(("127.0.0.1", 0), Handler)
         self.resolver = resolver
@@ -331,7 +331,7 @@ class ControlD(Proxy):
         resolver: Optional[str] = None,
         profiles: Optional[list[dict]] = None,
         max_profiles: int = 4,
-    ):
+    ) -> None:
         """
         Proxy provider that uses Control D's transparent proxies.
 

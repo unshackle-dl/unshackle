@@ -10,7 +10,7 @@ from unshackle.core.proxies.proxy import Proxy
 
 
 class WindscribeVPN(Proxy):
-    def __init__(self, username: str, password: str, server_map: Optional[dict[str, str]] = None):
+    def __init__(self, username: str, password: str, server_map: Optional[dict[str, str]] = None) -> None:
         """
         Proxy provider that uses WindscribeVPN Service Credentials.
 

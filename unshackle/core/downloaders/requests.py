@@ -404,7 +404,7 @@ def no_retry_session(session: Session) -> Session:
     view.adapters = OrderedDict()
     for prefix, adapter in session.adapters.items():
         twin = copy(adapter)
-        twin.max_retries = Retry(0, read=False)
+        twin.max_retries = Retry(0, read=False)  # type: ignore[attr-defined]
         if isinstance(adapter, HTTPAdapter) and isinstance(twin, HTTPAdapter):
             twin.poolmanager = adapter.poolmanager
             twin.proxy_manager = adapter.proxy_manager
@@ -869,7 +869,7 @@ def download(
                     req_headers["Range"] = f"bytes={resume_offset}-"
             request_kwargs["headers"] = req_headers
 
-            stream = session.get(url, stream=True, **request_kwargs)
+            stream: Any = session.get(url, stream=True, **request_kwargs)
 
             if (not part_mode) and (not item_range) and resume_offset > 0 and stream.status_code == 416:
                 complete = parse_content_range_unsatisfied(
@@ -1030,7 +1030,7 @@ def download(
             # (unsatisfiable Range on retry, silent zero-padded corruption). part_mode still
             # pre-truncates in dispatch_parts because its workers seek to fixed offsets.
             with open(save_path if part_mode else tmp_file, file_mode, buffering=file_buffering) as f:
-                if part_mode:
+                if part_mode and part_offset is not None:  # spelled so mypy narrows
                     f.seek(part_offset + written)
 
                 _write = f.write
@@ -1493,7 +1493,7 @@ def download_multiprocess(
 
 
 def requests(
-    urls: Union[str, list[str], dict[str, Any], list[dict[str, Any]]],
+    urls: Union[str, dict[str, Any], list[str], list[dict[str, Any]], list[Union[str, dict[str, Any]]]],
     output_dir: Path,
     filename: str,
     headers: Optional[MutableMapping[str, Union[str, bytes]]] = None,
@@ -2106,16 +2106,16 @@ def requests(
 
                 completed, pending = wait(pending, timeout=0.1, return_when=FIRST_COMPLETED)
                 for future in completed:
-                    exc = future.exception()
-                    if isinstance(exc, KeyboardInterrupt):
+                    err = future.exception()
+                    if isinstance(err, KeyboardInterrupt):
                         raise KeyboardInterrupt()
-                    elif isinstance(exc, TailPartFailed) and permanent_status(exc) is None:
-                        if exc.index not in tail_skipped:
-                            tail_boosted.discard(exc.index)
-                            tail_skipped.add(exc.index)
-                            remaining.appendleft((exc.index, urls[exc.index]))
+                    elif isinstance(err, TailPartFailed) and permanent_status(err) is None:
+                        if err.index not in tail_skipped:
+                            tail_boosted.discard(err.index)
+                            tail_skipped.add(err.index)
+                            remaining.appendleft((err.index, urls[err.index]))
                         continue
-                    elif exc:
+                    elif err:
                         DOWNLOAD_CANCELLED.set()
                         yield dict(downloaded="[red]FAILING")
                         pool.shutdown(wait=False, cancel_futures=True)
@@ -2124,14 +2124,14 @@ def requests(
                             debug_logger.log(
                                 level="ERROR",
                                 operation="downloader_failed",
-                                message=f"Download failed: {exc}",
-                                error=exc,
+                                message=f"Download failed: {err}",
+                                error=err,
                                 context={
                                     "url_count": len(urls),
                                     "output_dir": str(output_dir),
                                 },
                             )
-                        raise exc
+                        raise err
         except KeyboardInterrupt:
             DOWNLOAD_CANCELLED.set()
             yield dict(downloaded="[yellow]CANCELLING")

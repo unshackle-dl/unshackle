@@ -22,9 +22,9 @@ MODULES = {path.stem: getattr(import_module_by_path(path), path.stem) for path i
 class Vaults:
     """Keeps hold of Key Vaults with convenience functions, e.g. searching all vaults."""
 
-    def __init__(self, service: Optional[str] = None):
+    def __init__(self, service: Optional[str] = None) -> None:
         self.service = service or ""
-        self.vaults = []
+        self.vaults: list[Vault] = []
         self.sources: dict[Union[UUID, str], tuple[str, Vault]] = {}
         self.flagged: set[tuple[Union[UUID, str], str]] = set()
         self.candidates: dict[Union[UUID, str], list[tuple[str, Vault]]] = {}

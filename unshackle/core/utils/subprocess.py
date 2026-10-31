@@ -145,7 +145,7 @@ def ffprobe(uri: Union[bytes, Path]) -> dict:
     if not binaries.FFProbe:
         raise EnvironmentError('FFProbe executable "ffprobe" not found but is required.')
 
-    args = [binaries.FFProbe, "-v", "quiet", "-of", "json", "-show_streams"]
+    args: list[Union[str, Path]] = [binaries.FFProbe, "-v", "quiet", "-of", "json", "-show_streams"]
     if isinstance(uri, Path):
         args.extend(
             ["-f", "lavfi", "-i", "movie={}[out+subcc]".format(str(uri).replace("\\", "/").replace(":", "\\\\:"))]

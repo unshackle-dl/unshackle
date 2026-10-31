@@ -35,7 +35,7 @@ class MusicRenderer:
 
         first_song = music[0]
         data = first_song.data if isinstance(first_song.data, dict) else {}
-        metadata = data.get("metadata") if isinstance(data.get("metadata"), dict) else {}
+        metadata = m if isinstance(m := data.get("metadata"), dict) else {}
         title = music.title or first_song.album
         artist = music.artist or first_song.album_artist or first_song.artist
         year = getattr(music, "year", None) or first_song.year
@@ -139,7 +139,7 @@ class MusicRenderer:
 
     def option_from_song(self, song: Song) -> Text:
         data = song.data if isinstance(song.data, dict) else {}
-        metadata = data.get("metadata") if isinstance(data.get("metadata"), dict) else {}
+        metadata = m if isinstance(m := data.get("metadata"), dict) else {}
 
         quality = first_text(data.get("quality"), metadata.get("quality"), metadata.get("quality_label"))
         raw_duration = self.first_value(data.get("duration"), metadata.get("duration"))
@@ -304,7 +304,7 @@ class MusicRenderer:
         total = 0
         for song in music:
             data = song.data if isinstance(song.data, dict) else {}
-            metadata = data.get("metadata") if isinstance(data.get("metadata"), dict) else {}
+            metadata = m if isinstance(m := data.get("metadata"), dict) else {}
             value = MusicRenderer.first_value(data.get("duration"), metadata.get("duration"))
             try:
                 total += int(float(value or 0))

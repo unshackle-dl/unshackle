@@ -10,7 +10,7 @@ from unshackle.core.utils.redact import mask_proxy
 
 
 class Basic(Proxy):
-    def __init__(self, **countries: Union[str, list[str]]):
+    def __init__(self, **countries: Union[str, list[str]]) -> None:
         """Basic proxy provider that uses the proxies given in the configuration file."""
         self.countries = {k.lower(): v for k, v in countries.items()}
 

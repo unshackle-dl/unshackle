@@ -88,7 +88,7 @@ def compiled_import_hint(missing: str, path: Path) -> str:
     )
 
 
-def load_service(path: Path) -> object:
+def load_service(path: Path) -> type[Service]:
     """Load one Service module, returning its tag-named class.
 
     Raises a concise, single-line error naming the Service and the real cause so
@@ -108,7 +108,7 @@ def load_service(path: Path) -> object:
         ) from e
 
 
-def load_services(paths: list[Path]) -> tuple[dict[str, object], list[str]]:
+def load_services(paths: list[Path]) -> tuple[dict[str, type[Service]], list[str]]:
     """Load every Service, returning the good ones plus a list of load errors.
 
     Importing this module must never raise: several commands import it, and Python
@@ -116,7 +116,7 @@ def load_services(paths: list[Path]) -> tuple[dict[str, object], list[str]]:
     every command. Instead we collect failures and let the caller surface them once,
     cleanly, when it uses the services.
     """
-    modules: dict[str, object] = {}
+    modules: dict[str, type[Service]] = {}
     errors: list[str] = []
     for path in paths:
         try:
@@ -126,7 +126,7 @@ def load_services(paths: list[Path]) -> tuple[dict[str, object], list[str]]:
     return modules, errors
 
 
-def register_service_binaries(modules: dict[str, object]) -> None:
+def register_service_binaries(modules: dict[str, type[Service]]) -> None:
     """Register custom binary dependencies declared by services via get_binaries()."""
 
     for tag, service_cls in modules.items():
@@ -570,7 +570,9 @@ class Services(click.Group):
         def import_cli(ctx: click.Context, title: str, **kwargs: object) -> object:
             from unshackle.core.import_service import ImportService
 
-            import_file = ctx.params.get("import_file") or (ctx.parent and ctx.parent.params.get("import_file"))
+            import_file = ctx.params.get("import_file") or (
+                ctx.parent.params.get("import_file") if ctx.parent else None
+            )
             return ImportService(ctx, tag, title, import_file)
 
         return import_cli
@@ -612,7 +614,7 @@ class Services(click.Group):
         return value
 
     @staticmethod
-    def load(tag: str) -> Service:
+    def load(tag: str) -> type[Service]:
         """Load a Service module by Service tag."""
         module = MODULES.get(tag)
         if module:

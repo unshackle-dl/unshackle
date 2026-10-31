@@ -8,14 +8,10 @@ from typing import Optional, Union
 from urllib.parse import urlparse
 from zlib import crc32
 
-import requests
-
 from unshackle.core.config import config
 from unshackle.core.constants import DOWNLOAD_LICENCE_ONLY
-from unshackle.core.session import RnetSession
+from unshackle.core.session import AnySession
 from unshackle.core.utils import run_proxy
-
-AnySession = Union[requests.Session, RnetSession]
 
 
 class Attachment:
@@ -27,7 +23,7 @@ class Attachment:
         mime_type: Optional[str] = None,
         description: Optional[str] = None,
         session: Optional[AnySession] = None,
-    ):
+    ) -> None:
         """
         Make a new Attachment.
 
@@ -137,7 +133,7 @@ class Attachment:
         )
 
     def __str__(self) -> str:
-        return " | ".join(filter(bool, ["ATT", self.name, self.mime_type, self.description]))
+        return " | ".join(filter(None, ["ATT", self.name, self.mime_type, self.description]))
 
     def to_dict(self) -> dict[str, Optional[str]]:
         """Serialise a URL-backed attachment for export/import."""

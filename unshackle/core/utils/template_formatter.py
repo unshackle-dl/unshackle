@@ -27,7 +27,7 @@ class TemplateFormatter:
     Example: '{title}.{year}.{quality?}.{source}-{tag}'
     """
 
-    def __init__(self, template: str, spacer: str | None = None):
+    def __init__(self, template: str, spacer: str | None = None) -> None:
         """Initialise the template formatter.
 
         Args:

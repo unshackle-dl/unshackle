@@ -54,7 +54,7 @@ class ExpressVPN(Proxy):
         cache_path: Optional[str] = None,
         timeout: float = 10.0,
         enable: bool = False,
-    ):
+    ) -> None:
         """
         Proxy provider that uses ExpressVPN app proxy credentials.
 

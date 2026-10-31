@@ -13,7 +13,7 @@ class SQLite(Vault):
 
     local = True
 
-    def __init__(self, name: str, path: Union[str, Path], no_push: bool = False):
+    def __init__(self, name: str, path: Union[str, Path], no_push: bool = False) -> None:
         super().__init__(name, no_push)
         self.path = Path(path).expanduser()
         # TODO: Use a DictCursor or such to get fetches as dict?
@@ -113,7 +113,7 @@ class SQLite(Vault):
         self.create_bad_keys_table()
         bad = set(self.conn_factory.get().execute("SELECT lower(`kid`), lower(`key_`) FROM `bad_keys`").fetchall())
         kid_keys = {
-            kid: key_ for kid, key_ in kid_keys.items() if (kid.replace("-", "").lower(), key_.lower()) not in bad
+            kid: key_ for kid, key_ in kid_keys.items() if (str(kid).replace("-", "").lower(), key_.lower()) not in bad
         }
 
         if not kid_keys:
@@ -258,7 +258,7 @@ class SQLite(Vault):
         finally:
             cursor.close()
 
-    def create_table(self, name: str):
+    def create_table(self, name: str) -> None:
         """Make a Table with the specified name if it does not exist yet."""
         if self.has_table(name):
             return
@@ -285,7 +285,7 @@ class SQLite(Vault):
 
 
 class ConnectionFactory:
-    def __init__(self, path: Union[str, Path]):
+    def __init__(self, path: Union[str, Path]) -> None:
         self._path = path
         self._store = threading.local()
 

@@ -15,13 +15,16 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, cast
 
 from unshackle.core.api.events import bus, publish_service_event
 from unshackle.core.api.sanitize import sanitize_log
 from unshackle.core.utils.click_types import AUDIO_CODEC_LIST, QUALITY_LIST, VIDEO_CODEC_LIST
 from unshackle.core.utils.redact import REDACTED, URL_USERINFO_RE, redact_all, redact_path, redact_text
 from unshackle.core.utils.service_params import service_options
+
+if TYPE_CHECKING:
+    from unshackle.core.service import Service
 
 log = logging.getLogger("download_manager")
 
@@ -145,7 +148,7 @@ class DownloadJob:
 
     def to_dict(self, include_full_details: bool = False) -> Dict[str, Any]:
         """Convert job to dictionary for JSON response."""
-        result = {
+        result: Dict[str, Any] = {
             "job_id": self.job_id,
             "status": self.status.value,
             "created_time": self.created_time.isoformat(),
@@ -470,7 +473,7 @@ def perform_download(
         service_config = load_yaml(service_config_path)
     else:
         service_config = {}
-    merge_dict(config.services.get(service), service_config)
+    merge_dict(config.services.get(service) or {}, service_config)
 
     from unshackle.commands.dl import dl as dl_command
 
@@ -561,7 +564,8 @@ def perform_download(
     if remote:
         from unshackle.core.remote_service import make_remote_service
 
-        service_instance = make_remote_service(service_ctx, remote, service, title_id, params)
+        # RemoteService duck-types Service for dl.result()
+        service_instance = cast("Service", make_remote_service(service_ctx, remote, service, title_id, params))
     else:
         service_module = Services.load(service)
 
@@ -570,7 +574,7 @@ def perform_download(
 
             service_init_params = inspect.signature(service_module.__init__).parameters
 
-            service_kwargs = {}
+            service_kwargs: Dict[str, Any] = {}
 
             if "title" in service_init_params:
                 service_kwargs["title"] = title_id
@@ -704,7 +708,7 @@ def perform_download(
 class DownloadQueueManager:
     """Manages download job queue with configurable concurrency limits."""
 
-    def __init__(self, max_concurrent_downloads: int = 2, job_retention_hours: int = 24):
+    def __init__(self, max_concurrent_downloads: int = 2, job_retention_hours: int = 24) -> None:
         self.max_concurrent_downloads = max_concurrent_downloads
         self.job_retention_hours = job_retention_hours
 
@@ -724,7 +728,9 @@ class DownloadQueueManager:
             f"Initialized download queue manager: max_concurrent={max_concurrent_downloads}, retention_hours={job_retention_hours}"
         )
 
-    def create_job(self, service: str, title_id: str, owner_key: Optional[str] = None, **parameters) -> DownloadJob:
+    def create_job(
+        self, service: str, title_id: str, owner_key: Optional[str] = None, **parameters: Any
+    ) -> DownloadJob:
         """Make a new download job and add it to the queue."""
         from unshackle.core.api.session_store import refuse_while_draining
 
@@ -911,7 +917,7 @@ class DownloadQueueManager:
 
         return len(jobs_to_remove)
 
-    async def start_workers(self):
+    async def start_workers(self) -> None:
         """Start job worker tasks to process the download queue."""
         if self._workers_started:
             return
@@ -927,7 +933,7 @@ class DownloadQueueManager:
 
         log.info(f"Started {self.max_concurrent_downloads} download workers")
 
-    async def shutdown(self):
+    async def shutdown(self) -> None:
         """Shutdown the queue manager and cancel all active downloads."""
         log.info("Shutting down download queue manager")
         self._shutdown_event.set()
@@ -971,7 +977,7 @@ class DownloadQueueManager:
         if self._active_downloads:
             await asyncio.gather(*self._active_downloads.values(), return_exceptions=True)
 
-    async def download_worker(self, worker_name: str):
+    async def download_worker(self, worker_name: str) -> None:
         """Job worker task that processes jobs from the queue."""
         log.debug(f"Download worker {worker_name} started")
 
@@ -1021,7 +1027,7 @@ class DownloadQueueManager:
             except Exception as e:
                 log.error(f"Worker {worker_name} error: {e}")
 
-    async def execute_download(self, job: DownloadJob):
+    async def execute_download(self, job: DownloadJob) -> None:
         """Do the actual download for a job."""
         log.info(f"Executing download for job {job.job_id}")
 
@@ -1245,7 +1251,7 @@ class DownloadQueueManager:
                 except OSError:
                     pass
 
-    async def cleanup_worker(self):
+    async def cleanup_worker(self) -> None:
         """Job worker that periodically cleans up old jobs."""
         while not self._shutdown_event.is_set():
             try:

@@ -185,7 +185,7 @@ class Video(Track):
                 # The codebase is currently agnostic to either, so a manual conversion to 6 is done.
                 transfer = 6
 
-            def safe(enum_cls, value):
+            def safe(enum_cls: type[Enum], value: int) -> Any:
                 try:
                     return enum_cls(value)
                 except ValueError:
@@ -391,18 +391,18 @@ class Video(Track):
     def __str__(self) -> str:
         return " | ".join(
             filter(
-                bool,
+                None,
                 [
                     "VID",
-                    "[" + (", ".join(filter(bool, [self.codec.value if self.codec else None, self.range_label]))) + "]",
+                    "[" + (", ".join(filter(None, [self.codec.value if self.codec else None, self.range_label]))) + "]",
                     str(self.language),
                     ", ".join(
                         filter(
-                            bool,
+                            None,
                             [
                                 " @ ".join(
                                     filter(
-                                        bool,
+                                        None,
                                         [
                                             f"{self.width}x{self.height}" if self.width and self.height else None,
                                             f"{self.bitrate // 1000} kb/s" if self.bitrate else None,
@@ -667,12 +667,13 @@ class Video(Track):
             raise EnvironmentError("ccextractor executable was not found.")
 
         out_path = Path(out_path)
+        video_path, ccextractor = self.path, binaries.CCExtractor
 
         def run_ccextractor(fallback: str) -> bool:
             cc_start = time.monotonic()
             try:
                 subprocess.run(
-                    [binaries.CCExtractor, "-trim", "-nobom", "-noru", "-ru1", "-o", out_path, self.path],
+                    [ccextractor, "-trim", "-nobom", "-noru", "-ru1", "-o", out_path, video_path],
                     check=True,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
@@ -687,7 +688,7 @@ class Video(Track):
                 )
                 if e.returncode < 0:
                     logging.getLogger("Video").warning(
-                        f"ccextractor crashed (signal {-e.returncode}) on {self.path.name}; {fallback}"
+                        f"ccextractor crashed (signal {-e.returncode}) on {video_path.name}; {fallback}"
                     )
                     return out_path.exists()
                 if e.returncode != 10:  # 10 = No captions found

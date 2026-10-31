@@ -230,7 +230,7 @@ class Song(Title):
 class Music(SortedKeyList, ABC):
     """A grouped music release, such as an album, EP, single, compilation, or playlist."""
 
-    def __new__(cls, *args: Any, **kwargs: Any):
+    def __new__(cls, *args: Any, **kwargs: Any) -> "Music":
         return super().__new__(cls)
 
     def __init__(
@@ -246,7 +246,7 @@ class Music(SortedKeyList, ABC):
         total_duration: Optional[int] = None,
         owner: Optional[str] = None,
         description: Optional[str] = None,
-    ):
+    ) -> None:
         if not isinstance(kind, str):
             raise TypeError(f"Expected kind to be a str, not {kind!r}")
         if title is not None and not isinstance(title, str):

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import gzip
 import zlib
+from typing import Any
 
 from aiohttp import web
 
@@ -25,7 +26,7 @@ def safe_inflate(data: bytes, max_size: int = MAX_INFLATE_BYTES) -> bytes:
 
 
 @web.middleware
-async def compression_middleware(request: web.Request, handler) -> web.StreamResponse:
+async def compression_middleware(request: web.Request, handler: Any) -> web.StreamResponse:
     """Compress JSON responses with gzip when the client supports it."""
     response = await handler(request)
 

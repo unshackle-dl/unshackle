@@ -110,7 +110,7 @@ class EXAMPLE(Service):
     def cli(ctx: click.Context, **kwargs: Any) -> EXAMPLE:
         return EXAMPLE(ctx, **kwargs)
 
-    def __init__(self, ctx: click.Context, title: str, movie: bool, device: str):
+    def __init__(self, ctx: click.Context, title: str, movie: bool, device: str) -> None:
         # Store CLI args BEFORE super().__init__ if the base needs them; here order
         # doesn't matter, but storing first is the common convention.
         self.title = title

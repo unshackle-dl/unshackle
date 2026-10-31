@@ -26,11 +26,11 @@ from unshackle.core import binaries
 from unshackle.core.cdm.detect import is_playready_cdm, is_widevine_cdm
 from unshackle.core.config import config
 from unshackle.core.constants import DOWNLOAD_ALL_DRM, DOWNLOAD_CANCELLED, DOWNLOAD_LICENCE_ONLY, DownloadCancelled
-from unshackle.core.downloaders import requests
+from unshackle.core.downloaders.requests import requests
 from unshackle.core.drm import DRM_T, BlowfishStripe, ClearKeyCENC, PlayReady, Widevine
 from unshackle.core.drm.verify import decrypt_track, has_encrypted_entry, senc_protects_samples
 from unshackle.core.events import events
-from unshackle.core.session import MAX_BACKOFF, RnetSession, utf8_text
+from unshackle.core.session import MAX_BACKOFF, AnySession, RnetSession, utf8_text
 from unshackle.core.temp import restore_segments, stash_segments
 from unshackle.core.tracks import resume
 from unshackle.core.utilities import get_boxes, language_name, log_event, try_ensure_utf8
@@ -45,7 +45,7 @@ DRM_PREFERENCE_TYPES: dict[str, Union[type[Widevine], type[PlayReady]]] = {
 }
 
 
-def direct_session(session: Union[Session, "RnetSession"], proxy: Optional[str] = None) -> Session:
+def direct_session(session: AnySession, proxy: Optional[str] = None) -> Session:
     """requests.Session with copied headers/cookies and no proxy, or only ``proxy`` when given."""
     new = Session()
     if proxy:
@@ -82,7 +82,7 @@ def direct_session(session: Union[Session, "RnetSession"], proxy: Optional[str] 
                 total=5,
                 backoff_factor=0.2,
                 status_forcelist=[429, 500, 502, 503, 504],
-                retry_after_max=MAX_BACKOFF,
+                retry_after_max=int(MAX_BACKOFF),
             ),
             pool_maxsize=64,
             pool_block=True,
@@ -390,7 +390,7 @@ class DownloadContext:
     save_path: Path
     save_dir: Path
     progress: partial
-    session: Optional[Union[Session, "RnetSession"]] = None
+    session: Optional[AnySession] = None
     proxy: Optional[str] = None
     max_workers: Optional[int] = None
     adaptive_workers: bool = False
@@ -398,7 +398,7 @@ class DownloadContext:
     license_widevine: Optional[Callable] = None
     cdm: Optional[object] = None
 
-    def ensure_session(self) -> Union[Session, "RnetSession"]:
+    def ensure_session(self) -> AnySession:
         """Return the HTTP session, or a new ``Session`` if none was set."""
         session = self.session
         if not session:
@@ -428,7 +428,7 @@ class Track:
         drm: Optional[Iterable[DRM_T]] = None,
         edition: Optional[str] = None,
         note: Optional[str] = None,
-        session: Optional[Union[Session, "RnetSession"]] = None,
+        session: Optional[AnySession] = None,
         downloader: Optional[Callable] = None,
         downloader_args: Optional[dict] = None,
         from_file: Optional[Path] = None,
@@ -454,7 +454,7 @@ class Track:
             raise TypeError(f"Expected edition to be a {str}, {list}, or None, not {type(edition)}")
         if not isinstance(note, (str, type(None))):
             raise TypeError(f"Expected note to be a {str}, not {type(note)}")
-        if not isinstance(downloader, (Callable, type(None))):
+        if downloader is not None and not callable(downloader):
             raise TypeError(f"Expected downloader to be a {Callable}, not {type(downloader)}")
         if not isinstance(downloader_args, (dict, type(None))):
             raise TypeError(f"Expected downloader_args to be a {dict}, not {type(downloader_args)}")
@@ -463,7 +463,7 @@ class Track:
         if not isinstance(data, (dict, defaultdict, type(None))):
             raise TypeError(f"Expected data to be a {dict} or {defaultdict}, not {type(data)}")
 
-        invalid_urls = ", ".join(set(type(x) for x in url if not isinstance(x, str)))
+        invalid_urls = ", ".join({str(type(x)) for x in url if not isinstance(x, str)})
         if invalid_urls:
             raise TypeError(f"Expected all items in url to be a {str}, but found {invalid_urls}")
 
@@ -497,7 +497,8 @@ class Track:
 
         if not id_:
             this = copy(self)
-            this.url = self.url.rsplit("?", maxsplit=1)[0]
+            if isinstance(self.url, str):
+                this.url = self.url.rsplit("?", maxsplit=1)[0]
             checksum = crc32(repr(this).encode("utf8"))
             id_ = hex(checksum)[2:]
 
@@ -527,7 +528,7 @@ class Track:
         self.sample_start = (starts[first] - starts[0]) / timescale
         return slice(first, max(bisect_left(starts, high) + self.sample_tail, first + 1))
 
-    def sample_byte_range(self, session: Union[Session, "RnetSession"]) -> Optional[tuple[bytes, str]]:
+    def sample_byte_range(self, session: AnySession) -> Optional[tuple[bytes, str]]:
         """Find the bytes of a one-file track that hold the sample window.
 
         Reads the start of the file for a ``sidx`` box. Returns the bytes before that box, which hold
@@ -535,12 +536,13 @@ class Track:
         """
         if self.sample_bytes or not isinstance(self.url, str):
             return self.sample_bytes
+        url = self.url
         head = b""
 
         def read_to(end: int) -> None:
             nonlocal head
             if end > len(head):
-                res = session.get(self.url, headers={"Range": f"bytes={len(head)}-{end - 1}"})
+                res = session.get(url, headers={"Range": f"bytes={len(head)}-{end - 1}"})
                 if res.ok:
                     head += res.content
 
@@ -565,7 +567,7 @@ class Track:
             return self.sample_bytes
         return None
 
-    def can_sample(self, session: Union[Session, "RnetSession"]) -> bool:
+    def can_sample(self, session: AnySession) -> bool:
         """Return False when a sample cannot cut this track, because it is one file with no segment index."""
         if self.descriptor == self.Descriptor.URL:
             return bool(self.sample_byte_range(session))
@@ -682,7 +684,7 @@ class Track:
 
     def download(
         self,
-        session: Union[Session, "RnetSession"],
+        session: AnySession,
         prepare_drm: partial,
         max_workers: Optional[int] = None,
         progress: Optional[partial] = None,
@@ -692,14 +694,18 @@ class Track:
         proxy_download: Optional[str] = None,
         adaptive_workers: bool = False,
         download_processes: int = 1,
-    ):
+    ) -> None:
         """Download and optionally Decrypt this Track.
 
         For a URL-descriptor Video or Audio track with no `drm` set, unshackle probes the DRM from the
         track's init data and stores it on the track, so a service need not declare `drm` itself.
         """
         from unshackle.core.manifests import DASH, HLS, ISM
+        from unshackle.core.tracks.audio import Audio
+        from unshackle.core.tracks.subtitle import Subtitle
+        from unshackle.core.tracks.video import Video
 
+        assert isinstance(self, (Video, Audio, Subtitle)) and progress is not None
         if DOWNLOAD_LICENCE_ONLY.is_set():
             progress(downloaded="[yellow]SKIPPING")
 
@@ -722,7 +728,8 @@ class Track:
 
         track_type = self.__class__.__name__
         save_path = config.directories.temp / f"{track_type}_{self.id}.mp4"
-        if track_type == "Subtitle":
+        if isinstance(self, Subtitle):
+            assert self.codec
             save_path = save_path.with_suffix(f".{self.codec.extension}")
 
         if self.descriptor != self.Descriptor.URL:
@@ -769,7 +776,7 @@ class Track:
             cleanup()
 
         try:
-            manifest_parsers = {
+            manifest_parsers: dict[Track.Descriptor, Union[type[DASH], type[HLS], type[ISM]]] = {
                 self.Descriptor.HLS: HLS,
                 self.Descriptor.DASH: DASH,
                 self.Descriptor.ISM: ISM,
@@ -893,7 +900,7 @@ class Track:
                             if has_encrypted_sample_entry(save_path):
                                 self.needs_repack = True
 
-                        if track_type == "Subtitle" and self.codec.name not in ("fVTT", "fTTML"):
+                        if isinstance(self, Subtitle) and self.codec and self.codec.name not in ("fVTT", "fTTML"):
                             track_data = self.path.read_bytes()
                             track_data = try_ensure_utf8(track_data)
                             track_data = (
@@ -928,6 +935,7 @@ class Track:
             return
 
         if not DOWNLOAD_LICENCE_ONLY.is_set():
+            assert self.path is not None
             if self.path.stat().st_size <= 3:  # Empty UTF-8 BOM == 3 bytes
                 raise IOError("Download failed, the downloaded file is empty.")
 
@@ -1016,7 +1024,7 @@ class Track:
         from unshackle.core.tracks.video import Video
 
         track_type = data.get("type")
-        builders = {"Video": Video, "Audio": Audio, "Subtitle": Subtitle}
+        builders: dict[Optional[str], type[Track]] = {"Video": Video, "Audio": Audio, "Subtitle": Subtitle}
         builder = builders.get(track_type)
         if builder is None:
             raise ValueError(f"Cannot reconstruct unsupported track type: {track_type!r}")
@@ -1075,9 +1083,9 @@ class Track:
                 playready[0].absorb(*playready[1:])
                 return playready[0]
 
-        return self.drm[0]
+        return next(iter(self.drm))
 
-    def get_key_id(self, init_data: Optional[bytes] = None, *args, **kwargs) -> Optional[UUID]:
+    def get_key_id(self, init_data: Optional[bytes] = None, *args: Any, **kwargs: Any) -> Optional[UUID]:
         """
         Probe the DRM encryption Key ID (KID) for this specific track.
 
@@ -1117,8 +1125,9 @@ class Track:
                 tenc = uuid_box.data
                 if tenc.key_ID.int != 0:
                     return tenc.key_ID
+        return None
 
-    def load_drm_if_needed(self, service=None) -> bool:
+    def load_drm_if_needed(self, service: Optional[Any] = None) -> bool:
         """
         Load DRM information for this track if the parser deferred it.
 
@@ -1164,6 +1173,7 @@ class Track:
             from pywidevine.pssh import PSSH as WV_PSSH
 
             session = getattr(self, "session", None) or run_proxy.fallback_session()
+            assert isinstance(self.url, str)
 
             response = session.get(self.url)
             playlist = m3u8.loads(utf8_text(response), self.url)
@@ -1177,7 +1187,7 @@ class Track:
                 fmt = key.keyformat.lower()
                 if fmt == WidevineCdm.urn:
                     pssh_b64 = key.uri.split(",")[-1]
-                    drm = Widevine(pssh=WV_PSSH(pssh_b64))
+                    drm: DRM_T = Widevine(pssh=WV_PSSH(pssh_b64))
                     drm_list.append(drm)
                 elif fmt in {f"urn:uuid:{PR_PSSH.SYSTEM_ID}", "com.microsoft.playready"}:
                     pssh_b64 = key.uri.split(",")[-1]
@@ -1199,7 +1209,7 @@ class Track:
         maximum_size: int = 20000,
         url: Optional[str] = None,
         byte_range: Optional[str] = None,
-        session: Optional[Session] = None,
+        session: Optional[AnySession] = None,
     ) -> bytes:
         """
         Get the Track's initial segment data.
@@ -1235,7 +1245,7 @@ class Track:
         if not url:
             if self.descriptor != self.Descriptor.URL:
                 raise ValueError(f"An explicit URL must be provided for {self.descriptor.name} tracks")
-            if not self.url:
+            if not self.url or not isinstance(self.url, str):
                 raise ValueError("An explicit URL must be provided as the track has no URL")
             url = self.url
 
@@ -1262,6 +1272,7 @@ class Track:
             if range_test.status_code == 206:
                 byte_range = f"0-{content_length - 1}"
 
+        init_data: Optional[bytes]
         if byte_range:
             res = session.get(url=url, headers={"Range": f"bytes={byte_range}"})
             res.raise_for_status()
@@ -1294,15 +1305,16 @@ class Track:
         if not self.path or not self.path.exists():
             raise ValueError("Cannot repackage a Track that has not been downloaded.")
 
-        if not binaries.FFMPEG:
+        ffmpeg_bin = binaries.FFMPEG
+        if not ffmpeg_bin:
             raise EnvironmentError('FFmpeg executable "ffmpeg" was not found but is required for this call.')
 
         original_path = self.path
         output_path = original_path.with_stem(f"{original_path.stem}_repack")
 
-        def ffmpeg(extra_args: list[str] = None, bsf: Optional[str] = None):
-            args = [
-                binaries.FFMPEG,
+        def ffmpeg(extra_args: Optional[list[str]] = None, bsf: Optional[str] = None) -> None:
+            args: list[Union[str, Path]] = [
+                ffmpeg_bin,
                 "-nostdin",
                 "-hide_banner",
                 "-loglevel",

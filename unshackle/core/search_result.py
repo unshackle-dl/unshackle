@@ -9,7 +9,7 @@ class SearchResult:
         description: Optional[str] = None,
         label: Optional[str] = None,
         url: Optional[str] = None,
-    ):
+    ) -> None:
         """
         A search result for any title type a service can give.
 
