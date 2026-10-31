@@ -354,7 +354,7 @@ class ISM:
                             language=track_lang or language,
                             is_original_lang=bool(language and track_lang and str(track_lang) == str(language)),
                             bitrate=ql.get("Bitrate"),
-                            channels=ql.get("Channels"),
+                            channels=Audio.channels_from_count(ql.get("Channels")),
                             extra={"atmos": True} if (ql.get("HasAtmos") or "").lower() == "true" else None,
                             descriptor=Track.Descriptor.ISM,
                             drm=drm,

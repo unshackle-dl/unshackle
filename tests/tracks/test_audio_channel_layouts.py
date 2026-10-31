@@ -30,6 +30,15 @@ def test_a_dolby_channel_mask_counts_its_channels(value: str, expected: object) 
     assert Audio.parse_channels(value) == expected
 
 
+@pytest.mark.parametrize(
+    ("count", "expected"),
+    [("2", 2.0), ("6", 5.1), ("7", 6.1), ("8", 7.1), (6, 5.1), ("1", 1.0), (None, None), ("2ch", "2ch")],
+)
+def test_a_bare_channel_count_takes_its_usual_layout(count: object, expected: object) -> None:
+    """HLS CHANNELS and Smooth Streaming Channels give a count, which names no LFE."""
+    assert Audio.channels_from_count(count) == expected
+
+
 @pytest.mark.parametrize("value", ["stereo", "5.1.4.2", "", "..", "5.x.4"])
 def test_a_value_that_is_no_layout_still_raises(value: str) -> None:
     with pytest.raises(NotImplementedError):

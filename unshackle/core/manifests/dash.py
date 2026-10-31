@@ -46,6 +46,36 @@ from unshackle.core.utils.bitrate import ranged_get
 from unshackle.core.utils.redact import safe_display_url
 from unshackle.core.utils.xml import load_xml
 
+DOLBY_CHANNEL_SCHEMES = (
+    "tag:dolby.com,2014:dash:audio_channel_configuration:2011",
+    "urn:dolby:dash:audio_channel_configuration:2011",
+)
+COUNT_CHANNEL_SCHEMES = (
+    "urn:mpeg:dash:23003:3:audio_channel_configuration:2011",
+    "urn:dts:dash:audio_channel_configuration:2012",
+)
+CICP_CHANNEL_SCHEME = "urn:mpeg:mpegB:cicp:ChannelConfiguration"
+CICP_CHANNEL_LAYOUTS: dict[int, Union[float, str]] = {
+    1: 1.0,
+    2: 2.0,
+    3: 3.0,
+    4: 4.0,
+    5: 5.0,
+    6: 5.1,
+    7: 7.1,
+    8: 7.1,
+    9: 3.0,
+    10: 4.0,
+    11: 6.1,
+    12: 7.1,
+    14: "5.1.2",
+    16: "5.1.4",
+    17: "5.1.6",
+    18: "7.1.6",
+    19: "7.1.4",
+    20: "9.1.4",
+}
+
 
 class MissingLanguageError(ValueError):
     """A manifest track has no language, and the fallback language is missing or invalid."""
@@ -282,13 +312,7 @@ class DASH:
                         track_codec = Audio.Codec.from_codecs(codecs or "")
                         track_args = dict(
                             bitrate=get("bandwidth") or None,
-                            channels=next(
-                                iter(
-                                    rep.xpath("AudioChannelConfiguration/@value")
-                                    or adaptation_set.xpath("AudioChannelConfiguration/@value")
-                                ),
-                                None,
-                            ),
+                            channels=self.get_audio_channels(adaptation_set, rep),
                             joc=self.get_ddp_complexity_index(adaptation_set, rep),
                             descriptive=self.is_descriptive(adaptation_set),
                         )
@@ -1364,6 +1388,27 @@ class DASH:
             (x.get("schemeIdUri"), x.get("value")) == ("urn:mpeg:dash:role:2011", "caption")
             for x in adaptation_set.findall("Role")
         )
+
+    @staticmethod
+    def get_audio_channels(adaptation_set: Element, representation: Optional[Element]) -> Union[float, str, None]:
+        """
+        Channel layout from the first AudioChannelConfiguration whose scheme is known, decoded by that scheme.
+
+        The 23003:3 value is a 23003-3 index by the DASH-IF registry, but packagers write the number of channels
+        and players read it so; both readings agree up to 6 channels.
+        """
+        for descriptor in DASH.find_elements("AudioChannelConfiguration", adaptation_set, representation):
+            scheme, value = descriptor.get("schemeIdUri"), (descriptor.get("value") or "").strip()
+            try:
+                if scheme in DOLBY_CHANNEL_SCHEMES:
+                    return Audio.dolby_channel_layout(int(value, 16))
+                if scheme == CICP_CHANNEL_SCHEME and (layout := CICP_CHANNEL_LAYOUTS.get(int(value))):
+                    return layout
+                if scheme in COUNT_CHANNEL_SCHEMES and value.isdigit():
+                    return Audio.channels_from_count(value)
+            except ValueError:
+                continue
+        return None
 
     @staticmethod
     def get_ddp_complexity_index(adaptation_set: Element, representation: Optional[Element]) -> Optional[int]:

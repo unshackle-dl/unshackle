@@ -29,6 +29,8 @@ DOLBY_CHANNEL_BITS = (
     (1, "lfe"),  # LFE
 )
 
+COUNT_CHANNEL_LAYOUTS: dict[int, float] = {6: 5.1, 7: 6.1, 8: 7.1}
+
 
 class Audio(Track):
     class Codec(str, Enum):
@@ -219,16 +221,9 @@ class Audio(Track):
         It does not convert the value to assume a sub speaker channel layout, e.g. 5.1->6.0.
         """
         if isinstance(channels, str):
-            # TODO: decode a DASH AudioChannelConfiguration by its schemeIdUri (CICP, Dolby), not by its shape
+            # a manifest parser decodes a Dolby mask by its scheme; this shape guess serves a service passing one raw
             if re.fullmatch(r"[0-9A-Fa-f]{4}", channels) and not channels.isdigit():
-                mask = int(channels, 16)
-                counts = {"main": 0, "lfe": 0, "height": 0}
-                for bit, (count, kind) in enumerate(DOLBY_CHANNEL_BITS):
-                    if mask & (0x8000 >> bit):
-                        counts[kind] += count
-                if counts["height"]:
-                    return f"{counts['main']}.{counts['lfe']}.{counts['height']}"
-                return float(f"{counts['main']}.{counts['lfe']}")
+                return Audio.dolby_channel_layout(int(channels, 16))
             layout = channels.replace("ch", "")
             if layout.count(".") == 2 and all(part.isdigit() for part in layout.split(".")):
                 return layout
@@ -237,6 +232,29 @@ class Audio(Track):
             raise NotImplementedError(f"Unsupported Channels string value, '{channels}'")
 
         return float(channels)
+
+    @staticmethod
+    def dolby_channel_layout(mask: int) -> Union[float, str]:
+        """Channel layout of a Dolby DASH channel configuration mask, e.g. 0xF801 -> 5.1."""
+        counts = {"main": 0, "lfe": 0, "height": 0}
+        for bit, (count, kind) in enumerate(DOLBY_CHANNEL_BITS):
+            if mask & (0x8000 >> bit):
+                counts[kind] += count
+        if counts["height"]:
+            return f"{counts['main']}.{counts['lfe']}.{counts['height']}"
+        return float(f"{counts['main']}.{counts['lfe']}")
+
+    @staticmethod
+    def channels_from_count(count: Union[str, int, None]) -> Union[float, str, None]:
+        """
+        Channel layout for a bare number of channels, as HLS CHANNELS, Smooth Streaming and most DASH schemes give it.
+
+        A count does not say which channel is the LFE, so 6, 7 and 8 take the 5.1, 6.1 and 7.1 layouts those streams
+        carry in practice. Any other value goes back as-is, for parse_channels to read.
+        """
+        if count is None or (isinstance(count, str) and not count.isdigit()):
+            return count
+        return COUNT_CHANNEL_LAYOUTS.get(int(count), float(count))
 
     @staticmethod
     def channel_total(channels: Union[str, int, float]) -> float:

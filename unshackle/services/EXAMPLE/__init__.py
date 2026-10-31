@@ -388,9 +388,6 @@ class EXAMPLE(Service):
         # Drop "clear"/unencrypted decoy renditions the API sometimes returns.
         tracks.audio = [a for a in tracks.audio if "clear" not in (a.data["dash"]["representation"].get("id") or "")]
         for audio in tracks.audio:
-            # Normalize odd channel counts (6.0 -> 5.1) for correct filename tokens.
-            if audio.channels == 6.0:
-                audio.channels = 5.1
             # Mark descriptive / audio-description tracks from the AdaptationSet label.
             label = audio.data["dash"]["adaptation_set"].get("label") or ""
             if "Audio Description" in label or "description" in label.lower():

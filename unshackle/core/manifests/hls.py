@@ -295,7 +295,7 @@ class HLS:
                         joc = int(count)
                         media.channels = "5.1"
                     else:
-                        media.channels = count
+                        media.channels = Audio.channels_from_count(count)
             else:
                 track_type = Subtitle
                 codec = Subtitle.Codec.WebVTT  # assuming WebVTT, codec info isn't shown
