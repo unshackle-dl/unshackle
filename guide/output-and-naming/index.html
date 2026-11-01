@@ -2747,12 +2747,12 @@ For an episode with no on-screen name, <code>{episode_name?}</code> and its adja
 </tr>
 <tr>
 <td><code>quality</code></td>
-<td>Resolution with scan suffix</td>
+<td>Standard resolution with scan suffix</td>
 <td><code>1080p</code>, <code>2160p</code>, <code>576i</code></td>
 </tr>
 <tr>
 <td><code>resolution</code></td>
-<td>Resolution number only</td>
+<td>Standard resolution number only</td>
 <td><code>1080</code></td>
 </tr>
 <tr>
@@ -2792,6 +2792,16 @@ For an episode with no on-screen name, <code>{episode_name?}</code> and its adja
 </tr>
 </tbody>
 </table>
+<div class="admonition note">
+<p class="admonition-title"><code>quality</code> and <code>resolution</code> use the standard height</p>
+<p>unshackle names a video by the nearest standard height (4320, 2160, 1440, 1080, 720, 576, 540,
+480, 360 or 240) when it is within 10%. It measures the short side and the height that a 16:9
+picture of the same width has, and uses the larger one. So a cropped 1920x800, a padded
+1920x1088 and a 1080x1920 portrait video are all <code>1080p</code>. A short side within 16 lines of
+2160, 1440 or 1080 gives that height, so an ultrawide 2560x1080 is <code>1080p</code>. A size with no
+standard height near it, such as 1600x900, keeps its own height. <code>dl -q</code> and the
+<code>dl --export</code> file name use the same rule.</p>
+</div>
 <div class="admonition note">
 <p class="admonition-title">How <code>language_tags</code> rules match</p>
 <p>unshackle tries the rules in order, and they compare languages with the same <a href="../downloading/#exact-vs-fuzzy-matching">matching rules</a> as <code>-l</code>: a rule condition of <code>en</code> matches <code>en-US</code>, <code>en-GB</code>, and any other <code>en-*</code> form, but <code>es-419</code> matches only <code>es-419</code>. Within a single rule, <strong>all</strong> conditions must match (AND logic) for it to apply. The first rule that fully matches wins. If none match, unshackle removes <code>{lang_tag?}</code> from the filename cleanly.</p>
