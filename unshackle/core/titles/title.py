@@ -163,6 +163,14 @@ class Title:
                 if (primary_video_track.hdr_format or "").startswith("Dolby Vision"):
                     context["hdr"] = "DV"
                     base_layer = DYNAMIC_RANGE_MAP.get(hdr_format)
+                    profile = getattr(primary_video_track, "hdr_format_profile", None) or ""
+                    if (
+                        base_layer in (None, "DV")
+                        and trc
+                        and "PQ" in trc
+                        and profile.startswith(("dvhe.07", "dvhe.08"))
+                    ):
+                        base_layer = "HDR"
                     if base_layer and base_layer != "DV":
                         context["hdr"] += f".{base_layer}"
                 elif (primary_video_track.hdr_format or "").startswith("HDR Vivid"):
