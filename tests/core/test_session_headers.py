@@ -37,6 +37,10 @@ class Recorder(BaseHTTPRequestHandler):
             self.send_header("Set-Cookie", "sid=abc123; Path=/")
         elif self.path.startswith("/set/"):
             self.send_header("Set-Cookie", f"{self.path[len('/set/') :]}; Path=/")
+        elif self.path.startswith("/scoped/set/"):
+            self.send_header("Set-Cookie", f"{self.path[len('/scoped/set/') :]}; Path=/scoped")
+        elif self.path.startswith("/scoped/expire/"):
+            self.send_header("Set-Cookie", f"{self.path[len('/scoped/expire/') :]}=; Max-Age=0; Path=/scoped")
         self.end_headers()
         self.wfile.write(body)
 
@@ -57,7 +61,7 @@ def server() -> Iterator[str]:
         httpd.server_close()
 
 
-def make_cookie(name: str, value: str, domain: str) -> Cookie:
+def make_cookie(name: str, value: str, domain: str, path: str = "/") -> Cookie:
     return Cookie(
         version=0,
         name=name,
@@ -67,7 +71,7 @@ def make_cookie(name: str, value: str, domain: str) -> Cookie:
         domain=domain,
         domain_specified=True,
         domain_initial_dot=domain.startswith("."),
-        path="/",
+        path=path,
         path_specified=True,
         secure=False,
         expires=None,
@@ -333,3 +337,91 @@ def test_the_rebuilt_client_is_published_only_when_it_is_ready(server: str, monk
 
     assert seen and all(client is old for client in seen)
     assert session._client is not old
+
+
+def path_session(*cookies: Cookie) -> RnetSession:
+    session = RnetSession()
+    session.cookies.update(list(cookies))
+    return session
+
+
+def test_same_name_cookies_reach_only_their_own_path(server: str) -> None:
+    """Two cookies with one name on two paths must each reach only their own path."""
+    session = path_session(make_cookie("h", "A", "127.0.0.1", "/a"), make_cookie("h", "B", "127.0.0.1", "/b"))
+
+    for path, expected in (("/a/seg", "h=A"), ("/b/seg", "h=B"), ("/", "")):
+        session.get(f"{server}{path}")
+        assert Recorder.cookies_sent[-1] == expected
+
+    session.headers["X-Rebuild"] = "1"
+    del session.headers["X-Rebuild"]
+    session.get(f"{server}/a/seg")
+    assert Recorder.cookies_sent[-1] == "h=A"
+
+
+def test_delete_drops_every_path_copy(server: str) -> None:
+    """``del cookies[name]`` must reach a cookie stored on a path, not only the root-path one."""
+    session = path_session(make_cookie("h", "A", "127.0.0.1", "/a"), make_cookie("h", "B", "127.0.0.1", "/b"))
+    session.get(f"{server}/a/seg")
+
+    del session.cookies["h"]
+
+    session.get(f"{server}/a/seg")
+    session.get(f"{server}/b/seg")
+    assert Recorder.cookies_sent[-2:] == ["", ""]
+    assert list(session.cookies.jar) == []
+
+
+def test_clear_by_path_spares_the_other_path(server: str) -> None:
+    session = path_session(make_cookie("h", "A", "127.0.0.1", "/a"), make_cookie("h", "B", "127.0.0.1", "/b"))
+    session.get(f"{server}/a/seg")
+
+    session.cookies.clear(domain="127.0.0.1", path="/a", name="h")
+
+    session.get(f"{server}/a/seg")
+    session.get(f"{server}/b/seg")
+    assert Recorder.cookies_sent[-2:] == ["", "h=B"]
+    assert session.cookies.get("h", path="/b") == "B"
+    assert session.cookies.get("h", path="/a") is None
+
+
+def test_a_rotated_path_cookie_survives_a_rebuild(server: str) -> None:
+    """A value the server set for a stored path cookie must win after ``rebuild_client`` and on save."""
+    session = path_session(make_cookie("h", "STALE", "127.0.0.1", "/scoped"))
+    session.headers["X-Auth"] = "secret"
+
+    session.get(f"{server}/scoped/set/h=FRESH")
+    session.headers.pop("X-Auth", None)
+    session.get(f"{server}/scoped/seg")
+
+    assert Recorder.cookies_sent[-1] == "h=FRESH"
+    assert [(c.path, c.value) for c in session.cookies.jar] == [("/scoped", "FRESH")]
+
+
+def test_a_server_expiry_drops_the_stored_cookie(server: str) -> None:
+    session = path_session(make_cookie("h", "STALE", "127.0.0.1", "/scoped"))
+    session.headers["X-Auth"] = "secret"
+
+    session.get(f"{server}/scoped/expire/h")
+    session.headers.pop("X-Auth", None)
+    session.get(f"{server}/scoped/seg")
+
+    assert Recorder.cookies_sent[-1] == ""
+    assert "h" not in session.cookies
+
+
+def test_only_a_leading_dot_widens_a_cookie_to_subdomains() -> None:
+    """A Netscape row with a leading dot covers subdomains; any other domain stays host-only."""
+    assert RnetCookieAdapter.to_rnet(make_cookie("s", "1", ".example.com")).domain == "example.com"
+    assert RnetCookieAdapter.to_rnet(make_cookie("s", "1", "www.example.com")).domain is None
+
+
+def test_the_latest_write_answers_a_lookup_by_name() -> None:
+    session = path_session(make_cookie("tok", "file", ".example.com"))
+    session.cookies.update({"tok": "dict"})
+    assert session.cookies.get("tok") == "dict"
+    assert session.cookies["tok"] == "dict"
+    session.cookies.set("tok", "set", domain=".example.com")
+    assert session.cookies.get("tok") == "set"
+    assert session.cookies.get("tok", domain="") == "dict"
+    assert [c.value for c in session.cookies.jar] == ["set"]

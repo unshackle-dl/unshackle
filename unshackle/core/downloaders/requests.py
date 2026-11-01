@@ -1247,7 +1247,7 @@ def build_session_spec(session: Optional[Any]) -> Optional[dict[str, Any]]:
             "kind": "rnet",
             "impersonate": name,
             "headers": dict(session.headers),
-            "cookies": session.cookies.get_dict_by_domain(),
+            "cookies": session.cookies.snapshot(),  # stdlib Cookies pickle with their paths
             "origin_cookies": session.export_origin_cookies(),
             "proxy": session.proxies.get("all") or session.proxies.get("https") or session.proxies.get("http"),
         }
@@ -1290,13 +1290,7 @@ def rebuild_session(spec: dict[str, Any], max_workers: int) -> Optional[Any]:
         ns = make_session(spec["impersonate"])
         if spec.get("headers"):
             ns.headers.update(spec["headers"])
-        for domain, jar in spec.get("cookies", {}).items():
-            if domain:
-                for name, value in jar.items():
-                    ns.cookies.set(name, value, domain=domain)
-            else:
-                # no domain to scope to; update() reproduces the parent's localhost-scoped state
-                ns.cookies.update(jar)
+        ns.cookies.update(spec.get("cookies") or [])
         if spec.get("proxy"):
             ns.proxies.update({"all": spec["proxy"]})
         ns.import_origin_cookies(spec.get("origin_cookies") or {})

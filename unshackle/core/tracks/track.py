@@ -59,22 +59,15 @@ def direct_session(session: AnySession, proxy: Optional[str] = None) -> Session:
             pass
     cookies = getattr(session, "cookies", None)
     if cookies is not None:
-        jar = getattr(cookies, "jar", None)
+        snapshot = getattr(cookies, "snapshot", None)
         try:
-            new.cookies.update(jar if jar is not None else cookies)
+            if snapshot is None:
+                new.cookies.update(cookies)
+            else:
+                for cookie in snapshot():
+                    new.cookies.set_cookie(copy(cookie))  # set_cookie edits a quoted value in place
         except Exception:
             pass
-        # RnetCookieAdapter.jar holds only cookies that arrived as a CookieJar; the ones set by name or
-        # received from a server live in its domain map, so copy those across too
-        by_domain = getattr(cookies, "get_dict_by_domain", None)
-        if by_domain is not None:
-            try:
-                for domain, named in by_domain().items():
-                    for name, value in named.items():
-                        if name not in new.cookies:
-                            new.cookies.set(name, value, **({"domain": domain} if domain else {}))
-            except Exception:
-                pass
     new.mount(
         "https://",
         HTTPAdapter(

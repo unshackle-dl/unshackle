@@ -135,6 +135,9 @@ Services that require a login read either **cookies** or **credentials**.
     rows a text editor broke. unshackle refuses a JSON export. Export the cookies
     again in Netscape format.
 
+    unshackle sends each cookie only to the host and path that its row names, as a
+    browser does. A domain that starts with a dot also covers its subdomains.
+
 - **Credentials**: store a username and password per service in your config:
 
     ```yaml title="unshackle.yaml"
