@@ -173,6 +173,8 @@ class Title:
                         context["hdr"] = DYNAMIC_RANGE_MAP["HDR10+"]
             elif trc and "HLG" in trc:
                 context["hdr"] = "HLG"
+            elif trc and "PQ" in trc:
+                context["hdr"] = "HDR"
             else:
                 context["hdr"] = ""
             context["hdr"] = ".".join(filter(None, map(rename, context["hdr"].split("."))))

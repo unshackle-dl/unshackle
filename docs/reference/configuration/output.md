@@ -134,8 +134,9 @@ Put the more specific rules first, because unshackle stops at the first match.
     Matching is exact, and `hdr` is a composite label for Dolby Vision titles: a DV title with
     an HDR10 base layer gives `DV.HDR`, and with an HDR10+ base layer `DV.HDR10P`. Plain `DV`
     does **not** match those. Name every variant you want, as the example above does. Note
-    also that HDR10 gives `HDR`, not `HDR10`. The full set of values is `HDR`, `HDR10P`, `DV`,
-    `DV.HDR`, `DV.HDR10P`, and `HLG`, as listed in the
+    also that HDR10 gives `HDR`, not `HDR10`, and so does a PQ video track with no HDR10
+    metadata. The full set of values is `HDR`, `HDR10P`, `DV`, `DV.HDR`, `DV.HDR10P`, and
+    `HLG`, as listed in the
     [variable table](../../guide/output-and-naming.md#template-variables).
 
 ### Operators

@@ -1,4 +1,4 @@
-"""Tests for the HDR tag in the filename context when MediaInfo misses HDR10+."""
+"""Tests for the HDR tag in the filename context when MediaInfo misses HDR10+ or the HDR format."""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ def clean_config(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(config, "codec_names", {})
 
 
-def hdr_tag(commercial: str, range_: Video.Range) -> str:
+def hdr_tag(commercial: str, range_: Video.Range, transfer: str = "PQ") -> str:
     movie = Movie(id_="movie-0001", service=DummyService, name="The Film", year=2024, language="en")
     movie.tracks = Tracks(Video(url="https://example.test/v.mpd", language="en", codec=Video.Codec.AV1, range_=range_))
     video = types.SimpleNamespace(
@@ -33,7 +33,7 @@ def hdr_tag(commercial: str, range_: Video.Range) -> str:
         other_display_aspect_ratio=["16:9"],
         hdr_format_commercial=commercial,
         hdr_format="SMPTE ST 2086",
-        transfer_characteristics="PQ",
+        transfer_characteristics=transfer,
         transfer_characteristics_original=None,
         frame_rate="23.976",
     )
@@ -51,3 +51,15 @@ def test_an_hdr10_track_keeps_the_hdr_tag() -> None:
 
 def test_mediainfo_hdr10p_is_unchanged() -> None:
     assert hdr_tag("HDR10 / HDR10+", Video.Range.HDR10) == "HDR10P"
+
+
+def test_pq_without_an_hdr_format_gets_the_hdr_tag() -> None:
+    assert hdr_tag("", Video.Range.HDR10) == "HDR"
+
+
+def test_hlg_without_an_hdr_format_keeps_the_hlg_tag() -> None:
+    assert hdr_tag("", Video.Range.HLG, transfer="HLG") == "HLG"
+
+
+def test_sdr_gets_no_hdr_tag() -> None:
+    assert hdr_tag("", Video.Range.SDR, transfer="BT.709") == ""
