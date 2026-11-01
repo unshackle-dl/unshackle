@@ -14,7 +14,7 @@ from unshackle.core.constants import (
     VIDEO_CODEC_MAP,
 )
 from unshackle.core.tracks import Tracks, Video
-from unshackle.core.utilities import spoken_language
+from unshackle.core.utilities import spoken_language, standard_resolution
 
 
 def rename(name: Optional[str]) -> str:
@@ -119,40 +119,14 @@ class Title:
                 context["edition"] = " ".join(first_track.edition)
 
         if primary_video_track:
-            width = getattr(primary_video_track, "width", primary_video_track.height)
-            resolution = min(width, primary_video_track.height)
-            try:
-                dar = getattr(primary_video_track, "other_display_aspect_ratio", None) or []
-                if dar and dar[0]:
-                    aspect_ratio = [int(float(plane)) for plane in str(dar[0]).split(":")]
-                    if len(aspect_ratio) == 1:
-                        aspect_ratio.append(1)
-                    ratio = aspect_ratio[0] / aspect_ratio[1]
-                    if ratio not in (16 / 9, 4 / 3, 9 / 16, 3 / 4):
-                        if abs(width - 3840) <= 50:
-                            width = 3840
-                        elif abs(width - 2560) <= 50:
-                            width = 2560
-                        elif abs(width - 1920) <= 50 or abs(width - 1620) <= 50:
-                            width = 1920
-                        elif abs(width - 1280) <= 50 or abs(width - 1080) <= 50:
-                            width = 1280
-
-                        resolution = int(max(width, primary_video_track.height) * (9 / 16))
-
-                        track_height = primary_video_track.height
-                        if abs(resolution - track_height) <= 10 or track_height in (2160, 1440, 1080, 720, 480):
-                            resolution = track_height
-            # garbage DAR strings or a missing height fall back to the plain min(width, height)
-            except (ValueError, TypeError, ZeroDivisionError):
-                pass
+            resolution = standard_resolution(primary_video_track.width, primary_video_track.height)
 
             scan_suffix = "i" if str(getattr(primary_video_track, "scan_type", "")).lower() == "interlaced" else "p"
 
             context.update(
                 {
-                    "quality": f"{resolution}{scan_suffix}",
-                    "resolution": str(resolution),
+                    "quality": f"{resolution}{scan_suffix}" if resolution else "",
+                    "resolution": str(resolution) if resolution else "",
                     "video": rename(VIDEO_CODEC_MAP.get(primary_video_track.format, primary_video_track.format)),
                 }
             )

@@ -418,7 +418,7 @@ def test_a_conversion_run_removes_its_rpus_so_the_next_base_makes_its_own(
     monkeypatch.setattr(Hybrid, "level_6", level_6)
     monkeypatch.setattr(hybrid_mod.console, "print", lambda *a, **k: None)
 
-    Hybrid([SimpleNamespace(id="b", path=base, height=2160, range=Video.Range.HDR10P)], "TEST")
+    Hybrid([SimpleNamespace(id="b", path=base, width=None, height=2160, range=Video.Range.HDR10P)], "TEST")
 
     assert seen == {"stale_l6": False, "active_fraction": 0.9}
     assert not (tmp_path / "RPU.bin").exists() and not (tmp_path / "RPU_L6.bin").exists()
@@ -446,8 +446,8 @@ def test_a_failed_resolution_removes_its_crop_edits_and_keeps_the_dv_files(
     monkeypatch.setattr(Hybrid, "injecting", failed_inject)
     monkeypatch.setattr(hybrid_mod.console, "print", lambda *a, **k: None)
     videos = [
-        SimpleNamespace(id="b", path=tmp_path / "base.mkv", height=2160, range=Video.Range.HDR10),
-        SimpleNamespace(id="d", path=tmp_path / "dv.mkv", height=1080, range=Video.Range.DV),
+        SimpleNamespace(id="b", path=tmp_path / "base.mkv", width=None, height=2160, range=Video.Range.HDR10),
+        SimpleNamespace(id="d", path=tmp_path / "dv.mkv", width=None, height=1080, range=Video.Range.DV),
     ]
 
     with pytest.raises(ValueError):
@@ -559,7 +559,7 @@ def test_hybrid_asks_for_hdr10plus_only_for_a_conversion_without_dv(
 
 
 def test_the_hybrid_step_gets_the_base_alone_when_there_is_no_dv(tmp_path: Path) -> None:
-    base = SimpleNamespace(id="base", path=tmp_path / "base.mp4", height=2160, range=Video.Range.HDR10P)
+    base = SimpleNamespace(id="base", path=tmp_path / "base.mp4", width=None, height=2160, range=Video.Range.HDR10P)
 
     tracks = hybrid_source_tracks(base, None)  # type: ignore[arg-type]
 

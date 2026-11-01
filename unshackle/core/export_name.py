@@ -15,9 +15,8 @@ from typing import Any, Optional
 from unshackle.core.constants import AnyTrack
 from unshackle.core.titles import Episode, Movie, Song, Title_T
 from unshackle.core.tracks import Audio, Video
-from unshackle.core.utilities import sanitize_filename
+from unshackle.core.utilities import sanitize_filename, standard_resolution
 
-STANDARD_HEIGHTS = (4320, 2160, 1440, 1080, 720, 576, 480, 360)
 MANIFEST_ORDER = (Video.Descriptor.DASH, Video.Descriptor.HLS, Video.Descriptor.ISM, Video.Descriptor.URL)
 MAX_SCOPE_PARTS = 3
 MAX_TITLE_LENGTH = 100
@@ -107,13 +106,8 @@ def scope_part(titles: Sequence[Title_T], seasons: Mapping[int, Collection[int]]
 
 
 def resolution(track: Video) -> Optional[int]:
-    """The resolution a release name uses: a letterboxed 1920x800 is 1080p, from its width."""
-    if not track.height:
-        return None
-    height = track.height
-    if track.width and track.width > height:
-        height = max(height, track.width * 9 // 16)
-    return next((std for std in STANDARD_HEIGHTS if abs(height - std) <= 16), height)
+    """The resolution a release name uses, the same as the {resolution} template variable."""
+    return standard_resolution(track.width, track.height) if track.height else None
 
 
 def audio_token(track: Audio) -> str:

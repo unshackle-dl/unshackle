@@ -14,7 +14,7 @@ from rich.rule import Rule
 from unshackle.core.binaries import FFMPEG, FFProbe, HDR10PlusTool
 from unshackle.core.config import config
 from unshackle.core.console import console
-from unshackle.core.utilities import log_event
+from unshackle.core.utilities import log_event, standard_resolution
 from unshackle.core.utils import dovi
 from unshackle.core.utils.subprocess import run_step
 
@@ -136,7 +136,11 @@ class Hybrid:
         hdr10_track = next((v for v in videos if v.range == Video.Range.HDR10), None)
         hdr10p_track = next((v for v in videos if v.range == Video.Range.HDR10P), None)
         track_for_res = hdr10_track or hdr10p_track
-        self.resolution = f"{track_for_res.height}p" if track_for_res and track_for_res.height else "Unknown"
+        self.resolution = (
+            f"{standard_resolution(track_for_res.width, track_for_res.height)}p"
+            if track_for_res and track_for_res.height
+            else "Unknown"
+        )
 
         console.print(Padding(Rule(f"[rule.text]HDR10+DV Hybrid ({self.resolution})"), (1, 2)))
 

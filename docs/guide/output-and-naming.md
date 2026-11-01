@@ -105,8 +105,8 @@ Every variable below is valid in both output and folder templates. unshackle tak
 | `title_type` | Media kind of the title | `movie`, `series`, `music` |
 | `year` | Release year | `2024` |
 | `source` | Service tag / class name (empty with `--no-source`) | `EXAMPLE` |
-| `quality` | Resolution with scan suffix | `1080p`, `2160p`, `576i` |
-| `resolution` | Resolution number only | `1080` |
+| `quality` | Standard resolution with scan suffix | `1080p`, `2160p`, `576i` |
+| `resolution` | Standard resolution number only | `1080` |
 | `video` | Video codec | `H.264`, `H.265` |
 | `hdr` | Dynamic-range label | `HDR`, `HDR10P`, `DV`, `DV.HDR`, `DV.HDR10P`, `HLG` |
 | `hfr` | High frame rate marker (frame rate > 30) | `HFR` |
@@ -114,6 +114,15 @@ Every variable below is valid in both output and folder templates. unshackle tak
 | `tag` | Release-group tag (from `config.tag` or `--tag`) | `TAG` |
 | `repack` | `REPACK` when the `--repack` flag is used | `REPACK` |
 | `lang_tag` | Result of your `language_tags` rules, if configured | `MULTi` |
+
+!!! note "`quality` and `resolution` use the standard height"
+    unshackle names a video by the nearest standard height (4320, 2160, 1440, 1080, 720, 576, 540,
+    480, 360 or 240) when it is within 10%. It measures the short side and the height that a 16:9
+    picture of the same width has, and uses the larger one. So a cropped 1920x800, a padded
+    1920x1088 and a 1080x1920 portrait video are all `1080p`. A short side within 16 lines of
+    2160, 1440 or 1080 gives that height, so an ultrawide 2560x1080 is `1080p`. A size with no
+    standard height near it, such as 1600x900, keeps its own height. `dl -q` and the
+    `dl --export` file name use the same rule.
 
 !!! note "How `language_tags` rules match"
     unshackle tries the rules in order, and they compare languages with the same [matching rules](downloading.md#exact-vs-fuzzy-matching) as `-l`: a rule condition of `en` matches `en-US`, `en-GB`, and any other `en-*` form, but `es-419` matches only `es-419`. Within a single rule, **all** conditions must match (AND logic) for it to apply. The first rule that fully matches wins. If none match, unshackle removes `{lang_tag?}` from the filename cleanly.

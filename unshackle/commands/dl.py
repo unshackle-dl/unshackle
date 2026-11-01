@@ -120,6 +120,7 @@ from unshackle.core.utilities import (
     partition_exclusions,
     plain_subtitle_tags,
     resolve_sort_langs,
+    standard_resolution,
     suggest_font_packages,
     time_elapsed_since,
 )
@@ -2723,9 +2724,7 @@ class dl:
                                 v for v in non_hybrid_tracks if v.range in non_hybrid_ranges
                             ]
                             for resolution in quality:
-                                if any(v.height == resolution for v in deliverable_pool):
-                                    continue
-                                if any(v.width and int(v.width * 9 / 16) == resolution for v in deliverable_pool):
+                                if any(at_resolution(v, resolution) for v in deliverable_pool):
                                     continue
                                 missing_resolutions.append(resolution)
 
@@ -2741,12 +2740,7 @@ class dl:
 
                                 if non_hybrid_ranges and non_hybrid_tracks:
                                     non_hybrid_selected = [
-                                        v
-                                        for v in non_hybrid_tracks
-                                        if any(
-                                            v.height == res or (v.width and int(v.width * (9 / 16)) == res)
-                                            for res in quality
-                                        )
+                                        v for v in non_hybrid_tracks if any(at_resolution(v, res) for res in quality)
                                     ]
                                     title.tracks.videos = Tracks.merge_video_selections(
                                         hybrid_selected, non_hybrid_selected
@@ -2758,9 +2752,7 @@ class dl:
                             title.tracks.by_resolutions(quality)
 
                             for resolution in quality:
-                                if any(v.height == resolution for v in title.tracks.videos):
-                                    continue
-                                if any(v.width and int(v.width * 9 / 16) == resolution for v in title.tracks.videos):
+                                if any(at_resolution(v, resolution) for v in title.tracks.videos):
                                     continue
                                 missing_resolutions.append(resolution)
 
@@ -2818,11 +2810,7 @@ class dl:
                                 candidates = [
                                     t
                                     for t in non_hybrid_tracks
-                                    if (
-                                        not resolution
-                                        or t.height == resolution
-                                        or (t.width and int(t.width * (9 / 16)) == resolution)
-                                    )
+                                    if (not resolution or at_resolution(t, resolution))
                                     and (not color_range or t.range == color_range)
                                     and (not codec or t.codec == codec)
                                     and (vlang is None or str(t.language) == vlang)
@@ -2851,11 +2839,7 @@ class dl:
                             candidates = [
                                 t
                                 for t in title.tracks.videos
-                                if (
-                                    not resolution
-                                    or t.height == resolution
-                                    or (t.width and int(t.width * (9 / 16)) == resolution)
-                                )
+                                if (not resolution or at_resolution(t, resolution))
                                 and (not color_range or t.range == color_range)
                                 and (not codec or t.codec == codec)
                                 and (vlang is None or str(t.language) == vlang)
@@ -2893,11 +2877,7 @@ class dl:
                                     candidates = [
                                         t
                                         for t in fallback_pool
-                                        if (
-                                            not resolution
-                                            or t.height == resolution
-                                            or (t.width and int(t.width * (9 / 16)) == resolution)
-                                        )
+                                        if (not resolution or at_resolution(t, resolution))
                                         and (not color_range or t.range == color_range)
                                         and (not codec or t.codec == codec)
                                         and (vlang is None or str(t.language) == vlang)
@@ -3653,7 +3633,7 @@ class dl:
                         head = next((v for v in video_tracks if v), None)
                         if head:
                             if len(quality) > 1:
-                                task_description += f" {head.height}p"
+                                task_description += f" {standard_resolution(head.width, head.height)}p"
                             if len(range_) > 1:
                                 task_description += f" {head.range.name}"
                             if len(vcodec) > 1:

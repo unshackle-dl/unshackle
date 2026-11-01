@@ -34,6 +34,7 @@ from unshackle.core.utilities import (
     matching_languages,
     original_tag,
     sanitize_filename,
+    standard_resolution,
     valid_language,
 )
 from unshackle.core.utils.collections import as_list, flatten
@@ -44,8 +45,12 @@ MP4BOX_OPEN_FAILED = re.compile(r"error while opening|Error opening file|Invalid
 
 
 def at_resolution(video: Video, res: int) -> bool:
-    """Whether a track has this height, or this height from a 16:9 width (a letterboxed encode)."""
-    return video.height == res or bool(video.width and int(video.width * 9 / 16) == res)
+    """Whether a track has this height, this height from a 16:9 width, or this standard resolution (a padded encode)."""
+    return (
+        video.height == res
+        or bool(video.width and int(video.width * 9 / 16) == res)
+        or standard_resolution(video.width, video.height) == res
+    )
 
 
 def file_track_ids(path: Path) -> dict[str, int]:
@@ -573,7 +578,7 @@ class Tracks:
             for group in groups.values():
                 matches = [x for x in group if x.height == resolution]
                 if not matches:
-                    matches = [x for x in group if x.width and int(x.width * (9 / 16)) == resolution]
+                    matches = [x for x in group if at_resolution(x, resolution)]
                 keep.update(id(x) for x in matches[: per_resolution or None])
         self.videos = [x for x in self.videos if id(x) in keep]
 

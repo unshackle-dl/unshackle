@@ -32,7 +32,6 @@ def hdr_tag(
         height=1080,
         format="AV1",
         scan_type="Progressive",
-        other_display_aspect_ratio=["16:9"],
         hdr_format_commercial=commercial,
         hdr_format=hdr_format,
         hdr_format_profile=profile,

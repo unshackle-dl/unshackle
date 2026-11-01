@@ -10,6 +10,7 @@ import time
 from typing import Any, Callable, Optional
 
 from unshackle.core.constants import AnyTrack
+from unshackle.core.utilities import standard_resolution
 
 JOB_PROGRESS_TERMINAL_STATES = {"Downloaded", "Decrypted", "[yellow]SKIPPED"}
 PROGRESS_EMIT_INTERVAL = 0.25
@@ -26,9 +27,9 @@ def track_progress_label(track: AnyTrack) -> str:
     track_type = type(track).__name__
     if track_type == "Video":
         parts = ["video"]
-        height = getattr(track, "height", None)
-        if height:
-            parts.append(f"{height}p")
+        resolution = standard_resolution(getattr(track, "width", None), getattr(track, "height", None))
+        if resolution:
+            parts.append(f"{resolution}p")
         track_range = getattr(track, "range", None)
         if track_range is not None:
             parts.append(track_range.value)

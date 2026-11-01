@@ -76,7 +76,6 @@ def test_codec_names_renames_video_and_each_hdr_part(monkeypatch: pytest.MonkeyP
         height=2160,
         format="HEVC",
         scan_type="Progressive",
-        other_display_aspect_ratio=["16:9"],
         hdr_format_commercial="HDR10+",
         hdr_format="Dolby Vision, Version 1.0, Profile 8.1",
         transfer_characteristics=None,

@@ -122,6 +122,29 @@ def import_module_by_path(path: Path) -> ModuleType:
     return module
 
 
+RESOLUTION_TIERS = (4320, 2160, 1440, 1080, 720, 576, 540, 480, 360, 240)
+
+
+def standard_resolution(width: Optional[int], height: Optional[int]) -> Optional[int]:
+    """The resolution a release name uses: the nearest standard height within 10%, from the short side or a 16:9 width.
+
+    A cropped 1920x800, a padded 1920x1088 and a 1080x1920 portrait picture are all 1080. A size with no
+    standard height near it keeps its own, and a picture with no size gives None.
+    """
+    sides = [side for side in (width, height) if side]
+    if not sides:
+        return None
+    short, long = min(sides), max(sides)
+    # naming policy: a short side near 2160, 1440 or 1080 names the picture, so an ultrawide 2560x1080 is 1080
+    # as other media tools name it, even though a 1440 scope crop has the same size
+    by_height = next((tier for tier in (2160, 1440, 1080) if abs(short - tier) <= 16), None)
+    if by_height:
+        return by_height
+    equivalent = max(short, long * 9 / 16)
+    tier = min(RESOLUTION_TIERS, key=lambda t: abs(t - equivalent))
+    return tier if abs(tier - equivalent) <= tier / 10 else round(equivalent)
+
+
 def sanitize_filename(filename: str, spacer: str = ".", unicode: Optional[bool] = None) -> str:
     """
     Sanitise a string to be filename safe.
