@@ -2330,6 +2330,8 @@ and contents, and <code>unshackle env info</code> to show where unshackle stores
 file: a missing header line, a byte-order mark, spaces in place of tabs, and
 rows a text editor broke. unshackle refuses a JSON export. Export the cookies
 again in Netscape format.</p>
+<p>unshackle sends each cookie only to the host and path that its row names, as a
+browser does. A domain that starts with a dot also covers its subdomains.</p>
 </li>
 <li>
 <p><strong>Credentials</strong>: store a username and password per service in your config:</p>
