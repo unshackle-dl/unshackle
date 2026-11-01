@@ -556,7 +556,13 @@ def resolve_manifest_data(tracks: Tracks, manifests: list) -> None:
 
                 from unshackle.core.manifests import DASH
 
-                local_tracks = DASH(etree.fromstring(raw), m_url).to_tracks(language=fallback_lang)
+                skip = manifest_info.get("filtered_period_ids") or []
+                local_tracks = DASH(etree.fromstring(raw), m_url).to_tracks(
+                    language=fallback_lang, period_filter=(lambda p: p.get("id") in skip) if skip else None
+                )
+                if skip:
+                    for local_track in local_tracks:
+                        local_track.data["dash"]["filtered_period_ids"] = skip
             elif m_type == "ism":
                 from lxml import etree
 

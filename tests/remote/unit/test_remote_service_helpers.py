@@ -675,3 +675,31 @@ def test_a_service_profile_option_travels_nested_and_keeps_the_credential_profil
 
 def test_no_dl_params_when_the_ctx_has_no_selection() -> None:
     assert "dl_params" not in _sent_create_data({}, {})
+
+
+def test_resolve_manifest_data_keeps_the_periods_the_server_filtered() -> None:
+    """A service drops periods (a mid-roll ad) on the server only. The client must skip the
+    same periods after it re-parses the manifest, or a remote download joins them back in."""
+    from unshackle.core.api.handlers import extract_manifests
+    from unshackle.core.manifests import DASH
+    from unshackle.core.remote_service import resolve_manifest_data
+
+    periods = "".join(
+        f"""<Period id="{pid}" duration="PT1S"><AdaptationSet contentType="video" mimeType="video/mp4" lang="en">
+        <Representation id="v0" codecs="avc1.640028" bandwidth="1000000" width="1920" height="1080">
+        <SegmentTemplate timescale="1" duration="1" startNumber="1" initialization="{pid}/i.mp4"
+        media="{pid}/$Number$.m4s"/></Representation></AdaptationSet></Period>"""
+        for pid in ("main1", "ad1", "main2")
+    )
+    mpd = f"""<?xml version="1.0"?><MPD xmlns="urn:mpeg:dash:schema:mpd:2011" type="static"
+    mediaPresentationDuration="PT3S"><BaseURL>https://x/</BaseURL>{periods}</MPD>"""
+    server = DASH.from_text(mpd, url="https://x/manifest.mpd").to_tracks(language="en")
+    for track in server:
+        track.data["dash"]["filtered_period_ids"] = ["ad1"]
+
+    remote = deserialize_video(serialize_video_track(server.videos[0]))
+    tracks = build_tracks({"video": [], "audio": [], "subtitles": []})
+    tracks.videos.append(remote)
+    resolve_manifest_data(tracks, extract_manifests(server))
+
+    assert remote.data["dash"]["filtered_period_ids"] == ["ad1"]

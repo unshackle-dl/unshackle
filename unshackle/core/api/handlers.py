@@ -1543,6 +1543,7 @@ def extract_manifests(tracks: Tracks) -> List[Dict[str, Any]]:
                     "type": "dash",
                     "url": manifest_url,
                     "data": base64.b64encode(compressed).decode("ascii"),
+                    "filtered_period_ids": list(track.data["dash"].get("filtered_period_ids") or []),
                 }
             )
         elif track.data.get("ism") and track.data["ism"].get("manifest") is not None:
