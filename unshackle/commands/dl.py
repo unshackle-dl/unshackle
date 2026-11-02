@@ -4506,7 +4506,7 @@ class dl:
         With ``decrypt=False`` the downloader already decrypted the segments in place, so a
         failure can only flag and raise; the next run skips the flagged pair.
         """
-        keys = getattr(drm, "content_keys", None)
+        keys: Any = getattr(drm, "content_keys", None)
         if keys is None:
             if decrypt:
                 drm.decrypt(path)
@@ -4522,25 +4522,39 @@ class dl:
                 self.LICENSE_KEY_CACHE.pop(kid)
             return key
 
-        def relicense(dropped: set[UUID]) -> None:
-            """Licence again, then ask for each dropped KID that is still without a content key.
+        def relicense(bad: dict[UUID, str], kids: dict[UUID, Vault]) -> None:
+            """Licence again for each dropped KID, then settle each dropped pair against the new key.
 
             prepare_drm licenses only for a KID it is told to need, so without the second call a
-            track that still holds other content keys would decrypt without the dropped one.
+            track that still holds other content keys would decrypt without the dropped one. A
+            licence can replace the DRM's dict, so ``keys`` is read from the DRM again afterwards.
+            A licence key equal to the dropped one proves the decode check wrong and clears its flag.
             """
+            nonlocal keys
             if not licence:
                 return
             licence(drm, track_kid=track_kid)
-            for kid in sorted(dropped):
-                # prepare_drm can replace the dict, so read it from the DRM each time
+            for kid in sorted(bad):
                 if kid != track_kid and kid not in getattr(drm, "content_keys", {}):
                     licence(drm, track_kid=kid)
+            keys = getattr(drm, "content_keys", keys)
+            for kid, key in bad.items():
+                new = keys.get(kid)
+                if new is None:
+                    continue
+                source = self.vaults.sources.get(kid)
+                if source is None:
+                    if new == key:
+                        self.vaults.unflag_bad_key(kid, key)
+                        self.flush_vault_writes([partial(self.vaults.add_key, kid, key)])
+                    elif not self.vaults.held_locally(kid, new):
+                        self.flush_vault_writes([partial(self.vaults.add_key, kid, new)])
+                elif new == key and kid in kids and source[1] is kids[kid]:
+                    raise ValueError(f"{key} from {kids[kid].name} was bad and no other source has the key")
 
         known_bad = flagged_kids()
         if known_bad and licence:
-            for kid in known_bad:
-                drop(kid)
-            relicense(set(known_bad))
+            relicense({kid: drop(kid) for kid in known_bad}, {})
 
         def vault_kids() -> dict[UUID, Vault]:
             """The KIDs whose key on the track came from a vault, with that vault."""
@@ -4625,20 +4639,7 @@ class dl:
                     raise ValueError("The content key from the vault did not decrypt the track; run again")
                 path.unlink()
                 os.link(backup, path)
-                relicense(set(bad))
-                for kid, key in bad.items():
-                    new = keys.get(kid)
-                    if new is None:
-                        continue
-                    source = self.vaults.sources.get(kid)
-                    if source is None:
-                        if new == key:
-                            self.vaults.unflag_bad_key(kid, key)
-                            self.flush_vault_writes([partial(self.vaults.add_key, kid, key)])
-                        elif not self.vaults.held_locally(kid, new):
-                            self.flush_vault_writes([partial(self.vaults.add_key, kid, new)])
-                    elif new == key and kid in kids and source[1] is kids[kid]:
-                        raise ValueError(f"{key} from {kids[kid].name} was bad and no other source has the key")
+                relicense(bad, kids)
             raise ValueError("No vault or CDM produced a content key that decrypts the track")
         finally:
             backup.unlink(missing_ok=True)

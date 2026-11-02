@@ -265,7 +265,10 @@ def test_retry_takes_the_next_parallel_answer_without_a_new_request(tmp_path: Pa
     assert fast.calls == 1 and slow.calls == 1
 
 
-def test_cdm_returning_the_flagged_key_clears_the_flag(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize("replace", [False, True])
+def test_cdm_returning_the_flagged_key_clears_the_flag(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, replace: bool
+) -> None:
     """A decode failure on a key the CDM then confirms is a false positive: unflag, keep the file."""
     local = SQLite("local", tmp_path / "local.db")
     poisoned = Remote("poisoned", tmp_path / "poisoned.db")
@@ -280,11 +283,65 @@ def test_cdm_returning_the_flagged_key_clears_the_flag(tmp_path: Path, monkeypat
 
     def licence(drm: FakeDRM, track_kid: UUID) -> None:
         assert vaults.get_key(KID) == (None, None)
-        drm.content_keys[KID] = BAD  # the CDM answers with the same key
+        if replace:
+            drm.content_keys = {KID: BAD}  # a CDM licence builds a new dict
+        else:
+            drm.content_keys[KID] = BAD  # the CDM answers with the same key
 
     cmd.decrypt_verified(drm, path, licence, KID)
     assert path.read_bytes() == b"plain:" + BAD.encode()
     assert not local.is_bad_key(KID, BAD)
+
+
+def test_a_replacement_key_in_a_new_dict_is_checked_and_stored(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    local = SQLite("local", tmp_path / "local.db")
+    poisoned = Remote("poisoned", tmp_path / "poisoned.db")
+    poisoned.add_key("SVC", KID, BAD)
+    vaults = Vaults("SVC")
+    vaults.vaults = [local, poisoned]
+    assert vaults.get_key(KID) == (BAD, poisoned)
+    cmd = make_cmd(monkeypatch, vaults)
+    path = tmp_path / "video.mp4"
+    path.write_bytes(b"cipher")
+    drm = FakeDRM({KID: BAD})
+    other = Remote("other", tmp_path / "other.db")
+    other.add_key("SVC", KID, GOOD)
+
+    def licence(drm: FakeDRM, track_kid: UUID) -> None:
+        vaults.vaults.append(other)
+        drm.content_keys = {KID: vaults.get_key(KID)[0]}
+
+    cmd.decrypt_verified(drm, path, licence, KID)
+    cmd.wait_vault_writes()
+    assert path.read_bytes() == b"plain:" + GOOD.encode()
+    assert local.get_key(KID, "SVC") == GOOD
+
+
+@pytest.mark.parametrize("replace", [True, False])
+def test_a_cdm_that_confirms_a_key_flagged_on_entry_clears_the_flag(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, replace: bool
+) -> None:
+    """Another track flagged the pair, then this track's CDM licence answers with the same key."""
+    local = SQLite("local", tmp_path / "local.db")
+    vaults = Vaults("SVC")
+    vaults.vaults = [local]
+    cmd = make_cmd(monkeypatch, vaults)
+    vaults.flag_bad_key(KID, BAD)
+    path = tmp_path / "video.mp4"
+    path.write_bytes(b"cipher")
+    drm = FakeDRM({KID: BAD})
+
+    def licence(drm: FakeDRM, track_kid: UUID) -> None:
+        if replace:
+            drm.content_keys = {KID: BAD}
+        else:
+            drm.content_keys[KID] = BAD
+
+    cmd.decrypt_verified(drm, path, licence, KID)
+    cmd.wait_vault_writes()
+    assert path.read_bytes() == b"plain:" + BAD.encode()
+    assert not local.is_bad_key(KID, BAD)
+    assert local.get_key(KID, "SVC") == BAD
 
 
 def test_a_licence_key_that_replaces_a_bad_local_pair_is_stored(
