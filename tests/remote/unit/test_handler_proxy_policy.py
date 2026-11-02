@@ -246,6 +246,13 @@ class TestDownloadGates:
             handlers.enforce_download_gates({"service": "EXAMPLE", "client_region": "gb"}, request("plainkey"))
         assert exc_info.value.error_code == APIErrorCode.INVALID_PROXY
 
+    def test_download_proxy_on_local_network_refused(self):
+        with pytest.raises(APIError) as exc_info:
+            handlers.enforce_download_gates(
+                {"service": "EXAMPLE", "proxy_download": "http://127.0.0.1:9"}, request("plainkey")
+            )
+        assert exc_info.value.error_code == APIErrorCode.INVALID_PROXY
+
 
 class TestDownloadEnforcement:
     """The server_proxy stamp survives from submission to the dl construction."""
@@ -349,3 +356,57 @@ def test_session_create_builds_service_off_the_event_loop(monkeypatch):
     assert seen["thread"] != threading.get_ident()
     assert [r["message"] for r in seen["buffer"].since(0)] == ["checking proxy"]
     assert json.loads(response.body)["error_code"] == "INVALID_PROXY"
+
+
+@pytest.mark.parametrize(
+    "proxy",
+    [
+        "http://127.0.0.1:8080",
+        "http://localhost:3128",
+        "socks5://user:pass@10.0.0.5:1080",
+        "https://[::1]:8443",
+        "http://169.254.169.254",
+        "socks5h://192.168.1.1:1080",
+        "http://198.18.0.1:8080",
+        "http://[2002:7f00:1::]:8080",
+        "http://foo.localhost:8080",
+        "http://127.0.0.1:8080\\@example.com",
+        "http://%31%32%37.0.0.1:8080",
+    ],
+)
+def test_local_proxy_uri_refused_without_server_proxy(proxy):
+    with pytest.raises(APIError) as exc_info:
+        handlers.resolve_handler_proxy({"proxy": proxy}, "EXAMPLE", request("plainkey"))
+    assert exc_info.value.error_code == APIErrorCode.INVALID_PROXY
+    assert "pass" not in exc_info.value.message  # credentials never echo back
+
+
+@pytest.mark.parametrize("key", ["proxykey", "adminkey"])  # adminkey has no serve.users entry
+def test_local_proxy_uri_allowed_with_server_proxy_or_admin(monkeypatch, key):
+    monkeypatch.setattr(handlers, "initialize_proxy_providers", lambda: [])
+    proxy, _ = handlers.resolve_handler_proxy({"proxy": "http://127.0.0.1:8080"}, "EXAMPLE", request(key))
+    assert proxy == "http://127.0.0.1:8080"
+
+
+def test_hostname_resolving_to_a_private_address_refused(monkeypatch):
+    monkeypatch.setattr(handlers.socket, "getaddrinfo", lambda host, port: [(2, 1, 6, "", ("10.0.0.7", 0))])
+    with pytest.raises(APIError) as exc_info:
+        handlers.resolve_handler_proxy({"proxy": "http://proxy.lan:3128"}, "EXAMPLE", request("plainkey"))
+    assert exc_info.value.error_code == APIErrorCode.INVALID_PROXY
+
+
+def test_local_proxy_uri_ignored_under_no_proxy():
+    handlers.resolve_handler_proxy({"proxy": "http://127.0.0.1:8080", "no_proxy": True}, "EXAMPLE", request("plainkey"))
+
+
+def test_server_built_loopback_proxies_pass_without_server_proxy(monkeypatch):
+    """The check reads the client's value, so the loopback URIs the server builds for tunnel: and controld:// pass."""
+    monkeypatch.setattr(handlers, "tunnel_proxy", lambda tunnel_id, key: "http://u:p@127.0.0.1:5000")
+    proxy, _ = handlers.resolve_handler_proxy({"proxy": "tunnel:abc"}, "EXAMPLE", request("plainkey"))
+    assert proxy == "http://u:p@127.0.0.1:5000"
+
+    monkeypatch.setattr(handlers, "resolve_proxy", lambda proxy, providers: "http://127.0.0.1:5001")
+    proxy, _ = handlers.resolve_handler_proxy(
+        {"proxy": "controld://abc@dns.controld.com"}, "EXAMPLE", request("plainkey")
+    )
+    assert proxy == "http://127.0.0.1:5001"

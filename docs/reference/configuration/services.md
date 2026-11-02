@@ -309,6 +309,12 @@ to let that API key send a country code or a `provider:country` value, and to le
 pick a proxy for the client's region and for a service geofence. The client reports its own
 region; a client that reports none is not blocked.
 
+Without `server_proxy`, the server refuses a proxy URI whose host is not a public address:
+loopback, private, link-local and other special-purpose addresses, and `localhost`. This also
+applies to a server on a LAN, so a client proxy on that LAN needs `server_proxy` or an admin key.
+The server checks the proxy values the job uses, including a `proxy` default from the server's
+own config.
+
 ```yaml
 serve:
   api_secret: change-me

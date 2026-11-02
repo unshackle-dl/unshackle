@@ -151,7 +151,7 @@ For a service with `anonymous_search`, the server does not log in and ignores `c
 | `service` | string | yes | - | Service tag. |
 | `query` | string | yes | - | Search query. |
 | `profile` | string | no | `null` | Credential/cookie profile to use. |
-| `proxy` | string | no | `null` | Full proxy URI, a Control D resolver as `controld://<resolver>@dns.controld.com`, or a country code when the API key has `server_proxy`. |
+| `proxy` | string | no | `null` | Full proxy URI on a public host, a Control D resolver as `controld://<resolver>@dns.controld.com`, or a country code when the API key has `server_proxy`. |
 | `no_proxy` | boolean | no | `false` | Force-disable all proxy use. |
 | `credentials`, `cookies`, `cache` | - | no | `null` | Your own login material, on a `--remote-only` server only. See [Client cache on a remote-only server](#client-cache-on-a-remote-only-server). |
 
@@ -200,7 +200,7 @@ Get the list of titles behind a title ID, for example episodes or a movie, witho
 | `service` | string | yes | Service tag. |
 | `title_id` | string | yes | Title identifier. |
 | `profile` | string | no | Credential/cookie profile. |
-| `proxy` | string | no | Full proxy URI, a Control D resolver as `controld://<resolver>@dns.controld.com`, or a country code when the API key has `server_proxy`. |
+| `proxy` | string | no | Full proxy URI on a public host, a Control D resolver as `controld://<resolver>@dns.controld.com`, or a country code when the API key has `server_proxy`. |
 | `no_proxy` | boolean | no | Force-disable proxy. |
 | `cdm_type` | string | no | Preferred CDM type. |
 | `credentials`, `cookies`, `cache` | - | no | Your own login material, on a `--remote-only` server only. See [Client cache on a remote-only server](#client-cache-on-a-remote-only-server). |
@@ -468,7 +468,7 @@ Make a download job. It requires `service` and `title_id`. Every other field is 
 | `all_drm` | boolean | `false` | License each track with both Widevine and PlayReady. Needs a CDM for each DRM system. Key vaults are read first; `cdm_only: true` sends a challenge for each system. The server refuses it with `cdm`, which selects one device. |
 | `export` | boolean | `false` | Export manifest/keys/subs to JSON. |
 | `cdm_only` | boolean | `null` | Force CDM-only (`true`) or vault-only (`false`) key retrieval. |
-| `proxy` / `no_proxy` / `no_proxy_download` / `proxy_download` | string / bool / bool / string | `null` / `false` / `false` / `null` | Proxy controls. `proxy` and `proxy_download` must be full proxy URIs unless the API key has `server_proxy`. A Control D resolver, `controld://<resolver>@dns.controld.com`, counts as a full proxy URI: the server runs a forwarder for it. |
+| `proxy` / `no_proxy` / `no_proxy_download` / `proxy_download` | string / bool / bool / string | `null` / `false` / `false` / `null` | Proxy controls. `proxy` and `proxy_download` must be full proxy URIs on a public host unless the API key has `server_proxy`. A Control D resolver, `controld://<resolver>@dns.controld.com`, counts as a full proxy URI: the server runs a forwarder for it. |
 | `no_folder` / `no_source` / `no_mux` | boolean | `false` | Output/mux controls. |
 | `sample` | boolean/string | `null` | Download a short sample and write it with a `SAMPLE` tag on the filename in a `Sample` folder inside the output folder. `true` is 60 seconds from 2 minutes in; `"0-60"` is a window in seconds. |
 | `include_sample` | boolean | `false` | Download the full title, then also cut a 60 second sample from each muxed file into a `Sample` folder next to it. |
@@ -973,7 +973,7 @@ Make a remote session for a service and title. Authentication runs asynchronousl
 
 Service CLI options also travel in a nested `service_params` object. When the body has `service_params`, the server reads service options only from it, and a flat key with the same name stays a `dl` value. `profile` at the top level always means the credentials profile, never a service's own `--profile` option.
 
-The `proxy` value must be a full proxy URI, unless the operator gives your API key `server_proxy` in the `serve.users` config. Without `server_proxy`, the server does not resolve country codes with its own proxy providers. It rejects the request with `INVALID_PROXY` when no `proxy` is set and the reported `client_region` differs from the server's region. A request that reports no `client_region` is not blocked. Pass `proxy` with your own proxy, or `no_proxy` to accept the server's own connection. With `server_proxy`, the server resolves a country code and picks a proxy for your `client_region` itself. A Control D resolver, `controld://<resolver>@dns.controld.com`, counts as a full proxy URI: the server runs a forwarder for it and needs no Control D configuration of its own.
+The `proxy` value must be a full proxy URI, unless the operator gives your API key `server_proxy` in the `serve.users` config. Without `server_proxy`, a proxy URI gets `INVALID_PROXY` when its host is not a public address or is not a plain host name or IP address. Without `server_proxy`, the server does not resolve country codes with its own proxy providers. It rejects the request with `INVALID_PROXY` when no `proxy` is set and the reported `client_region` differs from the server's region. A request that reports no `client_region` is not blocked. Pass `proxy` with your own proxy, or `no_proxy` to accept the server's own connection. With `server_proxy`, the server resolves a country code and picks a proxy for your `client_region` itself. A Control D resolver, `controld://<resolver>@dns.controld.com`, counts as a full proxy URI: the server runs a forwarder for it and needs no Control D configuration of its own.
 
 === "Response `200`"
 

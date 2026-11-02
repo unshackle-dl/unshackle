@@ -4,6 +4,7 @@ import enum
 import json
 import logging
 import re
+import socket
 import threading
 import time
 import uuid
@@ -16,6 +17,7 @@ from functools import partial
 from http.cookiejar import CookieJar
 from pathlib import Path
 from typing import AbstractSet, Any, Callable, Dict, Iterable, List, Optional, Set, cast
+from urllib.parse import urlsplit
 
 import click
 from aiohttp import web
@@ -32,14 +34,23 @@ from unshackle.core.config import config, load_yaml
 from unshackle.core.constants import AUDIO_CODEC_MAP, DYNAMIC_RANGE_MAP, VIDEO_CODEC_MAP, AnyTrack
 from unshackle.core.drm import BlowfishStripe, cbcs
 from unshackle.core.providers.anilist import parse_anilist_ref
-from unshackle.core.proxies.resolve import initialize_proxy_providers, resolve_proxy
+from unshackle.core.proxies.resolve import initialize_proxy_providers, is_loopback, resolve_proxy
 from unshackle.core.services import Services
 from unshackle.core.session import RnetSession, utf8_text
 from unshackle.core.titles import Episode, Movie, Song, Title_T
 from unshackle.core.titles.music import SONG_FIELDS
 from unshackle.core.titles.title import rename
 from unshackle.core.tracks import Audio, Subtitle, Tracks, Video
-from unshackle.core.tunnel import HEARTBEAT, MAX_MESSAGE, MAX_TUNNELS, TUNNELS, Tunnel, tunnel_proxy
+from unshackle.core.tunnel import (
+    HEARTBEAT,
+    MAX_MESSAGE,
+    MAX_TUNNELS,
+    TUNNELS,
+    Tunnel,
+    is_ip_literal,
+    is_public_ip,
+    tunnel_proxy,
+)
 from unshackle.core.utilities import declared_kwargs, kind_only_conflict, original_tag
 from unshackle.core.utils.click_types import AUDIO_CODEC_LIST, QUALITY_LIST, SUBTITLE_CODEC, VIDEO_CODEC_LIST
 from unshackle.core.utils.collections import ci_get
@@ -4564,6 +4575,33 @@ async def get_validated_session(session_id: str, request: Optional[web.Request])
     return session
 
 
+def local_proxy_refusal(proxy: str) -> Optional[str]:
+    """Why an http(s) or socks proxy URI may reach the server's own machine or network, or None when it cannot.
+
+    The host must be a plain DNS name or an IP literal: an HTTP client that follows the WHATWG URL standard
+    reads a backslash or a percent-escape in the authority differently from ``urlsplit``.
+    """
+    if not re.match(r"^(https?://|socks)", proxy):
+        return None
+    try:
+        host = urlsplit(proxy).hostname or ""
+    except ValueError:
+        host = ""
+    literal = is_ip_literal(host)
+    if "\\" in proxy or not (literal or re.fullmatch(r"[a-z0-9._-]+", host)):
+        return "Proxy URI has no plain host name or IP address"
+    if literal or is_loopback(proxy):
+        addresses = {host}
+    else:
+        try:
+            addresses = {str(info[4][0]) for info in socket.getaddrinfo(host, None)}
+        except (socket.gaierror, UnicodeError):
+            return None  # an unresolvable proxy fails at connect time anyway
+    if not all(is_public_ip(address) for address in addresses):
+        return f"Proxy host {sanitize_log(host)} is not a public address"
+    return None
+
+
 def resolve_handler_proxy(
     data: Dict[str, Any], normalized_service: str, request: Optional[web.Request] = None
 ) -> tuple[Optional[str], list]:
@@ -4594,6 +4632,11 @@ def resolve_handler_proxy(
             "A server-account service takes a country code or no proxy, not a proxy URI",
             details={"service": normalized_service},
         )
+
+    if isinstance(proxy_param, str) and not no_proxy and not (allowed or is_admin(request)):
+        refusal = local_proxy_refusal(proxy_param)
+        if refusal:
+            raise APIError(APIErrorCode.INVALID_PROXY, refusal, details={"service": normalized_service})
 
     if isinstance(proxy_param, str) and proxy_param.startswith("tunnel:") and not no_proxy:
         proxy_param = tunnel_proxy(

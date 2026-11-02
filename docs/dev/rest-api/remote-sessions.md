@@ -136,7 +136,7 @@ hood the client walks a remote session through its lifecycle.
     - Local **cookies**, compressed and base64-encoded
     - A resolved **proxy**, or, if you did not set one, your detected
       **client region**. A client that reports no region is not blocked. The
-      proxy must be a full proxy URI unless the operator gives your API key
+      proxy must be a full proxy URI on a public host unless the operator gives your API key
       `server_proxy`. Without `server_proxy` the server does not resolve country
       codes with its own proxy providers, and it rejects the remote session when
       it sits in a different region from the reported one, asking the client to
