@@ -16,7 +16,7 @@ from aiohttp import web
 
 import unshackle.core.config as config_module
 from unshackle.core import binaries
-from unshackle.core.api import cors_middleware, no_5xx_middleware, setup_routes, setup_swagger
+from unshackle.core.api import cors_middleware, no_5xx_middleware, setup_routes
 from unshackle.core.api.compression import compression_middleware
 from unshackle.core.api.events import publish_refresh_events, publish_service_event
 from unshackle.core.api.handlers import (
@@ -493,29 +493,17 @@ def serve(
         serve_config, playready_config = _build_cdm_config(config.serve, api_secret, serve_widevine, serve_playready)
         prd_devices = playready_config["devices"]
 
+        base_middlewares = [cors_middleware, no_5xx_middleware, stats_middleware]
         if api_only:
             log.info("Starting REST API server (pywidevine/pyplayready CDM disabled)")
-            if no_key:
-                app = web.Application(
-                    middlewares=[
-                        cors_middleware,
-                        no_5xx_middleware,
-                        stats_middleware,
-                        dashboard_authentication,
-                        compression_middleware,
-                    ]
-                )
-            else:
-                app = web.Application(
-                    middlewares=[
-                        cors_middleware,
-                        no_5xx_middleware,
-                        stats_middleware,
-                        dashboard_authentication,
-                        api_key_authentication,
-                        compression_middleware,
-                    ]
-                )
+            app = web.Application(
+                middlewares=[
+                    *base_middlewares,
+                    dashboard_authentication,
+                    *([] if no_key else [api_key_authentication]),
+                    compression_middleware,
+                ]
+            )
             app["config"] = serve_config
             app["debug_api"] = debug_api
 
@@ -523,9 +511,8 @@ def serve(
             _install_service_refresh(app)
             _install_config_reload(app, no_key=no_key, serve_widevine=serve_widevine, serve_playready=serve_playready)
 
-            setup_routes(app, remote_only=remote_only, dashboard=dashboard)
+            setup_routes(app, remote_only=remote_only, dashboard=dashboard, docs=not remote_only)
             if not remote_only:
-                setup_swagger(app, dashboard=dashboard)
                 log.info(f"REST API endpoints available at http://{host}:{port}/api/")
                 log.info(f"Swagger UI available at http://{host}:{port}/api/docs/")
             else:
@@ -546,18 +533,17 @@ def serve(
                     secret_key = request_secret_key(request)
                     if request.path.startswith(DASHBOARD_PREFIX):
                         return await handler(request)
-                    if (
-                        request.path != "/api/health"
-                        and secret_key
-                        and any(hmac.compare_digest(secret_key, k) for k in request.app["config"]["users"])
-                    ):
+                    known = bool(secret_key) and any(
+                        hmac.compare_digest(secret_key, k) for k in request.app["config"]["users"]
+                    )
+                    if request.path != "/api/health" and secret_key and known:
                         limited = rate_limit_response(secret_key)
                         if limited is not None:
                             return limited
                     if serve_playready_flag and request.path in ("/playready", "/playready/"):
                         response = await handler(request)
                     elif secret_key and not request.headers.get("X-Secret-Key"):
-                        if not any(hmac.compare_digest(secret_key, k) for k in request.app["config"]["users"]):
+                        if not known:
                             return web.json_response({"status": 401, "message": "Secret Key is Invalid."}, status=401)
                         response = await handler(request)
                     else:
@@ -574,30 +560,15 @@ def serve(
 
                 return serve_authentication
 
-            if no_key:
-                app = web.Application(
-                    middlewares=[
-                        cors_middleware,
-                        no_5xx_middleware,
-                        stats_middleware,
-                        cdm_log_middleware,
-                        dashboard_authentication,
-                        compression_middleware,
-                    ]
-                )
-            else:
-                serve_auth = create_serve_authentication(serve_playready and bool(prd_devices))
-                app = web.Application(
-                    middlewares=[
-                        cors_middleware,
-                        no_5xx_middleware,
-                        stats_middleware,
-                        cdm_log_middleware,
-                        dashboard_authentication,
-                        serve_auth,
-                        compression_middleware,
-                    ]
-                )
+            app = web.Application(
+                middlewares=[
+                    *base_middlewares,
+                    cdm_log_middleware,
+                    dashboard_authentication,
+                    *([] if no_key else [create_serve_authentication(serve_playready and bool(prd_devices))]),
+                    compression_middleware,
+                ]
+            )
 
             app["config"] = serve_config
             app["debug_api"] = debug_api
@@ -637,7 +608,9 @@ def serve(
             elif serve_playready:
                 log.info("No PlayReady devices found, skipping PlayReady CDM endpoints")
 
-            setup_routes(app, remote_only=remote_only, dashboard=dashboard, cdm_only=cdm_only)
+            setup_routes(
+                app, remote_only=remote_only, dashboard=dashboard, cdm_only=cdm_only, docs=not (remote_only or cdm_only)
+            )
 
             if serve_widevine:
                 log.info(f"Widevine CDM endpoints available at http://{host}:{port}/{{device}}/open")
@@ -646,7 +619,6 @@ def serve(
             elif remote_only:
                 log.info(f"Remote service endpoints available at http://{host}:{port}/api/session/")
             else:
-                setup_swagger(app, dashboard=dashboard)
                 log.info(f"REST API endpoints available at http://{host}:{port}/api/")
                 log.info(f"Swagger UI available at http://{host}:{port}/api/docs/")
             log.info("(Press CTRL+C to quit)")

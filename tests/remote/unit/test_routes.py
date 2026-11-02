@@ -347,3 +347,13 @@ def test_setup_routes_cdm_only_keeps_health_and_dashboard_only() -> None:
     assert "/api/health" in paths
     assert any(path.startswith("/api/dashboard/") for path in paths)
     assert all(path == "/api/health" or path.startswith("/api/dashboard/") for path in paths)
+
+
+def test_setup_routes_with_docs_registers_each_route_once() -> None:
+    """Swagger registers the routes itself, so docs add none twice and drop none."""
+    plain, documented = web.Application(), web.Application()
+    setup_routes(plain, dashboard=True)
+    setup_routes(documented, dashboard=True, docs=True)
+    routes_with_docs = Counter((r.method, r.resource.canonical) for r in documented.router.routes())
+    assert max(routes_with_docs.values()) == 1
+    assert {route for route in routes_with_docs if not route[1].startswith("/api/docs")} == set(collect_paths(plain))

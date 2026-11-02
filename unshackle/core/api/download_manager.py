@@ -913,7 +913,7 @@ class DownloadQueueManager:
         jobs_to_remove = []
 
         for job_id, job in self._jobs.items():
-            if job.status in [JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED]:
+            if job.status in TERMINAL_STATUSES:
                 if job.completed_time and job.completed_time < cutoff_time:
                     jobs_to_remove.append(job_id)
                 elif not job.completed_time and job.created_time < cutoff_time:

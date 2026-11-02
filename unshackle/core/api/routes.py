@@ -142,6 +142,14 @@ def api_handler(handler: Handler) -> Handler:
     return wrapper
 
 
+async def json_body(request: web.Request) -> Any:
+    """The request's JSON body; raises INVALID_INPUT when it does not parse."""
+    try:
+        return await request.json()
+    except Exception as e:
+        raise APIError(APIErrorCode.INVALID_INPUT, "Invalid JSON request body", details={"error": str(e)}) from e
+
+
 HEARTBEAT_INTERVAL = 30.0
 
 
@@ -624,17 +632,7 @@ async def search(request: web.Request) -> web.Response:
       '400':
         description: Invalid request
     """
-    try:
-        data = await request.json()
-    except Exception as e:
-        return build_error_response(
-            APIError(
-                APIErrorCode.INVALID_INPUT,
-                "Invalid JSON request body",
-                details={"error": str(e)},
-            ),
-            request.app.get("debug_api", False),
-        )
+    data = await json_body(request)
 
     try:
         return await search_handler(data, request)
@@ -792,17 +790,7 @@ async def list_titles(request: web.Request) -> web.Response:
                   type: string
                   format: date-time
     """
-    try:
-        data = await request.json()
-    except Exception as e:
-        return build_error_response(
-            APIError(
-                APIErrorCode.INVALID_INPUT,
-                "Invalid JSON request body",
-                details={"error": str(e)},
-            ),
-            request.app.get("debug_api", False),
-        )
+    data = await json_body(request)
 
     return await list_titles_handler(data, request)
 
@@ -884,17 +872,7 @@ async def list_tracks(request: web.Request) -> web.Response:
       '400':
         description: Invalid request
     """
-    try:
-        data = await request.json()
-    except Exception as e:
-        return build_error_response(
-            APIError(
-                APIErrorCode.INVALID_INPUT,
-                "Invalid JSON request body",
-                details={"error": str(e)},
-            ),
-            request.app.get("debug_api", False),
-        )
+    data = await json_body(request)
 
     return await list_tracks_handler(data, request)
 
@@ -1215,17 +1193,7 @@ async def download(request: web.Request) -> web.Response:
           A gated parameter is not permitted (FORBIDDEN), or the job goes above the
           server_cdm_max_height of the API key (SERVER_CDM_CAPPED)
     """
-    try:
-        data = await request.json()
-    except Exception as e:
-        return build_error_response(
-            APIError(
-                APIErrorCode.INVALID_INPUT,
-                "Invalid JSON request body",
-                details={"error": str(e)},
-            ),
-            request.app.get("debug_api", False),
-        )
+    data = await json_body(request)
 
     return await download_handler(data, request)
 
@@ -1557,10 +1525,7 @@ async def download_job_input(request: web.Request) -> web.Response:
         description: No prompt pending for this job
     """
     job_id = request.match_info["job_id"]
-    try:
-        data = await request.json()
-    except Exception as e:
-        raise APIError(APIErrorCode.INVALID_INPUT, "Invalid JSON request body", details={"error": str(e)}) from e
+    data = await json_body(request)
     return await download_job_input_handler(data, job_id, request)
 
 
@@ -2066,13 +2031,7 @@ async def session_create(request: web.Request) -> web.Response:
       '401':
         description: Authentication failed
     """
-    try:
-        data = await request.json()
-    except Exception as e:
-        return build_error_response(
-            APIError(APIErrorCode.INVALID_INPUT, "Invalid JSON request body", details={"error": str(e)}),
-            request.app.get("debug_api", False),
-        )
+    data = await json_body(request)
     try:
         return await session_create_handler(data, request)
     except Exception as e:
@@ -2202,13 +2161,7 @@ async def session_tracks(request: web.Request) -> web.Response:
         description: Remote session or title not found
     """
     session_id = request.match_info["session_id"]
-    try:
-        data = await request.json()
-    except Exception as e:
-        return build_error_response(
-            APIError(APIErrorCode.INVALID_INPUT, "Invalid JSON request body", details={"error": str(e)}),
-            request.app.get("debug_api", False),
-        )
+    data = await json_body(request)
     try:
         return await session_tracks_handler(data, session_id, request)
     except Exception as e:
@@ -2252,13 +2205,7 @@ async def session_segments(request: web.Request) -> web.Response:
         description: Remote session or track not found
     """
     session_id = request.match_info["session_id"]
-    try:
-        data = await request.json()
-    except Exception as e:
-        return build_error_response(
-            APIError(APIErrorCode.INVALID_INPUT, "Invalid JSON request body", details={"error": str(e)}),
-            request.app.get("debug_api", False),
-        )
+    data = await json_body(request)
     try:
         return await session_segments_handler(data, session_id, request)
     except Exception as e:
@@ -2303,13 +2250,7 @@ async def session_segment_filter(request: web.Request) -> web.Response:
         description: Remote session or track not found
     """
     session_id = request.match_info["session_id"]
-    try:
-        data = await request.json()
-    except Exception as e:
-        return build_error_response(
-            APIError(APIErrorCode.INVALID_INPUT, "Invalid JSON request body", details={"error": str(e)}),
-            request.app.get("debug_api", False),
-        )
+    data = await json_body(request)
     try:
         return await session_segment_filter_handler(data, session_id, request)
     except Exception as e:
@@ -2425,13 +2366,7 @@ async def session_license(request: web.Request) -> web.Response:
         description: Remote session or track not found
     """
     session_id = request.match_info["session_id"]
-    try:
-        data = await request.json()
-    except Exception as e:
-        return build_error_response(
-            APIError(APIErrorCode.INVALID_INPUT, "Invalid JSON request body", details={"error": str(e)}),
-            request.app.get("debug_api", False),
-        )
+    data = await json_body(request)
     try:
         return await session_license_handler(data, session_id, request)
     except Exception as e:
@@ -2486,13 +2421,7 @@ async def session_bad_key(request: web.Request) -> web.Response:
         description: Remote session not found
     """
     session_id = request.match_info["session_id"]
-    try:
-        data = await request.json()
-    except Exception as e:
-        return build_error_response(
-            APIError(APIErrorCode.INVALID_INPUT, "Invalid JSON request body", details={"error": str(e)}),
-            request.app.get("debug_api", False),
-        )
+    data = await json_body(request)
     return await session_bad_key_handler(data, session_id, request)
 
 
@@ -2695,13 +2624,7 @@ async def session_prompt_submit(request: web.Request) -> web.Response:
         description: Remote session not found
     """
     session_id = request.match_info["session_id"]
-    try:
-        data = await request.json()
-    except Exception as e:
-        return build_error_response(
-            APIError(APIErrorCode.INVALID_INPUT, "Invalid JSON request body", details={"error": str(e)}),
-            request.app.get("debug_api", False),
-        )
+    data = await json_body(request)
     try:
         return await session_prompt_post_handler(data, session_id, request)
     except Exception as e:
@@ -3398,16 +3321,13 @@ async def remote_login_input(request: web.Request) -> web.Response:
       '409':
         description: The login is not asking anything
     """
-    try:
-        data = await request.json()
-    except Exception as e:
-        raise APIError(APIErrorCode.INVALID_INPUT, "Invalid JSON request body", details={"error": str(e)}) from e
+    data = await json_body(request)
     return await remote_login_input_handler(request.match_info["login_id"], data, request)
 
 
 # Single source of truth for all API routes. `remote` marks endpoints exposed in
-# --remote-only server mode; full mode registers every route. Both setup_routes and
-# setup_swagger derive from this table so the live routes and the docs cannot drift.
+# --remote-only server mode; full mode registers every route. setup_routes registers the
+# routes and their docs from this table, so the live routes and the docs cannot drift.
 ROUTES: list[tuple[str, str, Handler, bool]] = [
     ("GET", "/api/health", health, True),
     ("GET", "/api/services", services, True),
@@ -3467,15 +3387,21 @@ DASHBOARD_ROUTES: list[tuple[str, str, Handler, bool]] = [
 
 
 def setup_routes(
-    app: web.Application, remote_only: bool = False, dashboard: bool = False, cdm_only: bool = False
+    app: web.Application,
+    remote_only: bool = False,
+    dashboard: bool = False,
+    cdm_only: bool = False,
+    docs: bool = False,
 ) -> None:
     """Setup API routes. When remote_only=True, only the remote session endpoints operate.
     When cdm_only=True, only /api/health operates. When dashboard=True, this also registers
-    the /api/dashboard/ routes."""
+    the /api/dashboard/ routes. When docs=True, each route goes through Swagger so it is
+    documented at /api/docs/; Swagger request validation stays off."""
+    router: Any = swagger_docs(app) if docs else app.router
     add: dict[str, Callable[..., Any]] = {
-        "GET": app.router.add_get,
-        "POST": app.router.add_post,
-        "DELETE": app.router.add_delete,
+        "GET": router.add_get,
+        "POST": router.add_post,
+        "DELETE": router.add_delete,
     }
     api_routes = [r for r in ROUTES if r[1] == "/api/health"] if cdm_only else ROUTES
     for method, path, handler, remote in api_routes + (DASHBOARD_ROUTES if dashboard else []):
@@ -3485,19 +3411,15 @@ def setup_routes(
     app.on_shutdown.append(close_tunnels)
 
 
-def setup_swagger(app: web.Application, dashboard: bool = False) -> None:
-    """Setup Swagger UI documentation."""
-    swagger = SwaggerDocs(
+def swagger_docs(app: web.Application) -> SwaggerDocs:
+    """The Swagger UI at /api/docs/, which registers the routes added through it."""
+    return SwaggerDocs(
         app,
+        validate=False,
         swagger_ui_settings=SwaggerUiSettings(path="/api/docs/"),
         info=SwaggerInfo(
             title="Unshackle REST API",
             version=__version__,
             description="REST API for Unshackle - Modular Movie, TV, and Music Archival Software",
         ),
-    )
-
-    route: dict[str, Callable[..., Any]] = {"GET": web.get, "POST": web.post, "DELETE": web.delete}
-    swagger.add_routes(
-        [route[method](path, handler) for method, path, handler, _ in ROUTES + (DASHBOARD_ROUTES if dashboard else [])]
     )

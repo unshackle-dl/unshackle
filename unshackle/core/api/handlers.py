@@ -312,24 +312,29 @@ def server_login_material(
     """
     from unshackle.commands.dl import dl
     from unshackle.core.api.stats import stats
-    from unshackle.core.credential import Credential
 
     if account:
         return server_account_cookies(normalized_service, profile), dl.get_credentials(normalized_service, profile)
     if stats.mode != "remote_only":
         return dl.get_cookie_jar(normalized_service, profile), dl.get_credentials(normalized_service, profile)
-    credential = None
+    return load_client_cookies(data.get("cookies")), client_credential(data)
+
+
+def client_credential(data: Dict[str, Any]) -> Any:
+    """The Credential a client sent as ``credentials``, or None when it sent no username."""
+    from unshackle.core.credential import Credential
+
     cred_data = data.get("credentials")
-    if isinstance(cred_data, dict) and cred_data.get("username") is not None:
-        credential = Credential(
-            username=cred_data["username"], password=cred_data.get("password") or "", extra=cred_data.get("extra")
-        )
-    return load_client_cookies(data.get("cookies")), credential
+    if not isinstance(cred_data, dict) or cred_data.get("username") is None:
+        return None
+    return Credential(
+        username=cred_data["username"], password=cred_data.get("password") or "", extra=cred_data.get("extra")
+    )
 
 
 def api_key_namespace(request: Optional[web.Request]) -> str:
     """Name of the caller's cache directories, derived from its API key so no caller can guess another's."""
-    return key_namespace(request.headers.get("X-Secret-Key", "anonymous") if request else "anonymous")
+    return key_namespace(caller_key(request))
 
 
 @functools.lru_cache(maxsize=256)
@@ -1266,19 +1271,7 @@ def server_accounts_allowed(request: Optional[web.Request] = None, service: Opti
     full access. Combine with ``server_account_spec``: the server treats an API key without the
     opt-in as a client-managed remote session for that service.
     """
-    if not request:
-        return True
-    user_config = config.serve.get("users", {}).get(request_secret_key(request))
-    if user_config is None:
-        return True
-    allowed = user_config.get("server_accounts", False)
-    if isinstance(allowed, str):
-        allowed = [allowed]
-    if isinstance(allowed, (list, tuple, set)):
-        return service is not None and Services.get_tag(service).upper() in {
-            Services.get_tag(s).upper() for s in allowed
-        }
-    return bool(allowed)
+    return key_grant_allows(request, service, "server_accounts")
 
 
 def resolve_server_account(request: Optional[web.Request], service: str, region: Any) -> Optional[str]:
@@ -1781,6 +1774,20 @@ def serialize_track_common(track: Any) -> Dict[str, Any]:
     }
 
 
+def serialize_tracks(tracks: Tracks, title: Any, include_url: bool = False) -> Dict[str, List[Dict[str, Any]]]:
+    """The ``video``, ``audio`` and ``subtitles`` lists of a title's tracks, video and audio highest bitrate first."""
+    video_tracks = sorted(tracks.videos, key=lambda t: t.bitrate or 0, reverse=True)
+    audio_tracks = sorted(tracks.audio, key=lambda t: t.bitrate or 0, reverse=True)
+    original_ids = original_audio_ids(audio_tracks, title)
+    return {
+        "video": [serialize_video_track(t, include_url=include_url) for t in video_tracks],
+        "audio": [
+            serialize_audio_track(t, include_url=include_url, is_original=t.id in original_ids) for t in audio_tracks
+        ],
+        "subtitles": [serialize_subtitle_track(t, include_url=include_url) for t in tracks.subtitles],
+    }
+
+
 def serialize_video_track(track: Video, include_url: bool = False) -> Dict[str, Any]:
     """Convert video track to JSON-serializable dict."""
     codec_name = enum_name(track.codec)
@@ -2102,19 +2109,7 @@ async def list_tracks_handler(data: Dict[str, Any], request: Optional[web.Reques
                     for title in sorted_titles:
                         try:
                             tracks = await call(probed_tracks, service_instance, title)
-                            video_tracks = sorted(tracks.videos, key=lambda t: t.bitrate or 0, reverse=True)
-                            audio_tracks = sorted(tracks.audio, key=lambda t: t.bitrate or 0, reverse=True)
-
-                            original_ids = original_audio_ids(audio_tracks, title)
-                            episode_data = {
-                                "title": serialize_title(title),
-                                "video": [serialize_video_track(t) for t in video_tracks],
-                                "audio": [
-                                    serialize_audio_track(t, is_original=t.id in original_ids) for t in audio_tracks
-                                ],
-                                "subtitles": [serialize_subtitle_track(t) for t in tracks.subtitles],
-                            }
-                            episodes_data.append(episode_data)
+                            episodes_data.append({"title": serialize_title(title), **serialize_tracks(tracks, title)})
                             log.debug(f"Successfully got tracks for {title.season}x{title.number}")
                         except SystemExit:
                             # Service calls sys.exit() for unavailable episodes - catch and skip
@@ -2149,17 +2144,7 @@ async def list_tracks_handler(data: Dict[str, Any], request: Optional[web.Reques
             first_title = titles
 
         tracks = await call(probed_tracks, service_instance, first_title)
-
-        video_tracks = sorted(tracks.videos, key=lambda t: t.bitrate or 0, reverse=True)
-        audio_tracks = sorted(tracks.audio, key=lambda t: t.bitrate or 0, reverse=True)
-
-        original_ids = original_audio_ids(audio_tracks, first_title)
-        response = {
-            "title": serialize_title(first_title),
-            "video": [serialize_video_track(t) for t in video_tracks],
-            "audio": [serialize_audio_track(t, is_original=t.id in original_ids) for t in audio_tracks],
-            "subtitles": [serialize_subtitle_track(t) for t in tracks.subtitles],
-        }
+        response = {"title": serialize_title(first_title), **serialize_tracks(tracks, first_title)}
 
         return await request_cache.json_response(response)
 
@@ -2476,9 +2461,28 @@ def service_dl_defaults(service: str) -> Dict[str, Any]:
     return result
 
 
+async def enqueue_job(
+    service: str, title_id: str, params: Dict[str, Any], request: Optional[web.Request], gate_service: str
+) -> web.Response:
+    """Check the download gates for ``gate_service``, then queue a job with ``params`` and answer 202.
+
+    ``server_proxy`` is always stamped here, so a client-sent value cannot grant the server's proxy providers.
+    """
+    from unshackle.core.api.download_manager import get_download_manager
+
+    await asyncio.to_thread(enforce_download_gates, {**params, "service": gate_service}, request)
+    manager = get_download_manager()
+    await manager.start_workers()
+    job = manager.create_job(
+        service, title_id, owner_key=caller_key(request), **{**params, "server_proxy": server_proxy_allowed(request)}
+    )
+    return web.json_response(
+        {"job_id": job.job_id, "status": job.status.value, "created_time": job.created_time.isoformat()}, status=202
+    )
+
+
 async def download_handler(data: Dict[str, Any], request: Optional[web.Request] = None) -> web.Response:
     """Answer the download request: make a download job and add it to the queue."""
-    from unshackle.core.api.download_manager import get_download_manager
 
     require_fields(data, "service", "title_id")
     service_tag = data["service"]
@@ -2538,19 +2542,10 @@ async def download_handler(data: Dict[str, Any], request: Optional[web.Request] 
         }
         if service_params is not None:
             params_with_defaults["service_params"] = service_params
-        await asyncio.to_thread(enforce_download_gates, {**params_with_defaults, "service": service_tag}, request)
-
-        manager = get_download_manager()
-        await manager.start_workers()
-        # The download worker reads this to decide whether dl may load the server's proxy
-        # providers. Always stamped server-side so a client-sent value cannot grant it.
-        params_with_defaults["server_proxy"] = server_proxy_allowed(request)
-        params_with_defaults["client_keys"] = sorted(params_with_defaults if server else filtered_params)
-        job = manager.create_job(normalized_service, title_id, owner_key=caller_key(request), **params_with_defaults)
-
-        return web.json_response(
-            {"job_id": job.job_id, "status": job.status.value, "created_time": job.created_time.isoformat()}, status=202
+        params_with_defaults["client_keys"] = sorted(
+            [*params_with_defaults, "server_proxy"] if server else filtered_params
         )
+        return await enqueue_job(normalized_service, title_id, params_with_defaults, request, gate_service=service_tag)
 
     except APIError:
         raise
@@ -3309,26 +3304,8 @@ async def retry_download_job_handler(job_id: str, request: Optional[web.Request]
                 f"Invalid or unavailable service: {job.service}",
                 details={"service": job.service},
             )
-        await asyncio.to_thread(enforce_download_gates, {**job.parameters, "service": job.service}, request)
-
-        await manager.start_workers()
-
         # Reuse the raw in-memory parameters; redaction only ever applies to serialized copies.
-        new_job = manager.create_job(
-            job.service,
-            job.title_id,
-            owner_key=caller_key(request),
-            **{**job.parameters, "server_proxy": server_proxy_allowed(request)},
-        )
-
-        return web.json_response(
-            {
-                "job_id": new_job.job_id,
-                "status": new_job.status.value,
-                "created_time": new_job.created_time.isoformat(),
-            },
-            status=202,
-        )
+        return await enqueue_job(job.service, job.title_id, job.parameters, request, gate_service=job.service)
 
     except APIError:
         raise
@@ -3819,7 +3796,6 @@ def create_service_instance(
     own accounts.
     """
     from unshackle.commands.dl import dl
-    from unshackle.core.credential import Credential
     from unshackle.core.tracks import Video
 
     server_config = service_config = load_service_yaml(normalized_service)
@@ -3872,14 +3848,7 @@ def create_service_instance(
         cookies = server_account_cookies(normalized_service, profile)
         credential = dl.get_credentials(normalized_service, profile)
     else:
-        credential = None
-        cred_data = data.get("credentials")
-        if cred_data and isinstance(cred_data, dict):
-            credential = Credential(
-                username=cred_data["username"],
-                password=cred_data["password"],
-                extra=cred_data.get("extra"),
-            )
+        credential = client_credential(data)
         cookies = load_client_cookies(data.get("cookies"))
 
     extra_params["cookies_supplied"] = cookies is not None
@@ -3939,7 +3908,7 @@ async def session_create_handler(data: Dict[str, Any], request: Optional[web.Req
         import uuid as uuid_mod
 
         session_id = str(uuid_mod.uuid4())
-        api_key = request.headers.get("X-Secret-Key", "anonymous") if request else "anonymous"
+        api_key = caller_key(request)
         session_cache_dir = f"_sessions/{api_key_namespace(request)}/{session_id}/{normalized_service}"
         session_cache_tag: Optional[str] = session_cache_dir
 
@@ -4240,7 +4209,7 @@ async def session_tracks_handler(
 
         from unshackle.core.config import config as app_config
 
-        api_key = request.headers.get("X-Secret-Key", "anonymous") if request else "anonymous"
+        api_key = caller_key(request)
         user_cfg = serve_user_config(api_key)
         has_wv = bool(user_cfg.get("devices"))
         has_pr = bool(user_cfg.get("playready_devices"))
@@ -4271,13 +4240,11 @@ async def session_tracks_handler(
 
         def serialize() -> tuple[list, list, list, list]:
             """The track and attachment lists, off the event loop: an attachment can be a 20 MB file."""
-            original_ids = original_audio_ids(audio_tracks, title)
-            video = [serialize_video_track(t, include_url=True) for t in video_tracks]
-            audio = [serialize_audio_track(t, include_url=True, is_original=t.id in original_ids) for t in audio_tracks]
-            subtitles = [serialize_subtitle_track(t, include_url=True) for t in tracks.subtitles]
-            for d in video + audio + subtitles:
+            lists = serialize_tracks(tracks, title, include_url=True)
+            for d in lists["video"] + lists["audio"] + lists["subtitles"]:
                 d["data"] = scrub_track_data(d.get("data"), session)
-            return video, audio, subtitles, [a for a in map(serialize_attachment, tracks.attachments) if a]
+            attachments = [a for a in map(serialize_attachment, tracks.attachments) if a]
+            return lists["video"], lists["audio"], lists["subtitles"], attachments
 
         video, audio, subtitles, attachments = await asyncio.to_thread(serialize)
 
@@ -5149,24 +5116,14 @@ def handle_single_server_cdm(
         raise APIError(APIErrorCode.INVALID_INPUT, "No PSSH available for server_cdm licensing")
 
     if vault_only:
-        from unshackle.core.drm import PlayReady, Widevine
-
-        if drm_type == "playready":
-            from pyplayready.system.pssh import PSSH as PlayReadyPSSH
-
-            kids = PlayReady(pssh=PlayReadyPSSH(base64.b64decode(pssh_b64)), pssh_b64=pssh_b64).kids
-        else:
-            from pywidevine.pssh import PSSH as WvPSSH
-
-            kids = Widevine(pssh=WvPSSH(pssh_b64)).kids
-        vault_hit = check_vaults(kids, service_name, shared=shared)
+        vault_hit = check_vaults(list(pssh_kids(pssh_b64, drm_type)), service_name, shared=shared)
         if vault_hit:
             if sources is not None:
                 sources.update(vault_hit[1])
             return vault_hit[0]
         raise refusal or APIError(APIErrorCode.NO_CONTENT, "The server vault holds no content key for this track")
 
-    api_key = request.headers.get("X-Secret-Key", "anonymous") if request else "anonymous"
+    api_key = caller_key(request)
     user_config = serve_user_config(api_key)
 
     if drm_type == "playready":
@@ -5448,7 +5405,7 @@ def license_response(
         )
 
     if mode == "server_cdm" and track_ids:
-        api_key = request.headers.get("X-Secret-Key", "anonymous") if request else "anonymous"
+        api_key = caller_key(request)
         user_config = serve_user_config(api_key)
         service = session.service_instance
         service_tag = session.service_tag
@@ -5629,7 +5586,7 @@ def license_response(
         if mode == "server_cdm":
             # The server's config.cdm mapping decides the DRM system, as in the batch path.
             # The client only knows its own local device, which the server never uses here.
-            api_key = request.headers.get("X-Secret-Key", "anonymous") if request else "anonymous"
+            api_key = caller_key(request)
             candidates = (
                 vault_candidates(drm_type)
                 if vault_only
