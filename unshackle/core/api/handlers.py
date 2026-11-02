@@ -2746,7 +2746,7 @@ def configured_service_tags() -> List[str]:
     return [tag for tag in tags if tag in named]
 
 
-async def dashboard_status_handler(request: web.Request) -> web.Response:
+def dashboard_status() -> Dict[str, Any]:
     """Server-wide stats for the developer dashboard."""
     from unshackle.core.api.download_manager import get_download_manager
     from unshackle.core.api.session_store import get_session_store
@@ -2754,17 +2754,20 @@ async def dashboard_status_handler(request: web.Request) -> web.Response:
 
     store = get_session_store()
     jobs = Counter(job.status.value for job in get_download_manager().list_jobs())
-    return web.json_response(
-        {
-            **stats.to_dict(),
-            "services": len(configured_service_tags()),
-            "sessions": store.session_count,
-            "max_sessions": store.max_sessions,
-            "session_ttl": store.ttl,
-            "jobs": dict(jobs),
-            "draining": store.draining,
-        }
-    )
+    return {
+        **stats.to_dict(),
+        "services": len(configured_service_tags()),
+        "sessions": store.session_count,
+        "max_sessions": store.max_sessions,
+        "session_ttl": store.ttl,
+        "jobs": dict(jobs),
+        "draining": store.draining,
+    }
+
+
+async def dashboard_status_handler(request: web.Request) -> web.Response:
+    """Answer the request for the dashboard's server-wide stats."""
+    return web.json_response(dashboard_status())
 
 
 async def dashboard_drain_start_handler(request: web.Request) -> web.Response:
@@ -3143,12 +3146,10 @@ async def dashboard_events_handler(request: web.Request) -> web.StreamResponse:
             since = int(request.query["since"])
         except ValueError:
             since = 0
-        status = await dashboard_status_handler(request)
+        status = dashboard_status()
         before = bus.seq
         events = bus.since(since)
-        return web.json_response(
-            {"seq": _poll_cursor(before, events), "stats": json.loads(status.text or "{}"), "events": events}
-        )
+        return web.json_response({"seq": _poll_cursor(before, events), "stats": status, "events": events})
 
     response = web.StreamResponse(
         headers={
@@ -3167,8 +3168,7 @@ async def dashboard_events_handler(request: web.Request) -> web.StreamResponse:
         await response.write(f"{head}event: {event}\ndata: {payload}\n\n".encode())
 
     async def send_stats() -> None:
-        status = await dashboard_status_handler(request)
-        await send("stats", json.loads(status.text or "{}"))
+        await send("stats", dashboard_status())
 
     queue = bus.subscribe()
     get_task: Optional[asyncio.Task] = None

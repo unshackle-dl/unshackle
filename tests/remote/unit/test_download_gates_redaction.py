@@ -82,6 +82,29 @@ def test_to_dict_full_details_redacts_error_fields_and_parameters():
     assert d["parameters"]["credential"] == "***"
 
 
+def test_to_dict_redacts_again_only_when_an_error_field_changes(monkeypatch):
+    from unshackle.core.api import download_manager
+
+    calls = []
+    real = download_manager._redact_text
+    monkeypatch.setattr(download_manager, "_redact_text", lambda text, params: calls.append(text) or real(text, params))
+    job = DownloadJob(
+        job_id="j1",
+        status=JobStatus.FAILED,
+        created_time=datetime(2026, 1, 1),
+        service="EXAMPLE",
+        title_id="t",
+        parameters={"credential": "user:hunter2"},
+    )
+    job.error_message = "login failed for user:hunter2"
+    job.to_dict(include_full_details=True)
+    job.to_dict(include_full_details=True)
+    assert len(calls) == 4
+    job.error_message = "still failing for user:hunter2"
+    assert "hunter2" not in job.to_dict(include_full_details=True)["error_message"]
+    assert len(calls) == 8
+
+
 class _PastGate(Exception):
     """Raised by the stubbed download manager to prove a request got past the gate."""
 

@@ -93,6 +93,7 @@ class JobStatus(Enum):
 
 
 # Statuses a job can never leave; such jobs are safe to remove or retry.
+WORKER_STDERR_LIMIT = 64 * 1024
 TERMINAL_STATUSES = (JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED)
 
 
@@ -143,6 +144,8 @@ class DownloadJob:
     # Guards against writing the same job to the persistent history file twice.
     history_recorded: bool = False
 
+    redacted: Optional[tuple[tuple, Dict[str, Optional[str]]]] = field(default=None, repr=False, compare=False)
+
     # X-Secret-Key that created the job; scopes per-caller access, never serialized into to_dict().
     owner_key: Optional[str] = None
 
@@ -173,17 +176,21 @@ class DownloadJob:
         if include_full_details:
             # Error/stderr/traceback are free text a service may have echoed a credential or proxy
             # URL into, so scrub them with the same secrets that redact_parameters masks.
+            raw = (self.error_message, self.error_details, self.error_traceback, self.worker_stderr)
+            if not self.redacted or self.redacted[0] != raw:
+                names = ("error_message", "error_details", "error_traceback", "worker_stderr")
+                self.redacted = (
+                    raw,
+                    {name: redact_path(_redact_text(text, self.parameters)) for name, text in zip(names, raw)},
+                )
             result.update(
                 {
                     "parameters": redact_parameters(self.parameters),
                     "started_time": self.started_time.isoformat() if self.started_time else None,
                     "completed_time": self.completed_time.isoformat() if self.completed_time else None,
                     "output_files": self.output_files,
-                    "error_message": redact_path(_redact_text(self.error_message, self.parameters)),
-                    "error_details": redact_path(_redact_text(self.error_details, self.parameters)),
                     "error_code": self.error_code,
-                    "error_traceback": redact_path(_redact_text(self.error_traceback, self.parameters)),
-                    "worker_stderr": redact_path(_redact_text(self.worker_stderr, self.parameters)),
+                    **self.redacted[1],
                 }
             )
 
@@ -781,11 +788,12 @@ class DownloadQueueManager:
 
     def publish(self, job: DownloadJob, event: str) -> None:
         """Fan an event carrying the job's full detail dict out to every listener."""
-        bus.publish("job", {"event": event, **job.to_dict(include_full_details=True)})
+        data = job.to_dict(include_full_details=True)
+        bus.publish("job", {"event": event, **data})
         queues = self._subscribers.get(job.job_id)
         if not queues:
             return
-        payload = {"event": event, "data": job.to_dict(include_full_details=True)}
+        payload = {"event": event, "data": data}
         for queue in queues:
             self.put(queue, payload)
 
@@ -1164,7 +1172,7 @@ class DownloadQueueManager:
                                 new_progress = float(progress_data["progress"])
                                 if new_progress != job.progress:
                                     job.progress = new_progress
-                                    log.info(f"Job {job.job_id} progress updated: {job.progress}%")
+                                    log.debug(f"Job {job.job_id} progress updated: {job.progress}%")
                             # submit_input() clears the prompt out of band, so a re-prompt with the same text
                             # leaves the file equal to last_published; publish the prompt change anyway.
                             if progress_data != last_published or job.input_prompt != prompt_before:
@@ -1196,7 +1204,7 @@ class DownloadQueueManager:
             if stdout.strip():
                 log.debug(f"Worker stdout for job {job.job_id}: {safe_stdout}")
             if stderr.strip():
-                job.worker_stderr = stderr.strip()
+                job.worker_stderr = stderr.strip()[-WORKER_STDERR_LIMIT:]
                 if returncode != 0:
                     log.warning(f"Worker stderr for job {job.job_id}: {safe_stderr}")
                 else:

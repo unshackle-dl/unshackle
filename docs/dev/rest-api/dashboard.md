@@ -28,8 +28,9 @@ routes are available in `--remote-only` mode too.
 
 Run the server headless with `--quiet`: no banner, no Rich output, one plain log line per
 event on stderr, and `api.*` loggers stay at `INFO` so remote session activity reaches the
-log ring. Add `--debug` to raise the level to `DEBUG` and also write the full log to
-`directories.logs` as `unshackle_serve_<time>.log`. Nothing else the dashboard shows reaches
+log ring. The log ring and the event stream do not get `aiohttp.access` request lines.
+Add `--debug` to raise the level to `DEBUG`, send the request lines to the log ring too,
+and write the full log to `directories.logs` as `unshackle_serve_<time>.log`. Nothing else the dashboard shows reaches
 the disk: stats, the log ring and the event stream live in memory and reset on restart, so a
 dashboard UI that wants history must keep its own copy.
 
@@ -48,13 +49,13 @@ All are `GET`, except the two `drain` routes.
 | `DELETE /api/dashboard/drain` | Cancels the drain and returns the `/status` body. The server accepts new work again. |
 | `/api/dashboard/sessions` | Every live remote session: `id`, `owner` (username or masked key), `creator_ip`, `service`, `title_id`, `titles`, `tracks`, `title` (the display name of the title the client is on: the last one it asked tracks for, else the first resolved title), `auth_status`, `auth_error`, `server_account` (the server profile lent to the remote session, else `null`), `server_cdm` (`false` when the client's own device licenses the remote session), `server_cdm_max_height` (the tallest video the server CDM licenses live, else `null`), `client`, `actions`, `created_at` and `last_accessed` (ISO 8601) with `created_ts` and `last_accessed_ts` (Unix epoch, the same clock as log `ts`), `age_seconds`, `idle_seconds`, `log_seq`. `client` is whatever the remote client sent as `client` in its session create request. The CLI sends `version`, `code_hash` (the commit the client runs, `null` when its source cannot be read), `platform` and `argv`. `argv` is the command line the user ran: proxy and URL userinfo, secret query parameters and credential values become `***`, home and install paths shorten as in the logs, and the line is cut at 3000 characters. An older client sends less or nothing and the field is `{}`. `log_seq` is the last sequence number in the remote session's service log - poll `/api/dashboard/sessions/{id}/logs` when it changes. `actions` is the session's request log, newest last, capped at 500: `ts`, `method`, `action` (`titles`, `tracks`, `segments`, `license`, `prompt`, …), `query`, `status`, `ms`, `bytes_in`, `bytes_out`. |
 | `/api/dashboard/jobs` | Every download job with full detail, regardless of owner. Empty in `--remote-only` mode. |
-| `/api/dashboard/logs` | `{"seq": N, "records": [...]}`: the last 1000 log records. `?since=<seq>` returns only newer records; `?level=WARNING` sets the minimum level; `?logger=serve` keeps one logger and its children (`aiohttp.access` is the noisiest). `ts` is a Unix epoch in seconds. |
+| `/api/dashboard/logs` | `{"seq": N, "records": [...]}`: the last 1000 log records. `?since=<seq>` returns only newer records; `?level=WARNING` sets the minimum level; `?logger=serve` keeps one logger and its children. `ts` is a Unix epoch in seconds. |
 | `/api/dashboard/cdm-logs` | `{"seq": N, "records": [...], "sessions": [...]}`: the last 5000 calls to the Widevine and PlayReady CDM device routes, and the open sessions of each device. `?since=<seq>` returns only newer records. See [CDM calls](#cdm-calls). |
 | `/api/dashboard/sessions/{id}/logs` | One remote session's service log: `{"session_id", "last_seq", "records": [...]}`. Each record has `seq`, `ts`, `level`, `message`. `?since=<seq>` returns only newer records. 404 when the remote session is unknown. |
 | `/api/dashboard/keys` | Every configured API key: what it may do and what it has done. One row per key in `serve.users`, plus `serve.api_secret` when it is set. |
 | `/api/dashboard/services` | Every service configured on this server and its load state, including the ones that failed to import. See [Services](#services) for what configured means. |
 | `/api/dashboard/health` | Preflight: whether this instance could finish a download. Cached 30 seconds. |
-| `/api/dashboard/events` | Server-Sent Events stream. With `?since=<seq>` it returns `{"seq", "stats", "events": [...]}` instead: every event after `seq` (the server keeps the last 20000, log records included, so a poll every few seconds is safe even under a busy access log) as one JSON burst, so a UI that polls every few seconds still sees a remote session that opened and closed in between. |
+| `/api/dashboard/events` | Server-Sent Events stream. With `?since=<seq>` it returns `{"seq", "stats", "events": [...]}` instead: every event after `seq` (the server keeps the last 20000, log records included, so a poll every few seconds is safe) as one JSON burst, so a UI that polls every few seconds still sees a remote session that opened and closed in between. |
 
 `errors` counts every structured error response since the server started, for example
 `{"EXAMPLE": {"SERVICE_ERROR": 4}, "-": {"SESSION_NOT_FOUND": 1}}`. The service is the one of
@@ -74,7 +75,7 @@ those it sends:
 | Event | Data |
 |-------|------|
 | `log` | One log record: `seq`, `ts`, `level`, `logger`, `msg`. |
-| `session` | `action` (`create`, `update` on every request the session makes and when titles or tracks load, or `delete`) plus the full remote session summary, so each event is a complete snapshot. A `delete` also carries `reason`: `closed` (the client ended it), `expired` (TTL sweep) or `evicted` (`max_sessions` reached). A session opened by `--skip-dl` can live only a few seconds, so a UI that wants history must keep its own record of these events. |
+| `session` | `action` (`create`, `update` on every request the session makes and when titles or tracks load, or `delete`) plus the remote session summary. The `update` for a request carries that request as `action_entry` and has no `actions`: append it to the log you hold, capped at 500. Every other event is a complete snapshot with `actions`. A `delete` also carries `reason`: `closed` (the client ended it), `expired` (TTL sweep) or `evicted` (`max_sessions` reached). A session opened by `--skip-dl` can live only a few seconds, so a UI that wants history must keep its own record of these events. |
 | `job` | `event` (`queued`, `progress`, `status`, or the terminal status) plus the full job object. |
 | `service` | `action` (`staged`, `applied` or `failed`) and `tags`, the services it applies to. A `failed` action carries `errors` and an empty `tags`. Refetch `/api/dashboard/services` when one arrives, instead of polling for a reload. |
 

@@ -117,10 +117,16 @@ def _schedule_pending_reload(service_tag: str) -> None:
     schedule_pending_reload(service_tag)
 
 
-def _publish(action: str, entry: SessionEntry, reason: Optional[str] = None) -> None:
+def _publish(
+    action: str, entry: SessionEntry, reason: Optional[str] = None, action_entry: Optional[Dict[str, Any]] = None
+) -> None:
+    """Tell dashboard listeners about a remote session; ``action_entry`` replaces the action log with that one action."""
     data = {"action": action, **entry.summary()}
     if reason:
         data["reason"] = reason
+    if action_entry is not None:
+        del data["actions"]
+        data["action_entry"] = action_entry
     bus.publish("session", data)
 
 
@@ -319,7 +325,7 @@ class SessionStore:
         if entry is None:
             return
         entry.actions.append(action)
-        _publish("update", entry)
+        _publish("update", entry, action_entry=action)
 
     def list(self) -> List[SessionEntry]:
         """Snapshot of every live session."""

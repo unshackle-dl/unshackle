@@ -140,9 +140,7 @@ def main(argv: list[str]) -> int:
                 try:
                     with progress_lock:
                         progress_state.update(progress_data)
-                        log.info(f"Writing progress update: {progress_data}")
                         write_result(progress_path, progress_state)
-                    log.info(f"Progress update written to {progress_path}")
                 except Exception as e:
                     log.error(f"Failed to write progress update: {e}")
 

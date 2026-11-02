@@ -13,7 +13,7 @@ from unshackle.core.constants import AnyTrack
 from unshackle.core.utilities import standard_resolution
 
 JOB_PROGRESS_TERMINAL_STATES = {"Downloaded", "Decrypted", "[yellow]SKIPPED"}
-PROGRESS_EMIT_INTERVAL = 0.25
+PROGRESS_EMIT_INTERVAL = 0.5
 
 # Weight for a track with no bitrate (subtitles); small vs media bitrates so subs barely move the bar.
 SUBTITLE_PROGRESS_WEIGHT = 50_000.0

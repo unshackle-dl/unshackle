@@ -424,6 +424,8 @@ def serve(
         logging.getLogger("api").setLevel(logging.WARNING)
         logging.getLogger("api.remote").setLevel(logging.WARNING)
     ring.setFormatter(logging.Formatter("%(message)s"))
+    if not debug:
+        ring.addFilter(lambda record: record.name != "aiohttp.access")
     logging.getLogger().addHandler(ring)
     logging.getLogger("aiohttp.access").addFilter(_MaskAccessKey())
 

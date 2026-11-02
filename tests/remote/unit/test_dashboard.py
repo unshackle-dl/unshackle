@@ -183,7 +183,9 @@ async def test_session_action_log() -> None:
         store.record_action(entry.session_id, {"action": "titles", "status": 200})
         store.record_action("missing", {"action": "titles", "status": 200})
         assert entry.summary()["actions"] == [{"action": "titles", "status": 200}]
-        assert queue.get_nowait()["data"]["action"] == "update" and queue.empty()
+        event = queue.get_nowait()["data"]
+        assert event["action"] == "update" and queue.empty()
+        assert event["action_entry"] == {"action": "titles", "status": 200} and "actions" not in event
     finally:
         bus.unsubscribe(queue)
 
