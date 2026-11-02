@@ -164,6 +164,7 @@ class SessionStore:
         server_account: Optional[str] = None,
     ) -> SessionEntry:
         """Make a new remote session with an authenticated service instance."""
+        evicted_tag: Optional[str] = None
         async with self._lock:
             max_sessions = self.max_sessions
             if max_sessions is not None and len(self._sessions) >= max_sessions:
@@ -173,7 +174,7 @@ class SessionStore:
                 evicted = self._sessions.pop(oldest_id)
                 if evicted.input_bridge:
                     evicted.input_bridge.cancel()
-                self.cleanup_cache_dir(evicted.cache_tag)
+                evicted_tag = evicted.cache_tag
                 _publish("delete", evicted, "evicted")
                 _schedule_pending_reload(evicted.service_tag)
 
@@ -189,7 +190,8 @@ class SessionStore:
             self._sessions[session_id] = entry
             _publish("create", entry)
             log.info(f"Created session {sanitize_log(session_id)} for service {sanitize_log(service_tag)}")
-            return entry
+        await self.remove_cache_dirs([evicted_tag])
+        return entry
 
     async def get(self, session_id: str) -> Optional[SessionEntry]:
         """Get a remote session by ID, returns None if not found or expired."""
@@ -198,17 +200,19 @@ class SessionStore:
             if entry is None:
                 return None
 
+            expired = False
             if not entry.in_use and entry.auth_status not in (AuthStatus.AUTHENTICATING, AuthStatus.PENDING_INPUT):
                 elapsed = (datetime.now(timezone.utc) - entry.last_accessed).total_seconds()
                 if elapsed > self.ttl:
                     log.info(f"Session {sanitize_log(session_id)} expired (elapsed={elapsed:.0f}s, ttl={self.ttl}s)")
-                    self.cleanup_cache_dir(entry.cache_tag)
                     _publish("delete", self._sessions.pop(session_id), "expired")
                     _schedule_pending_reload(entry.service_tag)
-                    return None
-
-            entry.touch()
-            return entry
+                    expired = True
+            if not expired:
+                entry.touch()
+                return entry
+        await self.remove_cache_dirs([entry.cache_tag])
+        return None
 
     def peek(self, session_id: str) -> Optional[SessionEntry]:
         """A remote session entry without touching it, for read-only observers.
@@ -222,15 +226,15 @@ class SessionStore:
         """Delete a remote session. Returns True if it existed."""
         async with self._lock:
             entry = self._sessions.pop(session_id, None)
-            if entry:
-                if entry.input_bridge:
-                    entry.input_bridge.cancel()
-                self.cleanup_cache_dir(entry.cache_tag)
-                _publish("delete", entry, "closed")
-                log.info(f"Deleted session {sanitize_log(session_id)}")
-                _schedule_pending_reload(entry.service_tag)
-                return True
-            return False
+            if not entry:
+                return False
+            if entry.input_bridge:
+                entry.input_bridge.cancel()
+            _publish("delete", entry, "closed")
+            log.info(f"Deleted session {sanitize_log(session_id)}")
+            _schedule_pending_reload(entry.service_tag)
+        await self.remove_cache_dirs([entry.cache_tag])
+        return True
 
     async def cleanup_expired(self) -> int:
         """Remove all expired sessions. Returns count of removed sessions."""
@@ -247,18 +251,20 @@ class SessionStore:
                 elif elapsed > self.ttl:
                     expired.append(sid)
             ended_tags: set[str] = set()
+            cache_tags: list[Optional[str]] = []
             for sid in expired:
                 entry = self._sessions.pop(sid)
                 if entry.input_bridge:
                     entry.input_bridge.cancel()
-                self.cleanup_cache_dir(entry.cache_tag)
+                cache_tags.append(entry.cache_tag)
                 _publish("delete", entry, "expired")
                 ended_tags.add(entry.service_tag)
             for tag in ended_tags:
                 _schedule_pending_reload(tag)
             if expired:
                 log.info(f"Cleaned up {len(expired)} expired sessions")
-            return len(expired)
+        await self.remove_cache_dirs(cache_tags)
+        return len(expired)
 
     async def start_cleanup_loop(self) -> None:
         """Start periodic cleanup of expired sessions."""
@@ -291,6 +297,13 @@ class SessionStore:
             count = len(self._sessions)
         if count:
             log.info(f"Cancelled bridges for {count} active session(s)")
+
+    @classmethod
+    async def remove_cache_dirs(cls, cache_tags: List[Optional[str]]) -> None:
+        """Remove the cache directories of ended remote sessions on a worker thread, outside the store lock."""
+        for tag in cache_tags:
+            if tag:
+                await asyncio.to_thread(cls.cleanup_cache_dir, tag)
 
     @staticmethod
     def cleanup_cache_dir(cache_tag: Optional[str]) -> None:

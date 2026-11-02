@@ -72,6 +72,7 @@ def mask_key(key: Optional[str]) -> str:
     return key[:4] + "…"
 
 
+@lru_cache(maxsize=1024)
 def key_id(key: Optional[str]) -> str:
     """A stable id for an API key. A hash prefix, so two unnamed keys never collide the way
     ``mask_key`` does, and the id carries no key material."""

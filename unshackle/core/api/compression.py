@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import gzip
 import zlib
 from typing import Any
@@ -11,6 +12,7 @@ from aiohttp import web
 # Cap the inflated size of a peer-supplied compressed blob (cookies, session cache,
 # serialized manifests) so a tiny payload cannot expand without bound (zip-bomb DoS).
 MAX_INFLATE_BYTES = 64 * 1024 * 1024  # 64 MiB
+GZIP_THREAD_SIZE = 1024 * 1024
 
 
 def safe_inflate(data: bytes, max_size: int = MAX_INFLATE_BYTES) -> bytes:
@@ -50,6 +52,9 @@ async def compression_middleware(request: web.Request, handler: Any) -> web.Stre
     if not level:
         return response
 
-    response.body = gzip.compress(body, compresslevel=level)
+    if len(body) > GZIP_THREAD_SIZE:
+        response.body = await asyncio.to_thread(gzip.compress, body, compresslevel=level)
+    else:
+        response.body = gzip.compress(body, compresslevel=level)
     response.headers["Content-Encoding"] = "gzip"
     return response

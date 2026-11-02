@@ -2,6 +2,7 @@ import asyncio
 import base64
 import copy
 import enum
+import functools
 import json
 import logging
 import re
@@ -328,9 +329,14 @@ def server_login_material(
 
 def api_key_namespace(request: Optional[web.Request]) -> str:
     """Name of the caller's cache directories, derived from its API key so no caller can guess another's."""
+    return key_namespace(request.headers.get("X-Secret-Key", "anonymous") if request else "anonymous")
+
+
+@functools.lru_cache(maxsize=256)
+def key_namespace(api_key: str) -> str:
+    """The PBKDF2 behind :func:`api_key_namespace`, kept per key: 100k rounds cost about 20 ms a call."""
     import hashlib
 
-    api_key = request.headers.get("X-Secret-Key", "anonymous") if request else "anonymous"
     return hashlib.pbkdf2_hmac("sha256", api_key.encode(), b"unshackle-session-ns", 100_000).hex()[:12]
 
 
@@ -423,16 +429,16 @@ class RequestCache:
             write_client_cache(cache_data, self.tag)
         self.client_auth = client_login or bool(cache_data)
 
-    def json_response(self, payload: Dict[str, Any]) -> web.Response:
+    async def json_response(self, payload: Dict[str, Any]) -> web.Response:
         """Answer with ``payload``, plus the updated ``cache`` for a client that logged in itself."""
         if self.tag and self.client_auth:
-            cache_data = collect_cache_files(self.tag)
+            cache_data = await asyncio.to_thread(collect_cache_files, self.tag)
             if cache_data:
                 payload["cache"] = cache_data
         return web.json_response(payload)
 
-    def cleanup(self) -> None:
-        SessionStore.cleanup_cache_dir(self.tag)
+    async def cleanup(self) -> None:
+        await SessionStore.remove_cache_dirs([self.tag])
 
 
 def remote_list(name: Any) -> list[dict]:
@@ -1617,6 +1623,7 @@ def extract_track_manifests(tracks: Tracks) -> List[Dict[str, Any]]:
 
     compression_level = app_config.serve.get("compression_level", 1)
     fragments: List[Dict[str, Any]] = []
+    representations: Dict[int, int] = {}
 
     for track in list(tracks.videos) + list(tracks.audio) + list(tracks.subtitles):
         dash = (getattr(track, "data", None) or {}).get("dash") or {}
@@ -1624,8 +1631,10 @@ def extract_track_manifests(tracks: Tracks) -> List[Dict[str, Any]]:
         adaptation_set = dash.get("adaptation_set")
         if manifest is None or adaptation_set is None:
             continue
-        if adaptation_set.getroottree().getroot() is manifest and len(manifest.findall(".//Representation")) > 1:
-            continue
+        if adaptation_set.getroottree().getroot() is manifest:
+            count = once(representations, id(manifest), lambda: len(manifest.findall(".//Representation")))
+            if count > 1:
+                continue
 
         root = etree.Element("MPD", dict(manifest.attrib))
         for child in manifest:
@@ -1924,7 +1933,7 @@ async def search_handler(data: Dict[str, Any], request: Optional[web.Request] = 
     request_cache = RequestCache()
     try:
         results = await asyncio.to_thread(run_service_search, data, normalized_service, query, request, request_cache)
-        return request_cache.json_response({"results": results, "count": len(results)})
+        return await request_cache.json_response({"results": results, "count": len(results)})
     except APIError:
         raise
     except (Exception, SystemExit) as e:
@@ -1934,7 +1943,7 @@ async def search_handler(data: Dict[str, Any], request: Optional[web.Request] = 
             e, context={"operation": "search", "service": normalized_service}, debug_mode=debug_mode
         )
     finally:
-        request_cache.cleanup()
+        await request_cache.cleanup()
 
 
 async def list_titles_handler(data: Dict[str, Any], request: Optional[web.Request] = None) -> web.Response:
@@ -1967,7 +1976,7 @@ async def list_titles_handler(data: Dict[str, Any], request: Optional[web.Reques
 
         title_list = [stamp_service_flags(serialize_title(t), service_instance) for t in listed_titles(titles)]
 
-        return request_cache.json_response({"titles": title_list})
+        return await request_cache.json_response({"titles": title_list})
 
     except APIError:
         raise
@@ -1982,7 +1991,7 @@ async def list_titles_handler(data: Dict[str, Any], request: Optional[web.Reques
     finally:
         if lease is not None:
             await release_remote_service(lease)
-        request_cache.cleanup()
+        await request_cache.cleanup()
 
 
 async def list_tracks_handler(data: Dict[str, Any], request: Optional[web.Request] = None) -> web.Response:
@@ -2121,7 +2130,7 @@ async def list_tracks_handler(data: Dict[str, Any], request: Optional[web.Reques
                         response: Dict[str, Any] = {"episodes": episodes_data}
                         if failed_episodes:
                             response["unavailable_episodes"] = failed_episodes
-                        return request_cache.json_response(response)
+                        return await request_cache.json_response(response)
                     else:
                         raise APIError(
                             APIErrorCode.NO_CONTENT,
@@ -2152,7 +2161,7 @@ async def list_tracks_handler(data: Dict[str, Any], request: Optional[web.Reques
             "subtitles": [serialize_subtitle_track(t) for t in tracks.subtitles],
         }
 
-        return request_cache.json_response(response)
+        return await request_cache.json_response(response)
 
     except APIError:
         raise
@@ -2167,7 +2176,7 @@ async def list_tracks_handler(data: Dict[str, Any], request: Optional[web.Reques
     finally:
         if lease is not None:
             await release_remote_service(lease)
-        request_cache.cleanup()
+        await request_cache.cleanup()
 
 
 VALID_VCODECS = [choice.upper() for choice in VIDEO_CODEC_LIST.choices]
@@ -3505,11 +3514,15 @@ async def download_history_handler(data: Dict[str, Any], request: Optional[web.R
 
         allowed = get_allowed_services(request)
         if allowed is None:
-            history = read_job_history(limit=limit, service=data.get("service"), owner=owner_id(caller_key(request)))
+            history = await asyncio.to_thread(
+                read_job_history, limit=limit, service=data.get("service"), owner=owner_id(caller_key(request))
+            )
         else:
             # Read unbounded, drop entries outside the caller's allowlist, then apply limit.
             allowed_upper = {a.upper() for a in allowed}
-            entries = read_job_history(limit=0, service=data.get("service"), owner=owner_id(caller_key(request)))
+            entries = await asyncio.to_thread(
+                read_job_history, limit=0, service=data.get("service"), owner=owner_id(caller_key(request))
+            )
             history = [e for e in entries if str(e.get("service") or "").upper() in allowed_upper][:limit]
         return web.json_response({"history": history, "count": len(history)})
 
@@ -4219,8 +4232,9 @@ async def session_tracks_handler(
             video_tracks = sorted(tracks.videos, key=lambda t: t.bitrate or 0, reverse=True)
             audio_tracks = sorted(tracks.audio, key=lambda t: t.bitrate or 0, reverse=True)
 
-            manifests = extract_manifests(tracks)
-            track_manifests = extract_track_manifests(tracks)
+            manifests, track_manifests = await asyncio.to_thread(
+                lambda: (extract_manifests(tracks), extract_track_manifests(tracks))
+            )
 
             session_headers, session_cookies = client_session_auth(session)
 
@@ -4255,12 +4269,17 @@ async def session_tracks_handler(
         else:
             server_cdm_type = "playready"
 
-        original_ids = original_audio_ids(audio_tracks, title)
-        video = [serialize_video_track(t, include_url=True) for t in video_tracks]
-        audio = [serialize_audio_track(t, include_url=True, is_original=t.id in original_ids) for t in audio_tracks]
-        subtitles = [serialize_subtitle_track(t, include_url=True) for t in tracks.subtitles]
-        for d in video + audio + subtitles:
-            d["data"] = scrub_track_data(d.get("data"), session)
+        def serialize() -> tuple[list, list, list, list]:
+            """The track and attachment lists, off the event loop: an attachment can be a 20 MB file."""
+            original_ids = original_audio_ids(audio_tracks, title)
+            video = [serialize_video_track(t, include_url=True) for t in video_tracks]
+            audio = [serialize_audio_track(t, include_url=True, is_original=t.id in original_ids) for t in audio_tracks]
+            subtitles = [serialize_subtitle_track(t, include_url=True) for t in tracks.subtitles]
+            for d in video + audio + subtitles:
+                d["data"] = scrub_track_data(d.get("data"), session)
+            return video, audio, subtitles, [a for a in map(serialize_attachment, tracks.attachments) if a]
+
+        video, audio, subtitles, attachments = await asyncio.to_thread(serialize)
 
         return web.json_response(
             {
@@ -4272,7 +4291,7 @@ async def session_tracks_handler(
                     {"timestamp": ch.timestamp, "name": ch.name}
                     for ch in session.chapters_by_title.get(str(title_id), [])
                 ],
-                "attachments": [a for a in map(serialize_attachment, tracks.attachments) if a],
+                "attachments": attachments,
                 "manifests": manifests,
                 "track_manifests": track_manifests,
                 "session_headers": session_headers,
@@ -4955,7 +4974,7 @@ def load_server_vaults(service_name: str) -> Any:
     return vaults
 
 
-def once(shared: Dict[str, Any], key: Any, make: Callable[[], Any]) -> Any:
+def once(shared: Dict[Any, Any], key: Any, make: Callable[[], Any]) -> Any:
     """``make()`` the first time ``key`` is asked for in ``shared``, the stored value after that."""
     if key not in shared:
         shared[key] = make()
