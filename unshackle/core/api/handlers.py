@@ -5139,7 +5139,7 @@ def handle_single_server_cdm(
             pr_drm.absorb(*siblings)
 
         # Gate on the caller's CDM device first: no device, no keys from the vault or CDM.
-        device_name = resolve_device_name(user_config, drm_type, service.__class__.__name__)
+        device_name = resolve_device_name(user_config, drm_type, service_name)
 
         if refusal:
             raise refusal
@@ -5166,7 +5166,7 @@ def handle_single_server_cdm(
 
         # Gate on the caller's CDM device first so a caller with no device cannot
         # harvest server-side keys from the vault fallback below.
-        device_name = resolve_device_name(user_config, drm_type, service.__class__.__name__)
+        device_name = resolve_device_name(user_config, drm_type, service_name)
 
         vault_hit = check_vaults(wv_drm.kids, service_name, shared=shared)
         if vault_hit:

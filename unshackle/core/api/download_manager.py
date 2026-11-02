@@ -92,8 +92,8 @@ class JobStatus(Enum):
     CANCELLED = "cancelled"
 
 
-# Statuses a job can never leave; such jobs are safe to remove or retry.
 WORKER_STDERR_LIMIT = 64 * 1024
+# Statuses a job can never leave; such jobs are safe to remove or retry.
 TERMINAL_STATUSES = (JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED)
 
 

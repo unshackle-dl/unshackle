@@ -515,11 +515,11 @@ async def services(request: web.Request) -> web.Response:
         services_info = []
 
         for tag in service_tags:
-            service_data: dict[str, Any] = {**SERVICE_DEFAULTS, "tag": tag}
             try:
-                service_data = {**service_details(tag)}
+                service_data: dict[str, Any] = {**service_details(tag)}
             except Exception as e:
                 log.warning(f"Could not load details for service {tag}: {e}")
+                service_data = {**SERVICE_DEFAULTS, "tag": tag}
             if tag in services_module.PENDING:
                 service_data["pending_update"] = True
             if server_accounts_allowed(request, tag) and (server_accounts := server_account_regions(tag)) is not None:
