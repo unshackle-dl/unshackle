@@ -1371,7 +1371,6 @@ class dl:
                     },
                 )
 
-                # Log binary versions for diagnostics
                 binary_versions: dict[str, Optional[dict[str, Optional[str]]]] = {}
                 for name, binary in [
                     ("shaka_packager", binaries.ShakaPackager),
@@ -1380,56 +1379,9 @@ class dl:
                     ("ffmpeg", binaries.FFMPEG),
                     ("ffprobe", binaries.FFProbe),
                 ]:
-                    if binary:
-                        version = None
-                        try:
-                            if name == "shaka_packager":
-                                r = subprocess.run(
-                                    [str(binary), "--version"],
-                                    capture_output=True,
-                                    text=True,
-                                    encoding="utf-8",
-                                    errors="replace",
-                                    timeout=5,
-                                )
-                                version = (r.stdout or r.stderr or "").strip()
-                            elif name in ("ffmpeg", "ffprobe"):
-                                r = subprocess.run(
-                                    [str(binary), "-version"],
-                                    capture_output=True,
-                                    text=True,
-                                    encoding="utf-8",
-                                    errors="replace",
-                                    timeout=5,
-                                )
-                                version = (r.stdout or "").split("\n")[0].strip()
-                            elif name == "mkvmerge":
-                                r = subprocess.run(
-                                    [str(binary), "--version"],
-                                    capture_output=True,
-                                    text=True,
-                                    encoding="utf-8",
-                                    errors="replace",
-                                    timeout=5,
-                                )
-                                version = (r.stdout or "").strip()
-                            elif name == "mp4decrypt":
-                                r = subprocess.run(
-                                    [str(binary)],
-                                    capture_output=True,
-                                    text=True,
-                                    encoding="utf-8",
-                                    errors="replace",
-                                    timeout=5,
-                                )
-                                output = (r.stdout or "") + (r.stderr or "")
-                                lines = [line.strip() for line in output.split("\n") if line.strip()]
-                                version = " | ".join(lines[:2]) if lines else None
-                        except Exception:
-                            version = "<error getting version>"
-                        binary_versions[name] = {"path": str(binary), "version": version}
-                    else:
-                        binary_versions[name] = None
+                    binary_versions[name] = (
+                        {"path": str(binary), "version": binaries.binary_version(binary)} if binary else None
+                    )
 
                 self.debug_logger.log(
                     level="DEBUG",

@@ -1,7 +1,10 @@
+import os
 import re
 import shutil
+import signal
 import subprocess  # nosec B404
 import sys
+from contextlib import suppress
 from pathlib import Path
 from typing import Optional
 
@@ -108,6 +111,7 @@ VERSION_RE = re.compile(DOTTED_NUMBER)
 LABELLED_VERSION_RE = re.compile(rf"(?i)\bversion[:\s]+[a-z]?({DOTTED_NUMBER})")
 VERSION_WORD_RE = re.compile(r"(?i)\bversion\b")
 BARE_VERSION_TOOLS = {"mp4decrypt"}
+PROBE_TIMEOUT = 5.0
 
 
 def parse_version(text: str) -> Optional[str]:
@@ -125,6 +129,39 @@ def parse_version(text: str) -> Optional[str]:
     return None
 
 
+def probe_output(path: Path, args: list[str]) -> Optional[str]:
+    """Run a binary and return its stdout and stderr, or None when it does not start or times out.
+
+    A timeout kills the whole tree: on Windows subprocess.run waits with no limit for a grandchild that holds the pipes.
+    """
+    try:
+        proc = subprocess.Popen(  # nosec B603
+            [str(path), *args],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            start_new_session=True,
+        )
+    except (OSError, ValueError):
+        return None
+    with proc:
+        try:
+            out, err = proc.communicate(timeout=PROBE_TIMEOUT)
+        except subprocess.TimeoutExpired:
+            if sys.platform == "win32":
+                subprocess.run(["taskkill", "/F", "/T", "/PID", str(proc.pid)], capture_output=True)  # nosec B603 B607
+            else:
+                with suppress(ProcessLookupError):
+                    os.killpg(proc.pid, signal.SIGKILL)
+            with suppress(subprocess.TimeoutExpired):
+                proc.communicate(timeout=1)
+            return None
+    return f"{out}\n{err}"
+
+
 def binary_version(path: Optional[Path]) -> Optional[str]:
     """Best-effort version probe of a binary. Returns None when nothing is parseable.
 
@@ -134,20 +171,10 @@ def binary_version(path: Optional[Path]) -> Optional[str]:
         return None
     bare = path.stem.lower() in BARE_VERSION_TOOLS
     for args in [[]] if bare else [["--version"], ["-version"]]:
-        try:
-            proc = subprocess.run(  # nosec B603
-                [str(path), *args],
-                capture_output=True,
-                stdin=subprocess.DEVNULL,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=5,
-            )
-        except (OSError, subprocess.SubprocessError, ValueError):
+        output = probe_output(path, args)
+        if output is None:
             return None
-        version = parse_version(f"{proc.stdout}\n{proc.stderr}")
-        if version:
+        if version := parse_version(output):
             return version
     return None
 

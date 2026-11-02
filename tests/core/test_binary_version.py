@@ -1,11 +1,12 @@
-import subprocess
+import sys
+import time
 from pathlib import Path
-from typing import Any
+from typing import Callable, Optional
 
 import pytest
 
 from unshackle.core import binaries
-from unshackle.core.binaries import binary_version, parse_version
+from unshackle.core.binaries import binary_version, parse_version, probe_output
 
 
 @pytest.mark.parametrize(
@@ -29,33 +30,45 @@ def test_parse_version(text: str, expected: str | None) -> None:
     assert parse_version(text) == expected
 
 
+def fake_probe(outputs: dict[str, Optional[str]], calls: list[list[str]]) -> Callable[[Path, list[str]], Optional[str]]:
+    def probe(path: Path, args: list[str]) -> Optional[str]:
+        calls.append(args)
+        return outputs.get(" ".join(args), "")
+
+    return probe
+
+
 def test_bare_call_only_for_listed_tools(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[list[str]] = []
+    outputs = {"": "MP4 Decrypter - Version 1.4\nusage: tool [options]", "--version": "ERROR: missing output"}
+    monkeypatch.setattr(binaries, "probe_output", fake_probe(outputs, calls))
 
-    def run(cmd: list[str], **kwargs: Any) -> subprocess.CompletedProcess:
-        calls.append(cmd)
-        out = "MP4 Decrypter - Version 1.4\nusage: tool [options]" if len(cmd) == 1 else "ERROR: missing output"
-        return subprocess.CompletedProcess(cmd, 1, "", out)
-
-    monkeypatch.setattr(binaries.subprocess, "run", run)
-
-    listed, other = Path("/opt/bin/mp4decrypt"), Path("/opt/bin/othertool")
-    assert binary_version(listed) == "1.4"
-    assert calls == [[str(listed)]]
+    assert binary_version(Path("/opt/bin/mp4decrypt")) == "1.4"
+    assert calls == [[]]
 
     calls.clear()
-    assert binary_version(other) is None
-    assert calls == [[str(other), "--version"], [str(other), "-version"]]
+    assert binary_version(Path("/opt/bin/othertool")) is None
+    assert calls == [["--version"], ["-version"]]
 
 
 def test_timeout_stops_the_probe(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[list[str]] = []
-
-    def run(cmd: list[str], **kwargs: Any) -> subprocess.CompletedProcess:
-        calls.append(cmd)
-        raise subprocess.TimeoutExpired(cmd, kwargs["timeout"])
-
-    monkeypatch.setattr(binaries.subprocess, "run", run)
+    monkeypatch.setattr(binaries, "probe_output", fake_probe({"--version": None}, calls))
 
     assert binary_version(Path("/opt/bin/othertool")) is None
-    assert len(calls) == 1
+    assert calls == [["--version"]]
+
+
+def test_timeout_kills_the_whole_tree(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(binaries, "PROBE_TIMEOUT", 0.5)
+    if sys.platform == "win32":
+        tool = tmp_path / "wrapper.bat"
+        tool.write_text("@echo off\r\nping -n 30 127.0.0.1 >nul\r\n")
+    else:
+        tool = tmp_path / "wrapper"
+        tool.write_text("#!/bin/sh\nsleep 30 &\nsleep 30\n")
+        tool.chmod(0o755)
+
+    start = time.monotonic()
+    assert probe_output(tool, ["--version"]) is None
+    assert time.monotonic() - start < 10
