@@ -2559,7 +2559,7 @@ server does not have to prompt:</p>
 <li>Local <strong>cookies</strong>, compressed and base64-encoded</li>
 <li>A resolved <strong>proxy</strong>, or, if you did not set one, your detected
   <strong>client region</strong>. A client that reports no region is not blocked. The
-  proxy must be a full proxy URI unless the operator gives your API key
+  proxy must be a full proxy URI on a public host unless the operator gives your API key
   <code>server_proxy</code>. Without <code>server_proxy</code> the server does not resolve country
   codes with its own proxy providers, and it rejects the remote session when
   it sits in a different region from the reported one, asking the client to

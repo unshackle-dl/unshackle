@@ -2474,6 +2474,11 @@ full proxy URI, or <code>no_proxy</code> to accept the server's own connection. 
 to let that API key send a country code or a <code>provider:country</code> value, and to let the server
 pick a proxy for the client's region and for a service geofence. The client reports its own
 region; a client that reports none is not blocked.</p>
+<p>Without <code>server_proxy</code>, the server refuses a proxy URI whose host is not a public address:
+loopback, private, link-local and other special-purpose addresses, and <code>localhost</code>. This also
+applies to a server on a LAN, so a client proxy on that LAN needs <code>server_proxy</code> or an admin key.
+The server checks the proxy values the job uses, including a <code>proxy</code> default from the server's
+own config.</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nt">serve</span><span class="p">:</span>
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span><span class="nt">api_secret</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">change-me</span>
 </span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span><span class="nt">remote_only</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
