@@ -1459,7 +1459,7 @@ def declared_kwargs(fn: Callable[..., Any], kwargs: dict[str, Any]) -> dict[str,
     A service licence function that never asked for ``pssh`` or ``session_id`` must not fail
     on them. Filter only against a signature this function can read and call by keyword.
     Anything else, such as the licence function of a compiled service, gets every argument,
-    and the caller handles the TypeError.
+    and ``call_licence`` drops each extra it rejects.
     """
     try:
         params = inspect.signature(fn).parameters
@@ -1468,6 +1468,22 @@ def declared_kwargs(fn: Callable[..., Any], kwargs: dict[str, Any]) -> dict[str,
     if "challenge" not in params or any(p.kind is p.VAR_KEYWORD for p in params.values()):
         return kwargs
     return {k: v for k, v in kwargs.items() if k in params}
+
+
+def call_licence(licence: Callable[..., Any], challenge: Any, **extras: Any) -> Any:
+    """Call ``licence`` with ``challenge`` and ``extras``, and drop each extra the call names as unexpected.
+
+    A TypeError that names no offered extra comes from inside the licence function, so it
+    raises at once, and the challenge does not go to the licence server again.
+    """
+    while True:
+        try:
+            return licence(challenge=challenge, **extras)
+        except TypeError as e:
+            rejected = next((k for k in extras if f"'{k}'" in str(e)), None)
+            if rejected is None:
+                raise
+            del extras[rejected]
 
 
 __all__ = (

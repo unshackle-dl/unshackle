@@ -30,7 +30,7 @@ pytestmark = pytest.mark.unit
 KID = UUID("11111111111111111111111111111111")
 KEY = bytes.fromhex("22222222222222222222222222222222")
 PSSH_B64 = base64.b64encode(b"pssh").decode()
-SESSION_ID = b"sid-bytes"
+SESSION_ID = bytes(range(16))
 
 
 class _Recorder:
@@ -105,7 +105,7 @@ class StubPlayReady(PlayReady):
     kids: Any = None
 
     def __init__(self, pssh: Any = None, pssh_b64: Optional[str] = None, **kwargs: Any) -> None:
-        self.pssh = SimpleNamespace(wrm_headers=["<WRMHEADER/>"])
+        self.pssh = SimpleNamespace(wrm_headers=[SimpleNamespace(dumps=lambda: "<WRMHEADER/>")])
         self.pssh_b64 = pssh_b64
         self.kids = [KID]
         self._extra_headers: list[Any] = []
@@ -211,27 +211,6 @@ def test_server_cdm_widevine_var_kwargs_service_receives_pssh_and_session_id(wid
     assert service.calls[0]["session_id"] == SESSION_ID
 
 
-def test_server_cdm_widevine_unnarrowable_signature_retries_without_the_extras(widevine_env: None) -> None:
-    # declared_kwargs cannot narrow a signature it cannot read (a compiled service) so it offers
-    # everything. The call raises TypeError and Widevine retries with `challenge` alone, which
-    # the lambda turns back into the classic challenge/title/track set the service does accept.
-    service = ClassicService()
-    calls: list[dict[str, Any]] = []
-
-    def compiled(**kw: Any) -> bytes:
-        calls.append(kw)
-        if {"pssh", "session_id"} & set(kw):
-            raise TypeError("unexpected keyword argument")
-        return b"LIC"
-
-    service.get_widevine_license = compiled  # type: ignore[method-assign]
-    _server_cdm(service, "widevine")
-
-    assert len(calls) == 2
-    assert set(calls[0]) == {"challenge", "title", "track", "pssh", "session_id"}
-    assert set(calls[1]) == {"challenge", "title", "track"}
-
-
 def test_server_cdm_widevine_lambda_is_never_itself_filtered(widevine_env: None) -> None:
     # The `(**kw)` lambda would look like a VAR_KEYWORD service if declared_kwargs were ever
     # applied to it, and a classic service would then be handed `pssh` and `session_id`.
@@ -250,22 +229,77 @@ def test_server_cdm_playready_classic_signature_gets_three_arguments(playready_e
     assert set(service.calls[0]) == {"challenge", "title", "track"}
 
 
-def test_server_cdm_playready_offers_pssh_b64_not_pssh_or_session_id(playready_env: None) -> None:
-    # PlayReady.get_content_keys calls licence(challenge=..., pssh_b64=...); it has no
-    # session_id to give, so a session-aware service sees the None default there.
+def test_server_cdm_playready_offers_pssh_b64_and_session_id_not_pssh(playready_env: None) -> None:
     service = VarKwService()
     _server_cdm(service, "playready")
 
-    assert set(service.calls[0]) == {"challenge", "title", "track", "pssh_b64"}
+    assert set(service.calls[0]) == {"challenge", "title", "track", "pssh_b64", "session_id"}
     assert service.calls[0]["pssh_b64"] == PSSH_B64
+    assert service.calls[0]["session_id"] == SESSION_ID
 
 
-def test_server_cdm_playready_session_service_is_not_passed_session_id(playready_env: None) -> None:
+def test_server_cdm_playready_session_service_receives_session_id(playready_env: None) -> None:
     service = SessionService()
     _server_cdm(service, "playready")
 
     assert set(service.calls[0]) == {"challenge", "title", "track", "session_id"}
-    assert service.calls[0]["session_id"] is None  # the signature default, never an offered value
+    assert service.calls[0]["session_id"] == SESSION_ID
+
+
+@pytest.mark.parametrize(
+    ("drm_type", "rejects", "last_call"),
+    [
+        ("widevine", ("pssh", "session_id"), {"challenge", "title", "track"}),
+        ("playready", ("session_id",), {"challenge", "title", "track", "pssh_b64"}),
+        ("playready", ("pssh_b64", "session_id"), {"challenge", "title", "track"}),
+    ],
+)
+def test_server_cdm_unnarrowable_signature_retries_without_the_rejected_extras(
+    drm_type: str, rejects: tuple[str, ...], last_call: set[str], request: pytest.FixtureRequest
+) -> None:
+    # declared_kwargs cannot narrow a signature it cannot read (a compiled service) so it offers
+    # everything. Each TypeError names one rejected extra, and call_licence retries without it.
+    request.getfixturevalue(f"{drm_type}_env")
+    service = ClassicService()
+    classic = getattr(service, f"get_{drm_type}_license")
+    calls: list[dict[str, Any]] = []
+
+    def compiled(**kw: Any) -> Any:
+        calls.append(kw)
+        rejected = next((k for k in rejects if k in kw), None)
+        if rejected:
+            raise TypeError(f"compiled() got an unexpected keyword argument '{rejected}'")
+        return classic(challenge=kw["challenge"], title=None, track=None)
+
+    setattr(service, f"get_{drm_type}_license", compiled)
+    _server_cdm(service, drm_type)
+
+    assert len(calls) == len(rejects) + 1
+    assert set(calls[0]) == {
+        "challenge",
+        "title",
+        "track",
+        "session_id",
+        "pssh" if drm_type == "widevine" else "pssh_b64",
+    }
+    assert set(calls[-1]) == last_call
+
+
+@pytest.mark.parametrize("drm_type", ["widevine", "playready"])
+def test_server_cdm_typeerror_inside_the_service_is_not_retried(drm_type: str, request: pytest.FixtureRequest) -> None:
+    request.getfixturevalue(f"{drm_type}_env")
+    service = SessionService()
+    calls: list[dict[str, Any]] = []
+
+    def broken(**kw: Any) -> bytes:
+        calls.append(kw)
+        raise TypeError("'NoneType' object is not subscriptable")
+
+    setattr(service, f"get_{drm_type}_license", broken)
+    with pytest.raises(TypeError, match="not subscriptable"):
+        _server_cdm(service, drm_type)
+
+    assert len(calls) == 1
 
 
 def _proxy(service: Any, drm_type: str) -> Any:

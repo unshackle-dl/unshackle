@@ -26,7 +26,7 @@ from unshackle.core.console import console
 from unshackle.core.constants import AnyTrack
 from unshackle.core.drm import key_args as drm_key_args
 from unshackle.core.session import AnySession, utf8_text
-from unshackle.core.utilities import get_boxes, log_event
+from unshackle.core.utilities import call_licence, get_boxes, log_event
 from unshackle.core.utils import run_proxy
 from unshackle.core.utils.subprocess import ffprobe
 
@@ -491,13 +491,7 @@ class PlayReady:
                         challenge_size=len(challenge),
                         kid_count=len(required_kids),
                     )
-                    try:
-                        license_res = licence(challenge=challenge, pssh_b64=pssh_b64, session_id=session_id)
-                    except TypeError:
-                        try:
-                            license_res = licence(challenge=challenge, pssh_b64=pssh_b64)
-                        except TypeError:
-                            license_res = licence(challenge=challenge)
+                    license_res = call_licence(licence, challenge, pssh_b64=pssh_b64, session_id=session_id)
                     if isinstance(license_res, bytes):
                         license_str = license_res.decode(errors="ignore")
                     else:

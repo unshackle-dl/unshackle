@@ -22,7 +22,7 @@ from unshackle.core.console import console
 from unshackle.core.constants import AnyTrack
 from unshackle.core.drm import key_args as drm_key_args
 from unshackle.core.session import AnySession, utf8_text
-from unshackle.core.utilities import get_boxes, log_event
+from unshackle.core.utilities import call_licence, get_boxes, log_event
 from unshackle.core.utils import run_proxy
 from unshackle.core.utils.subprocess import ffprobe
 
@@ -237,10 +237,7 @@ class Widevine:
                         challenge_size=len(challenge),
                         kid_count=len(self.kids),
                     )
-                    try:
-                        license_res = licence(challenge=challenge, pssh=self.pssh, session_id=session_id)
-                    except TypeError:
-                        license_res = licence(challenge=challenge)
+                    license_res = call_licence(licence, challenge, pssh=self.pssh, session_id=session_id)
                     cdm.parse_license(session_id, license_res)
                     log_event(
                         "drm_license_response",

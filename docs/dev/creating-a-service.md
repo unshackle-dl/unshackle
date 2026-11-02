@@ -586,6 +586,8 @@ current `title` and `track`:
 | `get_playready_license` | PlayReady | The license response. Defaults to delegating to `get_widevine_license`. |
 | `get_clearkey_license` | DASH `org.w3.clearkey` | The JWK Set (dict/JSON/bytes), or `None` to let the framework POST the challenge to the manifest's Laurl. |
 
+A license callback can also declare optional keyword arguments. `get_widevine_license` can ask for `pssh` and `session_id`. `get_playready_license` can ask for `pssh_b64` and `session_id`. `session_id` is the open CDM session. A callback gets only the arguments that its signature declares.
+
 ```python
 def get_widevine_license(self, *, challenge: bytes, title, track):
     response = self.session.post(
