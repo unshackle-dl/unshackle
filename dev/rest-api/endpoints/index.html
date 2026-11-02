@@ -4129,9 +4129,11 @@ ignore it safely. See <a href="../../creating-a-service/#split-episodes">Split e
 <p><strong>Validation.</strong> Invalid values return <code>400 INVALID_PARAMETERS</code>. <code>vcodec</code>, <code>acodec</code> and <code>sub_format</code> take the same spellings as the CLI options of the same name (<code>unshackle dl --help</code> prints each list). The API and the CLI read one list, so they cannot disagree. <code>range</code> must be one of SDR/HDR10/HDR10P/DV/HLG/HYBRID, and <code>HDR10+</code> is also valid. The bitrate, download worker, and download counts must be positive integers. You may set at most one of the <code>*_only</code> flags. You cannot combine <code>no_subs</code> with <code>subs_only</code>, or <code>no_audio</code> with <code>audio_only</code>.</p>
 <p><strong>Service options.</strong> A service's own CLI options travel in the same body. Send them in a nested
 <code>service_params</code> object, or as flat top-level keys. When the body has <code>service_params</code>, the server
-reads service options only from it, and every flat key is a <code>dl</code> value. An option you leave out
+reads service options only from it, and every flat key is a <code>dl</code> value. Without it, a flat key that
+is also a <code>dl</code> option, such as <code>quality</code> or <code>lang</code>, stays a <code>dl</code> value. An option you leave out
 takes the default declared on the service's <code>cli</code> command, so the job matches the equivalent <code>dl</code>
-run. <code>profile</code> at the top level always means the credential
+run. The server checks each service option against that option's type, and a value it refuses gets
+<code>400 INVALID_PARAMETERS</code>. <code>profile</code> at the top level always means the credential
 profile, never a service's own <code>--profile</code> option.</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="7:1"><input checked="checked" id="__tabbed_7_1" name="__tabbed_7" type="radio" /><div class="tabbed-labels"><label for="__tabbed_7_1">Request</label></div>
 <div class="tabbed-content">
