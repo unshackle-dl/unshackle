@@ -8,13 +8,12 @@ from __future__ import annotations
 
 import base64
 import logging
-import subprocess
-import sys
 from pathlib import Path
 from typing import Any, Optional, Union
 from uuid import UUID
 
 from unshackle.core.cdm.monalisa import MonaLisaCDM
+from unshackle.core.utils.subprocess import run_step
 
 log = logging.getLogger(__name__)
 
@@ -220,57 +219,22 @@ class MonaLisa:
         self._execute_decrypt(path, output_path)
 
     def _execute_decrypt(self, path: Path, output_path: Optional[Path] = None) -> None:
-        """Execute external CLI tool via subprocess to decrypt the target file."""
+        """Run the external tool into a temporary file, which replaces the target only on success."""
         if not path or not path.exists():
             raise ValueError(f"Target file does not exist: {path}")
 
         if not self._tool_path or not self._tool_path.exists():
-            return
+            raise RuntimeError(f"MonaLisa decryption tool missing: {self._tool_path or 'no tool_path given'}")
 
         if not self.key or not self.kid:
             raise MonaLisa.Exceptions.KeyExtractionFailed("Missing content key for decryption.")
 
         target_output = output_path or path
-        temp_enc = path.with_name(f"{path.name}.temp_enc")
-
-        try:
-            if path.exists():
-                path.replace(temp_enc)
-            else:
-                raise FileNotFoundError(f"Target file disappeared: {path}")
-
-            cmd = [
-                str(self._tool_path),
-                "-i",
-                str(temp_enc),
-                "-o",
-                str(target_output),
-                "-k",
-                self.key_pair,
-            ]
-
-            startupinfo = None
-            if sys.platform == "win32":
-                startupinfo = subprocess.STARTUPINFO()
-                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-
-            process = subprocess.run(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                startupinfo=startupinfo,
-                timeout=60,
-            )
-
-            if process.returncode != 0 or not target_output.exists():
-                raise RuntimeError(f"MonaLisa decryption failed for {path.name}: {process.stderr or 'unknown error'}")
-
-        finally:
-            if temp_enc.exists():
-                try:
-                    temp_enc.unlink()
-                except Exception:
-                    pass
+        temp_out = target_output.with_stem(f"{target_output.stem}_decrypted")
+        run_step(
+            [self._tool_path, "-i", path, "-o", temp_out, "-k", self.key_pair],
+            output=temp_out,
+            label=f"MonaLisa decryption of {path.name}",
+            timeout=60,
+        )
+        temp_out.replace(target_output)

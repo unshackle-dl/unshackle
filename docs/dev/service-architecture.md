@@ -97,7 +97,7 @@ These are abstract. A service will not load unless it defines all three:
   line, and a REST download job shows it as the job's `notice`.
 - **Event callbacks**: `on_segment_downloaded`, `on_track_downloaded`,
   `on_track_decrypted`, `on_track_repacked`, `on_track_multiplex` let a service react to
-  pipeline events (for example, MonaLisa decrypts each segment in `on_segment_downloaded`).
+  pipeline events.
 - **`resolve_server_keys(title)`**: an escape hatch for services whose decryption keys are
   resolved server-side *ahead of* the normal per-track license flow. Unlike everything else
   here it is **not declared on the `Service` base class at all**: `dl.py` probes for it with
