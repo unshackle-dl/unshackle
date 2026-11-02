@@ -4686,7 +4686,9 @@ def resolve_handler_proxy(
             log.debug(f"Server region lookup failed: {e!r}")
             server_region = None
 
-        geoblock = getattr(Services.load(normalized_service), "GEOBLOCK", ()) or ()
+        geoblock: Any = ()
+        with suppress(KeyError):  # a relayed tag need not be installed on this server
+            geoblock = getattr(Services.load(normalized_service), "GEOBLOCK", ()) or ()
         if client_region.lower() in {x.lower() for x in geoblock}:
             raise APIError(
                 APIErrorCode.GEOFENCE,

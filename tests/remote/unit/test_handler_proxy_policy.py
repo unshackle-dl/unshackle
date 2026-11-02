@@ -63,6 +63,11 @@ def test_region_match_no_proxy(monkeypatch):
     assert handlers.resolve_handler_proxy({"client_region": "ca"}, "EXAMPLE", request("plainkey")) == (None, [])
 
 
+def test_relayed_tag_not_installed_here_skips_the_local_geoblock(monkeypatch):
+    patch_server_region(monkeypatch, "CA")
+    assert handlers.resolve_handler_proxy({"client_region": "ca"}, "NOTHERE", request("plainkey")) == (None, [])
+
+
 def test_region_unknown_no_error(monkeypatch):
     patch_server_region(monkeypatch, None)
     assert handlers.resolve_handler_proxy({"client_region": "ca"}, "EXAMPLE", request("plainkey")) == (None, [])
