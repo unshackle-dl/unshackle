@@ -3683,9 +3683,23 @@ through the tunnel. It stops at the first step that fails.</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>unshackle env COMMAND [ARGS]...
 </span></code></pre></div>
 <h3 id="env-check"><code>env check</code><a class="headerlink" href="#env-check" title="Permanent link">&para;</a></h3>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>unshackle env check
+<div class="language-text highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>unshackle env check [--verbose]
 </span></code></pre></div>
-<p>Prints a dependency table (Category / Tool / Status / Required / Purpose) that shows which external tools unshackle finds on your <code>PATH</code>. It also gives a summary of how many required tools are present. If a required tool is missing, it tells you to run <a href="#setup"><code>unshackle setup</code></a>.</p>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--verbose</code></td>
+<td>Adds a Path column with the file that unshackle loads for each tool. Use it to find a tool that you want to replace.</td>
+</tr>
+</tbody>
+</table>
+<p>Prints a dependency table (Category / Tool / Status / Version / Required / Purpose) that shows which external tools unshackle finds on your <code>PATH</code> and the version that each one reports. The version is <code>-</code> when a tool does not report one. It also gives a summary of how many required tools are present. If a required tool is missing, it tells you to run <a href="#setup"><code>unshackle setup</code></a>.</p>
 <table>
 <thead>
 <tr>
