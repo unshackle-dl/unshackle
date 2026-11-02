@@ -2243,8 +2243,9 @@ Every other endpoint refuses the dashboard key, and the dashboard refuses user k
 routes are available in <code>--remote-only</code> mode too.</p>
 <p>Run the server headless with <code>--quiet</code>: no banner, no Rich output, one plain log line per
 event on stderr, and <code>api.*</code> loggers stay at <code>INFO</code> so remote session activity reaches the
-log ring. Add <code>--debug</code> to raise the level to <code>DEBUG</code> and also write the full log to
-<code>directories.logs</code> as <code>unshackle_serve_&lt;time&gt;.log</code>. Nothing else the dashboard shows reaches
+log ring. The log ring and the event stream do not get <code>aiohttp.access</code> request lines.
+Add <code>--debug</code> to raise the level to <code>DEBUG</code>, send the request lines to the log ring too,
+and write the full log to <code>directories.logs</code> as <code>unshackle_serve_&lt;time&gt;.log</code>. Nothing else the dashboard shows reaches
 the disk: stats, the log ring and the event stream live in memory and reset on restart, so a
 dashboard UI that wants history must keep its own copy.</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>unshackle serve --remote-only --quiet
@@ -2281,7 +2282,7 @@ dashboard UI that wants history must keep its own copy.</p>
 </tr>
 <tr>
 <td><code>/api/dashboard/logs</code></td>
-<td><code>{"seq": N, "records": [...]}</code>: the last 1000 log records. <code>?since=&lt;seq&gt;</code> returns only newer records; <code>?level=WARNING</code> sets the minimum level; <code>?logger=serve</code> keeps one logger and its children (<code>aiohttp.access</code> is the noisiest). <code>ts</code> is a Unix epoch in seconds.</td>
+<td><code>{"seq": N, "records": [...]}</code>: the last 1000 log records. <code>?since=&lt;seq&gt;</code> returns only newer records; <code>?level=WARNING</code> sets the minimum level; <code>?logger=serve</code> keeps one logger and its children. <code>ts</code> is a Unix epoch in seconds.</td>
 </tr>
 <tr>
 <td><code>/api/dashboard/cdm-logs</code></td>
@@ -2305,7 +2306,7 @@ dashboard UI that wants history must keep its own copy.</p>
 </tr>
 <tr>
 <td><code>/api/dashboard/events</code></td>
-<td>Server-Sent Events stream. With <code>?since=&lt;seq&gt;</code> it returns <code>{"seq", "stats", "events": [...]}</code> instead: every event after <code>seq</code> (the server keeps the last 20000, log records included, so a poll every few seconds is safe even under a busy access log) as one JSON burst, so a UI that polls every few seconds still sees a remote session that opened and closed in between.</td>
+<td>Server-Sent Events stream. With <code>?since=&lt;seq&gt;</code> it returns <code>{"seq", "stats", "events": [...]}</code> instead: every event after <code>seq</code> (the server keeps the last 20000, log records included, so a poll every few seconds is safe) as one JSON burst, so a UI that polls every few seconds still sees a remote session that opened and closed in between.</td>
 </tr>
 </tbody>
 </table>
@@ -2334,7 +2335,7 @@ those it sends:</p>
 </tr>
 <tr>
 <td><code>session</code></td>
-<td><code>action</code> (<code>create</code>, <code>update</code> on every request the session makes and when titles or tracks load, or <code>delete</code>) plus the full remote session summary, so each event is a complete snapshot. A <code>delete</code> also carries <code>reason</code>: <code>closed</code> (the client ended it), <code>expired</code> (TTL sweep) or <code>evicted</code> (<code>max_sessions</code> reached). A session opened by <code>--skip-dl</code> can live only a few seconds, so a UI that wants history must keep its own record of these events.</td>
+<td><code>action</code> (<code>create</code>, <code>update</code> on every request the session makes and when titles or tracks load, or <code>delete</code>) plus the remote session summary. The <code>update</code> for a request carries that request as <code>action_entry</code> and has no <code>actions</code>: append it to the log you hold, capped at 500. Every other event is a complete snapshot with <code>actions</code>. A <code>delete</code> also carries <code>reason</code>: <code>closed</code> (the client ended it), <code>expired</code> (TTL sweep) or <code>evicted</code> (<code>max_sessions</code> reached). A session opened by <code>--skip-dl</code> can live only a few seconds, so a UI that wants history must keep its own record of these events.</td>
 </tr>
 <tr>
 <td><code>job</code></td>
