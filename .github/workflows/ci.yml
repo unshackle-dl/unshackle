@@ -36,10 +36,15 @@ jobs:
       - name: Import order
         run: uv run isort --check-only unshackle tests --skip-glob "*/services/*"
       - name: Type check
+        if: ${{ !cancelled() }}
         run: |
-          out=$(uv run mypy unshackle) || true
+          out=$(uv run mypy unshackle) || rc=$?
           echo "$out"
-          echo "$out" | sed -nE 's/^([^:]+):([0-9]+): error: (.*)$/::warning file=\1,line=\2::\3/p'
+          echo "$out" | sed -nE 's/^([^:]+):([0-9]+): error: (.*)$/::error file=\1,line=\2::\3/p'
+          exit ${rc:-0}
+      - name: Security lint
+        if: ${{ !cancelled() }}
+        run: uv run bandit -q -c pyproject.toml -r unshackle --severity-level medium --confidence-level medium
 
   test:
     strategy:

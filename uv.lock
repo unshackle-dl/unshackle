@@ -2176,7 +2176,6 @@ dependencies = [
     { name = "aiohttp" },
     { name = "aiohttp-swagger3" },
     { name = "appdirs" },
-    { name = "bandit" },
     { name = "brotli" },
     { name = "chardet" },
     { name = "click" },
@@ -2222,6 +2221,7 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "bandit" },
     { name = "isort" },
     { name = "mypy" },
     { name = "mypy-protobuf" },
@@ -2247,7 +2247,6 @@ requires-dist = [
     { name = "aiohttp", specifier = ">=3.14.0,<4" },
     { name = "aiohttp-swagger3", specifier = ">=0.9.0,<1" },
     { name = "appdirs", specifier = ">=1.4.4,<2" },
-    { name = "bandit", specifier = ">=1.9.4" },
     { name = "brotli", specifier = ">=1.1.0,<2" },
     { name = "chardet", specifier = ">=5.2.0,<6" },
     { name = "click", specifier = ">=8.2,<9" },
@@ -2293,6 +2292,7 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "bandit", specifier = ">=1.9.4,<2" },
     { name = "isort", specifier = ">=5.13.2,<8" },
     { name = "mypy", specifier = ">=1.9.0,<2" },
     { name = "mypy-protobuf", specifier = ">=3.6.0,<4" },
