@@ -492,9 +492,11 @@ Make a download job. It requires `service` and `title_id`. Every other field is 
 
 **Service options.** A service's own CLI options travel in the same body. Send them in a nested
 `service_params` object, or as flat top-level keys. When the body has `service_params`, the server
-reads service options only from it, and every flat key is a `dl` value. An option you leave out
+reads service options only from it, and every flat key is a `dl` value. Without it, a flat key that
+is also a `dl` option, such as `quality` or `lang`, stays a `dl` value. An option you leave out
 takes the default declared on the service's `cli` command, so the job matches the equivalent `dl`
-run. `profile` at the top level always means the credential
+run. The server checks each service option against that option's type, and a value it refuses gets
+`400 INVALID_PARAMETERS`. `profile` at the top level always means the credential
 profile, never a service's own `--profile` option.
 
 === "Request"

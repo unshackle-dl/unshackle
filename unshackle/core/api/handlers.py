@@ -56,7 +56,7 @@ from unshackle.core.utils.click_types import AUDIO_CODEC_LIST, QUALITY_LIST, SUB
 from unshackle.core.utils.collections import ci_get
 from unshackle.core.utils.hdr10plus import probed_tracks
 from unshackle.core.utils.redact import REDACTED, URL_USERINFO_RE, redact_all, redact_secrets, redact_text
-from unshackle.core.utils.service_params import service_options
+from unshackle.core.utils.service_params import FLAT_DL_KEYS, cast_service_options, service_options
 
 log = logging.getLogger("api")
 
@@ -253,6 +253,17 @@ def build_parent_ctx(
     return parent
 
 
+def cast_or_refuse(params: Iterable[click.Parameter], ctx: Any, options: Dict[str, Any]) -> Dict[str, Any]:
+    """``cast_service_options``, with a refused value as ``400 INVALID_PARAMETERS``."""
+    try:
+        return cast_service_options(params, ctx, options)
+    except click.BadParameter as e:
+        name = e.param.name if e.param and e.param.name else "?"
+        raise APIError(
+            APIErrorCode.INVALID_PARAMETERS, f"Invalid service option '{sanitize_log(name)}': {sanitize_log(e.message)}"
+        ) from e
+
+
 def instantiate_service(
     parent_ctx: Any,
     service_module: Any,
@@ -266,22 +277,13 @@ def instantiate_service(
     goes through its option's type here: JSON or a remote client's str-typed stub can send "1" for an int.
     """
     cli_params = getattr(getattr(service_module, "cli", None), "params", []) or []
-    params_by_name = {p.name: p for p in cli_params if getattr(p, "name", None) and p.name != "title"}
-    extras: Dict[str, Any] = {}
-    if data:
-        for k, v in service_options(data, params_by_name, transport_keys).items():
-            try:
-                extras[k] = params_by_name[k].type_cast_value(parent_ctx, v)
-            except click.BadParameter as e:
-                raise APIError(
-                    APIErrorCode.INVALID_PARAMETERS, f"Invalid service option '{sanitize_log(k)}': {e.message}"
-                ) from e
-        if data.get("service_params") is None:
-            for k in params_by_name.keys() & transport_keys & data.keys():
-                if k not in ("service", "title_id", "proxy", "no_proxy") and data.get(k) is not None:
-                    log.warning(
-                        f"Ignoring flat '{sanitize_log(k)}' as a service option, send it under 'service_params'"
-                    )
+    names = {p.name for p in cli_params if getattr(p, "name", None) and p.name != "title"}
+    data = data or {}
+    extras = cast_or_refuse(cli_params, parent_ctx, service_options(data, names, transport_keys))
+    if data and data.get("service_params") is None:
+        for k in names & transport_keys & data.keys():
+            if k not in ("service", "title_id", "proxy", "no_proxy") and data.get(k) is not None:
+                log.warning(f"Ignoring flat '{sanitize_log(k)}' as a service option, send it under 'service_params'")
     return parent_ctx.invoke(service_module.cli, title=title, **extras)
 
 
@@ -2491,7 +2493,12 @@ async def download_handler(data: Dict[str, Any], request: Optional[web.Request] 
                 for param in cli_params
                 if param.name and param.default is not None and not isinstance(param.default, enum.Enum)
             }
-            service_params = {**defaults, **service_options(data, {param.name for param in cli_params})}
+            # A flat dl key (quality, lang) stays a dl value, as in instantiate_service.
+            sent = service_options(
+                data, {param.name for param in cli_params}, FLAT_DL_KEYS | DEFAULT_DOWNLOAD_PARAMS.keys()
+            )
+            cast_or_refuse(cli_params, click.Context(click.Command(normalized_service)), sent)
+            service_params = {**defaults, **sent}
 
         filtered_params = {k: v for k, v in data.items() if k not in ["service", "title_id"]}
         # Overlay any dl-relevant keys from `serve:` config (e.g. downloads, workers) so the API

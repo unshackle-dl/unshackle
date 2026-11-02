@@ -21,7 +21,7 @@ from unshackle.core.api.events import bus, publish_service_event
 from unshackle.core.api.sanitize import sanitize_log
 from unshackle.core.utils.click_types import AUDIO_CODEC_LIST, QUALITY_LIST, VIDEO_CODEC_LIST
 from unshackle.core.utils.redact import REDACTED, URL_USERINFO_RE, redact_all, redact_path, redact_text
-from unshackle.core.utils.service_params import service_options
+from unshackle.core.utils.service_params import cast_service_options, service_options
 
 if TYPE_CHECKING:
     from unshackle.core.service import Service
@@ -579,7 +579,9 @@ def perform_download(
             if "title" in service_init_params:
                 service_kwargs["title"] = title_id
 
-            service_kwargs.update(service_options(params, service_init_params.keys() - {"title"}))
+            cli_params = getattr(getattr(service_module, "cli", None), "params", None) or []
+            options = service_options(params, service_init_params.keys() - {"title"})
+            service_kwargs.update(cast_service_options(cli_params, service_ctx, options))
 
             for param_name, param_info in service_init_params.items():
                 if param_name not in service_kwargs and param_name not in ["self", "ctx"]:

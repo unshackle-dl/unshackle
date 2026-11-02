@@ -4,10 +4,12 @@ import asyncio
 from datetime import datetime
 from types import SimpleNamespace
 
+import click
 import pytest
 
 from unshackle.core.api import download_manager as dm
 from unshackle.core.api import handlers
+from unshackle.core.api.errors import APIError, APIErrorCode
 
 pytestmark = pytest.mark.unit
 
@@ -106,8 +108,6 @@ def test_client_sent_keys_without_stamp_counts_all_keys():
 
 
 def test_service_defaults_and_options_travel_nested(env, monkeypatch):
-    import click
-
     @click.command()
     @click.option("--profile", type=int, default=1)
     @click.option("--device", default="chrome")
@@ -119,3 +119,40 @@ def test_service_defaults_and_options_travel_nested(env, monkeypatch):
     assert params["profile"] == "work"
     assert params["service_params"] == {"profile": 2, "device": "chrome"}
     assert env(body={"device": "tv"})["service_params"] == {"profile": 1, "device": "tv"}
+
+
+def use_cli(monkeypatch, *options):
+    """Make the loaded service declare ``options`` on its cli."""
+    cli = click.Command("svc", params=list(options))
+    monkeypatch.setattr(handlers.Services, "load", lambda service: SimpleNamespace(cli=cli))
+
+
+def test_a_service_option_its_type_refuses_is_a_400(env, monkeypatch):
+    use_cli(monkeypatch, click.Option(["--episodes"], type=click.IntRange(1, 3), default=1))
+    with pytest.raises(APIError) as exc_info:
+        env(body={"service_params": {"episodes": 9}})
+    assert exc_info.value.error_code == APIErrorCode.INVALID_PARAMETERS
+    assert "episodes" in exc_info.value.message
+    assert env(body={"service_params": {"episodes": "2"}})["service_params"]["episodes"] == "2"
+
+
+@pytest.mark.parametrize(
+    ("name", "value"),
+    [("episodes", {"a": 1}), ("episodes", [1]), ("movie", 2), ("movie", [1]), ("device", {"a": 1}), ("device", [1])],
+)
+def test_a_json_shape_click_cannot_convert_is_a_400(env, monkeypatch, name, value):
+    use_cli(
+        monkeypatch,
+        click.Option(["--episodes"], type=int),
+        click.Option(["--movie"], is_flag=True),
+        click.Option(["--device"]),
+    )
+    with pytest.raises(APIError) as exc_info:
+        env(body={"service_params": {name: value}})
+    assert exc_info.value.error_code == APIErrorCode.INVALID_PARAMETERS
+    assert name in exc_info.value.message
+
+
+def test_a_flat_dl_key_never_fills_a_service_option_of_the_same_name(env, monkeypatch):
+    use_cli(monkeypatch, click.Option(["--quality"], type=click.Choice(["SD", "HD"]), default="HD"))
+    assert env(body={"quality": [1080]})["service_params"] == {"quality": "HD"}

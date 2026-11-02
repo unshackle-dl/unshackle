@@ -268,6 +268,40 @@ def test_perform_download_passes_latest_episodes_to_dl_result(tmp_path: Path, mo
     assert exc.value.args[0]["latest_episodes"] == 3
 
 
+def test_perform_download_casts_service_options(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import click
+
+    import unshackle.commands.dl as dl_module
+    from unshackle.core.api import download_manager, handlers
+    from unshackle.core.services import Services
+
+    class FakeDl:
+        cli = click.Command("dl")
+
+        def __init__(self, ctx: click.Context, **kwargs: object) -> None:
+            pass
+
+    class FakeService:
+        cli = click.Command(
+            "svc", params=[click.Option(["--episodes"], type=int), click.Option(["--tag"], multiple=True)]
+        )
+
+        def __init__(self, ctx: click.Context, episodes: object = None, tag: object = ()) -> None:
+            raise _CapturedCtx(episodes, tag)
+
+    monkeypatch.setattr(dl_module, "dl", FakeDl)
+    monkeypatch.setattr(Services, "get_path", staticmethod(lambda s: tmp_path))
+    monkeypatch.setattr(Services, "load", staticmethod(lambda s: FakeService))
+    monkeypatch.setattr(handlers, "load_full_cdm", lambda *a: None)
+
+    with pytest.raises(_CapturedCtx) as exc:
+        download_manager.perform_download(
+            "job-1", "EXAMPLE", "t1", {"service_params": {"episodes": "2", "tag": ["a", "b"]}}
+        )
+
+    assert exc.value.args == (2, ("a", "b"))
+
+
 def test_worker_relays_a_prompt_and_reads_the_answer(monkeypatch: pytest.MonkeyPatch) -> None:
     import json
     import os
