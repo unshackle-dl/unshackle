@@ -75,7 +75,7 @@ class SessionEntry:
         """
         return self.lock.locked()
 
-    def summary(self) -> Dict[str, Any]:
+    def summary(self, include_actions: bool = True) -> Dict[str, Any]:
         """Dashboard view of the session: no service instance, no raw owner key."""
         from unshackle.core.api.stats import mask_key
 
@@ -100,7 +100,7 @@ class SessionEntry:
             "server_cdm_max_height": self.server_cdm_max_height,
             "log_seq": self.log_buffer.last_seq if self.log_buffer else 0,
             "client": self.client,
-            "actions": list(self.actions),
+            **({"actions": list(self.actions)} if include_actions else {}),
             "created_at": self.created_at.isoformat(),
             "last_accessed": self.last_accessed.isoformat(),
             "created_ts": self.created_at.timestamp(),
@@ -121,11 +121,10 @@ def _publish(
     action: str, entry: SessionEntry, reason: Optional[str] = None, action_entry: Optional[Dict[str, Any]] = None
 ) -> None:
     """Tell dashboard listeners about a remote session; ``action_entry`` replaces the action log with that one action."""
-    data = {"action": action, **entry.summary()}
+    data = {"action": action, **entry.summary(include_actions=action_entry is None)}
     if reason:
         data["reason"] = reason
     if action_entry is not None:
-        del data["actions"]
         data["action_entry"] = action_entry
     bus.publish("session", data)
 
@@ -301,9 +300,8 @@ class SessionStore:
     @classmethod
     async def remove_cache_dirs(cls, cache_tags: List[Optional[str]]) -> None:
         """Remove the cache directories of ended remote sessions on a worker thread, outside the store lock."""
-        for tag in cache_tags:
-            if tag:
-                await asyncio.to_thread(cls.cleanup_cache_dir, tag)
+        if any(cache_tags):
+            await asyncio.to_thread(lambda: [cls.cleanup_cache_dir(tag) for tag in cache_tags])
 
     @staticmethod
     def cleanup_cache_dir(cache_tag: Optional[str]) -> None:

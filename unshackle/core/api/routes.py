@@ -207,16 +207,15 @@ def heartbeat(handler: Handler) -> Handler:
 
 
 UPDATE_CHECK_TTL = 300.0
-UPDATE_CHECK: dict[str, tuple[float, Optional[str]]] = {}
+UPDATE_CHECK: list[tuple[float, Optional[str]]] = []
 
 
-def latest_release() -> Optional[str]:
+async def latest_release() -> Optional[str]:
     """The newer release the update check reports, kept for ``UPDATE_CHECK_TTL`` seconds: clients poll health."""
-    hit = UPDATE_CHECK.get(__version__)
-    if hit and time.monotonic() - hit[0] < UPDATE_CHECK_TTL:
-        return hit[1]
-    latest = UpdateChecker.check_for_updates_sync(__version__)
-    UPDATE_CHECK[__version__] = (time.monotonic(), latest)
+    if UPDATE_CHECK and time.monotonic() - UPDATE_CHECK[0][0] < UPDATE_CHECK_TTL:
+        return UPDATE_CHECK[0][1]
+    latest = await asyncio.to_thread(UpdateChecker.check_for_updates_sync, __version__)
+    UPDATE_CHECK[:] = [(time.monotonic(), latest)]
     return latest
 
 
@@ -261,7 +260,7 @@ async def health(request: web.Request) -> web.Response:
                       nullable: true
     """
     try:
-        latest_version = await asyncio.to_thread(latest_release)
+        latest_version = await latest_release()
         update_info = {
             "update_available": latest_version is not None,
             "current_version": __version__,

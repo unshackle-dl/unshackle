@@ -4198,9 +4198,6 @@ async def session_tracks_handler(
             except (Exception, SystemExit):
                 session.chapters_by_title[str(title_id)] = []
 
-            video_tracks = sorted(tracks.videos, key=lambda t: t.bitrate or 0, reverse=True)
-            audio_tracks = sorted(tracks.audio, key=lambda t: t.bitrate or 0, reverse=True)
-
             manifests, track_manifests = await asyncio.to_thread(
                 lambda: (extract_manifests(tracks), extract_track_manifests(tracks))
             )
@@ -4238,27 +4235,21 @@ async def session_tracks_handler(
         else:
             server_cdm_type = "playready"
 
-        def serialize() -> tuple[list, list, list, list]:
+        def serialize() -> Dict[str, list]:
             """The track and attachment lists, off the event loop: an attachment can be a 20 MB file."""
             lists = serialize_tracks(tracks, title, include_url=True)
             for d in lists["video"] + lists["audio"] + lists["subtitles"]:
                 d["data"] = scrub_track_data(d.get("data"), session)
-            attachments = [a for a in map(serialize_attachment, tracks.attachments) if a]
-            return lists["video"], lists["audio"], lists["subtitles"], attachments
-
-        video, audio, subtitles, attachments = await asyncio.to_thread(serialize)
+            return {**lists, "attachments": [a for a in map(serialize_attachment, tracks.attachments) if a]}
 
         return web.json_response(
             {
                 "title": stamp_service_flags(serialize_title(title), service_instance),
-                "video": video,
-                "audio": audio,
-                "subtitles": subtitles,
+                **await asyncio.to_thread(serialize),
                 "chapters": [
                     {"timestamp": ch.timestamp, "name": ch.name}
                     for ch in session.chapters_by_title.get(str(title_id), [])
                 ],
-                "attachments": attachments,
                 "manifests": manifests,
                 "track_manifests": track_manifests,
                 "session_headers": session_headers,
@@ -4267,7 +4258,7 @@ async def session_tracks_handler(
                 "server_cdm": session.server_cdm,
                 "server_cdm_type": server_cdm_type,
                 "sample_decrypt_tracks": [
-                    str(t.id) for t in [*video_tracks, *audio_tracks] if service_instance.decrypts_samples(t)
+                    str(t.id) for t in [*tracks.videos, *tracks.audio] if service_instance.decrypts_samples(t)
                 ],
             }
         )
@@ -4547,8 +4538,7 @@ async def get_validated_session(session_id: str, request: Optional[web.Request])
             details={"session_id": session_id},
         )
     if session.owner_key is not None and request is not None:
-        caller_key = request.headers.get("X-Secret-Key", "anonymous")
-        if not hmac.compare_digest(caller_key, session.owner_key):
+        if not hmac.compare_digest(caller_key(request), session.owner_key):
             raise APIError(
                 APIErrorCode.FORBIDDEN,
                 "Session access denied",
