@@ -1,6 +1,7 @@
 import asyncio
 import json
 import time
+from types import SimpleNamespace
 
 import pytest
 
@@ -43,8 +44,8 @@ def pool(monkeypatch):
     return logins
 
 
-def lease(data, **extra):
-    return handlers.lease_remote_service({**data, **extra}, "srv", INFO, None, "show")
+def lease(data, request=None, **extra):
+    return handlers.lease_remote_service({**data, **extra}, "srv", INFO, None, "show", request)
 
 
 DATA = {"service": "EXAMPLE", "title_id": "show", "remote": "srv"}
@@ -79,6 +80,25 @@ async def test_only_options_that_reach_the_remote_split_the_pool(pool):
     c = await lease(DATA, extras="a", tvdb_id="1", client_name="x")
     assert a.service is not b.service
     assert a.service is c.service
+
+
+def keyed(key):
+    return SimpleNamespace(headers={"X-Secret-Key": key})
+
+
+async def test_each_api_key_gets_its_own_pooled_session(pool):
+    a = await lease(DATA, keyed("a"), proxy="us")
+    again = await lease(DATA, keyed("a"), proxy="us")
+    b = await lease(DATA, keyed("b"), proxy="us")
+    assert a.service is again.service
+    assert b.service is not a.service
+    assert pool == ["show", "show"]
+
+
+async def test_client_region_splits_the_pool(pool):
+    us = await lease(DATA, client_region="us")
+    gb = await lease(DATA, client_region="gb")
+    assert us.service is not gb.service
 
 
 @pytest.fixture

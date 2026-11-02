@@ -587,7 +587,7 @@ class RemoteLease:
     Only the event loop touches the pool, so it needs no thread lock; blocking work runs in threads.
     """
 
-    key: tuple
+    key: tuple = field(repr=False)  # holds the caller's API key
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     service: Any = None
     error: Optional[Exception] = None
@@ -600,12 +600,24 @@ _remote_pool: Dict[tuple, RemoteLease] = {}
 _remote_sweeper: Optional["asyncio.Task[None]"] = None
 
 
-def remote_pool_key(data: Dict[str, Any], server: str, info: dict, profile: Optional[str], title_id: str) -> tuple:
-    """What opens a remote session; requests that differ only in episode selection share one."""
+def remote_pool_key(
+    data: Dict[str, Any], server: str, info: dict, profile: Optional[str], title_id: str, request: Optional[web.Request]
+) -> tuple:
+    """What opens a remote session for one API key; requests that differ only in episode selection share one."""
     from unshackle.core.remote_service import remote_service_params
 
     options = json.dumps(remote_service_params(info, data), sort_keys=True, default=str)
-    return (server, data["service"], title_id, profile, data.get("proxy"), bool(data.get("no_proxy")), options)
+    return (
+        caller_key(request),
+        server,
+        data["service"],
+        title_id,
+        profile,
+        data.get("proxy"),
+        data.get("client_region"),
+        bool(data.get("no_proxy")),
+        options,
+    )
 
 
 def close_remote_services(services: List[Any]) -> None:
@@ -661,7 +673,7 @@ async def lease_remote_service(
     global _remote_sweeper
     if _remote_sweeper is None or _remote_sweeper.done():
         _remote_sweeper = asyncio.get_running_loop().create_task(sweep_remote_pool())
-    key = remote_pool_key(data, server, info, profile, title_id)
+    key = remote_pool_key(data, server, info, profile, title_id, request)
     lease = _remote_pool.setdefault(key, RemoteLease(key))
     lease.busy += 1
     try:
