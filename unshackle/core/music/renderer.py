@@ -285,6 +285,7 @@ class MusicRenderer:
 
     @staticmethod
     def is_hires_quality(value: str) -> bool:
+        """Return True for a label above 16-bit or 48 kHz; a "k" before "b" is a bitrate ("256 kb/s"), not a rate."""
         lowered = value.lower()
         bit_depth = None
         sample_rate = None
@@ -293,7 +294,7 @@ class MusicRenderer:
         if bit_match:
             bit_depth = int(bit_match.group("bits"))
 
-        sample_match = re.search(r"(?P<rate>\d+(?:\.\d+)?)\s*k(?:hz)?", lowered)
+        sample_match = re.search(r"(?P<rate>\d+(?:\.\d+)?)\s*k(?!b)(?:hz)?", lowered)
         if sample_match:
             sample_rate = float(sample_match.group("rate"))
 
