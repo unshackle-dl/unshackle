@@ -1111,8 +1111,8 @@ class Subtitle(Track):
 
                     if nodes:
                         caption = Caption(
-                            start=start_time * timescale,  # as microseconds
-                            end=end_time * timescale,
+                            start=start_time * 1_000_000 / timescale,
+                            end=end_time * 1_000_000 / timescale,
                             nodes=nodes,
                             layout_info=layout,
                         )

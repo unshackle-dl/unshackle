@@ -351,6 +351,24 @@ def test_segmented_fvtt_parses_and_converts(tmp_path, monkeypatch):
     assert cue_count(out) == 2
 
 
+def with_mdhd_timescale(data: bytes, timescale: int) -> bytes:
+    """The fixture with its version-0 mdhd timescale replaced; sample times stay in the same units."""
+    at = data.index(b"mdhd") + 16
+    return data[:at] + struct.pack(">I", timescale) + data[at + 4 :]
+
+
+@pytest.mark.parametrize("timescale", [1000, 2000, 90000])
+def test_segmented_fvtt_cue_times_follow_the_media_timescale(timescale):
+    data = (FIXTURES / "segmented.wvtt.mp4").read_bytes()
+    assert with_mdhd_timescale(data, 1000) == data  # the helper's offset hits the fixture's timescale
+
+    captions, _ = Subtitle.merge_segmented_wvtt(with_mdhd_timescale(data, timescale))
+
+    # the fixture's cues span 1000-2000 and 3000-4000 media units
+    times = [t for c in captions for t in (c.start, c.end)]
+    assert times == pytest.approx([t * 1_000_000 / timescale for t in (1000, 2000, 3000, 4000)])
+
+
 def test_segmented_fttml_joins_a_cue_split_at_a_segment_boundary():
     data = build_stpp_mp4(
         ttml_fragment(("00:00:01.000", "00:00:02.000", "Carried")),
@@ -449,17 +467,25 @@ def test_dash_fttml_cues_lose_the_presentation_time_offset(tmp_path, monkeypatch
     assert (caption.start, caption.end) == times
 
 
-def test_dash_fvtt_cues_lose_the_presentation_time_offset(tmp_path, monkeypatch):
-    template = '<SegmentTemplate timescale="1000" presentationTimeOffset="1000" duration="2000"/>'
-    data = (FIXTURES / "segmented.wvtt.mp4").read_bytes()
+@pytest.mark.parametrize("method", ["subby", "pycaption"])
+@pytest.mark.parametrize(
+    "mdhd_timescale, pto, cues",
+    [
+        (1000, 1000, ("00:00:00.000 --> 00:00:01.000", "00:00:02.000 --> 00:00:03.000")),
+        (2000, 500, ("00:00:00.000 --> 00:00:00.500", "00:00:01.000 --> 00:00:01.500")),
+    ],
+)
+def test_dash_fvtt_cues_lose_the_presentation_time_offset(tmp_path, monkeypatch, method, mdhd_timescale, pto, cues):
+    template = f'<SegmentTemplate timescale="1000" presentationTimeOffset="{pto}" duration="2000"/>'
+    data = with_mdhd_timescale((FIXTURES / "segmented.wvtt.mp4").read_bytes(), mdhd_timescale)
     sub = dash_subtitle(tmp_path, monkeypatch, Codec.fVTT, data, template)
+    monkeypatch.setattr("unshackle.core.config.config.subtitle", {"conversion_method": method}, raising=False)
 
     sub.download(None, None)  # type: ignore[arg-type]
 
     assert sub.codec == Codec.WebVTT
     text = sub.path.read_text("utf8")
-    assert "00:00:00.000 --> 00:00:01.000" in text
-    assert "00:00:02.000 --> 00:00:03.000" in text
+    assert all(cue in text for cue in cues)
 
 
 def ttml_fragment(*cues: tuple[str, ...]) -> str:
