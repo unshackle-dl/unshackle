@@ -189,7 +189,8 @@ def env() -> None:
 
 
 @env.command()
-def check() -> None:
+@click.option("--verbose", is_flag=True, default=False, help="Also show the path each tool is loaded from.")
+def check(verbose: bool) -> None:
     """Checks environment for the required dependencies."""
     all_deps = get_dependencies()
 
@@ -199,11 +200,14 @@ def check() -> None:
     missing_required = []
 
     table = listing_table("Environment Dependencies", expand=True, show_lines=True)
-    table.add_column("Category", style="cyan", width=10)
-    table.add_column("Tool", style="text", width=16)
-    table.add_column("Status", justify="center", width=10)
+    table.add_column("Category", style="cyan", width=8)
+    table.add_column("Tool", style="text", width=14)
+    table.add_column("Status", justify="center", width=6)
+    table.add_column("Version", style="text2", width=8, overflow="ellipsis")
     table.add_column("Req", justify="center", width=4)
     table.add_column("Purpose", style="text2", overflow="fold")
+    if verbose:
+        table.add_column("Path", style="text2", overflow="fold")
 
     last_cat = None
     for dep in all_deps:
@@ -226,7 +230,11 @@ def check() -> None:
 
         req = "[red]Y[/red]" if dep["required"] else "[bright_black]-[/bright_black]"
 
-        table.add_row(category, dep["name"], status, req, dep["desc"])
+        version = binaries.binary_version(path) or "[bright_black]-[/bright_black]"
+        row = [category, dep["name"], status, version, req, dep["desc"]]
+        if verbose:
+            row.append(str(path) if path else "[bright_black]-[/bright_black]")
+        table.add_row(*row)
 
     print_wide(table)
 

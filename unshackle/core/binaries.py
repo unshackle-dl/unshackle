@@ -1,4 +1,6 @@
+import re
 import shutil
+import subprocess  # nosec B404
 import sys
 from pathlib import Path
 from typing import Optional
@@ -99,6 +101,55 @@ def register(
 def get_registered_dependencies() -> list[dict]:
     """Return all registered custom binary dependencies for env check."""
     return list(_registered_binaries.values())
+
+
+DOTTED_NUMBER = r"\d+\.\d+(?:\.\d+)*"
+VERSION_RE = re.compile(DOTTED_NUMBER)
+LABELLED_VERSION_RE = re.compile(rf"(?i)\bversion[:\s]+[a-z]?({DOTTED_NUMBER})")
+VERSION_WORD_RE = re.compile(r"(?i)\bversion\b")
+BARE_VERSION_TOOLS = {"mp4decrypt"}
+
+
+def parse_version(text: str) -> Optional[str]:
+    """Return the version from the first line that says "version" or holds a dotted number.
+
+    That line is the tool's own banner; later lines carry library and compiler versions.
+    """
+    for line in text.splitlines():
+        if match := LABELLED_VERSION_RE.search(line):
+            return match.group(1)
+        if VERSION_WORD_RE.search(line):
+            return None
+        if match := VERSION_RE.search(line):
+            return match.group(0)
+    return None
+
+
+def binary_version(path: Optional[Path]) -> Optional[str]:
+    """Best-effort version probe of a binary. Returns None when nothing is parseable.
+
+    BARE_VERSION_TOOLS run with no arguments because they print their version only in the usage text.
+    """
+    if not path:
+        return None
+    bare = path.stem.lower() in BARE_VERSION_TOOLS
+    for args in [[]] if bare else [["--version"], ["-version"]]:
+        try:
+            proc = subprocess.run(  # nosec B603
+                [str(path), *args],
+                capture_output=True,
+                stdin=subprocess.DEVNULL,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=5,
+            )
+        except (OSError, subprocess.SubprocessError, ValueError):
+            return None
+        version = parse_version(f"{proc.stdout}\n{proc.stderr}")
+        if version:
+            return version
+    return None
 
 
 _services_loaded = False

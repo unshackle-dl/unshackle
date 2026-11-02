@@ -28,6 +28,7 @@ from unshackle.core.api.input_bridge import AuthStatus, InputBridge, NoUserBridg
 from unshackle.core.api.sanitize import MAX_SESSION_CACHE_KEYS, safe_cache_key, safe_cache_payload, sanitize_log
 from unshackle.core.api.session_log import SessionLogBuffer, SessionLogMirror, capture_service_logs
 from unshackle.core.api.session_store import SessionStore
+from unshackle.core.binaries import binary_version
 from unshackle.core.cacher import Cacher
 from unshackle.core.cdm.detect import cdm_type_stub
 from unshackle.core.config import config, load_yaml
@@ -3596,26 +3597,6 @@ async def refresh_services_handler(request: Optional[web.Request] = None) -> web
         return handle_api_exception(e, context={"operation": "refresh_services"}, debug_mode=debug_mode)
 
 
-VERSION_RE = re.compile(r"\d+\.\d+(?:\.\d+)*")
-
-
-def binary_version(path: Any) -> Optional[str]:
-    """Best-effort version probe of a binary. Returns None when nothing is parseable."""
-    import subprocess
-
-    for flag in ("--version", "-version"):
-        try:
-            proc = subprocess.run(
-                [str(path), flag], capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=5
-            )
-        except (OSError, subprocess.SubprocessError, ValueError):
-            return None
-        match = VERSION_RE.search(proc.stdout or "") or VERSION_RE.search(proc.stderr or "")
-        if match:
-            return match.group(0)
-    return None
-
-
 async def env_check_handler(request: Optional[web.Request] = None) -> web.Response:
     """Answer the environment dependency check request."""
     from unshackle.commands.env import get_dependencies
@@ -3628,7 +3609,7 @@ async def env_check_handler(request: Optional[web.Request] = None) -> web.Respon
                 {
                     "name": dep["name"],
                     "installed": binary is not None,
-                    "version": binary_version(binary) if binary else None,
+                    "version": binary_version(binary),
                     "required": dep["required"],
                 }
             )

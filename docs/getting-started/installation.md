@@ -313,7 +313,8 @@ reports which tools it found:
 
 It prints a table grouped by category (Core, DRM, HDR, Subtitle, Player,
 Network) with a status column: a green check for tools that resolved and a red
-cross for those it could not find, plus a summary line such as
+cross for those it could not find. A version column shows the version that each
+tool reports, or `-` when it reports none. It ends with a summary line such as
 `All required tools installed ✓` or `Missing required: <names>`.
 
 If a required tool shows as missing, `env check` tells you to run

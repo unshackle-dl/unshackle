@@ -364,10 +364,14 @@ unshackle env COMMAND [ARGS]...
 ### `env check`
 
 ```
-unshackle env check
+unshackle env check [--verbose]
 ```
 
-Prints a dependency table (Category / Tool / Status / Required / Purpose) that shows which external tools unshackle finds on your `PATH`. It also gives a summary of how many required tools are present. If a required tool is missing, it tells you to run [`unshackle setup`](#setup).
+| Option | Description |
+|---|---|
+| `--verbose` | Adds a Path column with the file that unshackle loads for each tool. Use it to find a tool that you want to replace. |
+
+Prints a dependency table (Category / Tool / Status / Version / Required / Purpose) that shows which external tools unshackle finds on your `PATH` and the version that each one reports. The version is `-` when a tool does not report one. It also gives a summary of how many required tools are present. If a required tool is missing, it tells you to run [`unshackle setup`](#setup).
 
 | Category | Tools |
 |---|---|
