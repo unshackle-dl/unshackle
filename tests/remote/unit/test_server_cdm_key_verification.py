@@ -120,7 +120,9 @@ async def test_batch_reports_vault_keys_from_the_init_segment_pssh(monkeypatch):
     async def validated(sid, req):
         return session
 
-    def fake_single(service, title, track, pssh_str, drm_type, request, sources=None, refusal=None, vault_only=False):
+    def fake_single(
+        service, title, track, pssh_str, drm_type, request, sources=None, refusal=None, vault_only=False, shared=None
+    ):
         if pssh_str == "init":
             sources[CDM_KID.hex] = "sqlite"
             return {CDM_KID.hex: "v"}

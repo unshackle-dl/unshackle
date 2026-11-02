@@ -2,8 +2,9 @@ import asyncio
 import functools
 import logging
 import re
+import time
 from collections.abc import Awaitable, Callable
-from typing import Any
+from typing import Any, Optional
 
 import click
 from aiohttp import web
@@ -197,6 +198,20 @@ def heartbeat(handler: Handler) -> Handler:
     return wrapper
 
 
+UPDATE_CHECK_TTL = 300.0
+UPDATE_CHECK: dict[str, tuple[float, Optional[str]]] = {}
+
+
+def latest_release() -> Optional[str]:
+    """The newer release the update check reports, kept for ``UPDATE_CHECK_TTL`` seconds: clients poll health."""
+    hit = UPDATE_CHECK.get(__version__)
+    if hit and time.monotonic() - hit[0] < UPDATE_CHECK_TTL:
+        return hit[1]
+    latest = UpdateChecker.check_for_updates_sync(__version__)
+    UPDATE_CHECK[__version__] = (time.monotonic(), latest)
+    return latest
+
+
 @api_handler
 async def health(request: web.Request) -> web.Response:
     """
@@ -238,7 +253,7 @@ async def health(request: web.Request) -> web.Response:
                       nullable: true
     """
     try:
-        latest_version = await asyncio.to_thread(UpdateChecker.check_for_updates_sync, __version__)
+        latest_version = await asyncio.to_thread(latest_release)
         update_info = {
             "update_available": latest_version is not None,
             "current_version": __version__,
@@ -259,6 +274,124 @@ async def health(request: web.Request) -> web.Response:
             "update_check": update_info,
         }
     )
+
+
+SERVICE_DEFAULTS: dict[str, Any] = {
+    "aliases": [],
+    "geofence": [],
+    "geoblock": [],
+    "title_regex": None,
+    "url": None,
+    "help": None,
+}
+SERVICE_DETAILS: dict[str, tuple[Any, dict[str, Any]]] = {}
+
+
+def service_details(tag: str) -> dict[str, Any]:
+    """The catalogue entry of one service, built again only when its service module reloads."""
+    service_module = Services.load(tag)
+    hit = SERVICE_DETAILS.get(tag)
+    if hit and hit[0] is service_module:
+        return hit[1]
+    service_data: dict[str, Any] = {**SERVICE_DEFAULTS, "tag": tag}
+
+    if hasattr(service_module, "ALIASES"):
+        service_data["aliases"] = list(service_module.ALIASES)
+
+    if hasattr(service_module, "GEOFENCE"):
+        service_data["geofence"] = list(service_module.GEOFENCE)
+    service_data["geoblock"] = list(getattr(service_module, "GEOBLOCK", ()) or ())
+
+    if hasattr(service_module, "TITLE_RE"):
+        title_re = service_module.TITLE_RE
+        if isinstance(title_re, re.Pattern):
+            service_data["title_regex"] = title_re.pattern
+        elif isinstance(title_re, str):
+            service_data["title_regex"] = title_re
+        elif isinstance(title_re, (list, tuple)):
+            # Convert list/tuple of patterns to list of strings
+            patterns = []
+            for item in title_re:
+                if isinstance(item, re.Pattern):
+                    patterns.append(item.pattern)
+                elif isinstance(item, str):
+                    patterns.append(item)
+            service_data["title_regex"] = patterns if patterns else None
+
+    if hasattr(service_module, "cli") and hasattr(service_module.cli, "short_help"):
+        service_data["url"] = service_module.cli.short_help
+
+    if hasattr(service_module, "cli") and hasattr(service_module.cli, "params"):
+        cli_params = []
+        for param in service_module.cli.params:
+            param_info: dict = {"name": getattr(param, "name", None)}
+            if param.param_type_name == "argument":
+                param_info["kind"] = "argument"
+                param_info["required"] = param.required
+            else:
+                param_info["kind"] = "option"
+                param_info["opts"] = list(param.opts) if hasattr(param, "opts") else []
+                param_info["is_flag"] = getattr(param, "is_flag", False)
+                default = param.default
+                if default is None:
+                    pass
+                elif callable(default) or type(default).__name__ == "Sentinel":
+                    default = None
+                elif hasattr(default, "name"):
+                    default = default.name
+                elif not isinstance(default, (str, int, float, bool, list)):
+                    default = str(default)
+                param_info["default"] = default
+                param_info["help"] = getattr(param, "help", None)
+                param_info["type"] = param.type.name if hasattr(param.type, "name") else str(param.type)
+                if isinstance(param.type, click.Choice):
+                    param_info["choices"] = list(param.type.choices)
+                param_info["multiple"] = getattr(param, "multiple", False)
+            cli_params.append(param_info)
+        service_data["cli_params"] = cli_params
+
+    if service_module.__doc__:
+        service_data["help"] = service_module.__doc__.strip()
+
+    # Capability flags, derived from which Service hooks the service overrides.
+    from unshackle.core.service import Service as _BaseService
+
+    service_data["needs_auth"] = getattr(service_module, "authenticate", None) is not _BaseService.authenticate
+    client_config = getattr(service_module, "CLIENT_CONFIG", ())
+    if client_config:
+        service_data["client_config"] = list(client_config)
+    service_data["has_search"] = getattr(service_module, "search", None) is not _BaseService.search
+    service_data["anonymous_search"] = bool(getattr(service_module, "ANONYMOUS_SEARCH", False))
+    service_data["has_drm"] = (
+        getattr(service_module, "get_widevine_license", None) is not _BaseService.get_widevine_license
+        or getattr(service_module, "get_playready_license", None) is not _BaseService.get_playready_license
+    )
+
+    # Prefer the service's explicit AUTH_METHODS; otherwise infer from authenticate().
+    methods = []
+    if service_data["needs_auth"]:
+        declared = getattr(service_module, "AUTH_METHODS", None)
+        if declared:
+            methods = list(declared)
+        else:
+            try:
+                import inspect as _inspect
+
+                src_lines = _inspect.getsource(service_module.authenticate).splitlines()
+                start = next((i + 1 for i, ln in enumerate(src_lines) if ln.rstrip().endswith(":")), 1)
+                body = "\n".join(src_lines[start:])
+                if "cookies" in body:
+                    methods.append("cookies")
+                if "credential" in body:
+                    methods.append("credentials")
+            except (OSError, TypeError):
+                pass
+            if not methods:
+                methods = ["cookies"]
+    service_data["auth_methods"] = methods
+
+    SERVICE_DETAILS[tag] = (service_module, service_data)
+    return service_data
 
 
 @api_handler
@@ -374,122 +507,15 @@ async def services(request: web.Request) -> web.Response:
         services_info = []
 
         for tag in service_tags:
-            service_data: dict[str, Any] = {
-                "tag": tag,
-                "aliases": [],
-                "geofence": [],
-                "geoblock": [],
-                "title_regex": None,
-                "url": None,
-                "help": None,
-            }
+            service_data: dict[str, Any] = {**SERVICE_DEFAULTS, "tag": tag}
+            try:
+                service_data = {**service_details(tag)}
+            except Exception as e:
+                log.warning(f"Could not load details for service {tag}: {e}")
             if tag in services_module.PENDING:
                 service_data["pending_update"] = True
             if server_accounts_allowed(request, tag) and (server_accounts := server_account_regions(tag)) is not None:
                 service_data["server_accounts"] = server_accounts
-
-            try:
-                service_module = Services.load(tag)
-
-                if hasattr(service_module, "ALIASES"):
-                    service_data["aliases"] = list(service_module.ALIASES)
-
-                if hasattr(service_module, "GEOFENCE"):
-                    service_data["geofence"] = list(service_module.GEOFENCE)
-                service_data["geoblock"] = list(getattr(service_module, "GEOBLOCK", ()) or ())
-
-                if hasattr(service_module, "TITLE_RE"):
-                    title_re = service_module.TITLE_RE
-                    if isinstance(title_re, re.Pattern):
-                        service_data["title_regex"] = title_re.pattern
-                    elif isinstance(title_re, str):
-                        service_data["title_regex"] = title_re
-                    elif isinstance(title_re, (list, tuple)):
-                        # Convert list/tuple of patterns to list of strings
-                        patterns = []
-                        for item in title_re:
-                            if isinstance(item, re.Pattern):
-                                patterns.append(item.pattern)
-                            elif isinstance(item, str):
-                                patterns.append(item)
-                        service_data["title_regex"] = patterns if patterns else None
-
-                if hasattr(service_module, "cli") and hasattr(service_module.cli, "short_help"):
-                    service_data["url"] = service_module.cli.short_help
-
-                if hasattr(service_module, "cli") and hasattr(service_module.cli, "params"):
-                    cli_params = []
-                    for param in service_module.cli.params:
-                        param_info: dict = {"name": getattr(param, "name", None)}
-                        if param.param_type_name == "argument":
-                            param_info["kind"] = "argument"
-                            param_info["required"] = param.required
-                        else:
-                            param_info["kind"] = "option"
-                            param_info["opts"] = list(param.opts) if hasattr(param, "opts") else []
-                            param_info["is_flag"] = getattr(param, "is_flag", False)
-                            default = param.default
-                            if default is None:
-                                pass
-                            elif callable(default) or type(default).__name__ == "Sentinel":
-                                default = None
-                            elif hasattr(default, "name"):
-                                default = default.name
-                            elif not isinstance(default, (str, int, float, bool, list)):
-                                default = str(default)
-                            param_info["default"] = default
-                            param_info["help"] = getattr(param, "help", None)
-                            param_info["type"] = param.type.name if hasattr(param.type, "name") else str(param.type)
-                            if isinstance(param.type, click.Choice):
-                                param_info["choices"] = list(param.type.choices)
-                            param_info["multiple"] = getattr(param, "multiple", False)
-                        cli_params.append(param_info)
-                    service_data["cli_params"] = cli_params
-
-                if service_module.__doc__:
-                    service_data["help"] = service_module.__doc__.strip()
-
-                # Capability flags, derived from which Service hooks the service overrides.
-                from unshackle.core.service import Service as _BaseService
-
-                service_data["needs_auth"] = (
-                    getattr(service_module, "authenticate", None) is not _BaseService.authenticate
-                )
-                client_config = getattr(service_module, "CLIENT_CONFIG", ())
-                if client_config:
-                    service_data["client_config"] = list(client_config)
-                service_data["has_search"] = getattr(service_module, "search", None) is not _BaseService.search
-                service_data["anonymous_search"] = bool(getattr(service_module, "ANONYMOUS_SEARCH", False))
-                service_data["has_drm"] = (
-                    getattr(service_module, "get_widevine_license", None) is not _BaseService.get_widevine_license
-                    or getattr(service_module, "get_playready_license", None) is not _BaseService.get_playready_license
-                )
-
-                # Prefer the service's explicit AUTH_METHODS; otherwise infer from authenticate().
-                methods = []
-                if service_data["needs_auth"]:
-                    declared = getattr(service_module, "AUTH_METHODS", None)
-                    if declared:
-                        methods = list(declared)
-                    else:
-                        try:
-                            import inspect as _inspect
-
-                            src_lines = _inspect.getsource(service_module.authenticate).splitlines()
-                            start = next((i + 1 for i, ln in enumerate(src_lines) if ln.rstrip().endswith(":")), 1)
-                            body = "\n".join(src_lines[start:])
-                            if "cookies" in body:
-                                methods.append("cookies")
-                            if "credential" in body:
-                                methods.append("credentials")
-                        except (OSError, TypeError):
-                            pass
-                        if not methods:
-                            methods = ["cookies"]
-                service_data["auth_methods"] = methods
-
-            except Exception as e:
-                log.warning(f"Could not load details for service {tag}: {e}")
 
             services_info.append(service_data)
 

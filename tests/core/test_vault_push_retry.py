@@ -66,3 +66,20 @@ def test_server_pushes_again_after_one_vault_failed(monkeypatch: pytest.MonkeyPa
     handlers.cache_to_vaults({KID.hex: KEY}, "SVC")
     handlers.cache_to_vaults({KID.hex: KEY}, "SVC")
     assert len(pushes) == 2
+
+
+def test_one_licence_request_builds_the_server_vaults_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    builds: list = []
+    pushes: list = []
+
+    def build(name: str) -> Any:
+        builds.append(name)
+        return fake_server_vaults(pushes, [FakeVault(False)])
+
+    monkeypatch.setattr(handlers, "load_server_vaults", build)
+    monkeypatch.setattr(handlers, "CACHED_PAIRS", set())
+    shared: dict = {}
+    handlers.cache_to_vaults({KID.hex: KEY}, "SVC", shared=shared)
+    handlers.cache_to_vaults({KID.hex: KEY}, "SVC", shared=shared)
+    assert len(builds) == 1
+    assert len(pushes) == 2

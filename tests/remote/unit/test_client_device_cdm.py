@@ -238,7 +238,7 @@ def test_a_lent_device_session_never_licenses_live() -> None:
 
 
 def test_a_vault_only_miss_raises_the_refusal(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(handlers, "check_vaults", lambda kids, service: None)
+    monkeypatch.setattr(handlers, "check_vaults", lambda kids, service, **_: None)
     monkeypatch.setattr(handlers, "ensure_track_drm", lambda *a, **k: None)
     refusal = handlers.live_licence_refusal(SimpleNamespace(server_device=True), object())
     with pytest.raises(APIError) as caught:
@@ -257,7 +257,7 @@ def test_a_vault_only_miss_raises_the_refusal(monkeypatch: pytest.MonkeyPatch) -
 
 def test_a_vault_only_hit_needs_no_server_device(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        handlers, "check_vaults", lambda kids, service: ({SESSION_KID.hex: "k"}, {SESSION_KID.hex: "v"})
+        handlers, "check_vaults", lambda kids, service, **_: ({SESSION_KID.hex: "k"}, {SESSION_KID.hex: "v"})
     )
     monkeypatch.setattr(handlers, "ensure_track_drm", lambda *a, **k: None)
     monkeypatch.setattr(

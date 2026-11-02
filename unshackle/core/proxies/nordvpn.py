@@ -6,7 +6,7 @@ from typing import Optional, Union
 import requests
 
 from unshackle.core.proxies.asn import describe, is_ip, mapped_query, select, split_selector
-from unshackle.core.proxies.proxy import Proxy
+from unshackle.core.proxies.proxy import Proxy, cached_catalogue
 from unshackle.core.utilities import COUNTRY_CODE_ALIASES
 
 
@@ -186,6 +186,7 @@ class NordVPN(Proxy):
             raise ValueError("Could not decode list of NordVPN countries, not JSON data.")
 
     @staticmethod
+    @cached_catalogue
     def get_countries() -> list[dict]:
         """Get a list of available Countries and their metadata."""
         res = requests.get(url="https://api.nordvpn.com/v1/servers/countries", timeout=10)

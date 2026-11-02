@@ -14,7 +14,7 @@ import requests
 
 from unshackle.core.proxies.asn import describe, fold, is_ip, mapped_query, select, split_selector
 from unshackle.core.proxies.controld import build_query, parse_a_records
-from unshackle.core.proxies.proxy import Proxy
+from unshackle.core.proxies.proxy import Proxy, cached_catalogue
 from unshackle.core.utilities import COUNTRY_CODE_ALIASES
 
 log = logging.getLogger("proxies.surfsharkvpn")
@@ -241,6 +241,7 @@ class SurfsharkVPN(Proxy):
         return servers
 
     @staticmethod
+    @cached_catalogue
     def get_countries() -> list[dict]:
         """Get a list of available Countries and their metadata."""
         res = requests.get(

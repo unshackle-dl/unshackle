@@ -11,6 +11,7 @@ import pytest
 
 from unshackle.core import binaries
 from unshackle.core.config import config
+from unshackle.core.proxies.proxy import CATALOGUES
 from unshackle.core.update_checker import UpdateChecker
 
 # shutdown() blocks until the serve loop polls again, and the 0.5s default is paid by every
@@ -38,6 +39,12 @@ def no_update_check(monkeypatch: pytest.MonkeyPatch) -> None:
     """Keep the release lookup of the health route off the network."""
 
     monkeypatch.setattr(UpdateChecker, "check_for_updates_sync", lambda *args, **kwargs: None)
+
+
+@pytest.fixture(autouse=True)
+def fresh_proxy_catalogues() -> None:
+    """Fetch each proxy provider catalogue again, so one test's stub never answers another test."""
+    CATALOGUES.clear()
 
 
 @pytest.fixture(autouse=True)

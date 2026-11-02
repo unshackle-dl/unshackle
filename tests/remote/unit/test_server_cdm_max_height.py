@@ -156,13 +156,13 @@ def single(refusal):
 
 
 def test_a_vault_hit_is_served_above_the_cap(widevine_env, monkeypatch):
-    monkeypatch.setattr(handlers, "check_vaults", lambda kids, name: ({"11" * 16: "key"}, {"11" * 16: "sqlite"}))
+    monkeypatch.setattr(handlers, "check_vaults", lambda kids, name, **_: ({"11" * 16: "key"}, {"11" * 16: "sqlite"}))
     refusal = handlers.live_licence_refusal(SimpleNamespace(server_cdm_max_height=1080), video(2160))
     assert single(refusal) == {"11" * 16: "key"}
 
 
 def test_a_vault_miss_raises_the_refusal_before_the_device_loads(widevine_env, monkeypatch):
-    monkeypatch.setattr(handlers, "check_vaults", lambda kids, name: None)
+    monkeypatch.setattr(handlers, "check_vaults", lambda kids, name, **_: None)
     refusal = handlers.live_licence_refusal(SimpleNamespace(server_cdm_max_height=1080), video(2160))
     with pytest.raises(APIError) as ei:
         single(refusal)
@@ -406,7 +406,9 @@ def licence_env(monkeypatch):
     calls: list = []
     vault = {}
 
-    def fake_single(service, title, track, pssh_str, drm_type, request, sources=None, refusal=None, vault_only=False):
+    def fake_single(
+        service, title, track, pssh_str, drm_type, request, sources=None, refusal=None, vault_only=False, shared=None
+    ):
         calls.append((track.id, pssh_str))
         if pssh_str in vault:
             return dict(vault[pssh_str])

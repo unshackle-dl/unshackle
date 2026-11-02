@@ -1,5 +1,6 @@
 import asyncio
 import base64
+import copy
 import enum
 import json
 import logging
@@ -202,15 +203,26 @@ def load_full_cdm(service: str, profile: Optional[str], cdm_type: Optional[str] 
         return resolve_server_cdm(service, profile, cdm_type)
 
 
+SERVICE_YAML: Dict[Path, tuple[int, dict]] = {}
+
+
 def load_service_yaml(normalized_service: str) -> dict:
-    """Load a service's config.yaml and merge it with the global override block."""
+    """Load a service's config.yaml and merge it with the global override block.
+
+    The parsed file is kept until its mtime changes; each caller gets its own copy to change.
+    """
     from unshackle.core.utils.collections import merge_dict
 
     service_config_path = Services.get_path(normalized_service) / config.filenames.config
-    if service_config_path.exists():
-        service_config = load_yaml(service_config_path) or {}
+    try:
+        mtime = service_config_path.stat().st_mtime_ns
+    except OSError:
+        service_config: dict = {}
     else:
-        service_config = {}
+        hit = SERVICE_YAML.get(service_config_path)
+        if not hit or hit[0] != mtime:
+            hit = SERVICE_YAML[service_config_path] = (mtime, load_yaml(service_config_path) or {})
+        service_config = copy.deepcopy(hit[1])
     merge_dict(config.services.get(normalized_service) or {}, service_config)
     return service_config
 
@@ -4638,7 +4650,7 @@ def resolve_handler_proxy(
             )
 
     if allowed and not no_proxy:
-        proxy_providers = initialize_proxy_providers()
+        proxy_providers = initialize_proxy_providers(quiet=True)
 
     if proxy_param and not no_proxy:
         try:
@@ -4943,7 +4955,16 @@ def load_server_vaults(service_name: str) -> Any:
     return vaults
 
 
-def check_vaults(kids: list, service_name: str) -> Optional[tuple[Dict[str, str], Dict[str, str]]]:
+def once(shared: Dict[str, Any], key: Any, make: Callable[[], Any]) -> Any:
+    """``make()`` the first time ``key`` is asked for in ``shared``, the stored value after that."""
+    if key not in shared:
+        shared[key] = make()
+    return shared[key]
+
+
+def check_vaults(
+    kids: list, service_name: str, shared: Optional[Dict[str, Any]] = None
+) -> Optional[tuple[Dict[str, str], Dict[str, str]]]:
     """Examine the server vaults for existing content keys that match all KIDs.
 
     Returns `(KID:KEY, KID:vault name)` if ALL KIDs are found, None otherwise. The vault
@@ -4952,7 +4973,7 @@ def check_vaults(kids: list, service_name: str) -> Optional[tuple[Dict[str, str]
     from uuid import UUID
 
     try:
-        vaults = load_server_vaults(service_name)
+        vaults = once({} if shared is None else shared, "vaults", lambda: load_server_vaults(service_name))
         if not vaults.vaults:
             return None
         keys: Dict[str, str] = {}
@@ -4977,7 +4998,7 @@ def check_vaults(kids: list, service_name: str) -> Optional[tuple[Dict[str, str]
 CACHED_PAIRS: set[tuple[str, str, str]] = set()
 
 
-def cache_to_vaults(keys: Dict[str, str], service_name: str) -> None:
+def cache_to_vaults(keys: Dict[str, str], service_name: str, shared: Optional[Dict[str, Any]] = None) -> None:
     """Cache the content keys of a CDM licence to the server vaults.
 
     A PlayReady licence always runs, and a Widevine licence runs when one PSSH KID has no content
@@ -4991,7 +5012,7 @@ def cache_to_vaults(keys: Dict[str, str], service_name: str) -> None:
         new = {kid: key for kid, key in keys.items() if (service_name, kid, key) not in CACHED_PAIRS}
         if not new:
             return
-        vaults = load_server_vaults(service_name)
+        vaults = once({} if shared is None else shared, "vaults", lambda: load_server_vaults(service_name))
         if not vaults.vaults:
             return
 
@@ -5084,6 +5105,7 @@ def handle_single_server_cdm(
     sources: Optional[Dict[str, str]] = None,
     refusal: Optional[APIError] = None,
     vault_only: bool = False,
+    shared: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, str]:
     """Do the single-track server_cdm licensing with the DRM class get_content_keys() flow.
 
@@ -5091,6 +5113,7 @@ def handle_single_server_cdm(
     supplied. A content key the CDM licensed gets no entry. It raises ``refusal`` before a live licence:
     after a Widevine vault miss, or at once for PlayReady, whose licence can carry keys its header does not name.
     With ``vault_only`` no server device is involved: the header's KIDs come from the vault, else ``refusal``.
+    ``shared`` keeps the vaults and CDMs one ``license_response`` call built, for its next track.
     """
     import base64
 
@@ -5098,6 +5121,8 @@ def handle_single_server_cdm(
     from unshackle.core.cdm.detect import is_playready_cdm, is_widevine_cdm
 
     ensure_track_drm(track, getattr(service, "session", None))
+    shared = {} if shared is None else shared
+    service_name = service.__class__.__name__
 
     if not pssh_b64:
         pssh_b64 = extract_pssh_from_track(track, drm_type)
@@ -5115,7 +5140,7 @@ def handle_single_server_cdm(
             from pywidevine.pssh import PSSH as WvPSSH
 
             kids = Widevine(pssh=WvPSSH(pssh_b64)).kids
-        vault_hit = check_vaults(kids, service.__class__.__name__)
+        vault_hit = check_vaults(kids, service_name, shared=shared)
         if vault_hit:
             if sources is not None:
                 sources.update(vault_hit[1])
@@ -5143,7 +5168,7 @@ def handle_single_server_cdm(
         if refusal:
             raise refusal
 
-        cdm = load_cdm(device_name, service_name=service.__class__.__name__)
+        cdm = once(shared, ("cdm", device_name), lambda: load_cdm(device_name, service_name=service_name))
         if not is_playready_cdm(cdm):
             raise APIError(APIErrorCode.INVALID_INPUT, f"CDM device '{device_name}' is not a PlayReady device")
         keys = license_with_track_fallback(
@@ -5167,7 +5192,7 @@ def handle_single_server_cdm(
         # harvest server-side keys from the vault fallback below.
         device_name = resolve_device_name(user_config, drm_type, service.__class__.__name__)
 
-        vault_hit = check_vaults(wv_drm.kids, service.__class__.__name__)
+        vault_hit = check_vaults(wv_drm.kids, service_name, shared=shared)
         if vault_hit:
             vault_keys, vault_sources = vault_hit
             if sources is not None:
@@ -5176,7 +5201,7 @@ def handle_single_server_cdm(
         if refusal:
             raise refusal
 
-        cdm = load_cdm(device_name, service_name=service.__class__.__name__)
+        cdm = once(shared, ("cdm", device_name), lambda: load_cdm(device_name, service_name=service_name))
         if not is_widevine_cdm(cdm):
             raise APIError(APIErrorCode.INVALID_INPUT, f"CDM device '{device_name}' is not a Widevine device")
         keys = license_with_track_fallback(
@@ -5199,7 +5224,7 @@ def handle_single_server_cdm(
     if not keys:
         raise APIError(APIErrorCode.NO_CONTENT, "Server CDM returned no content keys")
 
-    cache_to_vaults(keys, service.__class__.__name__)
+    cache_to_vaults(keys, service_name, shared=shared)
     return keys
 
 
@@ -5414,6 +5439,7 @@ def license_response(
         clear_tracks: list[str] = []
         drm_types: Dict[str, str] = {}
         keys_by_pssh: Dict[tuple, Dict[str, str]] = {}
+        shared: Dict[str, Any] = {}
         sources_by_pssh: Dict[tuple, Dict[str, str]] = {}
         drm_type_by_pssh: Dict[tuple, str] = {}
         actual_drm_type: Optional[str] = None
@@ -5471,6 +5497,7 @@ def license_response(
                         sources_by_pssh[cache_key],
                         live_licence_refusal(session, track),
                         vault_only=vault_only,
+                        shared=shared,
                     )
                     if keys:
                         keys_by_pssh[cache_key] = keys

@@ -56,8 +56,8 @@ def server_env(monkeypatch):
     monkeypatch.setattr(detect_mod, "is_playready_cdm", lambda cdm: True)
     monkeypatch.setattr(handlers, "ensure_track_drm", lambda track, session=None, init_data=None: None)
     monkeypatch.setattr(handlers, "resolve_device_name", lambda *a, **k: "dev")
-    monkeypatch.setattr(handlers, "check_vaults", lambda kids, name: None)
-    monkeypatch.setattr(handlers, "cache_to_vaults", lambda keys, name: None)
+    monkeypatch.setattr(handlers, "check_vaults", lambda kids, name, **_: None)
+    monkeypatch.setattr(handlers, "cache_to_vaults", lambda keys, name, **_: None)
     monkeypatch.setattr(handlers.config, "serve", {"users": {}}, raising=False)
 
 

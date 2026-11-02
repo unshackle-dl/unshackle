@@ -34,7 +34,7 @@ def patch_server_region(monkeypatch, region):
 def patch_providers(monkeypatch, proxy):
     """Give the server one provider that answers every country code with ``proxy``."""
     provider = SimpleNamespace(get_proxy=lambda query: proxy)
-    monkeypatch.setattr(handlers, "initialize_proxy_providers", lambda: [provider])
+    monkeypatch.setattr(handlers, "initialize_proxy_providers", lambda **_: [provider])
     return provider
 
 
@@ -101,7 +101,7 @@ def test_provider_country_rejected(monkeypatch):
 
 def test_no_proxy_short_circuits(monkeypatch):
     """no_proxy skips resolution and never loads providers, even with a proxy param set."""
-    monkeypatch.setattr(handlers, "initialize_proxy_providers", lambda: pytest.fail("providers loaded"))
+    monkeypatch.setattr(handlers, "initialize_proxy_providers", lambda **_: pytest.fail("providers loaded"))
     _, providers = handlers.resolve_handler_proxy(
         {"proxy": "us", "no_proxy": True, "client_region": "ca"}, "EXAMPLE", request("proxykey")
     )
@@ -154,7 +154,7 @@ def test_user_without_server_proxy_denied(monkeypatch):
 def test_no_region_sent_proceeds(monkeypatch):
     """An out-of-date client that reports no region is unknown and never blocked."""
     patch_server_region(monkeypatch, "IN")
-    monkeypatch.setattr(handlers, "initialize_proxy_providers", lambda: [])
+    monkeypatch.setattr(handlers, "initialize_proxy_providers", lambda **_: [])
     assert handlers.resolve_handler_proxy({}, "EXAMPLE", request("plainkey")) == (None, [])
     assert handlers.resolve_handler_proxy({}, "EXAMPLE", request("proxykey")) == (None, [])
 
@@ -241,7 +241,7 @@ class TestDownloadGates:
     def test_country_code_passes_when_opted_in(self, monkeypatch):
         # The gate must not even try to resolve for an opted-in key: dl resolves at run time,
         # exactly as before the gate existed.
-        monkeypatch.setattr(handlers, "initialize_proxy_providers", lambda: pytest.fail("providers loaded"))
+        monkeypatch.setattr(handlers, "initialize_proxy_providers", lambda **_: pytest.fail("providers loaded"))
         handlers.enforce_download_gates({"service": "EXAMPLE", "proxy": "us"}, request("proxykey"))
 
     def test_region_mismatch_rejected_at_submit(self, monkeypatch):
@@ -388,7 +388,7 @@ def test_local_proxy_uri_refused_without_server_proxy(proxy):
 
 @pytest.mark.parametrize("key", ["proxykey", "adminkey"])  # adminkey has no serve.users entry
 def test_local_proxy_uri_allowed_with_server_proxy_or_admin(monkeypatch, key):
-    monkeypatch.setattr(handlers, "initialize_proxy_providers", lambda: [])
+    monkeypatch.setattr(handlers, "initialize_proxy_providers", lambda **_: [])
     proxy, _ = handlers.resolve_handler_proxy({"proxy": "http://127.0.0.1:8080"}, "EXAMPLE", request(key))
     assert proxy == "http://127.0.0.1:8080"
 

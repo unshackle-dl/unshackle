@@ -15,7 +15,7 @@ from urllib.parse import urlsplit
 import requests
 from requests.adapters import HTTPAdapter
 
-from unshackle.core.proxies.proxy import Proxy
+from unshackle.core.proxies.proxy import Proxy, cached_catalogue
 from unshackle.core.utils.redact import REDACTED
 
 log = logging.getLogger("ControlD")
@@ -369,6 +369,7 @@ class ControlD(Proxy):
 
         return f"{countries} Countr{['ies', 'y'][countries == 1]} ({servers} Server{['s', ''][servers == 1]})"
 
+    @cached_catalogue
     def get_locations(self) -> list[dict]:
         """Get Control D's proxy locations. Public data, so no token is needed."""
         try:

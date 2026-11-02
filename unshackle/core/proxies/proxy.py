@@ -1,5 +1,31 @@
+import functools
+import time
 from abc import abstractmethod
-from typing import Any, Optional
+from typing import Any, Callable, Optional, TypeVar
+
+CATALOGUE_TTL = 600.0
+CATALOGUES: dict[str, tuple[float, Any]] = {}
+
+F = TypeVar("F", bound=Callable[..., Any])
+
+
+def cached_catalogue(fetch: F) -> F:
+    """Keep a proxy provider's server catalogue for ``CATALOGUE_TTL`` seconds; the next call fetches an empty answer again.
+
+    A server builds its proxy providers on every request, and each build fetches the catalogue.
+    """
+
+    @functools.wraps(fetch)
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
+        hit = CATALOGUES.get(fetch.__qualname__)
+        if hit and time.monotonic() - hit[0] < CATALOGUE_TTL:
+            return hit[1]
+        value = fetch(*args, **kwargs)
+        if value:
+            CATALOGUES[fetch.__qualname__] = (time.monotonic(), value)
+        return value
+
+    return wrapper  # type: ignore[return-value]
 
 
 class Proxy:

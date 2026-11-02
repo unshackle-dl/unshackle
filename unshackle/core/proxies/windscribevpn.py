@@ -6,7 +6,7 @@ from typing import Iterator, Optional
 import requests
 
 from unshackle.core.proxies.asn import describe, mapped_query, resolve_all, select, split_selector
-from unshackle.core.proxies.proxy import Proxy
+from unshackle.core.proxies.proxy import Proxy, cached_catalogue
 
 
 class WindscribeVPN(Proxy):
@@ -163,6 +163,7 @@ class WindscribeVPN(Proxy):
         return None
 
     @staticmethod
+    @cached_catalogue
     def get_countries() -> list[dict]:
         """Get a list of available Countries and their metadata."""
         res = requests.get(

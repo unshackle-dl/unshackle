@@ -61,9 +61,9 @@ def playready_env(monkeypatch):
 def test_playready_multikey_not_shortcircuited_by_vault(playready_env, monkeypatch):
     # The vault holds only the PSSH KID (a stale subset). The old code returned it and skipped
     # the license, hiding REAL and OTHER; the fix licenses and returns the whole bundle.
-    monkeypatch.setattr(handlers, "check_vaults", lambda kids, name: {PSSH_KID.hex: "STALE"})
+    monkeypatch.setattr(handlers, "check_vaults", lambda kids, name, **_: {PSSH_KID.hex: "STALE"})
     cached: dict = {}
-    monkeypatch.setattr(handlers, "cache_to_vaults", lambda keys, name: cached.update(keys))
+    monkeypatch.setattr(handlers, "cache_to_vaults", lambda keys, name, **_: cached.update(keys))
 
     keys = handlers.handle_single_server_cdm(
         service=SimpleNamespace(),
@@ -99,7 +99,7 @@ def test_widevine_still_uses_vault_shortcut(monkeypatch):
     monkeypatch.setattr(drm_mod, "Widevine", _FakeWidevine)
     monkeypatch.setattr(handlers, "ensure_track_drm", lambda track, session=None, init_data=None: None)
     monkeypatch.setattr(handlers, "resolve_device_name", lambda *a, **k: "dev")
-    monkeypatch.setattr(handlers, "check_vaults", lambda kids, name: ({kid.hex: "vaultkey"}, {kid.hex: "sqlite"}))
+    monkeypatch.setattr(handlers, "check_vaults", lambda kids, name, **_: ({kid.hex: "vaultkey"}, {kid.hex: "sqlite"}))
     monkeypatch.setattr(handlers.config, "serve", {"users": {}}, raising=False)
 
     sources: dict = {}
@@ -133,7 +133,9 @@ async def test_batch_shares_full_bundle_per_pssh(monkeypatch):
     bundle_a = {REAL.hex: "k_real", PSSH_KID.hex: "k_pssh", OTHER.hex: "k_other"}
     bundle_b = {"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": "k_b"}
 
-    def fake_single(service, title, track, pssh_str, drm_type, request, sources=None, refusal=None, vault_only=False):
+    def fake_single(
+        service, title, track, pssh_str, drm_type, request, sources=None, refusal=None, vault_only=False, shared=None
+    ):
         calls.append(pssh_str)
         return dict(bundle_a) if pssh_str == pssh_a else dict(bundle_b)
 

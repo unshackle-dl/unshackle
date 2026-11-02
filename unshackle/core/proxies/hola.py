@@ -4,7 +4,7 @@ import subprocess
 from typing import Optional
 
 from unshackle.core import binaries
-from unshackle.core.proxies.proxy import Proxy
+from unshackle.core.proxies.proxy import Proxy, cached_catalogue
 
 
 class Hola(Proxy):
@@ -71,6 +71,7 @@ class Hola(Proxy):
 
         return random.choice(proxies) if proxies else None
 
+    @cached_catalogue
     def get_countries(self) -> list[dict[str, str]]:
         """Get a list of available Countries."""
         p = subprocess.run(
