@@ -313,7 +313,9 @@ all documented for users in [Subtitles](../guide/subtitles.md).
 - **`Chapters`**: a sorted collection that auto-inserts a `00:00:00.000` chapter and
   reads/writes OGM Simple format.
 - **`Attachment`**: a font or image attached to the mux (for example, fonts an ASS subtitle
-  references), built from a local `path` or a `url`.
+  references), built from a local `path` or a `url`. A `url` attachment downloads through
+  the same downloader as a track, with the same retries. If it still fails, `dl` stops the
+  run with a one-line error.
 
 ### Selection, sorting, and muxing
 
