@@ -171,4 +171,4 @@ def test_range_validation_accepts_hdr10p_and_alias():
 
 def test_range_validation_rejects_unknown_and_lists_hdr10p():
     err = handlers.validate_download_parameters({"range": ["HDR99"]})
-    assert err and "HDR10P" in err and "HDR99" in err
+    assert err and "hdr10p" in err.lower() and "HDR99" in err

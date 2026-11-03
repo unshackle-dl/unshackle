@@ -141,7 +141,7 @@ unshackle dl -v hevc,avc EXAMPLE 81234567
 | `SDR` | Standard dynamic range (default) |
 | `HLG` | Hybrid Log-Gamma |
 | `HDR10` | HDR10 |
-| `HDR10P` | HDR10+ |
+| `HDR10P` | HDR10+ (`-r HDR10+` also works) |
 | `DV` | Dolby Vision |
 | `HYBRID` | Fetch both an HDR10/HDR10+ base and a DV track, then merge them |
 

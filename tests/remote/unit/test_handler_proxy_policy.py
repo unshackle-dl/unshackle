@@ -305,7 +305,6 @@ class TestDownloadEnforcement:
     @pytest.mark.parametrize(("params", "expected"), [({}, []), ({"server_proxy": True}, None)])
     def test_perform_download_maps_stamp_to_dl_providers(self, monkeypatch, tmp_path, params, expected):
         """An unstamped or denied job hands dl an empty provider list; a stamped one loads config."""
-        import click
 
         from unshackle.commands import dl as dl_module
         from unshackle.core.api import download_manager as dm
@@ -316,7 +315,7 @@ class TestDownloadEnforcement:
             pass
 
         class FakeDl:
-            cli = click.Group("dl")
+            cli = dl_module.dl.cli
 
             def __init__(self, **kwargs):
                 seen.update(kwargs)

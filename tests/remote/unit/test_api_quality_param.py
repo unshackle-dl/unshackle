@@ -27,7 +27,7 @@ def test_the_api_accepts_the_quality_forms_the_cli_accepts(quality: Any) -> None
 
 def test_a_rest_job_converts_quality_and_passes_cdm_only(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     class FakeDl:
-        cli = click.Command("dl")
+        cli = dl_module.dl.cli
 
         def __init__(self, ctx: click.Context, **kwargs: object) -> None:
             self.ctx = ctx

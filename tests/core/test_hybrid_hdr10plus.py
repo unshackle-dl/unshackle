@@ -591,7 +591,7 @@ def test_a_rest_job_gives_the_flag_to_the_service_ctx_and_to_dl(
     import click
 
     class FakeDl:
-        cli = click.Command("dl")
+        cli = dl_module.dl.cli
 
         def __init__(self, ctx: click.Context, **kwargs: object) -> None:
             self.ctx = ctx

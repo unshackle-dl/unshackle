@@ -211,14 +211,6 @@ def test_no_duplicate_choices(param_type):
     assert len(lowered) == len(set(lowered))
 
 
-def test_api_codec_lists_come_from_the_param_types():
-    from unshackle.core.api.handlers import VALID_ACODECS, VALID_SUB_FORMATS, VALID_VCODECS
-
-    assert VALID_ACODECS == [c.upper() for c in AUDIO_CODEC_LIST.choices]
-    assert VALID_VCODECS == [c.upper() for c in VIDEO_CODEC_LIST.choices]
-    assert VALID_SUB_FORMATS == [c.upper() for c in SUBTITLE_CODEC.choices]
-
-
 @pytest.mark.parametrize("value", ["avc,,hevc", ["avc", "", "hevc"], " avc , hevc "])
 def test_empty_video_codec_tokens_are_skipped(value):
     """A None in the list reaches track filtering and crashes it, so blanks must drop out."""

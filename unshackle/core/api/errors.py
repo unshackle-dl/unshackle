@@ -183,7 +183,7 @@ def categorize_exception(
     context: dict[str, Any] | None = None,
 ) -> APIError:
     """
-    Categorize a generic exception into a structured APIError.
+    Categorize a generic exception into a structured APIError; an APIError is returned as it is.
 
     This function attempts to identify the type of error based on the exception
     type, message patterns, and optional context information.
@@ -195,6 +195,8 @@ def categorize_exception(
     Returns:
         APIError with appropriate error code and details
     """
+    if isinstance(exc, APIError):
+        return exc
     context = context or {}
     if isinstance(exc, SystemExit):
         exited = f"Service {context['service']} exited" if context.get("service") else "Service exited"
@@ -324,9 +326,4 @@ def handle_api_exception(
     Returns:
         Structured JSON error response
     """
-    if isinstance(exc, APIError):
-        api_error = exc
-    else:
-        api_error = categorize_exception(exc, context)
-
-    return build_error_response(api_error, debug_mode, extra_debug_info)
+    return build_error_response(categorize_exception(exc, context), debug_mode, extra_debug_info)

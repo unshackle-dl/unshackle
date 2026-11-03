@@ -135,27 +135,14 @@ def test_job_status_values() -> None:
     }
 
 
-def test_normalize_sub_format_preserves_original_sentinel() -> None:
-    """An API job asking for sub_format="original" must keep the "original" sentinel.
-
-    dl.py treats "original" as "keep source format" (skip conversion). If it were normalized to
-    None (as to_enum(["original"]) yields, since there is no such enum member), dl.py would fall
-    into the default branch and re-encode TTML -> WebVTT, contradicting the CLI.
-    """
-    from unshackle.core.api.download_manager import normalize_sub_format
+def test_api_sub_format_keeps_the_original_sentinel() -> None:
+    """sub_format "original" keeps the source format, so the API cast must not turn it into a codec or None."""
+    from unshackle.commands.dl import dl
+    from unshackle.core.api.handlers import cast_dl_params
     from unshackle.core.tracks import Subtitle
-    from unshackle.core.utils.click_types import SubtitleCodecChoice
 
-    # API path keeps the sentinel, case-insensitively.
-    assert normalize_sub_format("original") == "original"
-    assert normalize_sub_format("ORIGINAL") == "original"
-
-    # The CLI produces the exact same sentinel value, so dl.py's `== "original"` branch handles both.
-    assert SubtitleCodecChoice(Subtitle.Codec).convert("original") == "original"
-
-    # A real codec still maps to its enum member; unknowns collapse to None.
-    assert normalize_sub_format("srt") is Subtitle.Codec.SubRip
-    assert normalize_sub_format("nonsense") is None
+    assert cast_dl_params(dl.cli, {"sub_format": "ORIGINAL"})["sub_format"] == "original"
+    assert cast_dl_params(dl.cli, {"sub_format": "srt"})["sub_format"] is Subtitle.Codec.SubRip
 
 
 def test_worker_write_result_retries_denied_replace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -218,7 +205,7 @@ def test_perform_download_puts_the_lang_selection_in_the_service_ctx(
     from unshackle.core.services import Services
 
     class FakeDl:
-        cli = click.Command("dl")
+        cli = dl_module.dl.cli
 
         def __init__(self, ctx: click.Context, **kwargs: object) -> None:
             raise _CapturedCtx(ctx)
@@ -245,7 +232,7 @@ def test_perform_download_passes_latest_episodes_to_dl_result(tmp_path: Path, mo
     from unshackle.core.services import Services
 
     class FakeDl:
-        cli = click.Command("dl")
+        cli = dl_module.dl.cli
 
         def __init__(self, ctx: click.Context, **kwargs: object) -> None:
             pass
@@ -268,6 +255,45 @@ def test_perform_download_passes_latest_episodes_to_dl_result(tmp_path: Path, mo
     assert exc.value.args[0]["latest_episodes"] == 3
 
 
+def test_perform_download_gives_dl_the_defaults_for_null_and_empty_values(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import click
+
+    import unshackle.commands.dl as dl_module
+    from unshackle.core.api import download_manager, handlers
+    from unshackle.core.services import Services
+
+    seen: dict[str, dict] = {}
+
+    class FakeDl:
+        cli = dl_module.dl.cli
+
+        def __init__(self, ctx: click.Context, **kwargs: object) -> None:
+            seen["init"] = kwargs
+
+        def result(self, **kwargs: object) -> None:
+            seen["result"] = kwargs
+            raise RuntimeError("stop")
+
+    class FakeService:
+        def __init__(self, ctx: click.Context) -> None:
+            seen["parent"] = dict(ctx.parent.params)
+
+    monkeypatch.setattr(dl_module, "dl", FakeDl)
+    monkeypatch.setattr(Services, "get_path", staticmethod(lambda s: tmp_path))
+    monkeypatch.setattr(Services, "load", staticmethod(lambda s: FakeService))
+    monkeypatch.setattr(handlers, "load_full_cdm", lambda *a: None)
+
+    params: dict[str, object] = {"quality": None, "vcodec": None, "acodec": None, "lang": None, "output_dir": ""}
+    with pytest.raises(RuntimeError, match="stop"):
+        download_manager.perform_download("job-1", "EXAMPLE", "t1", params)
+
+    assert seen["init"]["output_dir"] is None
+    for view in (seen["parent"], seen["result"]):
+        assert view["quality"] == [] and view["vcodec"] == [] and view["acodec"] == [] and view["lang"] == ["orig"]
+
+
 def test_perform_download_casts_service_options(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     import click
 
@@ -276,7 +302,7 @@ def test_perform_download_casts_service_options(tmp_path: Path, monkeypatch: pyt
     from unshackle.core.services import Services
 
     class FakeDl:
-        cli = click.Command("dl")
+        cli = dl_module.dl.cli
 
         def __init__(self, ctx: click.Context, **kwargs: object) -> None:
             pass

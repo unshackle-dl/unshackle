@@ -439,8 +439,8 @@ Make a download job. It requires `service` and `title_id`. Every other field is 
 | --- | --- | --- | --- |
 | `profile` | string | `null` | Credential/cookie profile. |
 | `quality` | int[] | `[]` | Target resolution(s); best available if empty. |
-| `vcodec` | string/string[] | `null` | Video codec filter. |
-| `acodec` | string/string[] | `null` | Audio codec filter. |
+| `vcodec` | string/string[] | `[]` | Video codec filter. |
+| `acodec` | string/string[] | `[]` | Audio codec filter. |
 | `vbitrate` / `abitrate` | int | `null` | Video / audio bitrate in kbps (positive). |
 | `vbitrate_range` / `abitrate_range` | string | `null` | `"MIN-MAX"` bitrate window. |
 | `range` | string[] | `["SDR"]` | Dynamic range(s). |
@@ -460,6 +460,7 @@ Make a download job. It requires `service` and `title_id`. Every other field is 
 | `sub_format` | string | `null` | Output subtitle format. |
 | `video_only` / `audio_only` / `subs_only` / `chapters_only` | boolean | `false` | Track-type restriction (at most one). |
 | `no_subs` / `no_audio` / `no_chapters` / `no_video` / `no_attachments` | boolean | `false` | Skip a track type. |
+| `skip_subtitle_errors` | boolean | `false` | Skip a subtitle that fails to download and keep the other tracks. |
 | `audio_description` | boolean | `false` | Download audio description. |
 | `audio_description_only` | boolean | `false` | Download audio description and no standard audio. Not valid with `no_audio`, `video_only`, `subs_only` or `chapters_only`. |
 | `slow` | boolean/string | `null` | Randomized delay between downloads. |
@@ -488,7 +489,7 @@ Make a download job. It requires `service` and `title_id`. Every other field is 
 | `output_dir` | string | `null` | Output directory, relative to the server's downloads directory. The server rejects a path that resolves outside it with `400`. |
 | `no_cache` / `reset_cache` | boolean | `false` | Title cache controls. |
 
-**Validation.** Invalid values return `400 INVALID_PARAMETERS`. `vcodec`, `acodec` and `sub_format` take the same spellings as the CLI options of the same name (`unshackle dl --help` prints each list). The API and the CLI read one list, so they cannot disagree. `range` must be one of SDR/HDR10/HDR10P/DV/HLG/HYBRID, and `HDR10+` is also valid. The bitrate, download worker, and download counts must be positive integers. You may set at most one of the `*_only` flags. You cannot combine `no_subs` with `subs_only`, or `no_audio` with `audio_only`.
+**Validation.** Invalid values return `400 INVALID_PARAMETERS`. `vcodec`, `acodec` and `sub_format` take the same spellings as the CLI options of the same name (`unshackle dl --help` prints each list). The API and the CLI read one list, so they cannot disagree. `range` must be one of SDR/HDR10/HDR10P/DV/HLG/HYBRID, and `HDR10+` is also valid. The bitrate, download worker, and download counts must be positive integers. You may set at most one of the `*_only` flags. You cannot combine `no_subs` with `subs_only`, or `no_audio` with `audio_only`. The language fields (`lang`, `v_lang`, `a_lang`, `s_lang`, `forced_s_lang` and the `require_*` fields) must be arrays of strings: a single string such as `"en"` returns `400`. The server checks every other field with the type of its `dl` option. A `null` or an empty string gets the default from the table.
 
 **Service options.** A service's own CLI options travel in the same body. Send them in a nested
 `service_params` object, or as flat top-level keys. When the body has `service_params`, the server

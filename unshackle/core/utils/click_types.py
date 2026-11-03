@@ -1,5 +1,6 @@
 import re
 from datetime import date, timedelta
+from enum import Enum
 from typing import Any, Optional, Sequence, Union
 
 import click
@@ -434,7 +435,7 @@ class AudioCodecList(click.ParamType):
 class MultipleChoice(click.Choice):
     """
     The multiple choice type takes several values. Each value must be in a fixed
-    set of permitted values.
+    set of permitted values. An Enum choice also matches its value, so HDR10+ selects HDR10P.
 
     It internally uses and extends click.Choice.
     """
@@ -458,7 +459,11 @@ class MultipleChoice(click.Choice):
 
         chosen_values: list[Any] = []
         for value in values:
-            chosen_values.append(super().convert(value, param, ctx))
+            member = next(
+                (c for c in self.choices if isinstance(c, Enum) and str(c.value).casefold() == str(value).casefold()),
+                None,
+            )
+            chosen_values.append(member if member is not None else super().convert(value, param, ctx))
 
         return chosen_values
 

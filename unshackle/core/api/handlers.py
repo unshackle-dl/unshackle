@@ -55,7 +55,7 @@ from unshackle.core.tunnel import (
     tunnel_proxy,
 )
 from unshackle.core.utilities import declared_kwargs, kind_only_conflict, original_tag
-from unshackle.core.utils.click_types import AUDIO_CODEC_LIST, QUALITY_LIST, SUBTITLE_CODEC, VIDEO_CODEC_LIST
+from unshackle.core.utils.click_types import AUDIO_CODEC_LIST, QUALITY_LIST, VIDEO_CODEC_LIST
 from unshackle.core.utils.collections import ci_get
 from unshackle.core.utils.hdr10plus import probed_tracks
 from unshackle.core.utils.redact import REDACTED, URL_USERINFO_RE, redact_all, redact_secrets, redact_text
@@ -67,8 +67,8 @@ log = logging.getLogger("api")
 DEFAULT_DOWNLOAD_PARAMS = {
     "profile": None,
     "quality": [],
-    "vcodec": None,
-    "acodec": None,
+    "vcodec": [],
+    "acodec": [],
     "vbitrate": None,
     "abitrate": None,
     "vbitrate_range": None,
@@ -96,6 +96,7 @@ DEFAULT_DOWNLOAD_PARAMS = {
     "subs_only": False,
     "chapters_only": False,
     "no_subs": False,
+    "skip_subtitle_errors": False,
     "no_audio": False,
     "no_chapters": False,
     "no_video": False,
@@ -138,6 +139,33 @@ DEFAULT_DOWNLOAD_PARAMS = {
     "no_cache": False,
     "reset_cache": False,
 }
+
+API_SHAPED_DL_PARAMS = frozenset({"slow", "wanted"})
+
+
+def cast_dl_params(cli: click.Command, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Cast each ``DEFAULT_DOWNLOAD_PARAMS`` parameter in ``params`` by its dl click type, under its dl option name.
+
+    A missing, ``None`` or empty-string parameter, and an empty ``range``, take the API default, so
+    ``output_dir: ""`` is not the working directory. An ``API_SHAPED_DL_PARAMS`` value stays as sent. A parameter
+    outside ``DEFAULT_DOWNLOAD_PARAMS`` never reaches dl, so a new CLI option is closed to API clients by default.
+    Raises ``click.BadParameter``.
+    """
+    from unshackle.commands.dl import DL_OPTION_ALIASES
+
+    kept: Dict[str, Any] = {}
+    to_cast: Dict[str, Any] = {}
+    for key, default in DEFAULT_DOWNLOAD_PARAMS.items():
+        value = params.get(key)
+        if value is None or value == "" or (key == "range" and value == []):
+            value = default
+        (kept if value is None or key in API_SHAPED_DL_PARAMS else to_cast)[DL_OPTION_ALIASES.get(key, key)] = value
+    try:
+        return {**kept, **cast_service_options(cli.params, click.Context(cli), to_cast)}
+    except click.BadParameter as e:
+        name = (e.param.name if e.param else None) or ""
+        key = next((k for k, v in DL_OPTION_ALIASES.items() if v == name), name)
+        raise click.BadParameter(f"Invalid {key}: {e.message}") from e
 
 
 # Keys that are part of the API transport envelope, not service.cli options.
@@ -2164,11 +2192,6 @@ async def list_tracks_handler(data: Dict[str, Any], request: Optional[web.Reques
         await request_cache.cleanup()
 
 
-VALID_VCODECS = [choice.upper() for choice in VIDEO_CODEC_LIST.choices]
-VALID_ACODECS = [choice.upper() for choice in AUDIO_CODEC_LIST.choices]
-VALID_SUB_FORMATS = [choice.upper() for choice in SUBTITLE_CODEC.choices]
-
-
 def resolve_vcodec(value: Any) -> Optional[list]:
     """Map a client's vcodec field to codec enums.
 
@@ -2181,21 +2204,6 @@ def resolve_vcodec(value: Any) -> Optional[list]:
         return VIDEO_CODEC_LIST.convert(value) or None
     except click.UsageError as e:
         raise APIError(APIErrorCode.INVALID_INPUT, f"Invalid vcodec: {e.format_message()}")
-
-
-def check_codec(value: Any, allowed: List[str], name: str) -> Optional[str]:
-    """Validate a comma-string or list of codec tokens against `allowed` (case-insensitive)."""
-    if isinstance(value, str):
-        tokens = [v.strip() for v in value.split(",") if v.strip()]
-    elif isinstance(value, list):
-        tokens = [str(v).strip() for v in value if str(v).strip()]
-    else:
-        return f"{name} must be a string or list"
-
-    invalid = [token for token in tokens if token.upper() not in allowed]
-    if invalid:
-        return f"Invalid {name}: {', '.join(invalid)}. Must be one of: {', '.join(allowed)}"
-    return None
 
 
 def validate_download_parameters(data: Dict[str, Any]) -> Optional[str]:
@@ -2241,20 +2249,6 @@ def validate_download_parameters(data: Dict[str, Any]) -> Optional[str]:
 
     if data.get("all_drm") and data.get("cdm"):
         return "all_drm needs a CDM for each DRM system, so it cannot be used with cdm, which selects one device."
-
-    if "vcodec" in data and data["vcodec"]:
-        err = check_codec(data["vcodec"], VALID_VCODECS, "vcodec")
-        if err:
-            return err
-
-    if "acodec" in data and data["acodec"]:
-        err = check_codec(data["acodec"], VALID_ACODECS, "acodec")
-        if err:
-            return err
-
-    if "sub_format" in data and data["sub_format"]:
-        if str(data["sub_format"]).upper() not in VALID_SUB_FORMATS:
-            return f"Invalid sub_format: {data['sub_format']}. Must be one of: {', '.join(VALID_SUB_FORMATS)}"
 
     if "vbitrate" in data and data["vbitrate"] is not None:
         if not isinstance(data["vbitrate"], int) or data["vbitrate"] <= 0:
@@ -2341,25 +2335,35 @@ def validate_download_parameters(data: Dict[str, Any]) -> Optional[str]:
         if isinstance(default, bool) and data.get(key) is not None and not isinstance(data[key], bool):
             return f"{key} must be a boolean"
 
-    for key in ("require_audio", "require_video", "require_subs"):
+    for key in (
+        "lang",
+        "v_lang",
+        "a_lang",
+        "s_lang",
+        "forced_s_lang",
+        "require_audio",
+        "require_video",
+        "require_subs",
+    ):
         value = data.get(key)
         if value is not None and (not isinstance(value, list) or not all(isinstance(v, str) for v in value)):
             return f"{key} must be an array of language strings"
 
     ranges = data.get("range") or []
     ranges = ranges if isinstance(ranges, list) else [ranges]
-    # "HDR10P" is the canonical range value ("+" is awkward in scripts); "HDR10+" stays valid.
-    valid_ranges = ["SDR", "HDR10", "HDR10P", "DV", "HLG", "HYBRID"]
-    accepted = {*valid_ranges, "HDR10+"}
-    for r in ranges:
-        if r.upper() not in accepted:
-            return f"Invalid range value: {r}. Must be one of: {', '.join(valid_ranges)}"
     if data.get("generate_dv"):
         # a request without a range runs with the serve: default range
         job_ranges = ranges or (config.serve or {}).get("range") or []
         job_ranges = job_ranges if isinstance(job_ranges, list) else [job_ranges]
         if not any(str(r).upper() == "HYBRID" for r in job_ranges):
             return "generate_dv needs HYBRID in range."
+
+    from unshackle.commands.dl import dl
+
+    try:
+        cast_dl_params(dl.cli, data)
+    except click.BadParameter as e:
+        return e.message
 
     return None
 

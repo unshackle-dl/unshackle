@@ -19,7 +19,6 @@ from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, cast
 
 from unshackle.core.api.events import bus, publish_service_event
 from unshackle.core.api.sanitize import sanitize_log
-from unshackle.core.utils.click_types import AUDIO_CODEC_LIST, QUALITY_LIST, VIDEO_CODEC_LIST
 from unshackle.core.utils.redact import REDACTED, URL_USERINFO_RE, redact_all, redact_path, redact_text
 from unshackle.core.utils.service_params import cast_service_options, service_options
 
@@ -334,28 +333,6 @@ def delete_job_history(job_id: str, allowed: Optional[set] = None, owner: Option
     return True
 
 
-def to_enum(values: List[str], enum_cls: type[Enum]) -> List[Enum]:
-    """Map case-insensitive strings (by member name or value) to enum members, dropping unknowns."""
-    lookup = {m.name.upper(): m for m in enum_cls}
-    lookup.update({str(m.value).upper(): m for m in enum_cls})
-    return [lookup[v.upper()] for v in values if v.upper() in lookup]
-
-
-def normalize_sub_format(sub_format_raw: str) -> Any:
-    """Normalise an API sub_format string to what dl.py expects.
-
-    "original" is a sentinel meaning "keep source format" (dl.py skips conversion), so it must
-    pass through unchanged to match the CLI (SubtitleCodecChoice returns the same string). Any
-    other value maps to a Subtitle.Codec, or None when unrecognized.
-    """
-    from unshackle.core.tracks import Subtitle
-
-    if sub_format_raw.lower() == "original":
-        return "original"
-    mapped = to_enum([sub_format_raw], Subtitle.Codec)
-    return mapped[0] if mapped else None
-
-
 def client_sent_keys(params: Dict[str, Any]) -> set[str]:
     """Pop the server's ``client_keys`` stamp; a job without one counts every parameter as client-sent."""
     return set(params.pop("client_keys", params))
@@ -370,11 +347,11 @@ def perform_download(
 ) -> List[str]:
     """Do the synchronous download work for a job.
 
-    `params` holds the API's string form of the `dl` options. This function normalizes `params` in
-    place before dl.result() sees it: vcodec and range names become enums, `slow` accepts "MIN-MAX", a two-item
-    list, or True (which means 60-120), and `wanted` accepts forms such as "S01E01", "S01-S03",
-    "s1e1", or "1x1" as well as the internal "SxE" form. Music takes track numbers in the same
-    field, such as "1-5" or "2x3" for disc 2 track 3.
+    `params` holds the API's string form of the `dl` options. The function first normalizes the API-shaped
+    options in place: `slow` accepts "MIN-MAX", a two-item list, or True (which means 60-120), and `wanted`
+    accepts forms such as "S01E01", "S01-S03", "s1e1", or "1x1" as well as the internal "SxE" form. Music takes track
+    numbers in the same field, such as "1-5" or "2x3" for disc 2 track 3. Then each dl click type casts its option
+    into ``ctx.params``, which feeds dl() and dl.result() as on the CLI.
     """
 
     from contextlib import redirect_stderr, redirect_stdout
@@ -387,7 +364,6 @@ def perform_download(
     from unshackle.core.api.errors import APIError, APIErrorCode
     from unshackle.core.config import config, load_yaml
     from unshackle.core.services import Services
-    from unshackle.core.tracks import Video
     from unshackle.core.utils.click_types import ContextData
     from unshackle.core.utils.collections import merge_dict
 
@@ -410,42 +386,6 @@ def perform_download(
             log.warning(f"Ignoring '{banned}' in API download parameters; post-scripts are config-only")
 
     client_keys = client_sent_keys(params)
-
-    vcodec_raw = params.get("vcodec")
-    if vcodec_raw:
-        params["vcodec"] = VIDEO_CODEC_LIST.convert(vcodec_raw)
-    else:
-        params["vcodec"] = []
-
-    if params.get("acodec"):
-        params["acodec"] = AUDIO_CODEC_LIST.convert(params["acodec"])
-
-    params["quality"] = QUALITY_LIST.convert(params["quality"]) if params.get("quality") else []
-
-    range_raw = params.get("range")
-    if range_raw:
-        if isinstance(range_raw, str):
-            range_raw = [range_raw]
-        if isinstance(range_raw, list) and range_raw and not isinstance(range_raw[0], Video.Range):
-            params["range"] = to_enum(range_raw, Video.Range)
-    else:
-        params["range"] = [Video.Range.SDR]
-
-    sub_format_raw = params.get("sub_format")
-    if sub_format_raw and isinstance(sub_format_raw, str):
-        params["sub_format"] = normalize_sub_format(sub_format_raw)
-
-    if params.get("export"):
-        params["export"] = bool(params["export"])
-
-    sample_raw = params.get("sample")
-    if sample_raw is not None:
-        from unshackle.core.utils.click_types import SAMPLE_RANGE
-
-        try:
-            params["sample"] = SAMPLE_RANGE.convert(sample_raw, None, None)
-        except click.BadParameter as exc:
-            raise Exception(f"Invalid sample parameter: {exc}")
 
     slow_raw = params.get("slow")
     if slow_raw is not None and not isinstance(slow_raw, tuple):
@@ -486,45 +426,17 @@ def perform_download(
 
     ctx = click.Context(dl_command.cli)
     ctx.invoked_subcommand = service
-    from unshackle.core.api.handlers import load_full_cdm, relay_label
+    from unshackle.core.api.handlers import cast_dl_params, load_full_cdm, relay_label
 
     cdm = load_full_cdm(service, params.get("profile"), params.get("cdm_type"))
     ctx.obj = ContextData(config=service_config, cdm=cdm, proxy_providers=[], profile=params.get("profile"))
+    try:
+        dl_params = cast_dl_params(dl_command.cli, params)
+    except click.BadParameter as exc:
+        raise APIError(APIErrorCode.INVALID_PARAMETERS, exc.message)
     ctx.params = {
-        "proxy": params.get("proxy"),
-        "no_proxy": params.get("no_proxy", False),
-        "no_proxy_download": params.get("no_proxy_download", False),
-        "proxy_download": params.get("proxy_download"),
-        "profile": params.get("profile"),
+        **dl_params,
         "cdm_name": params.get("cdm"),
-        "cdm_only": params.get("cdm_only"),
-        "all_drm": params.get("all_drm", False),
-        "repack": params.get("repack", False),
-        "tag": params.get("tag"),
-        "tmdb_id": params.get("tmdb_id"),
-        "imdb_id": params.get("imdb_id"),
-        "tvdb_id": params.get("tvdb_id"),
-        "tvdb_order": params.get("tvdb_order"),
-        "anilist_id": params.get("anilist_id"),
-        "enrich": params.get("enrich", False),
-        "daily": params.get("daily", False),
-        "output_dir": Path(params["output_dir"]) if params.get("output_dir") else None,
-        "no_cache": params.get("no_cache", False),
-        "reset_cache": params.get("reset_cache", False),
-        # Track-selection params read by Service.__init__ via ctx.parent.params
-        "quality": params.get("quality", []),
-        "vcodec": params.get("vcodec", []),
-        "range_": params.get("range", [Video.Range.SDR]),
-        "best_available": params.get("best_available", False),
-        "generate_dv": params.get("generate_dv", False),
-        # services read these here, not from dl.result(), to pick the manifests they fetch
-        "acodec": params.get("acodec") or [],
-        "lang": params.get("lang", ["orig"]),
-        "v_lang": params.get("v_lang", []),
-        "a_lang": params.get("a_lang", []),
-        "s_lang": params.get("s_lang", ["all"]),
-        "forced_subs": params.get("forced_subs", False),
-        "exact_lang": params.get("exact_lang", False),
         # dl skips the local service config and guards the proxy for a remote_services server
         "remote": bool(remote),
         "server": remote,
@@ -540,23 +452,7 @@ def perform_download(
             param_name, ParameterSource.COMMANDLINE if source_key in client_keys else ParameterSource.DEFAULT
         )
 
-    dl_instance = dl(
-        ctx=ctx,
-        no_proxy=params.get("no_proxy", False),
-        proxy_providers=None if params.get("server_proxy") is True else [],
-        profile=params.get("profile"),
-        proxy=params.get("proxy"),
-        repack=params.get("repack", False),
-        tag=params.get("tag"),
-        tmdb_id=params.get("tmdb_id"),
-        imdb_id=params.get("imdb_id"),
-        tvdb_id=params.get("tvdb_id"),
-        tvdb_order=params.get("tvdb_order"),
-        anilist_id=params.get("anilist_id"),
-        enrich=params.get("enrich", False),
-        daily=params.get("daily", False),
-        output_dir=Path(params["output_dir"]) if params.get("output_dir") else None,
-    )
+    dl_instance = dl(ctx=ctx, proxy_providers=None if params.get("server_proxy") is True else [], **ctx.params)
     # Per-request credential ("user:pass"); feed it into the map get_credentials() reads so a
     # client can authenticate without anything being persisted to disk. Without a profile,
     # get_credentials() falls back to "default", so store it there too rather than dropping it
@@ -618,68 +514,7 @@ def perform_download(
         with redirect_stdout(stdout_capture), redirect_stderr(stderr_capture):
             dl_instance.result(
                 service=service_instance,
-                quality=params.get("quality", []),
-                vcodec=params.get("vcodec", []),
-                acodec=ctx.params["acodec"],
-                vbitrate=params.get("vbitrate"),
-                abitrate=params.get("abitrate"),
-                vbitrate_range=params.get("vbitrate_range"),
-                abitrate_range=params.get("abitrate_range"),
-                range_=params.get("range", ["SDR"]),
-                channels=params.get("channels"),
-                no_atmos=params.get("no_atmos", False),
-                select_titles=False,
-                wanted=params.get("wanted", []),
-                latest_episode=params.get("latest_episode", False),
-                latest_episodes=params.get("latest_episodes"),
-                lang=ctx.params["lang"],
-                v_lang=ctx.params["v_lang"],
-                a_lang=ctx.params["a_lang"],
-                s_lang=params.get("s_lang", ["all"]),
-                require_audio=params.get("require_audio", []),
-                require_video=params.get("require_video", []),
-                require_subs=params.get("require_subs", []),
-                forced_subs=ctx.params["forced_subs"],
-                forced_subs_only=params.get("forced_subs_only", False),
-                forced_s_lang=params.get("forced_s_lang", []),
-                exact_lang=params.get("exact_lang", False),
-                sub_format=params.get("sub_format"),
-                video_only=params.get("video_only", False),
-                audio_only=params.get("audio_only", False),
-                subs_only=params.get("subs_only", False),
-                chapters_only=params.get("chapters_only", False),
-                no_subs=params.get("no_subs", False),
-                skip_subtitle_errors=params.get("skip_subtitle_errors", False),
-                no_audio=params.get("no_audio", False),
-                no_chapters=params.get("no_chapters", False),
-                no_video=params.get("no_video", False),
-                no_attachments=params.get("no_attachments", False),
-                audio_description=params.get("audio_description", False),
-                audio_description_only=params.get("audio_description_only", False),
-                slow=params.get("slow", None),
-                list_=False,
-                list_titles=False,
-                skip_dl=params.get("skip_dl", False),
-                all_drm=params.get("all_drm", False),
-                export=params.get("export"),
-                cdm_only=params.get("cdm_only"),
-                no_proxy=params.get("no_proxy", False),
-                no_proxy_download=params.get("no_proxy_download", False),
-                proxy_download=params.get("proxy_download"),
-                no_folder=params.get("no_folder", False),
-                no_source=params.get("no_source", False),
-                no_mux=params.get("no_mux", False),
-                sample=params.get("sample"),
-                include_sample=params.get("include_sample", False),
-                workers=params.get("workers"),
-                adaptive_workers=params.get("adaptive_workers", False),
-                download_processes=params.get("download_processes", 1),
-                continue_downloads=params.get("continue_downloads", False),
-                downloads=params.get("downloads", 1),
-                worst=params.get("worst", False),
-                best_available=params.get("best_available", False),
-                generate_dv=params.get("generate_dv", False),
-                split_audio=params.get("split_audio"),
+                **{**ctx.params, "select_titles": False, "list_": False, "list_titles": False},
                 progress_sink=progress_callback,
             )
 

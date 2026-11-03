@@ -23,8 +23,9 @@ def service_options(
 def cast_service_options(params: Iterable[click.Parameter], ctx: Any, options: Dict[str, Any]) -> Dict[str, Any]:
     """``options`` with each value cast by the click parameter of the same name; raises ``click.BadParameter``.
 
-    A name that no parameter declares keeps its value. A JSON object, or an array for a single-value option,
-    is refused before the cast, since click would stringify it.
+    A name that no parameter declares keeps its value. A JSON object, an array for a single-value text option
+    (click would stringify it) and a boolean for a number are refused before the cast. ``convert()`` only promises
+    ``BadParameter`` for strings, so any other error of a JSON value becomes one too.
     """
     by_name = {p.name: p for p in params if p.name}
     cast: Dict[str, Any] = {}
@@ -33,10 +34,17 @@ def cast_service_options(params: Iterable[click.Parameter], ctx: Any, options: D
         if param is None:
             cast[k] = v
             continue
-        if isinstance(v, dict) or (isinstance(v, list) and not param.multiple and param.nargs == 1):
+        if isinstance(v, dict) or (
+            isinstance(v, list)
+            and not param.multiple
+            and param.nargs == 1
+            and isinstance(param.type, click.types.StringParamType)
+        ):
             raise click.BadParameter("expected a single value, not a JSON object or array", ctx=ctx, param=param)
+        if isinstance(v, bool) and isinstance(param.type, (click.types.IntParamType, click.types.FloatParamType)):
+            raise click.BadParameter("expected a number, not a boolean", ctx=ctx, param=param)
         try:
             cast[k] = param.type_cast_value(ctx, v)
-        except (TypeError, ValueError, AttributeError) as e:  # convert() only promises BadParameter for strings
+        except (TypeError, ValueError, AttributeError, OverflowError) as e:
             raise click.BadParameter(f"not a valid {param.type.name} value", ctx=ctx, param=param) from e
     return cast

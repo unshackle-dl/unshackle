@@ -291,7 +291,7 @@ def test_validate_download_params_accepts_defaults() -> None:
     "data, fragment",
     [
         ({"vcodec": "WUT"}, "Invalid vcodec"),
-        ({"vcodec": 123}, "vcodec must be a string or list"),
+        ({"vcodec": 123}, "Invalid vcodec"),
         ({"acodec": "MP9"}, "Invalid acodec"),
         ({"sub_format": "doc"}, "Invalid sub_format"),
         ({"vbitrate": -1}, "vbitrate"),
@@ -310,7 +310,7 @@ def test_validate_download_params_accepts_defaults() -> None:
         ({"no_audio": True, "audio_only": True}, "no_audio and audio_only"),
         ({"require_subs": "en"}, "require_subs must be an array"),
         ({"range": "UHD"}, "Invalid range"),
-        ({"range": ["SDR", "UHD"]}, "Invalid range value"),
+        ({"range": ["SDR", "UHD"]}, "Invalid range"),
     ],
 )
 def test_validate_download_params_errors(data: dict, fragment) -> None:

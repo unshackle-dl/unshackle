@@ -926,14 +926,14 @@ async def download(request: web.Request) -> web.Response:
                   - type: array
                     items:
                       type: string
-                description: Video codec(s) to download (e.g., "HEVC" or ["AVC", "HEVC"]) - accepts AVC, H.264, H264, HEVC, H.265, H265, VC1, VC-1, VP8, VP9, AV1, LCEVC (default - None)
+                description: Video codec(s) to download (e.g., "HEVC" or ["AVC", "HEVC"]) - accepts AVC, H.264, H264, HEVC, H.265, H265, VC1, VC-1, VP8, VP9, AV1, LCEVC (default - [])
               acodec:
                 oneOf:
                   - type: string
                   - type: array
                     items:
                       type: string
-                description: Audio codec(s) to download (e.g., "AAC" or ["AAC", "EC3"]) - accepts AAC, AC3, DD, EC3, DD+, EAC3, DDP, AC4, AC-4, OPUS, OGG, VORB, VORBIS, DTS, DTSX, DTS-X, DTSHD, DTS-HD, MPEGH, MPEG-H, ALAC, FLAC, MP3 (default - None)
+                description: Audio codec(s) to download (e.g., "AAC" or ["AAC", "EC3"]) - accepts AAC, AC3, DD, EC3, DD+, EAC3, DDP, AC4, AC-4, OPUS, OGG, VORB, VORBIS, DTS, DTSX, DTS-X, DTSHD, DTS-HD, MPEGH, MPEG-H, ALAC, FLAC, MP3 (default - [])
               vbitrate:
                 type: integer
                 description: Video bitrate in kbps (default - None)
@@ -1032,6 +1032,9 @@ async def download(request: web.Request) -> web.Response:
               no_subs:
                 type: boolean
                 description: Do not download subtitle tracks (default - false)
+              skip_subtitle_errors:
+                type: boolean
+                description: Skip a subtitle that fails to download and keep the other tracks (default - false)
               no_audio:
                 type: boolean
                 description: Do not download audio tracks (default - false)
