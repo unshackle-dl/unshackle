@@ -2708,7 +2708,9 @@ the raw license bytes come back for your local CDM to parse.</p>
 <p>The <strong>server's CDM</strong> does everything. The client sends track IDs (or a PSSH),
 the server checks its key vaults, loads the device configured for your API key,
 runs the CDM flow, and returns <code>KID:KEY</code> pairs directly. The client needs no
-CDM.</p>
+CDM. When the server's <code>cdm</code> entry for the service names a <code>widevine</code> and a
+<code>playready</code> device, the server loads the device of your local CDM's DRM system.
+See <a href="../../../reference/configuration/drm/"><code>cdm</code></a>.</p>
 <ul>
 <li>Enable with <code>server_cdm: true</code> in the server entry.</li>
 <li>The server tells the client which DRM type it used
@@ -2737,7 +2739,10 @@ session create response tells the client who licenses the session in <code>serve
 the limit in <code>server_cdm_max_height</code>. In a server CDM session, the batch licence response
 lists each track the server refused to license live under <code>capped_tracks</code>. A single-track
 server CDM licence answers <code>403 SERVER_CDM_CAPPED</code> for such a track. In both cases the client
-licenses those tracks in proxy mode with its own local CDM. See
+reads its own key vaults first, then licenses those tracks in proxy mode with its own local
+CDM. When the track has no DRM of that CDM's system, the client uses the device that its own
+<code>cdm</code> entry names for the track's DRM system. With no such device, the download of that track
+stops. See
 <a href="../../../reference/configuration/services/"><code>server_cdm_max_height</code></a>.</p>
 </div>
 <h3 id="your-own-device-identity">Your own device identity<a class="headerlink" href="#your-own-device-identity" title="Permanent link">&para;</a></h3>
