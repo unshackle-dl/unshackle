@@ -17,11 +17,10 @@ from unshackle.core.config import config
 from unshackle.core.constants import AnyTrack
 from unshackle.core.credential import Credential
 from unshackle.core.drm import ClearKey, MonaLisa, drm_from_dict, real_kids
-from unshackle.core.manifests import DASH, HLS, ISM, MissingLanguageError
+from unshackle.core.manifests import DASH, HLS, ISM, MissingLanguageError, snapshot
 from unshackle.core.remote_service import (
     RemoteService,
     build_title,
-    match_track,
     resolve_proxy_arg,
     segment_uri_filter,
 )
@@ -96,12 +95,13 @@ def resolve_import_manifest_data(
     session: requests.Session,
     language: Any,
     title: Title_T,
+    saved: Optional[dict[str, Any]] = None,
 ) -> None:
     """Fill ``track.data`` for DASH/ISM tracks rebuilt from export dicts.
 
     Exports can be without ``manifest_url`` (for example, when the service never set
-    ``title.tracks.manifest_url``) or carry one MPD per adaptation set. ``Track.from_dict``
-    does not serialise manifest XML, so each exported track's ``url`` is re-fetched and
+    ``title.tracks.manifest_url``) or carry one MPD per adaptation set. A track takes its
+    data from the export's manifest snapshot first; else its ``url`` is re-fetched and
     matched to a locally parsed representation before download. A track that matches none is
     dropped with a warning, since without its manifest data it fails only when it downloads.
     """
@@ -115,10 +115,12 @@ def resolve_import_manifest_data(
         for track in [*tracks.videos, *tracks.audio, *tracks.subtitles]
         if track.descriptor.name == manifest_type and not track.data.get(data_key)
     ]
+    fallback_lang = fallback_language(language)
+    snapshot.restore(Tracks(*pending), saved, language=fallback_lang)
+    pending = [track for track in pending if not track.data.get(data_key)]
     if not pending:
         return
 
-    fallback_lang = fallback_language(language)
     for url in {str(track.url) for track in pending if track.url}:
         try:
             manifest = parser.from_url(url=url, session=session)
@@ -138,7 +140,7 @@ def resolve_import_manifest_data(
         for track in pending:
             if track.data.get(data_key) or str(track.url) != url:
                 continue
-            matched = match_track(track, local_tracks)
+            matched = snapshot.match_track(track, local_tracks)
             if matched and matched.data.get(data_key):
                 track.data.update(matched.data)
 
@@ -268,6 +270,7 @@ class ImportService:
             "manifest_url": primary.url if primary else None,
             "manifest_type": manifest_type or None,
             "tracks": x.get("tracks") or {},
+            "snapshot": x.get("snapshot"),
             "chapters": entry.chapters,
             "attachments": x.get("attachments") or [],
         }
@@ -380,38 +383,48 @@ class ImportService:
         parser = PARSERS.get(manifest_type or "")
         # An export from another tool has no track dicts, so HLS is parsed from the manifest too
         if manifest_url and parser is not None and (manifest_type in ("DASH", "ISM") or not tracks_map):
-            try:
-                manifest = parser.from_url(url=manifest_url, session=self.session)
-            except Exception as e:
-                raise click.ClickException(
-                    f"Failed to fetch the {manifest_type} manifest for '{title}', the URL may have expired: {e}"
-                )
+            no_language = (
+                f"No language for '{title}': the {manifest_type} manifest has none and Title.language is unset"
+            )
             language = fallback_language(title.language)
-            if language is None and isinstance(manifest, HLS):
-                language = hls_audio_language(manifest)
-                if language is None:
-                    raise click.ClickException(f"No language for '{title}': the export and the HLS manifest have none")
             try:
-                parsed = manifest.to_tracks(language=language)
+                parsed = snapshot.parse(entry.get("snapshot"), str(manifest_url), language)
             except MissingLanguageError:
-                raise click.ClickException(
-                    f"No language for '{title}': the {manifest_type} manifest has none and Title.language is unset"
-                )
-            except Exception as e:
-                raise click.ClickException(f"Failed to parse the {manifest_type} manifest for '{title}': {e}")
+                raise click.ClickException(no_language)
+            if parsed is None:
+                try:
+                    manifest = parser.from_url(url=manifest_url, session=self.session)
+                except Exception as e:
+                    raise click.ClickException(
+                        f"Failed to fetch the {manifest_type} manifest for '{title}', the URL may have expired: {e}"
+                    )
+                if language is None and isinstance(manifest, HLS):
+                    language = hls_audio_language(manifest)
+                    if language is None:
+                        raise click.ClickException(
+                            f"No language for '{title}': the export and the HLS manifest have none"
+                        )
+                try:
+                    parsed = manifest.to_tracks(language=language)
+                except MissingLanguageError:
+                    raise click.ClickException(no_language)
+                except Exception as e:
+                    raise click.ClickException(f"Failed to parse the {manifest_type} manifest for '{title}': {e}")
             for parsed_track in parsed:
                 tracks.add(parsed_track)
             parsed_ids = {str(t.id) for t in tracks}
             url_dicts = [t for t in tracks_map.values() if t.get("descriptor", "URL") == "URL"]
-            # Merge back only tracks from another manifest, such as a separate HEVC one; the
-            # re-parse already covers manifest_url's own. Query stripped when comparing, since a
-            # service can sign the URL it fetches and register the bare one for the same manifest.
+            # Merge back only tracks from another manifest, such as a separate HEVC one, or that
+            # the snapshot keeps as a one-track fragment; the re-parse already covers manifest_url's
+            # own. Query stripped when comparing, since a service can sign the URL it fetches and
+            # register the bare one for the same manifest.
             manifest_base = str(manifest_url).split("?")[0]
+            fragments = snapshot.fragment_ids(entry.get("snapshot"))
             foreign_dicts = [
                 t
                 for t in tracks_map.values()
                 if t.get("descriptor") == manifest_type
-                and str(t.get("url")).split("?")[0] != manifest_base
+                and (str(t.get("url")).split("?")[0] != manifest_base or str(t.get("id")) in fragments)
                 and str(t.get("id")) not in parsed_ids
             ]
             track_dicts = [*url_dicts, *foreign_dicts]
@@ -452,6 +465,7 @@ class ImportService:
             session=self.session,
             language=title.language,
             title=title,
+            saved=entry.get("snapshot"),
         )
 
         for attachment in entry.get("attachments") or []:

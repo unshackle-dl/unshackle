@@ -36,6 +36,7 @@ from unshackle.core.cdm.detect import cdm_type_stub
 from unshackle.core.config import config, load_yaml
 from unshackle.core.constants import AUDIO_CODEC_MAP, DYNAMIC_RANGE_MAP, VIDEO_CODEC_MAP, AnyTrack
 from unshackle.core.drm import BlowfishStripe, cbcs
+from unshackle.core.manifests.snapshot import capture
 from unshackle.core.providers.anilist import parse_anilist_ref
 from unshackle.core.proxies.resolve import initialize_proxy_providers, is_loopback, resolve_proxy
 from unshackle.core.services import Services
@@ -1573,121 +1574,6 @@ def stamp_service_flags(serialized: Dict[str, Any], service_instance: Any) -> Di
         if serialized.get(key) is None and getattr(type(service_instance), attr, False):
             serialized[key] = True
     return serialized
-
-
-def extract_manifests(tracks: Tracks) -> List[Dict[str, Any]]:
-    """Extract manifest data from tracks for client-side re-parsing.
-
-    Serializes DASH and ISM manifest XML as zlib-compressed base64 strings
-    so the client can reconstruct track.data locally. HLS tracks download
-    directly from their URL, so this function does not serialise their manifest.
-    """
-    import base64
-    import zlib
-
-    from lxml import etree
-
-    from unshackle.core.config import config as app_config
-
-    compression_level = app_config.serve.get("compression_level", 1)
-
-    seen: set[str] = set()
-    manifests: List[Dict[str, Any]] = []
-
-    for track in list(tracks.videos) + list(tracks.audio) + list(tracks.subtitles):
-        manifest_url = str(track.url) if track.url else None
-        if not manifest_url or manifest_url in seen:
-            continue
-
-        if track.data.get("dash") and track.data["dash"].get("manifest") is not None:
-            seen.add(manifest_url)
-            xml_bytes = etree.tostring(track.data["dash"]["manifest"], xml_declaration=True, encoding="UTF-8")
-            compressed = zlib.compress(xml_bytes, compression_level) if compression_level else xml_bytes
-            manifests.append(
-                {
-                    "type": "dash",
-                    "url": manifest_url,
-                    "data": base64.b64encode(compressed).decode("ascii"),
-                    "filtered_period_ids": list(track.data["dash"].get("filtered_period_ids") or []),
-                }
-            )
-        elif track.data.get("ism") and track.data["ism"].get("manifest") is not None:
-            seen.add(manifest_url)
-            xml_bytes = etree.tostring(track.data["ism"]["manifest"], xml_declaration=True, encoding="UTF-8")
-            compressed = zlib.compress(xml_bytes, compression_level) if compression_level else xml_bytes
-            manifests.append(
-                {
-                    "type": "ism",
-                    "url": manifest_url,
-                    "data": base64.b64encode(compressed).decode("ascii"),
-                }
-            )
-
-    return manifests
-
-
-def extract_track_manifests(tracks: Tracks) -> List[Dict[str, Any]]:
-    """Build a one-AdaptationSet MPD for each track the client cannot find again in the served manifest.
-
-    A service can build an AdaptationSet of its own, out of merged segment timelines or
-    copied nodes, that never joins the manifest tree the server serialises. A service can also
-    build a manifest that holds only its own track, which the client's attribute match cannot
-    tell apart from others. Each of those tracks gets its own MPD, matched by track id.
-    """
-    import base64
-    import zlib
-    from copy import deepcopy
-
-    from lxml import etree
-
-    from unshackle.core.config import config as app_config
-
-    compression_level = app_config.serve.get("compression_level", 1)
-    fragments: List[Dict[str, Any]] = []
-    representations: Dict[int, int] = {}
-
-    for track in list(tracks.videos) + list(tracks.audio) + list(tracks.subtitles):
-        dash = (getattr(track, "data", None) or {}).get("dash") or {}
-        manifest = dash.get("manifest")
-        adaptation_set = dash.get("adaptation_set")
-        if manifest is None or adaptation_set is None:
-            continue
-        if adaptation_set.getroottree().getroot() is manifest:
-            count = once(representations, id(manifest), lambda: len(manifest.findall(".//Representation")))
-            if count > 1:
-                continue
-
-        root = etree.Element("MPD", dict(manifest.attrib))
-        for child in manifest:
-            if child.tag != "Period":
-                root.append(deepcopy(child))
-
-        period = dash.get("period")
-        new_period = etree.SubElement(root, "Period", dict(period.attrib) if period is not None else {})
-        for child in period if period is not None else []:
-            if child.tag != "AdaptationSet":
-                new_period.append(deepcopy(child))
-        new_adaptation_set = deepcopy(adaptation_set)
-        new_period.append(new_adaptation_set)
-
-        representation = dash.get("representation")
-        if representation is not None:
-            for sibling in new_adaptation_set.findall("Representation"):
-                new_adaptation_set.remove(sibling)
-            new_adaptation_set.append(deepcopy(representation))
-
-        xml_bytes = etree.tostring(root, xml_declaration=True, encoding="UTF-8")
-        compressed = zlib.compress(xml_bytes, compression_level) if compression_level else xml_bytes
-        fragments.append(
-            {
-                "track_id": str(track.id),
-                "type": "dash",
-                "url": str(track.url) if track.url else None,
-                "data": base64.b64encode(compressed).decode("ascii"),
-            }
-        )
-
-    return fragments
 
 
 def serialize_drm(drm_list: Any) -> Optional[List[Dict[str, Any]]]:
@@ -4202,9 +4088,7 @@ async def session_tracks_handler(
             except (Exception, SystemExit):
                 session.chapters_by_title[str(title_id)] = []
 
-            manifests, track_manifests = await asyncio.to_thread(
-                lambda: (extract_manifests(tracks), extract_track_manifests(tracks))
-            )
+            snapshot = await asyncio.to_thread(capture, tracks, config.serve.get("compression_level", 1))
 
             session_headers, session_cookies = client_session_auth(session)
 
@@ -4254,8 +4138,7 @@ async def session_tracks_handler(
                     {"timestamp": ch.timestamp, "name": ch.name}
                     for ch in session.chapters_by_title.get(str(title_id), [])
                 ],
-                "manifests": manifests,
-                "track_manifests": track_manifests,
+                **snapshot,
                 "session_headers": session_headers,
                 "session_cookies": cookie_values(session_cookies),
                 "session_cookie_jar": session_cookies,

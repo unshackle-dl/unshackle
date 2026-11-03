@@ -213,8 +213,9 @@ hood the client walks a remote session through its lifecycle.
     chosen title. The tracks come back with playback URLs, and the server ships
     DASH/ISM manifests as compressed XML so the client can re-parse them locally for
     downloading. A service can build an AdaptationSet of its own that the served
-    manifest does not contain. Each such track gets a one-AdaptationSet MPD in
-    `track_manifests`, and the client re-parses that instead. Any
+    manifest does not contain. Each such track gets a one-track MPD in
+    `track_manifests`, with the content periods after its own, and the client
+    re-parses that instead. The client skips the same DASH periods as the server. Any
     `session_headers` and cookies the server used are merged into the
     client's local HTTP session. Each cookie in `session_cookie_jar` keeps its
     domain, path and `secure` flag, so it goes only to its own hosts. `session_cookies` carries

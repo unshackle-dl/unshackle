@@ -7,6 +7,7 @@ from enum import Enum
 import pytest
 
 from unshackle.core.api.handlers import serialize_audio_track, serialize_subtitle_track, serialize_video_track
+from unshackle.core.manifests.snapshot import match_track
 from unshackle.core.remote_service import (
     RemoteService,
     build_title,
@@ -15,7 +16,6 @@ from unshackle.core.remote_service import (
     deserialize_subtitle,
     deserialize_video,
     enum_get,
-    match_track,
     reconstruct_drm,
 )
 from unshackle.core.titles.episode import Episode
@@ -524,7 +524,7 @@ def test_resolve_manifest_data_matches_across_per_range_manifests() -> None:
     from tests.core.test_ism_init import VIDEO_HEVC_PQ_CPD, VIDEO_HEVC_SDR_CPD
     from tests.core.test_ism_range import manifest_xml
     from unshackle.core.manifests import ISM
-    from unshackle.core.remote_service import resolve_manifest_data
+    from unshackle.core.manifests.snapshot import restore
 
     urls = {"sdr": "https://x/sdr/manifest", "hdr": "https://x/hdr/manifest"}
     xml = {"sdr": manifest_xml(VIDEO_HEVC_SDR_CPD), "hdr": manifest_xml(VIDEO_HEVC_PQ_CPD)}
@@ -549,7 +549,7 @@ def test_resolve_manifest_data_matches_across_per_range_manifests() -> None:
         for k in ("sdr", "hdr")
     ]
 
-    resolve_manifest_data(tracks, manifests)
+    restore(tracks, {"manifests": manifests})
 
     assert remote_hdr.data["ism"]["quality_level"].get("CodecPrivateData") == VIDEO_HEVC_PQ_CPD
 
@@ -680,9 +680,8 @@ def test_no_dl_params_when_the_ctx_has_no_selection() -> None:
 def test_resolve_manifest_data_keeps_the_periods_the_server_filtered() -> None:
     """A service drops periods (a mid-roll ad) on the server only. The client must skip the
     same periods after it re-parses the manifest, or a remote download joins them back in."""
-    from unshackle.core.api.handlers import extract_manifests
     from unshackle.core.manifests import DASH
-    from unshackle.core.remote_service import resolve_manifest_data
+    from unshackle.core.manifests.snapshot import capture, restore
 
     periods = "".join(
         f"""<Period id="{pid}" duration="PT1S"><AdaptationSet contentType="video" mimeType="video/mp4" lang="en">
@@ -700,6 +699,6 @@ def test_resolve_manifest_data_keeps_the_periods_the_server_filtered() -> None:
     remote = deserialize_video(serialize_video_track(server.videos[0]))
     tracks = build_tracks({"video": [], "audio": [], "subtitles": []})
     tracks.videos.append(remote)
-    resolve_manifest_data(tracks, extract_manifests(server))
+    restore(tracks, capture(server))
 
     assert remote.data["dash"]["filtered_period_ids"] == ["ad1"]

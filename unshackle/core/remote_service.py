@@ -41,6 +41,7 @@ from unshackle.core.console import console, prompt_user, show_notice
 from unshackle.core.constants import AnyTrack
 from unshackle.core.credential import Credential
 from unshackle.core.drm import BlowfishStripe, cbcs, real_kids
+from unshackle.core.manifests.snapshot import match_track, restore
 from unshackle.core.proxies.resolve import is_loopback
 from unshackle.core.search_result import SearchResult
 from unshackle.core.session import MAX_BACKOFF
@@ -473,120 +474,6 @@ def apply_session_cookies(session: requests.Session, result: dict) -> None:
             )
 
 
-def resolve_track_manifests(tracks: Tracks, track_manifests: list) -> None:
-    """Fill track.data from the per-track MPD fragments the server sent.
-
-    A service can build an AdaptationSet the served manifest does not contain, so the
-    client's re-parse of that manifest cannot find it. The server sends a one-AdaptationSet
-    MPD for each of those tracks instead. This runs first, and the whole-manifest re-parse
-    then skips every track whose ``data`` already holds a ``dash`` entry.
-    """
-    import base64 as b64
-
-    from lxml import etree
-
-    from unshackle.core.api.compression import safe_inflate
-
-    if not track_manifests:
-        return
-
-    log_m = logging.getLogger("remote_service")
-    by_id = {str(t.id): t for t in list(tracks.videos) + list(tracks.audio) + list(tracks.subtitles)}
-
-    for entry in track_manifests:
-        track = by_id.get(str(entry.get("track_id")))
-        if track is None or entry.get("type") != "dash" or not entry.get("data"):
-            continue
-        try:
-            manifest = etree.fromstring(safe_inflate(b64.b64decode(entry["data"])))
-            period = manifest.find("Period")
-            adaptation_set = period.find("AdaptationSet")
-            representation = adaptation_set.find("Representation")
-            if representation is None:
-                raise ValueError("fragment has no Representation")
-        except Exception as e:
-            log_m.warning("Failed to re-parse the track fragment for track %s: %s", track.id, e)
-            continue
-
-        track.data["dash"] = {
-            "manifest": manifest,
-            "period": period,
-            "adaptation_set": adaptation_set,
-            "representation": representation,
-            "representation_id": representation.get("id"),
-        }
-        track.descriptor = Track.Descriptor.DASH
-
-
-def resolve_manifest_data(tracks: Tracks, manifests: list) -> None:
-    """Re-parse serialized manifests and fill track.data for downloading.
-
-    The server serializes DASH and ISM manifest XML as zlib-compressed base64.
-    We decode and decompress locally, re-parse with the appropriate manifest
-    parser, then match each remote track to the locally-parsed track by ID
-    to copy track.data. We skip HLS, because it re-fetches from track.url.
-    """
-    import base64 as b64
-
-    from unshackle.core.api.compression import safe_inflate
-
-    if not manifests:
-        return
-
-    log_m = logging.getLogger("remote_service")
-    all_tracks = list(tracks.videos) + list(tracks.audio) + list(tracks.subtitles)
-    local_all: list = []
-
-    for manifest_info in manifests:
-        m_type = manifest_info.get("type")
-        m_url = manifest_info.get("url")
-        m_data = manifest_info.get("data")
-        if not m_data or not m_url:
-            continue
-
-        try:
-            raw = safe_inflate(b64.b64decode(m_data))
-
-            fallback_lang = next(
-                (t.language for t in all_tracks if t.language and str(t.language) != "und"),
-                None,
-            )
-            if m_type == "dash":
-                from lxml import etree
-
-                from unshackle.core.manifests import DASH
-
-                skip = manifest_info.get("filtered_period_ids") or []
-                local_tracks = DASH(etree.fromstring(raw), m_url).to_tracks(
-                    language=fallback_lang, period_filter=(lambda p: p.get("id") in skip) if skip else None
-                )
-                if skip:
-                    for local_track in local_tracks:
-                        local_track.data["dash"]["filtered_period_ids"] = skip
-            elif m_type == "ism":
-                from lxml import etree
-
-                from unshackle.core.manifests import ISM
-
-                local_tracks = ISM(etree.fromstring(raw), m_url).to_tracks(language=fallback_lang)
-            else:
-                continue
-
-            local_all += list(local_tracks.videos) + list(local_tracks.audio) + list(local_tracks.subtitles)
-        except Exception as e:
-            log_m.warning("Failed to re-parse %s manifest from %s: %s", m_type, m_url, e)
-
-    for remote_track in all_tracks:
-        if any(remote_track.data.get(key) for key in ("dash", "ism")):
-            continue
-        matched = match_track(remote_track, local_all)
-        if matched and any(matched.data.get(key) for key in ("dash", "ism")):
-            remote_track.data.update(matched.data)
-            remote_track.descriptor = matched.descriptor
-            if matched.drm and not remote_track.drm:
-                remote_track.drm = matched.drm
-
-
 def segment_uri_filter(uris: Iterable[Any]) -> Callable[[Any], bool]:
     """Return an HLS ``OnSegmentFilter`` that drops the segments with these URIs.
 
@@ -601,48 +488,6 @@ def segment_uri_filter(uris: Iterable[Any]) -> Callable[[Any], bool]:
         return bool(exact) and (uri in exact or uri.split("?")[0] in paths)
 
     return segment_filter
-
-
-def same_bitrate(local: Optional[int], remote: Optional[int]) -> bool:
-    """Equal to the nearest kb/s. A server that predates ``bitrate_bps`` rounds to kb/s in transit."""
-    if not local or not remote:
-        return not local and not remote
-    return round(local / 1000) == round(remote / 1000)
-
-
-def match_track(remote_track: Track, local_tracks: list) -> Optional[Track]:
-    """Find the locally-parsed track that matches a remote track by ID or by attributes.
-
-    HDR10 matches HDR10P, because the server's HDR10+ probe relabels a track that the local re-parse calls HDR10.
-    """
-    hdr10_ranges = {Video.Range.HDR10, Video.Range.HDR10P}
-    remote_id = str(remote_track.id)
-    for lt in local_tracks:
-        if str(lt.id) == remote_id:
-            return lt
-
-    if not isinstance(remote_track, (Video, Audio, Subtitle)):
-        return None
-    for lt in local_tracks:
-        if type(lt).__name__ != type(remote_track).__name__:
-            continue
-        if lt.codec != remote_track.codec or str(lt.language) != str(remote_track.language):
-            continue
-        if isinstance(remote_track, Video):
-            if (
-                lt.width == remote_track.width
-                and lt.height == remote_track.height
-                and (lt.range == remote_track.range or {lt.range, remote_track.range} == hdr10_ranges)
-                and same_bitrate(lt.bitrate, remote_track.bitrate)
-            ):
-                return lt
-        elif isinstance(remote_track, Audio):
-            if same_bitrate(lt.bitrate, remote_track.bitrate):
-                return lt
-        elif isinstance(remote_track, Subtitle):
-            if lt.forced == remote_track.forced and lt.sdh == remote_track.sdh:
-                return lt
-    return None
 
 
 EPISODE_PLACEHOLDER_NAME = re.compile(r"Episode ?#?\d+", re.IGNORECASE)
@@ -1847,8 +1692,7 @@ class RemoteService:
                 self._session.headers[k] = v
         apply_session_cookies(self._session, result)
 
-        resolve_track_manifests(tracks, result.get("track_manifests", []))
-        resolve_manifest_data(tracks, result.get("manifests", []))
+        restore(tracks, result)
         apply_service_track_data(tracks, result)
 
         server_cdm = bool(result.get("server_cdm", False)) or getattr(self, "_server_device", False)

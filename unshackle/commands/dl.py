@@ -76,6 +76,7 @@ from unshackle.core.drm import (
 )
 from unshackle.core.events import events
 from unshackle.core.export_name import ExportNamer, move_export, plural, season_episodes, title_label
+from unshackle.core.manifests.snapshot import capture
 from unshackle.core.providers.anilist import parse_anilist_ref
 from unshackle.core.providers.tvdb import SEASON_TYPES, parse_int
 from unshackle.core.proxies.resolve import (
@@ -1247,6 +1248,7 @@ class dl:
     LICENCE_LOCK = Lock()
     VAULT_WRITER = ThreadPoolExecutor(1, thread_name_prefix="vault-writer")
     EXPORT_LOCK = Lock()
+    export_snapshots: dict[str, Optional[dict[str, Any]]]
     LICENSE_KEY_CACHE: dict[UUID, str] = {}
     ALL_DRM_LOCK = Lock()
 
@@ -4219,9 +4221,19 @@ class dl:
         content keys live once per title. ``drm`` may be None (DRM-free track) or a DRM
         system without ``to_dict``/``content_keys`` (e.g. ClearKey) - the export still
         records the track, manifest, chapter and attachment info. unshackle's full track
-        dicts and title meta go under ``x-unshackle`` for its own importer.
+        dicts, title meta and manifest snapshot go under ``x-unshackle`` for its own importer.
         """
         namer: Optional[ExportNamer] = getattr(self, "export_namer", None)
+        snapshots = getattr(self, "export_snapshots", None)
+        if snapshots is None:
+            snapshots = self.export_snapshots = {}
+        if str(title.id) not in snapshots:
+            try:
+                fresh = capture(title.tracks)
+                snapshots[str(title.id)] = fresh if any(fresh.values()) else None
+            except Exception as e:
+                self.log.warning(f"Not saving the manifest of {title.id} in {export}: {e!r}")
+                snapshots[str(title.id)] = None
         with self.EXPORT_LOCK:
             if namer and namer.path:
                 export = namer.path
@@ -4248,6 +4260,8 @@ class dl:
                 track_dict["unwanted_segments"] = unwanted
             elif unwanted is not None:
                 track_dict.pop("unwanted_segments", None)
+            if saved := snapshots[str(title.id)]:
+                entry.ext("unshackle")["snapshot"] = saved
             # the row names the track's KIDs, so an import gives the track only their keys
             track_kids = [kid.hex for kid in own_kids(drm)] if drm is not None else []
             for row in entry.tracks:

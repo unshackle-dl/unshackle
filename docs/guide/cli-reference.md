@@ -269,7 +269,7 @@ unshackle logs in to the service before the search. A service that declares a se
 
 ## `import`
 
-Reconstruct a download (download → decrypt → mux) from an `--export` JSON file without re-contacting the service. It re-fetches the manifest, injects the stored keys, and then runs the normal `dl` pipeline. The service tag is read from the export file, not passed by you.
+Reconstruct a download (download → decrypt → mux) from an `--export` JSON file without re-contacting the service. It uses the DASH or ISM manifest that the export saved, or fetches the manifest again when the export has none. It injects the stored keys and then runs the normal `dl` pipeline. The service tag is read from the export file, not passed by you.
 
 ```
 unshackle import EXPORT_FILE [DL_ARGS...]

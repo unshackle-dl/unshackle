@@ -11,7 +11,7 @@ from contextlib import ExitStack, closing
 from copy import deepcopy
 from functools import lru_cache, partial
 from pathlib import Path
-from typing import Any, BinaryIO, Callable, Optional, Union, cast
+from typing import Any, BinaryIO, Callable, Collection, Optional, Union, cast
 from urllib.parse import urljoin, urlparse
 from uuid import UUID
 from zlib import crc32
@@ -239,7 +239,9 @@ class DASH:
         Parameters:
             language: The Title's Original Recorded Language. unshackle also uses it as a
                 fallback track language value when the manifest gives no language information.
-            period_filter: Filter out period's within the manifest.
+            period_filter: Filter out period's within the manifest. A filtered period without an
+                id, or with the id of a kept period, gets its own, so filtered_period_ids names
+                every filtered period and no kept one.
 
         Only the first main-content period becomes tracks. Later periods do not add tracks of their
         own, but download_track stitches the segments of every content period into each returned
@@ -251,14 +253,19 @@ class DASH:
 
         filtered_period_ids: list[str] = []
 
-        for period in self.manifest.findall("Period"):
-            if callable(period_filter) and period_filter(period):
-                if period_id := period.get("id"):
-                    filtered_period_ids.append(period_id)
-                continue
-            if not DASH.is_content_period(period, []):
-                if period_id := period.get("id"):
-                    filtered_period_ids.append(period_id)
+        periods = self.manifest.findall("Period")
+        filtered = {
+            p for p in periods if (callable(period_filter) and period_filter(p)) or not DASH.is_content_period(p, [])
+        }
+        kept_ids = {p.get("id") for p in periods if p not in filtered}
+        for index, period in enumerate(periods):
+            if period in filtered:
+                if not period.get("id") or period.get("id") in kept_ids:
+                    period.set("id", f"unshackle-period-{index}")
+                filtered_period_ids.append(period.get("id"))
+
+        for period in periods:
+            if period in filtered:
                 continue
 
             for adaptation_set in period.findall("AdaptationSet"):
@@ -437,7 +444,7 @@ class DASH:
         adaptation_set: Element = track.data["dash"]["adaptation_set"]
         representation: Element = track.data["dash"]["representation"]
         rep_id: Optional[str] = track.data["dash"].get("representation_id") or representation.get("id")
-        filtered_period_ids: list[str] = track.data["dash"].get("filtered_period_ids", [])
+        filtered_period_ids = set(track.data["dash"].get("filtered_period_ids", []))
 
         # Preserve existing DRM if it was set by the service, especially when service set Widevine
         # but manifest only contains PlayReady protection (common scenario for some services)
@@ -926,7 +933,7 @@ class DASH:
         return bool(subsegments) and subsegments[0][1] == first_start and subsegments[-1][2] == last_end
 
     @staticmethod
-    def is_content_period(period: Element, filtered_period_ids: list[str]) -> bool:
+    def is_content_period(period: Element, filtered_period_ids: Collection[str]) -> bool:
         """Whether a period is a valid content period (not an ad, not filtered, not trick mode)."""
         period_id = period.get("id")
         if period_id and period_id in filtered_period_ids:

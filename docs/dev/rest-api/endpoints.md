@@ -1091,7 +1091,7 @@ Requires an authenticated remote session. Otherwise it returns `404 SESSION_NOT_
 
 Get tracks and chapters for a specific title within the remote session. Body: `{ "title_id": "..." }` (required). Unlike `list-tracks`, track objects here **include** download URLs, along with session headers/cookies and manifest data the client needs to download directly. A slow answer arrives as a [slow response](#slow-responses).
 
-`manifests` holds each served DASH/ISM manifest once. A service can build an AdaptationSet of its own that the served manifest does not contain. `track_manifests` holds a one-AdaptationSet MPD for each such track, and the client re-parses that in place of the whole manifest.
+`manifests` holds each served DASH/ISM manifest once. For DASH, `filtered_period_ids` names the periods that the download skips, such as ad periods. A service can build an AdaptationSet of its own that the served manifest does not contain. `track_manifests` holds a one-track MPD for each such track, and the client re-parses that in place of the whole manifest. That MPD starts at the period of the track and keeps the content periods after it.
 
 === "Response `200`"
 
@@ -1103,7 +1103,7 @@ Get tracks and chapters for a specific title within the remote session. Body: `{
       "subtitles": [ { "id": "s-1", "url": "https://..." } ],
       "chapters": [ { "timestamp": "00:00:00.000", "name": "Intro" } ],
       "attachments": [ { "url": "https://...", "name": "font.ttf", "mime_type": "font/ttf", "description": "" } ],
-      "manifests": [ { "type": "dash", "url": "https://...", "data": "<base64 zlib xml>" } ],
+      "manifests": [ { "type": "dash", "url": "https://...", "data": "<base64 zlib xml>", "filtered_period_ids": [ "ad-1" ] } ],
       "track_manifests": [ { "track_id": "s-1", "type": "dash", "url": "https://...", "data": "<base64 zlib xml>" } ],
       "session_headers": { "User-Agent": "..." },
       "session_cookies": { "sid": "..." },

@@ -913,8 +913,10 @@ unshackle dl --skip-dl EXAMPLE 81234567
 
 `--export` writes a `mediaexport` JSON file into the configured exports directory. It holds
 the manifest, the DRM init data, the content keys, the KIDs of each track and the title
-metadata for each title. `unshackle import` reads it to reconstruct a download later, and gives
-each track only the content keys for its KIDs. The importer also reads the
+metadata for each title. For a DASH or ISM title, it also holds the manifest as the service
+left it, with the ad periods that the service skips. `unshackle import` reads it to reconstruct
+a download later, and gives each track only the content keys for its KIDs. The import uses the
+saved manifest, so it skips the same periods and does not fetch the manifest again. The importer also reads the
 older unshackle `version: 2` files and unidl's own export files.
 
 ```shell title="Export track info and keys"
