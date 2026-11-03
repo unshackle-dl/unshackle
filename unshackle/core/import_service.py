@@ -88,6 +88,20 @@ def hls_playlist_kids(track: Any, session: Optional[requests.Session] = None) ->
     return None
 
 
+def content_period_filter(manifest: Any, kept: Any, title: Any) -> Optional[Callable[[Any], bool]]:
+    """A DASH period_filter that drops every period not in ``kept``, the export's ``content_periods`` for this manifest.
+
+    None when there is nothing to filter, or when no kept id is in the re-fetched manifest: the server can name its
+    periods again on each fetch, so the import then warns and keeps every period.
+    """
+    if not kept or not isinstance(manifest, DASH):
+        return None
+    if not set(kept) & {p.get("id") for p in manifest.manifest.findall("Period")}:
+        log.warning(f"No exported content period of '{title}' is in its re-fetched DASH manifest, keeping every period")
+        return None
+    return lambda period: period.get("id") not in kept
+
+
 def resolve_import_manifest_data(
     tracks: Tracks,
     manifest_type: Optional[str],
@@ -96,6 +110,7 @@ def resolve_import_manifest_data(
     language: Any,
     title: Title_T,
     saved: Optional[dict[str, Any]] = None,
+    content_periods: Optional[dict[str, list[str]]] = None,
 ) -> None:
     """Fill ``track.data`` for DASH/ISM tracks rebuilt from export dicts.
 
@@ -124,7 +139,12 @@ def resolve_import_manifest_data(
     for url in {str(track.url) for track in pending if track.url}:
         try:
             manifest = parser.from_url(url=url, session=session)
-            parsed = manifest.to_tracks(language=fallback_lang)
+            kept = content_period_filter(manifest, (content_periods or {}).get(url), title)
+            parsed = (
+                manifest.to_tracks(language=fallback_lang, period_filter=kept)
+                if kept and isinstance(manifest, DASH)
+                else manifest.to_tracks(language=fallback_lang)
+            )
         except MissingLanguageError:
             raise click.ClickException(
                 f"No language for '{title}': the {manifest_type} manifest has none and Title.language is unset"
@@ -273,6 +293,7 @@ class ImportService:
             "snapshot": x.get("snapshot"),
             "chapters": entry.chapters,
             "attachments": x.get("attachments") or [],
+            "content_periods": {m.url: m.content_periods for m in entry.manifests if m.content_periods},
         }
 
     @staticmethod
@@ -404,8 +425,13 @@ class ImportService:
                         raise click.ClickException(
                             f"No language for '{title}': the export and the HLS manifest have none"
                         )
+                kept = content_period_filter(manifest, entry.get("content_periods", {}).get(manifest_url), title)
                 try:
-                    parsed = manifest.to_tracks(language=language)
+                    parsed = (
+                        manifest.to_tracks(language=language, period_filter=kept)
+                        if kept and isinstance(manifest, DASH)
+                        else manifest.to_tracks(language=language)
+                    )
                 except MissingLanguageError:
                     raise click.ClickException(no_language)
                 except Exception as e:
@@ -466,6 +492,7 @@ class ImportService:
             language=title.language,
             title=title,
             saved=entry.get("snapshot"),
+            content_periods=entry.get("content_periods"),
         )
 
         for attachment in entry.get("attachments") or []:

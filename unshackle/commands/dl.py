@@ -100,7 +100,7 @@ from unshackle.core.tracks import Audio, Subtitle, Tracks, Video
 from unshackle.core.tracks.attachment import Attachment
 from unshackle.core.tracks.dv_fixup import apply_dv_fixup
 from unshackle.core.tracks.hybrid import Hybrid
-from unshackle.core.tracks.track import assert_fragments_decrypted, has_encrypted_sample_entry
+from unshackle.core.tracks.track import Track, assert_fragments_decrypted, has_encrypted_sample_entry
 from unshackle.core.tracks.tracks import at_resolution
 from unshackle.core.utilities import (
     apply_original_language,
@@ -4371,14 +4371,33 @@ class dl:
         session = getattr(getattr(self, "export_service", None), "session", None)
         # mediaexport drops Cookie and Authorization itself, on write and on read
         headers = dict(getattr(session, "headers", None) or {})
-        manifests = [mediaexport.Manifest(primary_url, manifest_type, headers, role="primary")] if primary_url else []
+        manifests = (
+            [
+                mediaexport.Manifest(
+                    primary_url,
+                    manifest_type,
+                    headers,
+                    role="primary",
+                    content_periods=self.content_periods(all_tracks, primary_url),
+                )
+            ]
+            if primary_url
+            else []
+        )
         # the whole URL identifies a manifest: two profiles on one endpoint are two manifests
         seen = {primary_url}
         for t in all_tracks:
             url = str(t.url)
             if t.descriptor in (Video.Descriptor.DASH, Video.Descriptor.ISM) and url not in seen:
                 seen.add(url)
-                manifests.append(mediaexport.Manifest(url, t.descriptor.name.lower(), role="extra"))
+                manifests.append(
+                    mediaexport.Manifest(
+                        url,
+                        t.descriptor.name.lower(),
+                        role="extra",
+                        content_periods=self.content_periods(all_tracks, url),
+                    )
+                )
 
         rows = []
         for t in all_tracks:
@@ -4427,6 +4446,24 @@ class dl:
                 }
             },
         )
+
+    @staticmethod
+    def content_periods(tracks: Sequence[Track], url: str) -> list[str]:
+        """The ids of the DASH periods a service kept in the manifest at ``url``, empty when it filtered none.
+
+        An import re-fetches the manifest without the service, so its period filter must travel in the export.
+        Empty also when a kept period has no id, since an id allow-list cannot name it.
+        """
+        dash = next(
+            (d for t in tracks if (d := t.data.get("dash") or {}).get("filtered_period_ids") and str(t.url) == url),
+            None,
+        )
+        if dash is None:
+            return []
+        kept = [
+            p.get("id") for p in dash["manifest"].findall("Period") if p.get("id") not in dash["filtered_period_ids"]
+        ]
+        return kept if all(kept) else []
 
     @staticmethod
     def failure_lines(e: BaseException) -> list[str]:

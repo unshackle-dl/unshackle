@@ -12,7 +12,7 @@ import json
 import logging
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, cast
+from typing import Any, Optional, cast
 from uuid import UUID
 
 import click
@@ -374,3 +374,105 @@ def test_malformed_content_key_skips_the_key_not_the_download(
 
     assert "keys" not in entry(export)
     assert f"Not exporting the key for KID {KID.hex}" in caplog.text
+
+
+AD_MPD_URL = "https://example.test/ads/m.mpd"
+
+
+def ad_mpd(ad_id: str) -> str:
+    """An MPD whose pre-roll carries only a marker that a service filter, not core, knows."""
+
+    def period(pid: str, marker: str) -> str:
+        prop = f'<SupplementalProperty schemeIdUri="urn:example:ad" value="{marker}"/>' if marker else ""
+        return f"""<Period id="{pid}" duration="PT30S">{prop}
+          <AdaptationSet contentType="video" mimeType="video/mp4" lang="en">
+            <Representation id="v1" bandwidth="5000000" width="1920" height="1080" codecs="avc1.640028">
+              <SegmentTemplate media="{pid}/$Number$.m4s" initialization="{pid}/i.mp4" duration="10" startNumber="1"/>
+            </Representation>
+          </AdaptationSet></Period>"""
+
+    return f"""<?xml version="1.0"?>
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011" type="static" mediaPresentationDuration="PT60S">
+{period(ad_id, "PRE_ROLL")}{period("main", "")}</MPD>"""
+
+
+def export_service_filtered_title(tmp_path: Path, manifest_url: Optional[str]) -> Path:
+    """Export a DASH title as a service would, its own period_filter dropping the pre-roll, with no manifest snapshot.
+
+    Without a snapshot the import re-fetches the manifest, the path ``content_periods`` serves.
+    """
+    from unshackle.core.manifests import DASH
+
+    title = Movie(id_="movie-1", service=StubService, name="Example Movie", year=2024, language="en")
+    parsed = DASH.from_text(ad_mpd("ad-1"), AD_MPD_URL).to_tracks(
+        language="en",
+        period_filter=lambda p: any(x.get("value") == "PRE_ROLL" for x in p.findall("SupplementalProperty")),
+    )
+    video = parsed.videos[0]
+    assert video.data["dash"]["filtered_period_ids"] == ["ad-1"]
+    title.tracks.add(video)
+    title.tracks.manifest_url = manifest_url
+    export = tmp_path / "export.json"
+    make_dl().write_export(export, title, video)
+    doc = read_export(export)
+    doc["titles"][0]["x-unshackle"].pop("snapshot", None)
+    export.write_text(json.dumps(doc), encoding="utf8")
+    return export
+
+
+@pytest.mark.parametrize("manifest_url", [AD_MPD_URL, None])
+@pytest.mark.parametrize("ad_id_on_refetch", ["ad-1", "ad-9"])
+def test_import_keeps_out_the_periods_the_service_filtered(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, manifest_url: Optional[str], ad_id_on_refetch: str
+) -> None:
+    """The import re-fetches the MPD without the service, so its filter must travel in the export.
+
+    A re-fetch can name the ad period anew, so only the exported content periods are kept.
+    """
+    from unshackle.core.manifests import DASH
+
+    export = export_service_filtered_title(tmp_path, manifest_url)
+    assert [m.get("content_periods") for m in entry(export)["manifests"]] == [["main"]]
+    monkeypatch.setattr(DASH, "from_url", lambda url, session=None, **kw: DASH.from_text(ad_mpd(ad_id_on_refetch), url))
+
+    svc = ImportService(import_ctx(), "EXAMPLE", "movie-1", str(export))
+    video = svc.get_tracks(next(iter(svc.get_titles()))).videos[0]
+
+    assert video.data["dash"]["filtered_period_ids"] == [ad_id_on_refetch]
+
+
+def test_an_export_without_content_periods_imports_every_period(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An export written before content_period_ids, or from a service with no filter, keeps every period."""
+    from unshackle.core.manifests import DASH
+
+    export = export_service_filtered_title(tmp_path, AD_MPD_URL)
+    doc = read_export(export)
+    for manifest in doc["titles"][0]["manifests"]:
+        del manifest["content_periods"]
+    export.write_text(json.dumps(doc), encoding="utf8")
+    monkeypatch.setattr(DASH, "from_url", lambda url, session=None, **kw: DASH.from_text(ad_mpd("ad-1"), url))
+
+    svc = ImportService(import_ctx(), "EXAMPLE", "movie-1", str(export))
+    video = svc.get_tracks(next(iter(svc.get_titles()))).videos[0]
+
+    assert video.data["dash"]["filtered_period_ids"] == []
+
+
+def test_import_keeps_every_period_when_no_exported_period_is_left(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A re-fetch that names every period anew has nothing to match, so the import warns and filters nothing."""
+    from unshackle.core.manifests import DASH
+
+    export = export_service_filtered_title(tmp_path, AD_MPD_URL)
+    renamed = ad_mpd("ad-1").replace('id="main"', 'id="main-2"')
+    monkeypatch.setattr(DASH, "from_url", lambda url, session=None, **kw: DASH.from_text(renamed, url))
+
+    svc = ImportService(import_ctx(), "EXAMPLE", "movie-1", str(export))
+    with caplog.at_level(logging.WARNING):
+        video = svc.get_tracks(next(iter(svc.get_titles()))).videos[0]
+
+    assert video.data["dash"]["filtered_period_ids"] == []
+    assert "keeping every period" in caplog.text

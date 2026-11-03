@@ -990,6 +990,14 @@ The [mediaexport](https://github.com/unshackle-dl/mediaexport) package specifies
     title language, the video track takes the language of the default audio track. When
     the master playlist gives no audio language either, the import stops with a message.
 
+!!! note "Ad periods a service skipped stay skipped"
+    Some services skip DASH periods, such as ads, by a rule of their own. The export also
+    records the periods the service kept as `content_periods` on each manifest. An import that
+    must fetch the manifest again, because the file has no saved manifest or another tool wrote
+    it, downloads only those periods, also when the new manifest gives an ad period a new ID.
+    When the new manifest has none of the recorded periods, the import logs a warning and keeps
+    every period.
+
 ## Metadata and tagging
 
 unshackle looks up metadata automatically, but you can override the identifiers used for
