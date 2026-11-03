@@ -4039,7 +4039,7 @@ through the tunnel. It stops at the first step that fails.</p>
 </tr>
 </tbody>
 </table>
-<p>WVD files in the WVDs directory and PRD files in the PRDs directory are auto-loaded. The REST API lives under <code>http://&lt;host&gt;:&lt;port&gt;/api/</code>, with Swagger UI at <code>/api/docs/</code> and a health check at <code>/api/health</code> (exempt from auth).</p>
+<p>WVD files in the WVDs directory and PRD files in the PRDs directory are auto-loaded. The REST API lives under <code>http://&lt;host&gt;:&lt;port&gt;/api/</code>, with Swagger UI at <code>/api/docs/</code> and a health check at <code>/api/health</code>.</p>
 <div class="admonition warning">
 <p class="admonition-title">Configure <code>api_secret</code> first</p>
 <p>Unless you pass <code>--no-key</code>, <code>serve.api_secret</code> must be set in your config. Requests authenticate with the <code>X-Secret-Key</code> header. <code>--no-key</code> disables authentication entirely. Only use it on a trusted, private network.</p>

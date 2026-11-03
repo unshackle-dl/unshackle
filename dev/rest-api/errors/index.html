@@ -2698,8 +2698,7 @@ body that uses an integer <code>status</code> and no <code>error_code</code> or 
 <p class="admonition-title">Handle both shapes</p>
 <p>A client must expect two error formats: the standard structured error
 (string <code>status</code> of <code>"error"</code>, with <code>error_code</code>), and this authentication error
-(integer <code>status</code>, no <code>error_code</code>). The <code>GET /api/health</code> endpoint is exempt
-from authentication, so it never returns the key-error shape.</p>
+(integer <code>status</code>, no <code>error_code</code>).</p>
 </div>
 <h2 id="late-failures-with-status-200">Late failures with status <code>200</code><a class="headerlink" href="#late-failures-with-status-200" title="Permanent link">&para;</a></h2>
 <p>The remote session <code>titles</code>, <code>tracks</code> and <code>license</code> routes send status <code>200</code> and the headers

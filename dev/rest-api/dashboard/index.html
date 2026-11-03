@@ -2518,7 +2518,7 @@ here, so use <code>id</code> as the identity and <code>label</code> only for dis
 </tr>
 </tbody>
 </table>
-<p>Only a configured API key gets a row of counters. A request on an open route such as <code>/api/health</code> with an unknown key counts as <code>anonymous</code>, so an unauthenticated caller cannot grow the table.</p>
+<p>Only a configured API key gets a row of counters. A request that answers with an unknown key counts as <code>anonymous</code>, so an unauthenticated caller cannot grow the table.</p>
 <p>Every API key the server counts has a row here, the dashboard key included, so a
 <code>requests_by_key</code> bucket other than <code>anonymous</code> always matches one. A "traffic by key" panel
 reads the rows here, which are unambiguous, and takes <code>anonymous</code> from <code>requests_by_key</code>. Read

@@ -2260,10 +2260,10 @@ health check is <code>GET http://127.0.0.1:8786/api/health</code>.</p>
 available at <a href="http://127.0.0.1:8786/api/docs/"><code>/api/docs/</code></a>. The server generates
 it from the same route table it serves, so it always matches the version you
 operate. Note that in <code>--api-only</code> mode the docs page is itself behind the
-API key. Only <code>/api/health</code> is exempt from authentication.</p>
+API key, like every other route.</p>
 </div>
-<p>A quick smoke test that needs no API key:</p>
-<div class="language-shell highlight"><span class="filename">Confirm the server is up</span><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>curl<span class="w"> </span>http://127.0.0.1:8786/api/health
+<p>A quick smoke test:</p>
+<div class="language-shell highlight"><span class="filename">Confirm the server is up</span><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>curl<span class="w"> </span>-H<span class="w"> </span><span class="s2">"X-Secret-Key: your-api-secret"</span><span class="w"> </span>http://127.0.0.1:8786/api/health
 </span></code></pre></div>
 <div class="language-json highlight"><span class="filename">Response</span><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="p">{</span>
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span><span class="nt">"status"</span><span class="p">:</span><span class="w"> </span><span class="s2">"ok"</span><span class="p">,</span>
@@ -2292,7 +2292,7 @@ request and response in full.</p>
 <tr>
 <td><code>GET</code></td>
 <td><code>/api/health</code></td>
-<td>Liveness and version check. Never requires an API key.</td>
+<td>Liveness and version check.</td>
 </tr>
 <tr>
 <td><code>GET</code></td>
@@ -2522,7 +2522,7 @@ history, config, maintenance) is only available in the full or <code>--api-only<
 </div>
 <h2 id="authentication-in-one-line">Authentication in one line<a class="headerlink" href="#authentication-in-one-line" title="Permanent link">&para;</a></h2>
 <p>With the default configuration, send your API secret in the <code>X-Secret-Key</code> header on
-every request except <code>/api/health</code>:</p>
+every request:</p>
 <div class="language-shell highlight"><span class="filename">An authenticated request</span><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://127.0.0.1:8786/api/search<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">"X-Secret-Key: your-api-secret"</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">"Content-Type: application/json"</span><span class="w"> </span><span class="se">\</span>

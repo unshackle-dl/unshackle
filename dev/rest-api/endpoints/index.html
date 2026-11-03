@@ -3082,11 +3082,11 @@
 </div>
 <div class="admonition tip">
 <p class="admonition-title">Interactive docs</p>
-<p>The server mounts a live Swagger UI at <strong><code>/api/docs/</code></strong> whenever it does not operate in <code>--remote-only</code> mode. Its title is "Unshackle REST API" and its version tracks the installed package version. In API-only mode with an API key configured, the Swagger UI itself sits behind <code>X-Secret-Key</code>. Only <code>/api/health</code> is exempt.</p>
+<p>The server mounts a live Swagger UI at <strong><code>/api/docs/</code></strong> whenever it does not operate in <code>--remote-only</code> mode. Its title is "Unshackle REST API" and its version tracks the installed package version. In API-only mode with an API key configured, the Swagger UI itself sits behind <code>X-Secret-Key</code>, like every other route.</p>
 </div>
 <h2 id="conventions">Conventions<a class="headerlink" href="#conventions" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Authentication.</strong> Every request except <code>GET /api/health</code> requires the <code>X-Secret-Key</code> header when you configure an API key. <code>--no-key</code> disables the check entirely. See <a href="../authentication/">Authentication</a>.</li>
+<li><strong>Authentication.</strong> Every request, <code>GET /api/health</code> included, requires the <code>X-Secret-Key</code> header when you configure an API key. <code>--no-key</code> disables the check entirely. See <a href="../authentication/">Authentication</a>.</li>
 <li><strong>Content type.</strong> Request bodies are JSON (<code>Content-Type: application/json</code>). All success responses are JSON unless this page documents a <code>204 No Content</code>.</li>
 <li><strong>CORS.</strong> Every response carries permissive CORS headers, and the server answers <code>OPTIONS</code> preflight requests automatically.</li>
 <li><strong>Compression.</strong> JSON responses of 256 bytes or more are gzip-compressed when the client sends <code>Accept-Encoding: gzip</code>. A <a href="#slow-responses">slow response</a> is not compressed.</li>
@@ -3101,11 +3101,11 @@
 <h2 id="general-endpoints">General endpoints<a class="headerlink" href="#general-endpoints" title="Permanent link">&para;</a></h2>
 <p>These endpoints report server state and enumerate what is available. <code>GET /api/health</code>, <code>GET /api/services</code>, and <code>POST /api/search</code> are also exposed in <code>--remote-only</code> mode.</p>
 <h3 id="get-apihealth"><code>GET /api/health</code><a class="headerlink" href="#get-apihealth" title="Permanent link">&para;</a></h3>
-<p>Health check. <strong>This is the only route exempt from authentication</strong>: you can call it without an <code>X-Secret-Key</code> header. It reports the running version and a best-effort update check.</p>
+<p>Health check. It reports the running version and commit and a best-effort update check, so it needs the <code>X-Secret-Key</code> header like every other route. A request without an API key gets a <code>401</code>, which still shows the server is up.</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="1:2"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Request</label><label for="__tabbed_1_2">Response <code>200</code></label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>curl<span class="w"> </span>http://127.0.0.1:8786/api/health
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>curl<span class="w"> </span>-H<span class="w"> </span><span class="s2">"X-Secret-Key: </span><span class="nv">$SECRET</span><span class="s2">"</span><span class="w"> </span>http://127.0.0.1:8786/api/health
 </span></code></pre></div>
 </div>
 <div class="tabbed-block">
@@ -3143,7 +3143,7 @@
 </tbody>
 </table>
 <h3 id="get-apiservices"><code>GET /api/services</code><a class="headerlink" href="#get-apiservices" title="Permanent link">&para;</a></h3>
-<p>Show the streaming services available on this server, filtered by your allowlist. Each entry gives the service's tag, matching rules, capability flags, and its CLI parameters (useful when you make a UI that accepts service-specific options). <code>load_errors</code> lists the services the server skipped because they failed to import, at startup or after a service repository refresh; the server also writes each one to its log. An entry marked <code>pending_update</code> has newer code staged: it keeps its current code until its running or queued jobs and its live remote sessions finish.</p>
+<p>Show the streaming services available on this server, filtered by your allowlist. Each entry gives the service's tag, matching rules, capability flags, and its CLI parameters (useful when you make a UI that accepts service-specific options). For the admin key, <code>load_errors</code> lists the services the server skipped because they failed to import, at startup or after a service repository refresh; the server also writes each one to its log. Any other key gets an empty list; with <code>--no-key</code> every caller is the admin. An entry marked <code>pending_update</code> has newer code staged: it keeps its current code until its running or queued jobs and its live remote sessions finish.</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="2:2"><input checked="checked" id="__tabbed_2_1" name="__tabbed_2" type="radio" /><input id="__tabbed_2_2" name="__tabbed_2" type="radio" /><div class="tabbed-labels"><label for="__tabbed_2_1">Request</label><label for="__tabbed_2_2">Response <code>200</code></label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
