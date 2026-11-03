@@ -3030,7 +3030,9 @@ all documented for users in <a href="../../guide/subtitles/">Subtitles</a>.</p>
 <li><strong><code>Chapters</code></strong>: a sorted collection that auto-inserts a <code>00:00:00.000</code> chapter and
   reads/writes OGM Simple format.</li>
 <li><strong><code>Attachment</code></strong>: a font or image attached to the mux (for example, fonts an ASS subtitle
-  references), built from a local <code>path</code> or a <code>url</code>.</li>
+  references), built from a local <code>path</code> or a <code>url</code>. A <code>url</code> attachment downloads through
+  the same downloader as a track, with the same retries. If it still fails, <code>dl</code> stops the
+  run with a one-line error.</li>
 </ul>
 <h3 id="selection-sorting-and-muxing">Selection, sorting, and muxing<a class="headerlink" href="#selection-sorting-and-muxing" title="Permanent link">&para;</a></h3>
 <p><code>Tracks</code> is also the selection engine the <code>dl</code> command uses. It offers
