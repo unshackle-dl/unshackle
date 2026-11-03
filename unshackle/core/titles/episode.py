@@ -17,10 +17,11 @@ from unshackle.core.utils.template_formatter import TemplateFormatter, detect_sp
 
 
 class Episode(Title):
-    # class-level defaults so Episodes restored from an older title cache read as part-less
-    # and without an absolute number
+    # class-level defaults so Episodes restored from an older title cache read as part-less,
+    # without an absolute number and not as sport
     part: Optional[int] = None
     absolute: Optional[int] = None
+    sport: bool = False
 
     def __init__(
         self,
@@ -37,6 +38,7 @@ class Episode(Title):
         air_date: Optional[Union[date, str]] = None,
         part: Optional[Union[int, str]] = None,
         absolute: Optional[Union[int, str]] = None,
+        sport: bool = False,
     ) -> None:
         super().__init__(id_, service, language, data)
 
@@ -120,6 +122,7 @@ class Episode(Title):
         self.air_date = air_date
         self.part = part
         self.absolute = absolute
+        self.sport = sport
 
     def matches_wanted(self, wanted: Collection[str]) -> bool:
         """Whether a parsed ``-w`` key set selects this episode.
@@ -136,11 +139,15 @@ class Episode(Title):
             return False
         return any(k in wanted for k in keys)
 
+    def template_kind(self) -> str:
+        """``sports`` for a sport episode when a sports template is set, else ``series``."""
+        return "sports" if self.sport and config.output_template.get("sports") else "series"
+
     def part_suffix(self) -> str:
-        """``.Part.2`` / `` Part 2`` in the series template's own separator style."""
+        """``.Part.2`` / `` Part 2`` in the active template's own separator style."""
         if self.part is None:
             return ""
-        sep = config.get_template_separator("series") if config.output_template.get("series") else "."
+        sep = config.get_template_separator(self.template_kind())
         return f"{sep}Part{sep}{self.part}"
 
     def build_template_context(
@@ -164,7 +171,10 @@ class Episode(Title):
             context["episode"] = ""
             context["season_episode"] = disp
             context["year"] = ""  # air date is the sole date in the file; folders keep the year
-            context["date"] = self.air_date.isoformat() if isinstance(self.air_date, date) else str(self.air_date)
+            if self.template_kind() == "sports":
+                context["date"] = disp
+            else:
+                context["date"] = self.air_date.isoformat() if isinstance(self.air_date, date) else str(self.air_date)
         if include_part and self.part is not None:
             # folded into the identity tokens, not a token of its own: a standalone {part} is
             # absent from every shipped template, so two parts would render the same filename
@@ -174,9 +184,9 @@ class Episode(Title):
         return context
 
     def air_date_display(self) -> str:
-        """Render air_date using the series template's own separator (dots or spaces)."""
+        """Render air_date using the active template's own separator (dots or spaces)."""
         if isinstance(self.air_date, date):
-            sep = config.get_template_separator("series") if config.output_template.get("series") else "."
+            sep = config.get_template_separator(self.template_kind())
             return f"{self.air_date.year:04}{sep}{self.air_date.month:02}{sep}{self.air_date.day:02}"
         return str(self.air_date)
 
@@ -213,13 +223,18 @@ class Episode(Title):
 
     def get_filename(self, media_info: MediaInfo, folder: bool = False, show_service: bool = True) -> str:
         if folder:
-            template: Optional[str] = config.get_folder_template("series")
+            sports = self.sport and bool(config.folder_templates.get("sports"))
+            template: Optional[str] = config.get_folder_template("sports" if sports else "series")
             if template:
                 # all parts of an episode land in the same season folder
                 context = self.build_template_context(media_info, show_service, include_part=False)
                 context["season"] = self.folder_season()
-                # folders keep the year, unless the season label is already the air year
-                context["year"] = "" if str(self.year) == context["season"] else self.year or ""
+                if sports:
+                    # a sports folder has no season label, so it groups by the year or the air year
+                    context["year"] = self.year or getattr(self.air_date, "year", "")
+                else:
+                    # folders keep the year, unless the season label is already the air year
+                    context["year"] = "" if str(self.year) == context["season"] else self.year or ""
                 spacer = detect_spacer(template)  # one style for the whole path
                 segments = [
                     TemplateFormatter(seg, spacer).format(context)
@@ -228,7 +243,7 @@ class Episode(Title):
                 ]
                 return "/".join(s for s in segments if s)
 
-            series_template = config.output_template.get("series")
+            series_template = config.output_template.get(self.template_kind())
             if series_template:
                 derived_template = series_template
                 derived_template = re.sub(r"\{episode\}", "", derived_template)
@@ -258,7 +273,7 @@ class Episode(Title):
                 name += f" {self.folder_season()}"
                 return sanitize_filename(name, " ")
 
-        template = config.output_template.get("series")
+        template = config.output_template.get(self.template_kind())
         if not template:
             return sanitize_filename(str(self), " ")
 

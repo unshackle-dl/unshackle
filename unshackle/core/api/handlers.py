@@ -1553,6 +1553,8 @@ def serialize_title(title: Title_T) -> Dict[str, Any]:
             result["absolute"] = title.absolute
         if getattr(title, "daily", None) is not None:
             result["daily"] = title.daily
+        if title.sport:
+            result["sport"] = True
     if is_song:
         for field in SONG_FIELDS:
             result[field] = getattr(title, field, None)

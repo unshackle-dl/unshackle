@@ -303,6 +303,7 @@ class Config:
                 "label",
             },
         }
+        type_only["sports"] = type_only["series"]
         type_only["albums"] = type_only["songs"]
         shared = valid_variables - set().union(*type_only.values())
 
@@ -312,8 +313,8 @@ class Config:
         if self.folder_template:
             all_templates["folder"] = self.folder_template
         for kind, tmpl in self.folder_templates.items():
-            if kind not in {"movies", "series", "songs", "albums"}:
-                warnings.warn(f"Unknown folder template kind '{kind}' (expected movies/series/songs/albums)")
+            if kind not in {"movies", "series", "sports", "songs", "albums"}:
+                warnings.warn(f"Unknown folder template kind '{kind}' (expected movies/series/sports/songs/albums)")
                 continue
             all_templates[f"folder.{kind}"] = tmpl
 
@@ -347,7 +348,7 @@ class Config:
     def get_folder_template(self, kind: str) -> str:
         """Find the folder template for the given title kind.
 
-        kind: one of "movies", "series", "songs", "albums".
+        kind: one of "movies", "series", "sports", "songs", "albums".
         Falls back to the legacy single-string folder template, then "".
         """
         if self.folder_templates:
@@ -363,7 +364,7 @@ class Config:
         between variables. Falls back to dot separator (scene-style) by default.
 
         Args:
-            template_type: One of "movies", "series", or "songs".
+            template_type: One of "movies", "series", "sports", or "songs".
         """
         template = self.output_template.get(template_type) or ""
         between_vars = re.findall(r"\}([^{]*)\{", template)

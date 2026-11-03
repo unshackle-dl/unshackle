@@ -546,7 +546,7 @@ def apply_title_fields(title: Title_T, info: Dict[str, Any]) -> None:
     elif info.get("name"):
         title.name = info["name"]
 
-    for key in ("anime", "daily", *(SONG_FIELDS if isinstance(title, Song) else ())):
+    for key in ("anime", "daily", "sport", *(SONG_FIELDS if isinstance(title, Song) else ())):
         if info.get(key) is not None:
             setattr(title, key, info[key])
 

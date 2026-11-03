@@ -168,6 +168,33 @@ The same holds for a folder template of your own: `{season}` never picks up the 
 
 For custom templates there is also a standalone [`{part}`](../reference/configuration/output.md#output_template) variable. You rarely want it, see the caveat on that page.
 
+### Sports events {#sports-events}
+
+A service can mark an episode as a sports event. That episode then uses the `sports` output template and the `sports` folder template, if you set them. Without them it uses the `series` templates, as before.
+
+```yaml title="unshackle.yaml"
+output_template:
+  sports: "{title}.{year?}.{date?}.{episode_name}.{quality}.{source}.WEB-DL.{audio_full}.{video}-{tag}"
+  folder:
+    sports: "{title}.{year?}"
+```
+
+A `sports` template can use every series variable, with two differences:
+
+- `{date}` holds the air date in the separator style of the template (`2026.11.01`), and is empty when the event has no air date.
+- `{year}` is empty when the event has an air date, because the date holds the year.
+
+An event with a year and no air date, and an event with an air date:
+
+```text
+League.2026/
+  └─ League.2026.City.Grand.Prix.Practice.One.1080p.EXAMPLE.WEB-DL.AAC2.0.H.264-TAG.mkv
+Club.League.2026/
+  └─ Club.League.2026.11.01.Home.Club.vs.Away.Club.1080p.EXAMPLE.WEB-DL.AAC2.0.H.264-TAG.mkv
+```
+
+A `sports` folder template groups by `{year}`, or by the air year when the event has no year. `{season}`, `{episode}` and `{season_episode}` are not useful in a `sports` template. Use `-w S01E02` to select an event: the season and episode numbers stay on the title.
+
 ### Audio
 
 | Variable | Meaning | Example |
@@ -222,12 +249,12 @@ Folder templates sit under a special `folder` config key inside `output_template
         albums: "{artist} - {album} ({year})"
     ```
 
-The per-kind folder config keys are `movies`, `series`, `songs`, and `albums`. Any other config key gives a startup warning. Folder templates permit path separators (`/` or `\`). unshackle formats each segment independently, so you can assemble nested directory structures like `Show/Season 01`. unshackle reads the separator style from the whole template, so it spaces every segment alike.
+The per-kind folder config keys are `movies`, `series`, `sports`, `songs`, and `albums`. Any other config key gives a startup warning. Folder templates permit path separators (`/` or `\`). unshackle formats each segment independently, so you can assemble nested directory structures like `Show/Season 01`. unshackle reads the separator style from the whole template, so it spaces every segment alike.
 
 **Fallback behaviour:**
 
 - A per-kind folder template wins if present. If there is none, unshackle uses the single `folder` string. If there is no `folder` string either, unshackle falls back to a built-in default.
-- Built-in defaults when no folder template is set. Movies get no folder at all unless a `movies` folder template (or a single-string `folder` template) exists. Series fall back to a folder *derived* from the `series` output template (stripping `{episode}`, `{episode_name}`, and collapsing `{season_episode}` down to `{season}`). Music albums fall back to `{artist} - {album} ({year})`. If the song has no year, the folder name is only `{artist} - {album}`.
+- Built-in defaults when no folder template is set. Movies get no folder at all unless a `movies` folder template (or a single-string `folder` template) exists. Series fall back to a folder *derived* from the `series` output template (stripping `{episode}`, `{episode_name}`, and collapsing `{season_episode}` down to `{season}`). A sports event with no `sports` folder template uses the `series` folder template, or derives its folder from the `sports` output template when there is no folder template. Music albums fall back to `{artist} - {album} ({year})`. If the song has no year, the folder name is only `{artist} - {album}`.
 
 !!! note "Movies are flat by default"
     Episodes and songs are always foldered. unshackle writes movies directly into the output directory *unless* you define a `movies` folder template (or a single-string `folder` template, which folders every kind). Set one if you want each movie in its own directory.

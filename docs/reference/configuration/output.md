@@ -9,7 +9,7 @@ the [Output & naming guide](../../guide/output-and-naming.md).
 - **Type:** `dict` &nbsp;·&nbsp; **Required** (no usable default; `dl` exits with an error if this is missing)
 
 Filename templates keyed by media kind, using `{variable}` placeholders. Recognised kinds are
-`movies`, `series`, and `songs` (and `albums` for folder templates). A trailing `?` on a
+`movies`, `series`, `sports`, and `songs` (and `albums` for folder templates). A trailing `?` on a
 variable (e.g. `{quality?}`) marks it optional: if empty, it and one adjacent separator are
 dropped.
 
@@ -17,16 +17,18 @@ dropped.
 output_template:
   movies: "{title}.{year}.{quality?}.{source}-{tag}"
   series: "{title}.{season_episode}.{episode_name?}.{quality?}.{source}-{tag}"
+  sports: "{title}.{year?}.{date?}.{episode_name}.{quality?}.{source}-{tag}"
   songs: "{track_number}. {title}"
   folder:                       # special nested key, see below
     movies: "{title} ({year})"
     series: "{title} ({year})"
+    sports: "{title}.{year?}"
 ```
 
 **The nested `folder` sub-key** controls output subfolders, and unshackle pops it out of
 `output_template`:
 
-- A **dict** sets per-kind folder templates (kinds: `movies`, `series`, `songs`, `albums`).
+- A **dict** sets per-kind folder templates (kinds: `movies`, `series`, `sports`, `songs`, `albums`).
 - A **str** sets a single folder template for everything.
 
 unshackle validates templates on load and emits warnings for unknown variables, non-string
@@ -58,6 +60,11 @@ folder-kind keys.
     Services can supply it, and
     [`--enrich`](../../guide/downloading.md#metadata-and-tagging) fills it in from TVDB.
     Use `{absolute?}` so the name stays clean when it is unknown.
+
+!!! tip "`sports` names an event by year or date"
+    A service marks an event episode as sport, and that episode then uses the `sports`
+    templates. Without them it uses the `series` templates. For the variables and
+    examples, see [Sports events](../../guide/output-and-naming.md#sports-events).
 
 ## Tagging & naming keys
 

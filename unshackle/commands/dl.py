@@ -4207,6 +4207,8 @@ class dl:
                 meta["absolute"] = title.absolute
             if getattr(title, "daily", None) is not None:
                 meta["daily"] = title.daily
+            if title.sport:
+                meta["sport"] = True
         elif isinstance(title, Movie):
             meta.update(type="movie", name=title.name, year=title.year)
         else:

@@ -287,6 +287,7 @@ These keys are sent only when the title carries them, so a title without them se
 | `air_date` | string | episode | ISO air date of [daily and date-based content](../../guide/downloading.md#daily-and-date-based-content). unshackle names the episode by date instead of `SxxExx`. |
 | `absolute` | integer | episode | Absolute episode number across all seasons. |
 | `daily` | boolean | episode | The episode is daily/date-based. Set from the title, or from the service's `DAILY` class attribute. |
+| `sport` | boolean | episode | The episode is a sports event, so it uses the `sports` output template when one is set. Sent only when true. |
 | `anime` | boolean | episode, movie | The title is anime, so metadata lookups prefer AniList. Set from the title, or from the service's `ANIME` class attribute. |
 
 !!! info "`part` on a split episode"
