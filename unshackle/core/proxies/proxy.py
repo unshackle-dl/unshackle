@@ -10,9 +10,10 @@ F = TypeVar("F", bound=Callable[..., Any])
 
 
 def cached_catalogue(fetch: F) -> F:
-    """Keep a proxy provider's server catalogue for ``CATALOGUE_TTL`` seconds; the next call fetches an empty answer again.
+    """Keep a proxy provider's catalogue for ``CATALOGUE_TTL`` seconds; a failed (empty) answer is fetched again.
 
     A server builds its proxy providers on every request, and each build fetches the catalogue.
+    One config builds every provider, so a config reload clears the cache.
     """
 
     @functools.wraps(fetch)

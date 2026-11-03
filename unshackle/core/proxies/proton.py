@@ -15,7 +15,7 @@ import requests
 
 from unshackle.core.config import config
 from unshackle.core.console import prompt_user
-from unshackle.core.proxies.proxy import Proxy
+from unshackle.core.proxies.proxy import Proxy, cached_catalogue
 
 log = logging.getLogger("proxies.proton")
 
@@ -195,21 +195,28 @@ class ProtonVPN(Proxy):
         return chosen
 
     def get_logicals(self) -> list[dict]:
-        """Get Proton's server list. Only a list that loaded is cached, so a later session can still fetch it."""
-        if self.logicals is None:
-            response = self.api("GET", "/vpn/v1/logicals")
-            if response is None:
-                return []
-            self.logicals = response.json().get("LogicalServers") or []
+        """Get Proton's server list. Only a list that loaded is kept, so a later call can still fetch it."""
+        if not self.logicals:
+            self.logicals = self.fetch_logicals()
         return self.logicals
+
+    @cached_catalogue
+    def fetch_logicals(self) -> list[dict]:
+        response = self.api("GET", "/vpn/v1/logicals")
+        return (response.json().get("LogicalServers") or []) if response is not None else []
 
     def get_max_tier(self) -> int:
         """The account's plan tier (0=free, 2=plus). Caps which servers it can connect to."""
         if self.max_tier is None:
-            response = self.api("GET", "/vpn")
-            vpn = (response.json().get("VPN") or {}) if response is not None else {}
-            self.max_tier = int(vpn.get("MaxTier") or 0)
+            self.max_tier = int(self.fetch_vpn().get("MaxTier") or 0)
         return self.max_tier
+
+    @cached_catalogue
+    def fetch_vpn(self) -> dict:
+        """The account's VPN section, kept only when it names the plan tier."""
+        response = self.api("GET", "/vpn")
+        vpn = (response.json().get("VPN") or {}) if response is not None else {}
+        return vpn if "MaxTier" in vpn else {}
 
     def get_browser_token(self) -> Optional[tuple[str, str]]:
         response = self.api("GET", f"/vpn/v1/browser/token?Duration={self.TOKEN_DURATION}")

@@ -272,8 +272,10 @@ def reload_config(app: web.Application, *, no_key: bool, serve_widevine: bool, s
     old_devices, new_devices = _device_stems(config.serve), _device_stems(serve)
     vars(config).update(vars(fresh))
     from unshackle.core.api.handlers import reset_remote_pool
+    from unshackle.core.proxies.proxy import CATALOGUES
 
     reset_remote_pool()
+    CATALOGUES.clear()
     app["config"]["users"] = serve_config["users"]
     if serve_widevine:
         app["config"]["devices"] = _device_map(serve_config["devices"])
