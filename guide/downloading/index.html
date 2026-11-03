@@ -3289,7 +3289,7 @@ alone, so unshackle selects it only when you ask for it with <code>-v LCEVC</cod
 </tr>
 <tr>
 <td><code>HDR10P</code></td>
-<td>HDR10+</td>
+<td>HDR10+ (<code>-r HDR10+</code> also works)</td>
 </tr>
 <tr>
 <td><code>DV</code></td>
@@ -4180,8 +4180,10 @@ a content key when the vault misses. You can force one side or the other:</p>
 </span></code></pre></div>
 <p><code>--export</code> writes a <code>mediaexport</code> JSON file into the configured exports directory. It holds
 the manifest, the DRM init data, the content keys, the KIDs of each track and the title
-metadata for each title. <code>unshackle import</code> reads it to reconstruct a download later, and gives
-each track only the content keys for its KIDs. The importer also reads the
+metadata for each title. For a DASH or ISM title, it also holds the manifest as the service
+left it, with the ad periods that the service skips. <code>unshackle import</code> reads it to reconstruct
+a download later, and gives each track only the content keys for its KIDs. The import uses the
+saved manifest, so it skips the same periods and does not fetch the manifest again. The importer also reads the
 older unshackle <code>version: 2</code> files and unidl's own export files.</p>
 <div class="language-shell highlight"><span class="filename">Export track info and keys</span><pre><span></span><code><span id="__span-46-1"><a id="__codelineno-46-1" name="__codelineno-46-1" href="#__codelineno-46-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--skip-dl<span class="w"> </span>--export<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
@@ -4262,6 +4264,15 @@ the service. Neither end guesses a language for you, so the fix belongs in the s
 <p>An HLS master playlist gives no language for a video track. When the export gives no
 title language, the video track takes the language of the default audio track. When
 the master playlist gives no audio language either, the import stops with a message.</p>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Ad periods a service skipped stay skipped</p>
+<p>Some services skip DASH periods, such as ads, by a rule of their own. The export also
+records the periods the service kept as <code>content_periods</code> on each manifest. An import that
+must fetch the manifest again, because the file has no saved manifest or another tool wrote
+it, downloads only those periods, also when the new manifest gives an ad period a new ID.
+When the new manifest has none of the recorded periods, the import logs a warning and keeps
+every period.</p>
 </div>
 <h2 id="metadata-and-tagging">Metadata and tagging<a class="headerlink" href="#metadata-and-tagging" title="Permanent link">&para;</a></h2>
 <p>unshackle looks up metadata automatically, but you can override the identifiers used for

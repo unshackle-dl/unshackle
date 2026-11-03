@@ -2734,10 +2734,32 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#unshackle.core.drm.is_null_key" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;is_null_key
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#unshackle.core.drm.drm_from_dict" class="md-nav__link">
     <span class="md-ellipsis">
       
         <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;drm_from_dict
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#unshackle.core.drm.drop_null_keys" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;drop_null_keys
       
     </span>
   </a>
@@ -3622,10 +3644,32 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#unshackle.core.drm.is_null_key" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;is_null_key
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#unshackle.core.drm.drm_from_dict" class="md-nav__link">
     <span class="md-ellipsis">
       
         <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;drm_from_dict
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#unshackle.core.drm.drop_null_keys" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;drop_null_keys
       
     </span>
   </a>
@@ -6113,6 +6157,26 @@ track exactly. A PSSH can name the KIDs of other renditions too.</p>
 <div class="doc doc-object doc-function">
 
 
+<h2 id="unshackle.core.drm.is_null_key" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <span class="doc doc-object-name doc-function-name">is_null_key</span>
+
+
+<a href="#unshackle.core.drm.is_null_key" class="headerlink" title="Permanent link">&para;</a></h2>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">is_null_key</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>True for a blank or all-zero content key, the null key that no vault stores.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
 <h2 id="unshackle.core.drm.drm_from_dict" class="doc doc-heading">
 <code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <span class="doc doc-object-name doc-function-name">drm_from_dict</span>
 
@@ -6127,6 +6191,26 @@ track exactly. A PSSH can name the KIDs of other renditions too.</p>
 <p>Rebuilds the PSSH from the stored base64 (KIDs for ClearKey, which has no PSSH)
 and re-injects any saved content keys so the resulting object can decrypt without
 contacting a license server.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="unshackle.core.drm.drop_null_keys" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <span class="doc doc-object-name doc-function-name">drop_null_keys</span>
+
+
+<a href="#unshackle.core.drm.drop_null_keys" class="headerlink" title="Permanent link">&para;</a></h2>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">drop_null_keys</span><span class="p">(</span><span class="n">drm</span><span class="p">)</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Remove the null keys from a DRM object's content keys. A read-only key view stays as it is.</p>
 
 
     </div>

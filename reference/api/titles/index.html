@@ -1929,6 +1929,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#unshackle.core.titles.Episode.template_kind" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;template_kind
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#unshackle.core.titles.Episode.part_suffix" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2193,6 +2204,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#unshackle.core.titles.Episode.template_kind" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;template_kind
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#unshackle.core.titles.Episode.part_suffix" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2427,7 +2449,8 @@ A service returns one of these collections from its title lookup. See
 </span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>    <span class="n">air_date</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
 </span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>    <span class="n">part</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
 </span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>    <span class="n">absolute</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="p">)</span>
+</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>    <span class="n">sport</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="p">)</span>
 </span></code></pre></div>
 
     <div class="doc doc-contents ">
@@ -2483,6 +2506,26 @@ takes every part. A dated episode also answers to its ISO air date.
 <div class="doc doc-object doc-function">
 
 
+<h3 id="unshackle.core.titles.Episode.template_kind" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">template_kind</span>
+
+
+<a href="#unshackle.core.titles.Episode.template_kind" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">template_kind</span><span class="p">()</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p><code>sports</code> for a sport episode when a sports template is set, else <code>series</code>.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
 <h3 id="unshackle.core.titles.Episode.part_suffix" class="doc doc-heading">
 <code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">part_suffix</span>
 
@@ -2493,7 +2536,7 @@ takes every part. A dated episode also answers to its ISO air date.
 
     <div class="doc doc-contents ">
 
-        <p><code>.Part.2</code> / <code>Part 2</code> in the series template's own separator style.</p>
+        <p><code>.Part.2</code> / <code>Part 2</code> in the active template's own separator style.</p>
 
 
     </div>
@@ -2535,7 +2578,7 @@ takes every part. A dated episode also answers to its ISO air date.
 
     <div class="doc doc-contents ">
 
-        <p>Render air_date using the series template's own separator (dots or spaces).</p>
+        <p>Render air_date using the active template's own separator (dots or spaces).</p>
 
 
     </div>

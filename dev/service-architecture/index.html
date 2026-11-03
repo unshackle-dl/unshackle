@@ -2771,12 +2771,6 @@ Two kinds of members matter: <strong>class variables</strong> that give the deta
 <li><strong>Event callbacks</strong>: <code>on_segment_downloaded</code>, <code>on_track_downloaded</code>,
   <code>on_track_decrypted</code>, <code>on_track_repacked</code>, <code>on_track_multiplex</code> let a service react to
   pipeline events.</li>
-<li><strong><code>resolve_server_keys(title)</code></strong>: an escape hatch for services whose decryption keys are
-  resolved server-side <em>ahead of</em> the normal per-track license flow. Unlike everything else
-  here it is <strong>not declared on the <code>Service</code> base class at all</strong>: <code>dl.py</code> probes for it with
-  <code>hasattr</code> and calls it (once, after track selection) only if your service defines it. Use
-  it when your service must fetch or inject keys in bulk before download, separate from
-  the per-track license callbacks below.</li>
 </ul>
 <h3 id="what-__init__-wires-up-for-you">What <code>__init__</code> wires up for you<a class="headerlink" href="#what-__init__-wires-up-for-you" title="Permanent link">&para;</a></h3>
 <p>You rarely override <code>__init__</code>. The base constructor takes the Click context and sets

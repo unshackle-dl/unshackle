@@ -2628,8 +2628,9 @@ locally, so you see the server-side reason when a step fails.</p>
 chosen title. The tracks come back with playback URLs, and the server ships
 DASH/ISM manifests as compressed XML so the client can re-parse them locally for
 downloading. A service can build an AdaptationSet of its own that the served
-manifest does not contain. Each such track gets a one-AdaptationSet MPD in
-<code>track_manifests</code>, and the client re-parses that instead. Any
+manifest does not contain. Each such track gets a one-track MPD in
+<code>track_manifests</code>, with the content periods after its own, and the client
+re-parses that instead. The client skips the same DASH periods as the server. Any
 <code>session_headers</code> and cookies the server used are merged into the
 client's local HTTP session. Each cookie in <code>session_cookie_jar</code> keeps its
 domain, path and <code>secure</code> flag, so it goes only to its own hosts. <code>session_cookies</code> carries

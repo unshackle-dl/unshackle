@@ -3587,7 +3587,7 @@ and keeps the service's numbering unchanged. Pick an order that covers the whole
 </div>
 <hr />
 <h2 id="import"><code>import</code><a class="headerlink" href="#import" title="Permanent link">&para;</a></h2>
-<p>Reconstruct a download (download → decrypt → mux) from an <code>--export</code> JSON file without re-contacting the service. It re-fetches the manifest, injects the stored keys, and then runs the normal <code>dl</code> pipeline. The service tag is read from the export file, not passed by you.</p>
+<p>Reconstruct a download (download → decrypt → mux) from an <code>--export</code> JSON file without re-contacting the service. It uses the DASH or ISM manifest that the export saved, or fetches the manifest again when the export has none. It injects the stored keys and then runs the normal <code>dl</code> pipeline. The service tag is read from the export file, not passed by you.</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>unshackle import EXPORT_FILE [DL_ARGS...]
 </span></code></pre></div>
 <p>unshackle forwards any <code>dl</code> options after the file verbatim, so you can override quality, range, proxy, and so on.</p>

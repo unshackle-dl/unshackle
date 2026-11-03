@@ -2115,21 +2115,23 @@ the <a href="../../../guide/output-and-naming/">Output &amp; naming guide</a>.</
 <li><strong>Type:</strong> <code>dict</code> &nbsp;·&nbsp; <strong>Required</strong> (no usable default; <code>dl</code> exits with an error if this is missing)</li>
 </ul>
 <p>Filename templates keyed by media kind, using <code>{variable}</code> placeholders. Recognised kinds are
-<code>movies</code>, <code>series</code>, and <code>songs</code> (and <code>albums</code> for folder templates). A trailing <code>?</code> on a
+<code>movies</code>, <code>series</code>, <code>sports</code>, and <code>songs</code> (and <code>albums</code> for folder templates). A trailing <code>?</code> on a
 variable (e.g. <code>{quality?}</code>) marks it optional: if empty, it and one adjacent separator are
 dropped.</p>
 <div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">output_template</span><span class="p">:</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="nt">movies</span><span class="p">:</span><span class="w"> </span><span class="s">"{title}.{year}.{quality?}.{source}-{tag}"</span>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span><span class="nt">series</span><span class="p">:</span><span class="w"> </span><span class="s">"{title}.{season_episode}.{episode_name?}.{quality?}.{source}-{tag}"</span>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span><span class="nt">songs</span><span class="p">:</span><span class="w"> </span><span class="s">"{track_number}.</span><span class="nv"> </span><span class="s">{title}"</span>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">  </span><span class="nt">folder</span><span class="p">:</span><span class="w">                       </span><span class="c1"># special nested key, see below</span>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">    </span><span class="nt">movies</span><span class="p">:</span><span class="w"> </span><span class="s">"{title}</span><span class="nv"> </span><span class="s">({year})"</span>
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">    </span><span class="nt">series</span><span class="p">:</span><span class="w"> </span><span class="s">"{title}</span><span class="nv"> </span><span class="s">({year})"</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span><span class="nt">sports</span><span class="p">:</span><span class="w"> </span><span class="s">"{title}.{year?}.{date?}.{episode_name}.{quality?}.{source}-{tag}"</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">  </span><span class="nt">songs</span><span class="p">:</span><span class="w"> </span><span class="s">"{track_number}.</span><span class="nv"> </span><span class="s">{title}"</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">  </span><span class="nt">folder</span><span class="p">:</span><span class="w">                       </span><span class="c1"># special nested key, see below</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">    </span><span class="nt">movies</span><span class="p">:</span><span class="w"> </span><span class="s">"{title}</span><span class="nv"> </span><span class="s">({year})"</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="w">    </span><span class="nt">series</span><span class="p">:</span><span class="w"> </span><span class="s">"{title}</span><span class="nv"> </span><span class="s">({year})"</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="w">    </span><span class="nt">sports</span><span class="p">:</span><span class="w"> </span><span class="s">"{title}.{year?}"</span>
 </span></code></pre></div>
 <p><strong>The nested <code>folder</code> sub-key</strong> controls output subfolders, and unshackle pops it out of
 <code>output_template</code>:</p>
 <ul>
-<li>A <strong>dict</strong> sets per-kind folder templates (kinds: <code>movies</code>, <code>series</code>, <code>songs</code>, <code>albums</code>).</li>
+<li>A <strong>dict</strong> sets per-kind folder templates (kinds: <code>movies</code>, <code>series</code>, <code>sports</code>, <code>songs</code>, <code>albums</code>).</li>
 <li>A <strong>str</strong> sets a single folder template for everything.</li>
 </ul>
 <p>unshackle validates templates on load and emits warnings for unknown variables, non-string
@@ -2163,6 +2165,12 @@ or <code>{episode}</code>. Any series with a TVDB absolute order can use it, ani
 Services can supply it, and
 <a href="../../../guide/downloading/#metadata-and-tagging"><code>--enrich</code></a> fills it in from TVDB.
 Use <code>{absolute?}</code> so the name stays clean when it is unknown.</p>
+</div>
+<div class="admonition tip">
+<p class="admonition-title"><code>sports</code> names an event by year or date</p>
+<p>A service marks an event episode as sport, and that episode then uses the <code>sports</code>
+templates. Without them it uses the <code>series</code> templates. For the variables and
+examples, see <a href="../../../guide/output-and-naming/#sports-events">Sports events</a>.</p>
 </div>
 <h2 id="tagging-naming-keys">Tagging &amp; naming keys<a class="headerlink" href="#tagging-naming-keys" title="Permanent link">&para;</a></h2>
 <table>
