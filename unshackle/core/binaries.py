@@ -109,6 +109,7 @@ def get_registered_dependencies() -> list[dict]:
 DOTTED_NUMBER = r"\d+\.\d+(?:\.\d+)*"
 VERSION_RE = re.compile(DOTTED_NUMBER)
 LABELLED_VERSION_RE = re.compile(rf"(?i)\bversion[:\s]+[a-z]?({DOTTED_NUMBER})")
+GIT_BUILD_RE = re.compile(r"\bversion\s+(?:N-\d+-g[0-9a-f]+-(\d{8})\b|(?:git-)?(\d{4}-\d{2}-\d{2})\b|(N-\d+)-g)")
 VERSION_WORD_RE = re.compile(r"(?i)\bversion\b")
 BARE_VERSION_TOOLS = {"mp4decrypt"}
 PROBE_TIMEOUT = 5.0
@@ -118,10 +119,14 @@ def parse_version(text: str) -> Optional[str]:
     """Return the version from the first line that says "version" or holds a dotted number.
 
     That line is the tool's own banner; later lines carry library and compiler versions.
+    A git build of FFmpeg has no release number, so its build date (YYYYMMDD) stands in, or N-<revision> when undated.
     """
     for line in text.splitlines():
         if match := LABELLED_VERSION_RE.search(line):
             return match.group(1)
+        if match := GIT_BUILD_RE.search(line):
+            date, dashed_date, revision = match.groups()
+            return revision or (date or dashed_date).replace("-", "")
         if VERSION_WORD_RE.search(line):
             return None
         if match := VERSION_RE.search(line):
