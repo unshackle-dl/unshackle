@@ -147,6 +147,25 @@ class RollingMerge:
         return self.cursor
 
 
+def rep_shape(adaptation_set: Element, rep: Element) -> tuple[Optional[str], ...]:
+    """The attributes a Representation must keep to continue a track into another Period."""
+    return tuple(DASH.get_attr(a, adaptation_set, rep) for a in ("codecs", "width", "height", "audioSamplingRate"))
+
+
+def rep_bandwidth(rep: Element) -> float:
+    try:
+        return float(rep.get("bandwidth") or 0)
+    except ValueError:
+        return 0.0
+
+
+def kind_and_lang(adaptation_set: Element) -> tuple[Optional[str], str]:
+    """Content type and language subtag, without the region, of an AdaptationSet."""
+    mime = DASH.get_attr("mimeType", adaptation_set, adaptation_set.find("Representation")) or ""
+    kind = adaptation_set.get("contentType") or mime.split("/")[0] or None
+    return kind, (adaptation_set.get("lang") or "").split("-")[0].lower()
+
+
 class DASH:
     def __init__(self, manifest: Element, url: str) -> None:
         if manifest is None:
@@ -503,7 +522,7 @@ class DASH:
 
             if matched_rep is None or matched_as is None:
                 period_id = content_period.get("id", period_idx)
-                log.warning(f"Representation '{rep_id}' not found in period '{period_id}', skipping")
+                log.debug(f"Representation '{rep_id}' not found in period '{period_id}', skipping")
                 continue
 
             p_init, p_segments, p_timescale, p_durations, p_kid = DASH.get_period_segments(
@@ -1316,40 +1335,48 @@ class DASH:
         period: Element, rep_id: Optional[str], adaptation_set: Element
     ) -> Optional[tuple[Element, Element]]:
         """
-        Find the (AdaptationSet, Representation) in another Period matching rep_id.
+        Find the (AdaptationSet, Representation) in another Period that continues rep_id.
 
-        Representation ids are only unique within an AdaptationSet, so the set matching
-        `adaptation_set`'s identity wins over an earlier sibling that reuses the same id
-        for a different track (for example, audio description vs dialog).
+        Ids are not trusted alone, because some packagers renumber them per Period. A match never
+        crosses codec, size or language; within the set, bandwidth rank decides.
         """
-        as_key = DASH.adaptation_set_key(adaptation_set)
+        source = next((r for r in adaptation_set.findall("Representation") if r.get("id") == rep_id), None)
+        if source is None:
+            return None
+        want = rep_shape(adaptation_set, source)
 
-        def candidates(within: Element) -> list[tuple[Element, Element]]:
-            found = []
-            for as_ in within.findall("AdaptationSet"):
-                if DASH.is_trick_mode(as_) or DASH.adaptation_set_key(as_) != as_key:
-                    continue
-                for rep in as_.findall("Representation"):
-                    if rep.get("id") == rep_id:
-                        found.append((as_, rep))
-                        break
-            return found
+        def same_shape(as_: Element) -> list[Element]:
+            return sorted((r for r in as_.findall("Representation") if rep_shape(as_, r) == want), key=rep_bandwidth)
 
-        matches = candidates(period)
-        if matches:
-            parent = adaptation_set.getparent()
-            siblings = [as_ for as_, _ in candidates(parent)] if parent is not None else []
+        def sets(within: Optional[Element], key: Callable[[Element], Any]) -> list[Element]:
+            found = within.findall("AdaptationSet") if within is not None else []
+            target = key(adaptation_set)
+            return [a for a in found if key(a) == target and not DASH.is_trick_mode(a) and same_shape(a)]
+
+        keys: tuple[Callable[[Element], Any], ...] = (
+            DASH.adaptation_set_key,
+            lambda as_: DASH.adaptation_set_key(as_)[:-1],
+            kind_and_lang,
+        )
+        for key in keys:
+            if matches := sets(period, key):
+                break
+        else:
+            return None
+        with_id = [a for a in matches if any(r.get("id") == rep_id for r in same_shape(a))]
+        if len(with_id) == 1:
+            matched_as = with_id[0]
+        else:
+            siblings = sets(adaptation_set.getparent(), key)
             ordinal = siblings.index(adaptation_set) if adaptation_set in siblings else 0
-            return matches[min(ordinal, len(matches) - 1)]
+            matched_as = matches[min(ordinal, len(matches) - 1)]
 
-        for as_ in period.findall("AdaptationSet"):
-            if DASH.is_trick_mode(as_):
-                continue
-            for rep in as_.findall("Representation"):
-                if rep.get("id") == rep_id:
-                    return as_, rep
-
-        return None
+        group, source_group = same_shape(matched_as), same_shape(adaptation_set)
+        if len(group) == len(source_group):
+            return matched_as, group[source_group.index(source)]
+        return matched_as, min(
+            group, key=lambda r: (abs(rep_bandwidth(r) - rep_bandwidth(source)), r.get("id") != rep_id)
+        )
 
     @staticmethod
     def is_descriptive(adaptation_set: Element) -> bool:
