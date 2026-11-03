@@ -2917,6 +2917,13 @@
     "url": "https://download.tsi.telecom-paristech.fr/gpac/DASH_CONFORMANCE/TelecomParisTech/mp4-onDemand/mp4-onDemand-mpd-AV.mpd"
   },
   {
+    "file": "dash/shaka-packager-vtt-text-to-mp4-with-ad-cues-7bf01ab0.mpd",
+    "kind": "dash",
+    "source": "shaka-packager",
+    "name": "vtt-text-to-mp4-with-ad-cues",
+    "url": "https://raw.githubusercontent.com/shaka-project/shaka-packager/main/packager/app/test/testdata/vtt-text-to-mp4-with-ad-cues/output.mpd"
+  },
+  {
     "file": "dash/shaka-shaka-player-history-h264-vp9-av1-live-dash-88d2ae20.mpd",
     "kind": "dash",
     "source": "shaka",

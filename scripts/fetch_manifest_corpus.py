@@ -2,7 +2,8 @@
 
 Sources: the DASH-IF test vector database (with the stream counts and codecs it expects),
 the example MPDs of the MPEG DASH spec (ISO/IEC 23009-1), the yt-dlp test data, and the
-stream lists of the dash.js reference player, the Shaka Player demo and the hls.js tests.
+stream lists of the dash.js reference player, the Shaka Player demo and the hls.js tests, and
+Shaka Packager test output (ad cues written as Period splits).
 Only the manifest text is stored; index.json maps each file to its source URL, which the
 parser needs to resolve relative URLs. A manifest that fails to download keeps its previous
 copy. An HLS media playlist is left out, since HLS parses only multivariant playlists.
@@ -35,6 +36,10 @@ DASHJS_SOURCES = (
 YTDLP_TESTDATA = "https://api.github.com/repos/yt-dlp/yt-dlp/contents/test/testdata/"
 HLSJS_STREAMS = "https://raw.githubusercontent.com/video-dev/hls.js/master/tests/test-streams.js"
 SHAKA_ASSETS = "https://raw.githubusercontent.com/shaka-project/shaka-player/main/demo/common/assets.js"
+SHAKA_PACKAGER_TESTDATA = (
+    "https://raw.githubusercontent.com/shaka-project/shaka-packager/main/packager/app/test/testdata/"
+)
+SHAKA_PACKAGER_OUTPUTS = ("vtt-text-to-mp4-with-ad-cues",)
 OUT = Path(__file__).resolve().parent.parent / "tests" / "fixtures" / "manifests"
 MAX_BYTES = 500_000
 DEADLINE = 60
@@ -117,6 +122,12 @@ def shaka_streams() -> list[Stream]:
     return [("shaka", name.replace("\\'", "'"), url, None) for name, url in pattern.findall(text)]
 
 
+def shaka_packager_streams() -> list[Stream]:
+    return [
+        ("shaka-packager", name, f"{SHAKA_PACKAGER_TESTDATA}{name}/output.mpd", None) for name in SHAKA_PACKAGER_OUTPUTS
+    ]
+
+
 def kind_of(head: bytes) -> Optional[str]:
     """Tell the manifest type from the first bytes, since many manifest URLs have no telling extension."""
     text = head.lstrip(b"\xef\xbb\xbf").lstrip()
@@ -167,7 +178,15 @@ def fetch(stream: Stream) -> Optional[dict[str, Any]]:
 
 def main() -> None:
     streams: dict[str, Stream] = {}
-    lists = dashif_streams() + mpeg_streams() + ytdlp_streams() + dashjs_streams() + shaka_streams() + hlsjs_streams()
+    lists = (
+        dashif_streams()
+        + mpeg_streams()
+        + ytdlp_streams()
+        + dashjs_streams()
+        + shaka_streams()
+        + hlsjs_streams()
+        + shaka_packager_streams()
+    )
     for source, name, url, expect in lists:
         url = f"https:{url}" if url.startswith("//") else url
         if url not in EXCLUDED:
