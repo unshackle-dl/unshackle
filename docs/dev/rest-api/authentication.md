@@ -16,7 +16,7 @@ You start the API with the [`unshackle serve`](../../guide/cli-reference.md) com
 
 1. Add an `api_secret` to the `serve` section of your `unshackle.yaml`.
 2. Start the server with `unshackle serve`.
-3. Send that secret in the `X-Secret-Key` header on every request except `GET /api/health`.
+3. Send that secret in the `X-Secret-Key` header on every request, `GET /api/health` included.
 
 ```bash title="A minimal authenticated request"
 curl -H "X-Secret-Key: your-secret-key-here" \
@@ -152,12 +152,12 @@ The value must match one of the configured API keys exactly (`api_secret`, or on
 !!! tip "The reference client sets it for you"
     unshackle's own [remote download](../../guide/downloading.md) client (`RemoteService`) sends `X-Secret-Key` automatically, reading the API key from your `remote_services` config. It also sends a `User-Agent` of `unshackle/<version>`. You only deal with the header directly when writing your own client.
 
-### The health check is always open
+### The health check needs an API key too
 
-One endpoint is exempt from authentication: `GET /api/health`. It never requires an API key, so you can use it for liveness and version probes without embedding a secret in your monitoring:
+`GET /api/health` reports the running version and commit, so it sits behind the same `X-Secret-Key` check as every other route. A monitor that probes it sends an API key; a request without one gets the usual `401` body, which still proves the server is up:
 
-```bash title="No key needed"
-curl http://127.0.0.1:8786/api/health
+```bash title="Liveness probe"
+curl -H "X-Secret-Key: your-secret-key-here" http://127.0.0.1:8786/api/health
 ```
 
 ```json title="Response"
@@ -307,7 +307,6 @@ With `--caddy`, unshackle also starts `caddy run` using the `Caddyfile` located 
 | Auth header | `X-Secret-Key` |
 | Query-parameter alternative | `?secret_key=` on `GET /api/download/jobs/{job_id}/events` only |
 | Default bind address | `127.0.0.1:8786` |
-| Exempt endpoint | `GET /api/health` |
 | Failure status | `401 Unauthorized`, or `429 Too Many Requests` for a key over its rate limit |
 | Missing-header body | `{"status": 401, "message": "Secret Key is Empty."}` |
 | Invalid-key body | `{"status": 401, "message": "Secret Key is Invalid."}` |
@@ -326,7 +325,7 @@ With `--caddy`, unshackle also starts `caddy run` using the `Caddyfile` located 
 
 The header and config are identical between modes, but the code that enforces them differs:
 
-- **API-only server** (`--api-only`, or `--remote-only` which forces API-only). An `api_key_authentication` middleware runs on every request. It lets `GET /api/health` through unconditionally, then reads `X-Secret-Key`. An empty header returns the *"Secret Key is Empty."* body. A header that is not a configured user returns *"Secret Key is Invalid."*. In this mode the accepted-keys map holds your `api_secret` (labelled `api_user`, with no devices) plus every key under `serve.users`. A per-user key therefore authenticates here exactly as it does on the integrated server, and that user's `services` allowlist applies as usual. With `--no-key`, this middleware is not installed and the users map is empty.
+- **API-only server** (`--api-only`, or `--remote-only` which forces API-only). An `api_key_authentication` middleware runs on every request. It reads `X-Secret-Key` on every request, `GET /api/health` included. An empty header returns the *"Secret Key is Empty."* body. A header that is not a configured user returns *"Secret Key is Invalid."*. In this mode the accepted-keys map holds your `api_secret` (labelled `api_user`, with no devices) plus every key under `serve.users`. A per-user key therefore authenticates here exactly as it does on the integrated server, and that user's `services` allowlist applies as usual. With `--no-key`, this middleware is not installed and the users map is empty.
 
 - **Integrated server** (default). A `serve_authentication` middleware wraps pywidevine's authentication (and pyplayready's for `/playready*` paths), and the REST routes live in the same application, guarded by the same check. Here the accepted-keys map is your full `serve` config: `api_secret` (auto-added with access to all loaded devices) plus every entry under `users`, each with its declared `devices` / `playready_devices`.
 

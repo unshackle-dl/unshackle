@@ -221,8 +221,7 @@ body that uses an integer `status` and no `error_code` or `timestamp`.
 !!! warning "Handle both shapes"
     A client must expect two error formats: the standard structured error
     (string `status` of `"error"`, with `error_code`), and this authentication error
-    (integer `status`, no `error_code`). The `GET /api/health` endpoint is exempt
-    from authentication, so it never returns the key-error shape.
+    (integer `status`, no `error_code`).
 
 ## Late failures with status `200`
 

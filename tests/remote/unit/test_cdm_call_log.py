@@ -249,7 +249,7 @@ async def test_since_cursor_and_dashboard_key(aiohttp_client, serve_app) -> None
     assert (await client.get("/api/dashboard/cdm-logs")).status == 401
     assert (await client.get("/api/dashboard/cdm-logs", headers=USER)).status == 401
     # Only the device routes are CDM calls: not the API, not the ping, not this route.
-    await client.get("/api/health")
+    await client.get("/api/health", headers=USER)
     await client.get("/", headers=USER)
 
     page = await cdm_log(client, since=1)

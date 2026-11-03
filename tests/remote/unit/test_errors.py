@@ -95,6 +95,12 @@ def test_build_error_response_from_generic_exception() -> None:
     assert body["message"] == f"oops (ref {body['ref']})"
 
 
+def test_categorize_fallback_names_no_exception_class() -> None:
+    err = categorize_exception(RuntimeError("oops"), context={"op": "x"})
+    assert err.error_code == APIErrorCode.INTERNAL_ERROR
+    assert err.details == {"op": "x"}
+
+
 def test_build_error_response_debug_mode_includes_traceback() -> None:
     try:
         raise ValueError("kaboom")

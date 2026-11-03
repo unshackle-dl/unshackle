@@ -303,7 +303,7 @@ def categorize_exception(
     return APIError(
         error_code=APIErrorCode.INTERNAL_ERROR,
         message=f"An unexpected error occurred: {redact_secrets(str(exc))}",
-        details={**context, "exception_type": exc_type},
+        details=context,
         retryable=False,
     )
 

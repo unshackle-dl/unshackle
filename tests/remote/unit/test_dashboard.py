@@ -255,6 +255,8 @@ async def test_rate_limited_request_returns_429(aiohttp_client, monkeypatch) -> 
     assert (await client.get("/api/services", headers={"X-Secret-Key": "tier-key"})).status == 200
     resp = await client.get("/api/services", headers={"X-Secret-Key": "tier-key"})
     assert resp.status == 429 and int(resp.headers["Retry-After"]) > 0
+    assert (await client.get("/api/health", headers={"X-Secret-Key": "tier-key"})).status == 200
+    assert (await client.get("/api/health")).status == 401
     # The dashboard key leaves the middleware before the limit check, so it always answers.
     assert (await client.get("/api/dashboard/status", headers={"X-Secret-Key": "dash-secret"})).status == 200
 
@@ -400,7 +402,7 @@ async def test_dashboard_health(aiohttp_client, dashboard_cfg, monkeypatch) -> N
 
 
 async def test_unknown_key_on_open_route_does_not_grow_key_stats(aiohttp_client, monkeypatch) -> None:
-    """/api/health answers 200 to any header, so counters keyed by the raw header are a memory leak."""
+    """Counters keyed by the raw header of an unknown key would grow without bound."""
     monkeypatch.setitem(config.serve, "users", {"real": {}})
     stats.keys.clear()
     client = await aiohttp_client(make_app())

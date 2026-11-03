@@ -199,7 +199,7 @@ here, so use `id` as the identity and `label` only for display.
 | `bytes_out` | Response bodies only. An event stream reports no body length, so it counts as zero. |
 | `last_seen` | `null` until the API key makes its first request. |
 
-Only a configured API key gets a row of counters. A request on an open route such as `/api/health` with an unknown key counts as `anonymous`, so an unauthenticated caller cannot grow the table.
+Only a configured API key gets a row of counters. A request that answers with an unknown key counts as `anonymous`, so an unauthenticated caller cannot grow the table.
 
 Every API key the server counts has a row here, the dashboard key included, so a
 `requests_by_key` bucket other than `anonymous` always matches one. A "traffic by key" panel

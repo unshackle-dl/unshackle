@@ -1417,11 +1417,12 @@ async def api_key_authentication(request: web.Request, handler: Any) -> web.Stre
     """Gate every non-dashboard route behind an API key in ``app["config"]["users"]``, then rate limit it.
 
     Runs after :func:`dashboard_authentication`, which has already answered the dashboard
-    routes, so the dashboard key never reaches the limiter.
+    routes, so the dashboard key never reaches the limiter. Health is never limited: a client
+    polls it while it waits for a restarted server.
     """
     import hmac
 
-    if request.path == "/api/health" or request.path.startswith(DASHBOARD_PREFIX):
+    if request.path.startswith(DASHBOARD_PREFIX):
         return await handler(request)
     secret_key = request_secret_key(request)
     if not secret_key:
@@ -1430,6 +1431,8 @@ async def api_key_authentication(request: web.Request, handler: Any) -> web.Stre
     # recovered byte-by-byte from response timing.
     if not any(hmac.compare_digest(secret_key, k) for k in request.app["config"]["users"]):
         return web.json_response({"status": 401, "message": "Secret Key is Invalid."}, status=401)
+    if request.path == "/api/health":
+        return await handler(request)
     return rate_limit_response(secret_key) or await handler(request)
 
 

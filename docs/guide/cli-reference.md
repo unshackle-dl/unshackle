@@ -575,7 +575,7 @@ unshackle serve [OPTIONS]
 | `--debug` | off | Enable debug logging for API operations. |
 | `--remote-only` | off | Expose only the remote service session endpoints (health, services, search, session). Implies `--api-only`. |
 
-WVD files in the WVDs directory and PRD files in the PRDs directory are auto-loaded. The REST API lives under `http://<host>:<port>/api/`, with Swagger UI at `/api/docs/` and a health check at `/api/health` (exempt from auth).
+WVD files in the WVDs directory and PRD files in the PRDs directory are auto-loaded. The REST API lives under `http://<host>:<port>/api/`, with Swagger UI at `/api/docs/` and a health check at `/api/health`.
 
 !!! warning "Configure `api_secret` first"
     Unless you pass `--no-key`, `serve.api_secret` must be set in your config. Requests authenticate with the `X-Secret-Key` header. `--no-key` disables authentication entirely. Only use it on a trusted, private network.

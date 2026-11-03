@@ -71,13 +71,13 @@ def free_port() -> int:
         return s.getsockname()[1]
 
 
-def wait_for_health(url: str, timeout: float = 60.0) -> bool:
+def wait_for_health(url: str, secret_key: str, timeout: float = 60.0) -> bool:
     import requests
 
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         try:
-            r = requests.get(f"{url}/api/health", timeout=2)
+            r = requests.get(f"{url}/api/health", headers={"X-Secret-Key": secret_key}, timeout=2)
             if r.status_code == 200:
                 return True
         except requests.RequestException:
@@ -112,6 +112,7 @@ def server_url(request: pytest.FixtureRequest):
     explicit = str(cfg.getoption("--server-url")).rstrip("/")
     mode = cfg.getoption("--spawn-serve")
     is_live = cfg.getoption("--live")
+    key = str(cfg.getoption("--secret-key"))
 
     if not is_live:
         yield explicit or "http://localhost:8786"
@@ -120,13 +121,13 @@ def server_url(request: pytest.FixtureRequest):
     if mode == "never":
         if not explicit:
             pytest.fail("--spawn-serve=never requires --server-url")
-        if not wait_for_health(explicit, timeout=10):
+        if not wait_for_health(explicit, key, timeout=10):
             pytest.fail(f"External serve not reachable at {explicit}")
         yield explicit
         return
 
     if mode == "auto" and explicit:
-        if not wait_for_health(explicit, timeout=10):
+        if not wait_for_health(explicit, key, timeout=10):
             pytest.fail(f"External serve not reachable at {explicit}")
         yield explicit
         return
@@ -153,7 +154,7 @@ def server_url(request: pytest.FixtureRequest):
     )
     url = f"http://127.0.0.1:{port}"
     try:
-        if not wait_for_health(url, timeout=60):
+        if not wait_for_health(url, key, timeout=60):
             proc.terminate()
             pytest.fail(f"Spawned serve at {url} did not become healthy within 60s")
         yield url

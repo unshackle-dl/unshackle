@@ -8,6 +8,7 @@ from typing import Any, Optional
 
 import click
 from aiohttp import web
+from aiohttp.http import SERVER_SOFTWARE
 from aiohttp_swagger3 import SwaggerDocs, SwaggerInfo, SwaggerUiSettings
 
 from unshackle.core import __code_hash__, __version__
@@ -48,6 +49,7 @@ from unshackle.core.api.handlers import (
     env_check_handler,
     get_allowed_services,
     get_download_job_handler,
+    is_admin,
     list_download_jobs_handler,
     list_titles_handler,
     list_tracks_handler,
@@ -428,7 +430,7 @@ async def services(request: web.Request) -> web.Response:
               properties:
                 load_errors:
                   type: array
-                  description: Services skipped because they failed to import (startup or repo refresh)
+                  description: Services skipped because they failed to import (startup or repo refresh); admin key only
                   items:
                     type: string
                 services:
@@ -526,7 +528,12 @@ async def services(request: web.Request) -> web.Response:
 
             services_info.append(service_data)
 
-        load_errors = [redact_path(re.sub(r" \([^()]*\)$", "", err)) for err in services_module.LOAD_ERRORS]
+        # an import error names services outside the caller's allowlist
+        load_errors = (
+            [redact_path(re.sub(r" \([^()]*\)$", "", err)) for err in services_module.LOAD_ERRORS]
+            if is_admin(request)
+            else []
+        )
         return web.json_response({"services": services_info, "load_errors": load_errors})
     except Exception as e:
         log.exception("Error listing services")
@@ -3413,7 +3420,18 @@ def setup_routes(
         if remote_only and not remote:
             continue
         add[method](path, handler)
+    app.on_response_prepare.append(generic_server_header)
     app.on_shutdown.append(close_tunnels)
+
+
+async def generic_server_header(request: web.Request, response: web.StreamResponse) -> None:
+    """Replace aiohttp's default Server header, which names the Python and aiohttp versions.
+
+    A prepare signal also reaches raised and streamed responses, which a middleware never sees.
+    API routes drop the CDM middleware's stamp too; the CDM routes keep it for their clients.
+    """
+    if request.path.startswith("/api/") or response.headers.get("Server") == SERVER_SOFTWARE:
+        response.headers["Server"] = "unshackle"
 
 
 def swagger_docs(app: web.Application) -> SwaggerDocs:

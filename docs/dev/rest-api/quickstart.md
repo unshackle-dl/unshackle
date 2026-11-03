@@ -93,7 +93,7 @@ Swagger UI available at http://127.0.0.1:8786/api/docs/
 ```
 
 !!! note "Swagger UI is also behind auth"
-    In `--api-only` mode (without `--no-key`), the Swagger UI at `/api/docs/` requires the `X-Secret-Key` header, the same as every other route. Only `/api/health` is exempt from authentication.
+    In `--api-only` mode (without `--no-key`), the Swagger UI at `/api/docs/` requires the `X-Secret-Key` header, the same as every other route.
 
 For the rest of this page we will assume the server is reachable at `http://127.0.0.1:8786` and store the secret in an environment variable:
 
@@ -106,10 +106,10 @@ export BASE="http://127.0.0.1:8786"
 
 ## Step 3: Make sure that the server is alive
 
-The health endpoint is the one route that never requires an API key. Use it to make sure that the server operates, and to read its version:
+Use the health endpoint to make sure that the server operates, and to read its version. It needs the API key like every other route:
 
 ```shell
-curl "$BASE/api/health"
+curl -H "X-Secret-Key: $SECRET" "$BASE/api/health"
 ```
 
 ```json title="200 OK"

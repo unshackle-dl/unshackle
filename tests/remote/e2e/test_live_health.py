@@ -24,12 +24,12 @@ def test_services_endpoint(http_session, server_url: str) -> None:
     assert isinstance(body["services"], list)
 
 
-def test_health_does_not_require_secret_key(server_url: str) -> None:
-    """Health bypasses auth even when the server runs with a key."""
+def test_health_requires_secret_key(server_url: str, secret_key: str) -> None:
+    """Health needs the API key like every other route."""
     import requests
 
     r = requests.get(f"{server_url}/api/health", timeout=10)
-    assert r.status_code == 200
+    assert r.status_code == (401 if secret_key else 200)
 
 
 def test_unknown_route_returns_404(http_session, server_url: str) -> None:

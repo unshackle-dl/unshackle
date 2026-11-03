@@ -8,11 +8,11 @@ Start the server with [`unshackle serve`](../../guide/cli-reference.md). By defa
     All examples below assume a base URL of `http://127.0.0.1:8786`. Replace the host and port so that they match your own `unshackle serve -h <host> -p <port>` invocation.
 
 !!! tip "Interactive docs"
-    The server mounts a live Swagger UI at **`/api/docs/`** whenever it does not operate in `--remote-only` mode. Its title is "Unshackle REST API" and its version tracks the installed package version. In API-only mode with an API key configured, the Swagger UI itself sits behind `X-Secret-Key`. Only `/api/health` is exempt.
+    The server mounts a live Swagger UI at **`/api/docs/`** whenever it does not operate in `--remote-only` mode. Its title is "Unshackle REST API" and its version tracks the installed package version. In API-only mode with an API key configured, the Swagger UI itself sits behind `X-Secret-Key`, like every other route.
 
 ## Conventions
 
-- **Authentication.** Every request except `GET /api/health` requires the `X-Secret-Key` header when you configure an API key. `--no-key` disables the check entirely. See [Authentication](authentication.md).
+- **Authentication.** Every request, `GET /api/health` included, requires the `X-Secret-Key` header when you configure an API key. `--no-key` disables the check entirely. See [Authentication](authentication.md).
 - **Content type.** Request bodies are JSON (`Content-Type: application/json`). All success responses are JSON unless this page documents a `204 No Content`.
 - **CORS.** Every response carries permissive CORS headers, and the server answers `OPTIONS` preflight requests automatically.
 - **Compression.** JSON responses of 256 bytes or more are gzip-compressed when the client sends `Accept-Encoding: gzip`. A [slow response](#slow-responses) is not compressed.
@@ -30,12 +30,12 @@ These endpoints report server state and enumerate what is available. `GET /api/h
 
 ### `GET /api/health`
 
-Health check. **This is the only route exempt from authentication**: you can call it without an `X-Secret-Key` header. It reports the running version and a best-effort update check.
+Health check. It reports the running version and commit and a best-effort update check, so it needs the `X-Secret-Key` header like every other route. A request without an API key gets a `401`, which still shows the server is up.
 
 === "Request"
 
     ```bash
-    curl http://127.0.0.1:8786/api/health
+    curl -H "X-Secret-Key: $SECRET" http://127.0.0.1:8786/api/health
     ```
 
 === "Response `200`"
@@ -68,7 +68,7 @@ If the update check fails (for example, no network), `update_available` and `lat
 
 ### `GET /api/services`
 
-Show the streaming services available on this server, filtered by your allowlist. Each entry gives the service's tag, matching rules, capability flags, and its CLI parameters (useful when you make a UI that accepts service-specific options). `load_errors` lists the services the server skipped because they failed to import, at startup or after a service repository refresh; the server also writes each one to its log. An entry marked `pending_update` has newer code staged: it keeps its current code until its running or queued jobs and its live remote sessions finish.
+Show the streaming services available on this server, filtered by your allowlist. Each entry gives the service's tag, matching rules, capability flags, and its CLI parameters (useful when you make a UI that accepts service-specific options). For the admin key, `load_errors` lists the services the server skipped because they failed to import, at startup or after a service repository refresh; the server also writes each one to its log. Any other key gets an empty list; with `--no-key` every caller is the admin. An entry marked `pending_update` has newer code staged: it keeps its current code until its running or queued jobs and its live remote sessions finish.
 
 === "Request"
 

@@ -40,13 +40,10 @@ def make_app():
 
 
 def no_key_required_auth():
-    """Mirror serve.py's api_key_authentication middleware: required X-Secret-Key
-    on every endpoint except /api/health."""
+    """Mirror serve.py's api_key_authentication middleware: a required X-Secret-Key on every endpoint."""
 
     @web.middleware
     async def mw(request, handler):
-        if request.path == "/api/health":
-            return await handler(request)
         secret = request.headers.get("X-Secret-Key")
         if not secret:
             return web.json_response({"status": 401, "message": "Secret Key is Empty."}, status=401)
@@ -307,11 +304,44 @@ async def test_health_endpoint_responds_ok(make_app, aiohttp_client) -> None:
     assert "version" in body
 
 
-async def test_health_bypasses_api_key_auth_middleware(make_app, aiohttp_client) -> None:
-    app = make_app(remote_only=True, with_auth_middleware=True)
+async def test_every_response_carries_a_generic_server_header(make_app, aiohttp_client) -> None:
+    """Returned, raised (404, 405) and streamed responses all lose aiohttp's version banner."""
+
+    async def stream(request: web.Request) -> web.StreamResponse:
+        response = web.StreamResponse()
+        await response.prepare(request)
+        await response.write(b"x")
+        return response
+
+    app = make_app(remote_only=True)
+    app.router.add_get("/stream", stream)
     client = await aiohttp_client(app)
-    resp = await client.get("/api/health")
-    assert resp.status == 200  # health bypasses auth
+    for method, path in [("GET", "/api/health"), ("DELETE", "/api/health"), ("GET", "/api/nope"), ("GET", "/stream")]:
+        resp = await client.request(method, path)
+        assert resp.headers["Server"] == "unshackle", (method, path, resp.status)
+
+
+async def test_services_load_errors_go_to_the_admin_key_only(
+    make_app, aiohttp_client, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from unshackle.core import services as services_module
+    from unshackle.core.config import config
+
+    monkeypatch.setattr(services_module, "LOAD_ERRORS", ["BAD: failed to import - ImportError: boom"])
+    monkeypatch.setattr(config, "serve", {"api_secret": "admin", "users": {"user": {"services": ["EXAMPLE"]}}})
+    client = await aiohttp_client(make_app(remote_only=True))
+    user = await (await client.get("/api/services", headers={"X-Secret-Key": "user"})).json()
+    admin = await (await client.get("/api/services", headers={"X-Secret-Key": "admin"})).json()
+    assert user["load_errors"] == []
+    assert admin["load_errors"] == ["BAD: failed to import - ImportError: boom"]
+
+
+async def test_health_needs_an_api_key(make_app, aiohttp_client) -> None:
+    app = make_app(remote_only=True, with_auth_middleware=True)
+    app["config"]["users"]["good-key"] = {}
+    client = await aiohttp_client(app)
+    assert (await client.get("/api/health")).status == 401
+    assert (await client.get("/api/health", headers={"X-Secret-Key": "good-key"})).status == 200
 
 
 async def test_auth_middleware_rejects_missing_key(make_app, aiohttp_client) -> None:
