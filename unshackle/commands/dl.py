@@ -1623,6 +1623,7 @@ class dl:
             proxy_providers=self.proxy_providers,
             profile=self.profile,
             cdm_entry=self.cdm_from_service_entry(),
+            cdm_for=self.cdm_for,
         )
 
         if repack:
@@ -5283,6 +5284,10 @@ class dl:
             assert remote is not None
             track_cdm = remote.local_cdm
             local_drm = track.get_drm_for_cdm(track_cdm)
+            if isinstance(local_drm, (Widevine, PlayReady)) and isinstance(local_drm, PlayReady) != is_playready_cdm(
+                track_cdm
+            ):
+                track_cdm = self.cdm_for("playready" if isinstance(local_drm, PlayReady) else "widevine", track_quality)
             if local_drm is not None and local_drm is not drm:
                 assert not isinstance(local_drm, ClearKey)
                 # a mid-download handover leaves drm on the server's DRM system, and the caller decrypts with it

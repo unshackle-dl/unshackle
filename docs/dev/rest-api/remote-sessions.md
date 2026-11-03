@@ -296,7 +296,9 @@ There are two ways DRM keys get resolved, chosen by the client's `server_cdm` fl
     The **server's CDM** does everything. The client sends track IDs (or a PSSH),
     the server checks its key vaults, loads the device configured for your API key,
     runs the CDM flow, and returns `KID:KEY` pairs directly. The client needs no
-    CDM.
+    CDM. When the server's `cdm` entry for the service names a `widevine` and a
+    `playready` device, the server loads the device of your local CDM's DRM system.
+    See [`cdm`](../../reference/configuration/drm.md).
 
     - Enable with `server_cdm: true` in the server entry.
     - The server tells the client which DRM type it used
@@ -321,7 +323,10 @@ There are two ways DRM keys get resolved, chosen by the client's `server_cdm` fl
     the limit in `server_cdm_max_height`. In a server CDM session, the batch licence response
     lists each track the server refused to license live under `capped_tracks`. A single-track
     server CDM licence answers `403 SERVER_CDM_CAPPED` for such a track. In both cases the client
-    licenses those tracks in proxy mode with its own local CDM. See
+    reads its own key vaults first, then licenses those tracks in proxy mode with its own local
+    CDM. When the track has no DRM of that CDM's system, the client uses the device that its own
+    `cdm` entry names for the track's DRM system. With no such device, the download of that track
+    stops. See
     [`server_cdm_max_height`](../../reference/configuration/services.md).
 
 ### Your own device identity

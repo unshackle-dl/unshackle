@@ -1957,7 +1957,10 @@ async def session_create(request: web.Request) -> web.Response:
               cdm_type:
                 type: string
                 enum: [widevine, playready]
-                description: DRM system of the client's local CDM; absent when the client has none
+                description: |
+                  DRM system of the client's local CDM; absent when the client has none.
+                  A server CDM session loads the device of this system when the server's
+                  cdm entry for the service names both systems
               cdm_security_level:
                 type: integer
                 description: |

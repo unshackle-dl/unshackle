@@ -13,7 +13,7 @@ from uuid import UUID
 import pytest
 from rich.table import Table
 
-from tests.remote.key_source import remote_keys
+from tests.remote.key_source import CAPPED, PR_DEVICE, one_title, remote_keys, remote_session
 from unshackle.commands.dl import dl
 
 pytestmark = pytest.mark.unit
@@ -112,6 +112,41 @@ def test_keys_read_from_a_vault_are_not_pushed_back():
     vaults = FakeVaults({CACHED: "k_cached"})
     run_prepare(vaults, [CACHED, NEW], {NEW: "k_new"}, track_kid=NEW)
     assert vaults.added == {NEW: "k_new"}
+
+
+def capped_run(vaults):
+    """A batch licence refuses the track for a local PlayReady device, then dl prepares its Widevine DRM."""
+    cmd = make_cmd(vaults)
+    svc = remote_session(PR_DEVICE, CAPPED)
+    cmd._remote_service = svc
+
+    drm = type("Widevine", (FakeWidevine,), {})([CACHED])
+    track = SimpleNamespace(id="vid", height=2160, drm=[drm], drm_preference=None)
+    svc.resolve_server_keys(one_title(track))
+
+    table = Table.grid()
+    table.add_row("")
+    cmd.prepare_drm(
+        track=track,
+        title=None,
+        drm=drm,
+        licence=lambda **kwargs: svc.proxy_license(b"", track, "widevine"),
+        certificate=None,
+        track_kid=CACHED,
+        table=table,
+    )
+    return drm
+
+
+def test_a_capped_track_takes_a_local_vault_key_before_the_refusal():
+    assert capped_run(FakeVaults({CACHED: "k_cached"})).content_keys == {CACHED: "k_cached"}
+
+
+def test_a_capped_track_no_vault_holds_raises_the_refusal():
+    import click
+
+    with pytest.raises(click.ClickException, match="only Widevine DRM for your PlayReady device"):
+        capped_run(FakeVaults())
 
 
 def test_batch_resolved_keys_are_cached_before_download():

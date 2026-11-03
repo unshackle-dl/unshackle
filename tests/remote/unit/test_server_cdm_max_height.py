@@ -13,7 +13,7 @@ import pywidevine.pssh as wv_pssh_mod
 from rich.table import Table
 
 import unshackle.core.drm as drm_mod
-from tests.remote.key_source import remote_keys
+from tests.remote.key_source import CAPPED, PR_DEVICE, one_title, remote_keys, remote_session
 from unshackle.commands.dl import dl
 from unshackle.core.api import handlers
 from unshackle.core.api.errors import APIError, APIErrorCode
@@ -203,42 +203,15 @@ class _WV:
 _WV.__name__ = "Widevine"
 
 
-def remote(local_cdm, answer):
-    svc = remote_keys(server_cdm_type="playready", local_cdm=local_cdm)
-    svc._track_alias = {}
-    svc._title_alias = {}
-    svc._session_id = "sess"
-    svc.log = logging.getLogger("test-server-cdm-cap")
-    posts: list = []
-    svc.client = SimpleNamespace(post=lambda endpoint, payload, expect=(): posts.append(payload) or answer)
-    svc.drain_server_logs = lambda: None
-    svc.posts = posts
-    return svc
-
-
-class _Title:
-    def __init__(self, track):
-        self.tracks = _Tracks([track])
-
-
-class _Tracks(list):
-    @property
-    def videos(self):
-        return list(self)
-
-    @property
-    def audio(self):
-        return []
-
-
-CAPPED = {"keys": {}, "capped_tracks": {"vid": {"reason": "server_cdm_max_height", "max_height": 1080}}}
+def capped_track():
+    return SimpleNamespace(id="vid", height=2160, drm=[_WV()], drm_preference=None)
 
 
 def test_a_capped_track_moves_to_the_local_device():
     track = SimpleNamespace(id="vid", drm=[_WV()], drm_preference=None)
-    svc = remote(SimpleNamespace(is_playready=False, security_level=1), CAPPED)
+    svc = remote_session(SimpleNamespace(is_playready=False, security_level=1), CAPPED)
 
-    svc.resolve_server_keys(_Title(track))
+    svc.resolve_server_keys(one_title(track))
 
     assert svc.client_licensed == {"vid"}
     assert track.drm_preference == "widevine"
@@ -249,18 +222,39 @@ def test_a_capped_track_moves_to_the_local_device():
     assert "mode" not in svc.posts[0] and svc.posts[0]["challenge"]
 
 
+def fails_at_the_track_licence(local_cdm, match):
+    """The batch licence defers the refusal, so dl reads the local vaults before the track licence raises it."""
+    track = capped_track()
+    svc = remote_session(local_cdm, CAPPED)
+    svc.resolve_server_keys(one_title(track))
+    assert svc.client_licensed == set()
+    assert "vid" in svc.deferred_refusals
+
+    svc.client.post = None
+    with pytest.raises(click.ClickException, match=match):
+        svc.proxy_license(b"", track, "widevine")
+
+
 def test_a_capped_track_without_a_local_device_fails_clearly():
-    track = SimpleNamespace(id="vid", drm=[_WV()], drm_preference=None)
-    svc = remote(None, CAPPED)
-    with pytest.raises(click.ClickException, match="1080p"):
-        svc.resolve_server_keys(_Title(track))
+    fails_at_the_track_licence(None, "1080p")
 
 
 def test_a_capped_track_without_the_local_drm_system_fails_clearly():
-    track = SimpleNamespace(id="vid", drm=[_WV()], drm_preference=None)
-    svc = remote(SimpleNamespace(is_playready=True, security_level=3000), CAPPED)
-    with pytest.raises(click.ClickException, match="PlayReady"):
-        svc.resolve_server_keys(_Title(track))
+    fails_at_the_track_licence(
+        PR_DEVICE,
+        r"1080p.*the 2160p track has only Widevine DRM for your PlayReady device; pass -q 2160 ",
+    )
+
+
+def test_a_server_vault_miss_without_the_local_drm_system_fails_at_once():
+    """Only a server-CDM session reads the local vaults before the licence, so a server-vault session raises at once."""
+    track = capped_track()
+    svc = remote_session(PR_DEVICE, {"keys": {}, "capped_tracks": {"vid": {}}})
+    svc._server_cdm = False
+    svc._server_vault = True
+    with pytest.raises(click.ClickException, match="server vault") as ei:
+        svc.resolve_server_keys(one_title(track))
+    assert "-q" not in ei.value.message
 
 
 def test_a_null_service_in_the_cap_map_falls_through_to_the_default(monkeypatch):
@@ -537,18 +531,20 @@ class _LocalWidevine(Widevine):
         raise self.Used(cdm)
 
 
-def prepare(svc, licence):
+def prepare(svc, licence, drm=None, track=None, cdm_for=None):
     runner = dl.__new__(dl)
     runner._remote_service = svc
     runner.cdm = "server stub"
     runner.service = "EXAMPLE1"
     runner.debug_logger = None
     runner.log = logging.getLogger("test-server-cdm-cap")
+    runner.cdm_for = cdm_for
     table = Table()
     table.add_column()
-    track = SimpleNamespace(id="vid", drm=None, get_drm_for_cdm=lambda cdm: None)
+    drm = drm or _LocalWidevine()
+    track = track or SimpleNamespace(id="vid", drm=None, get_drm_for_cdm=lambda cdm: None)
     with pytest.raises(_LocalWidevine.Used) as ei:
-        runner.prepare_drm(_LocalWidevine(), track, None, lambda **k: None, licence, table=table, cdm_only=True)
+        runner.prepare_drm(drm, track, None, lambda **k: None, licence, table=table, cdm_only=True)
     return ei.value.args[0]
 
 
@@ -611,24 +607,24 @@ def test_a_mid_download_handover_puts_the_keys_on_the_callers_drm(monkeypatch):
 
 def test_a_capped_hls_track_with_no_drm_yet_moves_to_the_local_device():
     track = SimpleNamespace(id="vid", drm=[], drm_preference=None)
-    svc = remote(SimpleNamespace(is_playready=False, security_level=1), CAPPED)
-    svc.resolve_server_keys(_Title(track))
+    svc = remote_session(SimpleNamespace(is_playready=False, security_level=1), CAPPED)
+    svc.resolve_server_keys(one_title(track))
     assert svc.client_licensed == {"vid"}
     assert track.drm_preference == "widevine"
 
 
 def test_resolve_server_keys_forgets_the_last_titles_handovers():
     track = SimpleNamespace(id="vid", drm=[_WV()], drm_preference=None)
-    svc = remote(SimpleNamespace(is_playready=False, security_level=1), {"keys": {}})
+    svc = remote_session(SimpleNamespace(is_playready=False, security_level=1), {"keys": {}})
     svc.client_licensed = {"vid"}
-    svc.resolve_server_keys(_Title(track))
+    svc.resolve_server_keys(one_title(track))
     assert svc.client_licensed == set()
 
 
 def test_a_single_licence_refusal_hands_the_track_to_the_local_device():
     track = SimpleNamespace(id="vid", drm=[_WV()], drm_preference=None)
     refusal = {"status": "error", "error_code": "SERVER_CDM_CAPPED", "details": CAP_DETAILS}
-    svc = remote(SimpleNamespace(is_playready=False, security_level=1), refusal)
+    svc = remote_session(SimpleNamespace(is_playready=False, security_level=1), refusal)
 
     assert svc.proxy_license(b"", track, "widevine") == b""
     assert svc.client_licensed == {"vid"}
@@ -665,7 +661,7 @@ def sent_create(
         raise _SentCreate(data)
 
     handlers.config.cdm = cdm_map or {}
-    svc = remote(local_cdm, {})
+    svc = remote_session(local_cdm, {})
     svc.ctx.obj.cdm_entry = cdm_entry
     svc._server_cdm = server_cdm
     svc.service_tag = "EXAMPLE1"
@@ -815,7 +811,7 @@ def test_dl_records_whether_the_services_cdm_entry_named_the_loaded_device(cdm, 
 
 @pytest.mark.parametrize("max_height", [None, 1080])
 def test_a_declined_server_cdm_that_the_server_keeps_is_reported(max_height, caplog):
-    svc = remote(SimpleNamespace(is_playready=False), {})
+    svc = remote_session(SimpleNamespace(is_playready=False), {})
     svc.service_tag = "EXAMPLE1"
     svc._server_cdm = False
     with caplog.at_level(logging.INFO):
@@ -833,7 +829,7 @@ def test_a_declined_server_cdm_that_the_server_keeps_is_reported(max_height, cap
 
 @pytest.mark.parametrize(("cdm_entry", "level"), [(True, logging.INFO), (False, logging.WARNING)])
 def test_a_refused_server_cdm_warns_only_when_no_cdm_entry_loaded_the_fallback(cdm_entry, level, caplog):
-    svc = remote(SimpleNamespace(is_playready=False), {})
+    svc = remote_session(SimpleNamespace(is_playready=False), {})
     svc.service_tag = "EXAMPLE1"
     svc.ctx.obj.cdm_entry = cdm_entry
     with caplog.at_level(logging.INFO):
@@ -890,3 +886,40 @@ def test_a_per_service_entry_matches_the_tag_in_any_case(config_key, tag, monkey
     assert svc._server_cdm is False
     assert svc._anonymous_search is True
     assert handlers.config.services == {tag: {"title_map": {"a": "b"}}}
+
+
+def test_a_capped_track_moves_to_the_clients_device_for_its_drm_system():
+    """A client whose cdm entry also names a device of the track's system licenses with that device."""
+    track = capped_track()
+    svc = remote_session(PR_DEVICE, CAPPED)
+    asked: list = []
+    svc.ctx.obj.cdm_for = lambda system, quality: asked.append((system, quality)) or SimpleNamespace(is_playready=False)
+
+    svc.resolve_server_keys(one_title(track))
+
+    assert asked == [("widevine", 2160)]
+    assert svc.client_licensed == {"vid"}
+    assert track.drm_preference == "widevine"
+    assert svc.deferred_refusals == {}
+
+
+def test_a_capped_track_keeps_the_refusal_when_the_client_has_no_device_for_its_system():
+    track = capped_track()
+    svc = remote_session(PR_DEVICE, CAPPED)
+    svc.ctx.obj.cdm_for = lambda system, quality: SimpleNamespace(is_playready=True)
+
+    svc.resolve_server_keys(one_title(track))
+
+    assert svc.client_licensed == set()
+    assert "vid" in svc.deferred_refusals
+
+
+def test_dl_licenses_a_handed_over_track_with_the_device_of_its_drm_system():
+    svc = remote_keys(client_licensed={"vid"}, local_cdm=PR_DEVICE)
+    widevine_device = SimpleNamespace(is_playready=False)
+    drm = _LocalWidevine()
+    track = SimpleNamespace(id="vid", drm=[drm], get_drm_for_cdm=lambda cdm: drm)
+
+    used = prepare(svc, lambda **k: None, drm, track, lambda system, quality: widevine_device)
+
+    assert used is widevine_device

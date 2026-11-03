@@ -405,6 +405,7 @@ def test_a_lent_device_without_the_vault_grant_asks_the_server_for_no_key() -> N
     svc._server_device = True
     svc._local_vaults_only = True
     svc.client_licensed = set()
+    svc.deferred_refusals = {}
     svc.client = SimpleNamespace(post=lambda *a, **k: pytest.fail("the server refuses every key request"))
     track = SimpleNamespace(id="vid", drm=None)
 

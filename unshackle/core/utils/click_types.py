@@ -1,7 +1,7 @@
 import re
 from datetime import date, timedelta
 from enum import Enum
-from typing import Any, Optional, Sequence, Union
+from typing import Any, Callable, Optional, Sequence, Union
 
 import click
 from click.shell_completion import CompletionItem
@@ -166,6 +166,7 @@ class ContextData:
         proxy_providers: list,
         profile: Optional[str] = None,
         cdm_entry: bool = False,
+        cdm_for: Optional[Callable[[str, Optional[int]], Any]] = None,
     ) -> None:
         self.config = config
         self.cdm = cdm
@@ -173,6 +174,7 @@ class ContextData:
         self.profile = profile
         # True when the service's own entry in the cdm config named the loaded device
         self.cdm_entry = cdm_entry
+        self.cdm_for = cdm_for
 
 
 class SeasonRange(click.ParamType):

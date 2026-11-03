@@ -225,3 +225,88 @@ async def test_track_preference_falls_back_with_a_warning(env, monkeypatch, capl
 
     assert body["drm_type"] == "widevine"
     assert "wants playready DRM but the server has no device for it" in caplog.text
+
+
+BOTH = {"EXAMPLE1": {"widevine": "wv_device", "playready": "pr_device"}}
+
+
+@pytest.mark.parametrize(
+    ("mapping", "server_cdm", "wanted"),
+    [
+        (BOTH, True, "playready"),
+        ({"EXAMPLE1": "wv_device"}, True, None),
+        ({"EXAMPLE1": {"widevine": "wv_device"}}, True, None),
+        ({}, False, "playready"),
+    ],
+)
+def test_the_server_device_follows_the_client_only_when_both_systems_are_mapped(
+    monkeypatch, mapping, server_cdm, wanted
+):
+    asked: list = []
+    monkeypatch.setattr(handlers.config, "cdm", mapping, raising=False)
+    monkeypatch.setattr(handlers, "load_service_yaml", lambda tag: {})
+    monkeypatch.setattr(handlers, "load_full_cdm", lambda service, profile, cdm_type: asked.append(cdm_type))
+    monkeypatch.setattr(handlers, "build_parent_ctx", lambda *a, **k: None)
+    monkeypatch.setattr(handlers.Services, "load", lambda tag: object)
+    monkeypatch.setattr(handlers, "instantiate_service", lambda *a, **k: "service")
+
+    handlers.create_service_instance("EXAMPLE1", "t", {"cdm_type": "playready"}, None, [], None, server_cdm=server_cdm)
+
+    assert asked == [wanted]
+
+
+@pytest.mark.parametrize("system", ["widevine", "playready"])
+def test_the_tracks_response_names_the_system_of_the_loaded_device(monkeypatch, system):
+    from unshackle.core.api import session_store as store_mod
+    from unshackle.core.tracks import Tracks
+
+    monkeypatch.setattr(handlers.config, "cdm", BOTH, raising=False)
+    monkeypatch.setattr(handlers.config, "serve", {"users": {}}, raising=False)
+    monkeypatch.setattr(store_mod.bus, "publish", lambda topic, data: None)
+
+    class StubService:
+        session = SimpleNamespace(headers={}, cookies=[])
+        ctx = SimpleNamespace(obj=SimpleNamespace(cdm=SimpleNamespace(is_playready=system == "playready")))
+
+        def get_tracks(self, title):
+            return Tracks()
+
+        def get_chapters(self, title):
+            raise NotImplementedError
+
+    async def run():
+        store = store_mod.get_session_store()
+        entry = await store.create(
+            service_tag="EXAMPLE1", service_instance=StubService(), session_id="both", owner_key=None
+        )
+        entry.title_map = {"t1": "Title"}
+        entry.server_cdm = True
+        try:
+            resp = await handlers.session_tracks_handler({"title_id": "t1"}, "both")
+            return json.loads(resp.body)
+        finally:
+            await store.delete("both")
+
+    assert asyncio.run(run())["server_cdm_type"] == system
+
+
+@pytest.mark.parametrize(
+    ("mapping", "both"),
+    [
+        (BOTH, True),
+        ({"default": {"Widevine": "wv_device", "PlayReady": "pr_device"}}, True),
+        ({"EXAMPLE1": {"widevine": "wv_device", "playready": None}}, False),
+        ({"EXAMPLE1": {"widevine": "wv_device", "default": "pr_device"}}, False),
+        ({"EXAMPLE1": "wv_device"}, False),
+    ],
+)
+def test_lists_both_systems_needs_a_device_for_each(monkeypatch, mapping, both):
+    monkeypatch.setattr(handlers.config, "cdm", mapping, raising=False)
+    assert handlers.lists_both_systems("EXAMPLE1", handlers.config) is both
+
+
+@pytest.mark.parametrize("cdm_type", [5, ["playready"], {"a": 1}])
+def test_a_cdm_type_that_is_not_a_string_takes_the_first_listed_device(monkeypatch, cdm_type):
+    monkeypatch.setattr(handlers.config, "cdm", BOTH, raising=False)
+    monkeypatch.setitem(cdm_mod.__dict__, "load_cdm", lambda name, **k: name)
+    assert handlers.load_full_cdm("EXAMPLE1", None, cdm_type) == "wv_device"

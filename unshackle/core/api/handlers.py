@@ -32,7 +32,7 @@ from unshackle.core.api.session_log import SessionLogBuffer, SessionLogMirror, c
 from unshackle.core.api.session_store import SessionStore
 from unshackle.core.binaries import binary_version
 from unshackle.core.cacher import Cacher
-from unshackle.core.cdm.detect import cdm_type_stub
+from unshackle.core.cdm.detect import cdm_type_stub, is_playready_cdm
 from unshackle.core.config import config, load_yaml
 from unshackle.core.constants import AUDIO_CODEC_MAP, DYNAMIC_RANGE_MAP, VIDEO_CODEC_MAP, AnyTrack
 from unshackle.core.drm import BlowfishStripe, cbcs, is_null_key
@@ -200,6 +200,8 @@ def load_full_cdm(service: str, profile: Optional[str], cdm_type: Optional[str] 
     from unshackle.core.cdm import load_cdm
     from unshackle.core.config import config as app_config
 
+    if not isinstance(cdm_type, str):
+        cdm_type = None
     cdm_name = ci_get(app_config.cdm, service) or ci_get(app_config.cdm, "default")
     if isinstance(cdm_name, dict):
         lower_keys = {k.lower(): v for k, v in cdm_name.items()}
@@ -3710,7 +3712,8 @@ def create_service_instance(
 
         cdm = client_device_cdm(data, input_bridge, lend_server_device)
     else:
-        cdm = load_full_cdm(normalized_service, profile, None if server_cdm else data.get("cdm_type"))
+        follows_client = not server_cdm or lists_both_systems(normalized_service, config)
+        cdm = load_full_cdm(normalized_service, profile, data.get("cdm_type") if follows_client else None)
 
     # Reconstruct enum track-selection params from client data so service code that reads
     # ctx.parent.params (Service.__init__ proxy/range/vcodec/best_available block) sees enums.
@@ -4103,6 +4106,9 @@ async def session_tracks_handler(
 
         service_tag = session.service_tag
         config_cdm_type = detect_cdm_type_for_service(service_tag, app_config)
+        if not config_cdm_type and session.server_cdm and lists_both_systems(service_tag, app_config):
+            loaded = getattr(getattr(getattr(service_instance, "ctx", None), "obj", None), "cdm", None)
+            config_cdm_type = "playready" if is_playready_cdm(loaded) else "widevine"
 
         track_has_wv = any(
             d.__class__.__name__ == "Widevine" for t in list(tracks.videos) + list(tracks.audio) if t.drm for d in t.drm
@@ -4276,6 +4282,15 @@ def configured_cdm_name(service: str, drm_type: str, app_config: Any) -> Optiona
     if cdm_name and isinstance(cdm_name, str):
         return cdm_name
     return None
+
+
+def lists_both_systems(service: str, app_config: Any) -> bool:
+    """True when config.cdm names a device for both Widevine and PlayReady for ``service``.
+
+    The server CDM then loads the device of the client's DRM system, so the manifest suits the client's vaults.
+    """
+    entry = ci_get(app_config.cdm, service) or ci_get(app_config.cdm, "default")
+    return isinstance(entry, dict) and {"widevine", "playready"} <= {key.lower() for key, name in entry.items() if name}
 
 
 def detect_cdm_type_for_service(service: str, app_config: Any) -> Optional[str]:

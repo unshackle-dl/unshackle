@@ -1019,6 +1019,7 @@ class RemoteService:
         self._chapters_by_title: Dict[str, list] = {}
         self._session_id: Optional[str] = None
         self.client_licensed: set[str] = set()  # track ids this machine's device licenses by challenge relay
+        self.deferred_refusals: Dict[str, str] = {}
         self.server_vault_keys: Dict[UUID, str] = {}
         self.server_vault = ServerVault(self)
         self._segment_filters: Dict[str, Callable[[Any], bool]] = {}
@@ -1790,10 +1791,12 @@ class RemoteService:
         Called by dl.py between track selection and download. The server
         decides which CDM device to use and tells the client through
         server_cdm_type. We send track IDs and the server does the full
-        CDM flow, returning KID:KEY pairs.
+        CDM flow, returning KID:KEY pairs. A capped track this machine's device cannot license
+        waits in ``deferred_refusals``, so dl reads the local vaults before ``proxy_license`` raises it.
         """
         # track ids can repeat across titles, so a refusal for the last title must not carry over
         self.client_licensed.clear()
+        self.deferred_refusals.clear()
         if not (self._server_cdm or getattr(self, "_server_vault", False)) or self.local_vaults_only:
             return
 
@@ -1863,7 +1866,13 @@ class RemoteService:
             # a lent-device miss still gets the local vaults, which dl reads before asking the server again
             refusal = capped.get(self.server_track_id(track.id))
             if refusal is not None and refusal.get("reason") != "server_device":
-                self.license_locally(track, refusal)
+                try:
+                    self.license_locally(track, refusal)
+                except click.ClickException as e:
+                    if not self._server_cdm:
+                        raise
+                    self.deferred_refusals[str(track.id)] = e.message
+                    self.log.debug(f"{e.message}; trying the local vaults first")
 
     def license_locally(self, track: AnyTrack, refusal: Dict[str, Any]) -> None:
         """Hand a track the server CDM refused to license live to this machine's own device.
@@ -1871,7 +1880,7 @@ class RemoteService:
         dl then licenses it through the challenge relay. An HLS track with no DRM yet passes, as its
         media playlist names the DRM and the downloader honours ``drm_preference``.
         """
-        from unshackle.core.cdm.detect import is_playready_cdm
+        from unshackle.core.cdm.detect import is_playready_cdm, is_widevine_cdm
 
         if refusal.get("reason") == "server_device":
             vaults = (
@@ -1893,11 +1902,17 @@ class RemoteService:
         if cdm is None:
             raise click.ClickException(f"{why}, and {track} needs a local CDM to license it")
         drm_class = "PlayReady" if is_playready_cdm(cdm) else "Widevine"
-        if track.drm and not any(d.__class__.__name__ == drm_class for d in track.drm):
-            height = getattr(track, "height", None)
-            raise click.ClickException(
-                f"{why}, and {track} has no {drm_class} DRM for your local CDM; pass -q {height or 'with that height'}"
-            )
+        height = getattr(track, "height", None)
+        systems = {d.__class__.__name__ for d in track.drm or ()}
+        if systems and drm_class not in systems:
+            other = "Widevine" if drm_class == "PlayReady" else "PlayReady"
+            matches = is_widevine_cdm if other == "Widevine" else is_playready_cdm
+            if not (other in systems and self.ctx.obj.cdm_for and matches(self.ctx.obj.cdm_for(other.lower(), height))):
+                label = f"the {height}p track" if height else str(track)
+                hint = f"; pass -q {height} to start the session on your device" if cap and height else ""
+                have = " and ".join(sorted(systems))
+                raise click.ClickException(f"{why}, and {label} has only {have} DRM for your {drm_class} device{hint}")
+            drm_class = other
         track.drm_preference = drm_class.lower()
         self.client_licensed.add(str(track.id))
         self.log.info(f"{why}; licensing {track.id} with your own {drm_class} device")
@@ -2027,6 +2042,8 @@ class RemoteService:
         if self.local_vaults_only:
             self.license_locally(track, {"reason": "server_device"})
         if self._server_cdm and str(track.id) not in self.client_licensed:
+            if deferred := self.deferred_refusals.get(str(track.id)):
+                raise click.ClickException(deferred)
             from uuid import UUID
 
             server_type = self.server_cdm_type
