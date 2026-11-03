@@ -11,7 +11,7 @@ from uuid import UUID
 
 import pytest
 
-from unshackle.core.remote_service import RemoteService
+from tests.remote.key_source import remote_keys
 
 pytestmark = pytest.mark.unit
 
@@ -46,14 +46,10 @@ class _Client:
 
 
 def _service(server_type, answer):
-    svc = RemoteService.__new__(RemoteService)
+    svc = remote_keys(server_cdm_type=server_type)
     svc._track_alias = {}
     svc._title_alias = {}
-    svc._server_cdm = True
-    svc._server_cdm_type = server_type
-    svc.client_licensed = set()
     svc._session_id = "sess"
-    svc.server_vault_keys = {}
     svc.log = logging.getLogger("test-remote-license")
     svc.client = _Client(answer)
     return svc
@@ -86,7 +82,7 @@ def test_response_type_refreshes_the_server_type():
 
     svc.proxy_license(b"", track, "widevine")
 
-    assert svc._server_cdm_type == "playready"
+    assert svc.server_cdm_type == "playready"
 
 
 def test_proxy_mode_keeps_the_callers_type():

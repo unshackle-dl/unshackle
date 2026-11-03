@@ -1,5 +1,5 @@
 import base64
-from typing import Any, Union
+from typing import Any, Optional, Union
 from uuid import UUID
 
 from unshackle.core.drm.blowfish_stripe import BlowfishStripe
@@ -50,6 +50,19 @@ def drm_from_dict(data: dict[str, Any]) -> Union[Widevine, PlayReady, ClearKeyCE
     return drm
 
 
+def is_null_key(key: Optional[str]) -> bool:
+    """True for a blank or all-zero content key, the null key that no vault stores."""
+    return not key or key.count("0") == len(key)
+
+
+def drop_null_keys(drm: Any) -> None:
+    """Remove the null keys from a DRM object's content keys. A read-only key view stays as it is."""
+    content_keys = getattr(drm, "content_keys", None)
+    if isinstance(content_keys, dict):
+        for kid in [kid for kid, key in content_keys.items() if is_null_key(key)]:
+            del content_keys[kid]
+
+
 def real_kids(drm: Any) -> list[UUID]:
     """Return the KIDs a DRM object names, without the all-zero and test-pattern placeholders."""
     return [kid for kid in getattr(drm, "kids", None) or [] if kid.int and kid not in Widevine.PLACEHOLDER_KIDS]
@@ -71,6 +84,8 @@ __all__ = (
     "MonaLisa",
     "DRM_T",
     "drm_from_dict",
+    "drop_null_keys",
+    "is_null_key",
     "real_kids",
     "own_kids",
 )

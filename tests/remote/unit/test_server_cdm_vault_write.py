@@ -13,6 +13,7 @@ from uuid import UUID
 import pytest
 from rich.table import Table
 
+from tests.remote.key_source import remote_keys
 from unshackle.commands.dl import dl
 
 pytestmark = pytest.mark.unit
@@ -68,7 +69,7 @@ def make_cmd(vaults):
     cmd.vaults = vaults
     cmd.vault_cache_tally = None
     cmd.debug_logger = None
-    cmd._remote_service = SimpleNamespace(_server_cdm=True, _server_cdm_type="widevine")
+    cmd._remote_service = remote_keys()
     dl.LICENSE_KEY_CACHE.clear()
     dl.DRM_LOCKS.clear()
     return cmd
@@ -78,7 +79,7 @@ def prepare(cmd, drm, licence, track_kid, **kwargs):
     table = Table.grid()
     table.add_row("")
     cmd.prepare_drm(
-        track=SimpleNamespace(drm=[drm]),
+        track=SimpleNamespace(id="vid", drm=[drm]),
         title=None,
         drm=drm,
         licence=licence,
@@ -128,7 +129,7 @@ def test_batch_resolved_keys_are_cached_before_download():
     drm.content_keys = {NEW: "k_new"}
     title = SimpleNamespace(tracks=[SimpleNamespace(drm=[drm]), SimpleNamespace(drm=None)])
 
-    cmd.cache_resolved_keys(title)
+    cmd.cache_resolved_keys(remote_keys(), title)
     cmd.wait_vault_writes()
 
     assert vaults.added == {NEW: "k_new"}
@@ -168,7 +169,7 @@ def test_server_vault_keys_are_held_back_until_verified():
     drm2 = FakeWidevine([CACHED])
     drm2.content_keys = {CACHED: "k_cached"}
     dl.LICENSE_KEY_CACHE.clear()
-    cmd.cache_resolved_keys(SimpleNamespace(tracks=[SimpleNamespace(drm=[drm2])]))
+    cmd.cache_resolved_keys(remote, SimpleNamespace(tracks=[SimpleNamespace(drm=[drm2])]))
     cmd.wait_vault_writes()
     assert vaults.added == {NEW: "k_new"}
 
@@ -242,7 +243,7 @@ def test_no_cdm_and_no_server_cdm_names_the_missing_cdm(system):
     from unshackle.core.drm import PlayReady, Widevine
 
     cmd = make_cmd(FakeVaults())
-    cmd._remote_service = SimpleNamespace(_server_cdm=False)
+    cmd._remote_service = remote_keys(server_cdm=False)
     cmd.cdm = None
     cmd.cdm_for = lambda system, quality=None: None
     drm_class = PlayReady if system == "playready" else Widevine
@@ -250,3 +251,32 @@ def test_no_cdm_and_no_server_cdm_names_the_missing_cdm(system):
     drm.content_keys = {}
     with pytest.raises(click.ClickException, match="No CDM configured for TEST"):
         prepare(cmd, drm, lambda **kwargs: None, NEW)
+
+
+NULL = UUID("0b3e2d1c4a5f46e7b8c9d0e1f2a3b4c5")
+
+
+def test_a_null_key_from_the_server_licence_is_dropped():
+    vaults = FakeVaults()
+    drm = run_prepare(vaults, [NEW], {NEW: "k_new", NULL: "0" * 32}, track_kid=NEW)
+    assert drm.content_keys == {NEW: "k_new"}
+    assert vaults.added == {NEW: "k_new"}
+    assert NULL not in dl.LICENSE_KEY_CACHE
+
+
+def test_a_null_key_from_the_batch_licence_is_dropped(monkeypatch):
+    vaults = FakeVaults()
+    cmd = make_cmd(vaults)
+    drm = FakeWidevine([NEW])
+    title = SimpleNamespace(tracks=[SimpleNamespace(drm=[drm])])
+    source = cmd._remote_service
+    monkeypatch.setattr(
+        source, "resolve_server_keys", lambda t: drm.content_keys.update({NEW: "k_new", NULL: "0" * 32})
+    )
+
+    cmd.take_server_keys(source, title, cdm_only=False)
+    cmd.wait_vault_writes()
+
+    assert drm.content_keys == {NEW: "k_new"}
+    assert vaults.added == {NEW: "k_new"}
+    assert NULL not in dl.LICENSE_KEY_CACHE

@@ -23,7 +23,7 @@ from io import StringIO
 from itertools import product
 from pathlib import Path
 from threading import Lock
-from typing import Any, Callable, Collection, Optional, Sequence, TypedDict, Union, cast
+from typing import TYPE_CHECKING, Any, Callable, Collection, Optional, Sequence, TypedDict, Union, cast
 from uuid import UUID
 
 import click
@@ -70,6 +70,8 @@ from unshackle.core.drm import (
     PlayReady,
     Widevine,
     cbcs,
+    drop_null_keys,
+    is_null_key,
     own_kids,
     real_kids,
     verify,
@@ -147,6 +149,9 @@ from unshackle.core.utils.selector import select_multiple
 from unshackle.core.utils.subprocess import ffmpeg_decodes, ffprobe, run_step
 from unshackle.core.vault import Vault
 from unshackle.core.vaults import Vaults
+
+if TYPE_CHECKING:
+    from unshackle.core.remote_service import ServerKeySource
 
 
 class SkippedSubtitle(TypedDict):
@@ -1251,6 +1256,7 @@ class dl:
     export_snapshots: dict[str, Optional[dict[str, Any]]]
     LICENSE_KEY_CACHE: dict[UUID, str] = {}
     ALL_DRM_LOCK = Lock()
+    _remote_service: Optional["ServerKeySource"] = None
 
     def __init__(
         self,
@@ -1724,13 +1730,12 @@ class dl:
         self.search_source = None
         self.service_anime = bool(getattr(service, "ANIME", False))
         self.service_daily = bool(getattr(service, "DAILY", False))
-        self.server_cdm = getattr(service, "_server_cdm", False)
-        from unshackle.core.import_service import ImportService
+        from unshackle.core.import_service import SERVER_KEY_SOURCES, ImportService
 
         # a remote session sends --cdm to the server, which can hand it the tracks above its cap
         if self.cdm_override and isinstance(service, ImportService):
             self.log.warning("--cdm is ignored: an import uses the keys in the export")
-        self._remote_service: Any = service if hasattr(service, "_server_cdm") else None
+        self._remote_service = service if isinstance(service, SERVER_KEY_SOURCES) else None
         start_time = time.time()
 
         lang, lang_excl = partition_exclusions(lang)
@@ -3093,8 +3098,8 @@ class dl:
                 return prepare
 
             server_cdm_type = None
-            if getattr(self._remote_service, "_server_cdm", False):
-                server_cdm_type = getattr(self._remote_service, "_server_cdm_type", "widevine")
+            if self._remote_service and self._remote_service.server_cdm:
+                server_cdm_type = self._remote_service.server_cdm_type
                 self.cdm = cdm_type_stub(server_cdm_type)
                 from unshackle.core.import_service import ImportService
 
@@ -3145,11 +3150,8 @@ class dl:
                         self.all_drm_warned.add(system)
                         self.log.warning(f"The {system} CDM is remote and can answer with cached content keys")
 
-            if hasattr(service, "resolve_server_keys"):
-                service.resolve_server_keys(title)
-                if not cdm_only:
-                    self.prefer_vault_keys(title)
-                self.cache_resolved_keys(title)
+            if self._remote_service:
+                self.take_server_keys(self._remote_service, title, bool(cdm_only))
 
             if sample and not skip_dl:
                 whole_files = [
@@ -4607,7 +4609,7 @@ class dl:
         def passes_left(done: int) -> bool:
             """One pass per source that can still answer: every loaded vault, the server's vaults as
             one source that walks them itself over --remote, and one for the CDM."""
-            remote = 1 if getattr(getattr(self, "_remote_service", None), "_server_cdm", False) else 0
+            remote = 1 if self._remote_service and self._remote_service.server_cdm else 0
             return done < len(self.vaults) + remote + 1
 
         try:
@@ -4668,7 +4670,17 @@ class dl:
         self.vault_cache_tally = None
         self.log.info(f"Cached {keys} Key{'' if keys == 1 else 's'} to {successful_caches}/{len(self.vaults)} Vaults")
 
-    def prefer_vault_keys(self, title: Title_T) -> None:
+    def take_server_keys(self, source: "ServerKeySource", title: Title_T, cdm_only: bool) -> None:
+        """Put the content keys of ``source`` on the tracks of ``title``, drop the null keys, then cache the rest."""
+        source.resolve_server_keys(title)
+        for track in title.tracks:
+            for drm in track.drm or []:
+                drop_null_keys(drm)
+        if not cdm_only:
+            self.prefer_vault_keys(source, title)
+        self.cache_resolved_keys(source, title)
+
+    def prefer_vault_keys(self, source: "ServerKeySource", title: Title_T) -> None:
         """Let the client vaults answer before a content key the server batch licence returned.
 
         The client only learns the KIDs from the batch response, so the server has already
@@ -4679,7 +4691,6 @@ class dl:
         waits in ``Vaults.candidates`` and gets the same check when its turn comes. Only the KIDs
         the DRM names are looked up, each once, so sibling keys add no remote vault requests.
         """
-        server_vault_keys = getattr(self._remote_service, "server_vault_keys", {})
         looked_up: dict[UUID, tuple[Optional[str], Any]] = {}
         for track in title.tracks:
             for drm in getattr(track, "drm", None) or []:
@@ -4694,9 +4705,9 @@ class dl:
                     if not vault_key or vault_key == server_key:
                         continue
                     drm.content_keys[kid] = vault_key
-                    if server_vault_keys.get(kid) == server_key:
-                        source = self._remote_service.server_vault
-                        self.vaults.candidates.setdefault(kid, []).append((server_key, source))
+                    server_vault = source.vault_source(kid, server_key)
+                    if server_vault is not None:
+                        self.vaults.candidates.setdefault(kid, []).append((server_key, server_vault))
                     elif kid not in self.LICENSE_KEY_CACHE:
                         self.LICENSE_KEY_CACHE[kid] = server_key
                         self.flush_vault_writes([partial(self.cache_keys_to_vaults, {kid: server_key})])
@@ -4704,20 +4715,19 @@ class dl:
                         f"{vault.name} holds a different key for {kid.hex} than the server, testing it first"
                     )
 
-    def cache_resolved_keys(self, title: Title_T) -> None:
+    def cache_resolved_keys(self, source: "ServerKeySource", title: Title_T) -> None:
         """Cache the keys a batch licence or an import put on the tracks.
 
         Both fill track.drm before any prepare_drm call, so this is the only point where those
         keys can still reach the local vaults. A content key a local vault already holds is not pushed again.
         """
-        server_vault_keys = getattr(getattr(self, "_remote_service", None), "server_vault_keys", {})
         resolved = {
             kid: key
             for track in title.tracks
             for drm in (getattr(track, "drm", None) or [])
             for kid, key in getattr(drm, "content_keys", {}).items()
             if kid not in self.LICENSE_KEY_CACHE
-            and server_vault_keys.get(kid) != key
+            and source.vault_source(kid, key) is None
             and self.vaults.sources.get(kid, (None,))[0] != key
         }
         keys = {kid: key for kid, key in resolved.items() if not self.vaults.held_locally(kid, key)}
@@ -4829,6 +4839,189 @@ class dl:
                 },
             )
         return True
+
+    @staticmethod
+    def with_track_kid(drm: Any, track_kid: Optional[UUID]) -> list[UUID]:
+        """Return the KIDs the DRM names, plus the track's own KID when the DRM leaves it out."""
+        kids = list(getattr(drm, "kids", None) or [])
+        if track_kid and track_kid not in kids:
+            kids.append(track_kid)
+        return kids
+
+    def take_known_keys(
+        self,
+        drm: Union[ClearKeyCENC, Widevine, PlayReady, MonaLisa],
+        kids: list[UUID],
+        track: AnyTrack,
+        track_kid: Optional[UUID],
+        cek_tree: Optional[Tree],
+        use_cache: bool = True,
+        use_vaults: bool = True,
+        stop_at_miss: bool = False,
+    ) -> list[UUID]:
+        """Give the DRM the content keys of ``kids`` the run cache or a key vault holds, and return the KIDs still missing.
+
+        ``stop_at_miss`` returns at the first miss, so no more vaults are asked for a run that fails anyway.
+        """
+        missing = []
+        for kid in kids:
+            if kid in drm.content_keys:
+                if cek_tree is not None:
+                    self.add_key_label(cek_tree, kid, drm.content_keys[kid], track_kid)
+                continue
+            if use_cache and self.take_cached_key(drm, kid, track, track_kid, cek_tree):
+                continue
+            if not (use_vaults and self.take_vault_key(drm, kid, track, track_kid, cek_tree)):
+                missing.append(kid)
+                if stop_at_miss:
+                    break
+        return missing
+
+    def license_drm(
+        self,
+        drm: Union[ClearKeyCENC, Widevine, PlayReady],
+        get_keys: Callable[[], None],
+        track: AnyTrack,
+        title: Title_T,
+        track_kid: Optional[UUID],
+        table: Table,
+        cdm_only: bool,
+        vaults_only: bool,
+        force: bool,
+    ) -> None:
+        """Give a Widevine, PlayReady or ClearKey DRM its content keys: run cache, then key vaults, then ``get_keys``.
+
+        ``force`` skips the run cache, so the licence runs again for each KID no vault answers.
+        A licence can answer a KID with a blank or null key; a vault key for that KID wins.
+        """
+        pssh: Optional[str] = None
+        if isinstance(drm, ClearKeyCENC):
+            name = "ClearKey"
+        else:
+            name = type(drm).__name__
+            pssh = drm.pssh.dumps() if isinstance(drm, Widevine) else drm.pssh_b64 or ""
+        if pssh is not None and self.debug_logger:
+            self.debug_logger.log_drm_operation(
+                drm_type=name,
+                operation="prepare_drm",
+                service=self.service,
+                context={
+                    "track": str(track),
+                    "title": str(title),
+                    "pssh": pssh,
+                    "kids": [k.hex for k in drm.kids],
+                    "track_kid": track_kid.hex if track_kid else None,
+                },
+            )
+        pending_vault_writes: list[Callable[[], Any]] = []
+        with self.drm_lock(drm), ExitStack() as licence_turn:
+            label = [(f"({self.truncate_pssh_for_display(pssh, name)})", "text")] if pssh is not None else []
+            cek_tree = Tree(Text.assemble((name, "cyan"), *label, overflow="fold"))
+            pre_existing_tree = next(
+                (x for x in table.columns[0].cells if isinstance(x, Tree) and x.label == cek_tree.label), None
+            )
+            if pre_existing_tree:
+                cek_tree = pre_existing_tree
+
+            def show_error(msg: str) -> None:
+                cek_tree.add(f"[logging.level.error]{msg}")
+                if not pre_existing_tree:
+                    table.add_row(cek_tree)
+                self.flush_vault_writes(pending_vault_writes)
+
+            all_kids = self.with_track_kid(drm, track_kid)
+            stop_at_miss = vaults_only and not cdm_only
+            missing = self.take_known_keys(
+                drm, all_kids, track, track_kid, cek_tree, not force, not cdm_only, stop_at_miss
+            )
+            if missing and stop_at_miss:
+                msg = f"No Vault has a Key for {missing[0].hex} and --vaults-only was used"
+                log_event(
+                    "vault_key_not_found",
+                    level="ERROR",
+                    service=self.service,
+                    message=msg,
+                    context={"kid": missing[0].hex, "track": str(track), "drm_type": type(drm).__name__},
+                )
+                show_error(msg)
+                raise drm.Exceptions.CEKNotFound(msg)
+
+            need_license = bool(missing)
+            if need_license:
+                # force licenses again, so the turn takes no cached keys
+                self.take_licence_turn(licence_turn, drm, [] if force else all_kids, track, track_kid, cek_tree)
+                need_license = not all(kid in drm.content_keys for kid in all_kids)
+
+            if need_license and not vaults_only:
+                from_vaults = drm.content_keys.copy()
+                log_event(
+                    "get_license",
+                    level="INFO",
+                    service=self.service,
+                    message=f"Requesting {name} license from service",
+                    context={
+                        "track": str(track),
+                        "drm_type": type(drm).__name__,
+                        "kids_needed": [k.hex for k in all_kids if k not in drm.content_keys],
+                    },
+                )
+                try:
+                    get_keys()
+                except Exception as e:
+                    if drm.content_keys:
+                        self.log.debug(f"License call failed but keys already in content_keys: {e}")
+                    else:
+                        if isinstance(e, (drm.Exceptions.EmptyLicense, drm.Exceptions.CEKNotFound)):
+                            msg = str(e)
+                        else:
+                            msg = f"An exception occurred in the Service's license function: {e}"
+                        if self.debug_logger:
+                            self.debug_logger.log_error(
+                                "get_license" if name == "Widevine" else f"get_license_{name.lower()}",
+                                e,
+                                service=self.service,
+                                context={
+                                    "track": str(track),
+                                    "exception_type": type(e).__name__,
+                                    "drm_type": type(drm).__name__,
+                                },
+                            )
+                        show_error(msg)
+                        raise
+
+                log_event(
+                    "license_keys_retrieved",
+                    level="INFO",
+                    service=self.service,
+                    context={
+                        "track": str(track),
+                        "drm_type": type(drm).__name__,
+                        "keys_count": len(drm.content_keys),
+                        "kids": [k.hex for k in drm.content_keys.keys()],
+                    },
+                )
+                for kid, key in drm.content_keys.items():
+                    self.add_key_label(cek_tree, kid, f"[red]{key}[/]" if is_null_key(key) else key, track_kid)
+                drop_null_keys(drm)
+                drm.content_keys.update(from_vaults)
+                self.LICENSE_KEY_CACHE.update(drm.content_keys)
+                pending_vault_writes.append(
+                    partial(
+                        self.cache_keys_to_vaults,
+                        {k: v for k, v in drm.content_keys.items() if k not in from_vaults},
+                    )
+                )
+
+            if track_kid and track_kid not in drm.content_keys:
+                msg = f"No Content Key for KID {track_kid.hex} was returned in the License"
+                show_error(msg)
+                raise drm.Exceptions.CEKNotFound(msg)
+
+            if cek_tree.children and not pre_existing_tree:
+                table.add_row()
+                table.add_row(cek_tree)
+
+        self.flush_vault_writes(pending_vault_writes)
 
     @staticmethod
     def add_key_label(tree: Tree, kid: UUID, key: str, track_kid: Optional[UUID] = None, source: str = "") -> None:
@@ -4980,22 +5173,16 @@ class dl:
             return
         assert table is not None
 
-        svc_for_cdm = getattr(self, "_remote_service", None)
-        server_cdm = getattr(svc_for_cdm, "_server_cdm", getattr(self, "server_cdm", False))
-        client_licensed = getattr(svc_for_cdm, "client_licensed", ())
-        licensed_locally = bool(client_licensed) and str(track.id) in client_licensed
+        remote = self._remote_service
+        server_cdm = bool(remote and remote.server_cdm)
+        licensed_locally = bool(remote and remote.licenses_locally(track))
 
         if server_cdm and not licensed_locally:
+            assert remote is not None
             with self.drm_lock(drm), ExitStack() as licence_turn:
                 pending_vault_writes: list[Callable[[], Any]] = []
-                vault_kids = list(getattr(drm, "kids", None) or [])
-                if track_kid and track_kid not in vault_kids:
-                    vault_kids.append(track_kid)
-                for kid in vault_kids:
-                    if kid in drm.content_keys or self.take_cached_key(drm, kid, track, track_kid, None):
-                        continue
-                    if not cdm_only:
-                        self.take_vault_key(drm, kid, track, track_kid, None)
+                vault_kids = self.with_track_kid(drm, track_kid)
+                self.take_known_keys(drm, vault_kids, track, track_kid, None, use_vaults=not cdm_only)
 
                 def missing_track_key() -> bool:
                     return not drm.content_keys or bool(track_kid and track_kid not in drm.content_keys)
@@ -5016,24 +5203,22 @@ class dl:
                         raise
                     except (Exception, RemoteError) as e:
                         self.log.debug(f"Server CDM licence with an empty challenge failed: {e!r}")
+                drop_null_keys(drm)
 
-                server_vault_keys = {} if cdm_only else getattr(svc_for_cdm, "server_vault_keys", {})
+                new_keys = {}
                 for kid, key in drm.content_keys.items():
-                    if server_vault_keys.get(kid) == key:
-                        assert svc_for_cdm is not None
-                        self.vaults.sources[kid] = (key, svc_for_cdm.server_vault)
-                new_keys = {
-                    kid: key
-                    for kid, key in drm.content_keys.items()
-                    if kid not in known_keys and server_vault_keys.get(kid) != key
-                }
+                    source = None if cdm_only else remote.vault_source(kid, key)
+                    if source is not None:
+                        self.vaults.sources[kid] = (key, source)
+                    elif kid not in known_keys:
+                        new_keys[kid] = key
                 if new_keys:
                     self.LICENSE_KEY_CACHE.update(new_keys)
                     pending_vault_writes.append(partial(self.cache_keys_to_vaults, new_keys))
                 self.flush_vault_writes(pending_vault_writes)
 
             # the server can refuse the licence above its cap and hand the track to this machine
-            licensed_locally = bool(client_licensed) and str(track.id) in client_licensed
+            licensed_locally = bool(remote and remote.licenses_locally(track))
         if server_cdm and not licensed_locally:
             if not drm.content_keys:
                 self.log.warning("Server CDM did not resolve any keys for this track")
@@ -5043,11 +5228,9 @@ class dl:
                 if isinstance(drm, PlayReady):
                     raise PlayReady.Exceptions.CEKNotFound(msg)
                 raise Widevine.Exceptions.CEKNotFound(msg)
-            svc = getattr(self, "_remote_service", None)
-            server_drm_type = getattr(svc, "_server_cdm_type", None) if svc else None
-            drm_name = {"widevine": "Widevine", "playready": "PlayReady"}.get(
-                server_drm_type or "", drm.__class__.__name__
-            )
+            assert remote is not None
+            server_drm_type = remote.server_cdm_type
+            drm_name = {"widevine": "Widevine", "playready": "PlayReady"}.get(server_drm_type, drm.__class__.__name__)
             log_event(
                 "drm_content_keys",
                 level="INFO",
@@ -5074,9 +5257,7 @@ class dl:
                     cek_tree = Tree(Text.assemble((drm_name, "cyan"), (f"({pssh_str})", "text"), overflow="fold"))
                 else:
                     cek_tree = Tree(Text.assemble((drm_name, "cyan"), overflow="fold"))
-                all_kids = list(getattr(drm, "kids", []))
-                if track_kid and track_kid not in all_kids:
-                    all_kids.append(track_kid)
+                all_kids = self.with_track_kid(drm, track_kid)
                 for kid in all_kids:
                     if kid in drm.content_keys:
                         self.add_key_label(cek_tree, kid, drm.content_keys[kid], track_kid)
@@ -5097,7 +5278,8 @@ class dl:
 
         track_cdm = self.cdm
         if licensed_locally:
-            track_cdm = getattr(svc_for_cdm, "local_cdm", None)
+            assert remote is not None
+            track_cdm = remote.local_cdm
             local_drm = track.get_drm_for_cdm(track_cdm)
             if local_drm is not None and local_drm is not drm:
                 assert not isinstance(local_drm, ClearKey)
@@ -5137,388 +5319,14 @@ class dl:
                 else:
                     raise ValueError(f"Title needs a {name} CDM but {self.service} is configured with {other}.")
 
-        if isinstance(drm, Widevine):
-            if self.debug_logger:
-                self.debug_logger.log_drm_operation(
-                    drm_type="Widevine",
-                    operation="prepare_drm",
-                    service=self.service,
-                    context={
-                        "track": str(track),
-                        "title": str(title),
-                        "pssh": drm.pssh.dumps() if drm.pssh else None,
-                        "kids": [k.hex for k in drm.kids],
-                        "track_kid": track_kid.hex if track_kid else None,
-                    },
+        if isinstance(drm, (Widevine, PlayReady, ClearKeyCENC)):
+            if isinstance(drm, ClearKeyCENC):
+                get_keys = partial(
+                    drm.get_content_keys, licence=clearkey_licence or (lambda **_: None), session=service_session
                 )
-
-            pending_vault_writes = []
-            with self.drm_lock(drm), ExitStack() as licence_turn:
-                pssh_display = self.truncate_pssh_for_display(drm.pssh.dumps(), "Widevine")
-                cek_tree = Tree(Text.assemble(("Widevine", "cyan"), (f"({pssh_display})", "text"), overflow="fold"))
-                pre_existing_tree = next(
-                    (x for x in table.columns[0].cells if isinstance(x, Tree) and x.label == cek_tree.label), None
-                )
-                if pre_existing_tree:
-                    cek_tree = pre_existing_tree
-
-                need_license = False
-                all_kids = list(drm.kids)
-                if track_kid and track_kid not in all_kids:
-                    all_kids.append(track_kid)
-
-                for kid in all_kids:
-                    if kid in drm.content_keys:
-                        self.add_key_label(cek_tree, kid, drm.content_keys[kid], track_kid)
-                        continue
-
-                    if not force and self.take_cached_key(drm, kid, track, track_kid, cek_tree):
-                        continue
-
-                    if cdm_only:
-                        need_license = True
-                    elif not self.take_vault_key(drm, kid, track, track_kid, cek_tree):
-                        if vaults_only:
-                            msg = f"No Vault has a Key for {kid.hex} and --vaults-only was used"
-                            cek_tree.add(f"[logging.level.error]{msg}")
-                            if not pre_existing_tree:
-                                table.add_row(cek_tree)
-                            log_event(
-                                "vault_key_not_found",
-                                level="ERROR",
-                                service=self.service,
-                                message=msg,
-                                context={"kid": kid.hex, "track": str(track)},
-                            )
-                            self.flush_vault_writes(pending_vault_writes)
-                            raise Widevine.Exceptions.CEKNotFound(msg)
-                        need_license = True
-
-                if need_license:
-                    # force licenses again, so the turn takes no cached keys
-                    self.take_licence_turn(licence_turn, drm, [] if force else all_kids, track, track_kid, cek_tree)
-                    need_license = not all(kid in drm.content_keys for kid in all_kids)
-
-                if need_license and not vaults_only:
-                    from_vaults = drm.content_keys.copy()
-
-                    log_event(
-                        "get_license",
-                        level="INFO",
-                        service=self.service,
-                        message="Requesting Widevine license from service",
-                        context={
-                            "track": str(track),
-                            "kids_needed": [k.hex for k in all_kids if k not in drm.content_keys],
-                        },
-                    )
-
-                    try:
-                        drm.get_content_keys(cdm=track_cdm, licence=licence, certificate=certificate)
-                    except Exception as e:
-                        if drm.content_keys:
-                            self.log.debug(f"License call failed but keys already in content_keys: {e}")
-                        else:
-                            if isinstance(e, (Widevine.Exceptions.EmptyLicense, Widevine.Exceptions.CEKNotFound)):
-                                msg = str(e)
-                            else:
-                                msg = f"An exception occurred in the Service's license function: {e}"
-                            cek_tree.add(f"[logging.level.error]{msg}")
-                            if not pre_existing_tree:
-                                table.add_row(cek_tree)
-                            if self.debug_logger:
-                                self.debug_logger.log_error(
-                                    "get_license",
-                                    e,
-                                    service=self.service,
-                                    context={"track": str(track), "exception_type": type(e).__name__},
-                                )
-                            self.flush_vault_writes(pending_vault_writes)
-                            raise e
-
-                    log_event(
-                        "license_keys_retrieved",
-                        level="INFO",
-                        service=self.service,
-                        context={
-                            "track": str(track),
-                            "keys_count": len(drm.content_keys),
-                            "kids": [k.hex for k in drm.content_keys.keys()],
-                        },
-                    )
-
-                    for kid_, key in drm.content_keys.items():
-                        if key == "0" * 32:
-                            key = f"[red]{key}[/]"
-                        self.add_key_label(cek_tree, kid_, key, track_kid)
-
-                    drm.content_keys = {
-                        kid_: key for kid_, key in drm.content_keys.items() if key and key.count("0") != len(key)
-                    }
-
-                    # The CDM keys may have returned blank content keys for KIDs we got from vaults.
-                    # So we re-add the keys from vaults earlier overwriting blanks or removed KIDs data.
-                    drm.content_keys.update(from_vaults)
-
-                    self.LICENSE_KEY_CACHE.update(drm.content_keys)
-
-                    pending_vault_writes.append(
-                        partial(
-                            self.cache_keys_to_vaults,
-                            {k: v for k, v in drm.content_keys.items() if k not in from_vaults},
-                        )
-                    )
-
-                if track_kid and track_kid not in drm.content_keys:
-                    msg = f"No Content Key for KID {track_kid.hex} was returned in the License"
-                    cek_tree.add(f"[logging.level.error]{msg}")
-                    if not pre_existing_tree:
-                        table.add_row(cek_tree)
-                    self.flush_vault_writes(pending_vault_writes)
-                    raise Widevine.Exceptions.CEKNotFound(msg)
-
-                if cek_tree.children and not pre_existing_tree:
-                    table.add_row()
-                    table.add_row(cek_tree)
-
-            self.flush_vault_writes(pending_vault_writes)
-            if export:
-                self.write_export(export, title, track, drm)
-
-        elif isinstance(drm, PlayReady):
-            if self.debug_logger:
-                self.debug_logger.log_drm_operation(
-                    drm_type="PlayReady",
-                    operation="prepare_drm",
-                    service=self.service,
-                    context={
-                        "track": str(track),
-                        "title": str(title),
-                        "pssh": drm.pssh_b64 or "",
-                        "kids": [k.hex for k in drm.kids],
-                        "track_kid": track_kid.hex if track_kid else None,
-                    },
-                )
-
-            pending_vault_writes = []
-            with self.drm_lock(drm), ExitStack() as licence_turn:
-                pssh_display = self.truncate_pssh_for_display(drm.pssh_b64 or "", "PlayReady")
-                cek_tree = Tree(
-                    Text.assemble(
-                        ("PlayReady", "cyan"),
-                        (f"({pssh_display})", "text"),
-                        overflow="fold",
-                    )
-                )
-                pre_existing_tree = next(
-                    (x for x in table.columns[0].cells if isinstance(x, Tree) and x.label == cek_tree.label), None
-                )
-                if pre_existing_tree:
-                    cek_tree = pre_existing_tree
-
-                need_license = False
-                all_kids = list(drm.kids)
-                if track_kid and track_kid not in all_kids:
-                    all_kids.append(track_kid)
-
-                for kid in all_kids:
-                    if kid in drm.content_keys:
-                        self.add_key_label(cek_tree, kid, drm.content_keys[kid], track_kid)
-                        continue
-
-                    if not force and self.take_cached_key(drm, kid, track, track_kid, cek_tree):
-                        continue
-
-                    if cdm_only:
-                        need_license = True
-                    elif not self.take_vault_key(drm, kid, track, track_kid, cek_tree):
-                        if vaults_only:
-                            msg = f"No Vault has a Key for {kid.hex} and --vaults-only was used"
-                            cek_tree.add(f"[logging.level.error]{msg}")
-                            if not pre_existing_tree:
-                                table.add_row(cek_tree)
-                            log_event(
-                                "vault_key_not_found",
-                                level="ERROR",
-                                service=self.service,
-                                message=msg,
-                                context={"kid": kid.hex, "track": str(track), "drm_type": "PlayReady"},
-                            )
-                            self.flush_vault_writes(pending_vault_writes)
-                            raise PlayReady.Exceptions.CEKNotFound(msg)
-                        need_license = True
-
-                if need_license:
-                    # force licenses again, so the turn takes no cached keys
-                    self.take_licence_turn(licence_turn, drm, [] if force else all_kids, track, track_kid, cek_tree)
-                    need_license = not all(kid in drm.content_keys for kid in all_kids)
-
-                if need_license and not vaults_only:
-                    from_vaults = drm.content_keys.copy()
-
-                    try:
-                        drm.get_content_keys(cdm=track_cdm, licence=licence, certificate=certificate)
-                    except Exception as e:
-                        if drm.content_keys:
-                            self.log.debug(f"License call failed but keys already in content_keys: {e}")
-                        else:
-                            if isinstance(e, (PlayReady.Exceptions.EmptyLicense, PlayReady.Exceptions.CEKNotFound)):
-                                msg = str(e)
-                            else:
-                                msg = f"An exception occurred in the Service's license function: {e}"
-                            cek_tree.add(f"[logging.level.error]{msg}")
-                            if not pre_existing_tree:
-                                table.add_row(cek_tree)
-                            if self.debug_logger:
-                                self.debug_logger.log_error(
-                                    "get_license_playready",
-                                    e,
-                                    service=self.service,
-                                    context={
-                                        "track": str(track),
-                                        "exception_type": type(e).__name__,
-                                        "drm_type": "PlayReady",
-                                    },
-                                )
-                            self.flush_vault_writes(pending_vault_writes)
-                            raise e
-
-                    for kid_, key in drm.content_keys.items():
-                        self.add_key_label(cek_tree, kid_, key, track_kid)
-
-                    drm.content_keys.update(from_vaults)
-
-                    self.LICENSE_KEY_CACHE.update(drm.content_keys)
-
-                    pending_vault_writes.append(
-                        partial(
-                            self.cache_keys_to_vaults,
-                            {k: v for k, v in drm.content_keys.items() if k not in from_vaults},
-                        )
-                    )
-
-                if track_kid and track_kid not in drm.content_keys:
-                    msg = f"No Content Key for KID {track_kid.hex} was returned in the License"
-                    cek_tree.add(f"[logging.level.error]{msg}")
-                    if not pre_existing_tree:
-                        table.add_row(cek_tree)
-                    self.flush_vault_writes(pending_vault_writes)
-                    raise PlayReady.Exceptions.CEKNotFound(msg)
-
-                if cek_tree.children and not pre_existing_tree:
-                    table.add_row()
-                    table.add_row(cek_tree)
-
-            self.flush_vault_writes(pending_vault_writes)
-            if export:
-                self.write_export(export, title, track, drm)
-
-        elif isinstance(drm, ClearKeyCENC):
-            pending_vault_writes = []
-            with self.drm_lock(drm), ExitStack() as licence_turn:
-                cek_tree = Tree(Text.assemble(("ClearKey", "cyan"), overflow="fold"))
-                pre_existing_tree = next(
-                    (x for x in table.columns[0].cells if isinstance(x, Tree) and x.label == cek_tree.label), None
-                )
-                if pre_existing_tree:
-                    cek_tree = pre_existing_tree
-
-                need_license = False
-                all_kids = list(drm.kids)
-                if track_kid and track_kid not in all_kids:
-                    all_kids.append(track_kid)
-
-                for kid in all_kids:
-                    if kid in drm.content_keys:
-                        self.add_key_label(cek_tree, kid, drm.content_keys[kid], track_kid)
-                        continue
-
-                    if self.take_cached_key(drm, kid, track, track_kid, cek_tree):
-                        continue
-
-                    if cdm_only:
-                        need_license = True
-                    elif not self.take_vault_key(drm, kid, track, track_kid, cek_tree):
-                        if vaults_only:
-                            msg = f"No Vault has a Key for {kid.hex} and --vaults-only was used"
-                            cek_tree.add(f"[logging.level.error]{msg}")
-                            if not pre_existing_tree:
-                                table.add_row(cek_tree)
-                            log_event(
-                                "vault_key_not_found",
-                                level="ERROR",
-                                service=self.service,
-                                message=msg,
-                                context={"kid": kid.hex, "track": str(track), "drm_type": "ClearKeyCENC"},
-                            )
-                            self.flush_vault_writes(pending_vault_writes)
-                            raise ClearKeyCENC.Exceptions.CEKNotFound(msg)
-                        need_license = True
-
-                if need_license:
-                    # force licenses again, so the turn takes no cached keys
-                    self.take_licence_turn(licence_turn, drm, [] if force else all_kids, track, track_kid, cek_tree)
-                    need_license = not all(kid in drm.content_keys for kid in all_kids)
-
-                if need_license and not vaults_only:
-                    from_vaults = drm.content_keys.copy()
-
-                    try:
-                        drm.get_content_keys(licence=clearkey_licence or (lambda **_: None), session=service_session)
-                    except Exception as e:
-                        if drm.content_keys:
-                            self.log.debug(f"License call failed but keys already in content_keys: {e}")
-                        else:
-                            if isinstance(
-                                e, (ClearKeyCENC.Exceptions.EmptyLicense, ClearKeyCENC.Exceptions.CEKNotFound)
-                            ):
-                                msg = str(e)
-                            else:
-                                msg = f"An exception occurred in the Service's license function: {e}"
-                            cek_tree.add(f"[logging.level.error]{msg}")
-                            if not pre_existing_tree:
-                                table.add_row(cek_tree)
-                            if self.debug_logger:
-                                self.debug_logger.log_error(
-                                    "get_license_clearkey",
-                                    e,
-                                    service=self.service,
-                                    context={
-                                        "track": str(track),
-                                        "exception_type": type(e).__name__,
-                                        "drm_type": "ClearKeyCENC",
-                                    },
-                                )
-                            self.flush_vault_writes(pending_vault_writes)
-                            raise e
-
-                    for kid_, key in drm.content_keys.items():
-                        self.add_key_label(cek_tree, kid_, key, track_kid)
-
-                    drm.content_keys.update(from_vaults)
-
-                    self.LICENSE_KEY_CACHE.update(drm.content_keys)
-
-                    pending_vault_writes.append(
-                        partial(
-                            self.cache_keys_to_vaults,
-                            {k: v for k, v in drm.content_keys.items() if k not in from_vaults},
-                        )
-                    )
-
-                if track_kid and track_kid not in drm.content_keys:
-                    msg = f"No Content Key for KID {track_kid.hex} was returned in the License"
-                    cek_tree.add(f"[logging.level.error]{msg}")
-                    if not pre_existing_tree:
-                        table.add_row(cek_tree)
-                    self.flush_vault_writes(pending_vault_writes)
-                    raise ClearKeyCENC.Exceptions.CEKNotFound(msg)
-
-                if cek_tree.children and not pre_existing_tree:
-                    table.add_row()
-                    table.add_row(cek_tree)
-
-            self.flush_vault_writes(pending_vault_writes)
+            else:
+                get_keys = partial(drm.get_content_keys, cdm=track_cdm, licence=licence, certificate=certificate)
+            self.license_drm(drm, get_keys, track, title, track_kid, table, cdm_only, vaults_only, force)
             if export:
                 self.write_export(export, title, track, drm)
 

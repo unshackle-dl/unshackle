@@ -12,11 +12,12 @@ from uuid import UUID
 
 import pytest
 
+from tests.remote.key_source import remote_keys
 from unshackle.core.api import handlers
 from unshackle.core.api.errors import APIError
 from unshackle.core.api.session_store import SessionEntry
 from unshackle.core.drm import BlowfishStripe
-from unshackle.core.remote_service import RemoteService, ServerVault
+from unshackle.core.remote_service import RemoteService
 
 pytestmark = pytest.mark.unit
 
@@ -25,13 +26,10 @@ CDM_KID = UUID("43de497c6d1945f49acc2951696ec628")
 
 
 def remote_service() -> RemoteService:
-    svc = RemoteService.__new__(RemoteService)
+    svc = remote_keys(server_cdm=None)
     svc._track_alias = {}
     svc._title_alias = {}
-    svc.server_vault_keys = {}
-    svc.server_vault = ServerVault(svc)
     svc._session_id = "sess"
-    svc.client_licensed = set()
     svc.log = SimpleNamespace(warning=lambda *a, **k: None)
     return svc
 
@@ -277,3 +275,15 @@ async def test_a_stripe_cipher_track_is_clear_and_never_licensed(monkeypatch):
 
     assert json.loads(resp.body)["clear_tracks"] == ["aud"]
     assert isinstance(track.drm[0], BlowfishStripe)
+
+
+def test_the_server_licence_drops_a_null_key():
+    kid, null = UUID(int=1), UUID(int=2)
+
+    class Licensed:
+        content_keys: dict = {}
+
+        def get_content_keys(self, **kwargs):
+            self.content_keys = {kid: "ab" * 16, null: "0" * 32}
+
+    assert handlers.license_with_track_fallback(Licensed(), SimpleNamespace(drm=None)) == {kid.hex: "ab" * 16}

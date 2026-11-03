@@ -8,6 +8,7 @@ from uuid import UUID
 
 import pytest
 
+from tests.remote.key_source import remote_keys
 from unshackle.commands import dl as dl_module
 from unshackle.commands.dl import dl
 from unshackle.core.vault import RateLimited, vault_session
@@ -831,10 +832,11 @@ def test_prefer_vault_keys_queries_each_named_kid_once() -> None:
     asked: list[UUID] = []
     cmd = dl.__new__(dl)
     cmd.vaults = SimpleNamespace(get_key=lambda kid: asked.append(kid) or (None, None))
-    cmd._remote_service = SimpleNamespace(server_vault_keys={})
     video, audio = (SimpleNamespace(kids=[KID], content_keys={KID: GOOD, SIBLING: BAD}) for _ in range(2))
 
-    cmd.prefer_vault_keys(SimpleNamespace(tracks=[SimpleNamespace(drm=[video]), SimpleNamespace(drm=[audio])]))
+    cmd.prefer_vault_keys(
+        remote_keys(), SimpleNamespace(tracks=[SimpleNamespace(drm=[video]), SimpleNamespace(drm=[audio])])
+    )
 
     assert asked == [KID]
 
@@ -845,13 +847,12 @@ def test_cache_resolved_keys_skips_a_key_a_local_vault_holds(tmp_path: Path) -> 
     cmd = dl.__new__(dl)
     cmd.vaults = Vaults("SVC")
     cmd.vaults.vaults = [local]
-    cmd._remote_service = SimpleNamespace(server_vault_keys={})
     pushed: list[dict] = []
     cmd.flush_vault_writes = lambda writes: pushed.extend(w.args[0] for w in writes)
     dl.LICENSE_KEY_CACHE.clear()
     drm = SimpleNamespace(kids=[KID], content_keys={KID: GOOD, SIBLING: BAD})
 
-    cmd.cache_resolved_keys(SimpleNamespace(tracks=[SimpleNamespace(drm=[drm])]))
+    cmd.cache_resolved_keys(remote_keys(), SimpleNamespace(tracks=[SimpleNamespace(drm=[drm])]))
 
     assert pushed == [{KID: GOOD}]
 

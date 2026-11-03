@@ -98,12 +98,6 @@ These are abstract. A service will not load unless it defines all three:
 - **Event callbacks**: `on_segment_downloaded`, `on_track_downloaded`,
   `on_track_decrypted`, `on_track_repacked`, `on_track_multiplex` let a service react to
   pipeline events.
-- **`resolve_server_keys(title)`**: an escape hatch for services whose decryption keys are
-  resolved server-side *ahead of* the normal per-track license flow. Unlike everything else
-  here it is **not declared on the `Service` base class at all**: `dl.py` probes for it with
-  `hasattr` and calls it (once, after track selection) only if your service defines it. Use
-  it when your service must fetch or inject keys in bulk before download, separate from
-  the per-track license callbacks below.
 
 ### What `__init__` wires up for you
 

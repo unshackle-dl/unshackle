@@ -301,7 +301,7 @@ def test_import_takes_its_drm_type_from_the_export(tmp_path: Path, system: str, 
     doc["titles"][0]["drm"] = [{"system": system, "pssh": "AAAA"}]
     export.write_text(json.dumps(doc), encoding="utf8")
 
-    assert ImportService(import_ctx(), "EXAMPLE", "movie-1", str(export))._server_cdm_type == expected
+    assert ImportService(import_ctx(), "EXAMPLE", "movie-1", str(export)).server_cdm_type == expected
 
 
 class KeyDRM:

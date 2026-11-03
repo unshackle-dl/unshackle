@@ -13,6 +13,7 @@ import pywidevine.pssh as wv_pssh_mod
 from rich.table import Table
 
 import unshackle.core.drm as drm_mod
+from tests.remote.key_source import remote_keys
 from unshackle.commands.dl import dl
 from unshackle.core.api import handlers
 from unshackle.core.api.errors import APIError, APIErrorCode
@@ -203,16 +204,11 @@ _WV.__name__ = "Widevine"
 
 
 def remote(local_cdm, answer):
-    svc = RemoteService.__new__(RemoteService)
+    svc = remote_keys(server_cdm_type="playready", local_cdm=local_cdm)
     svc._track_alias = {}
     svc._title_alias = {}
-    svc._server_cdm = True
-    svc._server_cdm_type = "playready"
     svc._session_id = "sess"
-    svc.server_vault_keys = {}
-    svc.client_licensed = set()
     svc.log = logging.getLogger("test-server-cdm-cap")
-    svc.ctx = SimpleNamespace(obj=SimpleNamespace(cdm=local_cdm))
     posts: list = []
     svc.client = SimpleNamespace(post=lambda endpoint, payload, expect=(): posts.append(payload) or answer)
     svc.drain_server_logs = lambda: None
@@ -557,7 +553,7 @@ def prepare(svc, licence):
 
 
 def test_dl_licenses_a_client_licensed_track_with_the_local_device():
-    svc = SimpleNamespace(_server_cdm=True, client_licensed={"vid"}, local_cdm="local device")
+    svc = remote_keys(client_licensed={"vid"}, local_cdm="local device")
 
     server_calls: list = []
 
@@ -566,7 +562,7 @@ def test_dl_licenses_a_client_licensed_track_with_the_local_device():
 
 
 def test_dl_takes_the_local_path_when_the_server_hands_the_track_over():
-    svc = SimpleNamespace(_server_cdm=True, client_licensed=set(), local_cdm="local device")
+    svc = remote_keys(local_cdm="local device")
     assert prepare(svc, lambda **kwargs: svc.client_licensed.add("vid")) == "local device"
 
 
@@ -587,7 +583,7 @@ class PlayReady:
 def test_a_mid_download_handover_puts_the_keys_on_the_callers_drm(monkeypatch):
     """The caller decrypts with the DRM object it passed in, so the local licence must fill that one."""
     monkeypatch.setattr(dl, "LICENSE_KEY_CACHE", {})
-    svc = SimpleNamespace(_server_cdm=True, client_licensed=set(), local_cdm="local device", server_vault_keys={})
+    svc = remote_keys(local_cdm="local device")
     runner = dl.__new__(dl)
     runner._remote_service = svc
     runner.cdm = "server stub"

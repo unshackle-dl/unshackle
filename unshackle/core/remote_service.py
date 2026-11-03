@@ -24,7 +24,7 @@ from enum import Enum
 from http.cookiejar import CookieJar
 from pathlib import Path
 from threading import Event, Lock, Thread, local
-from typing import Any, Callable, Dict, Iterable, Iterator, Optional, TypeVar, Union
+from typing import Any, Callable, Dict, Iterable, Iterator, Optional, Protocol, TypeVar, Union
 from urllib.parse import urlencode
 from uuid import UUID
 
@@ -916,6 +916,31 @@ def cache_key_filter(service_tag: str, profile: Optional[str]) -> Callable[[str]
     return relevant
 
 
+class ServerKeySource(Protocol):
+    """A service whose content keys dl gets before ``prepare_drm``: a remote session or an import."""
+
+    @property
+    def server_cdm(self) -> bool:
+        """True when the keys come from the server CDM or the export, so dl licenses with no CDM of its own."""
+
+    @property
+    def server_cdm_type(self) -> str:
+        """``widevine`` or ``playready``: the DRM system the keys came from."""
+
+    @property
+    def local_cdm(self) -> Any:
+        """The CDM of this machine for a track ``licenses_locally`` names, or None."""
+
+    def resolve_server_keys(self, title: Title_T) -> None:
+        """Put the content keys the server or the export holds on the tracks of ``title``."""
+
+    def licenses_locally(self, track: AnyTrack) -> bool:
+        """True when this machine's own CDM licenses ``track`` instead of the server."""
+
+    def vault_source(self, kid: UUID, key: str) -> Optional[Vault]:
+        """The server vault when it served ``key`` for ``kid``, else None. That content key must pass a decrypt check."""
+
+
 class ServerVault(Vault):
     """The server's vaults as one source seen from the client: it can only be reported against.
 
@@ -963,6 +988,7 @@ class RemoteService:
     NO_SUBTITLES: bool = False
     ANIME: bool = False
     DAILY: bool = False
+    server_cdm_type: str = "widevine"
 
     def __init__(
         self,
@@ -992,7 +1018,6 @@ class RemoteService:
         self._tracks_by_title: Dict[str, Tracks] = {}
         self._chapters_by_title: Dict[str, list] = {}
         self._session_id: Optional[str] = None
-        self._server_cdm_type: str = "widevine"
         self.client_licensed: set[str] = set()  # track ids this machine's device licenses by challenge relay
         self.server_vault_keys: Dict[UUID, str] = {}
         self.server_vault = ServerVault(self)
@@ -1701,7 +1726,7 @@ class RemoteService:
         elif self._server_cdm and not server_cdm:
             self._server_cdm = False
             self.report_local_fallback()
-        self._server_cdm_type = result.get("server_cdm_type", "widevine")
+        self.server_cdm_type = result.get("server_cdm_type", "widevine")
         self._sample_decrypt_tracks.update(result.get("sample_decrypt_tracks") or [])
 
         for track in [*tracks.videos, *tracks.audio, *tracks.subtitles]:
@@ -1778,7 +1803,7 @@ class RemoteService:
         if not keyed:
             return
 
-        drm_type = getattr(self, "_server_cdm_type", "widevine")
+        drm_type = self.server_cdm_type
         if getattr(self, "_server_vault", False):
             from unshackle.core.cdm.detect import is_playready_cdm
 
@@ -1808,7 +1833,7 @@ class RemoteService:
             server_drm_type = resp.get("drm_type", drm_type)
             drm_types_by_track = resp.get("drm_types", {})
             capped = resp.get("capped_tracks") or {}
-            self._server_cdm_type = server_drm_type
+            self.server_cdm_type = server_drm_type
             self.log.debug(f"Server responded with drm_type={server_drm_type}, keys for {len(keys_by_track)} track(s)")
 
             for track in title.tracks:
@@ -1876,6 +1901,19 @@ class RemoteService:
         track.drm_preference = drm_class.lower()
         self.client_licensed.add(str(track.id))
         self.log.info(f"{why}; licensing {track.id} with your own {drm_class} device")
+
+    @property
+    def server_cdm(self) -> bool:
+        """True when the server CDM licenses this remote session, so dl licenses with no CDM of its own."""
+        return bool(self._server_cdm)
+
+    def licenses_locally(self, track: AnyTrack) -> bool:
+        """True when the server handed ``track`` to this machine's own CDM to license."""
+        return str(track.id) in self.client_licensed
+
+    def vault_source(self, kid: UUID, key: str) -> Optional[Vault]:
+        """The server vault when it served ``key`` for ``kid``, else None."""
+        return self.server_vault if self.server_vault_keys.get(kid) == key else None
 
     def note_vault_keys(self, keys: Dict[str, str], vault_kids: set[str]) -> None:
         """Remember which of the served keys a server vault supplied, and forget the rest."""
@@ -1991,7 +2029,7 @@ class RemoteService:
         if self._server_cdm and str(track.id) not in self.client_licensed:
             from uuid import UUID
 
-            server_type = self._server_cdm_type
+            server_type = self.server_cdm_type
             other_type = "playready" if server_type == "widevine" else "widevine"
             drm_type, pssh_b64 = server_type, track_pssh(track, server_type)
             if not pssh_b64:
@@ -2009,7 +2047,7 @@ class RemoteService:
                     )
                     if resp.get("error_code") == "SERVER_CDM_CAPPED":
                         refusal = resp.get("details") or {}
-                    self._server_cdm_type = resp.get("drm_type", server_type)
+                    self.server_cdm_type = resp.get("drm_type", server_type)
                     keys = resp.get("keys", {})
                     self.note_vault_keys(keys, set(resp.get("vault_keys", [])))
                     if keys and track.drm:

@@ -6,7 +6,7 @@ import logging
 import threading
 import time
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, Callable, Optional
 from uuid import UUID
 
 import pytest
@@ -14,10 +14,11 @@ from pywidevine.pssh import PSSH
 from rich.table import Table
 from rich.tree import Tree
 
+from tests.core.test_all_drm import playready
 from unshackle.commands.dl import dl
 from unshackle.core.cdm.detect import cdm_type_stub
 from unshackle.core.constants import DOWNLOAD_CANCELLED, DownloadCancelled
-from unshackle.core.drm import Widevine
+from unshackle.core.drm import ClearKeyCENC, PlayReady, Widevine
 
 pytestmark = pytest.mark.unit
 
@@ -151,3 +152,48 @@ def test_a_key_label_is_added_once_with_its_marker_and_source() -> None:
         f"[text2]{KID_A.hex}:{KEYS[KID_A]}* from cache",
         f"[text2]{KID_B.hex}:{KEYS[KID_B]}",
     ]
+
+
+@pytest.mark.parametrize(
+    "drm_class, build, cdm",
+    [
+        (Widevine, lambda: widevine(KID_A), "widevine"),
+        (PlayReady, lambda: playready(KID_A), "playready"),
+        (ClearKeyCENC, lambda: ClearKeyCENC(kids=[KID_A]), None),
+    ],
+    ids=["widevine", "playready", "clearkey"],
+)
+def test_an_all_zero_licence_key_is_dropped(
+    cmd: dl, monkeypatch: pytest.MonkeyPatch, drm_class: type, build: Callable[[], Any], cdm: Optional[str]
+) -> None:
+    def get_content_keys(self: Any, **_: Any) -> None:
+        self.content_keys.update({KID_A: KEYS[KID_A], KID_C: "0" * 32})
+
+    monkeypatch.setattr(drm_class, "get_content_keys", get_content_keys)
+    monkeypatch.setattr(dl, "LICENSE_KEY_CACHE", {})
+    monkeypatch.setattr(dl, "DRM_LOCKS", {})
+    drm = build()
+    if cdm:
+        cmd.cdm = cdm_type_stub(cdm)
+
+    prepare(cmd, drm, KID_A, new_table())
+
+    assert drm.content_keys == {KID_A: KEYS[KID_A]}
+    assert dl.LICENSE_KEY_CACHE == {KID_A: KEYS[KID_A]}
+
+
+def test_vaults_only_stops_at_the_first_kid_no_vault_holds(cmd: dl, licences: list[str]) -> None:
+    asked: list[UUID] = []
+
+    class EmptyVaults(NoVaults):
+        def get_key(self, kid: UUID) -> tuple[None, None]:
+            asked.append(kid)
+            return None, None
+
+    cmd.vaults = EmptyVaults()
+
+    with pytest.raises(Widevine.Exceptions.CEKNotFound, match=KID_A.hex):
+        prepare(cmd, widevine(KID_A, KID_B), KID_A, new_table(), vaults_only=True)
+
+    assert asked == [KID_A]
+    assert licences == []

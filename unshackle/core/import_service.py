@@ -20,6 +20,7 @@ from unshackle.core.drm import ClearKey, MonaLisa, drm_from_dict, real_kids
 from unshackle.core.manifests import DASH, HLS, ISM, MissingLanguageError, snapshot
 from unshackle.core.remote_service import (
     RemoteService,
+    ServerKeySource,
     build_title,
     resolve_proxy_arg,
     segment_uri_filter,
@@ -207,15 +208,16 @@ class ImportService:
     """Reconstructs a download from an export JSON.
 
     ImportService does not authenticate and does not license. It rebuilds the tracks from
-    the export and injects the keys directly. ``_server_cdm``/``_server_cdm_type`` keep their
-    underscores: dl.py reads them through getattr as the server-CDM contract that skips
-    client licensing.
+    the export and injects the keys directly. It is a ``ServerKeySource``, so dl takes the keys
+    from the tracks and licenses nothing itself.
     """
 
     ALIASES: tuple[str, ...] = ()
     GEOFENCE: tuple[str, ...] = ()
     GEOBLOCK: tuple[str, ...] = ()
     NO_SUBTITLES: bool = False
+    server_cdm = True
+    local_cdm = None
 
     def __init__(self, ctx: click.Context, service_tag: str, title: str, import_file: Optional[str]) -> None:
         self.__class__.__name__ = service_tag
@@ -247,8 +249,7 @@ class ImportService:
         self.titles: Optional[Titles_T] = None
         self.tracks_by_title: dict[str, Tracks] = {}
 
-        self._server_cdm = True
-        self._server_cdm_type = "playready" if self.exported_drm_system() == "playready" else "widevine"
+        self.server_cdm_type = "playready" if self.exported_drm_system() == "playready" else "widevine"
 
         first = self.doc.titles[0]
         # a title with no manifest keeps its request headers on its file rows
@@ -675,6 +676,14 @@ class ImportService:
             drm_obj.content_keys[UUID(hex=kid_hex)] = key
         return [drm_obj]
 
+    def licenses_locally(self, track: AnyTrack) -> bool:
+        """Always False: an import licenses nothing."""
+        return False
+
+    def vault_source(self, kid: UUID, key: str) -> None:
+        """Always None: no server vault serves an import."""
+        return None
+
     def resolve_server_keys(self, title: Title_T) -> None:
         """Inject exported keys into the selected encrypted tracks by KID (no network).
 
@@ -716,7 +725,7 @@ class ImportService:
             for kid, key in keys.items():
                 drm_obj.content_keys[kid] = key
             track.drm = [drm_obj]
-            self._server_cdm_type = drm_obj.__class__.__name__.lower()
+            self.server_cdm_type = drm_obj.__class__.__name__.lower()
 
     @classmethod
     def track_is_encrypted(cls, track: Any, session: Optional[requests.Session] = None) -> bool:
@@ -850,3 +859,7 @@ class ImportService:
             self.session.close()
         except Exception:
             pass
+
+
+SERVER_KEY_SOURCES: tuple[type[ServerKeySource], ...] = (RemoteService, ImportService)
+"""The services dl takes content keys from before ``prepare_drm``; mypy checks each against ServerKeySource."""

@@ -35,7 +35,7 @@ from unshackle.core.cacher import Cacher
 from unshackle.core.cdm.detect import cdm_type_stub
 from unshackle.core.config import config, load_yaml
 from unshackle.core.constants import AUDIO_CODEC_MAP, DYNAMIC_RANGE_MAP, VIDEO_CODEC_MAP, AnyTrack
-from unshackle.core.drm import BlowfishStripe, cbcs
+from unshackle.core.drm import BlowfishStripe, cbcs, is_null_key
 from unshackle.core.manifests.snapshot import capture
 from unshackle.core.providers.anilist import parse_anilist_ref
 from unshackle.core.proxies.resolve import initialize_proxy_providers, is_loopback, resolve_proxy
@@ -4909,16 +4909,17 @@ def track_injected_keys(track: Any, drm_class: str) -> Dict[str, str]:
 
 
 def license_with_track_fallback(drm: Any, track: Any, **kwargs: Any) -> Dict[str, str]:
-    """Run `drm.get_content_keys` and merge in the keys the service put on the track itself."""
+    """Run `drm.get_content_keys`, merge in the keys the service put on the track itself, and drop the null keys."""
     try:
         drm.get_content_keys(**kwargs)
     except Exception:
         if not track_injected_keys(track, drm.__class__.__name__):
             raise
-    return {
+    keys = {
         **track_injected_keys(track, drm.__class__.__name__),
         **{kid.hex: key for kid, key in drm.content_keys.items()},
     }
+    return {kid: key for kid, key in keys.items() if not is_null_key(key)}
 
 
 def pssh_kids(pssh_b64: str, drm_type: str) -> set:
