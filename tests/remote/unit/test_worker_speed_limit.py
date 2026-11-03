@@ -15,16 +15,6 @@ requests_downloader = importlib.import_module("unshackle.core.downloaders.reques
 pytestmark = pytest.mark.unit
 
 
-@pytest.fixture(autouse=True)
-def clean_limiter():
-    """Start and end each test with no limiter, whatever an earlier test leaked."""
-    requests_downloader.speed_limit_locked = False
-    requests_downloader.speed_limiter = None
-    yield
-    requests_downloader.speed_limit_locked = False
-    requests_downloader.speed_limiter = None
-
-
 @pytest.mark.parametrize(("lock", "expected"), [(True, 2_000_000.0), (False, None)])
 def test_worker_share_of_limit(lock, expected):
     requests_downloader.set_speed_limit(8_000_000, lock=lock)

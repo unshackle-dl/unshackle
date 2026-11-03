@@ -5,7 +5,7 @@ from sqlite3 import Connection
 from typing import Iterator, Optional, Union
 from uuid import UUID
 
-from unshackle.core.vault import Vault
+from unshackle.core.vault import Vault, is_null_key
 
 
 class SQLite(Vault):
@@ -58,7 +58,7 @@ class SQLite(Vault):
             cursor.close()
 
     def add_key(self, service: str, kid: Union[UUID, str], key: str) -> bool:
-        if not key or key.count("0") == len(key):
+        if is_null_key(key):
             raise ValueError("You cannot add a NULL Content Key to a Vault.")
 
         service = self.resolve_table(service) or service
@@ -95,7 +95,7 @@ class SQLite(Vault):
 
     def add_keys(self, service: str, kid_keys: dict[Union[UUID, str], str]) -> int:
         for kid, key in kid_keys.items():
-            if not key or key.count("0") == len(key):
+            if is_null_key(key):
                 raise ValueError("You cannot add a NULL Content Key to a Vault.")
 
         service = self.resolve_table(service) or service

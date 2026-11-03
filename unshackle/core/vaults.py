@@ -8,7 +8,7 @@ from uuid import UUID
 
 from unshackle.core.config import config
 from unshackle.core.utilities import get_debug_logger, import_module_by_path
-from unshackle.core.vault import UNREACHABLE, RateLimited, Vault
+from unshackle.core.vault import UNREACHABLE, RateLimited, Vault, is_null_key
 
 log = logging.getLogger(__name__)
 
@@ -136,7 +136,7 @@ class Vaults:
                     duration_ms=round((time.monotonic() - start) * 1000, 1),
                 )
             return None
-        found = bool(key and key.count("0") != len(key))
+        found = not is_null_key(key)
         if found and key and self.is_flagged(kid, key):
             found = False
             if (vault.name, kid, key) not in self.warned:
@@ -236,10 +236,12 @@ class Vaults:
         This method also skips Vaults with no_push=True.
 
         This method pushes to all Vaults at the same time, so one unreachable Vault costs only its
-        own timeout and does not delay the others.
+        own timeout and does not delay the others. This method drops null keys, because a Vault
+        rejects the whole batch when it contains one.
         """
+        kid_keys = {kid: key for kid, key in kid_keys.items() if not is_null_key(key)}
         vaults = [vault for vault in self.live() if not vault.no_push]
-        if not vaults:
+        if not vaults or not kid_keys:
             return 0
         with ThreadPoolExecutor(len(vaults), thread_name_prefix="vault-push") as pool:
             return sum(pool.map(lambda vault: self.push_keys(vault, kid_keys), vaults))

@@ -1,5 +1,5 @@
 import base64
-from typing import Any, Optional, Union
+from typing import Any, Union
 from uuid import UUID
 
 from unshackle.core.drm.blowfish_stripe import BlowfishStripe
@@ -8,6 +8,7 @@ from unshackle.core.drm.clearkey_cenc import ClearKeyCENC
 from unshackle.core.drm.monalisa import MonaLisa
 from unshackle.core.drm.playready import PlayReady
 from unshackle.core.drm.widevine import Widevine
+from unshackle.core.vault import is_null_key
 
 # BlowfishStripe stays out: the licensing paths typed on DRM_T never receive a DRM that needs no licence
 DRM_T = Union[ClearKey, ClearKeyCENC, Widevine, PlayReady, MonaLisa]
@@ -48,11 +49,6 @@ def drm_from_dict(data: dict[str, Any]) -> Union[Widevine, PlayReady, ClearKeyCE
         drm.content_keys[UUID(hex=kid_hex)] = key
 
     return drm
-
-
-def is_null_key(key: Optional[str]) -> bool:
-    """True for a blank or all-zero content key, the null key that no vault stores."""
-    return not key or key.count("0") == len(key)
 
 
 def drop_null_keys(drm: Any) -> None:

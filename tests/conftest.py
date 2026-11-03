@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib
 import socket
 import socketserver
 from pathlib import Path
@@ -13,6 +14,8 @@ from unshackle.core import binaries
 from unshackle.core.config import config
 from unshackle.core.proxies.proxy import CATALOGUES
 from unshackle.core.update_checker import UpdateChecker
+
+requests_downloader = importlib.import_module("unshackle.core.downloaders.requests")
 
 # shutdown() blocks until the serve loop polls again, and the 0.5s default is paid by every
 # test server at teardown. The default changes for the whole process, servers in core included.
@@ -57,6 +60,13 @@ def default_muxing(monkeypatch: pytest.MonkeyPatch) -> None:
 def default_codec_names(monkeypatch: pytest.MonkeyPatch) -> None:
     """Name codecs with the built-in labels, whatever codec_names the local unshackle.yaml sets."""
     monkeypatch.setattr(config, "codec_names", {})
+
+
+@pytest.fixture(autouse=True)
+def no_speed_limit(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Start with no speed limit, so a limit that an earlier test locked cannot block a later one."""
+    monkeypatch.setattr(requests_downloader, "speed_limiter", None)
+    monkeypatch.setattr(requests_downloader, "speed_limit_locked", False)
 
 
 @pytest.fixture

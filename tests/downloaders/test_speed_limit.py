@@ -121,15 +121,11 @@ def test_bucket_chunk_larger_than_capacity_does_not_deadlock(monkeypatch):
 
 def test_locked_limit_ignores_unlocked_calls():
     """serve's global_speed_limit must survive the per-job set in dl.result()."""
-    try:
-        set_speed_limit(5_000_000, lock=True)
-        set_speed_limit(None)
-        set_speed_limit(1_000_000)
-        limiter = requests_downloader.speed_limiter
-        assert limiter is not None and limiter.rate == 5_000_000
-    finally:
-        requests_downloader.speed_limit_locked = False
-        requests_downloader.speed_limiter = None
+    set_speed_limit(5_000_000, lock=True)
+    set_speed_limit(None)
+    set_speed_limit(1_000_000)
+    limiter = requests_downloader.speed_limiter
+    assert limiter is not None and limiter.rate == 5_000_000
 
 
 def test_bucket_wait_aborts_on_cancellation():

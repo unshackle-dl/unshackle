@@ -2,7 +2,7 @@ import logging
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import Optional, Union, cast
+from typing import Iterable, Optional, Union, cast
 from uuid import UUID
 
 import click
@@ -23,7 +23,7 @@ from unshackle.core.config import config
 from unshackle.core.console import GradientPulseBarColumn, console
 from unshackle.core.constants import context_settings
 from unshackle.core.services import Services
-from unshackle.core.vault import Vault
+from unshackle.core.vault import Vault, is_null_key
 from unshackle.core.vaults import Vaults
 
 
@@ -48,15 +48,20 @@ def load_vaults(vault_names: list[str]) -> Vaults:
     return vaults
 
 
+def without_null_keys(pairs: Iterable[tuple[str, str]], log: logging.Logger) -> dict[str, str]:
+    """Return the (kid, key) pairs that are not null as a dict, with a warning for each one dropped."""
+    kid_keys: dict[str, str] = {}
+    for kid, key in pairs:
+        if is_null_key(key):
+            log.warning(f"Skipping NULL key: {kid}:{key}")
+        else:
+            kid_keys[kid] = key
+    return kid_keys
+
+
 def process_service_keys(from_vault: Vault, service: str, log: logging.Logger) -> dict[str, str]:
     """Get and validate keys from a vault for a specific service."""
-    content_keys = list(from_vault.get_keys(service))
-
-    bad_keys = {kid: key for kid, key in content_keys if not key or key.count("0") == len(key)}
-    for kid, key in bad_keys.items():
-        log.warning(f"Skipping NULL key: {kid}:{key}")
-
-    return {kid: key for kid, key in content_keys if kid not in bad_keys}
+    return without_null_keys(from_vault.get_keys(service), log)
 
 
 class _PaddedProgress(Progress):
@@ -301,15 +306,10 @@ def add(file: Path, service: str, vaults: list[str]) -> None:
     vaults_ = load_vaults(list(vaults))
 
     data = file.read_text(encoding="utf8")
-    kid_keys: dict[str, str] = {}
-    for line in data.splitlines(keepends=False):
-        line = line.strip()
-        match = re.search(r"^(?P<kid>[0-9a-fA-F]{32}):(?P<key>[0-9a-fA-F]{32})$", line)
-        if not match:
-            continue
-        kid = match.group("kid").lower()
-        key = match.group("key").lower()
-        kid_keys[kid] = key
+    matches = (
+        re.search(r"^(?P<kid>[0-9a-fA-F]{32}):(?P<key>[0-9a-fA-F]{32})$", line.strip()) for line in data.splitlines()
+    )
+    kid_keys = without_null_keys(((m["kid"].lower(), m["key"].lower()) for m in matches if m), log)
 
     total_count = len(kid_keys)
 
@@ -331,7 +331,7 @@ def search_vault(vault: Vault, kid: str, services: list[str], log: logging.Logge
         except Exception as e:
             log.debug(f"{vault} [{svc}]: lookup error ({e})")
             return None
-        if key and key.count("0") != len(key):
+        if key and not is_null_key(key):
             return svc, key
         return None
 

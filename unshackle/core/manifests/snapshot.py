@@ -24,6 +24,9 @@ log = logging.getLogger("snapshot")
 
 Snapshot = dict[str, list[dict[str, Any]]]
 
+# A peer sets the entry count, so one restore or parse is capped in total. The parsed tree takes about 30x the XML.
+MAX_SNAPSHOT_BYTES = 32 * 1024 * 1024
+
 
 def capture(tracks: Tracks, level: int = zlib.Z_DEFAULT_COMPRESSION) -> Snapshot:
     """The snapshot of these tracks, JSON-safe, at zlib ``level`` (0 gives an uncompressed zlib stream)."""
@@ -36,8 +39,9 @@ def restore(tracks: Tracks, snapshot: Any, language: Any = None) -> None:
 
     ``language`` is the parse fallback when no track has a language of its own.
     """
-    restore_fragments(tracks, entries(snapshot, "track_manifests"))
-    restore_manifests(tracks, entries(snapshot, "manifests"), language)
+    budget = [MAX_SNAPSHOT_BYTES]
+    restore_fragments(tracks, entries(snapshot, "track_manifests"), budget)
+    restore_manifests(tracks, entries(snapshot, "manifests"), budget, language)
 
 
 def parse(snapshot: Any, url: str, language: Any = None) -> Optional[Tracks]:
@@ -53,7 +57,7 @@ def parse(snapshot: Any, url: str, language: Any = None) -> Optional[Tracks]:
     if entry is None:
         return None
     try:
-        tracks = to_tracks(entry, language)
+        tracks = to_tracks(entry, language, [MAX_SNAPSHOT_BYTES])
     except MissingLanguageError:
         raise
     except Exception as e:
@@ -78,10 +82,13 @@ def pack(element: Any, level: int) -> str:
     return base64.b64encode(zlib.compress(xml_bytes, level)).decode("ascii")
 
 
-def unpack(data: str) -> Any:
+def unpack(data: str, budget: list[int]) -> Any:
+    """The saved tree. ``budget[0]`` is the inflated byte count still allowed; this call takes its share."""
     from unshackle.core.api.compression import safe_inflate
 
-    return etree.fromstring(safe_inflate(base64.b64decode(data)))
+    xml_bytes = safe_inflate(base64.b64decode(data), budget[0])
+    budget[0] -= len(xml_bytes)
+    return etree.fromstring(xml_bytes)
 
 
 def counted(manifest: Any, tag: str, counts: dict[int, int]) -> int:
@@ -184,7 +191,7 @@ def fragments(tracks: Tracks, level: int, counts: dict[int, int]) -> list[dict[s
     return out
 
 
-def restore_fragments(tracks: Tracks, saved: list[dict[str, Any]]) -> None:
+def restore_fragments(tracks: Tracks, saved: list[dict[str, Any]], budget: list[int]) -> None:
     """Fill ``track.data`` from the one-track fragments, by track id. This runs before the whole-manifest restore."""
     by_id = {str(t.id): t for t in tracks}
     for entry in saved:
@@ -192,7 +199,7 @@ def restore_fragments(tracks: Tracks, saved: list[dict[str, Any]]) -> None:
         if track is None or entry.get("type") != "dash" or not isinstance(entry.get("data"), str):
             continue
         try:
-            manifest = unpack(entry["data"])
+            manifest = unpack(entry["data"], budget)
             period = manifest.find("Period")
             adaptation_set = period.find("AdaptationSet")
             representation = adaptation_set.find("Representation")
@@ -212,9 +219,9 @@ def restore_fragments(tracks: Tracks, saved: list[dict[str, Any]]) -> None:
         track.descriptor = Track.Descriptor.DASH
 
 
-def to_tracks(entry: dict[str, Any], language: Any) -> Optional[Tracks]:
+def to_tracks(entry: dict[str, Any], language: Any, budget: list[int]) -> Optional[Tracks]:
     """The tracks of one whole-manifest entry, with the service's filtered periods dropped again."""
-    root = unpack(entry["data"])
+    root = unpack(entry["data"], budget)
     if entry.get("type") == "dash":
         skip = set(entry.get("filtered_period_ids") or [])
         return DASH(root, entry["url"]).to_tracks(
@@ -229,7 +236,7 @@ def has_data(track: Any) -> bool:
     return any(track.data.get(key) for key in ("dash", "ism"))
 
 
-def restore_manifests(tracks: Tracks, saved: list[dict[str, Any]], fallback: Any = None) -> None:
+def restore_manifests(tracks: Tracks, saved: list[dict[str, Any]], budget: list[int], fallback: Any = None) -> None:
     """Re-parse each whole manifest and copy ``data`` to the tracks that match, by id or by attributes."""
     targets = [t for t in tracks if not has_data(t)]
     if not targets:
@@ -240,7 +247,7 @@ def restore_manifests(tracks: Tracks, saved: list[dict[str, Any]], fallback: Any
         if not isinstance(entry.get("data"), str) or not isinstance(entry.get("url"), str):
             continue
         try:
-            local = to_tracks(entry, language)
+            local = to_tracks(entry, language, budget)
         except Exception as e:
             log.warning("Failed to re-parse %s manifest from %s: %s", entry.get("type"), entry.get("url"), e)
             continue

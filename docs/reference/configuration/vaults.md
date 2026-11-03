@@ -36,8 +36,8 @@ key_vaults:
     - A vault of `type: API` whose `name` contains `decrypt_labs` auto-fills its `token` from
       [`decrypt_labs_api_key`](misc.md#external-api-keys) when not set inline. Vault `type` values are
       case-sensitive module names.
-    - unshackle treats an all-zero content key (32 zeros) as "no key" everywhere and never
-      stores it.
+    - unshackle treats an empty or all-zero content key, of any length, as "no key" everywhere
+      and never stores it.
 
 !!! note "Bad content keys"
     A content key from a vault is proven by short FFmpeg decodes of the decrypted output,

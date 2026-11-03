@@ -17,7 +17,8 @@ from uuid import UUID
 
 import pytest
 
-from unshackle.core.vault import Vault
+from unshackle.core.vault import Vault, is_null_key
+from unshackle.core.vaults import Vaults
 from unshackle.vaults.SQLite import SQLite
 
 LOG = logging.getLogger("kv-test")
@@ -119,10 +120,29 @@ def test_synced_lowercase_table_survives_the_service_being_added_later(tmp_path:
     assert len(list(v.get_keys("SVCC"))) == 2
 
 
+@pytest.mark.parametrize(
+    ("key", "expected"),
+    [
+        (None, True),
+        ("", True),
+        ("0" * 32, True),
+        ("00", True),
+        ("00112233445566778899aabbccddeeff", False),
+        ("00112233445566778899AABBCCDDEEFF", False),
+    ],
+)
+def test_is_null_key(key: Optional[str], expected: bool) -> None:
+    assert is_null_key(key) is expected
+
+
 def test_null_keys_are_rejected_and_filtered(tmp_path: Path) -> None:
     v = SQLite("test", tmp_path / "kv.db")
-    with pytest.raises(ValueError):
-        v.add_keys("SVCA", {KID: "0" * 32})
+    null_key_error = r"^You cannot add a NULL Content Key to a Vault\.$"
+    for key in ("0" * 32, ""):
+        with pytest.raises(ValueError, match=null_key_error):
+            v.add_keys("SVCA", {KID: key})
+        with pytest.raises(ValueError, match=null_key_error):
+            v.add_key("SVCA", KID, key)
 
     v.create_table("svca")
     conn = sqlite3.connect(v.path)
@@ -132,6 +152,15 @@ def test_null_keys_are_rejected_and_filtered(tmp_path: Path) -> None:
 
     assert v.get_key(KID, "SVCA") is None
     assert list(v.get_keys("SVCA")) == []
+
+
+def test_vaults_push_drops_null_keys_and_keeps_the_rest(tmp_path: Path) -> None:
+    vaults = Vaults("SVCA")
+    vaults.vaults = [SQLite("test", tmp_path / "kv.db")]
+    other_kid = "0" * 31 + "2"
+    assert vaults.add_keys({KID: KEY, other_kid: "0" * 32}) == 1
+    assert vaults.vaults[0].get_key(KID, "SVCA") == KEY
+    assert vaults.vaults[0].get_key(other_kid, "SVCA") is None
 
 
 def test_get_services_yields_stored_table_names(vault: SQLite, aliased_service: str) -> None:

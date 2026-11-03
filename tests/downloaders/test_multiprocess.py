@@ -180,11 +180,8 @@ def test_speed_limit_forces_single_process(server, tmp_path, monkeypatch):
     n = dl.MP_MIN_SEGMENTS
     urls = [{"url": url(server, f"/seg/{i}.bin")} for i in range(n)]
     dl.set_speed_limit(1_000_000_000)  # far above the tiny batch, so the test is not slowed
-    try:
-        for _ in dl.requests(urls, output_dir=tmp_path, filename="seg_{i:04}.bin", max_workers=4, processes=2):
-            pass
-    finally:
-        dl.set_speed_limit(None)
+    for _ in dl.requests(urls, output_dir=tmp_path, filename="seg_{i:04}.bin", max_workers=4, processes=2):
+        pass
 
     files = sorted(tmp_path.glob("seg_*.bin"))
     assert len(files) == n

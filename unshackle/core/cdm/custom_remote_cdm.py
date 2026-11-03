@@ -11,6 +11,7 @@ from pywidevine.device import DeviceTypes
 from requests import Session
 
 from unshackle.core import __version__
+from unshackle.core.vault import is_null_key
 from unshackle.core.vaults import Vaults
 
 
@@ -812,7 +813,7 @@ class CustomRemoteCDM:
                     else:
                         kid_uuid = UUID(hex=clean_kid.ljust(32, "0"))
                     key, _ = self.vaults.get_key(kid_uuid)
-                    if key and key.count("0") != len(key):
+                    if not is_null_key(key):
                         vault_keys.append({"kid": kid_str, "key": key, "type": "CONTENT"})
                 except (ValueError, TypeError):
                     continue

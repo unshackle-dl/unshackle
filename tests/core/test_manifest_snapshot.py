@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
+import base64
 import json
+import logging
+import zlib
 from copy import deepcopy
 from typing import Any, Optional
 
 import pytest
 
 from unshackle.core.manifests import DASH
+from unshackle.core.manifests import snapshot as snapshot_module
 from unshackle.core.manifests.snapshot import capture, parse, restore
 from unshackle.core.tracks import Tracks
 from unshackle.core.tracks.track import Track
@@ -117,6 +121,10 @@ def round_trip(tracks: Tracks, level: int = -1) -> Tracks:
     return client
 
 
+def inflated_size(entry: dict[str, Any]) -> int:
+    return len(zlib.decompress(base64.b64decode(entry["data"])))
+
+
 def test_service_filter_drops_every_ad_period_after_the_first_content_period():
     assert stitched(service_tracks().videos[0]) == ["main-1", "main-2", "main-3"]
 
@@ -174,6 +182,34 @@ def test_a_malformed_snapshot_restores_nothing(snapshot):
 
 def test_a_saved_manifest_that_does_not_parse_gives_none():
     assert parse({"manifests": [{"type": "dash", "url": URL, "data": "bm90IHpsaWI="}]}, URL, "en") is None
+
+
+def test_the_inflate_budget_covers_every_entry_of_one_restore(monkeypatch, caplog):
+    saved = capture(service_tracks())
+    entry = saved["manifests"][0]
+    size = inflated_size(entry)
+    saved["manifests"].append({**entry, "url": URL + "?copy"})
+    monkeypatch.setattr(snapshot_module, "MAX_SNAPSHOT_BYTES", size)
+    assert parse(saved, URL, "en") is not None
+
+    client = Tracks()
+    client.add(Track.from_dict(service_tracks().videos[0].to_dict()))
+    with caplog.at_level(logging.WARNING, logger="snapshot"):
+        restore(client, saved)
+    assert client.videos[0].data.get("dash")
+    assert ["expands beyond allowed size" in r.getMessage() for r in caplog.records] == [True]
+
+    monkeypatch.setattr(snapshot_module, "MAX_SNAPSHOT_BYTES", size - 1)
+    assert parse(saved, URL, "en") is None
+
+
+def test_the_fragments_and_the_whole_manifests_share_one_budget(monkeypatch):
+    tracks = service_tracks()
+    detach_video(tracks)
+    monkeypatch.setattr(snapshot_module, "MAX_SNAPSHOT_BYTES", inflated_size(capture(tracks)["manifests"][0]))
+    client = round_trip(tracks)
+    assert client.videos[0].data.get("dash")
+    assert not client.audio[0].data.get("dash")
 
 
 def test_compression_level_zero_restores():

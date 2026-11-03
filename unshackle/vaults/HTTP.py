@@ -3,7 +3,7 @@ from enum import Enum
 from typing import Iterator, Optional, Union
 from uuid import UUID
 
-from unshackle.core.vault import RateLimited, Vault, vault_session
+from unshackle.core.vault import RateLimited, Vault, is_null_key, vault_session
 
 
 class InsertResult(Enum):
@@ -218,7 +218,7 @@ class HTTP(Vault):
                 yield key_entry["kid"], key_entry["key"]
 
     def add_key(self, service: str, kid: Union[UUID, str], key: str) -> bool:
-        if not key or key.count("0") == len(key):
+        if is_null_key(key):
             raise ValueError("You cannot add a NULL Content Key to a Vault.")
 
         if self.api_mode == "decrypt_labs":
@@ -268,7 +268,7 @@ class HTTP(Vault):
             return 0
 
         for kid, key in kid_keys.items():
-            if not key or key.count("0") == len(key):
+            if is_null_key(key):
                 raise ValueError("You cannot add a NULL Content Key to a Vault.")
 
         processed_kid_keys = {
@@ -374,7 +374,7 @@ class HTTP(Vault):
         This method provides more granular feedback than the standard add_key method.
         Available in both API modes.
         """
-        if not key or key.count("0") == len(key):
+        if is_null_key(key):
             raise ValueError("You cannot add a NULL Content Key to a Vault.")
 
         if self.api_mode == "decrypt_labs":

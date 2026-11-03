@@ -36,3 +36,19 @@ def test_kv_copy_rejects_a_name_that_is_neither_configured_nor_a_file(monkeypatc
 
     assert result.exit_code != 0
     assert "not defined in the config" in result.output
+
+
+def test_kv_add_skips_a_null_key_line_and_adds_the_rest(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    keys = tmp_path / "keys.txt"
+    null_kid = "0" * 31 + "2"
+    keys.write_text(f"{KID}:{KEY}\n{null_kid}:{'0' * 32}\n", encoding="utf8")
+    dest = tmp_path / "local.db"
+    monkeypatch.setattr(kv_module.config, "key_vaults", [{"type": "SQLite", "name": "local", "path": str(dest)}])
+    monkeypatch.setattr(kv_module.Services, "get_vault_tag", lambda name: name)
+
+    result = CliRunner().invoke(kv_module.kv, ["add", str(keys), "TESTSVC", "local"])
+
+    assert result.exit_code == 0, result.output
+    check = SQLite("check", dest)
+    assert check.get_key(KID, "TESTSVC") == KEY
+    assert check.get_key(null_kid, "TESTSVC") is None

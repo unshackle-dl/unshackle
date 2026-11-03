@@ -23,6 +23,11 @@ class RateLimited(Exception):
 UNREACHABLE = (RequestsConnectionError, Timeout, ConnectionError, TimeoutError)
 
 
+def is_null_key(key: Optional[str]) -> bool:
+    """True for a blank or all-zero content key, the null key that no vault stores."""
+    return not key or key.count("0") == len(key)
+
+
 def vault_session(timeout: float) -> Session:
     """An HTTP session for a remote vault that retries a 429 and nothing else.
 

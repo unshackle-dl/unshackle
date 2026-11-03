@@ -26,6 +26,9 @@ def running(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> tuple[web.Applic
     wvds.mkdir()
     prds.mkdir()
     (wvds / "dev.wvd").write_bytes(b"x")
+    # a valid reload replaces every config section, so put each one back for the next test
+    for name, value in list(vars(config).items()):
+        monkeypatch.setattr(config, name, value)
     monkeypatch.setattr(config.directories, "wvds", wvds)
     monkeypatch.setattr(config.directories, "prds", prds)
     monkeypatch.setattr(config, "serve", {"api_secret": "api", "users": {"old": {"devices": ["dev"]}}})
