@@ -53,7 +53,7 @@ All are `GET`, except the two `drain` routes.
 | `/api/dashboard/cdm-logs` | `{"seq": N, "records": [...], "sessions": [...]}`: the last 5000 calls to the Widevine and PlayReady CDM device routes, and the open sessions of each device. `?since=<seq>` returns only newer records. See [CDM calls](#cdm-calls). |
 | `/api/dashboard/sessions/{id}/logs` | One remote session's service log: `{"session_id", "last_seq", "records": [...]}`. Each record has `seq`, `ts`, `level`, `message`. `?since=<seq>` returns only newer records. 404 when the remote session is unknown. |
 | `/api/dashboard/keys` | Every configured API key: what it may do and what it has done. One row per key in `serve.users`, plus `serve.api_secret` when it is set. |
-| `/api/dashboard/services` | Every service configured on this server and its load state, including the ones that failed to import. See [Services](#services) for what configured means. |
+| `/api/dashboard/services` | Every service configured on this server, its load state and its catalogue entry, including the services that failed to import. See [Services](#services) for what configured means. |
 | `/api/dashboard/health` | Preflight: whether this instance could finish a download. Cached 30 seconds. |
 | `/api/dashboard/events` | Server-Sent Events stream. With `?since=<seq>` it returns `{"seq", "stats", "events": [...]}` instead: every event after `seq` (the server keeps the last 20000, log records included, so a poll every few seconds is safe) as one JSON burst, so a UI that polls every few seconds still sees a remote session that opened and closed in between. |
 
@@ -238,7 +238,10 @@ GET /api/dashboard/services
 [{"tag": "EXAMPLE", "state": "staged", "error": null,
   "commit": "9cc230c98f13b83f6c6fe831595b9702d3ba2786", "staged_commit": "5f0aa17...",
   "staged_since": 1756908900.0, "sessions": 1, "jobs": 1,
-  "aliases": ["EXMPL"], "geofence": ["US"], "geoblock": []}]
+  "aliases": ["EXMPL"], "geofence": ["US"], "geoblock": [],
+  "help": "...", "url": "https://www.service.example", "title_regex": "...", "cli_params": [...],
+  "needs_auth": true, "auth_methods": ["cookies"], "has_search": true, "anonymous_search": false,
+  "has_drm": true, "server_accounts": {"regions": ["gb", "us"], "global": false}}]
 ```
 
 The list holds only the services configured on this server:
@@ -268,6 +271,15 @@ pull already happened, so `commit` (what runs now) and `staged_commit` (what wai
 for a service from a plain local directory rather than a git repo.
 
 Watch the `service` event rather than polling for the swap.
+
+Each row also carries the service's catalogue entry: the fields that
+[`GET /api/services`](endpoints.md#get-apiservices) sends, with the same meaning. A service with no loaded
+module, or whose catalogue entry fails, gets only `help`, `url` and `title_regex`, all `null`.
+A service whose re-import failed keeps the entry of the module that still runs.
+
+`server_accounts` shows when `serve.server_accounts` names the service. No API key grant
+applies to it here: `/api/services` sends it only to an API key with the `server_accounts`
+grant, but the dashboard key sees it for every service.
 
 ## Health
 

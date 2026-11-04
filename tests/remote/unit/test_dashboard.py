@@ -682,3 +682,68 @@ async def test_health_probe_timeout_reports_what_finished(aiohttp_client, dashbo
     # The timeout is cached for the full TTL, so callers cannot stack up more stalled threads.
     assert (await client.get("/api/dashboard/health", headers={"X-Secret-Key": "dash-secret"})).status == 200
     assert handlers._health_cache["payload"]["status"] == "failing"
+
+
+async def test_dashboard_services_carry_the_catalogue(aiohttp_client, dashboard_cfg, monkeypatch) -> None:
+    import enum
+    from pathlib import Path
+
+    import click
+
+    from unshackle.core import services as services_module
+    from unshackle.core.api import routes
+    from unshackle.core.service import Service
+
+    class Mode(enum.Enum):
+        FAST = 1
+
+    class Loaded(Service):
+        """How to use AAA."""
+
+        cli = click.Command(
+            "AAA",
+            params=[
+                click.Argument(["title"]),
+                click.Option(["--mode"], type=click.Choice(Mode)),
+                click.Option(["--dir"], multiple=True, default=[Path("/x")]),
+            ],
+            short_help="https://aaa.example",
+        )
+
+    class NoGeofence(Service):
+        """How to use DDD."""
+
+        GEOFENCE = None
+
+    real_details = routes.service_details
+
+    def details(tag: str) -> dict:
+        if tag == "CCC":
+            raise RuntimeError("bad module")
+        return real_details(tag)
+
+    tags = ("AAA", "BBB", "CCC", "DDD")
+    monkeypatch.setattr(services_module, "SERVICES", [Path(f"/svc/{t}/__init__.py") for t in tags])
+    monkeypatch.setattr(services_module, "MODULES", {"AAA": Loaded, "CCC": Loaded, "DDD": NoGeofence})
+    monkeypatch.setattr(services_module, "LOAD_ERRORS", ["BBB: failed to import - ImportError: boom"])
+    monkeypatch.setattr(services_module, "PENDING", {"DDD"})
+    monkeypatch.setattr(routes, "SERVICE_DETAILS", {})
+    monkeypatch.setattr(routes, "service_details", details)
+    monkeypatch.setitem(config.serve, "server_accounts", {"aaa": {"default": ["us", "gb"]}})
+
+    client = await aiohttp_client(make_app())
+    resp = await client.get("/api/dashboard/services", headers={"X-Secret-Key": "dash-secret"})
+    assert resp.status == 200
+    rows = {r["tag"]: r for r in await resp.json()}
+
+    assert rows["AAA"]["help"] == "How to use AAA." and rows["AAA"]["url"] == "https://aaa.example"
+    title, mode, folder = rows["AAA"]["cli_params"]
+    assert title == {"name": "title", "kind": "argument", "required": True}
+    assert mode["choices"] == ["FAST"] and folder["default"] == ["x"]
+    assert rows["AAA"]["state"] == "loaded"
+    assert rows["AAA"]["server_accounts"] == {"regions": ["gb", "us"], "global": False}
+    for tag in ("BBB", "CCC"):
+        assert rows[tag]["help"] is None and "cli_params" not in rows[tag] and "server_accounts" not in rows[tag]
+    assert rows["BBB"]["state"] == "failed"
+    assert rows["DDD"]["state"] == "staged" and rows["DDD"]["help"] == "How to use DDD."
+    assert rows["DDD"]["geofence"] == []

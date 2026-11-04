@@ -46,6 +46,7 @@ from unshackle.core.api.handlers import (
     download_history_handler,
     download_job_events_handler,
     download_job_input_handler,
+    enum_name,
     env_check_handler,
     get_allowed_services,
     get_download_job_handler,
@@ -296,6 +297,25 @@ SERVICE_DEFAULTS: dict[str, Any] = {
 SERVICE_DETAILS: dict[str, tuple[Any, dict[str, Any]]] = {}
 
 
+def json_value(value: Any) -> Any:
+    """A click default or choice as JSON: a named object such as an enum member by its name, else text."""
+    if value is None or (isinstance(value, (str, int, float, bool)) and not hasattr(value, "name")):
+        return value
+    return enum_name(value)
+
+
+def service_catalogue(tags: list[str]) -> dict[str, dict[str, Any]]:
+    """The catalogue entry of each tag, or the defaults for one that fails; slow on the first call after a reload."""
+    entries: dict[str, dict[str, Any]] = {}
+    for tag in tags:
+        try:
+            entries[tag] = service_details(tag)
+        except Exception as e:
+            log.warning(f"Could not load details for service {tag}: {e}")
+            entries[tag] = {**SERVICE_DEFAULTS, "tag": tag}
+    return entries
+
+
 def service_details(tag: str) -> dict[str, Any]:
     """The catalogue entry of one service, built again only when its service module reloads."""
     service_module = Services.load(tag)
@@ -304,11 +324,8 @@ def service_details(tag: str) -> dict[str, Any]:
         return hit[1]
     service_data: dict[str, Any] = {**SERVICE_DEFAULTS, "tag": tag}
 
-    if hasattr(service_module, "ALIASES"):
-        service_data["aliases"] = list(service_module.ALIASES)
-
-    if hasattr(service_module, "GEOFENCE"):
-        service_data["geofence"] = list(service_module.GEOFENCE)
+    service_data["aliases"] = list(getattr(service_module, "ALIASES", ()) or ())
+    service_data["geofence"] = list(getattr(service_module, "GEOFENCE", ()) or ())
     service_data["geoblock"] = list(getattr(service_module, "GEOBLOCK", ()) or ())
 
     if hasattr(service_module, "TITLE_RE"):
@@ -342,19 +359,17 @@ def service_details(tag: str) -> dict[str, Any]:
                 param_info["opts"] = list(param.opts) if hasattr(param, "opts") else []
                 param_info["is_flag"] = getattr(param, "is_flag", False)
                 default = param.default
-                if default is None:
-                    pass
-                elif callable(default) or type(default).__name__ == "Sentinel":
+                if callable(default) or type(default).__name__ == "Sentinel":
                     default = None
-                elif hasattr(default, "name"):
-                    default = default.name
-                elif not isinstance(default, (str, int, float, bool, list)):
-                    default = str(default)
+                elif isinstance(default, list):
+                    default = [json_value(item) for item in default]
+                else:
+                    default = json_value(default)
                 param_info["default"] = default
                 param_info["help"] = getattr(param, "help", None)
                 param_info["type"] = param.type.name if hasattr(param.type, "name") else str(param.type)
                 if isinstance(param.type, click.Choice):
-                    param_info["choices"] = list(param.type.choices)
+                    param_info["choices"] = [json_value(choice) for choice in param.type.choices]
                 param_info["multiple"] = getattr(param, "multiple", False)
             cli_params.append(param_info)
         service_data["cli_params"] = cli_params
@@ -514,13 +529,10 @@ async def services(request: web.Request) -> web.Response:
             remote_info = await asyncio.to_thread(remote_services_info, remote, allowed)
             return web.json_response({"services": remote_info, "load_errors": []})
         services_info = []
+        catalogue = await asyncio.to_thread(service_catalogue, service_tags)
 
         for tag in service_tags:
-            try:
-                service_data: dict[str, Any] = {**service_details(tag)}
-            except Exception as e:
-                log.warning(f"Could not load details for service {tag}: {e}")
-                service_data = {**SERVICE_DEFAULTS, "tag": tag}
+            service_data: dict[str, Any] = {**catalogue[tag]}
             if tag in services_module.PENDING:
                 service_data["pending_update"] = True
             if server_accounts_allowed(request, tag) and (server_accounts := server_account_regions(tag)) is not None:
@@ -3102,7 +3114,7 @@ async def dashboard_keys(request: web.Request) -> web.Response:
 @api_handler
 async def dashboard_services(request: web.Request) -> web.Response:
     """
-    Dashboard: every configured service and its load state.
+    Dashboard: every configured service, its load state and its catalogue entry.
     ---
     summary: Dashboard services
     description: >
@@ -3169,6 +3181,24 @@ async def dashboard_services(request: web.Request) -> web.Response:
                     type: array
                     items:
                       type: string
+                  server_accounts:
+                    type: object
+                    description: >
+                      Regions the server's own accounts cover. Only when `serve.server_accounts` names
+                      the service. No API key grant applies here, unlike `/api/services`.
+                    properties:
+                      regions:
+                        type: array
+                        items:
+                          type: string
+                      global:
+                        type: boolean
+                additionalProperties:
+                  description: >
+                    The `/api/services` catalogue fields (help, url, title_regex, cli_params,
+                    needs_auth, auth_methods, has_search, anonymous_search, has_drm, client_config).
+                    A service with no loaded module, or whose catalogue entry fails, gets only
+                    help, url and title_regex, all null.
       '401':
         description: Dashboard key missing or invalid
     """

@@ -2821,6 +2821,7 @@ async def dashboard_services_handler(request: web.Request) -> web.Response:
     """Every service configured on this server, or every installed one with ``?all=1``, and its load state."""
     from unshackle.core import services as services_module
     from unshackle.core.api.download_manager import TERMINAL_STATUSES, get_download_manager
+    from unshackle.core.api.routes import SERVICE_DEFAULTS, service_catalogue  # lazy: routes imports this module
     from unshackle.core.api.session_store import get_session_store
     from unshackle.core.service_repo import head
 
@@ -2830,11 +2831,13 @@ async def dashboard_services_handler(request: web.Request) -> web.Response:
     staged_commits: Dict[Any, Optional[str]] = {}
 
     tags = Services.get_tags() if request.query.get("all") == "1" else configured_service_tags()
+    catalogue = await asyncio.to_thread(service_catalogue, [tag for tag in tags if tag in services_module.MODULES])
     rows = []
     for tag in tags:
         error = errors.get(tag)
         staged = tag in services_module.PENDING
         row: Dict[str, Any] = {
+            **catalogue.get(tag, SERVICE_DEFAULTS),
             "tag": tag,
             "state": "failed" if error else "staged" if staged else "loaded",
             "error": error,
@@ -2843,9 +2846,6 @@ async def dashboard_services_handler(request: web.Request) -> web.Response:
             "staged_since": services_module.PENDING_SINCE.get(tag),
             "sessions": sessions.get(tag, 0),
             "jobs": jobs.get(tag, 0),
-            "aliases": list(services_module.ALIASES.get(tag, ())),
-            "geofence": [],
-            "geoblock": [],
         }
         if staged:
             # Only staged tags need a git call; the working tree already holds the new commit.
@@ -2853,10 +2853,8 @@ async def dashboard_services_handler(request: web.Request) -> web.Response:
             if source is not None and source not in staged_commits:
                 staged_commits[source] = head(source) if (source / ".git").exists() else None
             row["staged_commit"] = staged_commits.get(source)
-        module = services_module.MODULES.get(tag)
-        if module is not None:
-            row["geofence"] = list(getattr(module, "GEOFENCE", ()) or ())
-            row["geoblock"] = list(getattr(module, "GEOBLOCK", ()) or ())
+        if (accounts := server_account_regions(tag)) is not None:
+            row["server_accounts"] = accounts
         rows.append(row)
     return web.json_response(rows)
 
