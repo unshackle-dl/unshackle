@@ -3977,8 +3977,10 @@ query, because a loopback forwarder is of no use to a server on another machine.
 methods:</p>
 <ul>
 <li><code>__init__(self, **kwargs)</code> receives its <code>proxy_providers</code> sub-dict splatted as
-  keyword arguments, so YAML keys map 1:1 to constructor parameters. Do authentication
-  and catalogue pre-fetching here.</li>
+  keyword arguments, so YAML keys map 1:1 to constructor parameters. Check the
+  configuration here, but make no request: every <code>dl</code> run builds every configured
+  proxy provider, even for a run with no proxy. Read the server or location catalogue
+  through a <code>functools.cached_property</code>, so the first query fetches it.</li>
 <li><code>__repr__(self)</code> is a human summary, conventionally <code>"{n} Countries ({m} Servers)"</code>.</li>
 <li><code>get_proxy(self, query)</code> returns a Requests-compatible proxy URI, or <code>None</code> only
   when the query was valid but no proxy exists. Raise on genuine errors or bad queries.</li>
