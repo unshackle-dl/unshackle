@@ -4303,12 +4303,12 @@ Raises:
 
 
 <a href="#unshackle.core.drm.ClearKeyCENC.mp4decrypt_key_args" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">mp4decrypt_key_args</span><span class="p">()</span>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">mp4decrypt_key_args</span><span class="p">(</span><span class="n">track_kids</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
 </span></code></pre></div>
 
     <div class="doc doc-contents ">
 
-        <p>Build the mp4decrypt --key arguments for every content key.</p>
+        <p>Build the mp4decrypt --key arguments for every content key, and by track ID for each <code>track_kids</code> KID.</p>
 
 
     </div>
@@ -5531,12 +5531,12 @@ track exactly. A PSSH can name the KIDs of other renditions too.</p>
 
 
 <a href="#unshackle.core.drm.PlayReady.mp4decrypt_key_args" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">mp4decrypt_key_args</span><span class="p">()</span>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">mp4decrypt_key_args</span><span class="p">(</span><span class="n">track_kids</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
 </span></code></pre></div>
 
     <div class="doc doc-contents ">
 
-        <p>Build the mp4decrypt --key arguments for every content key and the zero-KID fallback.</p>
+        <p>Build the mp4decrypt --key arguments for every content key, the zero-KID and the track ID fallbacks.</p>
 
 
     </div>
@@ -6093,12 +6093,12 @@ track exactly. A PSSH can name the KIDs of other renditions too.</p>
 
 
 <a href="#unshackle.core.drm.Widevine.mp4decrypt_key_args" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">mp4decrypt_key_args</span><span class="p">()</span>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">mp4decrypt_key_args</span><span class="p">(</span><span class="n">track_kids</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
 </span></code></pre></div>
 
     <div class="doc doc-contents ">
 
-        <p>Build the mp4decrypt --key arguments for every content key and the zero-KID fallback.</p>
+        <p>Build the mp4decrypt --key arguments for every content key, the zero-KID and the track ID fallbacks.</p>
 
 
     </div>

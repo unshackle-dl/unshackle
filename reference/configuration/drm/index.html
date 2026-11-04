@@ -2386,6 +2386,11 @@ case-insensitively. <code>"mp4decrypt"</code> selects Bento4's mp4decrypt, and <
 (including <code>"shaka"</code>) selects shaka-packager. When the value is a dict, unshackle compares the
 service tag case-insensitively and uses the <code>default</code> entry as the fallback.</p>
 <p>unshackle decrypts HLS AES-128 ClearKey in-process and ignores this setting.</p>
+<p>mp4decrypt finds a content key by the KID in the first <code>sinf</code> box of the track. When that box
+has no CENC <code>tenc</code> (for example, a PIFF <code>sinf</code> before the CENC one), unshackle also gives
+mp4decrypt the content key of that KID by track ID. When mp4decrypt copies a track through
+still encrypted, unshackle decrypts it again with shaka-packager and logs a warning. This
+retry needs shaka-packager installed.</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="1:2"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Global</label><label for="__tabbed_1_2">Per-service</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
@@ -2411,7 +2416,8 @@ segment goes away. The output file is the same either way.</p>
 service (or as the default); with <code>shaka</code> the option has no effect, because shaka-packager
 cannot decrypt a segment without its init segment. It applies to DASH tracks and to HLS
 tracks that use one init segment, one <code>EXT-X-KEY</code> and no <code>EXT-X-DISCONTINUITY</code>. Every other
-track keeps the whole-file decryption.</p>
+track keeps the whole-file decryption, and so does a track whose init segment mp4decrypt
+cannot key by KID when no content key has that KID.</p>
 <div class="admonition note">
 <p class="admonition-title">No resume</p>
 <p>A track that decrypts segment by segment always downloads from the start.
