@@ -3020,10 +3020,11 @@ def run_health_checks(checks: Optional[List[Dict[str, Any]]] = None) -> List[Dic
     checks.append(health_check("bad_keys", "bad content key flags", bad_keys_probe))
 
     def proxy_probe() -> tuple[str, str]:
+        """Render each proxy provider, because the render fetches its catalogue from the provider."""
         providers = initialize_proxy_providers(raise_errors=True, quiet=True)
         if not providers:
             return "ok", "none configured"
-        return "ok", ", ".join(type(p).__name__ for p in providers)
+        return "ok", ", ".join(f"{type(p).__name__} ({p!r})" for p in providers)
 
     if config.proxy_providers:
         checks.append(health_check("proxies", "proxy providers", proxy_probe, config_secrets(config.proxy_providers)))

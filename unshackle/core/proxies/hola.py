@@ -1,6 +1,7 @@
 import random
 import re
 import subprocess
+from functools import cached_property
 from typing import Optional
 
 from unshackle.core import binaries
@@ -16,7 +17,10 @@ class Hola(Proxy):
             raise EnvironmentError("hola-proxy executable not found but is required for the Hola proxy provider.")
         self.binary = binaries.HolaProxy
 
-        self.countries = self.get_countries()
+    @cached_property
+    def countries(self) -> list[dict[str, str]]:
+        """Fetched on first use, so a run that wants no proxy makes no request."""
+        return self.get_countries()
 
     def __repr__(self) -> str:
         countries = len(self.countries)

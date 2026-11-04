@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import ipaddress
+import json
 import logging
 import re
 from typing import Any, List, Optional
 from urllib.parse import urlparse
 
 import click
+import requests
 from click.core import ParameterSource
 
 from unshackle.core.proxies.proxy import Proxy
@@ -58,6 +60,7 @@ def load_proxy_providers(exclude: tuple[str, ...] = (), raise_errors: bool = Fal
 
     Each proxy provider loads on its own. One that fails is logged and kept as Unavailable, so a bare
     query skips it and a query that names it reports why. *raise_errors* raises the failure instead.
+    The first query fetches a catalogue, not this function.
     *exclude* holds lowercase class names to leave out.
     """
     from unshackle.core import binaries
@@ -106,7 +109,7 @@ def load_proxy_providers(exclude: tuple[str, ...] = (), raise_errors: bool = Fal
             if provider is None:
                 continue
             if not quiet:
-                log.info(f"Loaded {name}: {provider}")
+                log.info(f"Loaded {name}")
         except Exception as e:
             if raise_errors:
                 raise
@@ -122,8 +125,7 @@ def initialize_proxy_providers(raise_errors: bool = False, quiet: bool = False) 
     Load the proxy providers for the REST API and the remote service client.
 
     Gluetun is not offered on this path, because it starts a local Docker container. *quiet* drops the
-    per-provider summary lines: rendering a proxy provider asks some of them for their server catalogue
-    over the network, which a repeated caller must not pay for.
+    per-provider summary lines.
     """
     proxy_providers = load_proxy_providers(("gluetun",), raise_errors, quiet)
     if not quiet and not proxy_providers:
@@ -154,12 +156,17 @@ def pick_proxy(proxy_providers: List[Any], query: str, provider_name: Optional[s
     """
     Get a proxy provider and its proxy URI: from the named one, or else from the first one that answers.
 
-    A named proxy provider's error goes to the caller. In a bare query, a proxy provider that fails is
+    A named proxy provider's error goes to the caller as a ValueError. In a bare query, a proxy provider that fails is
     logged and skipped, so a later one can still answer. Raises ValueError when no proxy provider answers.
     """
     if provider_name:
         provider = find_provider(proxy_providers, provider_name)
-        uri = provider.get_proxy(query)
+        try:
+            uri = provider.get_proxy(query)
+        except Exception as e:
+            if isinstance(e, ValueError) and not isinstance(e, (json.JSONDecodeError, requests.RequestException)):
+                raise
+            raise ValueError(f"The proxy provider {provider_name} failed for {query}: {e}") from e
         if not uri:
             raise ValueError(f"The proxy provider {provider_name} had no proxy for {query}")
         return provider, uri

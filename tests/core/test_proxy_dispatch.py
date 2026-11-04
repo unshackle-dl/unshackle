@@ -3,6 +3,7 @@ split, the named or bare provider lookup, and the line that reports which proxy 
 
 from __future__ import annotations
 
+import json
 import logging
 from typing import Iterator, Optional
 
@@ -188,10 +189,29 @@ def test_bare_query_skips_a_provider_that_raises(caplog: pytest.LogCaptureFixtur
         pick_proxy([Broken()], "us")
 
 
-def test_named_query_passes_the_provider_error_on() -> None:
+def test_named_query_passes_the_provider_error_on_as_a_value_error() -> None:
     class Broken:
         def get_proxy(self, query: str) -> str:
             raise ConnectionError("api down")
 
-    with pytest.raises(ConnectionError, match="api down"):
+    with pytest.raises(ValueError, match="The proxy provider broken failed for us: api down") as raised:
         pick_proxy([Broken()], "us", "broken")
+    assert isinstance(raised.value.__cause__, ConnectionError)
+
+
+def test_named_query_names_the_provider_for_a_bad_catalogue_response() -> None:
+    class Broken:
+        def get_proxy(self, query: str) -> str:
+            raise json.JSONDecodeError("Expecting value", "", 0)
+
+    with pytest.raises(ValueError, match="The proxy provider broken failed for us: Expecting value"):
+        pick_proxy([Broken()], "us", "broken")
+
+
+def test_named_query_passes_a_query_error_on_unchanged() -> None:
+    class Strict:
+        def get_proxy(self, query: str) -> str:
+            raise ValueError("no server for us150")
+
+    with pytest.raises(ValueError, match="^no server for us150$"):
+        pick_proxy([Strict()], "us150", "strict")

@@ -897,9 +897,10 @@ def get_unix_fonts() -> dict[str, Path]:
     return fonts
 
 
+@cache
 def get_system_fonts() -> dict[str, Path]:
     """
-    Get system fonts as a mapping of font family names to font file paths.
+    Get system fonts as a mapping of font family names to font file paths, scanned once per process.
 
     On Windows: Uses registry to get font display names
     On Linux/macOS: Scans standard font directories and extracts family names using fontTools

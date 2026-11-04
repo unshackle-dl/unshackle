@@ -1,6 +1,7 @@
 import json
 import random
 import re
+from functools import cached_property
 from typing import Optional, Union
 
 import requests
@@ -33,7 +34,10 @@ class NordVPN(Proxy):
         self.server_map = server_map or {}
         self.last_hostname: Optional[str] = None
 
-        self.countries = self.get_countries()
+    @cached_property
+    def countries(self) -> list[dict]:
+        """Fetched on first use, so a run that wants no proxy makes no request."""
+        return self.get_countries()
 
     def __repr__(self) -> str:
         countries = len(self.countries)

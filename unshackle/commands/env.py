@@ -13,7 +13,7 @@ from unshackle.core import binaries
 from unshackle.core.config import POSSIBLE_CONFIG_PATHS, config, config_path
 from unshackle.core.console import console, listing_table, print_wide
 from unshackle.core.constants import context_settings
-from unshackle.core.services import Services
+from unshackle.core.services import Services, load_all
 from unshackle.core.temp import TASK_PREFIX, is_stale
 
 
@@ -134,6 +134,7 @@ def get_dependencies() -> list[dict]:
         },
     ]
 
+    load_all()
     for reg in binaries.get_registered_dependencies():
         deps.append(
             {

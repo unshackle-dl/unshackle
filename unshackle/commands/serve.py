@@ -76,6 +76,7 @@ def _install_service_refresh(app: web.Application) -> None:
     from unshackle.core import services
 
     log = logging.getLogger("serve")
+    services.load_all()
     services.log_load_issues()
     services.record_loaded_commits()
     interval = int(config.serve.get("services_refresh_interval", 0) or 0)
@@ -575,7 +576,11 @@ def serve(
             app["config"] = serve_config
             app["debug_api"] = debug_api
 
-            if not cdm_only:
+            if cdm_only:
+                from unshackle.core import services
+
+                services.load_all()
+            else:
                 _install_session_store(app)
                 _install_service_refresh(app)
             _install_config_reload(app, no_key=no_key, serve_widevine=serve_widevine, serve_playready=serve_playready)

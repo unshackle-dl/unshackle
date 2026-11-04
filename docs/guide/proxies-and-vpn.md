@@ -1069,8 +1069,10 @@ The returned proxy is HTTPS on **port 443**.
     methods:
 
     - `__init__(self, **kwargs)` receives its `proxy_providers` sub-dict splatted as
-      keyword arguments, so YAML keys map 1:1 to constructor parameters. Do authentication
-      and catalogue pre-fetching here.
+      keyword arguments, so YAML keys map 1:1 to constructor parameters. Check the
+      configuration here, but make no request: every `dl` run builds every configured
+      proxy provider, even for a run with no proxy. Read the server or location catalogue
+      through a `functools.cached_property`, so the first query fetches it.
     - `__repr__(self)` is a human summary, conventionally `"{n} Countries ({m} Servers)"`.
     - `get_proxy(self, query)` returns a Requests-compatible proxy URI, or `None` only
       when the query was valid but no proxy exists. Raise on genuine errors or bad queries.

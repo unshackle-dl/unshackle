@@ -607,6 +607,8 @@ class dl:
         Returns:
             Tuple of (fonts_attached_count, missing_fonts_list)
         """
+        if not font_names:
+            return 0, []
         system_fonts = get_system_fonts()
 
         font_count = 0

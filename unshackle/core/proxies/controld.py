@@ -9,6 +9,7 @@ import socket
 import socketserver
 import threading
 import time
+from functools import cached_property
 from typing import Optional
 from urllib.parse import urlsplit
 
@@ -361,7 +362,10 @@ class ControlD(Proxy):
         self.resolvers = dict(self.configured)
         self.last_profile: Optional[str] = None
 
-        self.catalogue = self.get_locations()
+    @cached_property
+    def catalogue(self) -> list[dict]:
+        """Fetched on first use, so a run that wants no proxy makes no request."""
+        return self.get_locations()
 
     def __repr__(self) -> str:
         countries = len({x["country"] for x in self.catalogue})
@@ -377,7 +381,7 @@ class ControlD(Proxy):
             response.raise_for_status()
             return response.json()["body"]["proxies"]
         except Exception as e:
-            # never fail the command: all providers load up front, even for a run that wants no proxy
+            # never fail the command: a bare query falls through to the next proxy provider
             log.warning(f"Could not read Control D's locations: {e}")
             return []
 
