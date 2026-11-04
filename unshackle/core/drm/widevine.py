@@ -21,6 +21,7 @@ from unshackle.core.config import config
 from unshackle.core.console import console
 from unshackle.core.constants import AnyTrack
 from unshackle.core.drm import key_args as drm_key_args
+from unshackle.core.drm.verify import kidless_track_kids, mp4decrypt_or_shaka, read_top_level_box
 from unshackle.core.session import AnySession, utf8_text
 from unshackle.core.utilities import call_licence, get_boxes, log_event
 from unshackle.core.utils import run_proxy
@@ -300,7 +301,7 @@ class Widevine:
 
         decrypt_start = time.monotonic()
         if decrypter == "mp4decrypt":
-            self.decrypt_with_mp4decrypt(path)
+            mp4decrypt_or_shaka(self, path)
         else:
             self.decrypt_with_shaka_packager(path)
 
@@ -325,9 +326,9 @@ class Widevine:
             return [self._kid]
         return self.kids
 
-    def mp4decrypt_key_args(self) -> list[str]:
-        """Build the mp4decrypt --key arguments for every content key and the zero-KID fallback."""
-        return drm_key_args.mp4decrypt_key_args(self.content_keys, self.own_kids())
+    def mp4decrypt_key_args(self, track_kids: Optional[dict[int, UUID]] = None) -> list[str]:
+        """Build the mp4decrypt --key arguments for every content key, the zero-KID and the track ID fallbacks."""
+        return drm_key_args.mp4decrypt_key_args(self.content_keys, self.own_kids(), track_kids)
 
     def decrypt_with_mp4decrypt(self, path: Path) -> None:
         """Decrypt using mp4decrypt"""
@@ -336,7 +337,7 @@ class Widevine:
 
         output_path = path.with_stem(f"{path.stem}_decrypted")
 
-        key_args = self.mp4decrypt_key_args()
+        key_args = self.mp4decrypt_key_args(kidless_track_kids(read_top_level_box(path, b"moov") or b""))
 
         cmd = [
             str(binaries.Mp4decrypt),
@@ -396,7 +397,6 @@ class Widevine:
             )
 
             stream_skipped = False
-            had_error = False
 
             shaka_log_buffer = ""
             assert p.stderr is not None
@@ -407,26 +407,19 @@ class Widevine:
                 if "Skip stream" in line:
                     # file/segment was so small that it didn't have any actual data, ignore
                     stream_skipped = True
-                if ":INFO:" in line:
-                    continue
-                if "I0" in line or "W0" in line:
-                    continue
-                if ":ERROR:" in line:
-                    had_error = True
-                if "Insufficient bits in bitstream for given AVC profile" in line:
+                if drm_key_args.shaka_noise(line):
                     continue
                 shaka_log_buffer += f"{line.strip()}\n"
 
-            if shaka_log_buffer:
-                # wrap to console width - padding - '[Widevine]: '
-                shaka_log_buffer = "\n            ".join(
-                    textwrap.wrap(shaka_log_buffer.rstrip(), width=console.width - 22, initial_indent="")
-                )
-                console.log(Text.from_ansi("\n[Widevine]: " + shaka_log_buffer))
-
             p.wait()
 
-            if p.returncode != 0 or had_error:
+            if p.returncode != 0:
+                if shaka_log_buffer:
+                    # wrap to console width - padding - '[Widevine]: '
+                    shaka_log_buffer = "\n            ".join(
+                        textwrap.wrap(shaka_log_buffer.rstrip(), width=console.width - 22, initial_indent="")
+                    )
+                    console.log(Text.from_ansi("\n[Widevine]: " + shaka_log_buffer))
                 raise subprocess.CalledProcessError(p.returncode, [binaries.ShakaPackager, *arguments])
 
             path.unlink()

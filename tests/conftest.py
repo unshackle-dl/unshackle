@@ -91,3 +91,19 @@ def mux_args(monkeypatch: pytest.MonkeyPatch) -> Callable[..., list[str]]:
         return captured[0]
 
     return run
+
+
+@pytest.fixture
+def stub_mp4decrypt(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """An mp4decrypt that copies its input to its output and records its argv."""
+    argv_log = tmp_path / "argv.jsonl"
+    script = tmp_path / "mp4decrypt"
+    script.write_text(
+        "#!/usr/bin/env python3\n"
+        "import json, shutil, sys\n"
+        f"open({str(argv_log)!r}, 'a').write(json.dumps(sys.argv[1:]) + '\\n')\n"
+        "shutil.copyfile(sys.argv[-2], sys.argv[-1])\n"
+    )
+    script.chmod(0o755)
+    monkeypatch.setattr(binaries, "Mp4decrypt", script)
+    return argv_log

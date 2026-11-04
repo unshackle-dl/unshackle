@@ -19,10 +19,14 @@ def full(kind: bytes, payload: bytes, version: int = 0, flags: int = 0) -> bytes
     return box(kind, bytes([version]) + flags.to_bytes(3, "big") + payload)
 
 
-def encv(kid: UUID, piff: bool = False) -> bytes:
+def sinf(kid: UUID, piff: bool = False) -> bytes:
     tenc_body = b"\x00\x00\x01\x08" + kid.bytes
     tenc = box(b"uuid", PIFF_TENC, bytes(4) + tenc_body) if piff else full(b"tenc", tenc_body)
-    return box(b"encv", bytes(78), box(b"sinf", box(b"frma", b"avc1"), box(b"schi", tenc)))
+    return box(b"sinf", box(b"frma", b"avc1"), box(b"schi", tenc))
+
+
+def encv(kid: UUID, piff: bool = False) -> bytes:
+    return box(b"encv", bytes(78), sinf(kid, piff))
 
 
 def enca(kid: UUID) -> bytes:

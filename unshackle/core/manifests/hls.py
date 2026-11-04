@@ -867,6 +867,7 @@ class HLS:
             init_section = wanted_segments[0].init_section
             init_content, _ = HLS.fetch_init_section(session, init_section, 0)
             map_data = (init_section, init_content)
+            use_segment_decrypt = use_segment_decrypt and can_use(session_drm, config.decryption, init_content)
         if use_segment_decrypt:
             assert isinstance(session_drm, (Widevine, PlayReady, ClearKeyCENC))
             segment_decrypter = SegmentDecrypter(session_drm, init_content, save_dir.parent, max_workers)

@@ -12,6 +12,7 @@ from unshackle.core import binaries
 from unshackle.core.config import config
 from unshackle.core.drm.clearkey_cenc import ClearKeyCENC
 from unshackle.core.drm.playready import PlayReady
+from unshackle.core.drm.verify import kidless_track_kids
 from unshackle.core.drm.widevine import Widevine
 
 SEGMENT_DRM_T = Union[Widevine, PlayReady, ClearKeyCENC]
@@ -19,13 +20,17 @@ SEGMENT_DRM_T = Union[Widevine, PlayReady, ClearKeyCENC]
 MAX_WORKERS = 16
 
 
-def can_use(drm: Any, decryption: str) -> bool:
-    """Whether unshackle can decrypt a track's segments one by one as they download."""
+def can_use(drm: Any, decryption: str, init: Optional[bytes] = None) -> bool:
+    """Whether unshackle can decrypt a track's segments one by one as they download.
+
+    A track whose ``init`` mp4decrypt cannot key goes to the whole-file decrypt, which has the shaka fallback.
+    """
     return (
         isinstance(drm, (Widevine, PlayReady, ClearKeyCENC))
         and str(decryption).lower() == "mp4decrypt"
         and config.decrypt_segments
         and bool(binaries.Mp4decrypt)
+        and not (init and set(kidless_track_kids(init).values()) - set(drm.content_keys))
     )
 
 
@@ -44,7 +49,7 @@ class SegmentDecrypter:
             raise EnvironmentError("mp4decrypt executable not found but is required.")
 
         self.drm = drm
-        self.key_args = drm.mp4decrypt_key_args()
+        self.key_args = drm.mp4decrypt_key_args(kidless_track_kids(init_data))
 
         work_dir.mkdir(parents=True, exist_ok=True)
         self.work_dir = Path(tempfile.mkdtemp(prefix="segdec-", dir=work_dir))

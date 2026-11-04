@@ -187,6 +187,12 @@ service tag case-insensitively and uses the `default` entry as the fallback.
 
 unshackle decrypts HLS AES-128 ClearKey in-process and ignores this setting.
 
+mp4decrypt finds a content key by the KID in the first `sinf` box of the track. When that box
+has no CENC `tenc` (for example, a PIFF `sinf` before the CENC one), unshackle also gives
+mp4decrypt the content key of that KID by track ID. When mp4decrypt copies a track through
+still encrypted, unshackle decrypts it again with shaka-packager and logs a warning. This
+retry needs shaka-packager installed.
+
 === "Global"
 
     ```yaml
@@ -213,7 +219,8 @@ This works with `mp4decrypt` only. Set [`decryption`](#decryption) to `mp4decryp
 service (or as the default); with `shaka` the option has no effect, because shaka-packager
 cannot decrypt a segment without its init segment. It applies to DASH tracks and to HLS
 tracks that use one init segment, one `EXT-X-KEY` and no `EXT-X-DISCONTINUITY`. Every other
-track keeps the whole-file decryption.
+track keeps the whole-file decryption, and so does a track whose init segment mp4decrypt
+cannot key by KID when no content key has that KID.
 
 !!! note "No resume"
 

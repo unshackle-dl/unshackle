@@ -631,7 +631,7 @@ class DASH:
                 collapse_span = None
         collapse_single_url = collapse_span is not None
 
-        use_segment_decrypt = not collapse_single_url and bool(init_data) and can_use(drm, config.decryption)
+        use_segment_decrypt = not collapse_single_url and bool(init_data) and can_use(drm, config.decryption, init_data)
         # subtitle segments are tiny, the post-download merge costs nothing there
         use_rolling_merge = not collapse_single_url and config.merge_segments and not isinstance(track, Subtitle)
 

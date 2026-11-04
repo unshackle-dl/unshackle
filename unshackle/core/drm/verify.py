@@ -1,8 +1,11 @@
+import logging
 import os
 import struct
 from pathlib import Path
 from typing import Any, BinaryIO, Callable, Iterator, NamedTuple, Optional
 from uuid import UUID
+
+log = logging.getLogger(__name__)
 
 DECRYPT_HOOK: Optional[Callable[..., None]] = None
 
@@ -140,6 +143,94 @@ def has_encrypted_entry(moov: bytes) -> bool:
         kind == b"stsd" and any(entry[:3] in ENCRYPTED_ENTRY for entry, _, _ in children(moov, body + 8, end))
         for kind, body, end in walk(moov)
     )
+
+
+def read_top_level_box(path: Path, box_type: bytes) -> Optional[bytes]:
+    """Read a single top-level box from an MP4 file.
+
+    This function walks only the box headers, so the wanted box is the only payload it reads into memory.
+    Returns None if the file has no such top-level box, or if a box header is truncated or declares an
+    impossible size.
+    """
+    file_size = path.stat().st_size
+    with path.open("rb") as f:
+        start = 0
+        while start + 8 <= file_size:
+            header = f.read(8)
+            if len(header) < 8:
+                return None
+            size = int.from_bytes(header[:4], "big")
+            if size == 1:
+                large = f.read(8)
+                if len(large) < 8:
+                    return None
+                size = int.from_bytes(large, "big")
+            elif size == 0:
+                size = file_size - start
+            if size < 8:
+                return None
+            if header[4:8] == box_type:
+                f.seek(start)
+                return f.read(size)
+            start += size
+            f.seek(start)
+    return None
+
+
+def has_encrypted_sample_entry(path: Path) -> bool:
+    """True if the MP4's moov still carries an encrypted sample entry (``enc*`` or ``drm*``).
+
+    A faithful decrypt rewrites the entry back to the real codec 4CC through frma, so a
+    survivor means the decrypt tool skipped/failed the track. Only the moov is read, and its
+    stsd boxes are parsed, so byte runs in mdat or in metadata cannot match. Any read or
+    parse error -> False.
+    """
+    try:
+        moov = read_top_level_box(path, b"moov")
+        return moov is not None and has_encrypted_entry(moov)
+    except (OSError, struct.error, RecursionError):
+        return False
+
+
+def kidless_kid(data: bytes, kind: bytes, entry: int, end: int) -> Optional[UUID]:
+    """Return the KID of an encrypted sample entry whose first sinf holds no CENC tenc (a PIFF sinf, say)."""
+    for fields in ENTRY_FIELDS.get(kind, ()):
+        sinfs = [(body, box_end) for box, body, box_end in children(data, entry + fields, end) if box == b"sinf"]
+        if sinfs:
+            if any(box == b"tenc" for box, _, _ in walk(data, *sinfs[0])):
+                return None
+            return entry_kid(data, kind, entry, end)
+    return None
+
+
+def kidless_track_kids(data: bytes) -> dict[int, UUID]:
+    """Map each track of a moov or init segment whose first sinf has no tenc for mp4decrypt to read to its KID."""
+    kids: dict[int, UUID] = {}
+    track = 0
+    try:
+        for kind, body, end in walk(data):
+            if kind == b"tkhd":
+                track = struct.unpack_from(">I", data, body + (20 if data[body] == 1 else 12))[0]
+            elif kind == b"stsd" and track:
+                for entry in children(data, body + 8, end):
+                    kid = kidless_kid(data, *entry)
+                    if kid:
+                        kids[track] = kid
+    except (struct.error, IndexError, ValueError, RecursionError):
+        return {}
+    return kids
+
+
+def mp4decrypt_or_shaka(drm: Any, path: Path) -> None:
+    """Decrypt ``path`` with mp4decrypt, and again with shaka-packager when mp4decrypt copied it through.
+
+    mp4decrypt copies a track it has no content key for unchanged, so its first moof stays the same.
+    """
+    first_moof = read_top_level_box(path, b"moof")
+    drm.decrypt_with_mp4decrypt(path)
+    if has_encrypted_sample_entry(path) and read_top_level_box(path, b"moof") == first_moof:
+        log.warning(f"mp4decrypt left {path.name} encrypted, decrypting it with shaka-packager")
+        drm.decrypt_with_shaka_packager(path)
 
 
 def senc_protects_samples(buf: bytes, body: int, end: int) -> bool:

@@ -28,7 +28,12 @@ from unshackle.core.config import config
 from unshackle.core.constants import DOWNLOAD_ALL_DRM, DOWNLOAD_CANCELLED, DOWNLOAD_LICENCE_ONLY, DownloadCancelled
 from unshackle.core.downloaders.requests import requests
 from unshackle.core.drm import DRM_T, BlowfishStripe, ClearKeyCENC, PlayReady, Widevine
-from unshackle.core.drm.verify import decrypt_track, has_encrypted_entry, senc_protects_samples
+from unshackle.core.drm.verify import (
+    decrypt_track,
+    has_encrypted_sample_entry,
+    read_top_level_box,
+    senc_protects_samples,
+)
 from unshackle.core.events import events
 from unshackle.core.session import MAX_BACKOFF, AnySession, RnetSession, utf8_text
 from unshackle.core.temp import restore_segments, stash_segments
@@ -83,38 +88,6 @@ def direct_session(session: AnySession, proxy: Optional[str] = None) -> Session:
     )
     new.mount("http://", new.adapters["https://"])
     return new
-
-
-def read_top_level_box(path: Path, box_type: bytes) -> Optional[bytes]:
-    """Read a single top-level box from an MP4 file.
-
-    This function walks only the box headers, so the wanted box is the only payload it reads into memory.
-    Returns None if the file has no such top-level box, or if a box header is truncated or declares an
-    impossible size.
-    """
-    file_size = path.stat().st_size
-    with path.open("rb") as f:
-        start = 0
-        while start + 8 <= file_size:
-            header = f.read(8)
-            if len(header) < 8:
-                return None
-            size = int.from_bytes(header[:4], "big")
-            if size == 1:
-                large = f.read(8)
-                if len(large) < 8:
-                    return None
-                size = int.from_bytes(large, "big")
-            elif size == 0:
-                size = file_size - start
-            if size < 8:
-                return None
-            if header[4:8] == box_type:
-                f.seek(start)
-                return f.read(size)
-            start += size
-            f.seek(start)
-    return None
 
 
 def iter_top_level_boxes(path: Path) -> Iterable[tuple[bytes, int, int]]:
@@ -236,21 +209,6 @@ def has_mp4_only_audio_entry(path: Path) -> bool:
                 return True
             i = moov.find(tok, i + 1)
     return False
-
-
-def has_encrypted_sample_entry(path: Path) -> bool:
-    """True if the MP4's moov still carries an encrypted sample entry (``enc*`` or ``drm*``).
-
-    A faithful decrypt rewrites the entry back to the real codec 4CC through frma, so a
-    survivor means the decrypt tool skipped/failed the track. Only the moov is read, and its
-    stsd boxes are parsed, so byte runs in mdat or in metadata cannot match. Any read or
-    parse error -> False.
-    """
-    try:
-        moov = read_top_level_box(path, b"moov")
-        return moov is not None and has_encrypted_entry(moov)
-    except (OSError, struct.error, RecursionError):
-        return False
 
 
 def moof_still_encrypted(moof: bytes) -> bool:
