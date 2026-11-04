@@ -2298,7 +2298,7 @@ dashboard UI that wants history must keep its own copy.</p>
 </tr>
 <tr>
 <td><code>/api/dashboard/services</code></td>
-<td>Every service configured on this server and its load state, including the ones that failed to import. See <a href="#services">Services</a> for what configured means.</td>
+<td>Every service configured on this server, its load state and its catalogue entry, including the services that failed to import. See <a href="#services">Services</a> for what configured means.</td>
 </tr>
 <tr>
 <td><code>/api/dashboard/health</code></td>
@@ -2547,7 +2547,10 @@ limit never applies to the dashboard key, and never to <code>/api/health</code>.
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>[{"tag": "EXAMPLE", "state": "staged", "error": null,
 </span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>  "commit": "9cc230c98f13b83f6c6fe831595b9702d3ba2786", "staged_commit": "5f0aa17...",
 </span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>  "staged_since": 1756908900.0, "sessions": 1, "jobs": 1,
-</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>  "aliases": ["EXMPL"], "geofence": ["US"], "geoblock": []}]
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>  "aliases": ["EXMPL"], "geofence": ["US"], "geoblock": [],
+</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>  "help": "...", "url": "https://www.service.example", "title_regex": "...", "cli_params": [...],
+</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>  "needs_auth": true, "auth_methods": ["cookies"], "has_search": true, "anonymous_search": false,
+</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>  "has_drm": true, "server_accounts": {"regions": ["gb", "us"], "global": false}}]
 </span></code></pre></div>
 <p>The list holds only the services configured on this server:</p>
 <ol>
@@ -2573,6 +2576,13 @@ here instead of disappearing, and <code>/status</code> still counts it in the se
 pull already happened, so <code>commit</code> (what runs now) and <code>staged_commit</code> (what waits) differ. It swaps in when the last job and the last remote session for that tag finish. Both commits are <code>null</code>
 for a service from a plain local directory rather than a git repo.</p>
 <p>Watch the <code>service</code> event rather than polling for the swap.</p>
+<p>Each row also carries the service's catalogue entry: the fields that
+<a href="../endpoints/#get-apiservices"><code>GET /api/services</code></a> sends, with the same meaning. A service with no loaded
+module, or whose catalogue entry fails, gets only <code>help</code>, <code>url</code> and <code>title_regex</code>, all <code>null</code>.
+A service whose re-import failed keeps the entry of the module that still runs.</p>
+<p><code>server_accounts</code> shows when <code>serve.server_accounts</code> names the service. No API key grant
+applies to it here: <code>/api/services</code> sends it only to an API key with the <code>server_accounts</code>
+grant, but the dashboard key sees it for every service.</p>
 <h2 id="health">Health<a class="headerlink" href="#health" title="Permanent link">&para;</a></h2>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>GET /api/dashboard/health
 </span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>{"generated_at": 1756909350.4, "status": "ok",
