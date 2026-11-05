@@ -70,7 +70,7 @@ if %errorlevel% neq 0 (
 uv tool update-shell
 set "TOOL_BIN="
 for /f "delims=" %%B in ('uv tool dir --bin') do set "TOOL_BIN=%%B"
-set "SETUP="%TOOL_BIN%\unshackle.exe" setup"
+set "SETUP=%TOOL_BIN%\unshackle.exe setup"
 set "RERUN=Run it again in a new terminal with: unshackle setup"
 set "NOTE=Open a new terminal so that the unshackle command is on your PATH."
 
