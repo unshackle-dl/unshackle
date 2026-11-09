@@ -473,6 +473,16 @@ def original_tag(language: Union[str, Language], exact: bool = False) -> str:
     return str(language) if exact else ServiceTag(str(language))
 
 
+def orig_token(
+    requested: Sequence[str], language: Optional[Union[str, Language]], exact: bool = False
+) -> Optional[str]:
+    """The tag 'orig' resolved to, for as_requested. None when 'orig' did not resolve or the user also named that tag."""
+    if "orig" not in requested or not language:
+        return None
+    tag = original_tag(language, exact)
+    return None if tag in requested else tag
+
+
 def resolve_sort_langs(
     tokens: Sequence[str], original: Optional[Union[str, Language]] = None, *, exact: bool = False
 ) -> list[str]:

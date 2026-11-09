@@ -141,6 +141,14 @@ def test_a_single_title_with_no_such_track_exits(
     assert "Skipping" not in caplog.text
 
 
+def test_subs_only_with_no_matching_subtitle_exits_a_single_title_and_skips_in_a_season(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    assert run(monkeypatch, caplog, {1: {}}, subs_only=True, s_lang=["fr"]) == 1
+    assert run(monkeypatch, caplog, {1: {}, 2: {}}, subs_only=True, s_lang=["fr"]) is None
+    assert caplog.text.count("There's no track left for the selected options. Skipping Show S01E") == 2
+
+
 def test_a_multi_title_run_skips_the_title_and_continues(
     monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:

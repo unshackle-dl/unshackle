@@ -51,7 +51,7 @@ Common config keys. This is a useful subset, and every `dl` flag works:
 | `workers` | int | *(downloader default)* | Threads per track. |
 | `speed_limit` | str | *(unlimited)* | Total download speed cap across all downloads combined, e.g. `500k`, `5M`, `1.5G` or plain bytes/sec. Values are bytes, not bits (`5M` = 5.0 MB/s). |
 | `slow` | str | *(unset)* | Inter-title delay, e.g. `"20-40"`. |
-| `best_available` | bool | `false` | Warn instead of failing when a requested resolution, range, or language is missing, or when one DRM system does not license under `--all-drm`. The CLI flag is `--best-available`, also spelled `--warn-only`. |
+| `best_available` | bool | `false` | Warn instead of failing when a requested resolution, range, video language, or audio language is missing, or when one DRM system does not license under `--all-drm`. The CLI flag is `--best-available`, also spelled `--warn-only`. |
 | `generate_dv` | bool | `false` | With `-r HYBRID`, make Dolby Vision from the HDR10+ metadata when a title has no DV track. Needs `hdr10plus_tool`. See [Dolby Vision from HDR10+](../../guide/downloading.md#dolby-vision-from-hdr10). |
 | `proxy` | str | *(unset)* | Default proxy URI or 2-letter country. |
 | `no_folder` | bool | `false` | Do not create a per-title folder. |

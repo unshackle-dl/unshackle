@@ -97,7 +97,7 @@ By default a missing requested resolution is an error. Two flags change that:
 
 | Flag | Behaviour |
 | --- | --- |
-| `--best-available` (`--warn-only`) | If the requested resolution(s) are not present, continue with the best that *is* available instead of failing. Also softens missing video/audio/subtitle languages and hybrid fallbacks, and with `--all-drm` a DRM system that does not license. |
+| `--best-available` (`--warn-only`) | If the requested resolution(s) are not present, continue with the best that *is* available instead of failing. Also softens missing video and audio languages and hybrid fallbacks, and with `--all-drm` a DRM system that does not license. |
 | `--worst` | Within the specified quality, pick the **lowest** bitrate rendition. **Requires `-q/--quality`.** |
 
 ```shell title="Never fail on a missing resolution"
@@ -421,7 +421,8 @@ selects `pt-BR`. If the title has no such variant, the tag takes every regional 
 
 A tag with a region asks for that variant only: `-l es-419` selects `es-419`, never `es-ES`
 or `es-MX`. If the service has no `es-419` track, unshackle reports `es-419 not found` and
-stops. With `--best-available`, it continues with the other languages.
+stops. With `--best-available`, it continues with the other languages. A missing `-sl`
+language always gives a warning and the download continues; `--require-subs` makes it fail.
 
 A track without a region matches only the region its language implies. `en` is US English
 and `pt` is Brazilian Portuguese, so `-l en-US` accepts a track tagged `en`, but `-l en-GB`

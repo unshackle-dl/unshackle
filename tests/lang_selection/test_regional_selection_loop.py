@@ -147,8 +147,41 @@ def test_a_forced_only_language_without_fs_is_reported_missing(
     monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
     service = RegionalService("en", ["ja"], [("en", ""), ("es-419", ""), ("es-ES", "forced")])
-    assert run(monkeypatch, caplog, service, lang=["ja"], s_lang=["en", "es-ES"]) == 1
-    assert "es-ES not found in subtitle tracks" in caplog.text
+    ids = run(monkeypatch, caplog, service, lang=["ja"], s_lang=["en", "es-ES"])
+    assert "es-ES not found in subtitle tracks, continuing with: en" in caplog.text
+    assert ids["subs"] == ["en"]
+
+
+def test_a_missing_subtitle_language_continues_without_subtitles(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    service = RegionalService("en", ["ja"], [("en", "")])
+    ids = run(monkeypatch, caplog, service, lang=["ja"], s_lang=["fr"])
+    assert "fr not found in subtitle tracks, continuing without subtitles" in caplog.text
+    assert ids["subs"] == []
+
+
+def test_a_missing_orig_subtitle_is_reported_as_orig(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    service = RegionalService("ja", ["ja"], [("en", "")])
+    ids = run(monkeypatch, caplog, service, s_lang=["orig", "en"])
+    assert "orig not found in subtitle tracks, continuing with: en" in caplog.text
+    assert ids["subs"] == ["en"]
+
+
+def test_require_subs_fails_on_a_forced_track_that_is_dropped(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    service = RegionalService("ja", ["ja"], [("en", "forced")])
+    assert run(monkeypatch, caplog, service, require_subs=["en"]) == 1
+
+
+def test_require_subs_counts_a_forced_track_that_fs_keeps(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    service = RegionalService("ja", ["ja"], [("en", "forced")])
+    assert run(monkeypatch, caplog, service, require_subs=["en"], forced_subs=True)["subs"] == ["en-forced"]
 
 
 def test_an_exclusion_removes_every_regional_form(

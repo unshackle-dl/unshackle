@@ -84,7 +84,7 @@ unshackle dl [OPTIONS] SERVICE [SERVICE ARGS...]
 | `-c`, `--channels` | - | Audio channels; matches sub-layouts (5.1 ≈ 6.0). |
 | `-naa`, `--noatmos` | off | Exclude Dolby Atmos audio tracks. |
 | `--worst` | off | Pick the lowest bitrate within the requested quality. **Requires `-q`.** |
-| `--best-available`, `--warn-only` | off | Warn and continue when a requested resolution, range, or language is absent, instead of failing. With `--all-drm`, also when one DRM system does not license. |
+| `--best-available`, `--warn-only` | off | Warn and continue when a requested resolution, range, video language, or audio language is absent, instead of failing. With `--all-drm`, also when one DRM system does not license. |
 | `-rvb`, `--real-video-bitrate` | off | Probe real media size for true video bitrates, overriding the manifest. |
 | `-rab`, `--real-audio-bitrate` | off | Same for audio (slower). |
 

@@ -75,7 +75,7 @@ Subtitle selection happens through `dl` flags. The most important is language se
 | Flag | Purpose |
 | --- | --- |
 | `-sl`, `--s-lang` | Language(s) wanted for subtitles. Defaults to `all`. A `-` prefix excludes, e.g. `all,-es`. |
-| `--require-subs` | Require these languages to exist; if present, download **all** subtitles. Cannot be combined with `--s-lang`. |
+| `--require-subs` | Require these languages to exist. The title fails if one is missing. `--s-lang` still decides what to keep. |
 | `-fs`, `--forced-subs` | Include forced subtitle tracks (excluded by default). |
 | `-fso`, `--forced-subs-only` | Keep only forced subtitle tracks and drop the other subtitles; implies `-fs`. |
 | `-fsl`, `--forced-s-lang` | Language(s) wanted for forced subtitles; implies `-fs`. A `-` prefix excludes. |
@@ -102,24 +102,20 @@ that variant:
 unshackle dl --s-lang es-419 EXAMPLE 'https://www.example.com/...'
 ```
 
-If a requested language is missing, unshackle stops with an error. With `--best-available`,
-it continues with the languages it found and tells you which ones it dropped. See
+If a requested language is missing, unshackle continues with the languages it found and
+tells you which ones it dropped. To stop the title instead, use `--require-subs`. See
 [exact vs fuzzy matching](downloading.md#exact-vs-fuzzy-matching) for the full rules.
 
 ### Requiring languages before downloading
 
-`--require-subs` is a gate rather than a filter. It downloads **all** available
-subtitles, but only if every language you name is present. If any is missing, the title
-errors out. This is useful for batch jobs where you want a title without your must-have
-language to fail loudly, and not to silently give a partial result.
+`--require-subs` is a gate rather than a filter. If any language you name is missing, the
+title fails, even under `--best-available`. It does not select tracks: `--s-lang` still
+decides what to keep. This is useful for batch jobs where you want a title without your
+must-have language to fail loudly, and not to silently give a partial result.
 
 ```shell title="Fail unless both English and French subs exist, then grab everything"
 unshackle dl --require-subs en,fr EXAMPLE B0ABCDEFGH
 ```
-
-!!! warning "`--require-subs` and `--s-lang` are mutually exclusive"
-    Because `--require-subs` forces downloading of all subtitle languages, it cannot be
-    combined with `--s-lang`. Choose one or the other.
 
 ### Forced subtitles
 
