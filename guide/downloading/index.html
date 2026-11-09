@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../assets/favicon.svg">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.1">
     
     
       
@@ -3206,7 +3206,7 @@ therefore keeps its <code>3840×1920</code> HDR10 track, even when another range
 <tbody>
 <tr>
 <td><code>--best-available</code> (<code>--warn-only</code>)</td>
-<td>If the requested resolution(s) are not present, continue with the best that <em>is</em> available instead of failing. Also softens missing video/audio/subtitle languages and hybrid fallbacks, and with <code>--all-drm</code> a DRM system that does not license.</td>
+<td>If the requested resolution(s) are not present, continue with the best that <em>is</em> available instead of failing. Also softens missing video and audio languages and hybrid fallbacks, and with <code>--all-drm</code> a DRM system that does not license.</td>
 </tr>
 <tr>
 <td><code>--worst</code></td>
@@ -3632,7 +3632,8 @@ selects <code>pt-BR</code>. If the title has no such variant, the tag takes ever
 <code>-l es</code> on a title with only <code>es-419</code> selects <code>es-419</code>.</p>
 <p>A tag with a region asks for that variant only: <code>-l es-419</code> selects <code>es-419</code>, never <code>es-ES</code>
 or <code>es-MX</code>. If the service has no <code>es-419</code> track, unshackle reports <code>es-419 not found</code> and
-stops. With <code>--best-available</code>, it continues with the other languages.</p>
+stops. With <code>--best-available</code>, it continues with the other languages. A missing <code>-sl</code>
+language always gives a warning and the download continues; <code>--require-subs</code> makes it fail.</p>
 <p>A track without a region matches only the region its language implies. <code>en</code> is US English
 and <code>pt</code> is Brazilian Portuguese, so <code>-l en-US</code> accepts a track tagged <code>en</code>, but <code>-l en-GB</code>
 and <code>-l pt-PT</code> do not accept <code>en</code> or <code>pt</code>. To take any English track, write <code>en</code>.</p>
@@ -4754,7 +4755,7 @@ authoritative list.</p>
       <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["content.code.annotate", "content.code.copy", "content.tabs.link", "content.tooltips", "navigation.footer", "navigation.indexes", "navigation.sections", "navigation.tabs", "navigation.top", "navigation.tracking", "search.highlight", "search.share", "search.suggest", "toc.follow"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="../../assets/javascripts/bundle.c21346df.min.js"></script>
+      <script src="../../assets/javascripts/bundle.a5f9d56c.min.js"></script>
       
     
   </body>
