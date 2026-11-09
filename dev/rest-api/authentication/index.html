@@ -2670,6 +2670,33 @@ seconds:</p>
 <code>GET /api/health</code> is never limited. See
 <a href="../dashboard/#rate-limits">dashboard rate limits</a> for the config and the counters, and
 <a href="../../../reference/configuration/services/">services configuration</a> for the keys themselves.</p>
+<p>Every response to an API key that has a limit carries these headers, the <code>429</code> too. A
+WebSocket or event stream response sends its headers before the handler returns, so it has none.
+The CORS headers expose these headers and <code>Retry-After</code> to a browser client.</p>
+<table>
+<thead>
+<tr>
+<th>Header</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>X-RateLimit-Limit</code></td>
+<td>Requests per hour that the API key may make.</td>
+</tr>
+<tr>
+<td><code>X-RateLimit-Remaining</code></td>
+<td>Requests left in the current window.</td>
+</tr>
+<tr>
+<td><code>X-RateLimit-Reset</code></td>
+<td>Seconds until the window resets.</td>
+</tr>
+</tbody>
+</table>
+<p>A <code>--remote</code> client that gets a <code>429</code> with <code>Retry-After</code> shows a countdown, waits that time
+(one hour at most), and then sends the request again. It stops after 3 waits for one request.</p>
 <div class="admonition warning">
 <p class="admonition-title"><code>429</code> is not the <code>RATE_LIMITED</code> error body</p>
 <p><code>RATE_LIMITED</code> in <a href="../errors/">Errors</a> is a <em>service</em> rate limit that a handler raises, and it
@@ -2806,6 +2833,10 @@ that reads <code>error_code</code> to classify a <code>429</code> must cope with
 <tr>
 <td>Over-limit body</td>
 <td><code>{"status": 429, "message": "Rate limit exceeded."}</code>, plus a <code>Retry-After</code> header</td>
+</tr>
+<tr>
+<td>Rate limit headers</td>
+<td><code>X-RateLimit-Limit</code>, <code>X-RateLimit-Remaining</code>, <code>X-RateLimit-Reset</code> on each response to a limited API key</td>
 </tr>
 <tr>
 <td>Rate limit config</td>

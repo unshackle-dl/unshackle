@@ -2414,10 +2414,16 @@ hold goes back to the client's device. When the service runs the remote session 
 own device (a service option, such as a server-identity flag), the client's own vaults, and the
 server vault with this grant, are the only source, and a missing content key stops the download.</p>
 <p><code>admin</code> is a boolean that lets the API key run the maintenance endpoints (clear-cache, clear-temp, refresh-services). It is <code>false</code> unless the entry sets it. Keys that have no <code>users</code> entry, such as <code>api_secret</code>, keep that access.</p>
+<p><code>shared</code> is a boolean for an API key that a gateway in front of the server gives to many people.
+The gateway puts its own ID for each person in the <code>X-Client-Id</code> header, and the server then
+counts the <code>--local-proxy</code> tunnels of that API key for each person. Without <code>shared: true</code> the
+server ignores the header, because a client that connects to the server directly can set any
+value. Set it only when the gateway always replaces the header that the client sends.</p>
 <p>A <code>tier</code> names an entry under <code>serve.tiers</code>, which holds the settings that several API keys
 share. Today a tier carries <code>rate_limit</code>, the requests per hour that API key may make; an API
 key can also set its own <code>rate_limit</code>, which wins over its tier's. An API key with neither has
-no limit. Going over the limit answers <code>429</code> with a <code>Retry-After</code> header. The server keeps a
+no limit. Going over the limit answers <code>429</code> with a <code>Retry-After</code> header, and a <code>--remote</code>
+client waits that time before it tries again. The server keeps a
 fixed window rather than a sliding one: it opens on the first request and resets an hour
 later. A <code>tier</code> that names no entry under <code>serve.tiers</code>, or a <code>rate_limit</code> that is not a
 positive whole number, stops the server at startup, because the alternative is an API key that
@@ -2504,6 +2510,8 @@ own config.</p>
 </span><span id="__span-4-23"><a id="__codelineno-4-23" name="__codelineno-4-23" href="#__codelineno-4-23"></a><span class="w">    </span><span class="nt">f3a4b5c6</span><span class="p">:</span>
 </span><span id="__span-4-24"><a id="__codelineno-4-24" name="__codelineno-4-24" href="#__codelineno-4-24"></a><span class="w">      </span><span class="nt">services</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">EXAMPLE1</span><span class="p p-Indicator">]</span>
 </span><span id="__span-4-25"><a id="__codelineno-4-25" name="__codelineno-4-25" href="#__codelineno-4-25"></a><span class="w">      </span><span class="nt">server_vault</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">EXAMPLE1</span><span class="p p-Indicator">]</span><span class="w">    </span><span class="c1"># the client's device licenses; the server vault still serves keys</span>
+</span><span id="__span-4-26"><a id="__codelineno-4-26" name="__codelineno-4-26" href="#__codelineno-4-26"></a><span class="w">    </span><span class="nt">d7e8f9a0</span><span class="p">:</span>
+</span><span id="__span-4-27"><a id="__codelineno-4-27" name="__codelineno-4-27" href="#__codelineno-4-27"></a><span class="w">      </span><span class="nt">shared</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w">                </span><span class="c1"># a gateway gives this key to many people; tunnels count per X-Client-Id</span>
 </span></code></pre></div>
 <div class="admonition note">
 <p class="admonition-title"><code>dl</code> keys inside <code>serve</code></p>
