@@ -252,9 +252,13 @@ async def test_rate_limited_request_returns_429(aiohttp_client, monkeypatch) -> 
     setup_routes(app, remote_only=True, dashboard=True)
     client = await aiohttp_client(app)
 
-    assert (await client.get("/api/services", headers={"X-Secret-Key": "tier-key"})).status == 200
+    resp = await client.get("/api/services", headers={"X-Secret-Key": "tier-key"})
+    assert resp.status == 200
+    assert (resp.headers["X-RateLimit-Limit"], resp.headers["X-RateLimit-Remaining"]) == ("1", "0")
+    assert 0 < int(resp.headers["X-RateLimit-Reset"]) <= 3600
     resp = await client.get("/api/services", headers={"X-Secret-Key": "tier-key"})
     assert resp.status == 429 and int(resp.headers["Retry-After"]) > 0
+    assert resp.headers["X-RateLimit-Remaining"] == "0"
     assert (await client.get("/api/health", headers={"X-Secret-Key": "tier-key"})).status == 200
     assert (await client.get("/api/health")).status == 401
     # The dashboard key leaves the middleware before the limit check, so it always answers.

@@ -16,6 +16,7 @@ import pytest
 import requests
 import responses
 from aiohttp import web
+from multidict import CIMultiDict
 
 from unshackle.core import tunnel
 from unshackle.core.api.routes import tunnel as tunnel_route
@@ -356,6 +357,7 @@ def test_a_malformed_frame_still_leaves_the_tunnel_to_expire(server: str) -> Non
             async with http.ws_connect(server + ROUTE) as ws:
                 tunnel_id = (await ws.receive_json())["id"]
                 await ws.send_bytes(b"\x01")
+                await ws.close(code=aiohttp.WSCloseCode.GOING_AWAY)
         return str(tunnel_id)
 
     tunnel_id = asyncio.run(send_short_frame())
@@ -369,10 +371,110 @@ def test_an_api_key_has_a_tunnel_limit(server: str) -> None:
     clients = [TunnelClient(server, {"X-Secret-Key": "bob"}) for _ in range(tunnel.MAX_TUNNELS)]
     for client in clients:
         client.start()
-    with pytest.raises(ConnectionError, match="429"):
+    with pytest.raises(ConnectionError, match="429, the API key already has the maximum number of tunnels open"):
         TunnelClient(server, {"X-Secret-Key": "bob"}).start()
     for client in clients:
         client.stop()
+
+
+@pytest.mark.parametrize("shared", [True, False])
+def test_a_shared_api_key_counts_tunnels_for_each_client(
+    server: str, monkeypatch: pytest.MonkeyPatch, shared: bool
+) -> None:
+    from unshackle.core.config import config
+
+    monkeypatch.setitem(config.serve, "users", {"tier": {"shared": True} if shared else {}})
+    first = [TunnelClient(server, {"X-Secret-Key": "tier", "X-Client-Id": "u1"}) for _ in range(tunnel.MAX_TUNNELS)]
+    second = TunnelClient(server, {"X-Secret-Key": "tier", "X-Client-Id": "u2"})
+    try:
+        for client in first:
+            client.start()
+        if shared:
+            second.start()
+        else:
+            with pytest.raises(ConnectionError, match="maximum number of tunnels"):
+                second.start()
+        with pytest.raises(ConnectionError, match="maximum number of tunnels"):
+            TunnelClient(server, {"X-Secret-Key": "tier", "X-Client-Id": "u1"}).start()
+    finally:
+        for client in [*first, second]:
+            client.stop()
+
+
+def test_another_client_of_a_shared_api_key_cannot_reattach(server: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    from unshackle.core.config import config
+
+    monkeypatch.setitem(config.serve, "users", {"tier": {"shared": True}})
+    owner = TunnelClient(server, {"X-Secret-Key": "tier", "X-Client-Id": "u1"})
+    tunnel_id = owner.start()
+    try:
+        resp = requests.get(
+            f"{server}{ROUTE}?id={tunnel_id}", headers={"X-Secret-Key": "tier", "X-Client-Id": "u2"}, timeout=10
+        )
+        assert resp.status_code == 404
+    finally:
+        owner.stop()
+
+
+def test_stopping_one_client_leaves_the_other_tunnels_of_its_api_key_open(
+    server: str, target: int, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(tunnel, "is_public_ip", lambda address: True)
+    monkeypatch.setattr(tunnel, "dialled_itself", lambda writer: False)
+    clients = [TunnelClient(server, {"X-Secret-Key": "erin"}) for _ in range(3)]
+    stopped, *running = [client.start() for client in clients]
+    try:
+        clients[0].stop()
+        assert wait_until(lambda: stopped not in TUNNELS, 5)
+        for tunnel_id in running:
+            proxy = tunnel_proxy(tunnel_id, "erin")
+            assert proxy
+            resp = requests.get(f"http://127.0.0.1:{target}/", proxies={"all": proxy}, timeout=10)
+            assert resp.text == "hello through the tunnel"
+    finally:
+        for client in clients[1:]:
+            client.stop()
+
+
+@pytest.mark.parametrize(
+    ("value", "seconds"),
+    [
+        ("5", 5),
+        ("0", 1),
+        (None, None),
+        ("", None),
+        ("\u00b2", None),
+        ("9" * 5000, None),
+        ("Wed, 21 Oct 2026 07:28:00 GMT", None),
+    ],
+    ids=["seconds", "zero", "absent", "empty", "superscript", "huge", "http-date"],
+)
+def test_parse_retry_after(value: str | None, seconds: int | None) -> None:
+    assert tunnel.parse_retry_after(value) == seconds
+
+
+def test_a_client_that_exits_frees_its_tunnel_at_once(server: str) -> None:
+    async def open_then_leave() -> str:
+        async with aiohttp.ClientSession(headers={"X-Secret-Key": "dave"}) as http:
+            async with http.ws_connect(server + ROUTE) as ws:
+                return str((await ws.receive_json())["id"])
+
+    tunnel_id = asyncio.run(open_then_leave())
+    assert wait_until(lambda: tunnel_id not in TUNNELS, 5)
+
+
+@pytest.mark.parametrize(
+    ("status", "headers", "reason"),
+    [
+        (429, {"Retry-After": "120"}, "HTTP 429, the API key is over its hourly request limit, retry in 120s"),
+        (429, {"retry-after": "120"}, "HTTP 429, the API key is over its hourly request limit, retry in 120s"),
+        (429, {}, "HTTP 429, the API key already has the maximum number of tunnels open"),
+        (404, None, "HTTP 404"),
+    ],
+)
+def test_a_refused_tunnel_names_the_reason(status: int, headers: dict[str, str] | None, reason: str) -> None:
+    error = aiohttp.WSServerHandshakeError(None, (), status=status, headers=CIMultiDict(headers or {}))  # type: ignore[arg-type]
+    assert tunnel.refusal(error) == reason
 
 
 def test_a_connection_that_stops_reading_is_dropped() -> None:

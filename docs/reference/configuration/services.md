@@ -240,10 +240,17 @@ server vault with this grant, are the only source, and a missing content key sto
 
 `admin` is a boolean that lets the API key run the maintenance endpoints (clear-cache, clear-temp, refresh-services). It is `false` unless the entry sets it. Keys that have no `users` entry, such as `api_secret`, keep that access.
 
+`shared` is a boolean for an API key that a gateway in front of the server gives to many people.
+The gateway puts its own ID for each person in the `X-Client-Id` header, and the server then
+counts the `--local-proxy` tunnels of that API key for each person. Without `shared: true` the
+server ignores the header, because a client that connects to the server directly can set any
+value. Set it only when the gateway always replaces the header that the client sends.
+
 A `tier` names an entry under `serve.tiers`, which holds the settings that several API keys
 share. Today a tier carries `rate_limit`, the requests per hour that API key may make; an API
 key can also set its own `rate_limit`, which wins over its tier's. An API key with neither has
-no limit. Going over the limit answers `429` with a `Retry-After` header. The server keeps a
+no limit. Going over the limit answers `429` with a `Retry-After` header, and a `--remote`
+client waits that time before it tries again. The server keeps a
 fixed window rather than a sliding one: it opens on the first request and resets an hour
 later. A `tier` that names no entry under `serve.tiers`, or a `rate_limit` that is not a
 positive whole number, stops the server at startup, because the alternative is an API key that
@@ -341,6 +348,8 @@ serve:
     f3a4b5c6:
       services: [EXAMPLE1]
       server_vault: [EXAMPLE1]    # the client's device licenses; the server vault still serves keys
+    d7e8f9a0:
+      shared: true                # a gateway gives this key to many people; tunnels count per X-Client-Id
 ```
 
 !!! note "`dl` keys inside `serve`"

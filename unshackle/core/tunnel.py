@@ -20,7 +20,8 @@ import threading
 from typing import Any, Optional
 
 import aiohttp
-from aiohttp import WSMsgType, web
+from aiohttp import WSCloseCode, WSMsgType, web
+from multidict import CIMultiDict
 
 log = logging.getLogger("tunnel")
 
@@ -144,10 +145,11 @@ TUNNELS: dict[str, "Tunnel"] = {}
 class Tunnel:
     """The server side of one client's tunnel: a loopback SOCKS5 listener and the client's current link."""
 
-    def __init__(self, owner: Optional[str]) -> None:
+    def __init__(self, owner: Optional[str], client: Optional[str] = None) -> None:
         self.id = secrets.token_urlsafe(16)
         self.secret = secrets.token_urlsafe(24)
         self.owner = owner
+        self.client = client
         self.link: Optional[Link] = None
         self.pending: dict[int, asyncio.Future[bool]] = {}
         self.sids = itertools.count(1)
@@ -290,7 +292,9 @@ class Tunnel:
                 self.link = None
                 self.linked.clear()
                 link.end_all()
-                if self.id in TUNNELS:
+                if ws.close_code == WSCloseCode.OK:
+                    self.expire()
+                elif self.id in TUNNELS:
                     self.expiry = asyncio.get_running_loop().call_later(GRACE, self.expire)
 
     def expire(self) -> None:
@@ -377,6 +381,27 @@ async def connect_public(host: str, port: int) -> tuple[asyncio.StreamReader, as
     raise error
 
 
+def parse_retry_after(value: Optional[str]) -> Optional[int]:
+    """Whole seconds, at least 1, from a delay-seconds Retry-After; None for an absent, HTTP-date or malformed one."""
+    if not value or len(value) > 9 or not (value.isascii() and value.isdigit()):
+        return None
+    return max(1, int(value))
+
+
+def retry_after(e: aiohttp.WSServerHandshakeError) -> Optional[int]:
+    """The Retry-After seconds of a rate-limit refusal, or None for any other refusal."""
+    return parse_retry_after(CIMultiDict(e.headers or {}).get("Retry-After")) if e.status == 429 else None
+
+
+def refusal(e: aiohttp.WSServerHandshakeError) -> str:
+    """Why the server refused a tunnel. aiohttp drops the response body, so a 429 is told apart by its headers."""
+    if e.status != 429:
+        return f"HTTP {e.status}"
+    if (wait := retry_after(e)) is not None:
+        return f"HTTP 429, the API key is over its hourly request limit, retry in {wait}s"
+    return "HTTP 429, the API key already has the maximum number of tunnels open"
+
+
 class TunnelClient:
     """The client side: a background thread that keeps the tunnel's WebSocket open and dials for the server."""
 
@@ -385,6 +410,8 @@ class TunnelClient:
         self.headers = headers
         self.id: Optional[str] = None
         self.error: Optional[BaseException] = None
+        self.retry_after: Optional[int] = None
+        self.at_limit = False
         self.lost = False
         self.ready = threading.Event()
         self.relays: set[asyncio.Task[None]] = set()
@@ -398,7 +425,7 @@ class TunnelClient:
         self.thread.start()
         if not self.ready.wait(timeout) or not self.id:
             self.stop()  # or the thread opens the tunnel later and nobody uses it
-            raise ConnectionError(f"Could not open a tunnel to the server: {self.error or 'timed out'}")
+            raise ConnectionError(str(self.error or "timed out"))
         return self.id
 
     def stop(self) -> None:
@@ -431,7 +458,9 @@ class TunnelClient:
                         backoff = 1
                         await self.serve(Link(ws))
                 except aiohttp.WSServerHandshakeError as e:
-                    self.error = e
+                    self.error = ConnectionError(refusal(e))
+                    self.retry_after = retry_after(e)
+                    self.at_limit = e.status == 429 and self.retry_after is None
                     # a 404 means the tunnel expired or the server has no tunnel route; a 5xx is a proxy in between
                     if not self.id or e.status < 500:
                         if self.id:

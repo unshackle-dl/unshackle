@@ -448,7 +448,7 @@ The server mounts all these routes, even in `--remote-only` mode. Paths use the
 | Method | Path | Purpose |
 |---|---|---|
 | `POST` | `/api/session/create` | Build + authenticate a service instance; returns a session ID immediately |
-| `GET` | `/api/tunnel` | WebSocket that relays the connections of a `tunnel:<id>` proxy to the client; `?id=` reconnects |
+| `GET` | `/api/tunnel` | WebSocket that relays the connections of a `tunnel:<id>` proxy to the client; `?id=` reconnects, close code 1000 frees the tunnel at once |
 | `GET` | `/api/tunnel/check?id=` | Exit IP address and lookup time through the caller's tunnel, for `unshackle tunnel-test` |
 | `GET` | `/api/session/{id}/titles` | Fetch and cache the title list |
 | `POST` | `/api/session/{id}/tracks` | Resolve tracks, manifests, chapters, headers/cookies for a title |

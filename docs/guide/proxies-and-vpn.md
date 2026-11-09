@@ -336,8 +336,10 @@ A service that uses a server account does not work with `--local-proxy`, because
 logs in with its own account. If the tunnel drops, the client connects again, and a new request
 from the server waits up to 10 seconds for it. A request that was in progress when the tunnel
 dropped fails. The server closes a tunnel when its client has not connected for 60 seconds, and
-the client then stops with `The tunnel to the server closed`. An API key can have 4 tunnels
-open at once.
+the client then stops with `The tunnel to the server closed`. A client that exits closes its
+tunnel at once. An API key can have 4 tunnels open at once (4 for each person on a key with
+`shared: true`, see [services configuration](../reference/configuration/services.md)). A fifth run waits for a free
+tunnel and tries again every 15 seconds, for one hour at most.
 
 ## Basic (static proxies)
 

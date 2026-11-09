@@ -1354,6 +1354,7 @@ CORS_HEADERS = {
     "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type, X-Secret-Key, Authorization",
     "Access-Control-Max-Age": "3600",
+    "Access-Control-Expose-Headers": "Retry-After, X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset",
 }
 
 
@@ -1408,8 +1409,17 @@ def rate_limit_response(secret_key: str) -> Optional[web.Response]:
     return web.json_response(
         {"status": 429, "message": "Rate limit exceeded."},
         status=429,
-        headers={"Retry-After": str(retry_after)},
+        headers={"Retry-After": str(retry_after), **stats.rate_limit_headers(secret_key)},
     )
+
+
+def add_rate_limit_headers(response: web.StreamResponse, secret_key: str) -> web.StreamResponse:
+    """Put *secret_key*'s rate-limit headers on *response*; a streamed response has sent its headers already."""
+    from unshackle.core.api.stats import stats
+
+    if not response.prepared:
+        response.headers.update(stats.rate_limit_headers(secret_key))
+    return response
 
 
 @web.middleware
@@ -1433,7 +1443,7 @@ async def api_key_authentication(request: web.Request, handler: Any) -> web.Stre
         return web.json_response({"status": 401, "message": "Secret Key is Invalid."}, status=401)
     if request.path == "/api/health":
         return await handler(request)
-    return rate_limit_response(secret_key) or await handler(request)
+    return rate_limit_response(secret_key) or add_rate_limit_headers(await handler(request), secret_key)
 
 
 def caller_key(request: Optional[web.Request] = None) -> str:
@@ -5649,19 +5659,30 @@ async def session_delete_handler(session_id: str, request: Optional[web.Request]
     return web.json_response(response)
 
 
+def shared_key_client(request: web.Request) -> Optional[str]:
+    """The person behind a ``shared: true`` API key, from the ``X-Client-Id`` its gateway sets; None for other keys.
+
+    Only a shared key reads the header, so a client that talks to the server directly cannot use it to pass a limit.
+    """
+    if serve_user_config(request_secret_key(request) or "").get("shared") is not True:
+        return None
+    return request.headers.get("X-Client-Id", "")[:64] or None
+
+
 async def tunnel_handler(request: web.Request) -> web.StreamResponse:
     """Open a ``--local-proxy`` tunnel, or reattach to the caller's tunnel named by ``?id=``."""
     owner = request_secret_key(request)
+    client = shared_key_client(request)
     tunnel_id = request.query.get("id")
     tunnel = TUNNELS.get(tunnel_id) if tunnel_id else None
-    if tunnel_id and (not tunnel or tunnel.owner != owner):
+    if tunnel_id and (not tunnel or tunnel.owner != owner or tunnel.client != client):
         raise APIError(APIErrorCode.NOT_FOUND, "No open tunnel has this id.")
-    if not tunnel and sum(t.owner == owner for t in TUNNELS.values()) >= MAX_TUNNELS:
+    if not tunnel and sum(t.owner == owner and t.client == client for t in TUNNELS.values()) >= MAX_TUNNELS:
         raise APIError(APIErrorCode.RATE_LIMITED, f"An API key can have {MAX_TUNNELS} tunnels open at once.")
     ws = web.WebSocketResponse(heartbeat=HEARTBEAT, max_msg_size=MAX_MESSAGE)
     await ws.prepare(request)  # a request that is not a WebSocket upgrade fails here, before a tunnel exists
     if not tunnel:
-        tunnel = Tunnel(owner)
+        tunnel = Tunnel(owner, client)
         await tunnel.start()
     await tunnel.serve(ws)
     return ws

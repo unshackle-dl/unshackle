@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 
+import click
 import pytest
 import responses
 
@@ -244,3 +245,93 @@ def test_proxy_error_page_logs_its_title(client: RemoteClient, caplog: pytest.Lo
         client.get("/api/session/s/titles")
     assert "HTTP 524: example.com | 524: A timeout occurred" in caplog.text
     assert "DOCTYPE" not in caplog.text
+
+
+@responses.activate
+def test_a_429_with_retry_after_waits_then_retries(client: RemoteClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    waits: list[int] = []
+    monkeypatch.setattr("unshackle.core.remote_service.wait_retry_after", waits.append)
+    url = "http://srv:8786/api/services"
+    responses.add(responses.GET, url, status=429, json={"status": 429}, headers={"Retry-After": "7"})
+    responses.add(responses.GET, url, json={"status": "ok"})
+
+    assert client.get("/api/services") == {"status": "ok"}
+    assert waits == [7]
+
+
+@responses.activate
+def test_a_429_without_retry_after_fails_at_once(client: RemoteClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("unshackle.core.remote_service.wait_retry_after", pytest.fail)
+    responses.add(responses.GET, "http://srv:8786/api/services", status=429, json={"error_code": "RATE_LIMITED"})
+
+    with pytest.raises(SystemExit):
+        client.get("/api/services")
+
+
+def test_wait_retry_after_waits_out_its_own_deadline(monkeypatch: pytest.MonkeyPatch) -> None:
+    from unshackle.core import remote_service
+
+    clock = [0.0]
+    monkeypatch.setattr(remote_service.time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(remote_service.time, "sleep", lambda s: clock.__setitem__(0, clock[0] + s))
+    remote_service.wait_retry_after(3)
+    assert clock[0] == 3.0
+    remote_service.wait_retry_after(99999)
+    assert clock[0] == 3.0 + remote_service.RETRY_AFTER_MAX
+
+
+def test_a_rate_limited_tunnel_waits_then_opens(client: RemoteClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    from unshackle.core import remote_service
+
+    attempts: list[object] = []
+
+    class Refused:
+        def __init__(self, *_: object) -> None:
+            self.retry_after = 5 if not attempts else None
+            self.at_limit = len(attempts) == 1
+            attempts.append(self)
+
+        def start(self) -> str:
+            if self.retry_after or self.at_limit:
+                raise ConnectionError("HTTP 429")
+            return "id"
+
+    waits: list[int] = []
+    monkeypatch.setattr(remote_service, "TunnelClient", Refused)
+    monkeypatch.setattr(remote_service, "wait_retry_after", lambda s, *_: waits.append(s))
+    assert remote_service.start_tunnel(client) is attempts[2]
+    assert waits == [5, remote_service.TUNNEL_SLOT_POLL]
+
+
+def test_a_tunnel_refused_for_another_reason_fails_at_once(
+    client: RemoteClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from unshackle.core import remote_service
+
+    class Refused:
+        retry_after = None
+        at_limit = False
+
+        def __init__(self, *_: object) -> None:
+            pass
+
+        def start(self) -> str:
+            raise ConnectionError("HTTP 403")
+
+    monkeypatch.setattr(remote_service, "TunnelClient", Refused)
+    monkeypatch.setattr(remote_service, "wait_retry_after", pytest.fail)
+    with pytest.raises(click.ClickException, match="HTTP 403"):
+        remote_service.start_tunnel(client)
+
+
+@responses.activate
+def test_the_429_wait_gives_up_after_its_tries(client: RemoteClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    from unshackle.core import remote_service
+
+    waits: list[int] = []
+    monkeypatch.setattr(remote_service, "wait_retry_after", waits.append)
+    responses.add(responses.GET, "http://srv:8786/api/services", status=429, json={}, headers={"Retry-After": "0"})
+
+    with pytest.raises(SystemExit):
+        client.get("/api/services")
+    assert waits == [1] * remote_service.RATE_LIMIT_TRIES

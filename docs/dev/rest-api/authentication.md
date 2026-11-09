@@ -224,6 +224,19 @@ A limit comes from `serve.tiers.<name>.rate_limit` or from the API key's own
 [dashboard rate limits](dashboard.md#rate-limits) for the config and the counters, and
 [services configuration](../../reference/configuration/services.md) for the keys themselves.
 
+Every response to an API key that has a limit carries these headers, the `429` too. A
+WebSocket or event stream response sends its headers before the handler returns, so it has none.
+The CORS headers expose these headers and `Retry-After` to a browser client.
+
+| Header | Value |
+|---|---|
+| `X-RateLimit-Limit` | Requests per hour that the API key may make. |
+| `X-RateLimit-Remaining` | Requests left in the current window. |
+| `X-RateLimit-Reset` | Seconds until the window resets. |
+
+A `--remote` client that gets a `429` with `Retry-After` shows a countdown, waits that time
+(one hour at most), and then sends the request again. It stops after 3 waits for one request.
+
 !!! warning "`429` is not the `RATE_LIMITED` error body"
     `RATE_LIMITED` in [Errors](errors.md) is a *service* rate limit that a handler raises, and it
     arrives in the standard envelope with an `error_code`. The `429` here comes from the
@@ -311,6 +324,7 @@ With `--caddy`, unshackle also starts `caddy run` using the `Caddyfile` located 
 | Missing-header body | `{"status": 401, "message": "Secret Key is Empty."}` |
 | Invalid-key body | `{"status": 401, "message": "Secret Key is Invalid."}` |
 | Over-limit body | `{"status": 429, "message": "Rate limit exceeded."}`, plus a `Retry-After` header |
+| Rate limit headers | `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset` on each response to a limited API key |
 | Rate limit config | `serve.tiers.<name>.rate_limit`, overridden by `serve.users.<key>.rate_limit` |
 | Disable auth | `--no-key` (all requests allowed) |
 | Config location | `serve.api_secret` and `serve.users` in `unshackle.yaml` |

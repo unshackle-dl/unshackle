@@ -183,6 +183,18 @@ class ServerStats:
         entry.window_used += 1
         return None
 
+    def rate_limit_headers(self, key: str) -> Dict[str, str]:
+        """The ``X-RateLimit-*`` headers for ``key``'s current window; none for an API key with no limit."""
+        limit = key_rate_limit(key)
+        if limit is None:
+            return {}
+        entry = self.key_stats(key)
+        return {
+            "X-RateLimit-Limit": str(limit),
+            "X-RateLimit-Remaining": str(max(0, limit - entry.window_used)),
+            "X-RateLimit-Reset": str(max(0, int(entry.window_start + RATE_LIMIT_WINDOW - time.time()))),
+        }
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "version": __version__,

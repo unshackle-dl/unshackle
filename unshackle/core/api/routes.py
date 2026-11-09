@@ -2074,7 +2074,9 @@ async def tunnel(request: web.Request) -> web.StreamResponse:
     description: >-
       A WebSocket that a --remote client holds open. The server sends the requests of a remote session
       created with proxy tunnel:<id> through it, and the client makes them from its own connection.
-      The first message is {"id": <tunnel id>}.
+      The first message is {"id": <tunnel id>}. A client that has finished closes with code 1000,
+      which frees the tunnel at once; after any other close the tunnel waits 60 seconds for a reconnect.
+      An API key with shared: true counts its tunnels for each X-Client-Id value, which its gateway sets.
     parameters:
       - name: id
         in: query
@@ -2088,7 +2090,9 @@ async def tunnel(request: web.Request) -> web.StreamResponse:
       '404':
         description: No open tunnel with this id for this API key
       '429':
-        description: The API key has the maximum number of tunnels open
+        description: >-
+          The API key has the maximum number of tunnels open, or, with a Retry-After header,
+          the API key is over its hourly request limit
     """
     return await tunnel_handler(request)
 

@@ -21,6 +21,7 @@ from unshackle.core.api.compression import compression_middleware
 from unshackle.core.api.events import publish_refresh_events, publish_service_event
 from unshackle.core.api.handlers import (
     DASHBOARD_PREFIX,
+    add_rate_limit_headers,
     api_key_authentication,
     dashboard_authentication,
     dashboard_key,
@@ -559,6 +560,8 @@ def serve(
                             f"https://git.gay/ready-dl/pyplayready serve v{pyplayready_version}"
                         )
 
+                    if request.path != "/api/health" and secret_key and known:
+                        add_rate_limit_headers(response, secret_key)
                     return response
 
                 return serve_authentication

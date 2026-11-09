@@ -13,6 +13,7 @@ import contextlib
 import hashlib
 import json
 import logging
+import math
 import random
 import re
 import shlex
@@ -35,9 +36,10 @@ from langcodes import Language
 from requests.adapters import HTTPAdapter, Retry
 from rich.padding import Padding
 from rich.rule import Rule
+from rich.spinner import Spinner
 
 from unshackle.core.config import config
-from unshackle.core.console import console, prompt_user, show_notice
+from unshackle.core.console import SyncLive, console, prompt_user, show_notice
 from unshackle.core.constants import AnyTrack
 from unshackle.core.credential import Credential
 from unshackle.core.drm import BlowfishStripe, cbcs, real_kids
@@ -52,7 +54,7 @@ from unshackle.core.titles.music import SONG_FIELDS, Album, Song
 from unshackle.core.tracks import Audio, Chapter, Chapters, Subtitle, Tracks, Video
 from unshackle.core.tracks.attachment import Attachment
 from unshackle.core.tracks.track import Track
-from unshackle.core.tunnel import TunnelClient
+from unshackle.core.tunnel import TunnelClient, parse_retry_after
 from unshackle.core.utils import run_proxy
 from unshackle.core.utils.collections import ci_get
 from unshackle.core.utils.redact import redact_path, redact_text, safe_display_url
@@ -69,6 +71,10 @@ DEFAULT_AUTH_HEADERS = ["X-Secret-Key", "X-Api-Key"]
 SESSION_LOST = ("SESSION_NOT_FOUND", "CONNECT", "TIMEOUT", "TUNNEL_CLOSED")
 # what a recovering call can meet on its way, so these log only once the recovery fails
 RECOVERABLE = (*SESSION_LOST, "SERVER_DRAINING")
+RETRY_AFTER_MAX = 3600
+RETRY_AFTER_LOCK = Lock()
+RATE_LIMIT_TRIES = 3
+TUNNEL_SLOT_POLL = 15
 REOPEN_WAIT = 1800.0  # seconds a lost session waits for its server to come back; covers a deploy's whole drain
 
 _recovering = local()
@@ -90,6 +96,23 @@ def redact_secrets(text: str, data: Optional[Dict[str, Any]] = None) -> str:
     """Mask URL userinfo and any request-payload secrets before unshackle writes the text to the log."""
     secrets = [v for k in SENSITIVE_DATA_KEYS if isinstance(v := (data or {}).get(k), str) and v]
     return redact_text(text, secrets) or ""
+
+
+def wait_retry_after(seconds: int, reason: str = "Rate limited by the server") -> None:
+    """Count down a wait on the console, as ``--slow`` does, so the caller can retry; one hour at most, the rate-limit window.
+
+    Threads refused together share one countdown, each still waits out its own deadline.
+    """
+    deadline = time.monotonic() + min(seconds, RETRY_AFTER_MAX)
+    with RETRY_AFTER_LOCK:
+        if deadline <= time.monotonic():
+            return
+        log.info(f"{reason}, retrying in {math.ceil(deadline - time.monotonic())}s")
+        spinner = Spinner("dots")
+        with SyncLive(Padding(spinner, (0, 5)), console=console, refresh_per_second=12.5, transient=True):
+            while (left := deadline - time.monotonic()) > 0:
+                spinner.update(text=f"{reason}, retrying in {math.ceil(left)} seconds...")
+                time.sleep(min(1.0, left))
 
 
 class RemoteError(SystemExit):
@@ -172,6 +195,7 @@ class RemoteClient:
             {"json": data} if body is None else {"data": body, "headers": {"Content-Type": "application/octet-stream"}}
         )
         gateway_retried = False
+        rate_waits = 0
         while True:
             try:
                 with self.in_flight(endpoint):
@@ -185,6 +209,14 @@ class RemoteClient:
                 raise self.timed_out(endpoint) from None
             # servers differ on which header carries the key, so retry the rest before giving up
             if resp.status_code == 401 and self.next_auth_header():
+                continue
+            if (
+                resp.status_code == 429
+                and rate_waits < RATE_LIMIT_TRIES
+                and (retry_after := parse_retry_after(resp.headers.get("Retry-After")))
+            ):
+                rate_waits += 1
+                wait_retry_after(retry_after)
                 continue
             # a proxy HTML page, not the server's JSON, means a dropped tunnel stream, which one retry gets past
             if (
@@ -831,11 +863,21 @@ def resolve_remote_proxy_arg(proxy_arg: str, providers: Optional[list] = None) -
 def start_tunnel(client: RemoteClient) -> TunnelClient:
     """Open a tunnel that sends the server's requests out through this machine's own connection."""
     headers = {k: str(v) for k, v in client.session.headers.items() if k.lower() != "connection"}
-    tunnel = TunnelClient(client.server_url, headers)
-    try:
-        tunnel.start()
-    except ConnectionError as e:
-        raise click.ClickException(f"--local-proxy could not open a tunnel to the server: {e}")
+    slot_deadline = time.monotonic() + RETRY_AFTER_MAX
+    rate_waits = 0
+    while True:
+        tunnel = TunnelClient(client.server_url, headers)
+        try:
+            tunnel.start()
+            break
+        except ConnectionError as e:
+            if tunnel.retry_after and rate_waits < RATE_LIMIT_TRIES:
+                rate_waits += 1
+                wait_retry_after(tunnel.retry_after)
+            elif tunnel.at_limit and time.monotonic() < slot_deadline:
+                wait_retry_after(TUNNEL_SLOT_POLL, "Every tunnel of this API key is in use")
+            else:
+                raise click.ClickException(f"--local-proxy could not open a tunnel to the server: {e}")
     client.tunnel = tunnel
     return tunnel
 
