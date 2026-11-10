@@ -232,6 +232,7 @@ async def test_heartbeat_late_error_counts_as_rejected(aiohttp_client, monkeypat
     assert stats.errors == {"-": {"SERVICE_ERROR": 1}}
 
 
+@pytest.mark.usefixtures("example_service")
 @pytest.mark.parametrize(("service", "counted_as"), [("EXAMPLE", "EXAMPLE"), ("NOT_INSTALLED", "-")])
 async def test_error_is_counted_by_service_and_logged_with_its_ref(
     aiohttp_client, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture, service: str, counted_as: str

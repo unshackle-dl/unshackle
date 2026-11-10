@@ -48,6 +48,7 @@ def test_region_mismatch_raises(monkeypatch):
     assert exc_info.value.details == {"service": "EXAMPLE"}
 
 
+@pytest.mark.usefixtures("example_service")
 def test_geoblocked_client_region_raises(monkeypatch):
     patch_server_region(monkeypatch, "CA")
     service_class = handlers.Services.load("EXAMPLE")

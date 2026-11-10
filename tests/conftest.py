@@ -70,6 +70,17 @@ def no_speed_limit(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.fixture
+def example_service(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Make the in-repo EXAMPLE the only installed service, whatever the local unshackle.yaml lists."""
+    from unshackle.core import services
+
+    path = config.directories.namespace_dir / "services" / "EXAMPLE" / "__init__.py"
+    monkeypatch.setattr(services, "SERVICES", [path])
+    monkeypatch.setattr(services, "MODULES", {})
+    monkeypatch.setattr(services, "LOAD_ERRORS", [])
+
+
+@pytest.fixture
 def mux_args(monkeypatch: pytest.MonkeyPatch) -> Callable[..., list[str]]:
     """Run Tracks.mux up to mkvmerge and return its arguments; ``ids`` is what the track ID probe reports."""
 
