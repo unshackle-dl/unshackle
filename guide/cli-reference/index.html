@@ -3438,7 +3438,7 @@ and keeps the service's numbering unchanged. Pick an order that covers the whole
 </tr>
 <tr>
 <td><code>--local-proxy</code></td>
-<td>With <code>--remote</code>, send the server's service requests through your machine's own connection. Works with no other proxy option. Check it first with <code>unshackle tunnel-test</code>. See <a href="../proxies-and-vpn/#send-the-servers-requests-through-your-machine">Proxies &amp; VPN</a>.</td>
+<td>With <code>--remote</code>, send the server's service requests through your machine's own connection, or through a <code>--proxy</code> that your machine connects to. Check it first with <code>unshackle tunnel-test</code>. See <a href="../proxies-and-vpn/#send-the-servers-requests-through-your-machine">Proxies &amp; VPN</a>.</td>
 </tr>
 <tr>
 <td><code>--no-proxy</code></td>
@@ -3557,7 +3557,7 @@ and keeps the service's numbering unchanged. Pick an order that covers the whole
 </tr>
 <tr>
 <td><code>--local-proxy</code></td>
-<td>With <code>--remote</code>, send the server's search requests through your machine's own connection. Works with no other proxy option.</td>
+<td>With <code>--remote</code>, send the server's search requests through your machine's own connection, or through a <code>--proxy</code> that your machine connects to.</td>
 </tr>
 <tr>
 <td><code>--no-proxy</code></td>
@@ -3603,7 +3603,7 @@ and keeps the service's numbering unchanged. Pick an order that covers the whole
 <p>Check <code>--local-proxy</code> before a real <code>--remote</code> run. The command finds the IP address that this
 machine exits from, opens a tunnel to the server, and makes the server look up its exit IP address
 through the tunnel. It stops at the first step that fails.</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>unshackle tunnel-test [--server NAME]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>unshackle tunnel-test [--server NAME] [--proxy VALUE]
 </span></code></pre></div>
 <table>
 <thead>
@@ -3616,6 +3616,10 @@ through the tunnel. It stops at the first step that fails.</p>
 <tr>
 <td><code>--server</code></td>
 <td>Name of the remote server from <code>remote_services</code> config, if you configure more than one.</td>
+</tr>
+<tr>
+<td><code>--proxy</code></td>
+<td>Test the route through this proxy, as <code>--local-proxy --proxy</code> uses it. Takes any <code>--proxy</code> value.</td>
 </tr>
 </tbody>
 </table>
