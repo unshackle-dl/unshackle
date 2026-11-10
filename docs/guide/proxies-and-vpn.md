@@ -27,7 +27,7 @@ Five options on the `dl` command control proxying at download time:
 | Option | Effect |
 |---|---|
 | `--proxy` | The proxy to use. Either an explicit URI, or a query that unshackle resolves against your configured providers. |
-| `--local-proxy` | With `--remote`, send the server's service requests through your machine's own connection. Works with no other proxy option. See [Send the server's requests through your machine](#send-the-servers-requests-through-your-machine). |
+| `--local-proxy` | With `--remote`, send the server's service requests through your machine's own connection, or through a `--proxy` that your machine connects to. See [Send the server's requests through your machine](#send-the-servers-requests-through-your-machine). |
 | `--no-proxy` | Force **all** proxy use off. No providers are initialised and no proxy query is resolved. |
 | `--no-proxy-download` | Use the proxy for the manifest, licence, and authentication, but bypass it for the **downloads** themselves. |
 | `--proxy-download` | Use `--proxy` for the manifest, licence, and authentication, and a different proxy for the **downloads**. Takes the same forms as `--proxy`. |
@@ -273,18 +273,31 @@ unshackle dl --remote --local-proxy EXAMPLE 81234567
 
 A VPN app that covers your whole machine then also covers the server's requests, so the
 service sees your VPN's IP address. `--local-proxy` needs `--remote` (or a service with
-`remote: true`), and it works with no other proxy option: unshackle stops if you also give
-`--proxy`, `--no-proxy`, `--proxy-download` or `--no-proxy-download`. A proxy option from the `dl`
-config defaults does not count: `--local-proxy` turns it off for the run.
+`remote: true`). unshackle stops if you also give `--no-proxy`, `--proxy-download` or
+`--no-proxy-download`. A proxy option from the `dl` config defaults does not count:
+`--local-proxy` turns it off for the run.
 
-A `--proxy` on `localhost` or a loopback address, such as the local port of a VPN app, stops a
-`--remote` run with `That proxy is on your machine, so --remote cannot use it`. Connect the VPN
-app for the whole machine, then use `--local-proxy` without `--proxy`.
+Add `--proxy` to send the server's requests through a proxy that your machine connects to. The
+proxy can be on your machine, such as the local port of a VPN app or `hola-proxy`, or any value
+that `--proxy` takes, such as `ca` or `nordvpn:us`:
+
+```shell
+unshackle dl --remote --local-proxy --proxy http://127.0.0.1:8080 EXAMPLE 81234567
+```
+
+The proxy must be `http://`, `https://`, `socks5://` or `socks5h://`, with a username and
+password in the URI if it needs them. If the proxy fails, the request fails: unshackle never
+sends it from your own connection instead. Your machine still refuses a target on your own
+machine or network, and a host name that your machine resolves to a local address only.
+
+Without `--local-proxy`, a `--proxy` on `localhost` or a loopback address stops a `--remote` run
+with `--remote cannot use a proxy on this machine without --local-proxy`, because the server
+cannot reach it.
 
 #### Test it first
 
 `unshackle tunnel-test` checks the route before a real run. Add `--server <name>` to test a
-server other than the default one:
+server other than the default one, and `--proxy <value>` to test the route through a proxy:
 
 ```shell
 unshackle tunnel-test
@@ -292,7 +305,7 @@ unshackle tunnel-test
 
 It does three steps, and it stops at the first one that fails:
 
-1. It looks up the IP address that your machine exits from.
+1. It looks up the IP address that your machine exits from, through `--proxy` if you give one.
 2. It opens a tunnel to the server.
 3. It makes the server look up its exit IP address through the tunnel. That address must be
    the same as in step 1, or in the same country when one lookup used IPv4 and the other IPv6.

@@ -9,21 +9,31 @@ the server and the service, so the client sees only ciphertext.
 from __future__ import annotations
 
 import asyncio
+import base64
+import functools
 import ipaddress
 import itertools
 import json
 import logging
+import re
 import secrets
 import socket
+import ssl
 import struct
 import threading
 from typing import Any, Optional
+from urllib.parse import unquote, urlsplit
 
 import aiohttp
+import certifi
 from aiohttp import WSCloseCode, WSMsgType, web
 from multidict import CIMultiDict
 
 log = logging.getLogger("tunnel")
+
+PROXY_PORTS = {"http": 80, "https": 443, "socks5": 1080, "socks5h": 1080}
+PROXY_TIMEOUT = 10
+HOSTNAME = re.compile(r"[A-Za-z0-9_-]{1,63}(\.[A-Za-z0-9_-]{1,63})*\.?")
 
 OPEN, OK, DATA, CLOSE = range(4)
 HEADER = struct.Struct("!IB")  # stream id, frame kind
@@ -358,15 +368,7 @@ async def connect_public(host: str, port: int) -> tuple[asyncio.StreamReader, as
     synthetic one (such as fake-IP DNS in a TUN) and map it back to the real host, which the client cannot
     check. An IP address from the server must be public."""
     infos = await asyncio.get_running_loop().getaddrinfo(host, port, type=socket.SOCK_STREAM)
-    resolved = [str(info[4][0]) for info in infos]
-    if is_ip_literal(host):
-        addresses = [a for a in resolved if is_public_ip(a)]
-        if not addresses:
-            raise PermissionError(f"{host} is not a public address")
-    else:
-        addresses = [a for a in resolved if not is_local_ip(a)]
-        if not addresses:
-            raise PermissionError(f"{host} resolves only to local addresses ({', '.join(resolved)})")
+    addresses = allowed_addresses(host, [str(info[4][0]) for info in infos])
     error: OSError = OSError(f"could not connect to {host}")
     for address in addresses:
         try:
@@ -379,6 +381,111 @@ async def connect_public(host: str, port: int) -> tuple[asyncio.StreamReader, as
         writer.close()
         error = PermissionError(f"{host} resolves to this machine ({address})")
     raise error
+
+
+def allowed_addresses(host: str, resolved: list[str]) -> list[str]:
+    """The addresses of ``host`` the client may dial for the server: public ones for an IP address, non-local
+    ones for a name."""
+    if is_ip_literal(host):
+        if addresses := [a for a in resolved if is_public_ip(a)]:
+            return addresses
+        raise PermissionError(f"{host} is not a public address")
+    if addresses := [a for a in resolved if not is_local_ip(a)]:
+        return addresses
+    raise PermissionError(f"{host} resolves only to local addresses ({', '.join(resolved)})")
+
+
+async def check_proxied_target(host: str, port: int) -> None:
+    """Refuse a target the exit proxy must not reach for the server: a malformed name, a non-public IP address,
+    or a name that resolves here only to local addresses. The proxy resolves the name itself, so a name this
+    machine cannot resolve passes."""
+    if not (HOSTNAME.fullmatch(host) or parse_ip(host)):
+        raise PermissionError("a malformed host name")
+    name = host.lower().rstrip(".")
+    if name == "localhost" or name.endswith(".localhost"):
+        raise PermissionError(f"{host} is this machine")
+    try:
+        infos = await asyncio.get_running_loop().getaddrinfo(host, port, type=socket.SOCK_STREAM)
+    except (OSError, UnicodeError):
+        if is_ip_literal(host):
+            raise PermissionError(f"{host} is not a public address")
+        return
+    allowed_addresses(host, [str(info[4][0]) for info in infos])
+
+
+async def connect_proxied(proxy: str, host: str, port: int) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
+    """Connect to ``host`` through an http, https or socks5 proxy on the client's side. A failure raises, and
+    never falls back to a direct connection."""
+    await check_proxied_target(host, port)
+    uri = urlsplit(proxy)
+    scheme = uri.scheme.lower()
+    user, password = unquote(uri.username or ""), unquote(uri.password or "")
+    tls = tls_context() if scheme == "https" else None
+    reader, writer = await asyncio.wait_for(
+        asyncio.open_connection(
+            uri.hostname, uri.port or PROXY_PORTS[scheme], ssl=tls, server_hostname=uri.hostname if tls else None
+        ),
+        PROXY_TIMEOUT,
+    )
+    handshake = socks5_handshake if scheme.startswith("socks5") else http_connect
+    try:
+        await asyncio.wait_for(handshake(reader, writer, host, port, user, password), PROXY_TIMEOUT)
+    except BaseException as e:
+        writer.close()
+        if isinstance(e, asyncio.IncompleteReadError):
+            raise OSError("the proxy closed the connection") from e
+        raise
+    return reader, writer
+
+
+@functools.cache
+def tls_context() -> ssl.SSLContext:
+    return ssl.create_default_context(cafile=certifi.where())
+
+
+async def http_connect(
+    reader: asyncio.StreamReader, writer: asyncio.StreamWriter, host: str, port: int, user: str, password: str
+) -> None:
+    target = f"[{host}]:{port}" if ":" in host else f"{host}:{port}"
+    auth = f"Proxy-Authorization: Basic {base64.b64encode(f'{user}:{password}'.encode()).decode()}\r\n" if user else ""
+    writer.write(f"CONNECT {target} HTTP/1.1\r\nHost: {target}\r\n{auth}\r\n".encode())
+    status = await reader.readline()
+    parts = status.split(maxsplit=2)
+    if len(parts) < 2 or not parts[0].startswith(b"HTTP/") or not (parts[1].isdigit() and parts[1][:1] == b"2"):
+        raise OSError(f"the proxy answered {status[:100].decode('latin-1').strip() or 'nothing'}")
+    for _ in range(100):
+        line = await reader.readline()
+        if not line:
+            raise OSError("the proxy closed the connection")
+        if line in (b"\r\n", b"\n"):
+            return
+    raise OSError("the proxy sent too many headers")
+
+
+async def socks5_handshake(
+    reader: asyncio.StreamReader, writer: asyncio.StreamWriter, host: str, port: int, user: str, password: str
+) -> None:
+    writer.write(b"\x05\x02\x00\x02" if user else b"\x05\x01\x00")
+    version, method = await reader.readexactly(2)
+    if version != 5:
+        raise OSError("the proxy is not a SOCKS5 proxy")
+    if method == 2 and user:
+        name, secret = user.encode(), password.encode()
+        writer.write(b"\x01" + bytes([len(name)]) + name + bytes([len(secret)]) + secret)
+        if (await reader.readexactly(2))[1] != 0:
+            raise OSError("the SOCKS5 proxy refused the login")
+    elif method != 0:
+        raise OSError("the SOCKS5 proxy accepts no login method this client has")
+    ip = parse_ip(host)
+    address = (
+        (b"\x01" if ip.version == 4 else b"\x04") + ip.packed if ip else b"\x03" + bytes([len(host)]) + host.encode()
+    )
+    writer.write(b"\x05\x01\x00" + address + port.to_bytes(2, "big"))
+    _, code, _, address_type = await reader.readexactly(4)
+    if code != 0:
+        raise OSError(f"the SOCKS5 proxy refused the connection (code {code})")
+    length = {1: 4, 4: 16}.get(address_type) or (await reader.readexactly(1))[0]
+    await reader.readexactly(length + 2)
 
 
 def parse_retry_after(value: Optional[str]) -> Optional[int]:
@@ -405,9 +512,11 @@ def refusal(e: aiohttp.WSServerHandshakeError) -> str:
 class TunnelClient:
     """The client side: a background thread that keeps the tunnel's WebSocket open and dials for the server."""
 
-    def __init__(self, server_url: str, headers: dict[str, str]) -> None:
+    def __init__(self, server_url: str, headers: dict[str, str], proxy: Optional[str] = None) -> None:
         self.url = server_url.rstrip("/") + ROUTE
         self.headers = headers
+        self.proxy = proxy
+        self.proxy_failed = False
         self.id: Optional[str] = None
         self.error: Optional[BaseException] = None
         self.retry_after: Optional[int] = None
@@ -502,7 +611,9 @@ class TunnelClient:
 
     async def open(self, link: Link, sid: int, host: str, port: int) -> None:
         try:
-            reader, writer = await connect_public(host, port)
+            reader, writer = await (
+                connect_proxied(self.proxy, host, port) if self.proxy else connect_public(host, port)
+            )
         except PermissionError as e:
             if host not in self.refused:  # the server retries, so warn once per host
                 self.refused.add(host)
@@ -510,6 +621,9 @@ class TunnelClient:
             await link.close_stream(sid)
             return
         except (OSError, ValueError, asyncio.TimeoutError) as e:  # the idna codec raises ValueError on a bad hostname
+            if self.proxy and not self.proxy_failed:
+                self.proxy_failed = True
+                log.warning(f"Tunnel dial through the proxy failed: {str(e) or 'timed out'}")
             log.debug(f"Tunnel dial to {host}:{port} failed: {e}")
             await link.close_stream(sid)
             return

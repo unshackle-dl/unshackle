@@ -73,10 +73,12 @@ def test_search_sends_no_login(server_accounts: Any, anonymous: bool) -> None:
     assert client.sent == {"endpoint": "/api/search", "service": "TEST", "query": "query"}
 
 
-def test_local_proxy_sends_the_server_a_tunnel(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize("proxy", [None, "http://127.0.0.1:8080"])
+def test_local_proxy_sends_the_server_a_tunnel(monkeypatch: pytest.MonkeyPatch, proxy: str | None) -> None:
     class FakeTunnel:
-        def __init__(self, server_url: str, headers: dict) -> None:
+        def __init__(self, server_url: str, headers: dict, exit_proxy: str | None = None) -> None:
             self.id = "abc"
+            self.exit_proxy = exit_proxy
 
         def start(self) -> str:
             return self.id
@@ -85,13 +87,14 @@ def test_local_proxy_sends_the_server_a_tunnel(monkeypatch: pytest.MonkeyPatch) 
             self.stopped = True
 
     monkeypatch.setattr(remote_service, "TunnelClient", FakeTunnel)
-    svc, client, _ = make_service({"local_proxy": True})
+    svc, client, _ = make_service({"local_proxy": True, "proxy": proxy})
     svc.log = logging.getLogger("test")
     client.session = SimpleNamespace(headers={"X-Secret-Key": "k"})  # type: ignore[attr-defined]
 
     list(svc.search())
 
     assert client.sent["proxy"] == "tunnel:abc"
+    assert client.tunnel.exit_proxy == proxy
     assert client.tunnel.stopped
 
 
@@ -101,7 +104,7 @@ def test_a_loopback_proxy_points_to_local_proxy(monkeypatch: pytest.MonkeyPatch)
     monkeypatch.setattr(remote_service, "resolve_remote_proxy_arg", lambda arg, providers=None: arg)
     svc, _, _ = make_service({"proxy": "http://127.0.0.1:8888"}, {"global": True})
 
-    with pytest.raises(click.ClickException, match="--local-proxy without --proxy"):
+    with pytest.raises(click.ClickException, match="without --local-proxy"):
         list(svc.search())
 
 

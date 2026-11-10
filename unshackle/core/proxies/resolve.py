@@ -207,9 +207,10 @@ def describe_proxy(provider: Any, uri: str, query: str, allow_debug: bool = True
 
 
 def require_alone_local_proxy(ctx: click.Context) -> None:
-    """Check ``--local-proxy``: it needs a remote run and no other proxy option.
+    """Check ``--local-proxy``: it needs a remote run, and takes no proxy option but a typed ``--proxy``.
 
-    A proxy option that comes from the ``dl`` config defaults, not the command line, is cleared instead.
+    A typed ``--proxy`` becomes the tunnel's exit on this machine. A proxy option that comes from the ``dl``
+    config defaults, not the command line, is cleared instead.
     """
     if not ctx.params.get("remote"):
         raise click.UsageError(
@@ -221,7 +222,7 @@ def require_alone_local_proxy(ctx: click.Context) -> None:
             continue
         if ctx.get_parameter_source(key) in (ParameterSource.DEFAULT, ParameterSource.DEFAULT_MAP):
             ctx.params[key] = False if key.startswith("no_") else None
-        else:
+        elif key != "proxy":
             given.append("--" + key.replace("_", "-"))
     if given:
         raise click.UsageError(f"--local-proxy does not work with {', '.join(given)}.")

@@ -26,7 +26,7 @@ from http.cookiejar import CookieJar
 from pathlib import Path
 from threading import Event, Lock, Thread, local
 from typing import Any, Callable, Dict, Iterable, Iterator, Optional, Protocol, TypeVar, Union
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 from uuid import UUID
 
 import click
@@ -54,7 +54,7 @@ from unshackle.core.titles.music import SONG_FIELDS, Album, Song
 from unshackle.core.tracks import Audio, Chapter, Chapters, Subtitle, Tracks, Video
 from unshackle.core.tracks.attachment import Attachment
 from unshackle.core.tracks.track import Track
-from unshackle.core.tunnel import TunnelClient, parse_retry_after
+from unshackle.core.tunnel import PROXY_PORTS, TunnelClient, parse_retry_after
 from unshackle.core.utils import run_proxy
 from unshackle.core.utils.collections import ci_get
 from unshackle.core.utils.redact import redact_path, redact_text, safe_display_url
@@ -819,15 +819,14 @@ def load_cookies_for_transport(service_tag: str, profile: Optional[str]) -> Opti
     return None
 
 
-def resolve_proxy_arg(proxy_arg: Optional[str]) -> Optional[str]:
+def resolve_proxy_arg(proxy_arg: Optional[str], providers: Optional[list] = None) -> Optional[str]:
     if not proxy_arg:
         return None
 
     from unshackle.core.proxies.resolve import initialize_proxy_providers, resolve_proxy
 
     try:
-        providers = initialize_proxy_providers()
-        return resolve_proxy(proxy_arg, providers)
+        return resolve_proxy(proxy_arg, initialize_proxy_providers() if providers is None else providers)
     except ValueError as e:
         raise click.ClickException(str(e))
 
@@ -860,13 +859,16 @@ def resolve_remote_proxy_arg(proxy_arg: str, providers: Optional[list] = None) -
         raise click.ClickException(str(e))
 
 
-def start_tunnel(client: RemoteClient) -> TunnelClient:
-    """Open a tunnel that sends the server's requests out through this machine's own connection."""
+def start_tunnel(client: RemoteClient, proxy: Optional[str] = None) -> TunnelClient:
+    """Open a tunnel that sends the server's requests out through this machine's own connection, or through
+    ``proxy`` from this machine."""
+    if proxy and (scheme := urlsplit(proxy).scheme.lower()) not in PROXY_PORTS:
+        raise click.ClickException(f"--local-proxy cannot use a {scheme} proxy")
     headers = {k: str(v) for k, v in client.session.headers.items() if k.lower() != "connection"}
     slot_deadline = time.monotonic() + RETRY_AFTER_MAX
     rate_waits = 0
     while True:
-        tunnel = TunnelClient(client.server_url, headers)
+        tunnel = TunnelClient(client.server_url, headers, proxy)
         try:
             tunnel.start()
             break
@@ -1190,7 +1192,7 @@ class RemoteService:
     def require_reachable_proxy(self, proxy: Optional[str]) -> None:
         """Refuse a proxy on this machine when the server is elsewhere: the server cannot reach it."""
         if proxy and is_loopback(proxy) and not is_loopback(self.client.server_url):
-            raise click.ClickException("--remote cannot use a proxy on this machine; use --local-proxy without --proxy")
+            raise click.ClickException("--remote cannot use a proxy on this machine without --local-proxy")
 
     def tunnel(self) -> str:
         """The ``tunnel:<id>`` proxy to send the server for ``--local-proxy``, opening the tunnel the first time."""
@@ -1200,8 +1202,11 @@ class RemoteService:
             )
         tunnel = self.client.tunnel
         if tunnel is None:
-            tunnel = start_tunnel(self.client)
-            self.log.info("The server sends its requests through your connection on this machine")
+            proxy = self.ctx.parent.params.get("proxy") if self.ctx.parent else None
+            tunnel = start_tunnel(self.client, proxy)
+            self.log.info(
+                f"The server sends its requests through your {'proxy' if proxy else 'connection'} on this machine"
+            )
         return f"tunnel:{tunnel.id}"
 
     def authenticate(self, cookies: Optional[CookieJar] = None, credential: Optional[Credential] = None) -> None:
@@ -1256,7 +1261,7 @@ class RemoteService:
                 if country:
                     create_data["proxy_region"] = country.group(1).lower()
         self.require_reachable_proxy(create_data.get("proxy"))
-        local_proxy = None if no_proxy or local else (proxy or create_data.get("proxy"))
+        local_proxy = None if no_proxy else proxy if local else proxy or create_data.get("proxy")
         if local_proxy:
             self._session.proxies["all"] = local_proxy
             run_proxy.pin(self._session)

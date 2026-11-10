@@ -207,7 +207,7 @@ order the service used, then renumbers the episodes into the order you asked for
 | Flag | Description |
 |---|---|
 | `--proxy` | Proxy URI, a country or location code resolved from configured providers, or `provider:region` (e.g. `nordvpn:ca`, `gluetun:us`, `protonvpn:de:berlin`, `controld:yul`). |
-| `--local-proxy` | With `--remote`, send the server's service requests through your machine's own connection. Works with no other proxy option. Check it first with `unshackle tunnel-test`. See [Proxies & VPN](proxies-and-vpn.md#send-the-servers-requests-through-your-machine). |
+| `--local-proxy` | With `--remote`, send the server's service requests through your machine's own connection, or through a `--proxy` that your machine connects to. Check it first with `unshackle tunnel-test`. See [Proxies & VPN](proxies-and-vpn.md#send-the-servers-requests-through-your-machine). |
 | `--no-proxy` | Force-disable all proxy use. |
 | `--no-proxy-download` | Bypass the proxy for **all downloads** (manifest, licence, and auth stay proxied). |
 | `--proxy-download` | Use a different proxy for **all downloads**, in the same forms as `--proxy` (manifest, licence, and auth stay on `--proxy`). |
@@ -251,7 +251,7 @@ unshackle logs in to the service before the search. A service that declares a se
 |---|---|
 | `-p`, `--profile` | Profile for credentials and cookies. |
 | `--proxy` | Proxy URI, country or location code, or `provider:region` (e.g. `controld:ca`). |
-| `--local-proxy` | With `--remote`, send the server's search requests through your machine's own connection. Works with no other proxy option. |
+| `--local-proxy` | With `--remote`, send the server's search requests through your machine's own connection, or through a `--proxy` that your machine connects to. |
 | `--no-proxy` | Force-disable all proxy use. |
 | `--remote` | Search on a remote unshackle server. The server logs in to the service. unshackle sends it your credentials, cookies and cache for the profile, and saves the cache that the server sends back. A service that searches with no login gets none of them. |
 | `--local` | Search with the local service code, also when the config sets `remote: true` for the service. |
@@ -294,12 +294,13 @@ machine exits from, opens a tunnel to the server, and makes the server look up i
 through the tunnel. It stops at the first step that fails.
 
 ```
-unshackle tunnel-test [--server NAME]
+unshackle tunnel-test [--server NAME] [--proxy VALUE]
 ```
 
 | Flag | Description |
 |---|---|
 | `--server` | Name of the remote server from `remote_services` config, if you configure more than one. |
+| `--proxy` | Test the route through this proxy, as `--local-proxy --proxy` uses it. Takes any `--proxy` value. |
 
 See [Proxies & VPN](proxies-and-vpn.md#send-the-servers-requests-through-your-machine).
 

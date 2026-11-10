@@ -936,7 +936,7 @@ class dl:
         "--local-proxy",
         is_flag=True,
         default=False,
-        help="With --remote, the server sends its service requests out through this machine's own connection (and any VPN on it). Works with no other proxy option.",
+        help="With --remote, the server sends its service requests out through this machine's own connection (and any VPN on it), or through a --proxy dialled from this machine.",
     )
     @click.option(
         "--tag",
@@ -1570,14 +1570,18 @@ class dl:
             proxy, no_proxy = ctx.params.get("proxy"), bool(ctx.params.get("no_proxy"))
 
         # A server on this machine can reach a local proxy, so only a server elsewhere is guarded
-        self.remote_needs_public_proxy = self.is_remote and not is_loopback(server_url(ctx.params.get("server")))
+        self.remote_needs_public_proxy = (
+            self.is_remote
+            and not ctx.params.get("local_proxy")
+            and not is_loopback(server_url(ctx.params.get("server")))
+        )
 
         self.proxy_providers = []
         if no_proxy:
             ctx.params["proxy"] = None
         else:
             if self.remote_needs_public_proxy and proxy and proxy.lower().startswith("gluetun:"):
-                raise click.UsageError("Gluetun runs on your machine, so --remote cannot use it.")
+                raise click.UsageError("Gluetun runs on your machine, so --remote needs --local-proxy to use it.")
             if proxy_providers is not None:
                 self.proxy_providers = list(proxy_providers)
             else:

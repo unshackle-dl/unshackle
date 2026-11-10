@@ -21,12 +21,14 @@ from multidict import CIMultiDict
 from unshackle.core import tunnel
 from unshackle.core.api.routes import tunnel as tunnel_route
 from unshackle.core.api.routes import tunnel_check
+from unshackle.core.proxies.controld import relay
 from unshackle.core.tunnel import (
     CHECK_ROUTE,
     OPEN,
     ROUTE,
     TUNNELS,
     TunnelClient,
+    connect_proxied,
     connect_public,
     frame,
     is_ip_literal,
@@ -258,13 +260,16 @@ def local_proxy_ctx(params: dict, typed: set) -> click.Context:
     return ctx
 
 
-def test_local_proxy_works_with_no_other_proxy_option() -> None:
+def test_local_proxy_works_with_a_typed_proxy_and_no_other_proxy_option() -> None:
     from unshackle.core.proxies.resolve import require_alone_local_proxy
 
-    with pytest.raises(click.UsageError, match="--proxy, --proxy-download"):
+    with pytest.raises(click.UsageError, match="with --proxy-download\\.$"):
         require_alone_local_proxy(
             local_proxy_ctx({"remote": True, "proxy": "us", "proxy_download": "us"}, {"proxy", "proxy_download"})
         )
+    ctx = local_proxy_ctx({"remote": True, "proxy": "http://127.0.0.1:8080"}, {"proxy"})
+    require_alone_local_proxy(ctx)
+    assert ctx.params["proxy"] == "http://127.0.0.1:8080"
     with pytest.raises(click.UsageError, match="needs --remote"):
         require_alone_local_proxy(local_proxy_ctx({"remote": False}, set()))
 
@@ -612,3 +617,120 @@ def test_a_failed_start_leaves_no_thread_behind() -> None:
         assert not client.thread.is_alive()
     finally:
         silent.close()
+
+
+class ExitProxy(socketserver.BaseRequestHandler):
+    """An exit proxy on this machine: takes one HTTP CONNECT or SOCKS5 CONNECT and pipes it to the test target."""
+
+    server: ExitServer
+
+    def handle(self) -> None:
+        sock, seen = self.request, self.server.seen
+        stream = sock.makefile("rb")
+        if stream.peek(1)[:1] == b"\x05":
+            stream.read(stream.read(2)[1])
+            sock.sendall(b"\x05\x02")
+            stream.read(1)
+            user = stream.read(stream.read(1)[0])
+            seen.append(user + b":" + stream.read(stream.read(1)[0]))
+            sock.sendall(b"\x01\x00")
+            address_type = stream.read(4)[3]
+            seen.append(stream.read(stream.read(1)[0] if address_type == 3 else 4 if address_type == 1 else 16))
+            stream.read(2)
+            sock.sendall(b"\x05\x00\x00\x01" + bytes(6))
+        else:
+            head = b""
+            while not head.endswith(b"\r\n\r\n"):
+                head += stream.readline()
+            seen.append(head)
+            sock.sendall(b"HTTP/1.1 " + self.server.status + b"\r\n\r\n")
+            if not self.server.status.startswith(b"200"):
+                return
+        upstream = socket.create_connection(("127.0.0.1", self.server.target))
+        threading.Thread(target=relay, args=(upstream, sock), daemon=True).start()
+        relay(sock, upstream)
+
+
+class ExitServer(socketserver.ThreadingTCPServer):
+    daemon_threads = True
+    seen: list[bytes]
+    status: bytes
+    target: int
+
+
+@pytest.fixture
+def exit_proxy(target: int) -> Iterator[ExitServer]:
+    proxy = ExitServer(("127.0.0.1", 0), ExitProxy)
+    proxy.seen, proxy.status, proxy.target = [], b"200 Connection established", target
+    threading.Thread(target=proxy.serve_forever, daemon=True).start()
+    yield proxy
+    proxy.shutdown()
+
+
+@pytest.mark.parametrize("scheme", ["http", "socks5h"])
+def test_the_tunnel_dials_through_an_exit_proxy_with_its_login(
+    server: str, exit_proxy: ExitServer, scheme: str
+) -> None:
+    port = exit_proxy.server_address[1]
+    client = TunnelClient(server, {"X-Secret-Key": "alice"}, f"{scheme}://us%40er:p%3Ass@127.0.0.1:{port}")
+    proxy = tunnel_proxy(client.start(), "alice")
+    resp = requests.get("http://hello.example/", proxies={"all": proxy}, timeout=10)
+    client.stop()
+
+    assert resp.text == "hello through the tunnel"
+    if scheme == "http":
+        assert exit_proxy.seen[0].startswith(b"CONNECT hello.example:80 HTTP/1.1\r\n")
+        assert b"Proxy-Authorization: Basic dXNAZXI6cDpzcw==\r\n" in exit_proxy.seen[0]
+    else:
+        assert exit_proxy.seen == [b"us@er:p:ss", b"hello.example"]
+
+
+@pytest.mark.parametrize(
+    ("host", "address"),
+    [
+        ("127.0.0.1", None),
+        ("::1", None),
+        ("10.1", None),
+        ("localhost", None),
+        ("printer.localhost.", None),
+        ("bad.example\r\nX-Injected: 1", None),
+        ("bad example", None),
+        ("rebind.example", "192.168.1.1"),
+        ("metadata.example", "169.254.169.254"),
+    ],
+)
+def test_the_exit_proxy_never_carries_a_local_or_malformed_target(
+    monkeypatch: pytest.MonkeyPatch, exit_proxy: ExitServer, host: str, address: str | None
+) -> None:
+    async def resolve(self: object, host: str, port: int, **_: object) -> list:
+        return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", (address, port))]
+
+    if address:
+        monkeypatch.setattr(asyncio.BaseEventLoop, "getaddrinfo", resolve)
+    with pytest.raises(PermissionError):
+        asyncio.run(connect_proxied(f"http://127.0.0.1:{exit_proxy.server_address[1]}", host, 80))
+    assert exit_proxy.seen == []
+
+
+def test_a_refused_connect_fails_and_never_dials_direct(
+    server: str, target: int, exit_proxy: ExitServer, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(tunnel, "is_public_ip", lambda address: True)  # so a direct dial to the target would work
+    monkeypatch.setattr(tunnel, "dialled_itself", lambda writer: False)
+    exit_proxy.status = b"407 Proxy Authentication Required"
+    hits = Hello.hits
+    client = TunnelClient(server, {"X-Secret-Key": "alice"}, f"http://127.0.0.1:{exit_proxy.server_address[1]}")
+    proxy = tunnel_proxy(client.start(), "alice")
+    with pytest.raises(requests.exceptions.ConnectionError):
+        requests.get(f"http://127.0.0.1:{target}/", proxies={"all": proxy}, timeout=10)
+    client.stop()
+    assert len(exit_proxy.seen) == 1 and Hello.hits == hits
+    with pytest.raises(OSError, match="407"):
+        asyncio.run(connect_proxied(f"http://127.0.0.1:{exit_proxy.server_address[1]}", "hello.example", 80))
+
+
+def test_a_proxy_the_tunnel_cannot_dial_through_is_refused_at_start() -> None:
+    from unshackle.core.remote_service import start_tunnel
+
+    with pytest.raises(click.ClickException, match="cannot use a socks4 proxy"):
+        start_tunnel(None, "socks4://127.0.0.1:1080")  # type: ignore[arg-type]
