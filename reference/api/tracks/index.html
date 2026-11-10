@@ -2178,6 +2178,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#unshackle.core.tracks.Hybrid.align_rpu" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;align_rpu
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#unshackle.core.tracks.Hybrid.level_5" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2248,6 +2259,50 @@
     <span class="md-ellipsis">
       
         <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;convert_hdr10plus_to_dv
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unshackle.core.tracks.Hybrid.measure_frames" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;measure_frames
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unshackle.core.tracks.Hybrid.dropped_leading_frames" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;dropped_leading_frames
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unshackle.core.tracks.Hybrid.generator_config" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;generator_config
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unshackle.core.tracks.Hybrid.measure_dv" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;measure_dv
       
     </span>
   </a>
@@ -3673,6 +3728,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#unshackle.core.tracks.Hybrid.align_rpu" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;align_rpu
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#unshackle.core.tracks.Hybrid.level_5" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3743,6 +3809,50 @@
     <span class="md-ellipsis">
       
         <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;convert_hdr10plus_to_dv
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unshackle.core.tracks.Hybrid.measure_frames" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;measure_frames
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unshackle.core.tracks.Hybrid.dropped_leading_frames" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;dropped_leading_frames
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unshackle.core.tracks.Hybrid.generator_config" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;generator_config
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unshackle.core.tracks.Hybrid.measure_dv" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;measure_dv
       
     </span>
   </a>
@@ -5943,7 +6053,8 @@ any existing data.</p>
 
         <p>Takes the Dolby Vision and HDR10(+) streams out of the VideoTracks.
 It will then attempt to inject the Dolby Vision metadata layer to the HDR10(+) stream.
-If no DV track is available but HDR10+ is present, it will convert HDR10+ to DV.</p>
+If no DV track is available, it makes the DV from the HDR10+ metadata, or from the
+decoded video when there is no HDR10+ or no hdr10plus_tool.</p>
 
     </div>
 
@@ -5951,6 +6062,28 @@ If no DV track is available but HDR10+ is present, it will convert HDR10+ to DV.
 
 
 
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="unshackle.core.tracks.Hybrid.align_rpu" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">align_rpu</span>
+
+
+<a href="#unshackle.core.tracks.Hybrid.align_rpu" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">align_rpu</span><span class="p">(</span><span class="n">base</span><span class="p">,</span> <span class="n">dv</span><span class="p">)</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Shift the RPU so that it starts on the first frame of the base.</p>
+<p>--sample cuts each track on its own segment grid, so the DV track can start before or after the
+base. An RPU that starts early loses its first frames; one that starts late repeats its first frame.</p>
+
+
+    </div>
+
+</div>
 
 <div class="doc doc-object doc-function">
 
@@ -6105,6 +6238,91 @@ MaxCLL. A value of 0 means "unknown", and this method keeps it as-is.</p>
 --hdr10plus-json sets L1 avg from the linear AverageMaxRGB and so makes most scenes too bright.
 config.generate_dv_mode picks the L1 avg floor: v29 (about 2.4 nits, closest to the pixels) or v40
 (about 10 nits, as in studio CM v4.0 RPUs). legacy hands the HDR10+ JSON to dovi_tool instead.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="unshackle.core.tracks.Hybrid.measure_frames" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">measure_frames</span>
+
+
+<a href="#unshackle.core.tracks.Hybrid.measure_frames" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">measure_frames</span><span class="p">(</span><span class="n">input_video</span><span class="p">,</span> <span class="n">crop</span><span class="p">)</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Decode the whole video through MEASURE_GRAPH.</p>
+<p>Returns its frame_stats and the highest linear frame average (65535 = 10000 nits).</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="unshackle.core.tracks.Hybrid.dropped_leading_frames" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">dropped_leading_frames</span>
+
+
+<a href="#unshackle.core.tracks.Hybrid.dropped_leading_frames" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">dropped_leading_frames</span><span class="p">(</span><span class="n">stream</span><span class="p">)</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>How many frames at the head of a raw HEVC file the decoder gives no picture for.</p>
+<p>A file that starts on an open GOP holds frames that need the GOP before it.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="unshackle.core.tracks.Hybrid.generator_config" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">generator_config</span>
+
+
+<a href="#unshackle.core.tracks.Hybrid.generator_config" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">generator_config</span><span class="p">(</span><span class="n">measured_cll</span><span class="p">,</span> <span class="n">measured_fall</span><span class="p">)</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>The dovi_tool generator config without its shots, for config.generate_dv_mode.</p>
+<p>Level 6 comes from the HDR10 track. The measured light levels fill only what the track does not state.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="unshackle.core.tracks.Hybrid.measure_dv" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">measure_dv</span>
+
+
+<a href="#unshackle.core.tracks.Hybrid.measure_dv" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">measure_dv</span><span class="p">(</span><span class="n">crop</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Generate a Dolby Vision RPU with L1 measured from the decoded video, one shot per scene cut.</p>
+<p>It measures HDR10.hevc, the file that gets the RPU, so the shots count the same frames. The first
+shot takes the leading frames that the decoder drops.</p>
 
 
     </div>

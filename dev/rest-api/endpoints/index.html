@@ -4086,7 +4086,7 @@ ignore it safely. See <a href="../../creating-a-service/#split-episodes">Split e
 <td><code>generate_dv</code></td>
 <td>boolean</td>
 <td><code>false</code></td>
-<td>With <code>HYBRID</code> in <code>range</code>, make Dolby Vision from the HDR10+ metadata when a title has no DV track. Needs <code>hdr10plus_tool</code> on the server. Without <code>HYBRID</code> in <code>range</code>, the request returns <code>400</code>.</td>
+<td>With <code>HYBRID</code> in <code>range</code>, make Dolby Vision from the HDR10+ metadata or the decoded video when a title has no DV track. With <code>HDR10</code> or <code>HDR10P</code> in <code>range</code> and no <code>HYBRID</code>, make it for that base and ignore a DV track. With none of the three in <code>range</code>, the field has no effect.</td>
 </tr>
 <tr>
 <td><code>repack</code></td>
