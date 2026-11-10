@@ -52,7 +52,7 @@ Common config keys. This is a useful subset, and every `dl` flag works:
 | `speed_limit` | str | *(unlimited)* | Total download speed cap across all downloads combined, e.g. `500k`, `5M`, `1.5G` or plain bytes/sec. Values are bytes, not bits (`5M` = 5.0 MB/s). |
 | `slow` | str | *(unset)* | Inter-title delay, e.g. `"20-40"`. |
 | `best_available` | bool | `false` | Warn instead of failing when a requested resolution, range, video language, or audio language is missing, or when one DRM system does not license under `--all-drm`. The CLI flag is `--best-available`, also spelled `--warn-only`. |
-| `generate_dv` | bool | `false` | With `-r HYBRID`, make Dolby Vision from the HDR10+ metadata when a title has no DV track. Needs `hdr10plus_tool`. See [Dolby Vision from HDR10+](../../guide/downloading.md#dolby-vision-from-hdr10). |
+| `generate_dv` | bool | `false` | With `-r HYBRID`, make Dolby Vision from the HDR10+ metadata or the decoded video when a title has no DV track. With `-r HDR10` or `-r HDR10P`, make it for that base and ignore a DV track. See [Dolby Vision without a DV track](../../guide/downloading.md#dolby-vision-without-a-dv-track). |
 | `proxy` | str | *(unset)* | Default proxy URI or 2-letter country. |
 | `no_folder` | bool | `false` | Do not create a per-title folder. |
 
@@ -407,7 +407,7 @@ dual_multi_mode: strict
 Find the HDR10+ tracks that a service labels as HDR10. Before unshackle lists or selects tracks, it
 reads the first fragment of HEVC HDR10 tracks from DASH, HLS fMP4 and one-file sources. A track
 whose first frame carries HDR10+ (SMPTE ST 2094-40) metadata becomes `HDR10P`. Then `-r HDR10P`,
-`--list` and [`--generate-dv`](../../guide/downloading.md#dolby-vision-from-hdr10) use it.
+`--list` and [`--generate-dv`](../../guide/downloading.md#dolby-vision-without-a-dv-track) use it.
 
 unshackle also probes HEVC Dolby Vision tracks. A DV track that carries HDR10+ keeps its `DV`
 range, so `-r DV` selects it, and `--list` shows it as `DV+HDR10P`. `-r HYBRID` uses it as the
@@ -440,7 +440,7 @@ remote downloads and to the REST API.
 
 - **Type:** `str` &nbsp;·&nbsp; **Default:** `v29`
 
-How [`--generate-dv`](../../guide/downloading.md#dolby-vision-from-hdr10) sets the Level 1 brightness
+How [`--generate-dv`](../../guide/downloading.md#dolby-vision-without-a-dv-track) sets the Level 1 brightness
 values of the Dolby Vision it makes from HDR10+. All modes make one shot per HDR10+ scene and keep the
 same peak and letterbox area. They differ in the scene average, which the TV uses to tone-map.
 
@@ -453,6 +453,9 @@ same peak and letterbox area. They differ in the scene average, which the TV use
 ```yaml
 generate_dv_mode: v29
 ```
+
+Dolby Vision that unshackle measures from the decoded video uses its measured average in all modes.
+`v40` raises the lowest average to about 10 nits, and `legacy` is the same as `v29`.
 
 The setting applies on the machine that runs the hybrid step: the client for a remote download, the
 server for a REST API job.

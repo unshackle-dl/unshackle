@@ -19,10 +19,12 @@ import pytest
 import unshackle.commands.dl as dl_module
 from tests.remote.unit.test_remote_service_helpers import _sent_create_data
 from unshackle.commands.dl import (
+    generated_dv_ranges,
     hybrid_gate_failure,
     hybrid_plan,
     hybrid_source_tracks,
     hybrid_step_error,
+    keep_generated_dv_bases,
     missing_hybrid_error,
     select_hybrid_bases,
 )
@@ -33,7 +35,15 @@ from unshackle.core.service import Service, TrackRequest
 from unshackle.core.services import Services
 from unshackle.core.tracks import Audio, Chapter, Subtitle, Tracks, Video
 from unshackle.core.tracks import hybrid as hybrid_mod
-from unshackle.core.tracks.hybrid import Hybrid, hdr10plus_mean_pq, hdr10plus_shots, nits_to_pq
+from unshackle.core.tracks.hybrid import (
+    Hybrid,
+    frame_stats,
+    hdr10plus_mean_pq,
+    hdr10plus_shots,
+    measured_shots,
+    nits_to_pq,
+    pq_to_nits,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -209,6 +219,26 @@ def make_hybrid() -> Hybrid:
     obj.rpu_file = "RPU.bin"
     obj.hdr10plus_file = "HDR10Plus.json"
     return obj
+
+
+def stub_hybrid_steps(monkeypatch: pytest.MonkeyPatch, *steps: str, tool: Optional[str] = "hdr10plus_tool") -> None:
+    """Make the stream, Level 5 and inject steps (and those named) do nothing, with a fixed active area."""
+    for name in ("extract_stream", "level_5", "injecting", *steps):
+        monkeypatch.setattr(Hybrid, name, lambda self, *a, **k: None)
+    monkeypatch.setattr(Hybrid, "detect_active_area", lambda self, path: ((0, 100, 0, 100), 0.9))
+    monkeypatch.setattr(hybrid_mod.console, "print", lambda *a, **k: None)
+    monkeypatch.setattr(hybrid_mod, "HDR10PlusTool", tool)
+
+
+def capture_generate(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
+    """The config that dovi.generate gets, filled in when it runs."""
+    written: dict[str, Any] = {}
+    monkeypatch.setattr(
+        hybrid_mod.dovi,
+        "generate",
+        lambda config_path, output, **k: written.update(json.loads(config_path.read_text())),
+    )
+    return written
 
 
 @pytest.mark.parametrize("top, expected", [(277, (2160 - 554) / 2160), (1000, None)])
@@ -411,17 +441,199 @@ def test_a_conversion_run_removes_its_rpus_so_the_next_base_makes_its_own(
     def level_6(self: Hybrid) -> None:
         (tmp_path / "RPU_L6.bin").write_bytes(b"rpu")
 
-    for name in ("extract_stream", "extract_hdr10plus", "level_5", "injecting"):
-        monkeypatch.setattr(Hybrid, name, lambda self, *a, **k: None)
-    monkeypatch.setattr(Hybrid, "detect_active_area", lambda self, path: ((0, 100, 0, 100), 0.9))
+    stub_hybrid_steps(monkeypatch, "extract_hdr10plus")
     monkeypatch.setattr(Hybrid, "convert_hdr10plus_to_dv", convert)
     monkeypatch.setattr(Hybrid, "level_6", level_6)
-    monkeypatch.setattr(hybrid_mod.console, "print", lambda *a, **k: None)
 
     Hybrid([SimpleNamespace(id="b", path=base, width=None, height=2160, range=Video.Range.HDR10P)], "TEST")
 
     assert seen == {"stale_l6": False, "active_fraction": 0.9}
     assert not (tmp_path / "RPU.bin").exists() and not (tmp_path / "RPU_L6.bin").exists()
+
+
+@pytest.mark.parametrize("range_, tool", [(Video.Range.HDR10, "hdr10plus_tool"), (Video.Range.HDR10P, None)])
+def test_a_base_without_usable_hdr10plus_is_measured_inside_its_crop(
+    range_: Video.Range, tool: Optional[str], quiet: None, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    base = tmp_path / "base.mkv"
+    base.write_bytes(b"")
+    (tmp_path / "RPU_L6.bin").write_bytes(b"stale")
+    seen: dict[str, Any] = {}
+
+    def measure(self: Hybrid, crop: Any = None) -> None:
+        seen.update(crop=crop, stale_l6=(tmp_path / "RPU_L6.bin").exists())
+        (tmp_path / "RPU.bin").write_bytes(b"rpu")
+
+    stub_hybrid_steps(monkeypatch, "level_6", tool=tool)
+    monkeypatch.setattr(Hybrid, "measure_dv", measure)
+
+    Hybrid([SimpleNamespace(id="b", path=base, width=None, height=2160, range=range_)], "TEST")
+
+    assert seen == {"crop": (0, 100, 0, 100), "stale_l6": False}
+    assert not (tmp_path / "RPU.bin").exists()
+
+
+def test_an_hdr10plus_label_without_metadata_is_measured(
+    quiet: None, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    base = tmp_path / "base.mkv"
+    base.write_bytes(b"")
+    measured: list[Any] = []
+
+    def no_metadata(*args: Any, **kwargs: Any) -> bytes:
+        raise RuntimeError("hdr10plus_tool extract failed: Error: File doesn't contain dynamic metadata")
+
+    stub_hybrid_steps(monkeypatch, "level_6")
+    monkeypatch.setattr(Hybrid, "measure_dv", lambda self, crop=None: measured.append(crop))
+    monkeypatch.setattr(hybrid_mod, "run_step", no_metadata)
+
+    hybrid = Hybrid([SimpleNamespace(id="b", path=base, width=None, height=2160, range=Video.Range.HDR10P)], "TEST")
+
+    assert measured == [(0, 100, 0, 100)] and hybrid.hdr10plus_to_dv is False
+
+
+MEASURED = """frame:0    pts:0       pts_time:0
+lavfi.scd.score=0.000
+lavfi.signalstats.YMIN=1600
+lavfi.signalstats.YAVG=16000.5
+lavfi.signalstats.YMAX=32000
+frame:1    pts:42      pts_time:0.042
+lavfi.scd.score=0.100
+lavfi.signalstats.YMIN=800
+lavfi.signalstats.YAVG=32000.5
+lavfi.signalstats.YMAX=48000
+frame:2    pts:83      pts_time:0.083
+lavfi.scd.score=55.000
+lavfi.scd.time=0.083
+lavfi.signalstats.YMIN=160
+lavfi.signalstats.YAVG=1600
+lavfi.signalstats.YMAX=3200
+"""
+
+
+def test_measured_frames_become_one_shot_per_scene_cut() -> None:
+    frames = frame_stats(MEASURED.splitlines(keepends=True))
+    assert frames == [(1600, 16000.5, 32000, False), (800, 32000.5, 48000, False), (160, 1600.0, 3200, True)]
+
+    shots = measured_shots(frames[:2] * 6 + frames[2:])
+
+    assert [(s["start"], s["duration"]) for s in shots] == [(0, 12), (12, 1)]
+    assert shots[0]["metadata_blocks"] == [{"Level1": {"min_pq": 50, "max_pq": 2999, "avg_pq": 1500}}]
+    assert shots[1]["metadata_blocks"] == [{"Level1": {"min_pq": 10, "max_pq": 200, "avg_pq": 100}}]
+
+
+def test_a_cut_on_the_first_frame_or_inside_a_flash_burst_opens_no_shot() -> None:
+    still, cut = (0, 1.0, 2, False), (0, 1.0, 2, True)
+    shots = measured_shots([cut] + [still] * 11 + [cut, still, cut] + [still] * 9 + [cut])
+    assert [(s["start"], s["duration"]) for s in shots] == [(0, 12), (12, 12), (24, 1)]
+
+
+def test_pq_to_nits_is_the_inverse_of_nits_to_pq() -> None:
+    for nits in (0.005, 1.0, 100.0, 1000.0, 10000.0):
+        assert pq_to_nits(nits_to_pq(nits)) == pytest.approx(nits, rel=1e-6)
+
+
+@pytest.mark.parametrize("stream, expected", [((0, 0), (1000, 400)), ((800, 200), (800, 200))])
+def test_measured_light_levels_fill_only_what_the_stream_does_not_state(
+    stream: tuple[int, int], expected: tuple[int, int], quiet: None, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    peak = round(nits_to_pq(1000.0) * 65535 / 4095)
+    frames = [(0, 100.0, peak, False)]
+    written = capture_generate(monkeypatch)
+    hybrid = make_hybrid()
+    monkeypatch.setattr(Hybrid, "measure_frames", lambda self, path, crop: (frames, 400 * 65535 / 10000))
+    monkeypatch.setattr(Hybrid, "dropped_leading_frames", lambda self, path: 0)
+    monkeypatch.setattr(Hybrid, "probe_hdr_metadata", lambda self: (1000, 1, *stream))
+
+    hybrid.measure_dv()
+
+    level6 = written["level6"]
+    assert (level6["max_content_light_level"], level6["max_frame_average_light_level"]) == expected
+    assert written["shots"] == measured_shots(frames) and "l1_avg_pq_cm_version" not in written
+    assert not (tmp_path / "generate.json").exists()
+
+
+def test_leading_frames_the_decoder_dropped_go_to_the_first_shot(
+    quiet: None, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """dovi_tool pads a short RPU at its end, which would put every cut early."""
+    frames = [(10, 100.0, 1000, False)] * 12 + [(20, 200.0, 2000, True)]
+    written = capture_generate(monkeypatch)
+    monkeypatch.setattr(Hybrid, "measure_frames", lambda self, path, crop: (frames, 0.0))
+    monkeypatch.setattr(Hybrid, "dropped_leading_frames", lambda self, path: 2)
+    monkeypatch.setattr(Hybrid, "probe_hdr_metadata", lambda self: (1000, 1, 800, 200))
+
+    make_hybrid().measure_dv()
+
+    assert [(s["start"], s["duration"]) for s in written["shots"]] == [(0, 14), (14, 1)]
+
+
+@pytest.mark.parametrize("stream, expected", [((0, 0), (600, 30)), ((650, 120), (650, 120))])
+def test_an_hdr10plus_conversion_fills_light_levels_the_stream_does_not_state(
+    stream: tuple[int, int], expected: tuple[int, int], quiet: None, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    meta = metadata([(2, LETTERBOXED)])
+    meta["SceneInfo"][1]["LuminanceParameters"]["MaxScl"] = [4000, 6000, 5000]
+    (tmp_path / "HDR10Plus.json").write_text(json.dumps(meta))
+    hybrid = make_hybrid()
+    monkeypatch.setattr(hybrid, "probe_hdr_metadata", lambda: (1000, 1, *stream))
+    seen = capture_generate(monkeypatch)
+
+    hybrid.convert_hdr10plus_to_dv()
+
+    level6 = seen["level6"]
+    assert (level6["max_content_light_level"], level6["max_frame_average_light_level"]) == expected
+
+
+@pytest.mark.parametrize(
+    "dv_start, expected",
+    [
+        (122.0, {"duplicate": [{"source": 0, "offset": 0, "length": 48}]}),
+        (119.0, {"remove": ["0-23"]}),
+        (120.0, None),
+        (119.99, None),
+        (120.01, None),
+    ],
+)
+def test_a_sample_rpu_is_shifted_to_the_first_frame_of_the_base(
+    dv_start: float, expected: Optional[dict[str, Any]], quiet: None, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """--sample cuts each track on its own segment grid, so the RPU can start before or after the base."""
+    seen: dict[str, Any] = {}
+    monkeypatch.setattr(
+        hybrid_mod.dovi, "editor", lambda source, spec, output, **k: seen.update(json.loads(spec.read_text()))
+    )
+    hybrid = make_hybrid()
+
+    hybrid.align_rpu(SimpleNamespace(sample_start=120.0, fps=None), SimpleNamespace(sample_start=dv_start, fps=24.0))  # type: ignore[arg-type]
+
+    assert (seen or None) == expected
+    assert hybrid.rpu_file == ("RPU_ALIGN.bin" if expected else "RPU.bin")
+
+
+def test_a_base_range_with_the_flag_runs_as_a_hybrid_of_that_base_alone() -> None:
+    R = Video.Range
+    assert generated_dv_ranges([R.HDR10], True) == ([R.HYBRID], [R.HDR10])
+    assert generated_dv_ranges([R.HDR10P, R.SDR], True) == ([R.HYBRID, R.SDR], [R.HDR10P])
+    for unchanged in ([R.HDR10], False), ([R.HYBRID, R.HDR10P], True), ([R.DV], True), ([R.HDR10, R.DV], True):
+        assert generated_dv_ranges(*unchanged) == (unchanged[0], [])
+
+    videos = [video("dv", R.DV), video("h", R.HDR10), video("p", R.HDR10P), video("s", R.SDR)]
+    assert [v.id for v in keep_generated_dv_bases(videos, [R.HDR10])] == ["h", "s"]
+    assert hybrid_gate_failure(keep_generated_dv_bases(videos, [R.HDR10]), True) is None
+
+
+def test_hdr10plus_is_the_base_before_hdr10_at_one_height() -> None:
+    videos = [video("h", Video.Range.HDR10), video("p", Video.Range.HDR10P), video("h1080", Video.Range.HDR10, 1080)]
+    assert [v.id for v in hybrid_plan(videos, True)[0]] == ["p", "h1080"]
+    assert [v.id for v in select_hybrid_bases(videos[::-1])] == ["p", "h1080"]
+
+
+@pytest.mark.parametrize("to_dv", [False, True])
+def test_an_hdr10_base_without_dv_is_planned_only_with_the_flag(to_dv: bool) -> None:
+    videos = [video("h", Video.Range.HDR10)]
+    assert (hybrid_gate_failure(videos, to_dv) is None) is to_dv
+    assert [v.id for v in hybrid_plan(videos, to_dv)[0]] == (["h"] if to_dv else [])
 
 
 def test_a_failed_resolution_removes_its_crop_edits_and_keeps_the_dv_files(
@@ -446,8 +658,12 @@ def test_a_failed_resolution_removes_its_crop_edits_and_keeps_the_dv_files(
     monkeypatch.setattr(Hybrid, "injecting", failed_inject)
     monkeypatch.setattr(hybrid_mod.console, "print", lambda *a, **k: None)
     videos = [
-        SimpleNamespace(id="b", path=tmp_path / "base.mkv", width=None, height=2160, range=Video.Range.HDR10),
-        SimpleNamespace(id="d", path=tmp_path / "dv.mkv", width=None, height=1080, range=Video.Range.DV),
+        SimpleNamespace(
+            id="b", path=tmp_path / "base.mkv", width=None, height=2160, range=Video.Range.HDR10, sample_start=0.0
+        ),
+        SimpleNamespace(
+            id="d", path=tmp_path / "dv.mkv", width=None, height=1080, range=Video.Range.DV, sample_start=0.0
+        ),
     ]
 
     with pytest.raises(ValueError):
@@ -566,17 +782,10 @@ def test_the_hybrid_step_gets_the_base_alone_when_there_is_no_dv(tmp_path: Path)
     assert len(tracks) == 1 and tracks[0].range == Video.Range.HDR10P and tracks[0].needs_duration_fix
 
 
-def test_the_api_needs_hybrid_for_generate_dv() -> None:
-    assert "HYBRID" in (validate_download_parameters({"generate_dv": True}) or "")
-    assert "HYBRID" in (validate_download_parameters({"generate_dv": True, "range": ["HDR10P"]}) or "")
-    assert validate_download_parameters({"generate_dv": True, "range": ["HYBRID"]}) is None
+def test_the_api_takes_generate_dv_with_any_range_as_dl_does() -> None:
+    for data in ({}, {"range": ["SDR"]}, {"range": ["DV"]}, {"range": ["HYBRID"]}, {"range": ["HDR10"]}):
+        assert validate_download_parameters({"generate_dv": True, **data}) is None
     assert "boolean" in (validate_download_parameters({"generate_dv": "yes", "range": ["HYBRID"]}) or "")
-
-
-def test_the_api_takes_hybrid_from_the_serve_default_range(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(config, "serve", {"range": ["HYBRID"]})
-    assert validate_download_parameters({"generate_dv": True}) is None
-    assert "HYBRID" in (validate_download_parameters({"generate_dv": True, "range": ["HDR10P"]}) or "")
 
 
 class _Captured(Exception):
@@ -680,20 +889,11 @@ def test_hybrid_fails_up_front_when_no_base_is_hevc() -> None:
     assert hybrid_gate_failure(videos + [video("h", Video.Range.HDR10, codec=None)], False) is None
 
 
-@pytest.mark.parametrize(
-    "ranges, to_dv, detail",
-    [
-        ([Video.Range.HDR10P], False, "HDR10P; add --generate-dv to make DV from HDR10+"),
-        ([Video.Range.HDR10], False, "HDR10"),
-        ([Video.Range.HDR10], True, "HDR10; --generate-dv found no HEVC HDR10+ track"),
-    ],
-)
-def test_hybrid_fails_without_dv_and_hints_at_the_flag_only_when_it_is_off(
-    ranges: list[Video.Range], to_dv: bool, detail: str
-) -> None:
-    """A service that fetches HYBRID by hand may never return HDR10+; the hint must not blame the user then."""
-    videos = [video(r.name, r) for r in ranges]
-    assert hybrid_gate_failure(videos, to_dv) == f"HYBRID needs HDR10/HDR10+ and DV tracks, available ranges: {detail}"
+@pytest.mark.parametrize("range_", [Video.Range.HDR10P, Video.Range.HDR10])
+def test_hybrid_fails_without_dv_and_hints_at_the_flag(range_: Video.Range) -> None:
+    assert hybrid_gate_failure([video("v", range_)], False) == (
+        f"HYBRID needs HDR10/HDR10+ and DV tracks, available ranges: {range_.name}; add --generate-dv to make DV"
+    )
 
 
 @pytest.mark.parametrize("to_dv", [False, True])
@@ -711,12 +911,12 @@ def test_real_dv_takes_every_base_and_the_lowest_dv(to_dv: bool) -> None:
     assert dv is not None and dv.id == "dv1080"
 
 
-def test_the_flag_without_dv_takes_only_hdr10plus_bases() -> None:
+def test_the_flag_without_dv_takes_hdr10_and_hdr10plus_bases() -> None:
     videos = [video("h2160", Video.Range.HDR10), video("p1080", Video.Range.HDR10P, 1080)]
 
     bases, dv = hybrid_plan(videos, True)
 
-    assert [v.id for v in bases] == ["p1080"] and dv is None
+    assert [v.id for v in bases] == ["h2160", "p1080"] and dv is None
 
 
 def test_no_dv_and_no_flag_gives_no_bases() -> None:

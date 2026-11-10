@@ -185,17 +185,35 @@ The output file of a track with a Dolby Vision profile 8 RPU plays as Dolby Visi
     To keep an HDR10+ deliverable *alongside* the hybrid, request both ranges:
     `-r HYBRID,HDR10P`. `-r HYBRID` on its own muxes only the merged hybrid.
 
-#### Dolby Vision from HDR10+
+#### Dolby Vision without a DV track
 
-When a title has HDR10+ but no DV track, `-r HYBRID --generate-dv` makes a Dolby Vision
-Profile 8.1 track from the HDR10+ metadata. It needs `hdr10plus_tool` as well as `dovi_tool`.
-When a title has a DV track, unshackle uses that track and ignores the flag. When it has none,
-the flag also makes unshackle ask the service for its HDR10+ tracks. A track that the service labels HDR10 but
-that carries HDR10+ metadata also qualifies (see [`hdr10plus_probe`](../reference/configuration/download.md#hdr10plus_probe)).
+When a title has no DV track, `-r HYBRID --generate-dv` makes a Dolby Vision Profile 8.1 track
+for its HDR10 or HDR10+ base. When a title has a DV track, unshackle uses that track and ignores
+the flag. When it has none, the flag also makes unshackle ask the service for its HDR10+ tracks.
 
-```shell title="Generate Dolby Vision from HDR10+, and keep the HDR10+ file too"
+| Base | Source of the Dolby Vision brightness values |
+| --- | --- |
+| HDR10+, with `hdr10plus_tool` installed | The HDR10+ metadata |
+| HDR10, or HDR10+ without `hdr10plus_tool`, or an HDR10+ label with no metadata in the track | The decoded video |
+
+A track that the service labels HDR10 but that carries HDR10+ metadata counts as HDR10+
+(see [`hdr10plus_probe`](../reference/configuration/download.md#hdr10plus_probe)).
+
+```shell title="Generate Dolby Vision, and keep the HDR10+ file too"
 unshackle dl -q 2160 -r HYBRID,HDR10P --generate-dv EXAMPLE '...'
 ```
+
+To generate Dolby Vision for one base when the title has a DV track, name the base and not `HYBRID`:
+`-r HDR10 --generate-dv` or `-r HDR10P --generate-dv`. unshackle then ignores the DV track and writes
+only the hybrid of that base. The DV track of the service is better than generated Dolby Vision,
+so prefer `-r DV` or `-r HYBRID` when the title has one. With `DV` also in `-r`, unshackle shows a
+warning, ignores the flag and downloads the ranges as usual.
+
+```shell title="Generate Dolby Vision from the HDR10 track alone"
+unshackle dl -q 2160 -r HDR10 --generate-dv EXAMPLE '...'
+```
+
+##### From HDR10+ metadata
 
 Each HDR10+ scene becomes one Dolby Vision shot, with its own scene cut and its own Level 1
 brightness values (peak and average). unshackle calculates the average itself, as a PQ mean of
@@ -207,6 +225,21 @@ The [`generate_dv_mode`](../reference/configuration/download.md#generate_dv_mode
 `unshackle.yaml` changes how the average is set: `v29` (default), `v40` for the 10-nit floor of studio
 Dolby Vision, or `legacy` for the `dovi_tool` average.
 
+##### From the decoded video
+
+For a base with no HDR10+ metadata, FFmpeg decodes the whole HDR10 track and unshackle measures
+each frame inside the letterbox bars. Each scene cut that FFmpeg detects starts one Dolby Vision
+shot, and a shot is at least half a second long. The Level 1 values of a shot are the minimum, the
+peak and the mean brightness of its frames. The peak is the brightest small area of the picture
+(1/32 of its width), not one pixel, which is how studio Dolby Vision reads. `dovi_tool` keeps the
+minimum at 0.0003 nits or below and the peak at 100 nits or above. When the track states no MaxCLL
+or MaxFALL, the Level 6 values come from the same measurement, so they are lower than values
+measured for each pixel.
+
+!!! note "The measurement decodes the whole title"
+    A 2160p film takes about 10 minutes on a fast CPU, because every frame is decoded once. The
+    download and the HDR10 track are not changed.
+
 !!! warning "Generated Dolby Vision is not studio Dolby Vision"
     - There are no colourist trims (Level 2 and Level 8). The TV does all the tone mapping
       from the Level 1 values.
@@ -214,14 +247,11 @@ Dolby Vision, or `legacy` for the `dovi_tool` average.
       `generate_dv_mode: v40`), so a very dark scene reads a little brighter than its pixels.
     - The HDR10+ tone-mapping curve (Profile B) has no Dolby Vision equivalent. The HDR10+
       metadata stays in the file, so an HDR10+ TV still reads it.
-    - The result can be no better than the HDR10+ metadata. Profile A metadata is often less
-      reliable than Profile B, and unshackle shows a warning for Profile A.
+    - Dolby Vision from HDR10+ can be no better than the HDR10+ metadata. Profile A metadata is
+      often less reliable than Profile B, and unshackle shows a warning for Profile A.
     - A TV or player that supports both formats almost always picks Dolby Vision. On such a
       TV, the generated Dolby Vision replaces the original HDR10+. To keep the original, also
       request `HDR10P`, as in the example above.
-
-    An HDR10 track that a service labels HDR10 but that carries HDR10+ metadata does not
-    convert. Only a track with the `HDR10P` range does.
 
 ## Bitrate selection
 

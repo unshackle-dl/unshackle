@@ -3,10 +3,11 @@ import logging
 import os
 import re
 import subprocess
+import tempfile
 from collections import Counter
 from concurrent import futures
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, Iterable, Optional
 
 from rich.padding import Padding
 from rich.rule import Rule
@@ -27,14 +28,100 @@ if TYPE_CHECKING:
 # config.generate_dv_mode values: unshackle's L1 with the CM v2.9 or the CM v4.0 avg floor, or dovi_tool's own L1.
 GENERATE_DV_MODES = ("v29", "v40", "legacy")
 
+
+def generate_dv_mode() -> str:
+    """config.generate_dv_mode, checked against GENERATE_DV_MODES."""
+    mode = config.generate_dv_mode
+    if mode not in GENERATE_DV_MODES:
+        raise ValueError(f"generate_dv_mode must be one of {', '.join(GENERATE_DV_MODES)}, not {mode!r}")
+    return mode
+
+
 HDR10PLUS_PERCENTILES = ((1, 0.01), (25, 0.25), (50, 0.5), (75, 0.75), (90, 0.9), (95, 0.95), (99, 0.9998))
+
+
+ST2084 = (0.1593017578125, 78.84375, 0.8359375, 18.8515625, 18.6875)
 
 
 def nits_to_pq(nits: float) -> float:
     """SMPTE ST 2084 inverse EOTF, as a 12-bit code value (0-4095)."""
-    m1, m2, c1, c2, c3 = 0.1593017578125, 78.84375, 0.8359375, 18.8515625, 18.6875
+    m1, m2, c1, c2, c3 = ST2084
     y = (max(nits, 0.0) / 10000) ** m1
     return 4095 * ((c1 + c2 * y) / (1 + c3 * y)) ** m2
+
+
+def pq_to_nits(code: float, peak: int = 4095) -> float:
+    """SMPTE ST 2084 EOTF of a PQ code value on a 0-``peak`` scale."""
+    m1, m2, c1, c2, c3 = ST2084
+    v = (max(code, 0.0) / peak) ** (1 / m2)
+    return 10000 * (max(v - c1, 0.0) / (c2 - c3 * v)) ** (1 / m1)
+
+
+# maxRGB as one PQ-coded 16-bit plane, with scene cuts marked. The picture is first averaged over cells of
+# 1/32 of its width: against a studio RPU the L1 max of a shot is the peak of such cells (close to the
+# 99.98% percentile of HDR10+), not of single pixels, and a finer cell reads up to 600 PQ codes too high.
+# scdet scores PQ-coded video low, so its threshold is 4: the default of 10 found 6 of 18 studio cuts. The second branch applies
+# the ST 2084 EOTF (65535 = 10000 nits), because MaxFALL is a mean of linear light. It prints to a file
+# of its own: two filters that print to stdout mix their lines.
+PQ_TO_LINEAR_LUT = "65535*pow(max(pow(val/65535\\,1/{1})-{2}\\,0)/({3}-{4}*pow(val/65535\\,1/{1}))\\,1/{0})".format(
+    *ST2084
+)
+MEASURE_GRAPH = (
+    "[0:v]{crop}scale=iw/32:ih/32:flags=area,scdet=threshold=4,"
+    "scale=in_color_matrix=bt2020:in_range=tv:out_range=pc,format=gbrp16le,"
+    "extractplanes=g+b+r[g][b][r];[g][b]blend=all_mode=lighten[m];[m][r]blend=all_mode=lighten,split[p][l];"
+    "[p]signalstats,metadata=print:file=-[pq];"
+    "[l]lut=y='" + PQ_TO_LINEAR_LUT + "',"
+    "signalstats,metadata=print:key=lavfi.signalstats.YAVG:file={linear}[linear]"
+)
+
+
+def frame_stats(lines: Iterable[str]) -> list[tuple[int, float, int, bool]]:
+    """(min, avg, max, scene cut) of the PQ maxRGB of each frame as 16-bit codes, from MEASURE_GRAPH's stdout."""
+    frames: list[tuple[int, float, int, bool]] = []
+    block: dict[str, str] = {}
+
+    def flush() -> None:
+        if "YMIN" in block:
+            frames.append((int(block["YMIN"]), float(block["YAVG"]), int(block["YMAX"]), "time" in block))
+
+    for line in lines:
+        if line.startswith("frame:"):
+            flush()
+            block = {}
+        elif line.startswith("lavfi.") and "=" in line:
+            key, _, value = line.strip().partition("=")
+            block[key.rsplit(".", 1)[-1]] = value
+    flush()
+    return frames
+
+
+# Half a second at 24 fps. A burst of flashes scores a scene cut on each flash.
+MIN_SHOT_FRAMES = 12
+
+
+def measured_shots(frames: list[tuple[int, float, int, bool]]) -> list[dict]:
+    """One dovi_tool generator shot per scene, with L1 from the frame_stats values of its frames.
+
+    The shot takes the lowest min, the highest max and the mean of the frame averages. A cut that
+    comes less than MIN_SHOT_FRAMES after the last one is ignored.
+    """
+    cuts = [0]
+    for i, frame in enumerate(frames):
+        if frame[3] and i - cuts[-1] >= MIN_SHOT_FRAMES:
+            cuts.append(i)
+    cuts.append(len(frames))
+    to_12_bit = 4095 / 65535
+    shots = []
+    for start, end in zip(cuts, cuts[1:]):
+        shot = frames[start:end]
+        level1 = {
+            "min_pq": round(min(f[0] for f in shot) * to_12_bit),
+            "max_pq": round(max(f[2] for f in shot) * to_12_bit),
+            "avg_pq": round(sum(f[1] for f in shot) / len(shot) * to_12_bit),
+        }
+        shots.append({"start": start, "duration": end - start, "metadata_blocks": [{"Level1": level1}]})
+    return shots
 
 
 def hdr10plus_mean_pq(values: dict[int, float], active_fraction: float = 1.0) -> Optional[float]:
@@ -113,6 +200,10 @@ def hdr10plus_shots(metadata: dict, active_fraction: float = 1.0) -> list[dict]:
     return shots
 
 
+class NoHDR10PlusMetadata(ValueError):
+    """A track labelled HDR10+ carries no HDR10+ metadata."""
+
+
 class Hybrid:
     def __init__(self, videos: list["Video"], source: str, output_name: Optional[str] = None) -> None:
         self.log = logging.getLogger("hybrid")
@@ -120,7 +211,8 @@ class Hybrid:
         """
             Takes the Dolby Vision and HDR10(+) streams out of the VideoTracks.
             It will then attempt to inject the Dolby Vision metadata layer to the HDR10(+) stream.
-            If no DV track is available but HDR10+ is present, it will convert HDR10+ to DV.
+            If no DV track is available, it makes the DV from the HDR10+ metadata, or from the
+            decoded video when there is no HDR10+ or no hdr10plus_tool.
             """
         global directories
         from unshackle.core.tracks import Video
@@ -167,11 +259,10 @@ class Hybrid:
         if not has_hdr10 and not has_hdr10p:
             raise ValueError("No HDR10 or HDR10+ track available for hybrid processing.")
 
-        if not has_dv and has_hdr10p:
-            console.status("No DV track found, but HDR10+ is available. Will convert HDR10+ to DV.")
-            self.hdr10plus_to_dv = True
-        elif not has_dv:
-            raise ValueError("No DV track available and no HDR10+ to convert.")
+        if not has_dv:
+            self.hdr10plus_to_dv = has_hdr10p and bool(HDR10PlusTool)
+            if has_hdr10p and not self.hdr10plus_to_dv:
+                self.log.warning("hdr10plus_tool not found, measuring the decoded video instead of HDR10+")
 
         if os.path.isfile(config.directories.temp / self.hevc_file):
             console.status("Already Injected")
@@ -195,14 +286,20 @@ class Hybrid:
             base_video = next((v for v in videos if v.range in (Video.Range.HDR10, Video.Range.HDR10P)), None)
             area = self.detect_active_area(base_video.path) if base_video and base_video.path else None
 
-            if self.hdr10plus_to_dv:
+            if not has_dv:
                 # a base that failed earlier in this title can leave its edited RPUs, which level_5/level_6 reuse
                 for stale in ("RPU_L5.bin", "RPU_L6.bin"):
                     Path.unlink(config.directories.temp / stale, missing_ok=True)
+            if self.hdr10plus_to_dv:
                 hdr10p_video = next(v for v in videos if v.range == Video.Range.HDR10P)
-                self.extract_hdr10plus(hdr10p_video)
-                self.convert_hdr10plus_to_dv(area[1] if area else 1.0)
-            else:
+                try:
+                    self.extract_hdr10plus(hdr10p_video)
+                except NoHDR10PlusMetadata:
+                    self.log.warning("No HDR10+ metadata in the track, measuring the decoded video instead")
+                    self.hdr10plus_to_dv = False
+                else:
+                    self.convert_hdr10plus_to_dv(area[1] if area else 1.0)
+            if has_dv:
                 dv_video = next(v for v in videos if v.range == Video.Range.DV)
                 self.extract_rpu(dv_video)
                 if os.path.isfile(config.directories.temp / "RPU_UNT.bin"):
@@ -211,8 +308,12 @@ class Hybrid:
                 elif os.path.isfile(config.directories.temp / "RPU.bin"):
                     # RPU already extracted with mode 3
                     pass
+            elif not self.hdr10plus_to_dv:
+                self.measure_dv(area[0] if area else None)
 
             self.level_6()
+            if base_video and has_dv:
+                self.align_rpu(base_video, dv_video)
             if area:
                 self.level_5(area[0])
 
@@ -220,10 +321,10 @@ class Hybrid:
         finally:
             # The title goes on after a failed resolution, and level_5 reuses an RPU_L5.bin it finds,
             # so the files of this resolution's crop must not outlive it.
-            for own in ("HDR10.hevc", "RPU_L5.bin", "L5.json", "L6.json"):
+            for own in ("HDR10.hevc", "RPU_L5.bin", "L5.json", "L6.json", "RPU_ALIGN.bin", "ALIGN.json"):
                 Path.unlink(config.directories.temp / own, missing_ok=True)
-            if self.hdr10plus_to_dv:
-                # The RPU comes from this base's own HDR10+, so the next resolution must not reuse it.
+            if not has_dv:
+                # The RPU comes from this base's own metadata or frames, so the next resolution must not reuse it.
                 Path.unlink(config.directories.temp / "RPU.bin", missing_ok=True)
                 Path.unlink(config.directories.temp / "RPU_L6.bin", missing_ok=True)
 
@@ -235,6 +336,7 @@ class Hybrid:
                 "hdr_type": self.hdr_type,
                 "resolution": self.resolution,
                 "hdr10plus_to_dv": self.hdr10plus_to_dv,
+                "measured_dv": not has_dv and not self.hdr10plus_to_dv,
                 "rpu_file": self.rpu_file,
                 "output_file": self.hevc_file,
             },
@@ -305,6 +407,43 @@ class Hybrid:
             context={"untouched": untouched, "output": f"{rpu_name}.bin"},
             success=True,
         )
+
+    def align_rpu(self, base: "Video", dv: "Video") -> None:
+        """Shift the RPU so that it starts on the first frame of the base.
+
+        --sample cuts each track on its own segment grid, so the DV track can start before or after the
+        base. An RPU that starts early loses its first frames; one that starts late repeats its first frame.
+        """
+        seconds = dv.sample_start - base.sample_start
+        if not seconds:
+            return
+        fps = float(base.fps or dv.fps or 0)
+        if not fps:
+            raise ValueError("--sample cut the HDR10 and Dolby Vision tracks at different points")
+        frames = round(seconds * fps)
+        if not frames:
+            return
+        edit: dict[str, Any] = (
+            {"duplicate": [{"source": 0, "offset": 0, "length": frames}]}
+            if frames > 0
+            else {"remove": [f"0-{-frames - 1}"]}
+        )
+        align_path = config.directories.temp / "ALIGN.json"
+        with open(align_path, "w", encoding="utf-8") as f:
+            json.dump(edit, f)
+        try:
+            dovi.editor(
+                config.directories.temp / self.rpu_file,
+                align_path,
+                config.directories.temp / "RPU_ALIGN.bin",
+                status="Aligning the RPU with the sample...",
+                label="dovi_tool editor (align)",
+            )
+        except RuntimeError as e:
+            log_event("hybrid_align", level="ERROR", message="Failed aligning the RPU", context={"error": str(e)})
+            raise ValueError("Failed aligning the Dolby Vision RPU with the sample")
+        log_event("hybrid_align", level="DEBUG", message="Aligned the RPU", context={"frames": frames}, success=True)
+        self.rpu_file = "RPU_ALIGN.bin"
 
     def level_5(self, crop: tuple[int, int, int, int]) -> None:
         """Write the active area of the HDR10 track, as (left, top, right, bottom), to Level 5.
@@ -691,6 +830,8 @@ class Hybrid:
                 message="Failed extracting HDR10+ metadata",
                 context={"error": str(e)},
             )
+            if "dynamic metadata" in str(e):
+                raise NoHDR10PlusMetadata("No HDR10+ metadata found in the stream")
             raise ValueError("Failed extracting HDR10+ metadata")
 
         file_size = os.path.getsize(config.directories.temp / self.hdr10plus_file)
@@ -703,7 +844,7 @@ class Hybrid:
                 message="No HDR10+ metadata found in the stream",
                 context={"file_size": 0},
             )
-            raise ValueError("No HDR10+ metadata found in the stream")
+            raise NoHDR10PlusMetadata("No HDR10+ metadata found in the stream")
 
         log_event(
             "hybrid_extract_hdr10plus",
@@ -786,9 +927,7 @@ class Hybrid:
         config.generate_dv_mode picks the L1 avg floor: v29 (about 2.4 nits, closest to the pixels) or v40
         (about 10 nits, as in studio CM v4.0 RPUs). legacy hands the HDR10+ JSON to dovi_tool instead.
         """
-        mode = config.generate_dv_mode
-        if mode not in GENERATE_DV_MODES:
-            raise ValueError(f"generate_dv_mode must be one of {', '.join(GENERATE_DV_MODES)}, not {mode!r}")
+        mode = generate_dv_mode()
         hdr10plus_path = config.directories.temp / self.hdr10plus_file
         config_path = config.directories.temp / "generate.json"
         try:
@@ -797,25 +936,18 @@ class Hybrid:
                     metadata = json.load(f)
                 profile = metadata.get("JSONInfo", {}).get("HDR10plusProfile")
                 shots = hdr10plus_shots(metadata, active_fraction)
+                light = [frame["LuminanceParameters"] for frame in metadata["SceneInfo"]]
+                generator_config = self.generator_config(
+                    round(max(max(frame["MaxScl"]) for frame in light) / 10),
+                    round(max(frame["AverageRGB"] for frame in light) / 10),
+                )
                 # one entry per frame: a feature film is hundreds of MB of objects, freed before dovi_tool runs
-                del metadata
+                del metadata, light
 
-                max_mdl, min_mdl, max_cll, max_fall = self.sanitize_l6(*self.probe_hdr_metadata())
-                generator_config: dict[str, Any] = {
-                    "cm_version": "V29",
-                    "level6": {
-                        "max_display_mastering_luminance": max_mdl,
-                        "min_display_mastering_luminance": min_mdl,
-                        "max_content_light_level": max_cll,
-                        "max_frame_average_light_level": max_fall,
-                    },
-                }
                 if mode == "legacy":
                     generator_config["length"] = 0  # dovi_tool takes the length from the HDR10+ JSON
                 else:
                     generator_config["shots"] = shots
-                if mode == "v40":
-                    generator_config["l1_avg_pq_cm_version"] = "V40"
                 with open(config_path, "w", encoding="utf-8") as f:
                     json.dump(generator_config, f)
 
@@ -854,3 +986,186 @@ class Hybrid:
             success=True,
         )
         self.log.info(f"Dolby Vision generated from HDR10+ metadata ({len(shots)} scenes, {mode})")
+
+    def measure_frames(
+        self, input_video: Path, crop: Optional[tuple[int, int, int, int]]
+    ) -> tuple[list[tuple[int, float, int, bool]], float]:
+        """Decode the whole video through MEASURE_GRAPH.
+
+        Returns its frame_stats and the highest linear frame average (65535 = 10000 nits).
+        """
+        crop_filter = ""
+        if crop:
+            left, top, right, bottom = crop
+            crop_filter = f"crop=iw-{left + right}:ih-{top + bottom}:{left}:{top},"
+        linear_name = "measure_linear.txt"
+        linear_path = config.directories.temp / linear_name
+        args = [
+            str(FFMPEG) if FFMPEG else "ffmpeg",
+            "-nostdin",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            # one filter thread: after the downscale a frame is tiny, and handing its slices to a thread
+            # pool costs more than the filters do. The pass then runs close to the speed of the decoder.
+            "-filter_complex_threads",
+            "1",
+            "-i",
+            str(Path(input_video).resolve()),
+            "-filter_complex",
+            MEASURE_GRAPH.format(crop=crop_filter, linear=linear_name),
+            "-map",
+            "[pq]",
+            "-f",
+            "null",
+            "-",
+            "-map",
+            "[linear]",
+            "-f",
+            "null",
+            "-",
+        ]
+        max_linear = 0.0
+        try:
+            with console.status("Measuring Dolby Vision brightness from the decoded video...", spinner="dots"):
+                # the linear file is named relative to cwd, because a Windows path needs escapes in a filter graph
+                with (
+                    tempfile.TemporaryFile() as stderr,
+                    subprocess.Popen(
+                        args,
+                        stdout=subprocess.PIPE,
+                        stderr=stderr,
+                        cwd=config.directories.temp,
+                        text=True,
+                        encoding="utf-8",
+                        errors="replace",
+                    ) as process,
+                ):
+                    assert process.stdout
+                    try:
+                        frames = frame_stats(process.stdout)
+                    except BaseException:
+                        # a cancelled run must not leave FFmpeg decoding the rest of the title
+                        process.kill()
+                        raise
+                    process.wait()
+                    stderr.seek(0)
+                    error_tail = stderr.read()[-2000:].decode("utf-8", "replace")
+            if linear_path.is_file():
+                with open(linear_path, encoding="utf-8", errors="replace") as f:
+                    max_linear = max((float(line.partition("=")[2]) for line in f if "YAVG=" in line), default=0.0)
+        finally:
+            linear_path.unlink(missing_ok=True)
+        if process.returncode != 0 or not frames:
+            log_event(
+                "hybrid_measure_dv",
+                level="ERROR",
+                message="Failed measuring the decoded video",
+                context={"returncode": process.returncode, "frames": len(frames), "stderr": error_tail},
+            )
+            raise ValueError("Failed measuring the decoded video for Dolby Vision")
+        return frames, max_linear
+
+    def dropped_leading_frames(self, stream: Path) -> int:
+        """How many frames at the head of a raw HEVC file the decoder gives no picture for.
+
+        A file that starts on an open GOP holds frames that need the GOP before it.
+        """
+        result = subprocess.run(
+            [
+                str(FFProbe) if FFProbe else "ffprobe",
+                "-v",
+                "error",
+                "-select_streams",
+                "v:0",
+                "-count_packets",
+                "-count_frames",
+                "-read_intervals",
+                "%+#64",
+                "-show_entries",
+                "stream=nb_read_packets,nb_read_frames",
+                "-of",
+                "default=nw=1",
+                str(stream),
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+        counts = dict(line.split("=", 1) for line in result.stdout.splitlines() if "=" in line)
+        try:
+            return max(int(counts["nb_read_packets"]) - int(counts["nb_read_frames"]), 0)
+        except (KeyError, ValueError):
+            return 0
+
+    def generator_config(self, measured_cll: int, measured_fall: int) -> dict[str, Any]:
+        """The dovi_tool generator config without its shots, for config.generate_dv_mode.
+
+        Level 6 comes from the HDR10 track. The measured light levels fill only what the track does not state.
+        """
+        stream_mdl, stream_min_mdl, stream_cll, stream_fall = self.probe_hdr_metadata()
+        max_mdl, min_mdl, max_cll, max_fall = self.sanitize_l6(
+            stream_mdl, stream_min_mdl, stream_cll or measured_cll, stream_fall or measured_fall
+        )
+        generator_config: dict[str, Any] = {
+            "cm_version": "V29",
+            "level6": {
+                "max_display_mastering_luminance": max_mdl,
+                "min_display_mastering_luminance": min_mdl,
+                "max_content_light_level": max_cll,
+                "max_frame_average_light_level": max_fall,
+            },
+        }
+        if config.generate_dv_mode == "v40":
+            generator_config["l1_avg_pq_cm_version"] = "V40"
+        return generator_config
+
+    def measure_dv(self, crop: Optional[tuple[int, int, int, int]] = None) -> None:
+        """Generate a Dolby Vision RPU with L1 measured from the decoded video, one shot per scene cut.
+
+        It measures HDR10.hevc, the file that gets the RPU, so the shots count the same frames. The first
+        shot takes the leading frames that the decoder drops.
+        """
+        mode = generate_dv_mode()
+        stream = config.directories.temp / "HDR10.hevc"
+        frames, max_linear = self.measure_frames(stream, crop)
+        dropped = self.dropped_leading_frames(stream)
+        frames = [(*frames[0][:3], False)] * dropped + frames
+        shots = measured_shots(frames)
+        generator_config = self.generator_config(
+            round(pq_to_nits(max(f[2] for f in frames), 65535)), round(max_linear * 10000 / 65535)
+        )
+        generator_config["shots"] = shots
+
+        config_path = config.directories.temp / "generate.json"
+        try:
+            with open(config_path, "w", encoding="utf-8") as f:
+                json.dump(generator_config, f)
+            dovi.generate(config_path, config.directories.temp / "RPU.bin", label="dovi_tool generate")
+        except RuntimeError as e:
+            log_event(
+                "hybrid_measure_dv",
+                level="ERROR",
+                message="Failed generating Dolby Vision from the decoded video",
+                context={"error": str(e)},
+            )
+            raise ValueError("Failed generating Dolby Vision from the decoded video")
+        finally:
+            config_path.unlink(missing_ok=True)
+
+        log_event(
+            "hybrid_measure_dv",
+            level="DEBUG",
+            message="Generated Dolby Vision Profile 8.1 from the decoded video",
+            context={
+                "frames": len(frames),
+                "dropped_leading_frames": dropped,
+                "shots": len(shots),
+                "mode": mode,
+                "level6": generator_config["level6"],
+            },
+            success=True,
+        )
+        self.log.info(f"Dolby Vision generated from the decoded video ({len(shots)} scenes, {mode})")

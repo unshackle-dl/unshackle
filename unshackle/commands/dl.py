@@ -237,33 +237,52 @@ def group_videos_by_variant(videos: list[Video], *, merge: bool) -> list[list[Vi
     return list(groups.values())
 
 
+HYBRID_BASE_RANGES = (Video.Range.HDR10P, Video.Range.HDR10)
+
+
 def select_hybrid_bases(videos: Sequence[Video]) -> list[Video]:
     """The HDR10 or HDR10+ track that is the hybrid base for each height, tallest first.
 
-    Only HEVC tracks qualify, because dovi_tool injects the RPU into an HEVC stream.
+    Only HEVC tracks qualify, because dovi_tool injects the RPU into an HEVC stream. HDR10+ comes before
+    HDR10 at one height.
     """
     bases: dict[int, Video] = {}
     for video in sorted(
-        (
-            v
-            for v in videos
-            if v.range in (Video.Range.HDR10P, Video.Range.HDR10) and v.codec in (Video.Codec.HEVC, None)
-        ),
-        key=lambda v: v.height or 0,
+        (v for v in videos if v.range in HYBRID_BASE_RANGES and v.codec in (Video.Codec.HEVC, None)),
+        key=lambda v: (v.height or 0, v.range == Video.Range.HDR10P),
         reverse=True,
     ):
         bases.setdefault(video.height or 0, video)
     return list(bases.values())
 
 
+def generated_dv_ranges(
+    range_: Sequence[Video.Range], generate_dv: bool
+) -> tuple[list[Video.Range], list[Video.Range]]:
+    """Turn ``-r HDR10 --generate-dv`` (or HDR10P) into a HYBRID run on that base alone.
+
+    Returns the ranges to run with, and the base ranges the user named. The second list is empty when
+    the flag is off, HYBRID or DV is in the ranges, or no base range is. The service still gets the
+    ranges the user gave, so it fetches no DV track.
+    """
+    bases = [r for r in range_ if r in HYBRID_BASE_RANGES]
+    if not generate_dv or not bases or Video.Range.HYBRID in range_ or Video.Range.DV in range_:
+        return list(range_), []
+    return [Video.Range.HYBRID, *(r for r in range_ if r not in bases)], bases
+
+
+def keep_generated_dv_bases(videos: Sequence[Video], bases: Sequence[Video.Range]) -> list[Video]:
+    """The videos without the DV tracks and without a hybrid base range the user did not name."""
+    return [v for v in videos if v.range != Video.Range.DV and (v.range not in HYBRID_BASE_RANGES or v.range in bases)]
+
+
 def hybrid_gate_failure(videos: Sequence[Video], generate_dv: bool) -> Optional[str]:
     """The message that stops HYBRID for these selected videos, or None when it can go on."""
     if any(v.native_hybrid for v in videos):
         return None
-    hdr_tracks = [v for v in videos if v.range in (Video.Range.HDR10, Video.Range.HDR10P)]
+    hdr_tracks = [v for v in videos if v.range in HYBRID_BASE_RANGES]
     base_tracks = [v for v in hdr_tracks if v.codec in (Video.Codec.HEVC, None)]
     dv_tracks = [v for v in videos if v.range == Video.Range.DV]
-    has_hdr10p = any(v.range == Video.Range.HDR10P for v in base_tracks)
     ranges = ", ".join(sorted(set(v.range.name for v in videos))) or "none"
     missing = f"HYBRID needs HDR10/HDR10+ and DV tracks, available ranges: {ranges}"
 
@@ -272,28 +291,20 @@ def hybrid_gate_failure(videos: Sequence[Video], generate_dv: bool) -> Optional[
     if not base_tracks:
         codecs = sorted(set(v.codec.name for v in hdr_tracks if v.codec))
         return f"HYBRID needs an HEVC HDR10/HDR10+ base, available codecs: {', '.join(codecs)}"
-    if not dv_tracks and not (generate_dv and has_hdr10p):
-        if generate_dv:
-            return f"{missing}; --generate-dv found no HEVC HDR10+ track"
-        if has_hdr10p:
-            return f"{missing}; add --generate-dv to make DV from HDR10+"
-        return missing
+    if not dv_tracks and not generate_dv:
+        return f"{missing}; add --generate-dv to make DV"
     return None
 
 
 def hybrid_plan(videos: Sequence[Video], generate_dv: bool) -> tuple[list[Video], Optional[Video]]:
     """The hybrid bases and the DV track to pair with them.
 
-    With no DV track, only HDR10+ bases qualify, and only with ``--generate-dv``. A resolution with a
+    With no DV track, a base qualifies only with ``--generate-dv``. A resolution with a
     finished hybrid (``native_hybrid``) gets no base: that track is its hybrid.
     """
     dv_tracks = [v for v in videos if v.range == Video.Range.DV]
     native_heights = {v.height for v in videos if v.native_hybrid}
-    base_pool = [
-        v
-        for v in videos
-        if v.height not in native_heights and (dv_tracks or (generate_dv and v.range == Video.Range.HDR10P))
-    ]
+    base_pool = [v for v in videos if v.height not in native_heights and (dv_tracks or generate_dv)]
     matching_dv = min(dv_tracks, key=lambda v: v.height or 0) if dv_tracks else None
     return select_hybrid_bases(base_pool), matching_dv
 
@@ -302,7 +313,7 @@ def hybrid_source_tracks(base: Video, dv: Optional[Video], base_container: Optio
     """Copies of the base and DV tracks for the hybrid step, with the base on its container file.
 
     The hybrid step reads the duration and seeks, and the raw stream from the DV fixup
-    permits neither. With no DV track, the hybrid step makes Dolby Vision from the base's HDR10+.
+    permits neither. With no DV track, the hybrid step makes Dolby Vision for the base.
     """
     tracks = [deepcopy(track) for track in (base, dv) if track]
     tracks[0].path = base_container or base.path
@@ -1231,7 +1242,8 @@ class dl:
         "--generate-dv",
         is_flag=True,
         default=False,
-        help="With -r HYBRID, make Dolby Vision from the HDR10+ metadata when a title has no Dolby Vision track.",
+        help="Make Dolby Vision from HDR10+ or the decoded video: with -r HYBRID when a title has no DV track, "
+        "with -r HDR10 or HDR10P for that base alone.",
     )
     @click.option(
         "--remote/--local",
@@ -1904,18 +1916,15 @@ class dl:
             self.log.error("--select-titles and -w/--wanted cannot be used together")
             sys.exit(1)
 
+        if generate_dv and Video.Range.DV in range_ and Video.Range.HYBRID not in range_:
+            self.log.warning("--generate-dv ignored: DV is in the selected ranges")
+        range_, generated_dv_bases = generated_dv_ranges(range_, generate_dv)
         if any(r == Video.Range.HYBRID for r in range_):
             from unshackle.core.binaries import DoviTool
 
             if not DoviTool:
                 self.log.error("Unable to run hybrid mode: dovi_tool not found")
                 sys.exit(1)
-            if generate_dv:
-                from unshackle.core.binaries import HDR10PlusTool
-
-                if not HDR10PlusTool:
-                    self.log.error("Unable to run --generate-dv: hdr10plus_tool not found")
-                    sys.exit(1)
 
         if cdm_only is None:
             vaults_only = None
@@ -2585,6 +2594,12 @@ class dl:
                     elif keep_videos:
                         title.tracks.select_video(lambda x: x.codec != Video.Codec.LCEVC)
 
+                    if keep_videos and generated_dv_bases:
+                        title.tracks.videos = keep_generated_dv_bases(title.tracks.videos, generated_dv_bases)
+                        if not any(v.range in generated_dv_bases for v in title.tracks.videos):
+                            self.log.error(f"There's no {', '.join(r.name for r in generated_dv_bases)} Video Track...")
+                            sys.exit(1)
+
                     if keep_videos and range_:
                         # Special handling for HYBRID - don't filter, keep all HDR10 and DV tracks
                         if Video.Range.HYBRID not in range_:
@@ -2819,7 +2834,7 @@ class dl:
                         if not gate_failure and not any(
                             v.range == Video.Range.DV or v.native_hybrid for v in title.tracks.videos
                         ):
-                            self.log.info("No Dolby Vision track: Dolby Vision will be generated from HDR10+")
+                            self.log.info("No Dolby Vision track: Dolby Vision will be generated")
 
                         if gate_failure:
                             other_ranges: list[Video.Range] = [r for r in range_ if r != Video.Range.HYBRID]
@@ -3643,11 +3658,6 @@ class dl:
                                         hybrid_output_path = config.directories.temp / hybrid_filename
                                         hybrid_temp_paths.append(hybrid_output_path)
 
-                                        if len({track.sample_start for track in resolution_tracks}) > 1:
-                                            raise click.ClickException(
-                                                "--sample cut the HDR10 and Dolby Vision tracks at different "
-                                                "points, so a hybrid of them would not line up."
-                                            )
                                         step_error = hybrid_step_error(resolution_tracks, self.service, hybrid_filename)
                                         if step_error:
                                             # the other files of the title are already queued for muxing

@@ -130,7 +130,7 @@ See [Proxies and VPN](../guide/proxies-and-vpn.md).
     `[Video.Range.SDR]`), `best_available`, and `generate_dv` (from `--generate-dv`).
     Use it in `get_tracks` to decide which variants to fetch. A service that fetches
     the HYBRID variants itself must also fetch HDR10P when `generate_dv` is set and
-    the title has no DV track, because the conversion needs an HEVC HDR10+ base.
+    the title has no DV track, because unshackle prefers an HEVC HDR10+ base.
 
 ## Titles and the `Title` hierarchy
 

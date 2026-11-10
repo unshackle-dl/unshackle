@@ -2252,15 +2252,6 @@ def validate_download_parameters(data: Dict[str, Any]) -> Optional[str]:
         if value is not None and (not isinstance(value, list) or not all(isinstance(v, str) for v in value)):
             return f"{key} must be an array of language strings"
 
-    ranges = data.get("range") or []
-    ranges = ranges if isinstance(ranges, list) else [ranges]
-    if data.get("generate_dv"):
-        # a request without a range runs with the serve: default range
-        job_ranges = ranges or (config.serve or {}).get("range") or []
-        job_ranges = job_ranges if isinstance(job_ranges, list) else [job_ranges]
-        if not any(str(r).upper() == "HYBRID" for r in job_ranges):
-            return "generate_dv needs HYBRID in range."
-
     from unshackle.commands.dl import dl
 
     try:

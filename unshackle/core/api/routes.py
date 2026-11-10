@@ -1164,8 +1164,10 @@ async def download(request: web.Request) -> web.Response:
               generate_dv:
                 type: boolean
                 description: >-
-                  With HYBRID in range, make Dolby Vision from the HDR10+ metadata when a title has no
-                  Dolby Vision track (default - false). Needs hdr10plus_tool on the server.
+                  With HYBRID in range, make Dolby Vision from the HDR10+ metadata or the decoded video
+                  when a title has no Dolby Vision track (default - false). With HDR10 or HDR10P in range
+                  and no HYBRID, make it for that base and ignore a Dolby Vision track. With none of the
+                  three in range, the field has no effect.
               worst:
                 type: boolean
                 description: Select the lowest bitrate track within the specified quality. Requires `quality` (default - false)
