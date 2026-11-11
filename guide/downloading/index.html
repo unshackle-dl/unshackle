@@ -1300,6 +1300,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#continuous-episode-numbers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Continuous episode numbers
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -3125,6 +3136,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#continuous-episode-numbers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Continuous episode numbers
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -4416,6 +4438,11 @@ lookups but keep the IDs you give, set
 <td><code>--tvdb-order dvd</code></td>
 <td>Renumber episodes to a TVDB season order. Needs <code>tvdb_api_key</code>.</td>
 </tr>
+<tr>
+<td><code>-ce</code> / <code>--continuous-episodes</code></td>
+<td>-</td>
+<td>Number each season on from the season before it, so season two starts at <code>S02E05</code> after four episodes.</td>
+</tr>
 </tbody>
 </table>
 <div class="language-shell highlight"><span class="filename">Force the right IMDb match, and keep the service&#x27;s own naming</span><pre><span></span><code><span id="__span-49-1"><a id="__codelineno-49-1" name="__codelineno-49-1" href="#__codelineno-49-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--imdb<span class="w"> </span>tt1375666<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
@@ -4549,6 +4576,18 @@ contain Futurama's four movies. Those episodes keep their original numbering. If
 two episodes the same season/episode slot, and so the same filename, unshackle logs an
 error and leaves the numbering untouched. Pick an order that covers the whole series.</p>
 </div>
+<h3 id="continuous-episode-numbers">Continuous episode numbers<a class="headerlink" href="#continuous-episode-numbers" title="Permanent link">&para;</a></h3>
+<p>Some anime release groups number each season on from the season before it. With
+<code>--continuous-episodes</code>, a season two that follows a four-episode season one starts at
+<code>S02E05</code>:</p>
+<div class="language-shell highlight"><span class="filename">Number season two on from season one</span><pre><span></span><code><span id="__span-52-1"><a id="__codelineno-52-1" name="__codelineno-52-1" href="#__codelineno-52-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-ce<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+</span></code></pre></div>
+<p>The count comes from the episodes the service lists, so download from the series URL, not
+from a single season. A season the service does not list in your region is not counted.
+Season 0 and episode 0 keep their numbers, and a season that already starts past the
+season before it is not changed. The renumbering runs before <code>--wanted</code>, so select episodes
+by their new numbers, for example <code>-w S02E05</code>. A whole-season selection such as <code>-w S05</code>
+matches episodes up to E999 only.</p>
 <h2 id="configuration-defaults">Configuration defaults<a class="headerlink" href="#configuration-defaults" title="Permanent link">&para;</a></h2>
 <p>You can set every flag on this page as a default in your configuration file so you do not
 have to type it each time, and you can scope defaults per service. See
@@ -4746,6 +4785,11 @@ authoritative list.</p>
 <td><code>--tvdb-order</code></td>
 <td></td>
 <td>Renumber episodes to a TVDB season order.</td>
+</tr>
+<tr>
+<td><code>-ce</code> / <code>--continuous-episodes</code></td>
+<td></td>
+<td>Number each season on from the season before it.</td>
 </tr>
 </tbody>
 </table>

@@ -4113,6 +4113,12 @@ ignore it safely. See <a href="../../creating-a-service/#split-episodes">Split e
 <td>Renumber episodes to a TVDB season order. Falls back to the <code>tvdb_order</code> config option.</td>
 </tr>
 <tr>
+<td><code>continuous_episodes</code></td>
+<td>boolean</td>
+<td><code>false</code></td>
+<td>Number each season on from the season before it, so season two starts at episode 5 after four episodes. Season 0 and episode 0 keep their numbers. <code>wanted</code> selects by the new numbers, but the list endpoints show the numbers of the service.</td>
+</tr>
+<tr>
 <td><code>enrich</code></td>
 <td>boolean</td>
 <td><code>false</code></td>

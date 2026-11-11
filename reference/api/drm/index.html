@@ -2630,6 +2630,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#unshackle.core.drm.Widevine.from_playready" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;from_playready
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#unshackle.core.drm.Widevine.from_track" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3536,6 +3547,17 @@
         
       </ul>
     </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unshackle.core.drm.Widevine.from_playready" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;from_playready
+      
+    </span>
+  </a>
   
 </li>
         
@@ -5869,6 +5891,31 @@ track exactly. A PSSH can name the KIDs of other renditions too.</p>
 
 </div>
 
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="unshackle.core.drm.Widevine.from_playready" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">from_playready</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-staticmethod"><code>staticmethod</code></small>
+  </span>
+
+<a href="#unshackle.core.drm.Widevine.from_playready" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">from_playready</span><span class="p">(</span><span class="n">pssh</span><span class="p">)</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>A Widevine PSSH naming a v1 box's own KIDs, then the KIDs the PlayReady class reads from it.</p>
+<p>pywidevine's own conversion fails on a bare WRMHEADER and byte-swaps PlayReady KIDs.</p>
+
+
+    </div>
+
+</div>
 
 <div class="doc doc-object doc-function">
 
