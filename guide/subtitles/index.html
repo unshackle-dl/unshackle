@@ -1080,6 +1080,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#custom-font-and-style" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Custom font and style
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#fonts-for-styled-subtitles" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2371,6 +2382,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#custom-font-and-style" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Custom font and style
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#fonts-for-styled-subtitles" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2613,6 +2635,10 @@ format-appropriate clean-up to make a single, valid file:</p>
 <tr>
 <td><code>--sub-format</code></td>
 <td>Output subtitle format / conversion target (see <a href="#converting-subtitle-formats">conversion</a>).</td>
+</tr>
+<tr>
+<td><code>--sub-font</code></td>
+<td>Font for subtitles converted to ASS; implies <code>--sub-format ass</code> (see <a href="#custom-font-and-style">custom font and style</a>).</td>
 </tr>
 <tr>
 <td><code>--skip-subtitle-errors</code></td>
@@ -2998,6 +3024,53 @@ in the name, so players and media managers can match them automatically:</p>
 <a href="#subtitle-configuration"><code>sidecar_format</code></a> config key sets the sidecar file format. Use
 a format name like <code>srt</code> or <code>vtt</code>, or <code>original</code> to keep each subtitle in its downloaded
 format.</p>
+<h2 id="custom-font-and-style">Custom font and style<a class="headerlink" href="#custom-font-and-style" title="Permanent link">&para;</a></h2>
+<p>Services mostly deliver WebVTT, which players draw in their own plain font. To use a font
+of your choice, unshackle converts the subtitles to ASS and gives them one style:</p>
+<div class="language-shell highlight"><span class="filename">Convert to ASS in a custom font</span><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--sub-font<span class="w"> </span><span class="s2">"Noto Sans"</span><span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+</span></code></pre></div>
+<p><code>--sub-font</code> sets only the font name. The rest of the look comes from
+<a href="#subtitle-configuration"><code>subtitle.ass_style</code></a>, a mapping of style fields. A field takes its
+<a href="https://pysubs2.readthedocs.io/en/latest/api-reference.html#ssastyle-style-of-subtitles">pysubs2 name</a>
+(<code>primarycolor</code>) or its ASS name (<code>PrimaryColour</code>). Give sizes and margins for a 1080-line
+picture. unshackle writes a 1080-line canvas in the shape of the video, and the player scales
+it to the screen, so the text has the same size on a 720p, 1080p or 2160p video.</p>
+<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="nt">subtitle</span><span class="p">:</span>
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="w">  </span><span class="nt">ass_style</span><span class="p">:</span>
+</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="w">    </span><span class="nt">fontname</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Noto Sans</span>
+</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="w">    </span><span class="nt">fontsize</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">72</span>
+</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="w">    </span><span class="nt">primarycolor</span><span class="p">:</span><span class="w"> </span><span class="s">"&amp;H00FFFFFF"</span>
+</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a><span class="w">    </span><span class="nt">marginv</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">60</span>
+</span></code></pre></div>
+<p>The fields you leave out keep these defaults: <code>fontname: Arial</code>, <code>fontsize: 72</code>, <code>bold: true</code>,
+<code>outline: 3.6</code>, <code>shadow: 1.5</code>, <code>backcolor: "&amp;HA0000000"</code>, <code>marginl: 100</code>, <code>marginr: 100</code> and
+<code>marginv: 60</code>. Write colours as <code>&amp;HAABBGGRR</code> strings in quotes: in YAML, an unquoted <code>&amp;</code> starts
+an anchor, and an unquoted number is not read as a colour.</p>
+<ul>
+<li>A style makes ASS the output format when you set no <code>--sub-format</code>. With <code>--sub-format ass</code>
+  or <code>ssa</code> the style applies too. With another format, unshackle does not use the style.
+  A <code>--sub-font</code> that you type overrides a <code>sub_format</code> from the configuration file, and stops
+  the download with an error when you also type another <code>--sub-format</code>. A <code>sub_font</code> from the
+  configuration file is ignored when the format is not ASS.</li>
+<li>The style applies only to subtitles that unshackle converts into ASS. A subtitle that is
+  already SSA/ASS keeps its own styles, positions and canvas, and so does its SDH-stripped copy.</li>
+<li>The SDH-stripped copy of a converted track keeps the style.</li>
+<li>unshackle checks the style before it downloads. An unknown field or a value that does not
+  fit its field stops the download with an error.</li>
+<li>With <code>output_mode: sidecar</code> and a <code>sidecar_format</code> other than <code>ass</code>, the sidecar files do
+  not use the style.</li>
+<li>Closed captions that unshackle extracts from the video stay SRT.</li>
+</ul>
+<div class="admonition note">
+<p class="admonition-title">Player settings</p>
+<p>A player draws an ASS subtitle with its own style, so player options for text subtitles,
+such as the mpv options <code>sub-font</code> and <code>sub-font-size</code>, no longer apply. The text size
+follows the height of the video, so on a wide video such as 1920x800 the text is smaller
+than on a 1920x1080 video.</p>
+</div>
+<p>The font must be on your system or in <a href="../../reference/configuration/directories/"><code>directories.fonts</code></a>,
+in a folder with the family name, for example <code>fonts/Noto Sans/NotoSans-Regular.ttf</code>. unshackle
+attaches it to the MKV, as described below.</p>
 <h2 id="fonts-for-styled-subtitles">Fonts for styled subtitles<a class="headerlink" href="#fonts-for-styled-subtitles" title="Permanent link">&para;</a></h2>
 <p>Styled SSA/ASS subtitles reference specific fonts by name. When unshackle muxes such a
 subtitle it scans it for the fonts it uses and attaches the matching font files to the
@@ -3007,14 +3080,14 @@ relevant font packages.</p>
 <h2 id="subtitle-configuration">Subtitle configuration<a class="headerlink" href="#subtitle-configuration" title="Permanent link">&para;</a></h2>
 <p>You can set defaults for all of the behaviour above in the <code>subtitle</code> block of your
 <a href="../../getting-started/configuration-file/">configuration file</a>:</p>
-<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="nt">subtitle</span><span class="p">:</span>
-</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="w">  </span><span class="nt">strip_sdh</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
-</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="w">  </span><span class="nt">preserve_formatting</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
-</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="w">  </span><span class="nt">conversion_method</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">auto</span>
-</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="w">  </span><span class="nt">sdh_method</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">auto</span>
-</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="w">  </span><span class="nt">convert_before_strip</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
-</span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="w">  </span><span class="nt">output_mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">mux</span>
-</span><span id="__span-12-8"><a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a><span class="w">  </span><span class="nt">sidecar_format</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">srt</span>
+<div class="language-yaml highlight"><span class="filename">unshackle.yaml</span><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="nt">subtitle</span><span class="p">:</span>
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="w">  </span><span class="nt">strip_sdh</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="w">  </span><span class="nt">preserve_formatting</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="w">  </span><span class="nt">conversion_method</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">auto</span>
+</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="w">  </span><span class="nt">sdh_method</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">auto</span>
+</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="w">  </span><span class="nt">convert_before_strip</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="w">  </span><span class="nt">output_mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">mux</span>
+</span><span id="__span-14-8"><a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a><span class="w">  </span><span class="nt">sidecar_format</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">srt</span>
 </span></code></pre></div>
 <table>
 <thead>
@@ -3085,6 +3158,12 @@ relevant font packages.</p>
 <td><em>(unset)</em></td>
 <td>a list of codecs, e.g. <code>[VTT, STPP, WVTT]</code></td>
 <td>Keep one copy of a subtitle that the service sends in several codecs: the earliest listed codec wins.</td>
+</tr>
+<tr>
+<td><code>ass_style</code></td>
+<td><em>(unset)</em></td>
+<td>a mapping of pysubs2 style fields</td>
+<td>The look of subtitles converted to ASS; makes ASS the default output format. See <a href="#custom-font-and-style">custom font and style</a>.</td>
 </tr>
 </tbody>
 </table>

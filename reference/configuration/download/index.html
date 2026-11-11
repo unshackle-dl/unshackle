@@ -2327,6 +2327,12 @@ default. In other words, config only fills in options you did not set on the com
 <td>Convert subtitles to this format (<code>srt</code>, <code>vtt</code>, <code>original</code>, ...).</td>
 </tr>
 <tr>
+<td><code>sub_font</code></td>
+<td>str</td>
+<td><em>(unset)</em></td>
+<td>Font for subtitles converted to ASS; implies <code>sub_format: ass</code>. Ignored when <code>sub_format</code> is another format.</td>
+</tr>
+<tr>
 <td><code>forced_subs</code></td>
 <td>bool</td>
 <td><code>false</code></td>
@@ -2594,6 +2600,12 @@ in or writes them as sidecar files. See <a href="../../../guide/subtitles/">Subt
 <td>list</td>
 <td><em>(unset)</em></td>
 <td>Languages to sort to the top, in the order you give. The rest keep the default order: original language first, then alphabetical. Nothing is removed.</td>
+</tr>
+<tr>
+<td><code>ass_style</code></td>
+<td>dict</td>
+<td><em>(unset)</em></td>
+<td>Style for subtitles converted to ASS, as pysubs2 or ASS style fields (<code>fontname</code>, <code>fontsize</code>, <code>primarycolor</code> or <code>PrimaryColour</code>, ...) for a 1080-line picture. Makes ASS the output format when <code>sub_format</code> is unset. See <a href="../../../guide/subtitles/#custom-font-and-style">Custom font and style</a>.</td>
 </tr>
 <tr>
 <td><code>dedupe_codecs</code></td>
