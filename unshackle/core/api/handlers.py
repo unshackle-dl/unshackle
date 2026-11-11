@@ -133,6 +133,7 @@ DEFAULT_DOWNLOAD_PARAMS = {
     "imdb_id": None,
     "tvdb_id": None,
     "tvdb_order": None,
+    "continuous_episodes": False,
     "anilist_id": None,
     "enrich": False,
     "daily": False,

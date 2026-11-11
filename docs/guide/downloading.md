@@ -1047,6 +1047,7 @@ lookups but keep the IDs you give, set
 | `--anilist` | `--anilist 21` | Use this AniList ID instead of an automatic search. `mal:12345` is also accepted. Needs no API key. |
 | `--enrich` | - | Overwrite the show title, year and original language with the external source's. **Requires** one of `--tmdb`, `--imdb`, `--tvdb`, or `--anilist`. |
 | `--tvdb-order` | `--tvdb-order dvd` | Renumber episodes to a TVDB season order. Needs `tvdb_api_key`. |
+| `-ce` / `--continuous-episodes` | - | Number each season on from the season before it, so season two starts at `S02E05` after four episodes. |
 
 ```shell title="Force the right IMDb match, and keep the service's own naming"
 unshackle dl --imdb tt1375666 EXAMPLE 81234567
@@ -1148,6 +1149,23 @@ Available orders are `official` (aired), `dvd`, `absolute`, `alternate`, and `re
     two episodes the same season/episode slot, and so the same filename, unshackle logs an
     error and leaves the numbering untouched. Pick an order that covers the whole series.
 
+### Continuous episode numbers
+
+Some anime release groups number each season on from the season before it. With
+`--continuous-episodes`, a season two that follows a four-episode season one starts at
+`S02E05`:
+
+```shell title="Number season two on from season one"
+unshackle dl -ce EXAMPLE 81234567
+```
+
+The count comes from the episodes the service lists, so download from the series URL, not
+from a single season. A season the service does not list in your region is not counted.
+Season 0 and episode 0 keep their numbers, and a season that already starts past the
+season before it is not changed. The renumbering runs before `--wanted`, so select episodes
+by their new numbers, for example `-w S02E05`. A whole-season selection such as `-w S05`
+matches episodes up to E999 only.
+
 ## Configuration defaults
 
 You can set every flag on this page as a default in your configuration file so you do not
@@ -1202,3 +1220,4 @@ authoritative list.
 | `--export` | | Export track info and keys to JSON. |
 | `--tmdb` / `--imdb` / `--tvdb` / `--anilist` / `--enrich` | | Metadata overrides. |
 | `--tvdb-order` | | Renumber episodes to a TVDB season order. |
+| `-ce` / `--continuous-episodes` | | Number each season on from the season before it. |

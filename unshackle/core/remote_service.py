@@ -552,11 +552,12 @@ def parse_air_date(value: Any) -> Any:
 
 
 def apply_title_fields(title: Title_T, info: Dict[str, Any]) -> None:
-    """Copy every serialized title field onto a local title.
+    """Copy the serialized metadata fields onto a local title.
 
     A service can change its title inside ``get_tracks`` (a corrected original language,
     a real episode name, an air date), so the client re-applies the server's view of the
-    title after every call that returns one.
+    title after every call that returns one. Season, number and part are set only by
+    ``build_title``, as dl can renumber them after the listing.
     """
     if info.get("language"):
         title.language = Language.get(info["language"])
@@ -570,9 +571,8 @@ def apply_title_fields(title: Title_T, info: Dict[str, Any]) -> None:
             title.title = info["series_title"]
         if "name" in info:
             title.name = episode_name(info["name"], title.title)
-        for key in ("season", "number", "part", "absolute"):
-            if info.get(key) is not None:
-                setattr(title, key, info[key])
+        if info.get("absolute") is not None:
+            title.absolute = info["absolute"]
         if info.get("air_date") is not None:
             title.air_date = parse_air_date(info["air_date"])
     elif info.get("name"):
@@ -602,6 +602,7 @@ def build_title(info: Dict[str, Any], service_tag: str, fallback_id: str) -> Tit
             title=info.get("series_title", "Unknown"),
             season=info.get("season", 0),
             number=info.get("number", 0),
+            part=info.get("part"),
             language=lang,
         )
     elif title_type == "movie":

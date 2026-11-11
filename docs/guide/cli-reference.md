@@ -172,6 +172,7 @@ Keep only certain track types, or skip certain track types.
 | `--enrich` | Overwrite show title, year and original language with the external source's. **Requires** one of `--tmdb`, `--imdb`, `--tvdb`, or `--anilist`. |
 | `--daily` | Treat the title as daily/date-based content and fill missing episode air dates from TVDB. The fill needs `--enrich` and a TVDB ID. See [Daily and date-based content](downloading.md#daily-and-date-based-content). |
 | `--tvdb-order` | Renumber episodes to a TVDB season order: `official` (aired), `dvd`, `absolute`, `alternate`, or `regional`. Needs `tvdb_api_key`. |
+| `-ce` / `--continuous-episodes` | Number each season on from the season before it. After a season one of four episodes, season two starts at `S02E05`. Season 0 and episode 0 keep their numbers. |
 
 !!! note "One ID at a time"
     You cannot combine `--tmdb`, `--imdb` and `--tvdb`. Give one and unshackle finds the

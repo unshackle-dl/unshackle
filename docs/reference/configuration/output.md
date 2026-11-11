@@ -59,7 +59,9 @@ folder-kind keys.
     or `{episode}`. Any series with a TVDB absolute order can use it, anime most often.
     Services can supply it, and
     [`--enrich`](../../guide/downloading.md#metadata-and-tagging) fills it in from TVDB.
-    Use `{absolute?}` so the name stays clean when it is unknown.
+    Use `{absolute?}` so the name stays clean when it is unknown. To keep the season and
+    continue the episode number instead (`S02E05`), use
+    [`--continuous-episodes`](../../guide/downloading.md#continuous-episode-numbers).
 
 !!! tip "`sports` names an event by year or date"
     A service marks an event episode as sport, and that episode then uses the `sports`

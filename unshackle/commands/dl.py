@@ -20,7 +20,8 @@ from datetime import date, timedelta
 from functools import partial
 from http.cookiejar import CookieJar, MozillaCookieJar
 from io import StringIO
-from itertools import product
+from itertools import groupby, product
+from operator import attrgetter
 from pathlib import Path
 from threading import Lock
 from typing import TYPE_CHECKING, Any, Callable, Collection, Optional, Sequence, TypedDict, Union, cast
@@ -996,6 +997,13 @@ class dl:
         "a series' Streaming Order is 'alternate'. Defaults to the tvdb_order config option.",
     )
     @click.option(
+        "-ce",
+        "--continuous-episodes",
+        is_flag=True,
+        default=False,
+        help="Number each season on from the season before it, e.g. S02E05 after a four-episode season one.",
+    )
+    @click.option(
         "--anilist",
         "anilist_id",
         type=str,
@@ -1284,6 +1292,7 @@ class dl:
         imdb_id: Optional[str] = None,
         tvdb_id: Optional[int] = None,
         tvdb_order: Optional[str] = None,
+        continuous_episodes: bool = False,
         anilist_id: Optional[Union[int, str]] = None,
         enrich: bool = False,
         daily: bool = False,
@@ -1322,6 +1331,7 @@ class dl:
         imdb_id = ctx.params.get("imdb_id", imdb_id)
         tvdb_id = ctx.params.get("tvdb_id", tvdb_id)
         tvdb_order = ctx.params.get("tvdb_order", tvdb_order)
+        continuous_episodes = ctx.params.get("continuous_episodes", continuous_episodes)
         anilist_id = ctx.params.get("anilist_id", anilist_id)
         enrich = ctx.params.get("enrich", enrich)
         daily = ctx.params.get("daily", daily)
@@ -1337,6 +1347,7 @@ class dl:
         self.tvdb_order = (tvdb_order or config.tvdb_order or "").lower()
         if self.tvdb_order and self.tvdb_order not in SEASON_TYPES:
             raise click.UsageError(f"tvdb_order must be one of {', '.join(SEASON_TYPES)}, not {self.tvdb_order!r}")
+        self.continuous_episodes = continuous_episodes
         self.enrich = enrich
         self.daily = daily
         self.output_dir = output_dir
@@ -2062,6 +2073,9 @@ class dl:
 
         if self.tvdb_order and isinstance(titles, Series):
             titles = self.apply_tvdb_order(titles, title_cacher, cache_title_id, cache_region, cache_account_hash)
+
+        if self.continuous_episodes and isinstance(titles, Series):
+            titles = self.apply_continuous_episodes(titles)
 
         console.print(Padding(Rule(f"[rule.text]{titles.__class__.__name__}: {titles}"), (1, 2)))
         console.print(Padding(titles.tree(verbose=list_titles), (0, 5)))
@@ -4098,6 +4112,26 @@ class dl:
 
         if filled:
             self.log.info("Filled absolute numbers for %d episode(s) from TVDB (ID %s).", filled, tvdb_id)
+
+    def apply_continuous_episodes(self, titles: Series) -> Series:
+        """Number each season on from the last episode of the season before it.
+
+        Season 0 and episode 0 keep their numbers, and a season that already starts past the season before it is kept.
+        The Series is rebuilt, as it does not re-sort an episode whose number changed.
+        """
+        last = 0
+        renumbered = 0
+        for season, group in groupby(titles, key=attrgetter("season")):
+            episodes = [t for t in group if t.number]
+            if not season or not episodes:
+                continue
+            if min(t.number for t in episodes) <= last:
+                for t in episodes:
+                    t.number += last
+                renumbered += len(episodes)
+            last = max(t.number for t in episodes)
+        self.log.info("Numbered %d episode(s) on from the season before.", renumbered)
+        return type(titles)(list(titles))
 
     def apply_tvdb_order(
         self,

@@ -1184,6 +1184,9 @@ async def download(request: web.Request) -> web.Response:
                 type: string
                 enum: [official, dvd, absolute, alternate, regional]
                 description: Renumber episodes to a TVDB season order (default - the tvdb_order config option)
+              continuous_episodes:
+                type: boolean
+                description: Number each season on from the season before it, e.g. S02E05 after a four-episode season one (default - false)
               output_dir:
                 type: string
                 description: >
