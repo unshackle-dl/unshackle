@@ -838,9 +838,16 @@ def extract_font_family(font_path: Path) -> Optional[str]:
     return None
 
 
+WINDOWS_FONTS_DIR = Path(r"C:\Windows\Fonts")
+
+
 def get_windows_fonts() -> dict[str, Path]:
     """
-    Get fonts from Windows registry.
+    Get the fonts installed for all users and for the current user from the Windows registry.
+
+    Only TrueType and OpenType files that exist are kept: a bitmap font cannot be attached, and a per-user entry
+    can outlive its file. Each font is also listed under the family name in its file, because a registry name
+    can differ from it (``GandhiSansPL-Bold`` for the family ``Gandhi Sans PL``).
 
     Returns:
         Dictionary mapping font family names to their file paths
@@ -849,14 +856,24 @@ def get_windows_fonts() -> dict[str, Path]:
         raise OSError("Windows font registry is only available on Windows")
     import winreg
 
-    with winreg.ConnectRegistry(None, winreg.HKEY_LOCAL_MACHINE) as reg:
-        key = winreg.OpenKey(reg, r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts", 0, winreg.KEY_READ)
-        total_fonts = winreg.QueryInfoKey(key)[1]
-        return {
-            name.replace(" (TrueType)", ""): Path(r"C:\Windows\Fonts", filename)
-            for n in range(0, total_fonts)
-            for name, filename, _ in [winreg.EnumValue(key, n)]
-        }
+    fonts: dict[str, Path] = {}
+    for hive in (winreg.HKEY_LOCAL_MACHINE, winreg.HKEY_CURRENT_USER):
+        try:
+            key = winreg.OpenKey(hive, r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts", 0, winreg.KEY_READ)
+        except OSError:
+            continue
+        with key:
+            for n in range(winreg.QueryInfoKey(key)[1]):
+                name, filename, _ = winreg.EnumValue(key, n)
+                if not isinstance(filename, str):
+                    continue
+                path = Path(WINDOWS_FONTS_DIR, filename)
+                if path.suffix.lower() in {".ttf", ".otf", ".ttc"} and path.is_file():
+                    fonts.setdefault(name.replace(" (TrueType)", ""), path)
+    for path in dict.fromkeys(fonts.values()):
+        if family := extract_font_family(path):
+            fonts.setdefault(family, path)
+    return fonts
 
 
 def scan_font_directory(font_dir: Path, fonts: dict[str, Path], log: logging.Logger) -> None:
