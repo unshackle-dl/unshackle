@@ -2666,7 +2666,9 @@ with a warning.</p>
 flags drive selection, sort order, output filenames, and the Matroska track flags.</p>
 <ul>
 <li><strong>Forced</strong>: only signs and foreign dialogue, meant to play when the audio language
-  matches. Off by default. Enable it with <code>--forced-subs</code>.</li>
+  matches. Off by default. Enable it with <code>--forced-subs</code>. To choose which type gets the
+  default flag in the file, set
+  <a href="../../reference/configuration/download/#muxing"><code>muxing.default_subtitle_type</code></a>.</li>
 <li><strong>SDH</strong> (Subtitles for the Deaf and Hard-of-Hearing, also called HOH): a full
   transcript that includes both dialogue and non-speech sound cues.</li>
 <li><strong>CC</strong> (Closed Captions): captions originating from an EIA-608/708 broadcast stream,

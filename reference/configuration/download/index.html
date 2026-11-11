@@ -2666,18 +2666,21 @@ it ignores entries that are not valid language tags.</p>
 that flag.</p>
 </div>
 <div class="admonition note">
-<p class="admonition-title"><code>type_priority</code> picks the default subtitle only with <code>muxing.default_language</code></p>
+<p class="admonition-title"><code>type_priority</code> alone does not pick the default subtitle</p>
 <p>At mux time the <code>default</code> flag goes to every forced subtitle whose language matches the
-first audio track, so a full dialogue track never becomes default on its own.
-<code>type_priority</code> alone does not change that. Name a subtitle language in
-<a href="#muxing"><code>muxing.default_language</code></a> and the first track in that language gets the flag
-instead, which is where <code>type_priority</code> decides which track that is:</p>
+default audio track, so a full dialogue track never becomes default on its own.
+<code>type_priority</code> changes the order of the tracks in the file. It decides the flag only
+between the tracks of one language, when you set <code>muxing.default_language.subtitle</code>. Set
+<a href="#muxing"><code>muxing.default_subtitle_type</code></a> to name the type that gets the flag:</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="nt">muxing</span><span class="p">:</span>
-</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">  </span><span class="nt">default_language</span><span class="p">:</span>
-</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">    </span><span class="nt">subtitle</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">en</span>
-</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="nt">subtitle</span><span class="p">:</span>
-</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="w">  </span><span class="nt">type_priority</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">normal</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">sdh</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">forced</span><span class="p p-Indicator">]</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">  </span><span class="nt">default_subtitle_type</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">normal</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">sdh</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">forced</span><span class="p p-Indicator">]</span>
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">  </span><span class="nt">default_language</span><span class="p">:</span>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="w">    </span><span class="nt">subtitle</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">en</span>
 </span></code></pre></div>
+<p>Here the flag goes to the full English track, then to the English SDH track when the
+title has no full one, then to the forced one. Without <code>default_language.subtitle</code>, the
+first track of the type in file order gets the flag, in any language. A forced track is
+the exception: it gets the flag only in the language of the default audio track.</p>
 </div>
 <h2 id="audio"><code>audio</code><a class="headerlink" href="#audio" title="Permanent link">&para;</a></h2>
 <ul>
@@ -2731,6 +2734,12 @@ bitrate alone, with those same Atmos/descriptive rules still applied.</p>
 <td>Force which language is flagged <em>default</em> per track type, e.g. <code>{audio: en, subtitle: en}</code>. A tag with a region, such as <code>en-US</code>, matches only that variant.</td>
 </tr>
 <tr>
+<td><code>default_subtitle_type</code></td>
+<td>str or list</td>
+<td>unset</td>
+<td>The subtitle types that can take the <em>default</em> flag, in order: <code>forced</code>, <code>normal</code>, <code>sdh</code> (CC counts as SDH, and <code>cc</code> is the same as <code>sdh</code>). The first subtitle track of the first type that the title has gets the flag. With <code>default_language.subtitle</code>, only the tracks in that language count. unshackle ignores a different word with a warning. <code>normal</code> is the value for players that read the forced flag. Read <a href="../../../guide/output-and-naming/#muxing-options">Muxing</a>.</td>
+</tr>
+<tr>
 <td><code>merge_audio</code></td>
 <td>bool</td>
 <td><code>true</code></td>
@@ -2768,6 +2777,7 @@ bitrate alone, with those same Atmos/descriptive rules still applied.</p>
 </span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="w">  </span><span class="nt">default_language</span><span class="p">:</span>
 </span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="w">    </span><span class="nt">audio</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">en</span>
 </span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="w">    </span><span class="nt">subtitle</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">en</span>
+</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="w">  </span><span class="nt">default_subtitle_type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">normal</span>
 </span></code></pre></div>
 <h2 id="language_tags"><code>language_tags</code><a class="headerlink" href="#language_tags" title="Permanent link">&para;</a></h2>
 <ul>

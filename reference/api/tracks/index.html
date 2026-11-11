@@ -2338,6 +2338,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#unshackle.core.tracks.Subtitle.kind" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;kind
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#unshackle.core.tracks.Subtitle.get_track_name" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3108,6 +3119,17 @@
     <span class="md-ellipsis">
       
         <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;first_match_index
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unshackle.core.tracks.Tracks.default_subtitle_index" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;default_subtitle_index
       
     </span>
   </a>
@@ -3888,6 +3910,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#unshackle.core.tracks.Subtitle.kind" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;kind
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#unshackle.core.tracks.Subtitle.get_track_name" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4658,6 +4691,17 @@
     <span class="md-ellipsis">
       
         <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;first_match_index
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unshackle.core.tracks.Tracks.default_subtitle_index" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;default_subtitle_index
       
     </span>
   </a>
@@ -6529,6 +6573,30 @@ explanation list above.</p>
     <div class="doc doc-contents ">
 
         <p>The language tag written to the output file, with the script its region implies.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h3 id="unshackle.core.tracks.Subtitle.kind" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <span class="doc doc-object-name doc-attribute-name">kind</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-property"><code>property</code></small>
+  </span>
+
+<a href="#unshackle.core.tracks.Subtitle.kind" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">kind</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>The subtitle type that the config names: "forced", "sdh" (CC counts as SDH) or "normal".</p>
 
     </div>
 
@@ -8917,6 +8985,35 @@ resolutions get a base only when a DV track can give it an RPU, or with <code>ge
 
         <p>The index of the first track that <code>language</code> asks for, matched against every track at once.</p>
 <p>Matching the whole list lets the RFC 4647 string preference pick en-US over en.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="unshackle.core.tracks.Tracks.default_subtitle_index" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">default_subtitle_index</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-staticmethod"><code>staticmethod</code></small>
+  </span>
+
+<a href="#unshackle.core.tracks.Tracks.default_subtitle_index" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">default_subtitle_index</span><span class="p">(</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">subtitles</span><span class="p">,</span> <span class="n">language</span><span class="p">,</span> <span class="n">types</span><span class="p">,</span> <span class="n">audio_language</span><span class="o">=</span><span class="kc">None</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="p">)</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>The index of the first subtitle of the first type in <code>types</code> that a track has.</p>
+<p><code>language</code> limits the choice to the tracks it asks for. With no <code>types</code>, or no track
+of a listed type, the first track in <code>language</code> is the answer. With no <code>language</code>, a
+forced track counts only in <code>audio_language</code>, because it adds to that audio alone.</p>
 
 
     </div>
