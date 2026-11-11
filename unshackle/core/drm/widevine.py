@@ -44,7 +44,7 @@ class Widevine:
             raise TypeError(f"Expected pssh to be a {PSSH}, not {pssh!r}")
 
         if pssh.system_id == PSSH.SystemId.PlayReady:
-            pssh.to_widevine()
+            pssh = self.from_playready(pssh)
 
         self._kid: Optional[UUID] = None
         if kid:
@@ -67,6 +67,27 @@ class Widevine:
 
         self.content_keys: dict[UUID, str] = {}
         self.data: dict = kwargs or {}
+
+    @staticmethod
+    def from_playready(pssh: PSSH) -> PSSH:
+        """A Widevine PSSH naming a v1 box's own KIDs, then the KIDs the PlayReady class reads from it.
+
+        pywidevine's own conversion fails on a bare WRMHEADER and byte-swaps PlayReady KIDs.
+        """
+        from pyplayready.misc.exceptions import InvalidPssh
+
+        from unshackle.core.drm.playready import PlayReady
+
+        box = pssh.dump()
+        kids: list[UUID] = list(Box.parse(box).key_IDs or [])
+        try:
+            kids += PlayReady.from_pssh_b64(base64.b64encode(box).decode()).kids
+        except PlayReady.Exceptions.KIDNotFound:
+            pass
+        except InvalidPssh:
+            if not kids:
+                raise
+        return PSSH.new(system_id=PSSH.SystemId.Widevine, key_ids=list(dict.fromkeys(kids)))
 
     @classmethod
     def from_track(cls, track: AnyTrack, session: Optional[AnySession] = None) -> Widevine:

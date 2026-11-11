@@ -9,10 +9,13 @@ from uuid import UUID
 import m3u8
 import pytest
 from lxml import etree
+from pymp4.parser import Box
 from pyplayready.misc.exceptions import InvalidPssh
 from pyplayready.system.pssh import PSSH
+from pyplayready.system.wrmheader import WRMHeader
 from pywidevine.pssh import PSSH as WV_PSSH
 
+from unshackle.core.api.handlers import pssh_kids
 from unshackle.core.drm import PlayReady, Widevine, drm_from_dict
 from unshackle.core.manifests.dash import DASH
 from unshackle.core.manifests.hls import HLS
@@ -110,3 +113,37 @@ def test_ism_loads_a_bare_header() -> None:
 
     assert len(drm) == 1
     assert KID in drm[0].kids
+
+
+def pr_box(header: bytes, box_kids: tuple[UUID, ...] = ()) -> str:
+    """Base64 of a PlayReady PSSH box around ``header``; ``box_kids`` makes it a v1 box."""
+    return base64.b64encode(
+        Box.build(
+            dict(
+                type=b"pssh",
+                version=1 if box_kids else 0,
+                flags=0,
+                system_ID=WV_PSSH.SystemId.PlayReady,
+                key_IDs=list(box_kids) or None,
+                init_data=header,
+            )
+        )
+    ).decode()
+
+
+@pytest.mark.parametrize("version", ["4.0.0.0", "4.3.0.0"])
+@pytest.mark.parametrize("wrap", [False, True], ids=["bare", "pro"])
+def test_widevine_converts_a_playready_box_with_the_playready_kids(version: str, wrap: bool) -> None:
+    header = base64.b64decode(bare_header(version))
+    box = pr_box(base64.b64decode(PlayReady.pro_b64_for(WRMHeader(header))) if wrap else header)
+
+    assert Widevine(pssh=WV_PSSH(box)).kids == [KID]
+    assert PlayReady(pssh=PSSH(base64.b64decode(box)), pssh_b64=box).kids == [KID]
+    assert pssh_kids(box, "widevine") == {KID}
+
+
+def test_widevine_keeps_the_kids_of_a_v1_playready_box() -> None:
+    other = UUID("ffeeddcc-bbaa-9988-7766-554433221100")
+    box = pr_box(base64.b64decode(bare_header("4.0.0.0")), box_kids=(other, KID))
+
+    assert Widevine(pssh=WV_PSSH(box)).kids == [other, KID]
