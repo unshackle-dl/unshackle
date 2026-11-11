@@ -9,7 +9,7 @@ from enum import Enum
 from functools import partial
 from io import BytesIO
 from pathlib import Path
-from typing import Any, Callable, Iterable, Optional, Sequence, Union
+from typing import TYPE_CHECKING, Any, Callable, Iterable, Optional, Sequence, Union
 
 import click
 import pycaption
@@ -28,6 +28,9 @@ from unshackle.core.tracks.track import Track
 from unshackle.core.utilities import PYMP4_LOCK, try_ensure_utf8, with_script
 from unshackle.core.utils.subprocess import log_tool_run
 from unshackle.core.utils.webvtt import merge_segmented_webvtt, rebase_webvtt
+
+if TYPE_CHECKING:
+    import pysubs2
 
 # silence srt library INFO logging
 logging.getLogger("srt").setLevel(logging.ERROR)
@@ -185,6 +188,9 @@ class Subtitle(Track):
 
         if self.forced and (self.cc or self.sdh):
             raise ValueError("A text track cannot be CC/SDH as well as Forced.")
+
+        self.ass_style: Optional[pysubs2.SSAStyle] = None
+        self.ass_video_size: Optional[tuple[int, int]] = None
 
         # TODO: Migrate to new event observer system
         # Called after Track has been converted to another format
@@ -1227,6 +1233,7 @@ class Subtitle(Track):
                 format=output_format,
             )
         else:
+            styled_codec = self.codec if self.ass_style else None
             if config.subtitle.get("convert_before_strip", True) and self.codec != Subtitle.Codec.SubRip:
                 # Filter reads SRT only; force the (possibly lossy) conversion so content and
                 # codec label stay in sync. convert() relabels path/codec only on real conversion.
@@ -1255,6 +1262,8 @@ class Subtitle(Track):
                     log.warning(f"Failed to strip SDH from {self.path.name}, keeping it as is: {e}")
                 else:
                     raise
+            if styled_codec and self.codec != styled_codec and self.path.read_text("utf-8", errors="replace").strip():
+                self.convert(styled_codec)
 
     def reverse_rtl(self) -> None:
         """

@@ -83,6 +83,7 @@ Subtitle selection happens through `dl` flags. The most important is language se
 | `-S`, `--subs-only` | Download only subtitle tracks. |
 | `-ns`, `--no-subs` | Do not download subtitle tracks at all. |
 | `--sub-format` | Output subtitle format / conversion target (see [conversion](#converting-subtitle-formats)). |
+| `--sub-font` | Font for subtitles converted to ASS; implies `--sub-format ass` (see [custom font and style](#custom-font-and-style)). |
 | `--skip-subtitle-errors` | Skip a subtitle that fails to download instead of aborting the whole title. |
 
 ### Choosing languages
@@ -404,6 +405,60 @@ The pattern is `{base}.{language}[.forced][.sdh].{extension}`. The
 a format name like `srt` or `vtt`, or `original` to keep each subtitle in its downloaded
 format.
 
+## Custom font and style
+
+Services mostly deliver WebVTT, which players draw in their own plain font. To use a font
+of your choice, unshackle converts the subtitles to ASS and gives them one style:
+
+```shell title="Convert to ASS in a custom font"
+unshackle dl --sub-font "Noto Sans" EXAMPLE 81234567
+```
+
+`--sub-font` sets only the font name. The rest of the look comes from
+[`subtitle.ass_style`](#subtitle-configuration), a mapping of style fields. A field takes its
+[pysubs2 name](https://pysubs2.readthedocs.io/en/latest/api-reference.html#ssastyle-style-of-subtitles)
+(`primarycolor`) or its ASS name (`PrimaryColour`). Give sizes and margins for a 1080-line
+picture. unshackle writes a 1080-line canvas in the shape of the video, and the player scales
+it to the screen, so the text has the same size on a 720p, 1080p or 2160p video.
+
+```yaml title="unshackle.yaml"
+subtitle:
+  ass_style:
+    fontname: Noto Sans
+    fontsize: 72
+    primarycolor: "&H00FFFFFF"
+    marginv: 60
+```
+
+The fields you leave out keep these defaults: `fontname: Arial`, `fontsize: 72`, `bold: true`,
+`outline: 3.6`, `shadow: 1.5`, `backcolor: "&HA0000000"`, `marginl: 100`, `marginr: 100` and
+`marginv: 60`. Write colours as `&HAABBGGRR` strings in quotes: in YAML, an unquoted `&` starts
+an anchor, and an unquoted number is not read as a colour.
+
+- A style makes ASS the output format when you set no `--sub-format`. With `--sub-format ass`
+  or `ssa` the style applies too. With another format, unshackle does not use the style.
+  A `--sub-font` that you type overrides a `sub_format` from the configuration file, and stops
+  the download with an error when you also type another `--sub-format`. A `sub_font` from the
+  configuration file is ignored when the format is not ASS.
+- The style applies only to subtitles that unshackle converts into ASS. A subtitle that is
+  already SSA/ASS keeps its own styles, positions and canvas, and so does its SDH-stripped copy.
+- The SDH-stripped copy of a converted track keeps the style.
+- unshackle checks the style before it downloads. An unknown field or a value that does not
+  fit its field stops the download with an error.
+- With `output_mode: sidecar` and a `sidecar_format` other than `ass`, the sidecar files do
+  not use the style.
+- Closed captions that unshackle extracts from the video stay SRT.
+
+!!! note "Player settings"
+    A player draws an ASS subtitle with its own style, so player options for text subtitles,
+    such as the mpv options `sub-font` and `sub-font-size`, no longer apply. The text size
+    follows the height of the video, so on a wide video such as 1920x800 the text is smaller
+    than on a 1920x1080 video.
+
+The font must be on your system or in [`directories.fonts`](../reference/configuration/directories.md),
+in a folder with the family name, for example `fonts/Noto Sans/NotoSans-Regular.ttf`. unshackle
+attaches it to the MKV, as described below.
+
 ## Fonts for styled subtitles
 
 Styled SSA/ASS subtitles reference specific fonts by name. When unshackle muxes such a
@@ -440,6 +495,7 @@ subtitle:
 | `group_by` | `type` | `type`, `language` | Whether all tracks of one type stay together, or each language stays next to its own variants. |
 | `language_priority` | *(unset)* | a list of languages | Languages to sort to the top. The rest keep the default order. Nothing is removed. |
 | `dedupe_codecs` | *(unset)* | a list of codecs, e.g. `[VTT, STPP, WVTT]` | Keep one copy of a subtitle that the service sends in several codecs: the earliest listed codec wins. |
+| `ass_style` | *(unset)* | a mapping of pysubs2 style fields | The look of subtitles converted to ASS; makes ASS the default output format. See [custom font and style](#custom-font-and-style). |
 
 ### Which settings to change
 

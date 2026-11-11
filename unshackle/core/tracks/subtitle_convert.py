@@ -16,12 +16,13 @@ from __future__ import annotations
 
 import html
 import logging
+import math
 import re
 import subprocess
 import time
 from itertools import pairwise
 from pathlib import Path
-from typing import Optional, Protocol
+from typing import Any, Mapping, Optional, Protocol
 
 import pycaption
 import pysubs2
@@ -315,6 +316,110 @@ def decode_entities(out: Path) -> None:
         out.write_text(decoded, encoding="utf8")
 
 
+ASS_CANVAS_HEIGHT = 1080
+ASS_STYLE_DEFAULTS: dict[str, Any] = {
+    "fontsize": 72,
+    "bold": True,
+    "outline": 3.6,
+    "shadow": 1.5,
+    "backcolor": "&HA0000000",
+    "marginl": 100,
+    "marginr": 100,
+    "marginv": 60,
+}
+NON_NEGATIVE_STYLE_FIELDS = frozenset({"fontsize", "outline", "shadow", "scalex", "scaley"})
+
+
+def ass_color(text: str) -> pysubs2.Color:
+    """Read an ``&HAABBGGRR`` colour, the form an ASS style line uses."""
+    value = int(text.strip().upper().removeprefix("&H").rstrip("&"), 16)
+    if not 0 <= value <= 0xFFFFFFFF:
+        raise ValueError(f"{text!r} is not an &HAABBGGRR colour")
+    return pysubs2.Color(value & 0xFF, value >> 8 & 0xFF, value >> 16 & 0xFF, value >> 24 & 0xFF)
+
+
+def style_field_value(name: str, current: Any, value: Any) -> Any:
+    """``value`` as the type of the style field that holds ``current``; ValueError or TypeError when it does not fit."""
+    if isinstance(current, pysubs2.Color):
+        if not isinstance(value, str):
+            raise ValueError
+        return ass_color(value)
+    if isinstance(current, bool) != isinstance(value, bool):
+        raise ValueError
+    if isinstance(current, bool):
+        return value
+    if isinstance(current, str):
+        if not isinstance(value, str) or not value.strip() or "," in value or not value.isprintable():
+            raise ValueError
+        return value
+    number = float(value)
+    if not math.isfinite(number) or (name in NON_NEGATIVE_STYLE_FIELDS and number < 0):
+        raise ValueError
+    if isinstance(current, float):
+        return number
+    if not number.is_integer():
+        raise ValueError
+    return type(current)(int(number))
+
+
+def build_ass_style(fields: Mapping[str, Any]) -> pysubs2.SSAStyle:
+    """Build the style for converted subtitles from style fields over ``ASS_STYLE_DEFAULTS``.
+
+    A field is a pysubs2 name (``primarycolor``) or an ASS one (``PrimaryColour``). Sizes and margins are for a
+    1080-line canvas. A value that does not fit its field raises ValueError.
+    """
+    style = pysubs2.SSAStyle()
+    for name, value in {**ASS_STYLE_DEFAULTS, **fields}.items():
+        field = str(name).lower().replace("colour", "color")
+        if field not in vars(style):
+            raise ValueError(f"ass_style has no field {name!r}")
+        try:
+            setattr(style, field, style_field_value(field, getattr(style, field), value))
+        except (ValueError, TypeError):
+            raise ValueError(f"ass_style {name}: {value!r} is not valid") from None
+    return style
+
+
+def style_substation(path: Path, style: pysubs2.SSAStyle, video_size: Optional[tuple[int, int]]) -> None:
+    """Give every style of a converted SSA/ASS file the look of ``style``.
+
+    A file with no PlayResY gets a 1080-line canvas in the shape of the video. A file with one keeps it, so positions
+    a converter wrote stay put, and the style scales to it. Each style keeps its own alignment and italic flag.
+    """
+    try:
+        subs = pysubs2.load(str(path), encoding="utf-8-sig")
+    except (pysubs2.exceptions.Pysubs2Error, UnicodeDecodeError, ValueError) as e:
+        log.warning(f"Cannot style {path.name}: {e}")
+        return
+    try:
+        height = float(subs.info["PlayResY"])
+    except (KeyError, ValueError):
+        height = 0.0
+    if height <= 0:
+        width, video_height = video_size or (16, 9)
+        height = ASS_CANVAS_HEIGHT
+        subs.info["PlayResX"] = str(round(height * width / video_height))
+        subs.info["PlayResY"] = str(ASS_CANVAS_HEIGHT)
+        if video_size:
+            subs.info["LayoutResX"], subs.info["LayoutResY"] = str(width), str(video_height)
+    subs.info["ScaledBorderAndShadow"] = "yes"
+
+    scale = height / ASS_CANVAS_HEIGHT
+    scaled = style.copy()
+    for name in ("fontsize", "outline", "shadow", "spacing"):
+        setattr(scaled, name, getattr(style, name) * scale)
+    for name in ("marginl", "marginr", "marginv"):
+        setattr(scaled, name, round(getattr(style, name) * scale))
+
+    styles = {}
+    for name, old in subs.styles.items():
+        styles[name] = scaled.copy()
+        styles[name].alignment, styles[name].italic = old.alignment, old.italic
+    styles["Default"] = scaled
+    subs.styles = styles
+    subs.save(str(path), format_=subs.format, encoding="utf-8")
+
+
 def finalize(sub: Subtitle, target: Codec, out: Path) -> Path:
     """Swap the track onto the converted file and fire the OnConverted callback."""
     original = sub.path
@@ -388,6 +493,8 @@ def run_conversion(sub: Subtitle, target: Codec, *, pin: Optional[str] = None, f
                 continue
             if target in PLAIN_TEXT_TARGETS:
                 decode_entities(out)
+            if sub.ass_style and target in SUBSTATION and source not in SUBSTATION:
+                style_substation(out, sub.ass_style, sub.ass_video_size)
             return finalize(sub, target, out)
     finally:
         if sorted_src:

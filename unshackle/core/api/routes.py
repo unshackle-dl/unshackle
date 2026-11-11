@@ -1036,6 +1036,9 @@ async def download(request: web.Request) -> web.Response:
               sub_format:
                 type: string
                 description: Output subtitle format such as SRT or VTT, or "original" to keep the source format (default - None)
+              sub_font:
+                type: string
+                description: Font for subtitles converted to ASS, implies sub_format ASS (default - None)
               video_only:
                 type: boolean
                 description: Only download video tracks (default - false)

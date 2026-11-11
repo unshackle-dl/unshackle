@@ -92,6 +92,7 @@ DEFAULT_DOWNLOAD_PARAMS = {
     "forced_s_lang": [],
     "exact_lang": False,
     "sub_format": None,
+    "sub_font": None,
     "video_only": False,
     "audio_only": False,
     "subs_only": False,
@@ -2253,12 +2254,18 @@ def validate_download_parameters(data: Dict[str, Any]) -> Optional[str]:
         if value is not None and (not isinstance(value, list) or not all(isinstance(v, str) for v in value)):
             return f"{key} must be an array of language strings"
 
-    from unshackle.commands.dl import dl
+    from unshackle.commands.dl import dl, subtitle_look
 
     try:
-        cast_dl_params(dl.cli, data)
+        params = cast_dl_params(dl.cli, data)
     except click.BadParameter as e:
         return e.message
+
+    if params.get("sub_font"):
+        try:
+            subtitle_look(params.get("sub_format"), params["sub_font"], None)
+        except ValueError as e:
+            return f"Invalid sub_font: {e}"
 
     return None
 

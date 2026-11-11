@@ -103,6 +103,7 @@ from unshackle.core.tracks import Audio, Subtitle, Tracks, Video
 from unshackle.core.tracks.attachment import Attachment
 from unshackle.core.tracks.dv_fixup import apply_dv_fixup
 from unshackle.core.tracks.hybrid import Hybrid
+from unshackle.core.tracks.subtitle_convert import SUBSTATION, build_ass_style
 from unshackle.core.tracks.track import Track, assert_fragments_decrypted, has_encrypted_sample_entry
 from unshackle.core.tracks.tracks import at_resolution
 from unshackle.core.utilities import (
@@ -152,6 +153,8 @@ from unshackle.core.vault import Vault
 from unshackle.core.vaults import Vaults
 
 if TYPE_CHECKING:
+    import pysubs2
+
     from unshackle.core.remote_service import ServerKeySource
 
 
@@ -275,6 +278,41 @@ def generated_dv_ranges(
 def keep_generated_dv_bases(videos: Sequence[Video], bases: Sequence[Video.Range]) -> list[Video]:
     """The videos without the DV tracks and without a hybrid base range the user did not name."""
     return [v for v in videos if v.range != Video.Range.DV and (v.range not in HYBRID_BASE_RANGES or v.range in bases)]
+
+
+def subtitle_look(
+    sub_format: Optional[Union[Subtitle.Codec, str]],
+    sub_font: Optional[str],
+    style_fields: Any,
+    *,
+    typed_font: bool = True,
+    typed_format: bool = True,
+) -> tuple[Optional[Union[Subtitle.Codec, str]], Optional[pysubs2.SSAStyle]]:
+    """The subtitle format and ASS style for --sub-font and the subtitle.ass_style config.
+
+    A style makes ASS the format when none is set. Another format leaves the style unused. A typed --sub-font
+    overrides a format from config, refuses a typed one, and a font from config is ignored like the config style.
+    """
+    if typed_font and sub_font and sub_format is not None and sub_format not in SUBSTATION:
+        if typed_format:
+            raise ValueError(f"--sub-font needs ASS subtitles, not {getattr(sub_format, 'name', sub_format)}")
+        sub_format = None
+    if not (style_fields or sub_font) or sub_format not in (None, *SUBSTATION):
+        return sub_format, None
+    if not isinstance(style_fields, (dict, type(None))):
+        raise ValueError("subtitle.ass_style must be a mapping of style fields")
+    style = build_ass_style({**(style_fields or {}), **({"fontname": sub_font} if sub_font else {})})
+    return sub_format or Subtitle.Codec.SubStationAlphav4, style
+
+
+def set_subtitle_look(
+    subtitles: Iterable[Subtitle], style: Optional[pysubs2.SSAStyle], videos: Iterable[Video]
+) -> None:
+    """Give each subtitle that is not already SSA/ASS the style, and every subtitle the size of the first video."""
+    size = next(((v.width, v.height) for v in videos if v.width and v.height), None)
+    for subtitle in subtitles:
+        subtitle.ass_style = None if subtitle.codec in SUBSTATION else style
+        subtitle.ass_video_size = size
 
 
 def hybrid_gate_failure(videos: Sequence[Video], generate_dv: bool) -> Optional[str]:
@@ -575,8 +613,10 @@ class dl:
             font_name: Font family name to find
 
         Returns:
-            Path to font file, or None if not found
+            Path to font file, or None if not found. A name that is a path, not one folder name, finds nothing.
         """
+        if Path(font_name).name != font_name or font_name in ("", ".."):
+            return None
         family_dir = Path(config.directories.fonts, font_name)
         if family_dir.exists():
             fonts = list(family_dir.glob("*.*tf"))
@@ -1041,6 +1081,12 @@ class dl:
         default=None,
         help="Set Output Subtitle Format, only converting if necessary. Use 'original' to keep source format.",
     )
+    @click.option(
+        "--sub-font",
+        type=str,
+        default=None,
+        help="Font for subtitles converted to ASS, with the subtitle.ass_style look. Implies --sub-format ASS.",
+    )
     @click.option("-V", "--video-only", is_flag=True, default=False, help="Only download video tracks.")
     @click.option("-A", "--audio-only", is_flag=True, default=False, help="Only download audio tracks.")
     @click.option("-S", "--subs-only", is_flag=True, default=False, help="Only download subtitle tracks.")
@@ -1279,6 +1325,7 @@ class dl:
     LICENSE_KEY_CACHE: dict[UUID, str] = {}
     ALL_DRM_LOCK = Lock()
     _remote_service: Optional["ServerKeySource"] = None
+    typed_params: frozenset[str] = frozenset()
 
     def __init__(
         self,
@@ -1305,6 +1352,11 @@ class dl:
             raise ValueError("A subcommand to invoke was not specified, the main code cannot continue.")
 
         self.log = logging.getLogger("download")
+        self.typed_params = frozenset(
+            name
+            for name in ("sub_font", "sub_format")
+            if ctx.get_parameter_source(name) not in (None, ParameterSource.DEFAULT, ParameterSource.DEFAULT_MAP)
+        )
         self.completed_files: list[Path] = []
         # Subtitles skipped under --skip-subtitle-errors, recorded so an embedding caller can
         # report which weren't available without parsing the console output. See SkippedSubtitle.
@@ -1696,6 +1748,7 @@ class dl:
         forced_s_lang: list[str],
         exact_lang: bool,
         sub_format: Optional[Union[Subtitle.Codec, str]],
+        sub_font: Optional[str],
         video_only: bool,
         audio_only: bool,
         subs_only: bool,
@@ -1925,6 +1978,18 @@ class dl:
 
         if select_titles and wanted:
             self.log.error("--select-titles and -w/--wanted cannot be used together")
+            sys.exit(1)
+
+        try:
+            sub_format, ass_style = subtitle_look(
+                sub_format,
+                sub_font,
+                config.subtitle.get("ass_style"),
+                typed_font="sub_font" in self.typed_params,
+                typed_format="sub_format" in self.typed_params,
+            )
+        except ValueError as e:
+            self.log.error(str(e))
             sys.exit(1)
 
         if generate_dv and Video.Range.DV in range_ and Video.Range.HYBRID not in range_:
@@ -3337,6 +3402,7 @@ class dl:
                             shutil.copy2(subtitle.path, original_path)
                             sidecar_original_paths[subtitle.id] = original_path
 
+                set_subtitle_look(title.tracks.subtitles, ass_style, title.tracks.videos)
                 with console.status("Converting Subtitles..."):
                     sub_conversions: dict[tuple[str, str], int] = {}
                     for subtitle in title.tracks.subtitles:

@@ -41,6 +41,7 @@ Common config keys. This is a useful subset, and every `dl` flag works:
 | `range` | list | `["SDR"]` | Colour range(s): `SDR`, `HLG`, `HDR10`, `HDR10P`, `DV`, `HYBRID`. |
 | `channels` | float | *(unset)* | Audio channels, e.g. `6` for 5.1. |
 | `sub_format` | str | *(unset)* | Convert subtitles to this format (`srt`, `vtt`, `original`, ...). |
+| `sub_font` | str | *(unset)* | Font for subtitles converted to ASS; implies `sub_format: ass`. Ignored when `sub_format` is another format. |
 | `forced_subs` | bool | `false` | Include forced subtitle tracks. |
 | `forced_s_lang` | list | `[]` | Forced subtitle language(s); implies `forced_subs`. A `-` prefix excludes. |
 | `forced_subs_only` | bool | `false` | Keep only forced subtitle tracks; implies `forced_subs`. |
@@ -194,6 +195,7 @@ in or writes them as sidecar files. See [Subtitles](../../guide/subtitles.md) fo
 | `type_priority` | list | *(unset)* | Ordered ranking of subtitle types (`forced`, `normal`, `sdh`; CC counts as SDH). Types you leave out fall to the end. |
 | `group_by` | str | `"type"` | Which key groups the subtitle tracks. `type` puts all forced tracks together, then all normal, then all SDH. `language` keeps each language next to its own variants. |
 | `language_priority` | list | *(unset)* | Languages to sort to the top, in the order you give. The rest keep the default order: original language first, then alphabetical. Nothing is removed. |
+| `ass_style` | dict | *(unset)* | Style for subtitles converted to ASS, as pysubs2 or ASS style fields (`fontname`, `fontsize`, `primarycolor` or `PrimaryColour`, ...) for a 1080-line picture. Makes ASS the output format when `sub_format` is unset. See [Custom font and style](../../guide/subtitles.md#custom-font-and-style). |
 | `dedupe_codecs` | list | *(unset)* | Subtitle codecs in order of preference, by value or name, for example `[VTT, STPP, WVTT]`. When tracks of the same language, forced/SDH/CC type and name come in several listed codecs, unshackle drops the ones in a later codec. It always keeps codecs you leave out. Unset keeps every track. |
 
 ```yaml

@@ -107,6 +107,7 @@ unshackle dl [OPTIONS] SERVICE [SERVICE ARGS...]
 | `-fsl`, `--forced-s-lang` | none | Language(s) wanted for forced subtitles; implies `-fs`. A `-` prefix excludes. |
 | `--exact-lang` | off | A tag without a region selects only the variant it means and never falls back to another: `-l es` does not select `es-419`. A tag with a region, such as `es-419`, is always exact. Applies to selection and to sort order. |
 | `--sub-format` | - | Output subtitle format (`SRT`/`srt`, `VTT`/`webvtt`, `ASS`/`ssa`, `TTML`, `SMI`, ...), or `original` to keep the source format. |
+| `--sub-font` | - | Font for subtitles converted to ASS, with the rest of the look from `subtitle.ass_style`. Implies `--sub-format ASS` and overrides a `sub_format` from the configuration file; a typed `--sub-format` of another format is an error. |
 
 !!! tip "These flags select languages, they do not order them"
     Naming languages with `-l` or `-sl` removes the others. To keep every language but put
