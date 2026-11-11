@@ -232,6 +232,11 @@ class Subtitle(Track):
             )
         )
 
+    @property
+    def kind(self) -> str:
+        """The subtitle type that the config names: "forced", "sdh" (CC counts as SDH) or "normal"."""
+        return "forced" if self.forced else "sdh" if (self.sdh or self.cc) else "normal"
+
     def get_track_name(self) -> Optional[str]:
         """Return the base Track Name."""
         track_name = super().get_track_name() or ""

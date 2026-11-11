@@ -156,7 +156,9 @@ Every subtitle track carries flags describing what kind of captions it holds. Th
 flags drive selection, sort order, output filenames, and the Matroska track flags.
 
 - **Forced**: only signs and foreign dialogue, meant to play when the audio language
-  matches. Off by default. Enable it with `--forced-subs`.
+  matches. Off by default. Enable it with `--forced-subs`. To choose which type gets the
+  default flag in the file, set
+  [`muxing.default_subtitle_type`](../reference/configuration/download.md#muxing).
 - **SDH** (Subtitles for the Deaf and Hard-of-Hearing, also called HOH): a full
   transcript that includes both dialogue and non-speech sound cues.
 - **CC** (Closed Captions): captions originating from an EIA-608/708 broadcast stream,

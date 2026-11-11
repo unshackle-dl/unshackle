@@ -424,7 +424,7 @@ DTS:X Profile 1 is DTS-HD Master Audio and muxes to MKV as usual.
 
 An MP4 title loses:
 
-- the forced, hearing-impaired and original track flags
+- the default, forced, hearing-impaired and original track flags
 - attachments, such as subtitle fonts
 - SubStation Alpha (`.ass`) subtitles
 - container tags (`mkvpropedit`)
@@ -447,8 +447,14 @@ muxing:
 | `merge_video` | bool | `false` | Group video tracks that share the same resolution, range, and codec into one file so only language varies inside it. |
 | `merge_audio` | bool | `true` | Merge audio tracks of the same kind so multiple languages sit in one file. |
 | `default_language` | map | *(unset)* | Preferred language per track type (`video` / `audio` / `subtitle`). A track in the preferred language is flagged as the default track. |
+| `default_subtitle_type` | str or list | *(unset)* | The subtitle types that can take the default flag, in order: `forced`, `normal`, `sdh` (CC counts as SDH). The first subtitle track of the first type that the title has gets the flag. |
 
-When no track has the preferred language, unshackle applies sensible defaults. The video default falls back to the title language, then the original-language track, then the first track. The audio default is the original-language track. The subtitle default is a forced track in the first audio's language.
+When no track has the preferred language, unshackle applies sensible defaults. The video default falls back to the title language, then the original-language track, then the first track. The audio default is the original-language track. The subtitle default is a forced track in the language of the default audio track.
+
+Set `default_subtitle_type` to give the subtitle default to a different type. `default_subtitle_type: normal` with `default_language.subtitle: pl` puts the flag on the full Polish track when the title also has a forced Polish track. Without `default_language.subtitle`, the first track of the type in file order gets the flag, and a forced track counts only in the language of the default audio track. When the title has no track of a listed type, the rules above apply.
+
+!!! tip "Use `normal` for players that read the forced flag"
+    A forced track always carries the Matroska forced flag. A player that reads it, such as mpv or Jellyfin in its Smart mode, shows the forced track when the audio is in your subtitle language and the default track when it is not. `default_subtitle_type: forced` puts the default flag on the forced track, and such a player then shows it in place of the full track.
 
 !!! note "`default_language` only sets the default-track flag"
     `default_language` controls **which track carries the MKV `--default-track` flag**. Nothing else. It does not change track *selection* (that stays with `-l`/`--a-lang` and friends). It also does not touch which track carries the original flag: `--original-flag` still tags the *true* original-audio track. That is the point: you can make your player default to, say, Polish audio on an English-original title without altering the original marker. When the configured language is not present in the manifest, each track type falls back to its normal default rule described above.

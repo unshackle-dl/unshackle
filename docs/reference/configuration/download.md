@@ -236,20 +236,24 @@ subtitle:
     `en-GB` falls to the alphabetical tail with the rest. Name each tag you want when you use
     that flag.
 
-!!! note "`type_priority` picks the default subtitle only with `muxing.default_language`"
+!!! note "`type_priority` alone does not pick the default subtitle"
     At mux time the `default` flag goes to every forced subtitle whose language matches the
-    first audio track, so a full dialogue track never becomes default on its own.
-    `type_priority` alone does not change that. Name a subtitle language in
-    [`muxing.default_language`](#muxing) and the first track in that language gets the flag
-    instead, which is where `type_priority` decides which track that is:
+    default audio track, so a full dialogue track never becomes default on its own.
+    `type_priority` changes the order of the tracks in the file. It decides the flag only
+    between the tracks of one language, when you set `muxing.default_language.subtitle`. Set
+    [`muxing.default_subtitle_type`](#muxing) to name the type that gets the flag:
 
     ```yaml
     muxing:
+      default_subtitle_type: [normal, sdh, forced]
       default_language:
         subtitle: en
-    subtitle:
-      type_priority: [normal, sdh, forced]
     ```
+
+    Here the flag goes to the full English track, then to the English SDH track when the
+    title has no full one, then to the forced one. Without `default_language.subtitle`, the
+    first track of the type in file order gets the flag, in any language. A forced track is
+    the exception: it gets the flag only in the language of the default audio track.
 
 ## `audio`
 
@@ -287,6 +291,7 @@ Matroska (MKV) muxing options.
 |---------|------|---------|-------------|
 | `set_title` | bool | `true` | Write a human-readable title into the MKV container. |
 | `default_language` | dict | `{}` | Force which language is flagged *default* per track type, e.g. `{audio: en, subtitle: en}`. A tag with a region, such as `en-US`, matches only that variant. |
+| `default_subtitle_type` | str or list | unset | The subtitle types that can take the *default* flag, in order: `forced`, `normal`, `sdh` (CC counts as SDH, and `cc` is the same as `sdh`). The first subtitle track of the first type that the title has gets the flag. With `default_language.subtitle`, only the tracks in that language count. unshackle ignores a different word with a warning. `normal` is the value for players that read the forced flag. Read [Muxing](../../guide/output-and-naming.md#muxing-options). |
 | `merge_audio` | bool | `true` | Merge all audio into one file. `--split-audio` on the CLI flips this off. |
 | `merge_video` | bool | `false` | Merge video tracks that share height, range, and codec into one file, so only language varies inside a file. `--merge-video` on the CLI flips this on. |
 | `track_names` | str | `english` | The language of the name unshackle gives a track that the service left unnamed: `english` (`Chinese (Traditional)`), `native`, the name in the language itself (`中文（繁體）`), or `none`, which leaves the track unnamed. Read [Track names and language tags](../../guide/output-and-naming.md#track-names-and-language-tags). |
@@ -300,6 +305,7 @@ muxing:
   default_language:
     audio: en
     subtitle: en
+  default_subtitle_type: normal
 ```
 
 ## `language_tags`

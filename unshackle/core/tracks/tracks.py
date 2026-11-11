@@ -418,11 +418,7 @@ class Tracks:
             if type_priority:
                 rank = {str(t).lower(): i for i, t in enumerate(type_priority)}
                 default_rank = len(rank)
-                self.subtitles.sort(
-                    key=lambda x: rank.get(
-                        "forced" if x.forced else "sdh" if (x.sdh or x.cc) else "normal", default_rank
-                    )
-                )
+                self.subtitles.sort(key=lambda x: rank.get(x.kind, default_rank))
             else:
                 self.subtitles.sort(key=lambda x: x.sdh or x.cc)
                 self.subtitles.sort(key=lambda x: x.forced, reverse=True)
@@ -615,6 +611,32 @@ class Tracks:
             return None
         wanted = matching_languages(language, [t.language for t in tracks])
         return next((idx for idx, t in enumerate(tracks) if str(t.language) in wanted), None)
+
+    @staticmethod
+    def default_subtitle_index(
+        subtitles: Sequence[Subtitle],
+        language: Optional[str],
+        types: Sequence[str],
+        audio_language: Optional[Language] = None,
+    ) -> Optional[int]:
+        """The index of the first subtitle of the first type in `types` that a track has.
+
+        `language` limits the choice to the tracks it asks for. With no `types`, or no track
+        of a listed type, the first track in `language` is the answer. With no `language`, a
+        forced track counts only in `audio_language`, because it adds to that audio alone.
+        """
+        if language:
+            wanted = matching_languages(language, [t.language for t in subtitles])
+            candidates = [(idx, t) for idx, t in enumerate(subtitles) if str(t.language) in wanted]
+            fallback = candidates[0][0] if candidates else None
+        else:
+            candidates = [
+                (idx, t)
+                for idx, t in enumerate(subtitles)
+                if not t.forced or (audio_language and is_close_match(t.language, [audio_language]))
+            ]
+            fallback = None
+        return next((idx for kind in types for idx, t in candidates if t.kind == kind), fallback)
 
     @property
     def sample_base(self) -> float:
@@ -884,8 +906,27 @@ class Tracks:
 
         preferred_video_idx = self.first_match_index(self.videos, preferred_video_lang)
         preferred_audio_idx = self.first_match_index(self.audio, preferred_audio_lang)
+        if preferred_audio_idx is not None:
+            default_audio: Optional[Audio] = self.audio[preferred_audio_idx]
+        else:
+            default_audio = next(
+                (at for at in self.audio if at.is_original_lang), self.audio[0] if self.audio else None
+            )
+        default_audio_lang = default_audio.language if default_audio else None
+
+        subtitle_types = []
+        for value in as_list(config.muxing.get("default_subtitle_type") or []):
+            kind = "sdh" if str(value).lower() == "cc" else str(value).lower()
+            if kind in ("forced", "normal", "sdh"):
+                subtitle_types.append(kind)
+            else:
+                logging.getLogger("Tracks").warning("%r is not a subtitle type, ignoring it", value)
         preferred_subtitle_idx = (
-            None if skip_subtitles else self.first_match_index(self.subtitles, preferred_subtitle_lang)
+            None
+            if skip_subtitles
+            else self.default_subtitle_index(
+                self.subtitles, preferred_subtitle_lang, subtitle_types, default_audio_lang
+            )
         )
 
         for i, vt in enumerate(self.videos):
@@ -989,7 +1030,9 @@ class Tracks:
                 if preferred_subtitle_idx is not None:
                     default = i == preferred_subtitle_idx
                 else:
-                    default = bool(self.audio and is_close_match(st.language, [self.audio[0].language]) and st.forced)
+                    default = bool(
+                        st.forced and default_audio_lang and is_close_match(st.language, [default_audio_lang])
+                    )
                 cl.extend(
                     [
                         "--track-name",
