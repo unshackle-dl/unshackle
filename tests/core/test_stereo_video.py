@@ -123,7 +123,12 @@ def mp4box_commands(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> list[lis
 
     monkeypatch.setattr(binaries, "MP4Box", Path("/bin/MP4Box"), raising=False)
     monkeypatch.setattr(tracks_module.subprocess, "Popen", FakePopen)
-    monkeypatch.setattr(tracks_module, "run_step", lambda command, **kwargs: commands.append([str(c) for c in command]))
+
+    def run_step(command: list[Any], output: Path, **kwargs: Any) -> None:
+        commands.append([str(c) for c in command])
+        output.write_bytes(b"cut")
+
+    monkeypatch.setattr(tracks_module, "run_step", run_step)
     monkeypatch.setattr(config, "sample", None)
     monkeypatch.setattr(config.directories, "temp", tmp_path)
     return commands
@@ -136,6 +141,15 @@ def test_a_3d_mp4_mux_keeps_the_sample_whole(
     Tracks(stereo_video(tmp_path))._mux_mp4(title="Film", output_path=tmp_path / "out.mkv")
     assert len(mp4box_commands) == 1
     assert "-splitx" not in mp4box_commands[0]
+    assert "-for-test" in mp4box_commands[0]
+
+
+def test_a_2d_mp4_sample_cut_keeps_no_date(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mp4box_commands: list[list[str]]
+) -> None:
+    monkeypatch.setattr(config, "sample", (120.0, 180.0))
+    Tracks(stereo_video(tmp_path, stereo=False))._mux_mp4(title="Film", output_path=tmp_path / "out.mkv")
+    assert mp4box_commands[1][1:3] == ["-for-test", "-splitx"]
 
 
 def test_a_3d_mp4_mux_writes_quicktime_chapters(tmp_path: Path, mp4box_commands: list[list[str]]) -> None:

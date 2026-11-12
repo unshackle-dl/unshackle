@@ -482,11 +482,11 @@ Set `default_subtitle_type` to give the subtitle default to a different type. `d
 
 A few muxing behaviors are automatic and not configurable:
 
-- `--no-date` is always passed for privacy (no timestamps embedded).
+- The output has no encoding date: mkvmerge gets `--no-date` and MP4Box gets `-for-test`.
 - Descriptive audio gets the visually-impaired flag. SDH subtitles get the hearing-impaired flag. Forced subtitles get the forced flag.
 - unshackle writes the chapters from the title's chapter list (see [Chapters](#chapters-naming) below).
 
-The `--no-mux` flag skips muxing entirely and writes the individual track files, each with a track-type suffix, into the same output/folder structure.
+The `--no-mux` flag skips muxing entirely and writes the individual track files, each with a track-type suffix, into the same output/folder structure. A track that shaka-packager decrypts has its date set to 1970-01-01; other tracks keep the date of the source file.
 
 ## Sample files
 

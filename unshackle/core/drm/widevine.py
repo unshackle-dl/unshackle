@@ -404,6 +404,7 @@ class Widevine:
                 "--enable_raw_key_decryption",
                 "--keys",
                 drm_key_args.shaka_keys(self.content_keys, self.own_kids()),
+                "--use_fake_clock_for_muxer",
                 "--temp_dir",
                 config.directories.temp,
             ]

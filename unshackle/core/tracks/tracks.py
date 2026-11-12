@@ -69,10 +69,9 @@ def file_track_ids(path: Path) -> dict[str, int]:
     return ids or {"video": 0, "audio": 1}
 
 
-def mp4_track_count(path: Path) -> int:
-    """How many tracks ``MP4Box -add`` takes from a file: each ``trak`` of an MP4, or 1 for any other file."""
-    moov = read_top_level_box(path, b"moov") or b""
-    return sum(1 for kind, _, _ in children(moov, 8) if kind == b"trak") or 1
+def mp4_track_count(moov: Optional[bytes]) -> int:
+    """How many tracks ``MP4Box -add`` takes from a file: each ``trak`` of its moov, or 1 for a file with none."""
+    return sum(1 for kind, _, _ in children(moov or b"", 8) if kind == b"trak") or 1
 
 
 class Tracks:
@@ -677,7 +676,8 @@ class Tracks:
         (MV-HEVC) video, whose second view mkvmerge drops. MP4 carries far less: it drops the
         forced, hearing-impaired and original flags, holds no attachments at all, and leaves
         out a subtitle it has no format for rather than mangling it. Losing those beats
-        shipping audio no player can name or a 3D film as 2D.
+        shipping audio no player can name or a 3D film as 2D. ``-for-test`` drops the dates and
+        the GPAC version tag; ``tkhd`` restores the flags it clears on a non-MP4 input.
 
         Returns the same (path, returncode, errors) shape as the Matroska mux.
         """
@@ -688,7 +688,7 @@ class Tracks:
         progress = progress or partial(lambda **kwargs: None)
 
         stereo = any(v.stereo for v in self.videos)
-        cl = [str(mp4box)]
+        cl = [str(mp4box), "-for-test"]
         sample_base = self.sample_base
         names: list[str] = []
         cleaned: list[Path] = []
@@ -723,11 +723,13 @@ class Tracks:
                 candidate.unlink()
 
             delay = round((track.sample_start - sample_base) * 1000) if config.sample else 0
-            cl.extend(["-add", f"{source}:lang={track.mux_language}" + (f":delay={delay}" if delay else "")])
+            moov = read_top_level_box(source, b"moov")
+            flags = "" if moov else ":tkhd=enable,movie,preview"
+            cl.extend(["-add", f"{source}:lang={track.mux_language}{flags}" + (f":delay={delay}" if delay else "")])
             name = "" if isinstance(track, Video) else (track.get_track_name() or "")
             if name:
                 names.extend(["-name", f"{track_id + 1}={name}"])
-            track_id += mp4_track_count(source)
+            track_id += mp4_track_count(moov)
 
         if not track_id:
             raise ValueError("No tracks provided, at least one track must be provided.")
@@ -806,7 +808,7 @@ class Tracks:
                 cut_path = output_path.with_suffix(".cut.mp4")
                 try:
                     run_step(
-                        [mp4box, "-splitx", f"{start:.3f}:{end:.3f}", output_path, "-out", cut_path],
+                        [mp4box, "-for-test", "-splitx", f"{start:.3f}:{end:.3f}", output_path, "-out", cut_path],
                         output=cut_path,
                         label="MP4Box sample cut",
                     )

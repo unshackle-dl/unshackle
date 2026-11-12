@@ -289,6 +289,7 @@ class ClearKeyCENC:
                     "label={}:key_id={}:key={}".format(i, kid.hex, key.lower())
                     for i, (kid, key) in enumerate(self.content_keys.items())
                 ),
+                "--use_fake_clock_for_muxer",
                 "--temp_dir",
                 config.directories.temp,
             ]

@@ -122,6 +122,7 @@ def test_shaka_decrypt_passes_the_built_keys(monkeypatch: pytest.MonkeyPatch, tm
 
     keys = seen[0][seen[0].index("--keys") + 1]
     assert _shaka_zero_entries(keys) == [VIDEO_KEY]
+    assert "--use_fake_clock_for_muxer" in seen[0]
 
 
 def test_a_rebuilt_widevine_does_not_take_the_first_pssh_kid_as_its_own() -> None:

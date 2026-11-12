@@ -96,7 +96,7 @@ def test_dts_uhd_audio_routes_the_mux_to_mp4(tmp_path: Path, monkeypatch: pytest
     assert out.suffix == ".mp4", "a DTS-UHD title must not be delivered as Matroska"
     assert returncode == 0 and not errors
     command = captured[0].args
-    assert command[0] == "MP4Box"
+    assert command[:2] == ["MP4Box", "-for-test"]
     assert command[-2:] == ["-new", str(out)]
     assert f"{tmp_path / 'a.mp4'}:lang=en" in command
     # the child must not inherit the terminal that the live progress tree is drawing on
@@ -170,7 +170,7 @@ def test_mp4_subtitles_get_the_script_their_region_implies(tmp_path: Path, monke
 
     tracks.mux("Title", delete=False, output_path=tmp_path / "out.muxed.mkv")
     command = captured[0].args
-    assert f"{tmp_path / 's.vtt'}:lang=zh-Hant-TW" in command
+    assert f"{tmp_path / 's.vtt'}:lang=zh-Hant-TW:tkhd=enable,movie,preview" in command
     assert any(arg.endswith("=Chinese (Traditional)") for arg in command)
 
 
