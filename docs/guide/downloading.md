@@ -164,6 +164,10 @@ unshackle dl -q 2160 -r HDR10,DV EXAMPLE '...'
 
 The output file of a track with a Dolby Vision profile 8 RPU plays as Dolby Vision on a DV screen.
 
+`--list` adds `3D` to a stereoscopic 3D (MV-HEVC) track, for example `[H.265, DV, 3D]`. When a title
+has a 2D and a 3D track at the same resolution, unshackle selects the 2D track. A 3D title muxes to
+MP4, see [3D output](output-and-naming.md#3d-output).
+
 !!! warning "HYBRID requires dovi_tool"
     `-r HYBRID` makes a single hybrid track by injecting the Dolby Vision RPU
     metadata onto an HDR10/HDR10+ base layer with **dovi_tool**.

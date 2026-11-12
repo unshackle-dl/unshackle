@@ -1744,6 +1744,7 @@ def serialize_video_track(track: Video, include_url: bool = False) -> Dict[str, 
         "dv_compatible_bitstream": bool(getattr(track, "dv_compatible_bitstream", False)),
         "hdr10plus": bool(getattr(track, "hdr10plus", False)),
         "hdr10_base": bool(getattr(track, "hdr10_base", False)),
+        "stereo": bool(getattr(track, "stereo", False)),
     }
     result.update(serialize_track_common(track))
     if include_url and hasattr(track, "url") and track.url:

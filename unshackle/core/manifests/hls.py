@@ -222,7 +222,11 @@ class HLS:
 
         supplemental_codecs = self.supplemental_codecs_by_uri()
 
-        for playlist in self.manifest.playlists:
+        video_layouts = [
+            (raw.get("stream_info") or {}).get("req_video_layout")
+            for raw in (getattr(self.manifest, "data", None) or {}).get("playlists", [])
+        ]
+        for playlist, video_layout in zip(self.manifest.playlists, video_layouts):
             video_codec: Optional[Video.Codec] = None
             primary_track_type: type[Audio] | type[Video]
             try:
@@ -272,6 +276,9 @@ class HLS:
                                 (playlist.stream_info.closed_captions or "").strip('"'), []
                             ),
                             dv_compatible_bitstream=dv_compatible_bitstream,
+                            stereo=Video.is_stereo(
+                                playlist.stream_info.codecs, supplemental_codecs.get(playlist.uri), video_layout
+                            ),
                         )
                         if primary_track_type is Video
                         else {}

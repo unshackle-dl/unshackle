@@ -562,6 +562,7 @@ class ImportService:
                         width=int_or_none(row.get("width")),
                         height=int_or_none(row.get("height")),
                         fps=row.get("fps") or None,
+                        stereo=bool(row.get("stereo")),
                     )
                 else:
                     track = Audio(

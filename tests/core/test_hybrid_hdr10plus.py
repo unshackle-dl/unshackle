@@ -856,7 +856,7 @@ def video(
     codec: Optional[Video.Codec] = Video.Codec.HEVC,
     native_hybrid: bool = False,
 ) -> Any:
-    return SimpleNamespace(id=id_, height=height, range=range_, codec=codec, native_hybrid=native_hybrid)
+    return SimpleNamespace(id=id_, height=height, range=range_, codec=codec, native_hybrid=native_hybrid, stereo=False)
 
 
 def test_hybrid_fails_with_neither_a_base_nor_dv() -> None:

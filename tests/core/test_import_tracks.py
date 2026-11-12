@@ -297,3 +297,8 @@ def test_a_file_row_can_name_its_codec_and_range_by_name(tmp_path: Path) -> None
     service = file_export(tmp_path, [row])
     video = service.get_tracks(next(iter(service.get_titles()))).videos[0]
     assert (video.codec, video.range) == (Video.Codec.HEVC, Video.Range.HDR10P)
+
+
+def test_a_file_row_marked_stereo_imports_as_a_3d_video(tmp_path: Path) -> None:
+    service = file_export(tmp_path, [{**FILE_ROWS[0], "stereo": True}])
+    assert service.get_tracks(next(iter(service.get_titles()))).videos[0].stereo

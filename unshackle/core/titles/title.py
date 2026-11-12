@@ -106,6 +106,7 @@ class Title:
             "video": "",
             "hdr": "",
             "hfr": "",
+            "3d": "",
             "edition": "",
             "lang_tag": "",
             "title_type": {"Movie": "movie", "Episode": "series", "Song": "music"}.get(
@@ -163,6 +164,7 @@ class Title:
 
             frame_rate = float(primary_video_track.frame_rate) if primary_video_track.frame_rate else 0.0
             context["hfr"] = "HFR" if frame_rate > 30 else ""
+            context["3d"] = "3D" if any(v.stereo for v in self.tracks.videos[:1]) else ""
 
         if primary_audio_track:
             codec = primary_audio_track.format

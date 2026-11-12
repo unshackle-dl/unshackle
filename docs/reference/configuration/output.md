@@ -40,7 +40,7 @@ folder-kind keys.
     `absolute`, `date`, `quality`, `resolution`, `source`, `tag`, `track_number`, `artist`,
     `album_artist`, `album`, `disc`, `track_total`, `disc_total`, `release_type`, `genre`,
     `explicit`, `isrc`, `upc`, `label`, `audio`, `audio_channels`, `audio_full`, `atmos`,
-    `dual`, `multi`, `dubbed`, `video`, `hdr`, `hfr`, `edition`, `repack`, `lang_tag`,
+    `dual`, `multi`, `dubbed`, `video`, `hdr`, `hfr`, `3d`, `edition`, `repack`, `lang_tag`,
     `title_type`.
 
 !!! warning "`{part?}` is already inside `{season_episode}`"
@@ -129,7 +129,7 @@ Rule semantics:
 - A value can be a scalar or a list. A list matches if **any** entry matches.
 - Comparison is case-insensitive string equality.
 - The keys of `when` are the filename template variables for the release itself:
-  `title_type`, `quality`, `resolution`, `source`, `video`, `hdr`, `hfr`, `audio`,
+  `title_type`, `quality`, `resolution`, `source`, `video`, `hdr`, `hfr`, `3d`, `audio`,
   `audio_channels`, `audio_full`, `atmos`, `dual`, `multi`, `dubbed`, `edition`, `repack`,
   and `lang_tag`. Only these are available. unshackle adds the title's own fields (`title`,
   `year`, `season`, `episode`, and so on) after it evaluates the rules, so a condition cannot

@@ -119,7 +119,7 @@ class RemoteError(SystemExit):
     """A remote call that failed: logged, then exits a CLI run like ``SystemExit(1)``.
 
     A serve relaying for a REST client catches it instead and answers with ``message``; ``kind`` is the
-    remote server's error code, or CONNECT / TIMEOUT / AUTH when the session could not be reached or opened.
+    remote server's error code, or CONNECT / TIMEOUT / AUTH when the remote session could not be reached or opened.
     (Not ``code``: SystemExit's ``code`` is the exit status.)
     """
 
@@ -132,7 +132,7 @@ class RemoteError(SystemExit):
 
     @property
     def session_broke(self) -> bool:
-        """Whether the remote session itself is gone, not just this one call."""
+        """Whether the remote session itself is gone, not only this one call."""
         return self.kind in SESSION_LOST
 
 
@@ -348,6 +348,7 @@ def deserialize_video(data: Dict[str, Any]) -> Video:
         dv_compatible_bitstream=bool(data.get("dv_compatible_bitstream", False)),
         hdr10plus=bool(data.get("hdr10plus", False)),
         hdr10_base=bool(data.get("hdr10_base", False)),
+        stereo=bool(data.get("stereo", False)),
     )
 
 

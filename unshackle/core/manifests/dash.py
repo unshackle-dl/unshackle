@@ -333,6 +333,7 @@ class DASH:
                         video_args["dv_compatible_bitstream"] = Video.is_dv_composite(
                             track_codec, codecs, get("supplementalCodecs")
                         )
+                        video_args["stereo"] = Video.is_stereo(codecs, get("supplementalCodecs"))
                     elif content_type == "audio":
                         track_type = Audio
                         track_codec = Audio.Codec.from_codecs(codecs or "")

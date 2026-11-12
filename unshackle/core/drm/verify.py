@@ -5,6 +5,8 @@ from pathlib import Path
 from typing import Any, BinaryIO, Callable, Iterator, NamedTuple, Optional
 from uuid import UUID
 
+from unshackle.core.config import config
+
 log = logging.getLogger(__name__)
 
 DECRYPT_HOOK: Optional[Callable[..., None]] = None
@@ -219,6 +221,37 @@ def kidless_track_kids(data: bytes) -> dict[int, UUID]:
     except (struct.error, IndexError, ValueError, RecursionError):
         return {}
     return kids
+
+
+def find_child_box(buf: bytes, box_type: bytes) -> Optional[bytes]:
+    """Return the first box of the given type nested anywhere in buf, header included."""
+    i = buf.find(box_type, 4)
+    while i != -1:
+        size = int.from_bytes(buf[i - 4 : i], "big")
+        if 8 <= size <= len(buf) - (i - 4):
+            return buf[i - 4 : i - 4 + size]
+        i = buf.find(box_type, i + 1)
+    return None
+
+
+def has_second_view(path: Path) -> bool:
+    """True if the MP4 holds a second video layer (an ``lhvC`` box, as stereoscopic MV-HEVC has)."""
+    try:
+        return find_child_box(read_top_level_box(path, b"moov") or b"", b"lhvC") is not None
+    except OSError:
+        return False
+
+
+def decrypter_for(path: Path) -> str:
+    """The configured decrypter, or mp4decrypt for a multi-layer (MV-HEVC) track.
+
+    shaka-packager refuses a version 3 dvvC (Dolby Vision profile 20) and, before v3.5.0, drops lhvC and vexu.
+    """
+    configured = str(getattr(config, "decryption", "")).lower()
+    if configured != "mp4decrypt" and has_second_view(path):
+        log.debug(f"Decrypting {path.name} with mp4decrypt: it holds a second video layer (lhvC)")
+        return "mp4decrypt"
+    return configured
 
 
 def mp4decrypt_or_shaka(drm: Any, path: Path) -> None:

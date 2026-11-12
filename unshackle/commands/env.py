@@ -49,6 +49,13 @@ def get_dependencies() -> list[dict]:
             "cat": "Core",
         },
         {
+            "name": "MP4Box",
+            "binary": binaries.MP4Box,
+            "required": False,
+            "desc": "MP4 muxing",
+            "cat": "Core",
+        },
+        {
             "name": "shaka-packager",
             "binary": binaries.ShakaPackager,
             "required": True,

@@ -58,6 +58,11 @@ def test_a_dv_track_keeps_its_hdr10_base_label_over_remote() -> None:
     assert deserialize_video(serialize_video_track(v)).range_label == "DV+HDR10"
 
 
+def test_a_stereo_track_stays_3d_over_remote() -> None:
+    v = Video(url="https://x/v.mp4", language="en", codec=Video.Codec.HEVC, range_=Video.Range.DV, stereo=True)
+    assert deserialize_video(serialize_video_track(v)).stereo
+
+
 def test_a_track_note_shows_over_remote_and_export_and_is_not_an_edition() -> None:
     from unshackle.core.tracks.track import Track
 

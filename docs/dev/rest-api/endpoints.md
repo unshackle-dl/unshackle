@@ -339,7 +339,7 @@ When you give both `season` and `episode`, the server combines them into a `"{se
           "bitrate": 8000, "bitrate_bps": 8000000, "width": 3840, "height": 2160,
           "resolution": "2160p", "fps": "24", "range": "HDR10",
           "range_display": "HDR", "scan_type": null, "closed_captions": [],
-          "dv_compatible_bitstream": false, "hdr10plus": false, "hdr10_base": false, "language": "en",
+          "dv_compatible_bitstream": false, "hdr10plus": false, "hdr10_base": false, "stereo": false, "language": "en",
           "is_original_lang": true,
           "name": null, "track_name": "English", "needs_repack": false, "edition": [], "note": null, "data": null,
           "drm": [], "descriptor": "DASH"

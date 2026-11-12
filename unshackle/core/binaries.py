@@ -79,6 +79,7 @@ __binaries = {
     "DoviTool": ("dovi_tool",),
     "HDR10PlusTool": ("hdr10plus_tool", "HDR10Plus_tool"),
     "Mp4decrypt": ("mp4decrypt",),
+    "MP4Box": ("MP4Box", "mp4box"),
     "Docker": ("docker",),
     "Git": ("git",),
 }
@@ -226,6 +227,7 @@ __all__ = (
     "DoviTool",
     "HDR10PlusTool",
     "Mp4decrypt",
+    "MP4Box",
     "Docker",
     "Git",
     "find",

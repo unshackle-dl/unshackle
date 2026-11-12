@@ -113,7 +113,7 @@ values.
 | `{year}` `{season}` `{episode}` `{episode_name}` | Season and episode are plain numbers (`1`, `5`) |
 | `{part}` | Part number of a split episode as a plain number (`1` for `Part.1`). Empty when the episode has no part |
 | `{season_episode}` `{absolute}` `{date}` | As in the filename template: `{season_episode}` keeps the part suffix (`S01E05.Part.1`) while `{episode}` drops it |
-| `{quality}` `{resolution}` `{hdr}` `{hfr}` `{vcodec}` `{acodec}` `{edition}` `{tag}` `{lang_tag}` | As in the filename template, for this file |
+| `{quality}` `{resolution}` `{hdr}` `{hfr}` `{3d}` `{vcodec}` `{acodec}` `{edition}` `{tag}` `{lang_tag}` | As in the filename template, for this file |
 | `{tmdb}` `{imdb}` `{tvdb}` | The tagging IDs in use, otherwise empty. See [Tagging IDs](#tagging-ids) |
 | `{error}` | Failure message. Empty on success |
 
@@ -132,7 +132,7 @@ Every variable from your `output_template` is available here as well, including
       music has none of them.
     - **The naming context renders it empty on purpose.** `{hdr}` is empty for an SDR
       file, because SDR is the absence of an HDR tag in a filename rather than a tag that
-      reads `SDR`. `{edition}`, `{atmos}`, `{multi}`, `{dual}` and `{hfr}` behave the same
+      reads `SDR`. `{edition}`, `{atmos}`, `{multi}`, `{dual}`, `{hfr}` and `{3d}` behave the same
       way. If your script needs the word `SDR`, derive it from an empty `{hdr}` yourself.
     - The post-script is a `failure` one. A failed download has no output file to read metadata
       from, so everything that comes from the output file is empty. See

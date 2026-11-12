@@ -15,6 +15,7 @@ from langcodes import Language
 
 from unshackle.core import binaries
 from unshackle.core.config import config
+from unshackle.core.drm.verify import has_second_view
 from unshackle.core.tracks.subtitle import Subtitle
 from unshackle.core.tracks.track import Track
 from unshackle.core.utilities import FPS, get_boxes, log_event
@@ -228,6 +229,7 @@ class Video(Track):
         dv_compatible_bitstream: bool = False,
         hdr10plus: bool = False,
         hdr10_base: bool = False,
+        stereo: bool = False,
         **kwargs: Any,
     ) -> None:
         """
@@ -248,6 +250,7 @@ class Video(Track):
                 All strings will be cast to either a number or float.
             hdr10plus: The DV track also carries HDR10+ metadata. The HDR10+ probe sets it.
             hdr10_base: The DV track has an HDR10 base layer, as DV profile 8.1 does.
+            stereo: The track is stereoscopic 3D (MV-HEVC), with a second view for the other eye.
 
         Note: If codec, bitrate, width, height, or fps is not specified, unshackle can
         skip some checks or assume a value. Give as much information as possible.
@@ -298,6 +301,7 @@ class Video(Track):
         self.dv_compatible_bitstream = dv_compatible_bitstream
         self.hdr10plus = hdr10plus
         self.hdr10_base = hdr10_base
+        self.stereo = stereo
         self.hybrid_base_only = False
         self.native_hybrid = False
 
@@ -315,6 +319,7 @@ class Video(Track):
                 "dv_compatible_bitstream": self.dv_compatible_bitstream,
                 "hdr10plus": self.hdr10plus,
                 "hdr10_base": self.hdr10_base,
+                "stereo": self.stereo,
             }
         )
         return data
@@ -334,6 +339,7 @@ class Video(Track):
             dv_compatible_bitstream=data.get("dv_compatible_bitstream", False),
             hdr10plus=data.get("hdr10plus", False),
             hdr10_base=data.get("hdr10_base", False),
+            stereo=data.get("stereo", False),
         )
 
     @staticmethod
@@ -346,6 +352,16 @@ class Video(Track):
     def has_dv_codec(codecs: Optional[str]) -> bool:
         """Whether a codecs list names a Dolby Vision codec."""
         return bool(Video.dv_fourccs(codecs))
+
+    @staticmethod
+    def is_stereo(
+        codecs: Optional[str], supplemental_codecs: Optional[str] = None, video_layout: Optional[str] = None
+    ) -> bool:
+        """Whether a track is stereoscopic 3D: the HLS REQ-VIDEO-LAYOUT names CH-STEREO, or a codec is DV profile 20."""
+        tokens = re.split(r"[\s,]+", f"{codecs or ''},{supplemental_codecs or ''}".lower())
+        return "CH-STEREO" in (video_layout or "").upper() or any(
+            re.match(r"dvh[1e]\.20(\.|$)", token) for token in tokens
+        )
 
     @staticmethod
     def is_dv_composite(
@@ -377,12 +393,15 @@ class Video(Track):
         return f"{label}+DV" if self.dv_compatible_bitstream and self.range != Video.Range.DV else label
 
     def __str__(self) -> str:
+        labels = filter(
+            None, [self.codec.value if self.codec else None, self.range_label, "3D" if self.stereo else None]
+        )
         return " | ".join(
             filter(
                 None,
                 [
                     "VID",
-                    "[" + (", ".join(filter(None, [self.codec.value if self.codec else None, self.range_label]))) + "]",
+                    f"[{', '.join(labels)}]",
                     str(self.language),
                     ", ".join(
                         filter(
@@ -459,16 +478,34 @@ class Video(Track):
         self.path = output_path
         original_path.unlink()
 
+    def download(self, *args: Any, **kwargs: Any) -> None:
+        """Download the track and mark it 3D when the file holds a second view; a 3D track is never repacked."""
+        super().download(*args, **kwargs)
+        if not self.stereo and self.path and has_second_view(self.path):
+            self.stereo = True
+        if self.stereo:
+            self.needs_repack = False
+
+    def repackage(self, bsf_v: Optional[str] = None) -> bool:
+        """Remux with FFmpeg, except a 3D track: an FFmpeg remux rewrites its stereo and DV boxes."""
+        if self.stereo:
+            logging.getLogger("Video").warning(
+                f"Skipped the FFmpeg repack of 3D track {self.id}: FFmpeg rewrites its stereo boxes"
+            )
+            return False
+        return super().repackage(bsf_v)
+
     def vui_bsf(self) -> Optional[str]:
         """Return the ``-bsf:v`` value that rewrites SPS VUI colour metadata to match ``self.range``.
 
-        Returns None when a rewrite is not necessary: SDR/DV/HYBRID ranges, non-AVC/HEVC codecs, a
-        missing file, or when the bitstream already ships the correct colour metadata. Otherwise
+        Returns None when a rewrite is not necessary or not safe: SDR/DV/HYBRID ranges, non-AVC/HEVC
+        codecs, a 3D track (an FFmpeg remux rewrites its stereo and DV boxes), a missing file, or when the
+        bitstream already ships the correct colour metadata. Otherwise
         returns a ``{h264,hevc}_metadata=...`` string suitable for FFmpeg ``-bsf:v``.
         """
         if not self.path or not self.path.exists():
             return None
-        if self.codec not in (Video.Codec.AVC, Video.Codec.HEVC):
+        if self.codec not in (Video.Codec.AVC, Video.Codec.HEVC) or self.stereo:
             return None
         if self.range in (Video.Range.SDR, Video.Range.DV, Video.Range.HYBRID):
             return None

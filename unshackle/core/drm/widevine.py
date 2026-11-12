@@ -21,7 +21,7 @@ from unshackle.core.config import config
 from unshackle.core.console import console
 from unshackle.core.constants import AnyTrack
 from unshackle.core.drm import key_args as drm_key_args
-from unshackle.core.drm.verify import kidless_track_kids, mp4decrypt_or_shaka, read_top_level_box
+from unshackle.core.drm.verify import decrypter_for, kidless_track_kids, mp4decrypt_or_shaka, read_top_level_box
 from unshackle.core.session import AnySession, utf8_text
 from unshackle.core.utilities import call_licence, get_boxes, log_event
 from unshackle.core.utils import run_proxy
@@ -307,7 +307,7 @@ class Widevine:
         if not path or not path.exists():
             raise ValueError("Tried to decrypt a file that does not exist.")
 
-        decrypter = str(getattr(config, "decryption", "")).lower()
+        decrypter = decrypter_for(path)
         tool = "mp4decrypt" if decrypter == "mp4decrypt" else "shaka-packager"
 
         log_event(

@@ -30,6 +30,7 @@ from unshackle.core.downloaders.requests import requests
 from unshackle.core.drm import DRM_T, BlowfishStripe, ClearKeyCENC, PlayReady, Widevine
 from unshackle.core.drm.verify import (
     decrypt_track,
+    find_child_box,
     has_encrypted_sample_entry,
     read_top_level_box,
     senc_protects_samples,
@@ -112,17 +113,6 @@ def iter_top_level_boxes(path: Path) -> Iterable[tuple[bytes, int, int]]:
                 return
             yield header[4:8], offset, size
             offset += size
-
-
-def find_child_box(buf: bytes, box_type: bytes) -> Optional[bytes]:
-    """Return the first box of the given type nested anywhere in buf, header included."""
-    i = buf.find(box_type, 4)
-    while i != -1:
-        size = int.from_bytes(buf[i - 4 : i], "big")
-        if 8 <= size <= len(buf) - (i - 4):
-            return buf[i - 4 : i - 4 + size]
-        i = buf.find(box_type, i + 1)
-    return None
 
 
 def strip_duplicate_init_boxes(src: Path, dst: Path) -> int:

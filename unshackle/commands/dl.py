@@ -336,16 +336,24 @@ def hybrid_gate_failure(videos: Sequence[Video], generate_dv: bool) -> Optional[
 
 
 def hybrid_plan(videos: Sequence[Video], generate_dv: bool) -> tuple[list[Video], Optional[Video]]:
-    """The hybrid bases and the DV track to pair with them.
+    """The hybrid bases and the 2D DV track to pair with them.
 
     With no DV track, a base qualifies only with ``--generate-dv``. A resolution with a
     finished hybrid (``native_hybrid``) gets no base: that track is its hybrid.
     """
-    dv_tracks = [v for v in videos if v.range == Video.Range.DV]
+    dv_tracks = [v for v in videos if v.range == Video.Range.DV and not v.stereo]
     native_heights = {v.height for v in videos if v.native_hybrid}
     base_pool = [v for v in videos if v.height not in native_heights and (dv_tracks or generate_dv)]
     matching_dv = min(dv_tracks, key=lambda v: v.height or 0) if dv_tracks else None
     return select_hybrid_bases(base_pool), matching_dv
+
+
+def pick_video(candidates: list[Video], worst: bool) -> Optional[Video]:
+    """The best candidate, or with ``worst`` the last one, preferring 2D: a 3D track sorts after 2D at one height."""
+    if worst:
+        pool = [v for v in candidates if not v.stereo] or candidates
+        return pool[-1] if pool else None
+    return next(iter(candidates), None)
 
 
 def hybrid_source_tracks(base: Video, dv: Optional[Video], base_container: Optional[Path] = None) -> list[Video]:
@@ -2874,7 +2882,7 @@ class dl:
                                     and (not codec or t.codec == codec)
                                     and (vlang is None or str(t.language) == vlang)
                                 ]
-                                match = candidates[-1] if worst and candidates else next(iter(candidates), None)
+                                match = pick_video(candidates, worst)
                                 if match and match not in non_hybrid_selected:
                                     non_hybrid_selected.append(match)
 
@@ -2903,7 +2911,7 @@ class dl:
                                 and (not codec or t.codec == codec)
                                 and (vlang is None or str(t.language) == vlang)
                             ]
-                            match = candidates[-1] if worst and candidates else next(iter(candidates), None)
+                            match = pick_video(candidates, worst)
                             if match and match not in selected_videos:
                                 selected_videos.append(match)
                         title.tracks.videos = selected_videos
@@ -2941,7 +2949,7 @@ class dl:
                                         and (not codec or t.codec == codec)
                                         and (vlang is None or str(t.language) == vlang)
                                     ]
-                                    match = candidates[-1] if worst and candidates else next(iter(candidates), None)
+                                    match = pick_video(candidates, worst)
                                     if match and match not in fallback_selected:
                                         fallback_selected.append(match)
                                 title.tracks.videos = fallback_selected
@@ -3448,13 +3456,9 @@ class dl:
                         self.suggest_missing_fonts(missing_fonts)
 
                 # Handle DRM decryption BEFORE repacking (must decrypt first!)
-                service_name = service.__class__.__name__.upper()
-                decryption_method = resolve_decryption(config.decryption_map, config.decryption, service_name)
-                decrypt_tool = "mp4decrypt" if decryption_method.lower() == "mp4decrypt" else "Shaka Packager"
-
                 drm_tracks = [track for track in title.tracks if track.drm]
                 if drm_tracks:
-                    with console.status(f"Decrypting tracks with {decrypt_tool}..."):
+                    with console.status("Decrypting tracks..."):
                         has_decrypted = False
                         for track in drm_tracks:
                             drm = track.get_drm_for_cdm(self.cdm)
@@ -3470,7 +3474,7 @@ class dl:
                                     f"No matching DRM found for track {track} with CDM type {type(self.cdm).__name__}"
                                 )
                         if has_decrypted:
-                            self.log.info(f"Decrypted tracks with {decrypt_tool}")
+                            self.log.info("Decrypted tracks")
 
                 if (
                     not no_subs
@@ -4050,7 +4054,11 @@ class dl:
         """Cut a 60 second sample from a finished file into a ``Sample`` folder next to it.
 
         The sample starts 2 minutes in. A file shorter than 3 minutes gives its middle 60 seconds.
+        mkvmerge cuts only Matroska: an MP4 (3D video, or audio Matroska cannot carry) gets no sample.
         """
+        if source.suffix.lower() != ".mkv":
+            self.log.warning(f"No sample for {source.name}: mkvmerge cuts only Matroska files")
+            return
         duration = float(media_info.general_tracks[0].duration or 0) / 1000
         start: float
         start, end = DEFAULT_SAMPLE
@@ -4518,6 +4526,8 @@ class dl:
             }
             if isinstance(t, Video):
                 row.update(width=t.width, height=t.height, range=t.range.name.lower() if t.range else "")
+                if t.stereo:
+                    row["stereo"] = True
             elif isinstance(t, Audio):
                 row.update(channels=str(t.channels) if t.channels else "", atmos=bool(t.joc), descriptive=t.descriptive)
             elif isinstance(t, Subtitle):

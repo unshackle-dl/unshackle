@@ -476,3 +476,16 @@ def test_import_keeps_every_period_when_no_exported_period_is_left(
 
     assert video.data["dash"]["filtered_period_ids"] == []
     assert "keeping every period" in caplog.text
+
+
+def test_a_3d_video_stays_3d_through_export_and_import(tmp_path: Path) -> None:
+    export = tmp_path / "export.json"
+    title = make_title()
+    title.tracks.videos[0].stereo = True
+    runner = make_dl()
+    for track in [*title.tracks.videos, *title.tracks.audio]:
+        runner.write_export(export, title, track)
+    assert [row.get("stereo") for row in entry(export)["tracks"]][0] is True
+    svc = ImportService(import_ctx(), "EXAMPLE", "movie-1", str(export))
+    movie = next(iter(svc.get_titles()))
+    assert svc.get_tracks(movie).videos[0].stereo

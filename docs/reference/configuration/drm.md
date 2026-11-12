@@ -187,6 +187,10 @@ service tag case-insensitively and uses the `default` entry as the fallback.
 
 unshackle decrypts HLS AES-128 ClearKey in-process and ignores this setting.
 
+unshackle decrypts a stereoscopic 3D (MV-HEVC) track with mp4decrypt whatever this setting says.
+shaka-packager refuses its Dolby Vision configuration (version 3), and before v3.5.0 it also drops
+the boxes of the second view.
+
 mp4decrypt finds a content key by the KID in the first `sinf` box of the track. When that box
 has no CENC `tenc` (for example, a PIFF `sinf` before the CENC one), unshackle also gives
 mp4decrypt the content key of that KID by track ID. When mp4decrypt copies a track through

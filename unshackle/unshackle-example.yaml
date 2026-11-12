@@ -22,12 +22,12 @@ tag: "NOGRP"
 # ? suffix, e.g. {year?}.
 output_template:
   # Scene-style naming (dot-separated)
-  movies: "{title}.{year?}.{repack?}.{edition?}.{lang_tag?}.{quality}.{source}.WEB-DL.{dual?}.{multi?}.{dubbed?}.{audio_full}.{atmos?}.{hdr?}.{hfr?}.{video}-{tag}"
-  series: "{title}.{year?}.{season_episode}.{episode_name?}.{repack?}.{edition?}.{lang_tag?}.{quality}.{source}.WEB-DL.{dual?}.{multi?}.{dubbed?}.{audio_full}.{atmos?}.{hdr?}.{hfr?}.{video}-{tag}"
+  movies: "{title}.{year?}.{repack?}.{edition?}.{lang_tag?}.{3d?}.{quality}.{source}.WEB-DL.{dual?}.{multi?}.{dubbed?}.{audio_full}.{atmos?}.{hdr?}.{hfr?}.{video}-{tag}"
+  series: "{title}.{year?}.{season_episode}.{episode_name?}.{repack?}.{edition?}.{lang_tag?}.{3d?}.{quality}.{source}.WEB-DL.{dual?}.{multi?}.{dubbed?}.{audio_full}.{atmos?}.{hdr?}.{hfr?}.{video}-{tag}"
   songs: "{track_number}.{title}.{repack?}.{edition?}.{lang_tag?}.{source?}.WEB-DL.{audio_full}.{atmos?}-{tag}"
   folder:
-    movies: "{title}.{year?}.{repack?}.{edition?}.{lang_tag?}.{quality}.{source}.WEB-DL.{dual?}.{multi?}.{dubbed?}.{audio_full}.{atmos?}.{hdr?}.{hfr?}.{video}-{tag}"
-    series: "{title}.{year?}.{repack?}.{edition?}.{lang_tag?}.{quality}.{source}.WEB-DL.{dual?}.{multi?}.{dubbed?}.{audio_full}.{atmos?}.{hdr?}.{hfr?}.{video}-{tag}"
+    movies: "{title}.{year?}.{repack?}.{edition?}.{lang_tag?}.{3d?}.{quality}.{source}.WEB-DL.{dual?}.{multi?}.{dubbed?}.{audio_full}.{atmos?}.{hdr?}.{hfr?}.{video}-{tag}"
+    series: "{title}.{year?}.{repack?}.{edition?}.{lang_tag?}.{3d?}.{quality}.{source}.WEB-DL.{dual?}.{multi?}.{dubbed?}.{audio_full}.{atmos?}.{hdr?}.{hfr?}.{video}-{tag}"
     albums: "{album_artist} - {album} ({year?})"
 
   #
