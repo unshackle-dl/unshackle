@@ -2143,7 +2143,7 @@ folder-kind keys.</p>
 <code>absolute</code>, <code>date</code>, <code>quality</code>, <code>resolution</code>, <code>source</code>, <code>tag</code>, <code>track_number</code>, <code>artist</code>,
 <code>album_artist</code>, <code>album</code>, <code>disc</code>, <code>track_total</code>, <code>disc_total</code>, <code>release_type</code>, <code>genre</code>,
 <code>explicit</code>, <code>isrc</code>, <code>upc</code>, <code>label</code>, <code>audio</code>, <code>audio_channels</code>, <code>audio_full</code>, <code>atmos</code>,
-<code>dual</code>, <code>multi</code>, <code>dubbed</code>, <code>video</code>, <code>hdr</code>, <code>hfr</code>, <code>edition</code>, <code>repack</code>, <code>lang_tag</code>,
+<code>dual</code>, <code>multi</code>, <code>dubbed</code>, <code>video</code>, <code>hdr</code>, <code>hfr</code>, <code>3d</code>, <code>edition</code>, <code>repack</code>, <code>lang_tag</code>,
 <code>title_type</code>.</p>
 </details>
 <div class="admonition warning">
@@ -2261,7 +2261,7 @@ order and the first match wins. If no rule matches, the global <code>tag</code> 
 <li>A value can be a scalar or a list. A list matches if <strong>any</strong> entry matches.</li>
 <li>Comparison is case-insensitive string equality.</li>
 <li>The keys of <code>when</code> are the filename template variables for the release itself:
-  <code>title_type</code>, <code>quality</code>, <code>resolution</code>, <code>source</code>, <code>video</code>, <code>hdr</code>, <code>hfr</code>, <code>audio</code>,
+  <code>title_type</code>, <code>quality</code>, <code>resolution</code>, <code>source</code>, <code>video</code>, <code>hdr</code>, <code>hfr</code>, <code>3d</code>, <code>audio</code>,
   <code>audio_channels</code>, <code>audio_full</code>, <code>atmos</code>, <code>dual</code>, <code>multi</code>, <code>dubbed</code>, <code>edition</code>, <code>repack</code>,
   and <code>lang_tag</code>. Only these are available. unshackle adds the title's own fields (<code>title</code>,
   <code>year</code>, <code>season</code>, <code>episode</code>, and so on) after it evaluates the rules, so a condition cannot

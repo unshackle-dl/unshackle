@@ -2516,7 +2516,7 @@ values.</p>
 <td>As in the filename template: <code>{season_episode}</code> keeps the part suffix (<code>S01E05.Part.1</code>) while <code>{episode}</code> drops it</td>
 </tr>
 <tr>
-<td><code>{quality}</code> <code>{resolution}</code> <code>{hdr}</code> <code>{hfr}</code> <code>{vcodec}</code> <code>{acodec}</code> <code>{edition}</code> <code>{tag}</code> <code>{lang_tag}</code></td>
+<td><code>{quality}</code> <code>{resolution}</code> <code>{hdr}</code> <code>{hfr}</code> <code>{3d}</code> <code>{vcodec}</code> <code>{acodec}</code> <code>{edition}</code> <code>{tag}</code> <code>{lang_tag}</code></td>
 <td>As in the filename template, for this file</td>
 </tr>
 <tr>
@@ -2543,7 +2543,7 @@ string as absent. Write your script to accept an empty value for every variable.
   music has none of them.</li>
 <li><strong>The naming context renders it empty on purpose.</strong> <code>{hdr}</code> is empty for an SDR
   file, because SDR is the absence of an HDR tag in a filename rather than a tag that
-  reads <code>SDR</code>. <code>{edition}</code>, <code>{atmos}</code>, <code>{multi}</code>, <code>{dual}</code> and <code>{hfr}</code> behave the same
+  reads <code>SDR</code>. <code>{edition}</code>, <code>{atmos}</code>, <code>{multi}</code>, <code>{dual}</code>, <code>{hfr}</code> and <code>{3d}</code> behave the same
   way. If your script needs the word <code>SDR</code>, derive it from an empty <code>{hdr}</code> yourself.</li>
 <li>The post-script is a <code>failure</code> one. A failed download has no output file to read metadata
   from, so everything that comes from the output file is empty. See

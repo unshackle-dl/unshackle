@@ -3415,6 +3415,9 @@ alone, so unshackle selects it only when you ask for it with <code>-v LCEVC</cod
 </tbody>
 </table>
 <p>The output file of a track with a Dolby Vision profile 8 RPU plays as Dolby Vision on a DV screen.</p>
+<p><code>--list</code> adds <code>3D</code> to a stereoscopic 3D (MV-HEVC) track, for example <code>[H.265, DV, 3D]</code>. When a title
+has a 2D and a 3D track at the same resolution, unshackle selects the 2D track. A 3D title muxes to
+MP4, see <a href="../output-and-naming/#3d-output">3D output</a>.</p>
 <div class="admonition warning">
 <p class="admonition-title">HYBRID requires dovi_tool</p>
 <p><code>-r HYBRID</code> makes a single hybrid track by injecting the Dolby Vision RPU

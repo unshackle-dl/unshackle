@@ -3248,6 +3248,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#unshackle.core.tracks.Video.is_stereo" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;is_stereo
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#unshackle.core.tracks.Video.is_dv_composite" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3263,6 +3274,28 @@
     <span class="md-ellipsis">
       
         <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;change_color_range
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unshackle.core.tracks.Video.download" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;download
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unshackle.core.tracks.Video.repackage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;repackage
       
     </span>
   </a>
@@ -4820,6 +4853,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#unshackle.core.tracks.Video.is_stereo" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;is_stereo
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#unshackle.core.tracks.Video.is_dv_composite" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4835,6 +4879,28 @@
     <span class="md-ellipsis">
       
         <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;change_color_range
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unshackle.core.tracks.Video.download" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;download
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unshackle.core.tracks.Video.repackage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;repackage
       
     </span>
   </a>
@@ -8361,7 +8427,7 @@ of <code>get_init_segment</code> to find the Key ID.</p>
                 <code>service</code>
             </td>
             <td>
-                  <code><span title="Service">Service</span> | None</code>
+                  <code>Service | None</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -8755,7 +8821,8 @@ A subtitle in an unlisted codec is always kept.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Sort video tracks by resolution then bitrate, and optionally language.</p>
+        <p>Sort video tracks by resolution, 2D before 3D, then bitrate, and optionally language.</p>
+<p>A 3D track carries two views, so its higher bitrate would otherwise rank it over the 2D one.</p>
 
 
     </div>
@@ -8905,7 +8972,7 @@ track twice.</p>
 <p>HDR10/HDR10+/DV tracks are hybrid ingredients. They only enter the standalone
 pool when the user explicitly requested their range alongside HYBRID, so for
 example <code>-r HYBRID</code> muxes only the hybrid while <code>-r HYBRID,HDR10P</code> also delivers
-HDR10+.</p>
+HDR10+. A 3D track is never an ingredient: dovi_tool does not handle a second view.</p>
 
 
     </div>
@@ -9213,8 +9280,9 @@ share a video list must pass distinct paths to avoid clobbering each other.</p>
 </span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>    <span class="n">dv_compatible_bitstream</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
 </span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>    <span class="n">hdr10plus</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
 </span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>    <span class="n">hdr10_base</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
-</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>    <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
-</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="p">)</span>
+</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>    <span class="n">stereo</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>    <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="p">)</span>
 </span></code></pre></div>
 
     <div class="doc doc-contents ">
@@ -9365,6 +9433,22 @@ All strings will be cast to either a number or float.</p>
             <td>
               <div class="doc-md-description">
                 <p>The DV track has an HDR10 base layer, as DV profile 8.1 does.</p>
+              </div>
+            </td>
+            <td>
+                  <code>False</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>stereo</code>
+            </td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The track is stereoscopic 3D (MV-HEVC), with a second view for the other eye.</p>
               </div>
             </td>
             <td>
@@ -9606,6 +9690,32 @@ FFmpeg's AVColorPrimaries/AVColorTransferCharacteristic enums.</p>
 <div class="doc doc-object doc-function">
 
 
+<h3 id="unshackle.core.tracks.Video.is_stereo" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">is_stereo</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-staticmethod"><code>staticmethod</code></small>
+  </span>
+
+<a href="#unshackle.core.tracks.Video.is_stereo" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">is_stereo</span><span class="p">(</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">codecs</span><span class="p">,</span> <span class="n">supplemental_codecs</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">video_layout</span><span class="o">=</span><span class="kc">None</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="p">)</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Whether a track is stereoscopic 3D: the HLS REQ-VIDEO-LAYOUT names CH-STEREO, or a codec is DV profile 20.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
 <h3 id="unshackle.core.tracks.Video.is_dv_composite" class="doc doc-heading">
 <code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">is_dv_composite</span>
 
@@ -9650,6 +9760,46 @@ FFmpeg's AVColorPrimaries/AVColorTransferCharacteristic enums.</p>
 <div class="doc doc-object doc-function">
 
 
+<h3 id="unshackle.core.tracks.Video.download" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">download</span>
+
+
+<a href="#unshackle.core.tracks.Video.download" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">download</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Download the track and mark it 3D when the file holds a second view; a 3D track is never repacked.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="unshackle.core.tracks.Video.repackage" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">repackage</span>
+
+
+<a href="#unshackle.core.tracks.Video.repackage" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">repackage</span><span class="p">(</span><span class="n">bsf_v</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Remux with FFmpeg, except a 3D track: an FFmpeg remux rewrites its stereo and DV boxes.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
 <h3 id="unshackle.core.tracks.Video.vui_bsf" class="doc doc-heading">
 <code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">vui_bsf</span>
 
@@ -9661,8 +9811,9 @@ FFmpeg's AVColorPrimaries/AVColorTransferCharacteristic enums.</p>
     <div class="doc doc-contents ">
 
         <p>Return the <code>-bsf:v</code> value that rewrites SPS VUI colour metadata to match <code>self.range</code>.</p>
-<p>Returns None when a rewrite is not necessary: SDR/DV/HYBRID ranges, non-AVC/HEVC codecs, a
-missing file, or when the bitstream already ships the correct colour metadata. Otherwise
+<p>Returns None when a rewrite is not necessary or not safe: SDR/DV/HYBRID ranges, non-AVC/HEVC
+codecs, a 3D track (an FFmpeg remux rewrites its stereo and DV boxes), a missing file, or when the
+bitstream already ships the correct colour metadata. Otherwise
 returns a <code>{h264,hevc}_metadata=...</code> string suitable for FFmpeg <code>-bsf:v</code>.</p>
 
 

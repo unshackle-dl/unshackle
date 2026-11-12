@@ -2386,6 +2386,9 @@ case-insensitively. <code>"mp4decrypt"</code> selects Bento4's mp4decrypt, and <
 (including <code>"shaka"</code>) selects shaka-packager. When the value is a dict, unshackle compares the
 service tag case-insensitively and uses the <code>default</code> entry as the fallback.</p>
 <p>unshackle decrypts HLS AES-128 ClearKey in-process and ignores this setting.</p>
+<p>unshackle decrypts a stereoscopic 3D (MV-HEVC) track with mp4decrypt whatever this setting says.
+shaka-packager refuses its Dolby Vision configuration (version 3), and before v3.5.0 it also drops
+the boxes of the second view.</p>
 <p>mp4decrypt finds a content key by the KID in the first <code>sinf</code> box of the track. When that box
 has no CENC <code>tenc</code> (for example, a PIFF <code>sinf</code> before the CENC one), unshackle also gives
 mp4decrypt the content key of that KID by track ID. When mp4decrypt copies a track through
