@@ -12,6 +12,7 @@ import pytest
 from unshackle.core.api.progress import (
     DOWNLOAD_PROGRESS_CEILING,
     build_job_progress_callables,
+    track_log_label,
     track_progress_label,
     track_progress_weight,
 )
@@ -46,6 +47,13 @@ class Subtitle:
 
 def noop(**kwargs):
     pass
+
+
+def test_track_log_label_adds_the_track_id():
+    video = Video(2160, "DV")
+    video.id = "592464997"
+
+    assert track_log_label(video) == "video 2160p DV (592464997)"
 
 
 def test_track_progress_label():

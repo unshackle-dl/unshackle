@@ -182,7 +182,7 @@ def test_resolve_server_keys_does_not_warn_for_clear_tracks(monkeypatch):
 
     svc.resolve_server_keys(SimpleNamespace(tracks=Tracks([video_track, audio_track])))
 
-    assert warnings == ["Server CDM returned no content keys for track v-1"]
+    assert warnings == ["Server CDM returned no content keys for track simplenamespace (v-1)"]
 
 
 def resolve(manifest_drm, drm_type="widevine"):

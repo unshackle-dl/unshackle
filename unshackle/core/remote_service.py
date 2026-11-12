@@ -130,6 +130,9 @@ class RemoteError(SystemExit):
         quiet = getattr(_recovering, "on", False) and kind in RECOVERABLE
         (log.debug if quiet else log.error)(message)
 
+    def __str__(self) -> str:
+        return self.message
+
     @property
     def session_broke(self) -> bool:
         """Whether the remote session itself is gone, not only this one call."""
@@ -1893,7 +1896,9 @@ class RemoteService:
                 track_keys = keys_by_track.get(server_id, {})
                 if not track_keys:
                     if server_id in track_ids and server_id not in clear_tracks | set(capped):
-                        self.log.warning(f"Server CDM returned no content keys for track {track.id}")
+                        from unshackle.core.api.progress import track_log_label
+
+                        self.log.warning(f"Server CDM returned no content keys for track {track_log_label(track)}")
                     continue
 
                 named = {kid.hex for drm in track.drm or [] for kid in real_kids(drm)} & track_keys.keys()
@@ -1964,7 +1969,9 @@ class RemoteService:
             drm_class = other
         track.drm_preference = drm_class.lower()
         self.client_licensed.add(str(track.id))
-        self.log.info(f"{why}; licensing {track.id} with your own {drm_class} device")
+        from unshackle.core.api.progress import track_log_label
+
+        self.log.info(f"{why}; licensing track {track_log_label(track)} with your own {drm_class} device")
 
     @property
     def server_cdm(self) -> bool:
@@ -1995,7 +2002,7 @@ class RemoteService:
                 lambda sid: self.client.post_optional(f"/api/session/{sid}/keys/bad", {"kid": kid.hex, "key": key})
             )
         except (Exception, RemoteError) as e:
-            self.log.warning(f"Could not report the bad content key to the server: {e!r}")
+            self.log.warning(f"Could not report the bad content key to the server: {e}")
 
     @staticmethod
     def create_drm_stub(drm_type: str, kid_hexes: list[str]) -> Any:
@@ -2085,6 +2092,7 @@ class RemoteService:
         return base64.b64decode(resp["license"]) if resp.get("license") else None
 
     def proxy_license(self, challenge: Union[bytes, str], track: AnyTrack, drm_type: str) -> bytes:
+        """Relay a licence challenge to the server. A failed relay raises ClickException, so dl's licence fallbacks see it."""
         if isinstance(challenge, str):
             challenge = challenge.encode("utf-8")
 
@@ -2146,6 +2154,8 @@ class RemoteService:
                     f"/api/session/{sid}/license", {**payload, "track_id": self.server_track_id(track.id)}
                 )
             )
+        except RemoteError as e:
+            raise click.ClickException(e.message) from None
         finally:
             self.drain_server_logs()
         return base64.b64decode(resp["license"])

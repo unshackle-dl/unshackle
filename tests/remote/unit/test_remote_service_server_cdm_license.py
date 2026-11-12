@@ -96,3 +96,22 @@ def test_proxy_mode_keeps_the_callers_type():
     assert licence == b"lic"
     assert svc.client.posts[0]["drm_type"] == "playready"
     assert svc.client.posts[0]["pssh"] == "PR"
+
+
+def test_a_refused_relayed_licence_raises_a_click_exception_with_the_server_message():
+    import click
+
+    from unshackle.core.remote_service import RemoteError
+
+    svc = _service("widevine", {})
+    svc._server_cdm = False
+    svc.drain_server_logs = lambda: None
+
+    def refuse(endpoint, payload, expect=()):
+        raise RemoteError("Licence request failed: refused", "SERVICE_ERROR")
+
+    svc.client.post = refuse
+    track = SimpleNamespace(id="vid", drm=[_PlayReady()])
+
+    with pytest.raises(click.ClickException, match="^Licence request failed: refused$"):
+        svc.proxy_license(b"chal", track, "playready")

@@ -9,6 +9,7 @@ from __future__ import annotations
 import time
 from typing import Any, Callable, Optional
 
+from unshackle.core.api.sanitize import sanitize_log
 from unshackle.core.constants import AnyTrack
 from unshackle.core.utilities import standard_resolution
 
@@ -47,6 +48,11 @@ def track_progress_label(track: AnyTrack) -> str:
         language = getattr(track, "language", None)
         return f"subtitle {language}" if language else "subtitle"
     return track_type.lower()
+
+
+def track_log_label(track: AnyTrack) -> str:
+    """Track label for a log line: its short label and its ID, e.g. "video 360p DV (592464997)"."""
+    return f"{track_progress_label(track)} ({sanitize_log(str(track.id)[:12])})"
 
 
 def track_progress_weight(track: AnyTrack) -> float:

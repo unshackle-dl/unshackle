@@ -27,6 +27,7 @@ from aiohttp import web
 from unshackle.core.api.compression import safe_inflate
 from unshackle.core.api.errors import APIError, APIErrorCode, categorize_exception, handle_api_exception
 from unshackle.core.api.input_bridge import AuthStatus, InputBridge, NoUserBridge
+from unshackle.core.api.progress import track_log_label
 from unshackle.core.api.sanitize import MAX_SESSION_CACHE_KEYS, safe_cache_key, safe_cache_payload, sanitize_log
 from unshackle.core.api.session_log import SessionLogBuffer, SessionLogMirror, capture_service_logs
 from unshackle.core.api.session_store import SessionStore
@@ -4804,7 +4805,7 @@ def server_drm_candidates(
             candidates.insert(0, preferred)
         else:
             warn(
-                f"Track {sanitize_log(str(track.id)[:12])} wants {preferred} DRM "
+                f"Track {track_log_label(track)} wants {preferred} DRM "
                 "but the server has no device for it, using the configured DRM instead"
             )
     return candidates
@@ -4822,7 +4823,7 @@ def pick_server_pssh(track: Any, candidates: List[str]) -> Optional[tuple[str, s
             pssh_str = extract_pssh_from_track(track, "playready")
             if pssh_str:
                 log.info(
-                    f"Track {sanitize_log(str(track.id)[:12])} has only a PlayReady PSSH, licensing it with the Widevine device"
+                    f"Track {track_log_label(track)} has only a PlayReady PSSH, licensing it with the Widevine device"
                 )
         if pssh_str:
             return candidate, pssh_str
@@ -5361,7 +5362,7 @@ def license_response(
             """
             picked = pick_server_pssh(track, candidates)
             if not picked:
-                warn(f"No PSSH on track {sanitize_log(str(track.id)[:12])} for {', '.join(candidates) or 'any CDM'}")
+                warn(f"No PSSH on track {track_log_label(track)} for {', '.join(candidates) or 'any CDM'}")
                 return {}, None, None
             candidate, pssh_str = picked
 
@@ -5386,13 +5387,13 @@ def license_response(
                         keys_by_pssh[cache_key] = keys
                         drm_type_by_pssh[cache_key] = candidate
                 except SystemExit:
-                    warn(f"Service exited while resolving keys for track {sanitize_log(str(track.id)[:12])}, skipping")
+                    warn(f"Service exited while resolving keys for track {track_log_label(track)}, skipping")
                 except (Exception, SystemExit) as e:
                     if isinstance(e, APIError) and e.error_code is APIErrorCode.SERVER_CDM_CAPPED:
                         del keys_by_pssh[cache_key], sources_by_pssh[cache_key]
                         capped_tracks[str(track.id)] = e.details
                         return {}, None, pssh_str
-                    warn(f"Failed to resolve keys for track {sanitize_log(str(track.id)[:12])}: {redact_all(str(e))}")
+                    warn(f"Failed to resolve keys for track {track_log_label(track)}: {redact_all(str(e))}")
             return keys_by_pssh[cache_key], drm_type_by_pssh.get(cache_key), pssh_str
 
         for tid in track_ids:
@@ -5404,7 +5405,7 @@ def license_response(
             init_data = fetch_init_segment(track, svc_session)
             ensure_track_drm(track, svc_session, init_data)
             if not track.drm or all(isinstance(d, BlowfishStripe) for d in track.drm):
-                log.info(f"Track {sanitize_log(tid[:12])} needs no licence, so it has no keys to resolve")
+                log.info(f"Track {track_log_label(track)} needs no licence, so it has no keys to resolve")
                 clear_tracks.append(tid)
                 continue
 
@@ -5434,7 +5435,7 @@ def license_response(
                 if init_pssh != pssh_str:
                     log.info(
                         f"The manifest PSSH gave no content key for KID {track_kid.hex} of track "
-                        f"{sanitize_log(tid[:12])}, tried the init segment PSSH"
+                        f"{track_log_label(track)}, tried the init segment PSSH"
                     )
                 if track_kid.hex in init_keys:
                     keys, track_drm_type, pssh_str = init_keys, init_drm_type, init_pssh
@@ -5443,7 +5444,7 @@ def license_response(
                     track.drm = manifest_drm
                     refusal = refusal or init_refusal
                     if not refusal:
-                        warn(f"No content key for KID {track_kid.hex} of track {sanitize_log(tid[:12])}")
+                        warn(f"No content key for KID {track_kid.hex} of track {track_log_label(track)}")
             if refusal:
                 capped_tracks[tid] = refusal
                 continue
@@ -5503,12 +5504,12 @@ def license_response(
             if not picked:
                 raise APIError(
                     APIErrorCode.INVALID_INPUT,
-                    f"No PSSH on track {sanitize_log(track_id[:12])} for {', '.join(candidates) or 'any CDM'}",
+                    f"No PSSH on track {track_log_label(track)} for {', '.join(candidates) or 'any CDM'}",
                 )
             server_drm_type, server_pssh = picked
             if pssh_b64 and server_drm_type != drm_type:
                 log.info(
-                    f"Client asked for {sanitize_log(drm_type)} on track {sanitize_log(track_id[:12])}, "
+                    f"Client asked for {sanitize_log(drm_type)} on track {track_log_label(track)}, "
                     f"licensing with the server's {server_drm_type} CDM"
                 )
                 pssh_b64 = None
@@ -5528,7 +5529,7 @@ def license_response(
                 live_licence_refusal(session, track),
                 vault_only=vault_only,
             )
-            log.info(f"Server CDM resolved {len(keys)} key(s) for track {sanitize_log(track_id[:12])}")
+            log.info(f"Server CDM resolved {len(keys)} key(s) for track {track_log_label(track)}")
             note_served_keys(session, keys, key_sources)
             return web.json_response({"keys": keys, "vault_keys": list(key_sources), "drm_type": server_drm_type})
 

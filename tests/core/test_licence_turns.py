@@ -9,6 +9,7 @@ from types import SimpleNamespace
 from typing import Any, Callable, Optional
 from uuid import UUID
 
+import click
 import pytest
 from pywidevine.pssh import PSSH
 from rich.table import Table
@@ -197,3 +198,17 @@ def test_vaults_only_stops_at_the_first_kid_no_vault_holds(cmd: dl, licences: li
 
     assert asked == [KID_A]
     assert licences == []
+
+
+def test_a_refused_licence_keeps_the_known_track_key(cmd: dl, monkeypatch: pytest.MonkeyPatch) -> None:
+    def refuse(self: Widevine, **_: Any) -> None:
+        raise click.ClickException("Licence request failed")
+
+    monkeypatch.setattr(Widevine, "get_content_keys", refuse)
+    monkeypatch.setattr(dl, "LICENSE_KEY_CACHE", {KID_A: KEYS[KID_A]})
+    monkeypatch.setattr(dl, "DRM_LOCKS", {})
+    drm = widevine(KID_A, KID_B)
+
+    prepare(cmd, drm, KID_A, new_table())
+
+    assert drm.content_keys == {KID_A: KEYS[KID_A]}

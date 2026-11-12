@@ -5102,18 +5102,19 @@ class dl:
                             )
                         show_error(msg)
                         raise
+                else:
+                    log_event(
+                        "license_keys_retrieved",
+                        level="INFO",
+                        service=self.service,
+                        context={
+                            "track": str(track),
+                            "drm_type": type(drm).__name__,
+                            "keys_count": len(drm.content_keys),
+                            "kids": [k.hex for k in drm.content_keys.keys()],
+                        },
+                    )
 
-                log_event(
-                    "license_keys_retrieved",
-                    level="INFO",
-                    service=self.service,
-                    context={
-                        "track": str(track),
-                        "drm_type": type(drm).__name__,
-                        "keys_count": len(drm.content_keys),
-                        "kids": [k.hex for k in drm.content_keys.keys()],
-                    },
-                )
                 for kid, key in drm.content_keys.items():
                     self.add_key_label(cek_tree, kid, f"[red]{key}[/]" if is_null_key(key) else key, track_kid)
                 drop_null_keys(drm)
