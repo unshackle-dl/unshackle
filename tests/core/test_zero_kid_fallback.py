@@ -99,7 +99,7 @@ def test_several_keys_and_no_single_own_kid_give_no_zero_kid_entry(make) -> None
 
 def test_shaka_decrypt_passes_the_built_keys(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
     """The shaka-packager call uses the same builder the tests above cover."""
-    from unshackle.core.drm import widevine as widevine_module
+    from unshackle.core.drm import decrypters as decrypters_module
 
     seen: list[list[str]] = []
 
@@ -110,9 +110,9 @@ def test_shaka_decrypt_passes_the_built_keys(monkeypatch: pytest.MonkeyPatch, tm
         seen.append([str(c) for c in cmd])
         raise StopPopen
 
-    monkeypatch.setattr(widevine_module.subprocess, "Popen", fake_popen)
-    monkeypatch.setattr(widevine_module.binaries, "ShakaPackager", "shaka-packager")
-    monkeypatch.setattr(widevine_module.config.directories, "temp", tmp_path)
+    monkeypatch.setattr(decrypters_module.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(decrypters_module.binaries, "ShakaPackager", "shaka-packager")
+    monkeypatch.setattr(decrypters_module.config.directories, "temp", tmp_path)
     drm = _with_keys(_widevine(VIDEO_KID), BOTH_KEYS)
     media = tmp_path / "track.mp4"
     media.write_bytes(b"x")

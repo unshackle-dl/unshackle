@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import io
 import subprocess
 import sys
 from pathlib import Path
@@ -14,9 +15,11 @@ from tests.test_segment_decrypt import read_argv
 from unshackle.core import binaries
 from unshackle.core.config import config
 from unshackle.core.drm import ClearKeyCENC
+from unshackle.core.drm import decrypters as decrypters_module
+from unshackle.core.drm.decrypters import mp4decrypt_or_shaka
 from unshackle.core.drm.key_args import shaka_noise, track_key_args
 from unshackle.core.drm.segment_decrypt import SegmentDecrypter, can_use
-from unshackle.core.drm.verify import kidless_track_kids, mp4decrypt_or_shaka
+from unshackle.core.drm.verify import kidless_track_kids
 
 KEY = "b5df2ae3f63b8dda9049d6e41422e075"
 OTHER_KEY = "11" * 16
@@ -217,6 +220,76 @@ def test_shaka_non_zero_exit_raises(
 
     with pytest.raises(subprocess.CalledProcessError):
         drm.decrypt_with_shaka_packager(path)
+
+
+class FakePackager:
+    """A shaka-packager Popen that records its argv, prints ``log`` and exits with ``code``."""
+
+    code = 0
+    log = ""
+    argv: list[str] = []
+
+    def __init__(self, cmd: list[Any], **kwargs: Any) -> None:
+        FakePackager.argv = [str(c) for c in cmd]
+        self.stderr = io.StringIO(FakePackager.log)
+        self.returncode = FakePackager.code
+
+    def wait(self) -> int:
+        return self.returncode
+
+
+@pytest.fixture
+def fake_packager(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """Route shaka-packager to ``FakePackager`` and collect what the console prints."""
+    printed: list[str] = []
+    FakePackager.code, FakePackager.log = 0, ""
+    monkeypatch.setattr(decrypters_module.subprocess, "Popen", FakePackager)
+    monkeypatch.setattr(binaries, "ShakaPackager", Path("packager"))
+    monkeypatch.setattr(config.directories, "temp", tmp_path)
+    monkeypatch.setattr(decrypters_module.console, "log", lambda text: printed.append(str(text)))
+    return printed
+
+
+def shaka_run(tmp_path: Path, make: Callable[[], Any], raises: type[BaseException]) -> None:
+    """Decrypt a one-key track of ``make()`` through ``FakePackager`` and expect ``raises``."""
+    path = tmp_path / "track.mp4"
+    path.write_bytes(b"encrypted")
+    drm = make()
+    drm.content_keys[A] = KEY
+    with pytest.raises(raises):
+        drm.decrypt_with_shaka_packager(path)
+
+
+@pytest.mark.parametrize("make", DRMS)
+def test_every_drm_passes_the_fake_clock(tmp_path: Path, fake_packager: list[str], make: Callable[[], Any]) -> None:
+    shaka_run(tmp_path, make, FileNotFoundError)
+    assert "--use_fake_clock_for_muxer" in FakePackager.argv
+
+
+def test_clearkey_gives_no_zero_kid_fallback(tmp_path: Path, fake_packager: list[str]) -> None:
+    shaka_run(tmp_path, lambda: ClearKeyCENC(kids=[A]), FileNotFoundError)
+    assert FakePackager.argv[FakePackager.argv.index("--keys") + 1] == f"label=0:key_id={A.hex}:key={KEY}"
+
+
+@pytest.mark.parametrize(
+    ("make", "label"),
+    [
+        pytest.param(lambda: _widevine(A), "Widevine", id="widevine"),
+        pytest.param(lambda: _playready(A), "PlayReady", id="playready"),
+        pytest.param(lambda: ClearKeyCENC(kids=[A]), "ClearKey", id="clearkey"),
+    ],
+)
+def test_a_shaka_failure_logs_under_the_drm_label(
+    tmp_path: Path, fake_packager: list[str], make: Callable[[], Any], label: str
+) -> None:
+    FakePackager.code, FakePackager.log = 1, "[1103/153702:ERROR:main.cc(1)] Bad key\n"
+    shaka_run(tmp_path, make, subprocess.CalledProcessError)
+    assert len(fake_packager) == 1 and f"[{label}]: " in fake_packager[0] and "Bad key" in fake_packager[0]
+
+
+def test_a_shaka_ctrl_c_exit_is_a_keyboard_interrupt(tmp_path: Path, fake_packager: list[str]) -> None:
+    FakePackager.code = 0xC000013A
+    shaka_run(tmp_path, lambda: _widevine(A), KeyboardInterrupt)
 
 
 @pytest.mark.parametrize(

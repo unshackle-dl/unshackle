@@ -254,18 +254,6 @@ def decrypter_for(path: Path) -> str:
     return configured
 
 
-def mp4decrypt_or_shaka(drm: Any, path: Path) -> None:
-    """Decrypt ``path`` with mp4decrypt, and again with shaka-packager when mp4decrypt copied it through.
-
-    mp4decrypt copies a track it has no content key for unchanged, so its first moof stays the same.
-    """
-    first_moof = read_top_level_box(path, b"moof")
-    drm.decrypt_with_mp4decrypt(path)
-    if has_encrypted_sample_entry(path) and read_top_level_box(path, b"moof") == first_moof:
-        log.warning(f"mp4decrypt left {path.name} encrypted, decrypting it with shaka-packager")
-        drm.decrypt_with_shaka_packager(path)
-
-
 def senc_protects_samples(buf: bytes, body: int, end: int) -> bool:
     """True if a senc/PIFF-uuid box describes protected samples.
 
