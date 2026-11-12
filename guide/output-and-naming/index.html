@@ -3399,11 +3399,11 @@ wrong colours.</p>
 </div>
 <p>A few muxing behaviors are automatic and not configurable:</p>
 <ul>
-<li><code>--no-date</code> is always passed for privacy (no timestamps embedded).</li>
+<li>The output has no encoding date: mkvmerge gets <code>--no-date</code> and MP4Box gets <code>-for-test</code>.</li>
 <li>Descriptive audio gets the visually-impaired flag. SDH subtitles get the hearing-impaired flag. Forced subtitles get the forced flag.</li>
 <li>unshackle writes the chapters from the title's chapter list (see <a href="#chapters-naming">Chapters</a> below).</li>
 </ul>
-<p>The <code>--no-mux</code> flag skips muxing entirely and writes the individual track files, each with a track-type suffix, into the same output/folder structure.</p>
+<p>The <code>--no-mux</code> flag skips muxing entirely and writes the individual track files, each with a track-type suffix, into the same output/folder structure. A track that shaka-packager decrypts has its date set to 1970-01-01; other tracks keep the date of the source file.</p>
 <h2 id="sample-files">Sample files<a class="headerlink" href="#sample-files" title="Permanent link">&para;</a></h2>
 <p><a href="../cli-reference/#output-muxing-files"><code>--sample</code></a> and <code>--include-sample</code> write a sample into a
 <code>Sample</code> folder inside the output folder of the title. The sample keeps the filename of the
