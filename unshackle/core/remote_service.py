@@ -77,7 +77,15 @@ RATE_LIMIT_TRIES = 3
 TUNNEL_SLOT_POLL = 15
 REOPEN_WAIT = 1800.0  # seconds a lost session waits for its server to come back; covers a deploy's whole drain
 
-_recovering = local()
+
+class _Mute(local):
+    """This thread's RemoteError log state: inside ``session_call`` (``recovering``) and under ``quiet()``."""
+
+    recovering = False
+    quiet = False
+
+
+_mute = _Mute()
 
 T = TypeVar("T")
 
@@ -85,11 +93,22 @@ T = TypeVar("T")
 @contextlib.contextmanager
 def recovering() -> Iterator[None]:
     """Mark this thread's remote calls as recoverable, so a RECOVERABLE error logs at debug level."""
-    _recovering.on = True
+    _mute.recovering = True
     try:
         yield
     finally:
-        _recovering.on = False
+        _mute.recovering = False
+
+
+@contextlib.contextmanager
+def quiet() -> Iterator[None]:
+    """Log this thread's RemoteErrors at debug level, because the caller reports them."""
+    before = _mute.quiet
+    _mute.quiet = True
+    try:
+        yield
+    finally:
+        _mute.quiet = before
 
 
 def redact_secrets(text: str, data: Optional[Dict[str, Any]] = None) -> str:
@@ -127,8 +146,8 @@ class RemoteError(SystemExit):
         super().__init__(1)
         self.message = message
         self.kind = kind
-        quiet = getattr(_recovering, "on", False) and kind in RECOVERABLE
-        (log.debug if quiet else log.error)(message)
+        muted = _mute.quiet or (_mute.recovering and kind in RECOVERABLE)
+        (log.debug if muted else log.error)(message)
 
     def __str__(self) -> str:
         return self.message
@@ -744,7 +763,8 @@ def remote_service_list(server_name: Optional[str]) -> Optional[list[dict]]:
             return hit[1]
         services: Optional[list[dict]] = None
         try:
-            services = remote_client(server_name).get("/api/services").get("services") or []
+            with quiet():
+                services = remote_client(server_name).get("/api/services").get("services") or []
         except (Exception, SystemExit) as e:
             log.warning(f"Could not list the services of remote server '{server_name}': {e}")
         _remote_lists[server_name] = (time.monotonic(), services)
@@ -1463,7 +1483,7 @@ class RemoteService:
     def session_call(self, call: Callable[[Optional[str]], T]) -> T:
         """Run ``call`` with the session id, and once more on a new session when the server lost the old one."""
         session_id = self._session_id
-        if getattr(_recovering, "on", False):
+        if _mute.recovering:
             return call(session_id)
         try:
             with recovering():
@@ -1473,7 +1493,8 @@ class RemoteService:
                 raise
             lost = e
         if not self.recover(session_id, lost.kind):
-            log.error(lost.message)
+            if not _mute.quiet:
+                log.error(lost.message)
             raise lost
         return call(self._session_id)
 
@@ -1595,7 +1616,8 @@ class RemoteService:
             return
         with self._log_drain_lock:
             try:
-                resp = self.client.get_optional(f"/api/session/{self._session_id}/logs?since={self._log_seq}")
+                with quiet():
+                    resp = self.client.get_optional(f"/api/session/{self._session_id}/logs?since={self._log_seq}")
             except (Exception, SystemExit):
                 return
             if not resp:
@@ -1704,7 +1726,8 @@ class RemoteService:
             try:
                 call = self.client.session.get(url, timeout=30).json().get("cdm_call")
                 if isinstance(call, dict):
-                    self.answer_cdm_call(call, sessions)
+                    with quiet():
+                        self.answer_cdm_call(call, sessions)
             except (requests.RequestException, ValueError, SystemExit) as e:
                 self.log.debug(f"CDM call poll failed: {e}")
         self.close_cdm_sessions(sessions)
@@ -1998,11 +2021,12 @@ class RemoteService:
     def report_bad_key(self, kid: UUID, key: str) -> None:
         """Tell the server a vault key it served did not decrypt, so it flags its own row."""
         try:
-            self.session_call(
-                lambda sid: self.client.post_optional(f"/api/session/{sid}/keys/bad", {"kid": kid.hex, "key": key})
-            )
+            with quiet():
+                self.session_call(
+                    lambda sid: self.client.post_optional(f"/api/session/{sid}/keys/bad", {"kid": kid.hex, "key": key})
+                )
         except (Exception, RemoteError) as e:
-            self.log.warning(f"Could not report the bad content key to the server: {e}")
+            self.log.debug(f"Could not report the bad content key to the server: {e}")
 
     @staticmethod
     def create_drm_stub(drm_type: str, kid_hexes: list[str]) -> Any:
@@ -2112,13 +2136,14 @@ class RemoteService:
             if pssh_b64:
                 try:
                     request = {"drm_type": drm_type, "mode": "server_cdm", "pssh": pssh_b64}
-                    resp = self.session_call(
-                        lambda sid: self.client.post(
-                            f"/api/session/{sid}/license",
-                            {**request, "track_id": self.server_track_id(track.id)},
-                            expect=("SERVER_CDM_CAPPED",),
+                    with quiet():
+                        resp = self.session_call(
+                            lambda sid: self.client.post(
+                                f"/api/session/{sid}/license",
+                                {**request, "track_id": self.server_track_id(track.id)},
+                                expect=("SERVER_CDM_CAPPED",),
+                            )
                         )
-                    )
                     if resp.get("error_code") == "SERVER_CDM_CAPPED":
                         refusal = resp.get("details") or {}
                     self.server_cdm_type = resp.get("drm_type", server_type)
@@ -2149,11 +2174,12 @@ class RemoteService:
             payload["pssh"] = pssh_b64
 
         try:
-            resp = self.session_call(
-                lambda sid: self.client.post(
-                    f"/api/session/{sid}/license", {**payload, "track_id": self.server_track_id(track.id)}
+            with quiet():
+                resp = self.session_call(
+                    lambda sid: self.client.post(
+                        f"/api/session/{sid}/license", {**payload, "track_id": self.server_track_id(track.id)}
+                    )
                 )
-            )
         except RemoteError as e:
             raise click.ClickException(e.message) from None
         finally:
@@ -2182,7 +2208,8 @@ class RemoteService:
         session_id, self._session_id = self._session_id, None
         if session_id:
             try:
-                result = self.client.delete(f"/api/session/{session_id}")
+                with quiet():
+                    result = self.client.delete(f"/api/session/{session_id}")
                 profile = self.ctx.parent.params.get("profile") if self.ctx.parent else None
                 self.save_returned_cache(result.get("cache", {}), profile)
             except SystemExit:

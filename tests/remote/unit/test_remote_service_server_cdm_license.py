@@ -98,7 +98,7 @@ def test_proxy_mode_keeps_the_callers_type():
     assert svc.client.posts[0]["pssh"] == "PR"
 
 
-def test_a_refused_relayed_licence_raises_a_click_exception_with_the_server_message():
+def test_a_refused_relayed_licence_raises_a_click_exception_with_the_server_message(caplog):
     import click
 
     from unshackle.core.remote_service import RemoteError
@@ -115,3 +115,20 @@ def test_a_refused_relayed_licence_raises_a_click_exception_with_the_server_mess
 
     with pytest.raises(click.ClickException, match="^Licence request failed: refused$"):
         svc.proxy_license(b"chal", track, "playready")
+
+    assert not [r for r in caplog.records if r.levelname == "ERROR"]
+
+
+def test_a_refused_server_cdm_licence_logs_one_warning(caplog):
+    from unshackle.core.remote_service import RemoteError
+
+    svc = _service("widevine", {})
+
+    def refuse(endpoint, payload, expect=()):
+        raise RemoteError("Server error [SERVICE_ERROR]: refused", "SERVICE_ERROR")
+
+    svc.client.post = refuse
+    track = SimpleNamespace(id="vid", drm=[_Widevine()])
+
+    assert svc.proxy_license(b"chal", track, "widevine") == b"chal"
+    assert [r.levelname for r in caplog.records if r.levelname in ("WARNING", "ERROR")] == ["WARNING"]

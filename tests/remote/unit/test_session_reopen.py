@@ -11,7 +11,7 @@ import requests
 import responses
 from langcodes import Language
 
-from unshackle.core.remote_service import RemoteClient, RemoteError, RemoteService, build_title
+from unshackle.core.remote_service import RemoteClient, RemoteError, RemoteService, build_title, quiet
 from unshackle.core.tracks import Audio
 from unshackle.core.tracks.track import Track
 
@@ -124,3 +124,31 @@ def test_a_gateway_error_page_counts_as_an_unreachable_server():
         client.get("/api/session/s1/titles")
 
     assert exc.value.kind == "CONNECT"
+
+
+def fail_reopen(session_id, kind):
+    raise RemoteError("Server error [NOT_FOUND]: no title", "NOT_FOUND")
+
+
+@pytest.mark.parametrize("recover", [lambda session_id, kind: False, fail_reopen], ids=["lost", "reopen-failed"])
+@responses.activate
+def test_a_session_lost_under_quiet_is_left_to_the_caller(monkeypatch, caplog, recover):
+    service = make_service()
+    monkeypatch.setattr(service, "recover", recover)
+    responses.add(responses.POST, f"{SERVER}/api/session/s1/license", json=GONE, status=404)
+
+    with quiet(), pytest.raises(RemoteError):
+        license_call(service, audio("a-old"))
+
+    assert not [r for r in caplog.records if r.levelname == "ERROR"]
+
+
+@responses.activate
+def test_closing_a_session_the_server_lost_logs_no_error(caplog):
+    service = make_service()
+    responses.add(responses.DELETE, f"{SERVER}/api/session/s1", json=GONE, status=404)
+
+    service.close()
+
+    assert service._session_id is None
+    assert not [r for r in caplog.records if r.levelname in ("WARNING", "ERROR")]

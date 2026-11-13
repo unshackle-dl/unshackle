@@ -146,7 +146,7 @@ from unshackle.core.utils.click_types import (
 from unshackle.core.utils.collections import ci_get, merge_dict
 from unshackle.core.utils.hdr10plus import probed_tracks
 from unshackle.core.utils.post_scripts import NO_POST_SCRIPTS, build_context, dispatch, season_context
-from unshackle.core.utils.redact import mask_proxy
+from unshackle.core.utils.redact import mask_proxy, redact_secrets
 from unshackle.core.utils.selector import select_multiple
 from unshackle.core.utils.subprocess import ffmpeg_decodes, ffprobe, run_step
 from unshackle.core.vault import Vault
@@ -5082,8 +5082,10 @@ class dl:
                 try:
                     get_keys()
                 except Exception as e:
-                    if drm.content_keys:
-                        self.log.debug(f"License call failed but keys already in content_keys: {e}")
+                    if drm.content_keys and (not track_kid or track_kid in drm.content_keys):
+                        self.log.warning(
+                            f"Licence failed, using the {len(drm.content_keys)} known key(s): {redact_secrets(str(e))}"
+                        )
                     else:
                         if isinstance(e, (drm.Exceptions.EmptyLicense, drm.Exceptions.CEKNotFound)):
                             msg = str(e)

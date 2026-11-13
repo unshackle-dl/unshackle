@@ -200,11 +200,30 @@ def test_vaults_only_stops_at_the_first_kid_no_vault_holds(cmd: dl, licences: li
     assert licences == []
 
 
-def test_a_refused_licence_keeps_the_known_track_key(cmd: dl, monkeypatch: pytest.MonkeyPatch) -> None:
-    def refuse(self: Widevine, **_: Any) -> None:
-        raise click.ClickException("Licence request failed")
+def refuse_licence(self: Widevine, **_: Any) -> None:
+    raise click.ClickException("Licence request failed")
 
-    monkeypatch.setattr(Widevine, "get_content_keys", refuse)
+
+def test_a_refused_licence_without_the_track_key_reports_the_licence_error(
+    cmd: dl, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    monkeypatch.setattr(Widevine, "get_content_keys", refuse_licence)
+    monkeypatch.setattr(dl, "LICENSE_KEY_CACHE", {KID_B: KEYS[KID_B]})
+    monkeypatch.setattr(dl, "DRM_LOCKS", {})
+    table = new_table()
+
+    with pytest.raises(click.ClickException, match="^Licence request failed$"):
+        prepare(cmd, widevine(KID_A, KID_B), KID_A, table)
+
+    assert not [r for r in caplog.records if r.levelname == "WARNING"]
+    tree = list(table.columns[0].cells)[-1]
+    assert "Licence request failed" in str(tree.children[-1].label)
+
+
+def test_a_refused_licence_keeps_the_known_track_key(
+    cmd: dl, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    monkeypatch.setattr(Widevine, "get_content_keys", refuse_licence)
     monkeypatch.setattr(dl, "LICENSE_KEY_CACHE", {KID_A: KEYS[KID_A]})
     monkeypatch.setattr(dl, "DRM_LOCKS", {})
     drm = widevine(KID_A, KID_B)
@@ -212,3 +231,6 @@ def test_a_refused_licence_keeps_the_known_track_key(cmd: dl, monkeypatch: pytes
     prepare(cmd, drm, KID_A, new_table())
 
     assert drm.content_keys == {KID_A: KEYS[KID_A]}
+    assert [r.getMessage() for r in caplog.records if r.levelname == "WARNING"] == [
+        "Licence failed, using the 1 known key(s): Licence request failed"
+    ]

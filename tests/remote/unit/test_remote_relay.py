@@ -169,6 +169,32 @@ def test_remote_error_carries_its_reason_and_exits_a_cli_run():
     assert not remote_service.RemoteError("Server error [NOT_FOUND]: no title", "NOT_FOUND").session_broke
 
 
+def test_quiet_mutes_a_remote_error_the_caller_reports(caplog):
+    with caplog.at_level("DEBUG", logger="remote_service"), remote_service.quiet():
+        with remote_service.quiet():
+            remote_service.RemoteError("Server error [SERVICE_ERROR]: refused", "SERVICE_ERROR")
+        remote_service.RemoteError("Remote auth failed: bad key", "AUTH")
+    remote_service.RemoteError("Server error [NOT_FOUND]: outside", "NOT_FOUND")
+
+    assert [(r.levelname, r.getMessage()) for r in caplog.records] == [
+        ("DEBUG", "Server error [SERVICE_ERROR]: refused"),
+        ("DEBUG", "Remote auth failed: bad key"),
+        ("ERROR", "Server error [NOT_FOUND]: outside"),
+    ]
+
+
+def test_an_unreachable_server_list_logs_one_warning(monkeypatch, caplog):
+    class Down:
+        def get(self, endpoint):
+            raise remote_service.RemoteError("Could not connect to remote server at http://srv", "CONNECT")
+
+    monkeypatch.setattr(remote_service, "remote_client", lambda name: Down())
+    monkeypatch.setattr(remote_service, "_remote_lists", {})
+
+    assert remote_service.remote_service_list("down") is None
+    assert [r.levelname for r in caplog.records if r.levelname in ("WARNING", "ERROR")] == ["WARNING"]
+
+
 def test_a_geofenced_remote_service_gets_its_first_allowed_region_as_proxy(monkeypatch):
     monkeypatch.setattr(handlers, "server_proxy_allowed", lambda request=None: True)
     fenced = {"tag": "EXAMPLE", "geofence": ["US", "ca"], "geoblock": ["us"]}
