@@ -397,7 +397,15 @@ def licence_env(monkeypatch):
     vault = {}
 
     def fake_single(
-        service, title, track, pssh_str, drm_type, request, sources=None, refusal=None, vault_only=False, shared=None
+        service,
+        title,
+        track,
+        pssh_str,
+        drm_type,
+        request,
+        sources=None,
+        refusal=None,
+        **_,
     ):
         calls.append((track.id, pssh_str))
         if pssh_str in vault:

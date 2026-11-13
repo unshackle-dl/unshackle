@@ -24,6 +24,7 @@ def can_use(drm: Any, decryption: str, init: Optional[bytes] = None) -> bool:
     """Whether unshackle can decrypt a track's segments one by one as they download.
 
     A track whose ``init`` mp4decrypt cannot key goes to the whole-file decrypt, which has the shaka fallback.
+    So does a track whose DRM names a KID with no content key, as only that decrypt can license a KID the file uses.
     """
     return (
         isinstance(drm, (Widevine, PlayReady, ClearKeyCENC))
@@ -31,6 +32,7 @@ def can_use(drm: Any, decryption: str, init: Optional[bytes] = None) -> bool:
         and config.decrypt_segments
         and bool(binaries.Mp4decrypt)
         and not (init and set(kidless_track_kids(init).values()) - set(drm.content_keys))
+        and set(getattr(drm, "kids", None) or []) <= set(drm.content_keys)
     )
 
 

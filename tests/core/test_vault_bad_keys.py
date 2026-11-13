@@ -384,6 +384,32 @@ def test_stale_backup_from_a_killed_run_is_not_restored(tmp_path: Path, monkeypa
     assert path.read_bytes() == b"cipher"
 
 
+@pytest.mark.parametrize(
+    ("windows", "licensed"),
+    [({KID: [(0.0, 2.0)], SIBLING: [(2.0, 4.0)]}, [SIBLING]), ({KID: [(0.0, 2.0)]}, []), (None, [SIBLING])],
+    ids=["file-uses-it", "file-does-not", "unmapped"],
+)
+def test_an_unkeyed_kid_the_file_uses_is_licensed_before_the_decrypt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, windows: Optional[dict], licensed: list[UUID]
+) -> None:
+    cmd = make_cmd(monkeypatch, Vaults("SVC"))
+    drm = FakeDRM({KID: GOOD})
+    drm.kids = [KID, SIBLING]
+    monkeypatch.setattr(
+        dl_module.verify,
+        "kid_windows",
+        lambda path: None if windows is None else dl_module.verify.KidMap(windows, True),
+    )
+    path = tmp_path / "video.mp4"
+    path.write_bytes(b"cipher")
+    licences: list[UUID] = []
+
+    cmd.decrypt_verified(drm, path, lambda drm, track_kid: licences.append(track_kid), KID)
+
+    assert licences == licensed
+    assert drm.decrypted_with == [{KID: GOOD}]
+
+
 def test_drm_without_content_keys_still_decrypts(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """HLS AES-128 ClearKey has no KID:KEY map; the hook must pass it straight through."""
     cmd = make_cmd(monkeypatch, Vaults("SVC"))

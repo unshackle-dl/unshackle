@@ -72,7 +72,7 @@ def widevine(*kids: UUID) -> Widevine:
     return Widevine(pssh=PSSH.new(system_id=PSSH.SystemId.Widevine, key_ids=list(kids)))
 
 
-def prepare(cmd: dl, drm: Widevine, track_kid: UUID, table: Table, **kwargs: Any) -> None:
+def prepare(cmd: dl, drm: Widevine, track_kid: Optional[UUID], table: Table, **kwargs: Any) -> None:
     cmd.prepare_drm(
         drm,
         track=SimpleNamespace(drm=[drm]),
@@ -220,7 +220,25 @@ def test_a_refused_licence_without_the_track_key_reports_the_licence_error(
     assert "Licence request failed" in str(tree.children[-1].label)
 
 
-def test_a_refused_licence_keeps_the_known_track_key(
+def test_a_held_track_key_needs_no_licence(cmd: dl, licences: list[str], monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(dl, "LICENSE_KEY_CACHE", {KID_A: KEYS[KID_A]})
+    drm = widevine(KID_A, KID_B)
+
+    prepare(cmd, drm, KID_A, new_table())
+
+    assert licences == []
+    assert drm.content_keys == {KID_A: KEYS[KID_A]}
+
+
+def test_force_licenses_a_held_track_key_again(cmd: dl, licences: list[str], monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(dl, "LICENSE_KEY_CACHE", {KID_A: KEYS[KID_A]})
+
+    prepare(cmd, widevine(KID_A, KID_B), KID_A, new_table(), force=True)
+
+    assert len(licences) == 1
+
+
+def test_a_refused_licence_keeps_the_known_keys_when_the_track_kid_is_unknown(
     cmd: dl, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
     monkeypatch.setattr(Widevine, "get_content_keys", refuse_licence)
@@ -228,7 +246,7 @@ def test_a_refused_licence_keeps_the_known_track_key(
     monkeypatch.setattr(dl, "DRM_LOCKS", {})
     drm = widevine(KID_A, KID_B)
 
-    prepare(cmd, drm, KID_A, new_table())
+    prepare(cmd, drm, None, new_table())
 
     assert drm.content_keys == {KID_A: KEYS[KID_A]}
     assert [r.getMessage() for r in caplog.records if r.levelname == "WARNING"] == [

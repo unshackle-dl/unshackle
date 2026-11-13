@@ -2081,13 +2081,15 @@ class RemoteService:
         raw = self._chapters_by_title.get(title_id, [])
         return Chapters([Chapter(ch["timestamp"], ch.get("name")) for ch in raw])
 
-    def get_widevine_license(self, *, challenge: bytes, title: Title_T, track: AnyTrack) -> Optional[Union[bytes, str]]:
-        return self.proxy_license(challenge, track, "widevine")
+    def get_widevine_license(
+        self, *, challenge: bytes, title: Title_T, track: AnyTrack, kid: Optional[UUID] = None
+    ) -> Optional[Union[bytes, str]]:
+        return self.proxy_license(challenge, track, "widevine", kid)
 
     def get_playready_license(
-        self, *, challenge: bytes, title: Title_T, track: AnyTrack
+        self, *, challenge: bytes, title: Title_T, track: AnyTrack, kid: Optional[UUID] = None
     ) -> Optional[Union[bytes, str]]:
-        return self.proxy_license(challenge, track, "playready")
+        return self.proxy_license(challenge, track, "playready", kid)
 
     def get_clearkey_license(
         self, *, challenge: bytes, title: Title_T, track: AnyTrack
@@ -2115,8 +2117,13 @@ class RemoteService:
         )
         return base64.b64decode(resp["license"]) if resp.get("license") else None
 
-    def proxy_license(self, challenge: Union[bytes, str], track: AnyTrack, drm_type: str) -> bytes:
-        """Relay a licence challenge to the server. A failed relay raises ClickException, so dl's licence fallbacks see it."""
+    def proxy_license(
+        self, challenge: Union[bytes, str], track: AnyTrack, drm_type: str, kid: Optional[UUID] = None
+    ) -> bytes:
+        """Relay a licence challenge to the server. A failed relay raises ClickException, so dl's licence fallbacks see it.
+
+        ``kid`` is the KID the server CDM must answer; a server vault key for it stands in for the licence.
+        """
         if isinstance(challenge, str):
             challenge = challenge.encode("utf-8")
 
@@ -2136,6 +2143,8 @@ class RemoteService:
             if pssh_b64:
                 try:
                     request = {"drm_type": drm_type, "mode": "server_cdm", "pssh": pssh_b64}
+                    if kid:
+                        request["kid"] = kid.hex
                     with quiet():
                         resp = self.session_call(
                             lambda sid: self.client.post(

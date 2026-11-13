@@ -131,7 +131,18 @@ def test_segment_decrypt_needs_a_key_for_a_kidless_track(
     drm.content_keys[key_kid] = KEY
 
     assert can_use(drm, "mp4decrypt", movie(two_sinf(A, piff_first=True))) is usable
-    assert can_use(drm, "mp4decrypt", movie(encv(A))) is True
+    assert can_use(drm, "mp4decrypt", movie(encv(A))) is usable
+
+
+def test_segment_decrypt_waits_for_a_key_to_every_kid_the_drm_names(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(config, "decrypt_segments", True, raising=False)
+    monkeypatch.setattr(binaries, "Mp4decrypt", tmp_path / "mp4decrypt")
+    drm = _widevine(A, B)
+    drm.content_keys[A] = KEY
+
+    assert can_use(drm, "mp4decrypt", movie(encv(A))) is False
 
 
 class StubDRM:

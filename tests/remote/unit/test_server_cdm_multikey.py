@@ -134,7 +134,15 @@ async def test_batch_shares_full_bundle_per_pssh(monkeypatch):
     bundle_b = {"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": "k_b"}
 
     def fake_single(
-        service, title, track, pssh_str, drm_type, request, sources=None, refusal=None, vault_only=False, shared=None
+        service,
+        title,
+        track,
+        pssh_str,
+        drm_type,
+        request,
+        sources=None,
+        refusal=None,
+        **_,
     ):
         calls.append(pssh_str)
         return dict(bundle_a) if pssh_str == pssh_a else dict(bundle_b)

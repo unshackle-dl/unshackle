@@ -56,7 +56,15 @@ async def _run_batch(monkeypatch, tracks, cdm_type, calls):
         return session
 
     def fake_single(
-        service, title, track, pssh_str, drm_type, request, sources=None, refusal=None, vault_only=False, shared=None
+        service,
+        title,
+        track,
+        pssh_str,
+        drm_type,
+        request,
+        sources=None,
+        refusal=None,
+        **_,
     ):
         calls.append((pssh_str, drm_type))
         return {"00" * 16: "key"}

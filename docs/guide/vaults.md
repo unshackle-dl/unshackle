@@ -25,6 +25,8 @@ A vault stores every content key as a **KID → KEY** pair, grouped by **service
 
 When unshackle needs a content key during a download it asks your vaults **in the order they appear in your config**. It returns the first non-null key it finds and stops searching. If a vault raises a permission error or is unreachable, unshackle skips it and continues the search with the next one.
 
+A track needs no licence when a vault holds the content key of the KID that encrypts it. The DRM header of the track can name more KIDs, for example those of other tracks. Before the decrypt, unshackle reads the downloaded file, and licenses each of those KIDs that the file uses and no vault holds. When unshackle cannot read which KIDs the file uses, it licenses all of them.
+
 When unshackle recovers new keys from a license, it pushes them to **all** configured vaults, so every vault gradually converges on the same set of keys. Two rules apply to pushing:
 
 - unshackle skips keys that already exist in a vault (it never overwrites or deletes existing data).

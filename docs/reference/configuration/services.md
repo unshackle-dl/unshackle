@@ -223,9 +223,10 @@ the remote client's `-q` when the remote session starts:
   error. The server checks the values the job runs with, after it applies the service defaults
   and the `serve:` download defaults.
 
-The limit protects the server's device, not the content keys. For a Widevine track, a server vault
-still supplies a content key at every height. A PlayReady track never reads the vault, so above
-the limit it always goes to the client's device. A licence for a lower track can carry the
+The limit protects the server's device, not the content keys. A server vault still supplies a
+content key at every height: for a Widevine track, the key of the track's own KID or of every KID in
+its header; for a PlayReady track, only the key of the track's own KID. A PlayReady track whose
+own KID the server does not know always goes to the client's device above the limit. A licence for a lower track can carry the
 content key of a higher track when the service shares one content key between them. With server
 accounts enabled, a client that reports a stronger device than it holds makes the server's
 account request those manifests; the licence server still refuses its challenge.
@@ -233,7 +234,8 @@ account request those manifests; the licence server still refuses its challenge.
 `server_vault` lets a remote session that the client's own device licenses take content keys
 from the server vault. Set it to `true` for every service, or to a list of service tags. It is
 `false` unless the entry sets it, and `server_cdm` for a service implies it. The server looks up
-every KID of the track in its vault and makes no live licence. A track that the vault does not
+the track's own KID in its vault, or every KID of the track when it does not know that KID, and
+makes no live licence. A track that the vault does not
 hold goes back to the client's device. When the service runs the remote session on the server's
 own device (a service option, such as a server-identity flag), the client's own vaults, and the
 server vault with this grant, are the only source, and a missing content key stops the download.

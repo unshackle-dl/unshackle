@@ -27,6 +27,8 @@ from unshackle.core.drm import PlayReady
 
 pytestmark = pytest.mark.unit
 
+REAL_CHECK_VAULTS = handlers.check_vaults
+
 KID_A = UUID("161219ec3df64e0eadbb3827c0ccc46d")
 KID_B = UUID("43de497c6d1945f49acc2951696ec628")
 
@@ -161,3 +163,59 @@ async def test_uncovered_kid_reaches_the_client(server_env, fake_playready, monk
     )
 
     assert any(KID_B.hex in r["message"] for r in buf.since(0)), "client gets no reason for the missing key"
+
+
+class _VaultsHolding:
+    """Server vaults that hold a content key for ``held`` only."""
+
+    def __init__(self, *held: UUID):
+        self.held = held
+        self.vaults = [SimpleNamespace(name="v1")]
+
+    def get_key(self, kid):
+        return ("k" + kid.hex[:4], self.vaults[0]) if kid in self.held else (None, None)
+
+
+@pytest.mark.parametrize(
+    ("track_kid", "found"), [(None, None), (KID_A, {KID_A.hex}), (KID_B, None)], ids=["every-kid", "held", "not-held"]
+)
+def test_check_vaults_answers_for_the_track_kid(monkeypatch, track_kid, found):
+    monkeypatch.setattr(handlers, "load_server_vaults", lambda name: _VaultsHolding(KID_A))
+
+    hit = handlers.check_vaults([KID_A, KID_B], "SVC", track_kid=track_kid)
+
+    assert (set(hit[0]) if hit else None) == found
+
+
+@pytest.mark.parametrize("track_kid", [KID_A, None], ids=["track-kid-held", "track-kid-unknown"])
+def test_a_playready_track_takes_the_vault_key_only_for_its_known_kid(server_env, monkeypatch, track_kid):
+    monkeypatch.setattr(handlers, "check_vaults", REAL_CHECK_VAULTS)
+    monkeypatch.setattr(handlers, "load_server_vaults", lambda name: _VaultsHolding(KID_A))
+    licensed: list = []
+    monkeypatch.setattr(
+        PlayReady,
+        "get_content_keys",
+        lambda self, cdm, certificate, licence: licensed.append(self) or self.content_keys.update({KID_A: "cdm"}),
+    )
+    pro_b64 = _kidless_pro_b64()
+    track = SimpleNamespace(
+        id="vid", drm=[PlayReady(pssh=RealPSSH(base64.b64decode(pro_b64)), kid=KID_A, pssh_b64=pro_b64)]
+    )
+    sources: dict = {}
+
+    keys = handlers.handle_single_server_cdm(
+        SimpleNamespace(), SimpleNamespace(), track, pro_b64, "playready", None, sources, track_kid=track_kid
+    )
+
+    assert bool(licensed) is (track_kid is None)
+    assert sources == ({KID_A.hex: "v1"} if track_kid else {})
+    assert set(keys) == {KID_A.hex}
+
+
+def test_the_client_kid_counts_only_when_the_track_drm_names_it():
+    track = SimpleNamespace(drm=[SimpleNamespace(kids=[KID_A])])
+
+    assert handlers.client_track_kid(KID_A.hex, track) == KID_A
+    assert handlers.client_track_kid(KID_B.hex, track) is None
+    assert handlers.client_track_kid("not-hex", track) is None
+    assert handlers.client_track_kid(None, track) is None

@@ -132,3 +132,12 @@ def test_a_refused_server_cdm_licence_logs_one_warning(caplog):
 
     assert svc.proxy_license(b"chal", track, "widevine") == b"chal"
     assert [r.levelname for r in caplog.records if r.levelname in ("WARNING", "ERROR")] == ["WARNING"]
+
+
+def test_the_kid_dl_needs_goes_to_the_server():
+    svc = _service("widevine", {"keys": {KID.hex: "k"}, "drm_type": "widevine"})
+    track = SimpleNamespace(id="vid", drm=[_Widevine()])
+
+    svc.get_widevine_license(challenge=b"", title=None, track=track, kid=KID)
+
+    assert svc.client.posts[0]["kid"] == KID.hex

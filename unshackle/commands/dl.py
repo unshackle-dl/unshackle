@@ -4624,6 +4624,9 @@ class dl:
 
         With ``decrypt=False`` the downloader already decrypted the segments in place, so a
         failure can only flag and raise; the next run skips the flagged pair.
+
+        Before the decrypt, each KID the DRM names without a content key is licensed when the file
+        uses it, or when the file cannot be mapped, because ``prepare_drm`` licensed only for the track's KID.
         """
         keys: Any = getattr(drm, "content_keys", None)
         if keys is None:
@@ -4675,6 +4678,15 @@ class dl:
         if known_bad and licence:
             relicense({kid: drop(kid) for kid in known_bad}, {})
 
+        unkeyed = [kid for kid in getattr(drm, "kids", None) or [] if kid not in keys]
+        mapped = bool(unkeyed and decrypt and licence)
+        kid_map = verify.kid_windows(path) if mapped else None
+        if mapped and licence:
+            for kid in unkeyed:
+                if kid_map is None or kid in kid_map.windows:
+                    licence(drm, track_kid=kid)
+            keys = getattr(drm, "content_keys", keys)
+
         def vault_kids() -> dict[UUID, Vault]:
             """The KIDs whose key on the track came from a vault, with that vault."""
             found = {kid: self.vaults.sources.get(kid) for kid in keys}
@@ -4688,7 +4700,7 @@ class dl:
                 os.link(path, backup)
             except OSError as e:
                 self.log.debug(f"Cannot keep the ciphertext for a decrypt retry: {e!r}")
-        kid_map = verify.kid_windows(path) if checking else None
+        kid_map = (kid_map if mapped else verify.kid_windows(path)) if checking else None
         windows = kid_map.windows if kid_map else {}
         video = kid_map.video if kid_map else None
 
@@ -5005,6 +5017,8 @@ class dl:
     ) -> None:
         """Give a Widevine, PlayReady or ClearKey DRM its content keys: run cache, then key vaults, then ``get_keys``.
 
+        A held key for ``track_kid`` skips the licence, as the file is encrypted with that KID;
+        ``decrypt_verified`` licenses any other KID the file turns out to use.
         ``force`` skips the run cache, so the licence runs again for each KID no vault answers.
         A licence can answer a KID with a blank or null key; a vault key for that KID wins.
         """
@@ -5060,7 +5074,7 @@ class dl:
                 show_error(msg)
                 raise drm.Exceptions.CEKNotFound(msg)
 
-            need_license = bool(missing)
+            need_license = bool(missing) and (force or not track_kid or track_kid not in drm.content_keys)
             if need_license:
                 # force licenses again, so the turn takes no cached keys
                 self.take_licence_turn(licence_turn, drm, [] if force else all_kids, track, track_kid, cek_tree)
@@ -5315,6 +5329,7 @@ class dl:
                         licence(
                             drm_system="playready" if drm.__class__.__name__ == "PlayReady" else "widevine",
                             challenge=b"",
+                            kid=track_kid,
                         )
                     except click.ClickException:
                         raise

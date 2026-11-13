@@ -115,12 +115,25 @@ async def test_batch_reports_vault_keys_from_the_init_segment_pssh(monkeypatch):
     session = SessionEntry(session_id="sess", service_tag="SVC", service_instance=SimpleNamespace())
     session.tracks = {"vid": track}
 
+    probed: list = []
+
     async def validated(sid, req):
         return session
 
     def fake_single(
-        service, title, track, pssh_str, drm_type, request, sources=None, refusal=None, vault_only=False, shared=None
+        service,
+        title,
+        track,
+        pssh_str,
+        drm_type,
+        request,
+        sources=None,
+        refusal=None,
+        vault_only=False,
+        shared=None,
+        track_kid=None,
     ):
+        probed.append(track_kid)
         if pssh_str == "init":
             sources[CDM_KID.hex] = "sqlite"
             return {CDM_KID.hex: "v"}
@@ -147,6 +160,66 @@ async def test_batch_reports_vault_keys_from_the_init_segment_pssh(monkeypatch):
     assert payload["keys"] == {"vid": {CDM_KID.hex: "v"}}
     assert payload["vault_keys"] == [CDM_KID.hex]
     assert session.served_keys == {CDM_KID.hex: ("v", "sqlite")}
+    assert probed == [CDM_KID, CDM_KID]
+
+
+async def test_batch_asks_again_when_a_cached_vault_answer_lacks_the_track_kid(monkeypatch):
+    """Renditions that share a header: a vault answer for one track's KID does not serve a track with another KID."""
+    kids = {"a": KID, "b": CDM_KID, "c": CDM_KID}
+    session = SessionEntry(session_id="sess", service_tag="SVC", service_instance=SimpleNamespace())
+    session.tracks = {
+        tid: SimpleNamespace(id=tid, drm=[_WV("shared", [KID, CDM_KID])], get_key_id=lambda init, k=kid: k)
+        for tid, kid in kids.items()
+    }
+    asked: list = []
+
+    async def validated(sid, req):
+        return session
+
+    def fake_single(
+        service, title, track, pssh_str, drm_type, request, sources=None, refusal=None, track_kid=None, **_
+    ):
+        asked.append(track_kid)
+        if track_kid == KID:
+            sources[KID.hex] = "sqlite"
+            return {KID.hex: "v"}
+        return {KID.hex: "v", CDM_KID.hex: "c"}
+
+    monkeypatch.setattr(handlers, "get_validated_session", validated)
+    monkeypatch.setattr(handlers, "server_cdm_allowed", lambda request, tag: True)
+    monkeypatch.setattr(handlers, "ensure_track_drm", lambda track, session=None, init_data=None: None)
+    monkeypatch.setattr(handlers, "find_title_for_track", lambda tid, session: SimpleNamespace())
+    monkeypatch.setattr(handlers, "detect_cdm_type_for_service", lambda tag, cfg: "widevine")
+    monkeypatch.setattr(handlers, "resolve_device_name", lambda *a, **k: "dev")
+    monkeypatch.setattr(handlers, "fetch_init_segment", lambda track, sess: b"init")
+    monkeypatch.setattr(handlers, "handle_single_server_cdm", fake_single)
+    monkeypatch.setattr(handlers.config, "serve", {"users": {}}, raising=False)
+
+    resp = await handlers.session_license_handler(
+        {"mode": "server_cdm", "track_ids": list(kids), "drm_type": "widevine"}, "sess", None
+    )
+
+    payload = json.loads(resp.body)
+    assert asked == [KID, CDM_KID]
+    assert payload["keys"]["c"] == {KID.hex: "v", CDM_KID.hex: "c"}
+
+
+@pytest.mark.parametrize("drm", [["drm"], []], ids=["with-drm", "clear"])
+def test_the_server_reads_the_head_of_a_one_file_track_with_drm(drm):
+    from unshackle.core.tracks import Video
+
+    fetched: list = []
+    track = SimpleNamespace(
+        id="v",
+        data={},
+        descriptor=Video.Descriptor.URL,
+        drm=drm,
+        get_init_segment=lambda session: fetched.append(session) or b"head",
+    )
+
+    head = handlers.fetch_init_segment(track, "svc-session")
+
+    assert (head, fetched) == ((b"head", ["svc-session"]) if drm else (None, []))
 
 
 async def test_server_tells_a_remote_vault_only_when_it_served_the_pair(monkeypatch, session):
