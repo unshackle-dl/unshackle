@@ -4304,13 +4304,7 @@ challenge there directly instead.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Decrypt a Track with ClearKey DRM (standard CENC).
-Args:
-    path: Path to the encrypted file to decrypt
-Raises:
-    EnvironmentError if the required decryption executable could not be found.
-    ValueError if unshackle has not yet downloaded the track.
-    SubprocessError if the decryption process returned a non-zero exit code.</p>
+        <p>Decrypt the file at <code>path</code> in place with this track's ClearKey (standard CENC) content keys.</p>
 
 
     </div>
@@ -4350,7 +4344,7 @@ Raises:
 
     <div class="doc doc-contents ">
 
-        <p>Decrypt using mp4decrypt</p>
+        <p>Decrypt with mp4decrypt.</p>
 
 
     </div>
@@ -4370,7 +4364,7 @@ Raises:
 
     <div class="doc doc-contents ">
 
-        <p>Decrypt with shaka-packager</p>
+        <p>Decrypt with shaka-packager.</p>
 
 
     </div>
@@ -5510,13 +5504,7 @@ or from an exception message that carries it, so this method covers any service.
 
     <div class="doc doc-contents ">
 
-        <p>Decrypt a Track with PlayReady DRM.
-Args:
-    path: Path to the encrypted file to decrypt
-Raises:
-    EnvironmentError if the required decryption executable could not be found.
-    ValueError if unshackle has not yet downloaded the track.
-    SubprocessError if the decryption process returned a non-zero exit code.</p>
+        <p>Decrypt the file at <code>path</code> in place with this track's PlayReady content keys.</p>
 
 
     </div>
@@ -5578,7 +5566,7 @@ track exactly. A PSSH can name the KIDs of other renditions too.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Decrypt using mp4decrypt</p>
+        <p>Decrypt with mp4decrypt.</p>
 
 
     </div>
@@ -5598,7 +5586,7 @@ track exactly. A PSSH can name the KIDs of other renditions too.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Decrypt with shaka-packager (original method)</p>
+        <p>Decrypt with shaka-packager.</p>
 
 
     </div>
@@ -6097,13 +6085,7 @@ the challenge and the session ID.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Decrypt a Track with Widevine DRM.
-Args:
-    path: Path to the encrypted file to decrypt
-Raises:
-    EnvironmentError if the required decryption executable could not be found.
-    ValueError if unshackle has not yet downloaded the track.
-    SubprocessError if the decryption process returned a non-zero exit code.</p>
+        <p>Decrypt the file at <code>path</code> in place with this track's Widevine content keys.</p>
 
 
     </div>
@@ -6165,7 +6147,7 @@ track exactly. A PSSH can name the KIDs of other renditions too.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Decrypt using mp4decrypt</p>
+        <p>Decrypt with mp4decrypt.</p>
 
 
     </div>
@@ -6185,7 +6167,7 @@ track exactly. A PSSH can name the KIDs of other renditions too.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Decrypt with shaka-packager (original method)</p>
+        <p>Decrypt with shaka-packager.</p>
 
 
     </div>
