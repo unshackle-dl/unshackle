@@ -189,6 +189,78 @@ def test_webvtt_to_srt_conversion(tmp_path, monkeypatch):
     assert cue_count(out) == 2
 
 
+SCC_SAMPLE = """Scenarist_SCC V1.0
+
+00:00:00;00	9420 9152 9723 5bc2 4f43 49ce c120 c445 20c2 c152 434f 5d80 9420 942c 942f
+
+00:00:04;15	942c
+
+00:01:48;06	9420 9152 91b3 54e5 2067 7573 f461 2c20 c2ec 616e e361 2046 ecef f2bf
+
+00:01:51;20	9420 942c 942f
+
+00:01:55;20	942c
+"""
+
+
+def test_scc_mime_maps_to_the_scc_codec():
+    assert Codec.from_mime("x-scc") is Codec.SCC
+    assert Codec.from_mime("scc") is Codec.SCC
+
+
+@pytest.mark.parametrize(
+    "sub_format, expected",
+    [
+        (None, Codec.SubRip),
+        ("original", Codec.SubRip),
+        (Codec.SubRip, Codec.SubRip),
+        (Codec.WebVTT, Codec.WebVTT),
+        (Codec.SubStationAlphav4, Codec.SubRip),
+    ],
+)
+def test_scc_converts_to_the_requested_format_or_srt(tmp_path, monkeypatch, sub_format, expected):
+    from unshackle.commands.dl import convert_scc
+
+    monkeypatch.setattr("unshackle.core.config.config.subtitle", {}, raising=False)
+    sub = make_sub(tmp_path, "x.scc", SCC_SAMPLE, Codec.SCC)
+    assert convert_scc(sub, sub_format) == expected
+    assert sub.codec == expected
+    assert cue_count(sub.path) == 2
+    assert "¿Te gusta, Blanca Flor?" in sub.path.read_text("utf8")
+
+
+def test_scc_to_webvtt_keeps_the_caption_row(tmp_path, monkeypatch):
+    from unshackle.commands.dl import convert_scc
+
+    monkeypatch.setattr("unshackle.core.config.config.subtitle", {}, raising=False)
+    sub = make_sub(tmp_path, "x.scc", SCC_SAMPLE, Codec.SCC)
+    convert_scc(sub, Codec.WebVTT)
+    assert "line:" in sub.path.read_text("utf8")
+
+
+def test_scc_as_srt_converts_on_to_ass(tmp_path, monkeypatch):
+    from unshackle.commands.dl import convert_scc
+
+    monkeypatch.setattr("unshackle.core.config.config.subtitle", {}, raising=False)
+    sub = make_sub(tmp_path, "x.scc", SCC_SAMPLE, Codec.SCC)
+    convert_scc(sub, Codec.SubStationAlphav4)
+    assert sub.convert(Codec.SubStationAlphav4, forced=True).read_text("utf8").count("Dialogue:") == 2
+
+
+def test_scc_without_cc1_captions_warns(tmp_path, monkeypatch, caplog):
+    from unshackle.commands.dl import convert_scc
+
+    monkeypatch.setattr("unshackle.core.config.config.subtitle", {}, raising=False)
+    cc3 = "Scenarist_SCC V1.0\n\n00:00:01:00\t1520 1520 1552 1552 c8e5 ecec ef80 152f 152f\n\n00:00:03:00\t152c 152c\n"
+    convert_scc(make_sub(tmp_path, "x.scc", cc3, Codec.SCC), None)
+    assert "has no CC1 captions" in caplog.text
+
+
+def test_scc_with_a_bad_timecode_is_a_syntax_error():
+    with pytest.raises(SyntaxError):
+        Subtitle.parse(b"Scenarist_SCC V1.0\n\n00:00:xx;00\t9420 942f\n", Codec.SCC)
+
+
 def test_same_codec_is_noop(tmp_path):
     sub = make_sub(tmp_path, "x.srt", "1\n00:00:01,000 --> 00:00:02,000\nHi\n", Codec.SubRip)
     assert sub.convert(Codec.SubRip) == sub.path

@@ -301,7 +301,7 @@ and `descriptive`. `Audio.Codec` covers `AAC`, `AC3` (`DD`), `EC3` (`DD+`), `AC4
 (subtitles for the deaf and hard-of-hearing), and `forced`. A track cannot be both `cc`
 and `sdh`, and `forced` cannot combine with either. `Subtitle.Codec` includes `SubRip`
 (SRT), `WebVTT` (VTT), `SubStationAlpha`/`SubStationAlphav4` (SSA/ASS),
-`TimedTextMarkupLang` (TTML), `SAMI`, and the box-encapsulated DASH formats `fTTML`
+`TimedTextMarkupLang` (TTML), `SAMI`, `SCC`, and the box-encapsulated DASH formats `fTTML`
 (STPP) and `fVTT` (WVTT). Subtitles receive post-download normalization
 (segment merging, WebVTT sanitization, format conversion, and optional SDH stripping),
 all documented for users in [Subtitles](../guide/subtitles.md).

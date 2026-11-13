@@ -103,7 +103,7 @@ from unshackle.core.tracks import Audio, Subtitle, Tracks, Video
 from unshackle.core.tracks.attachment import Attachment
 from unshackle.core.tracks.dv_fixup import apply_dv_fixup
 from unshackle.core.tracks.hybrid import Hybrid
-from unshackle.core.tracks.subtitle_convert import SUBSTATION, build_ass_style
+from unshackle.core.tracks.subtitle_convert import PYCAPTION_WRITERS, SUBSTATION, build_ass_style
 from unshackle.core.tracks.track import Track, assert_fragments_decrypted, has_encrypted_sample_entry
 from unshackle.core.tracks.tracks import at_resolution
 from unshackle.core.utilities import (
@@ -242,6 +242,20 @@ def group_videos_by_variant(videos: list[Video], *, merge: bool) -> list[list[Vi
 
 
 HYBRID_BASE_RANGES = (Video.Range.HDR10P, Video.Range.HDR10)
+
+
+def convert_scc(subtitle: Subtitle, sub_format: Optional[Union[Subtitle.Codec, str]]) -> Subtitle.Codec:
+    """
+    Convert an SCC subtitle to sub_format when pycaption can write it, else to SRT, and return the new codec.
+    Only pycaption reads SCC, and nothing later in the pipeline (styling, SDH strip, mux) can.
+    """
+    target = Subtitle.Codec.SubRip
+    if isinstance(sub_format, Subtitle.Codec) and sub_format in PYCAPTION_WRITERS:
+        target = sub_format
+    subtitle.convert(target)
+    if subtitle.path and not subtitle.path.read_text("utf8").strip():
+        logging.getLogger("Subtitle").warning(f"SCC subtitle {subtitle.language} has no CC1 captions")
+    return target
 
 
 def select_hybrid_bases(videos: Sequence[Video]) -> list[Video]:
@@ -3414,6 +3428,9 @@ class dl:
                 with console.status("Converting Subtitles..."):
                     sub_conversions: dict[tuple[str, str], int] = {}
                     for subtitle in title.tracks.subtitles:
+                        if subtitle.codec == Subtitle.Codec.SCC:
+                            scc_dst = convert_scc(subtitle, sub_format).name
+                            sub_conversions[("SCC", scc_dst)] = sub_conversions.get(("SCC", scc_dst), 0) + 1
                         if sub_format == "original":
                             continue
                         if sub_format:

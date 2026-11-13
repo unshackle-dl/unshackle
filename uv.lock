@@ -1461,16 +1461,16 @@ wheels = [
 
 [[package]]
 name = "pycaption"
-version = "2.2.22"
+version = "2.2.26"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "beautifulsoup4" },
     { name = "cssutils" },
     { name = "lxml" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/80/1b/eed6e7a337e1c5807fd88920c100ff06042abca170a80677cb036629d888/pycaption-2.2.22.tar.gz", hash = "sha256:37680491c4b1867c78ce8b537b0004ec1f790db608b545d934475baf95ee0032", size = 112873, upload-time = "2026-05-04T10:00:28.97Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/d6/63/d68d74e88e278c1b489aeaa83f524899586709713e0da4f1709397604e48/pycaption-2.2.26.tar.gz", hash = "sha256:8ef2fead71c75205c0ebcc947430f77c7896b48631b96ecc63865ee9f3bb0f56", size = 119916, upload-time = "2026-07-02T14:11:31.026Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/9c/ce/82938777b8efe253be1175647bcc408fd4918faaca1b23c04e8158554288/pycaption-2.2.22-py3-none-any.whl", hash = "sha256:d5f672d05539e46fca0fdecb76f8d23b7c9b1a0f62f91268d4046d0e949f862e", size = 126674, upload-time = "2026-05-04T10:00:27.53Z" },
+    { url = "https://files.pythonhosted.org/packages/b3/de/5ec2a4c89ef256b457f76bba738075502fb04b5c672a1e1948b666d5bee4/pycaption-2.2.26-py3-none-any.whl", hash = "sha256:edc702b901c9188c720c33316fa248076ff9ce60f3a91aa53a3e93b62b370518", size = 134352, upload-time = "2026-07-02T14:11:29.953Z" },
 ]
 
 [[package]]
@@ -2264,7 +2264,7 @@ requires-dist = [
     { name = "mediaexport", git = "https://github.com/unshackle-dl/mediaexport?rev=main" },
     { name = "mutagen", specifier = ">=1.47.0,<2" },
     { name = "protobuf", specifier = ">=4.25.3,<7" },
-    { name = "pycaption", specifier = ">=2.2.6,<2.2.27" },
+    { name = "pycaption", specifier = ">=2.2.24,<2.2.27" },
     { name = "pycountry", specifier = ">=24.6.1" },
     { name = "pycryptodomex", specifier = ">=3.20.0,<4" },
     { name = "pyexecjs", specifier = ">=1.5.1,<2" },

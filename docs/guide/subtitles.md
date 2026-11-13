@@ -28,6 +28,7 @@ shown in track listings. The **Extension** column is the file extension used on 
 | `MicroDVD` | SUB | `sub` | MicroDVD |
 | `MPL2` | MPL2 | `mpl2` | MPL2 |
 | `TMP` | TMP | `tmp` | TMP |
+| `SCC` | SCC | `scc` | Scenarist Closed Captions (CEA-608), read only |
 | `fTTML` | STPP | `stpp` | MPEG-DASH box-encapsulated TTML (IMSC1) |
 | `fVTT` | WVTT | `wvtt` | MPEG-DASH box-encapsulated WebVTT |
 
@@ -65,6 +66,13 @@ format-appropriate clean-up to make a single, valid file:
   output format, unshackle automatically converts any plain TTML track to WebVTT before
   muxing (the closest lossless equivalent). Boxed `fTTML` is likewise unwrapped to TTML
   first.
+- **SCC for muxing**: Matroska cannot carry SCC, and no later step can read it. Before
+  muxing, unshackle converts an SCC track straight to the `--sub-format` you request
+  when that is SRT, WebVTT or TTML, and to SRT in all other cases (no `--sub-format`,
+  `original`, or another format, which unshackle then makes from the SRT). Choose
+  `--sub-format vtt` to keep the caption rows: WebVTT keeps a top-of-screen caption at
+  the top, SRT does not. unshackle reads only the CC1 channel. An SCC file with no CC1
+  captions gives an empty track and a warning.
 
 You normally do not need to think about any of this. It gives a clean file.
 
@@ -302,8 +310,9 @@ styling that survives. `—` means that the backend cannot convert that pair.
 
 Reading the table:
 
-- **Keep the original**: leaving `--sub-format` unset (or set to `original`) never
-  round-trips the file, so every style survives. Only convert when your player cannot
+- **Keep the original**: leaving `--sub-format` unset (or set to `original`) does not
+  round-trip the file, so every style survives. TTML and SCC are the exceptions, as noted
+  above. Only convert when your player cannot
   read the source format.
 - **`subtitleedit`** (SubtitleEdit / `seconv`): the best choice for anything → SRT. It
   is the only backend that carries colour, and it embeds `{\an8}` tags to preserve

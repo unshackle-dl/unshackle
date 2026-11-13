@@ -47,6 +47,7 @@ class Subtitle(Track):
         MicroDVD = "SUB"  # https://wikipedia.org/wiki/MicroDVD
         MPL2 = "MPL2"  # MPL2 subtitle format
         TMP = "TMP"  # TMP subtitle format
+        SCC = "SCC"  # https://wikipedia.org/wiki/EIA-608 (Scenarist SCC)
         # MPEG-DASH box-encapsulated subtitle formats
         fTTML = "STPP"  # https://www.w3.org/TR/2018/REC-ttml-imsc1.0.1-20180424
         fVTT = "WVTT"  # https://www.w3.org/TR/webvtt1
@@ -80,6 +81,8 @@ class Subtitle(Track):
                 return Subtitle.Codec.fTTML
             elif mime == "wvtt":
                 return Subtitle.Codec.fVTT
+            elif mime in ("scc", "x-scc"):
+                return Subtitle.Codec.SCC
             raise ValueError(f"The MIME '{mime}' is not a supported Subtitle Codec")
 
         @staticmethod
@@ -885,6 +888,11 @@ class Subtitle(Track):
                 # Convert SRT back to CaptionSet for compatibility
                 srt_text = str(srt_subtitles).encode("utf8")
                 caption_set = Subtitle.parse(srt_text, Subtitle.Codec.SubRip)
+            elif codec == Subtitle.Codec.SCC:
+                try:
+                    caption_set = pycaption.SCCReader().read(try_ensure_utf8(data).decode("utf8"))
+                except ValueError as e:
+                    raise pycaption.exceptions.CaptionReadSyntaxError(e) from e
             else:
                 raise ValueError(f'Unknown Subtitle format "{codec}"...')
         except pycaption.exceptions.CaptionReadSyntaxError as e:

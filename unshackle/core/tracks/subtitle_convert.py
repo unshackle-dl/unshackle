@@ -254,7 +254,9 @@ class PycaptionBackend:
     """pycaption: last resort. Flattens positioning/italics (devine #39), so ranked last."""
 
     name = "pycaption"
-    reads = frozenset({Codec.SubRip, Codec.TimedTextMarkupLang, Codec.WebVTT, Codec.SAMI, Codec.fTTML, Codec.fVTT})
+    reads = frozenset(
+        {Codec.SubRip, Codec.TimedTextMarkupLang, Codec.WebVTT, Codec.SAMI, Codec.SCC, Codec.fTTML, Codec.fVTT}
+    )
     writes = frozenset(PYCAPTION_WRITERS)
 
     def is_available(self) -> bool:
