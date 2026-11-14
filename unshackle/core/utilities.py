@@ -16,6 +16,7 @@ import unicodedata
 import zlib
 from collections import defaultdict
 from datetime import datetime, timezone
+from fractions import Fraction
 from functools import cache
 from pathlib import Path
 from types import ModuleType
@@ -1085,6 +1086,13 @@ class FPS(ast.NodeVisitor):
     @classmethod
     def parse(cls, expr: str) -> float:
         return cls().visit(ast.parse(expr).body[0])
+
+    @staticmethod
+    def exact(fps: float) -> Fraction:
+        """The frame rate as a fraction; a rate within 0.05% of an N*1000/1001 rate becomes that rate."""
+        rate = Fraction(fps)
+        ntsc = Fraction(round(rate * Fraction(1001, 1000)) * 1000, 1001)
+        return ntsc if abs(rate - ntsc) < rate / 2000 else rate.limit_denominator(1001)
 
 
 """

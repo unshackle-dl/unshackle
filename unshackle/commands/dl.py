@@ -385,8 +385,6 @@ def hybrid_source_tracks(base: Video, dv: Optional[Video], base_container: Optio
     """
     tracks = [deepcopy(track) for track in (base, dv) if track]
     tracks[0].path = base_container or base.path
-    for track in tracks:
-        track.needs_duration_fix = True
     return tracks
 
 

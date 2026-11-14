@@ -779,7 +779,7 @@ def test_the_hybrid_step_gets_the_base_alone_when_there_is_no_dv(tmp_path: Path)
 
     tracks = hybrid_source_tracks(base, None)  # type: ignore[arg-type]
 
-    assert len(tracks) == 1 and tracks[0].range == Video.Range.HDR10P and tracks[0].needs_duration_fix
+    assert len(tracks) == 1 and tracks[0].range == Video.Range.HDR10P
 
 
 def test_the_api_takes_generate_dv_with_any_range_as_dl_does() -> None:

@@ -30,6 +30,7 @@ from unshackle.core.tracks.subtitle import Subtitle
 from unshackle.core.tracks.track import Track, has_mp4_only_audio_entry, strip_duplicate_init_boxes
 from unshackle.core.tracks.video import Video
 from unshackle.core.utilities import (
+    FPS,
     is_close_match,
     log_event,
     matching_languages,
@@ -991,7 +992,7 @@ class Tracks:
                 video_args.extend(
                     [
                         "--default-duration",
-                        f"{v}:{vt.fps}fps" if isinstance(vt.fps, str) else f"{v}:{vt.fps:.3f}fps",
+                        f"{v}:{FPS.exact(vt.fps)}p",
                         "--fix-bitstream-timing-information",
                         f"{v}:1",
                     ]
