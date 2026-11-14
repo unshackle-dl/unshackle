@@ -2399,6 +2399,12 @@ default. In other words, config only fills in options you did not set on the com
 <td>Warn instead of failing when a requested resolution, range, video language, or audio language is missing, or when one DRM system does not license under <code>--all-drm</code>. The CLI flag is <code>--best-available</code>, also spelled <code>--warn-only</code>.</td>
 </tr>
 <tr>
+<td><code>skip_missing</code></td>
+<td>bool</td>
+<td><code>false</code></td>
+<td>Skip a title that misses a required language (<code>require_audio</code>, <code>require_video</code>, <code>require_subs</code>) or a track that a filter asks for, and continue with the next title. A run with one title, or a run that skips every title, still fails. The CLI flag is <code>--skip-missing</code>. For REST API jobs, set it in the <a href="../services/#serve"><code>serve</code></a> block.</td>
+</tr>
+<tr>
 <td><code>generate_dv</code></td>
 <td>bool</td>
 <td><code>false</code></td>

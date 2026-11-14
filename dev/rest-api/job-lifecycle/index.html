@@ -2685,6 +2685,11 @@ full detail:</p>
 <td>Subtitles that were skipped as non-fatal failures (when <code>skip_subtitle_errors</code> is set).</td>
 </tr>
 <tr>
+<td><code>skipped_titles</code></td>
+<td>list</td>
+<td>Titles that the run skipped because a requested track or language is missing, each <code>{title, reason}</code>.</td>
+</tr>
+<tr>
 <td><code>input_prompt</code></td>
 <td>string or <code>null</code></td>
 <td>The prompt the service waits on. Answer it with <code>POST /api/download/jobs/{job_id}/input</code>.</td>

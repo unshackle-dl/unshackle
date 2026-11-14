@@ -3912,19 +3912,25 @@ ignore it safely. See <a href="../../creating-a-service/#split-episodes">Split e
 <td><code>require_audio</code></td>
 <td>string[]</td>
 <td><code>[]</code></td>
-<td>Audio languages that must exist. The job fails if one is missing, even with <code>best_available</code>.</td>
+<td>Audio languages that must exist. The job fails if one is missing, even with <code>best_available</code>, or skips the title with <code>skip_missing</code>.</td>
 </tr>
 <tr>
 <td><code>require_video</code></td>
 <td>string[]</td>
 <td><code>[]</code></td>
-<td>Video languages that must exist. The job fails if one is missing, even with <code>best_available</code>.</td>
+<td>Video languages that must exist. The job fails if one is missing, even with <code>best_available</code>, or skips the title with <code>skip_missing</code>.</td>
 </tr>
 <tr>
 <td><code>require_subs</code></td>
 <td>string[]</td>
 <td><code>[]</code></td>
-<td>Subtitle languages that must exist. The job fails if one is missing. <code>s_lang</code> still decides what to keep.</td>
+<td>Subtitle languages that must exist. The job fails if one is missing, or skips the title with <code>skip_missing</code>. <code>s_lang</code> still decides what to keep.</td>
+</tr>
+<tr>
+<td><code>skip_missing</code></td>
+<td>boolean</td>
+<td><code>false</code></td>
+<td>Skip a title that misses a required language or track, and continue with the next title. The job's <code>skipped_titles</code> lists each skip. The job fails when it has one title or skips every title.</td>
 </tr>
 <tr>
 <td><code>forced_subs</code></td>
@@ -4306,11 +4312,12 @@ an HTTP caller would be remote code execution. You configure post-scripts only i
 </span><span id="__span-14-18"><a id="__codelineno-14-18" name="__codelineno-14-18" href="#__codelineno-14-18"></a><span class="w">      </span><span class="nt">"segments_total"</span><span class="p">:</span><span class="w"> </span><span class="mi">300</span><span class="p">,</span>
 </span><span id="__span-14-19"><a id="__codelineno-14-19" name="__codelineno-14-19" href="#__codelineno-14-19"></a><span class="w">      </span><span class="nt">"speed"</span><span class="p">:</span><span class="w"> </span><span class="s2">"5.2 MB/s"</span><span class="p">,</span>
 </span><span id="__span-14-20"><a id="__codelineno-14-20" name="__codelineno-14-20" href="#__codelineno-14-20"></a><span class="w">      </span><span class="nt">"skipped_subtitles"</span><span class="p">:</span><span class="w"> </span><span class="p">[],</span>
-</span><span id="__span-14-21"><a id="__codelineno-14-21" name="__codelineno-14-21" href="#__codelineno-14-21"></a><span class="w">      </span><span class="nt">"input_prompt"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span>
-</span><span id="__span-14-22"><a id="__codelineno-14-22" name="__codelineno-14-22" href="#__codelineno-14-22"></a><span class="w">      </span><span class="nt">"notice"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span>
-</span><span id="__span-14-23"><a id="__codelineno-14-23" name="__codelineno-14-23" href="#__codelineno-14-23"></a><span class="w">    </span><span class="p">}</span>
-</span><span id="__span-14-24"><a id="__codelineno-14-24" name="__codelineno-14-24" href="#__codelineno-14-24"></a><span class="w">  </span><span class="p">]</span>
-</span><span id="__span-14-25"><a id="__codelineno-14-25" name="__codelineno-14-25" href="#__codelineno-14-25"></a><span class="p">}</span>
+</span><span id="__span-14-21"><a id="__codelineno-14-21" name="__codelineno-14-21" href="#__codelineno-14-21"></a><span class="w">      </span><span class="nt">"skipped_titles"</span><span class="p">:</span><span class="w"> </span><span class="p">[],</span>
+</span><span id="__span-14-22"><a id="__codelineno-14-22" name="__codelineno-14-22" href="#__codelineno-14-22"></a><span class="w">      </span><span class="nt">"input_prompt"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span>
+</span><span id="__span-14-23"><a id="__codelineno-14-23" name="__codelineno-14-23" href="#__codelineno-14-23"></a><span class="w">      </span><span class="nt">"notice"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span>
+</span><span id="__span-14-24"><a id="__codelineno-14-24" name="__codelineno-14-24" href="#__codelineno-14-24"></a><span class="w">    </span><span class="p">}</span>
+</span><span id="__span-14-25"><a id="__codelineno-14-25" name="__codelineno-14-25" href="#__codelineno-14-25"></a><span class="w">  </span><span class="p">]</span>
+</span><span id="__span-14-26"><a id="__codelineno-14-26" name="__codelineno-14-26" href="#__codelineno-14-26"></a><span class="p">}</span>
 </span></code></pre></div>
 </div>
 </div>
@@ -4747,12 +4754,13 @@ answers the prompt within 10 minutes.</p>
 </span><span id="__span-26-9"><a id="__codelineno-26-9" name="__codelineno-26-9" href="#__codelineno-26-9"></a><span class="w">      </span><span class="nt">"created_time"</span><span class="p">:</span><span class="w"> </span><span class="s2">"2026-07-03T12:00:00+00:00"</span><span class="p">,</span>
 </span><span id="__span-26-10"><a id="__codelineno-26-10" name="__codelineno-26-10" href="#__codelineno-26-10"></a><span class="w">      </span><span class="nt">"completed_time"</span><span class="p">:</span><span class="w"> </span><span class="s2">"2026-07-03T12:08:00+00:00"</span><span class="p">,</span>
 </span><span id="__span-26-11"><a id="__codelineno-26-11" name="__codelineno-26-11" href="#__codelineno-26-11"></a><span class="w">      </span><span class="nt">"output_files"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"/downloads/Example.S01E01.mkv"</span><span class="p">],</span>
-</span><span id="__span-26-12"><a id="__codelineno-26-12" name="__codelineno-26-12" href="#__codelineno-26-12"></a><span class="w">      </span><span class="nt">"error_message"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span>
-</span><span id="__span-26-13"><a id="__codelineno-26-13" name="__codelineno-26-13" href="#__codelineno-26-13"></a><span class="w">      </span><span class="nt">"parameters"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"..."</span><span class="p">:</span><span class="w"> </span><span class="s2">"redacted"</span><span class="w"> </span><span class="p">}</span>
-</span><span id="__span-26-14"><a id="__codelineno-26-14" name="__codelineno-26-14" href="#__codelineno-26-14"></a><span class="w">    </span><span class="p">}</span>
-</span><span id="__span-26-15"><a id="__codelineno-26-15" name="__codelineno-26-15" href="#__codelineno-26-15"></a><span class="w">  </span><span class="p">],</span>
-</span><span id="__span-26-16"><a id="__codelineno-26-16" name="__codelineno-26-16" href="#__codelineno-26-16"></a><span class="w">  </span><span class="nt">"count"</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span>
-</span><span id="__span-26-17"><a id="__codelineno-26-17" name="__codelineno-26-17" href="#__codelineno-26-17"></a><span class="p">}</span>
+</span><span id="__span-26-12"><a id="__codelineno-26-12" name="__codelineno-26-12" href="#__codelineno-26-12"></a><span class="w">      </span><span class="nt">"skipped_titles"</span><span class="p">:</span><span class="w"> </span><span class="p">[],</span>
+</span><span id="__span-26-13"><a id="__codelineno-26-13" name="__codelineno-26-13" href="#__codelineno-26-13"></a><span class="w">      </span><span class="nt">"error_message"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span>
+</span><span id="__span-26-14"><a id="__codelineno-26-14" name="__codelineno-26-14" href="#__codelineno-26-14"></a><span class="w">      </span><span class="nt">"parameters"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"..."</span><span class="p">:</span><span class="w"> </span><span class="s2">"redacted"</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-26-15"><a id="__codelineno-26-15" name="__codelineno-26-15" href="#__codelineno-26-15"></a><span class="w">    </span><span class="p">}</span>
+</span><span id="__span-26-16"><a id="__codelineno-26-16" name="__codelineno-26-16" href="#__codelineno-26-16"></a><span class="w">  </span><span class="p">],</span>
+</span><span id="__span-26-17"><a id="__codelineno-26-17" name="__codelineno-26-17" href="#__codelineno-26-17"></a><span class="w">  </span><span class="nt">"count"</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span>
+</span><span id="__span-26-18"><a id="__codelineno-26-18" name="__codelineno-26-18" href="#__codelineno-26-18"></a><span class="p">}</span>
 </span></code></pre></div>
 </div>
 </div>

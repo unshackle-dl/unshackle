@@ -3806,6 +3806,14 @@ so never report a missing language on their own:</p>
 <p>The check runs against the full track list, before any language selection or exclusion.
 <code>orig</code> resolves to the title language, and <code>--exact-lang</code> applies. Audio carried inside the
 video track counts. <code>--no-audio</code> and <code>--no-video</code> drop the matching requirement.</p>
+<p>A failed title stops the whole run. To skip that title and come back for it later, add
+<code>--skip-missing</code>, or set <code>skip_missing: true</code> under <code>dl:</code> in <code>unshackle.yaml</code>. It also skips a
+title that has no track for a filter such as <code>-q</code>, <code>-v</code>, <code>-r</code>, <code>-a</code> or a language you request.
+A run with one title, or a run that skips every title, still fails. A REST API job lists each
+skipped title and the reason in <code>skipped_titles</code>.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="c1"># download the episodes that have Korean audio, skip the others</span>
+</span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-al<span class="w"> </span>ko,en<span class="w"> </span>--require-audio<span class="w"> </span>ko<span class="w"> </span>--skip-missing<span class="w"> </span>-w<span class="w"> </span>S06<span class="w"> </span>EXAMPLE<span class="w"> </span>0ABC123
+</span></code></pre></div>
 <h3 id="forced-subtitles-and-output-format">Forced subtitles and output format<a class="headerlink" href="#forced-subtitles-and-output-format" title="Permanent link">&para;</a></h3>
 <ul>
 <li><code>-fs</code> / <code>--forced-subs</code>: include forced subtitle tracks (signs/foreign dialogue).
@@ -3854,7 +3862,7 @@ video track counts. <code>--no-audio</code> and <code>--no-video</code> drop the
 </tr>
 </tbody>
 </table>
-<div class="language-shell highlight"><span class="filename">Convert subtitles to SRT</span><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--sub-format<span class="w"> </span>srt<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+<div class="language-shell highlight"><span class="filename">Convert subtitles to SRT</span><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--sub-format<span class="w"> </span>srt<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
 <div class="admonition note">
 <p class="admonition-title">SDH stripping happens by default</p>
@@ -3874,42 +3882,42 @@ with <code>-</code> to exclude it. For a music release, the same option takes tr
 <div class="tabbed-set tabbed-alternate" data-tabs="1:5"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><input id="__tabbed_1_4" name="__tabbed_1" type="radio" /><input id="__tabbed_1_5" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Whole seasons</label><label for="__tabbed_1_2">Specific episodes</label><label for="__tabbed_1_3">Exclusions</label><label for="__tabbed_1_4">Split episodes</label><label for="__tabbed_1_5">Air dates</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-w<span class="w"> </span>S01<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
-</span><span id="__span-24-2"><a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-w<span class="w"> </span>S01-S03<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
-</span><span id="__span-24-3"><a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-w<span class="w"> </span>S01,S03,S05<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-w<span class="w"> </span>S01<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+</span><span id="__span-25-2"><a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-w<span class="w"> </span>S01-S03<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+</span><span id="__span-25-3"><a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-w<span class="w"> </span>S01,S03,S05<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
 </div>
 <div class="tabbed-block">
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-w<span class="w"> </span>S01E01<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
-</span><span id="__span-25-2"><a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-w<span class="w"> </span>S01E01-S01E05<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
-</span><span id="__span-25-3"><a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-w<span class="w"> </span>S01E01-S02E03<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-w<span class="w"> </span>S01E01<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+</span><span id="__span-26-2"><a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-w<span class="w"> </span>S01E01-S01E05<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+</span><span id="__span-26-3"><a id="__codelineno-26-3" name="__codelineno-26-3" href="#__codelineno-26-3"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-w<span class="w"> </span>S01E01-S02E03<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
 </div>
 <div class="tabbed-block">
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="c1"># Seasons 1 through 5, but not season 3</span>
-</span><span id="__span-26-2"><a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-w<span class="w"> </span>S01-S05,-S03<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="c1"># Seasons 1 through 5, but not season 3</span>
+</span><span id="__span-27-2"><a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-w<span class="w"> </span>S01-S05,-S03<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
 </div>
 <div class="tabbed-block">
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="c1"># Part 2 of episode 1 only</span>
-</span><span id="__span-27-2"><a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-w<span class="w"> </span>S01E01.2<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
-</span><span id="__span-27-3"><a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a>
-</span><span id="__span-27-4"><a id="__codelineno-27-4" name="__codelineno-27-4" href="#__codelineno-27-4"></a><span class="c1"># Parts 1 through 3 of episode 1</span>
-</span><span id="__span-27-5"><a id="__codelineno-27-5" name="__codelineno-27-5" href="#__codelineno-27-5"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-w<span class="w"> </span>S01E01.1-S01E01.3<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
-</span><span id="__span-27-6"><a id="__codelineno-27-6" name="__codelineno-27-6" href="#__codelineno-27-6"></a>
-</span><span id="__span-27-7"><a id="__codelineno-27-7" name="__codelineno-27-7" href="#__codelineno-27-7"></a><span class="c1"># All of season 1 except episode 1 part 2</span>
-</span><span id="__span-27-8"><a id="__codelineno-27-8" name="__codelineno-27-8" href="#__codelineno-27-8"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-w<span class="w"> </span>S01,-S01E01.2<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
-</span></code></pre></div>
-</div>
-<div class="tabbed-block">
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-28-1"><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a><span class="c1"># One day</span>
-</span><span id="__span-28-2"><a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-w<span class="w"> </span><span class="m">2026</span>-08-11<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-28-1"><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a><span class="c1"># Part 2 of episode 1 only</span>
+</span><span id="__span-28-2"><a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-w<span class="w"> </span>S01E01.2<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span><span id="__span-28-3"><a id="__codelineno-28-3" name="__codelineno-28-3" href="#__codelineno-28-3"></a>
-</span><span id="__span-28-4"><a id="__codelineno-28-4" name="__codelineno-28-4" href="#__codelineno-28-4"></a><span class="c1"># A range of days, colon separated</span>
-</span><span id="__span-28-5"><a id="__codelineno-28-5" name="__codelineno-28-5" href="#__codelineno-28-5"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-w<span class="w"> </span><span class="m">2026</span>-08-01:2026-08-31<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+</span><span id="__span-28-4"><a id="__codelineno-28-4" name="__codelineno-28-4" href="#__codelineno-28-4"></a><span class="c1"># Parts 1 through 3 of episode 1</span>
+</span><span id="__span-28-5"><a id="__codelineno-28-5" name="__codelineno-28-5" href="#__codelineno-28-5"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-w<span class="w"> </span>S01E01.1-S01E01.3<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span><span id="__span-28-6"><a id="__codelineno-28-6" name="__codelineno-28-6" href="#__codelineno-28-6"></a>
-</span><span id="__span-28-7"><a id="__codelineno-28-7" name="__codelineno-28-7" href="#__codelineno-28-7"></a><span class="c1"># August, but not the 15th</span>
-</span><span id="__span-28-8"><a id="__codelineno-28-8" name="__codelineno-28-8" href="#__codelineno-28-8"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-w<span class="w"> </span><span class="m">2026</span>-08-01:2026-08-31,-2026-08-15<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+</span><span id="__span-28-7"><a id="__codelineno-28-7" name="__codelineno-28-7" href="#__codelineno-28-7"></a><span class="c1"># All of season 1 except episode 1 part 2</span>
+</span><span id="__span-28-8"><a id="__codelineno-28-8" name="__codelineno-28-8" href="#__codelineno-28-8"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-w<span class="w"> </span>S01,-S01E01.2<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+</span></code></pre></div>
+</div>
+<div class="tabbed-block">
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-29-1"><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="c1"># One day</span>
+</span><span id="__span-29-2"><a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-w<span class="w"> </span><span class="m">2026</span>-08-11<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+</span><span id="__span-29-3"><a id="__codelineno-29-3" name="__codelineno-29-3" href="#__codelineno-29-3"></a>
+</span><span id="__span-29-4"><a id="__codelineno-29-4" name="__codelineno-29-4" href="#__codelineno-29-4"></a><span class="c1"># A range of days, colon separated</span>
+</span><span id="__span-29-5"><a id="__codelineno-29-5" name="__codelineno-29-5" href="#__codelineno-29-5"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-w<span class="w"> </span><span class="m">2026</span>-08-01:2026-08-31<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+</span><span id="__span-29-6"><a id="__codelineno-29-6" name="__codelineno-29-6" href="#__codelineno-29-6"></a>
+</span><span id="__span-29-7"><a id="__codelineno-29-7" name="__codelineno-29-7" href="#__codelineno-29-7"></a><span class="c1"># August, but not the 15th</span>
+</span><span id="__span-29-8"><a id="__codelineno-29-8" name="__codelineno-29-8" href="#__codelineno-29-8"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-w<span class="w"> </span><span class="m">2026</span>-08-01:2026-08-31,-2026-08-15<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
 </div>
 </div>
@@ -3921,30 +3929,30 @@ track on disc 1, which is the number the track list shows for a single-disc rele
 <div class="tabbed-set tabbed-alternate" data-tabs="2:3"><input checked="checked" id="__tabbed_2_1" name="__tabbed_2" type="radio" /><input id="__tabbed_2_2" name="__tabbed_2" type="radio" /><input id="__tabbed_2_3" name="__tabbed_2" type="radio" /><div class="tabbed-labels"><label for="__tabbed_2_1">Tracks</label><label for="__tabbed_2_2">More than one disc</label><label for="__tabbed_2_3">Exclusions</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-29-1"><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="c1"># Track 3</span>
-</span><span id="__span-29-2"><a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-w<span class="w"> </span><span class="m">3</span><span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
-</span><span id="__span-29-3"><a id="__codelineno-29-3" name="__codelineno-29-3" href="#__codelineno-29-3"></a>
-</span><span id="__span-29-4"><a id="__codelineno-29-4" name="__codelineno-29-4" href="#__codelineno-29-4"></a><span class="c1"># Tracks 1 through 5</span>
-</span><span id="__span-29-5"><a id="__codelineno-29-5" name="__codelineno-29-5" href="#__codelineno-29-5"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-w<span class="w"> </span><span class="m">1</span>-5<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
-</span><span id="__span-29-6"><a id="__codelineno-29-6" name="__codelineno-29-6" href="#__codelineno-29-6"></a>
-</span><span id="__span-29-7"><a id="__codelineno-29-7" name="__codelineno-29-7" href="#__codelineno-29-7"></a><span class="c1"># Tracks 1, 3 and 7</span>
-</span><span id="__span-29-8"><a id="__codelineno-29-8" name="__codelineno-29-8" href="#__codelineno-29-8"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-w<span class="w"> </span><span class="m">1</span>,3,7<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
-</span></code></pre></div>
-</div>
-<div class="tabbed-block">
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-30-1"><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a><span class="c1"># Disc 2, track 3</span>
-</span><span id="__span-30-2"><a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-w<span class="w"> </span>2x3<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-30-1"><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a><span class="c1"># Track 3</span>
+</span><span id="__span-30-2"><a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-w<span class="w"> </span><span class="m">3</span><span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span><span id="__span-30-3"><a id="__codelineno-30-3" name="__codelineno-30-3" href="#__codelineno-30-3"></a>
-</span><span id="__span-30-4"><a id="__codelineno-30-4" name="__codelineno-30-4" href="#__codelineno-30-4"></a><span class="c1"># Disc 2, tracks 1 through 4</span>
-</span><span id="__span-30-5"><a id="__codelineno-30-5" name="__codelineno-30-5" href="#__codelineno-30-5"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-w<span class="w"> </span>2x1-2x4<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+</span><span id="__span-30-4"><a id="__codelineno-30-4" name="__codelineno-30-4" href="#__codelineno-30-4"></a><span class="c1"># Tracks 1 through 5</span>
+</span><span id="__span-30-5"><a id="__codelineno-30-5" name="__codelineno-30-5" href="#__codelineno-30-5"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-w<span class="w"> </span><span class="m">1</span>-5<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span><span id="__span-30-6"><a id="__codelineno-30-6" name="__codelineno-30-6" href="#__codelineno-30-6"></a>
-</span><span id="__span-30-7"><a id="__codelineno-30-7" name="__codelineno-30-7" href="#__codelineno-30-7"></a><span class="c1"># Disc 1 track 3, through disc 2 track 2</span>
-</span><span id="__span-30-8"><a id="__codelineno-30-8" name="__codelineno-30-8" href="#__codelineno-30-8"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-w<span class="w"> </span>1x3-2x2<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+</span><span id="__span-30-7"><a id="__codelineno-30-7" name="__codelineno-30-7" href="#__codelineno-30-7"></a><span class="c1"># Tracks 1, 3 and 7</span>
+</span><span id="__span-30-8"><a id="__codelineno-30-8" name="__codelineno-30-8" href="#__codelineno-30-8"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-w<span class="w"> </span><span class="m">1</span>,3,7<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
 </div>
 <div class="tabbed-block">
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-31-1"><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a><span class="c1"># Tracks 1 through 8, but not track 4</span>
-</span><span id="__span-31-2"><a id="__codelineno-31-2" name="__codelineno-31-2" href="#__codelineno-31-2"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-w<span class="w"> </span><span class="m">1</span>-8,-4<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-31-1"><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a><span class="c1"># Disc 2, track 3</span>
+</span><span id="__span-31-2"><a id="__codelineno-31-2" name="__codelineno-31-2" href="#__codelineno-31-2"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-w<span class="w"> </span>2x3<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+</span><span id="__span-31-3"><a id="__codelineno-31-3" name="__codelineno-31-3" href="#__codelineno-31-3"></a>
+</span><span id="__span-31-4"><a id="__codelineno-31-4" name="__codelineno-31-4" href="#__codelineno-31-4"></a><span class="c1"># Disc 2, tracks 1 through 4</span>
+</span><span id="__span-31-5"><a id="__codelineno-31-5" name="__codelineno-31-5" href="#__codelineno-31-5"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-w<span class="w"> </span>2x1-2x4<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+</span><span id="__span-31-6"><a id="__codelineno-31-6" name="__codelineno-31-6" href="#__codelineno-31-6"></a>
+</span><span id="__span-31-7"><a id="__codelineno-31-7" name="__codelineno-31-7" href="#__codelineno-31-7"></a><span class="c1"># Disc 1 track 3, through disc 2 track 2</span>
+</span><span id="__span-31-8"><a id="__codelineno-31-8" name="__codelineno-31-8" href="#__codelineno-31-8"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-w<span class="w"> </span>1x3-2x2<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+</span></code></pre></div>
+</div>
+<div class="tabbed-block">
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-32-1"><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a><span class="c1"># Tracks 1 through 8, but not track 4</span>
+</span><span id="__span-32-2"><a id="__codelineno-32-2" name="__codelineno-32-2" href="#__codelineno-32-2"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-w<span class="w"> </span><span class="m">1</span>-8,-4<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
 </div>
 </div>
@@ -3962,7 +3970,7 @@ the year.</p>
 <p>A service that only carries this kind of title sets <code>DAILY = True</code> on its class, and a
 service can set <code>air_date</code> on each episode itself. Add <code>--daily</code> to mark any other title
 as date-based:</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-32-1"><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--daily<span class="w"> </span>--tvdb<span class="w"> </span><span class="m">73871</span><span class="w"> </span>--enrich<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-33-1"><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--daily<span class="w"> </span>--tvdb<span class="w"> </span><span class="m">73871</span><span class="w"> </span>--enrich<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
 <p>With <code>--enrich</code> and a TVDB ID, <code>--daily</code> fills in the air date of every episode that has
 none. An air date the service already set is kept. unshackle skips dates before 1970 and
@@ -4044,9 +4052,9 @@ the episode has no parts, rather than quietly handing you the whole episode. Use
 </tbody>
 </table>
 <p>When <code>--latest-episode</code> or <code>--latest-episodes</code> is set, <code>-w</code> has no effect.</p>
-<div class="language-shell highlight"><span class="filename">Grab just the newest episode</span><pre><span></span><code><span id="__span-33-1"><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--latest-episode<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+<div class="language-shell highlight"><span class="filename">Grab just the newest episode</span><pre><span></span><code><span id="__span-34-1"><a id="__codelineno-34-1" name="__codelineno-34-1" href="#__codelineno-34-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--latest-episode<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
-<div class="language-shell highlight"><span class="filename">Grab the three newest episodes</span><pre><span></span><code><span id="__span-34-1"><a id="__codelineno-34-1" name="__codelineno-34-1" href="#__codelineno-34-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--latest-episodes<span class="w"> </span><span class="m">3</span><span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+<div class="language-shell highlight"><span class="filename">Grab the three newest episodes</span><pre><span></span><code><span id="__span-35-1"><a id="__codelineno-35-1" name="__codelineno-35-1" href="#__codelineno-35-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--latest-episodes<span class="w"> </span><span class="m">3</span><span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
 <h2 id="including-and-excluding-track-types">Including and excluding track types<a class="headerlink" href="#including-and-excluding-track-types" title="Permanent link">&para;</a></h2>
 <p>You can restrict a download to certain track categories, either positively (only these)
@@ -4086,16 +4094,17 @@ video and audio. Add <code>-A</code> or <code>-S</code> for that.</p>
 <li>A flag that drops the same tracks is an error, for example <code>-ado</code> with <code>--no-audio</code>
   or <code>-fso</code> with <code>-A</code>.</li>
 <li>A title with no track of that kind stops a run of one title. A run of more than one
-  title skips that title with a warning and continues.</li>
+  title skips that title with a warning and continues. The run fails when it skips
+  every title.</li>
 <li>unshackle reads the kind from the manifest or from the service. A track that
   neither of them marks as descriptive or forced does not match.</li>
 </ul>
 </div>
-<div class="language-shell highlight"><span class="filename">Audio description only, in English</span><pre><span></span><code><span id="__span-35-1"><a id="__codelineno-35-1" name="__codelineno-35-1" href="#__codelineno-35-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-A<span class="w"> </span>-ado<span class="w"> </span>-al<span class="w"> </span>en<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+<div class="language-shell highlight"><span class="filename">Audio description only, in English</span><pre><span></span><code><span id="__span-36-1"><a id="__codelineno-36-1" name="__codelineno-36-1" href="#__codelineno-36-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-A<span class="w"> </span>-ado<span class="w"> </span>-al<span class="w"> </span>en<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
-<div class="language-shell highlight"><span class="filename">Subtitles only</span><pre><span></span><code><span id="__span-36-1"><a id="__codelineno-36-1" name="__codelineno-36-1" href="#__codelineno-36-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-S<span class="w"> </span>-sl<span class="w"> </span>en<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+<div class="language-shell highlight"><span class="filename">Subtitles only</span><pre><span></span><code><span id="__span-37-1"><a id="__codelineno-37-1" name="__codelineno-37-1" href="#__codelineno-37-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-S<span class="w"> </span>-sl<span class="w"> </span>en<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
-<div class="language-shell highlight"><span class="filename">Everything except chapters</span><pre><span></span><code><span id="__span-37-1"><a id="__codelineno-37-1" name="__codelineno-37-1" href="#__codelineno-37-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-nc<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+<div class="language-shell highlight"><span class="filename">Everything except chapters</span><pre><span></span><code><span id="__span-38-1"><a id="__codelineno-38-1" name="__codelineno-38-1" href="#__codelineno-38-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-nc<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
@@ -4131,7 +4140,7 @@ are always kept.</p>
 </tr>
 </tbody>
 </table>
-<div class="language-shell highlight"><span class="filename">See the track selection without downloading</span><pre><span></span><code><span id="__span-38-1"><a id="__codelineno-38-1" name="__codelineno-38-1" href="#__codelineno-38-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-q<span class="w"> </span><span class="m">1080</span><span class="w"> </span>-v<span class="w"> </span>H.265<span class="w"> </span>-r<span class="w"> </span>HDR10<span class="w"> </span>--list<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+<div class="language-shell highlight"><span class="filename">See the track selection without downloading</span><pre><span></span><code><span id="__span-39-1"><a id="__codelineno-39-1" name="__codelineno-39-1" href="#__codelineno-39-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-q<span class="w"> </span><span class="m">1080</span><span class="w"> </span>-v<span class="w"> </span>H.265<span class="w"> </span>-r<span class="w"> </span>HDR10<span class="w"> </span>--list<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
 <h2 id="output-and-muxing">Output and muxing<a class="headerlink" href="#output-and-muxing" title="Permanent link">&para;</a></h2>
 <h3 id="output-location-and-folders">Output location and folders<a class="headerlink" href="#output-location-and-folders" title="Permanent link">&para;</a></h3>
@@ -4141,7 +4150,7 @@ are always kept.</p>
 <li><code>--no-folder</code>: do not make a per-show folder for TV downloads.</li>
 <li><code>--no-source</code>: remove the service source tag from the filename and path.</li>
 </ul>
-<div class="language-shell highlight"><span class="filename">Send this download somewhere specific</span><pre><span></span><code><span id="__span-39-1"><a id="__codelineno-39-1" name="__codelineno-39-1" href="#__codelineno-39-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-o<span class="w"> </span>~/Videos/incoming<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+<div class="language-shell highlight"><span class="filename">Send this download somewhere specific</span><pre><span></span><code><span id="__span-40-1"><a id="__codelineno-40-1" name="__codelineno-40-1" href="#__codelineno-40-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-o<span class="w"> </span>~/Videos/incoming<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
 <h3 id="muxing-behaviour">Muxing behaviour<a class="headerlink" href="#muxing-behaviour" title="Permanent link">&para;</a></h3>
 <p>By default, <code>mkvmerge</code> muxes the tracks of a movie or an episode into a single Matroska
@@ -4205,11 +4214,11 @@ Read <a href="../output-and-naming/#music-output-files">Music output files</a>.<
 metadata substituted into <code>{variable}</code> placeholders. It is repeatable, and it replaces the
 <code>post_scripts</code> config for that run. No <code>success</code> post-script operates under <code>--no-mux</code>, because
 that run writes no muxed output. A <code>failure</code> post-script still operates if the download fails.</p>
-<div class="language-shell highlight"><span class="filename">Hand each finished file to an uploader</span><pre><span></span><code><span id="__span-40-1"><a id="__codelineno-40-1" name="__codelineno-40-1" href="#__codelineno-40-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--postscript<span class="w"> </span><span class="s2">"python /opt/upload.py {filepath} --service={service}"</span><span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+<div class="language-shell highlight"><span class="filename">Hand each finished file to an uploader</span><pre><span></span><code><span id="__span-41-1"><a id="__codelineno-41-1" name="__codelineno-41-1" href="#__codelineno-41-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--postscript<span class="w"> </span><span class="s2">"python /opt/upload.py {filepath} --service={service}"</span><span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
 <p><code>--no-postscript</code> operates the run with no post-script at all. It silences the <code>post_scripts</code>
 config and <code>--postscript</code> together, for every event and mode.</p>
-<div class="language-shell highlight"><span class="filename">Skip the uploader for one run</span><pre><span></span><code><span id="__span-41-1"><a id="__codelineno-41-1" name="__codelineno-41-1" href="#__codelineno-41-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--no-postscript<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+<div class="language-shell highlight"><span class="filename">Skip the uploader for one run</span><pre><span></span><code><span id="__span-42-1"><a id="__codelineno-42-1" name="__codelineno-42-1" href="#__codelineno-42-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--no-postscript<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
 <p>For post-scripts that continue across runs, for the <code>season</code> and <code>run</code> modes, for <code>failure</code>
 post-scripts and for the full variable list, see
@@ -4219,16 +4228,16 @@ post-scripts and for the full variable list, see
 <li><code>--tag</code>: set the release group tag (overrides the configured tag).</li>
 <li><code>--repack</code>: add a <code>REPACK</code> tag to the output filename.</li>
 </ul>
-<div class="language-shell highlight"><span class="filename">Custom group tag and a REPACK label</span><pre><span></span><code><span id="__span-42-1"><a id="__codelineno-42-1" name="__codelineno-42-1" href="#__codelineno-42-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--tag<span class="w"> </span>MYGRP<span class="w"> </span>--repack<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+<div class="language-shell highlight"><span class="filename">Custom group tag and a REPACK label</span><pre><span></span><code><span id="__span-43-1"><a id="__codelineno-43-1" name="__codelineno-43-1" href="#__codelineno-43-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--tag<span class="w"> </span>MYGRP<span class="w"> </span>--repack<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
 <h2 id="proxies">Proxies<a class="headerlink" href="#proxies" title="Permanent link">&para;</a></h2>
 <p><code>--proxy</code> accepts a full proxy URI, a country or location code (resolved through your
 configured proxy providers), or a <code>provider:region</code> form. See
 <a href="../proxies-and-vpn/#how-proxy-resolution-works">Proxies &amp; VPN</a> for the exact grammar.</p>
-<div class="language-shell highlight"><span class="filename">Proxy forms</span><pre><span></span><code><span id="__span-43-1"><a id="__codelineno-43-1" name="__codelineno-43-1" href="#__codelineno-43-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--proxy<span class="w"> </span>us<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
-</span><span id="__span-43-2"><a id="__codelineno-43-2" name="__codelineno-43-2" href="#__codelineno-43-2"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--proxy<span class="w"> </span>nordvpn:ca<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
-</span><span id="__span-43-3"><a id="__codelineno-43-3" name="__codelineno-43-3" href="#__codelineno-43-3"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--proxy<span class="w"> </span>controld:yul<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
-</span><span id="__span-43-4"><a id="__codelineno-43-4" name="__codelineno-43-4" href="#__codelineno-43-4"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--proxy<span class="w"> </span><span class="s1">'http://user:pass@host:8080'</span><span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+<div class="language-shell highlight"><span class="filename">Proxy forms</span><pre><span></span><code><span id="__span-44-1"><a id="__codelineno-44-1" name="__codelineno-44-1" href="#__codelineno-44-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--proxy<span class="w"> </span>us<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+</span><span id="__span-44-2"><a id="__codelineno-44-2" name="__codelineno-44-2" href="#__codelineno-44-2"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--proxy<span class="w"> </span>nordvpn:ca<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+</span><span id="__span-44-3"><a id="__codelineno-44-3" name="__codelineno-44-3" href="#__codelineno-44-3"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--proxy<span class="w"> </span>controld:yul<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+</span><span id="__span-44-4"><a id="__codelineno-44-4" name="__codelineno-44-4" href="#__codelineno-44-4"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--proxy<span class="w"> </span><span class="s1">'http://user:pass@host:8080'</span><span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
 <p>Three related flags:</p>
 <ul>
@@ -4283,9 +4292,9 @@ configured proxy providers), or a <code>provider:region</code> form. See
 </tr>
 </tbody>
 </table>
-<div class="language-shell highlight"><span class="filename">Two tracks at a time, eight threads each</span><pre><span></span><code><span id="__span-44-1"><a id="__codelineno-44-1" name="__codelineno-44-1" href="#__codelineno-44-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--downloads<span class="w"> </span><span class="m">2</span><span class="w"> </span>--workers<span class="w"> </span><span class="m">8</span><span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+<div class="language-shell highlight"><span class="filename">Two tracks at a time, eight threads each</span><pre><span></span><code><span id="__span-45-1"><a id="__codelineno-45-1" name="__codelineno-45-1" href="#__codelineno-45-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--downloads<span class="w"> </span><span class="m">2</span><span class="w"> </span>--workers<span class="w"> </span><span class="m">8</span><span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
-<div class="language-shell highlight"><span class="filename">Space out a season download</span><pre><span></span><code><span id="__span-45-1"><a id="__codelineno-45-1" name="__codelineno-45-1" href="#__codelineno-45-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-w<span class="w"> </span>S01<span class="w"> </span>--slow<span class="w"> </span><span class="m">30</span>-60<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+<div class="language-shell highlight"><span class="filename">Space out a season download</span><pre><span></span><code><span id="__span-46-1"><a id="__codelineno-46-1" name="__codelineno-46-1" href="#__codelineno-46-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-w<span class="w"> </span>S01<span class="w"> </span>--slow<span class="w"> </span><span class="m">30</span>-60<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
 <h2 id="keys-vaults-and-export">Keys, vaults, and export<a class="headerlink" href="#keys-vaults-and-export" title="Permanent link">&para;</a></h2>
 <p>By default, unshackle checks your <strong>key vaults</strong> first and only asks a <strong>CDM</strong> to license
@@ -4296,7 +4305,7 @@ a content key when the vault misses. You can force one side or the other:</p>
 <li><code>--vaults-only</code>: only use key vaults and never license through the CDM. A missing
   content key fails.</li>
 </ul>
-<div class="language-shell highlight"><span class="filename">Fetch keys only, no download</span><pre><span></span><code><span id="__span-46-1"><a id="__codelineno-46-1" name="__codelineno-46-1" href="#__codelineno-46-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--skip-dl<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+<div class="language-shell highlight"><span class="filename">Fetch keys only, no download</span><pre><span></span><code><span id="__span-47-1"><a id="__codelineno-47-1" name="__codelineno-47-1" href="#__codelineno-47-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--skip-dl<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
 <p><code>--export</code> writes a <code>mediaexport</code> JSON file into the configured exports directory. It holds
 the manifest, the DRM init data, the content keys, the KIDs of each track and the title
@@ -4305,12 +4314,12 @@ left it, with the ad periods that the service skips. <code>unshackle import</cod
 a download later, and gives each track only the content keys for its KIDs. The import uses the
 saved manifest, so it skips the same periods and does not fetch the manifest again. The importer also reads the
 older unshackle <code>version: 2</code> files and unidl's own export files.</p>
-<div class="language-shell highlight"><span class="filename">Export track info and keys</span><pre><span></span><code><span id="__span-47-1"><a id="__codelineno-47-1" name="__codelineno-47-1" href="#__codelineno-47-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--skip-dl<span class="w"> </span>--export<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+<div class="language-shell highlight"><span class="filename">Export track info and keys</span><pre><span></span><code><span id="__span-48-1"><a id="__codelineno-48-1" name="__codelineno-48-1" href="#__codelineno-48-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--skip-dl<span class="w"> </span>--export<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
 <p>Add <code>--all-drm</code> to get the content keys of each DRM system the title offers. The export then
 holds the DRM init data of both. A Key Vault that has a content key stops the challenge for
 its KID; add <code>--cdm-only</code> to send a challenge for each DRM system.</p>
-<div class="language-shell highlight"><span class="filename">License with Widevine and PlayReady, no download</span><pre><span></span><code><span id="__span-48-1"><a id="__codelineno-48-1" name="__codelineno-48-1" href="#__codelineno-48-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--skip-dl<span class="w"> </span>--all-drm<span class="w"> </span>--export<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+<div class="language-shell highlight"><span class="filename">License with Widevine and PlayReady, no download</span><pre><span></span><code><span id="__span-49-1"><a id="__codelineno-49-1" name="__codelineno-49-1" href="#__codelineno-49-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--skip-dl<span class="w"> </span>--all-drm<span class="w"> </span>--export<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
 <p>The file name tells what the file holds, in the form
 <code>{title}.{scope}.{resolutions}.{codecs}.{ranges}.{manifests}.{audio}-{SERVICE}.json</code>:</p>
@@ -4448,9 +4457,9 @@ lookups but keep the IDs you give, set
 </tr>
 </tbody>
 </table>
-<div class="language-shell highlight"><span class="filename">Force the right IMDb match, and keep the service&#x27;s own naming</span><pre><span></span><code><span id="__span-49-1"><a id="__codelineno-49-1" name="__codelineno-49-1" href="#__codelineno-49-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--imdb<span class="w"> </span>tt1375666<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+<div class="language-shell highlight"><span class="filename">Force the right IMDb match, and keep the service&#x27;s own naming</span><pre><span></span><code><span id="__span-50-1"><a id="__codelineno-50-1" name="__codelineno-50-1" href="#__codelineno-50-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--imdb<span class="w"> </span>tt1375666<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
-<div class="language-shell highlight"><span class="filename">Force the match and take IMDb&#x27;s title, year and language too</span><pre><span></span><code><span id="__span-50-1"><a id="__codelineno-50-1" name="__codelineno-50-1" href="#__codelineno-50-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--imdb<span class="w"> </span>tt1375666<span class="w"> </span>--enrich<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+<div class="language-shell highlight"><span class="filename">Force the match and take IMDb&#x27;s title, year and language too</span><pre><span></span><code><span id="__span-51-1"><a id="__codelineno-51-1" name="__codelineno-51-1" href="#__codelineno-51-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--imdb<span class="w"> </span>tt1375666<span class="w"> </span>--enrich<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
 <h3 id="what-each-metadata-provider-supplies">What each metadata provider supplies<a class="headerlink" href="#what-each-metadata-provider-supplies" title="Permanent link">&para;</a></h3>
 <p>Metadata providers differ in what they answer with, so the fields <code>--enrich</code> can replace
@@ -4568,7 +4577,7 @@ selection.</p>
 TVDB's <code>alternate</code> (Streaming) order for Futurama, for example, while TVDB's <code>official</code> order
 holds back four season-one episodes to the start of season two. <code>--tvdb-order</code> works out which
 order the service used, then renumbers the episodes into the order you asked for:</p>
-<div class="language-shell highlight"><span class="filename">Download Futurama in DVD order</span><pre><span></span><code><span id="__span-51-1"><a id="__codelineno-51-1" name="__codelineno-51-1" href="#__codelineno-51-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--tvdb-order<span class="w"> </span>dvd<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+<div class="language-shell highlight"><span class="filename">Download Futurama in DVD order</span><pre><span></span><code><span id="__span-52-1"><a id="__codelineno-52-1" name="__codelineno-52-1" href="#__codelineno-52-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--tvdb-order<span class="w"> </span>dvd<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
 <p>Available orders are <code>official</code> (aired), <code>dvd</code>, <code>absolute</code>, <code>alternate</code>, and <code>regional</code>. Set
 <code>tvdb_order</code> in your config to apply one by default.</p>
@@ -4583,7 +4592,7 @@ error and leaves the numbering untouched. Pick an order that covers the whole se
 <p>Some anime release groups number each season on from the season before it. With
 <code>--continuous-episodes</code>, a season two that follows a four-episode season one starts at
 <code>S02E05</code>:</p>
-<div class="language-shell highlight"><span class="filename">Number season two on from season one</span><pre><span></span><code><span id="__span-52-1"><a id="__codelineno-52-1" name="__codelineno-52-1" href="#__codelineno-52-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-ce<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
+<div class="language-shell highlight"><span class="filename">Number season two on from season one</span><pre><span></span><code><span id="__span-53-1"><a id="__codelineno-53-1" name="__codelineno-53-1" href="#__codelineno-53-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-ce<span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
 <p>The count comes from the episodes the service lists, so download from the series URL, not
 from a single season. A season the service does not list in your region is not counted.
@@ -4738,6 +4747,11 @@ authoritative list.</p>
 <td><code>--best-available</code></td>
 <td></td>
 <td>Degrade gracefully instead of failing.</td>
+</tr>
+<tr>
+<td><code>--skip-missing</code></td>
+<td></td>
+<td>Skip a title that misses a required language or track, and continue with the next title.</td>
 </tr>
 <tr>
 <td><code>--output</code></td>

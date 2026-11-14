@@ -2664,6 +2664,9 @@ copy of the sidecar files, and each invocation lists the copies sitting beside i
 finishes. With <code>-w S01-S02</code> the S01 post-script runs while S02 is still downloading. It says
 nothing about whether the season is complete on disk. Downloading a single episode fires
 the post-script for that season as soon as the episode lands.</p>
+<p>A title that track selection skips (<code>--skip-missing</code>, <code>-ado</code>, <code>-fso</code>) counts as done. The
+<code>season</code> post-script still fires for the episodes that landed, so the folder can be missing
+the skipped episodes. A run that skips every title fails, and then no <code>season</code> post-script fires.</p>
 <p>A title that fails stops the whole run. unshackle dispatches the <code>failure</code> post-script for
 that title and then returns. It downloads no further title, and no <code>season</code> or <code>run</code>
 post-script fires after that point. This applies to every title type. If one episode of S01
