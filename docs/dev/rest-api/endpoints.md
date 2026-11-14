@@ -451,9 +451,10 @@ Make a download job. It requires `service` and `title_id`. Every other field is 
 | `latest_episode` | boolean | `false` | Only the newest episode. |
 | `latest_episodes` | integer | `null` | Only the N newest episodes. A positive integer. When set, it overrides `latest_episode`. |
 | `lang` / `v_lang` / `a_lang` / `s_lang` | string[] | `["orig"]` / `[]` / `[]` / `["all"]` | Language filters. A missing `s_lang` language gives a warning and the job continues. |
-| `require_audio` | string[] | `[]` | Audio languages that must exist. The job fails if one is missing, even with `best_available`. |
-| `require_video` | string[] | `[]` | Video languages that must exist. The job fails if one is missing, even with `best_available`. |
-| `require_subs` | string[] | `[]` | Subtitle languages that must exist. The job fails if one is missing. `s_lang` still decides what to keep. |
+| `require_audio` | string[] | `[]` | Audio languages that must exist. The job fails if one is missing, even with `best_available`, or skips the title with `skip_missing`. |
+| `require_video` | string[] | `[]` | Video languages that must exist. The job fails if one is missing, even with `best_available`, or skips the title with `skip_missing`. |
+| `require_subs` | string[] | `[]` | Subtitle languages that must exist. The job fails if one is missing, or skips the title with `skip_missing`. `s_lang` still decides what to keep. |
+| `skip_missing` | boolean | `false` | Skip a title that misses a required language or track, and continue with the next title. The job's `skipped_titles` lists each skip. The job fails when it has one title or skips every title. |
 | `forced_subs` | boolean | `false` | Include forced subtitles. |
 | `forced_subs_only` | boolean | `false` | Download forced subtitles and no other subtitle; implies `forced_subs`. Not valid with `no_subs`, `video_only`, `audio_only` or `chapters_only`. |
 | `forced_s_lang` | string[] | `[]` | Forced subtitle language(s); implies `forced_subs`. |
@@ -585,6 +586,7 @@ Show download jobs, with optional filtering and sorting.
           "segments_total": 300,
           "speed": "5.2 MB/s",
           "skipped_subtitles": [],
+          "skipped_titles": [],
           "input_prompt": null,
           "notice": null
         }
@@ -853,6 +855,7 @@ Read the persisted history of jobs that reached a terminal state, newest first. 
           "created_time": "2026-07-03T12:00:00+00:00",
           "completed_time": "2026-07-03T12:08:00+00:00",
           "output_files": ["/downloads/Example.S01E01.mkv"],
+          "skipped_titles": [],
           "error_message": null,
           "parameters": { "...": "redacted" }
         }

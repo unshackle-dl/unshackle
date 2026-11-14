@@ -157,7 +157,7 @@ unshackle dl --s-lang en --forced-subs-only EXAMPLE 81234567
 
 `-fso` does not drop video or audio. Add `-S` for a subtitle-only download. A title with
 no forced track stops a run of one title. A run of more than one title skips that title
-with a warning.
+with a warning, and fails when it skips every title.
 
 ## Track types: forced, SDH, and CC
 

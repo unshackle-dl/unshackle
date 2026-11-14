@@ -88,6 +88,7 @@ DEFAULT_DOWNLOAD_PARAMS = {
     "require_audio": [],
     "require_video": [],
     "require_subs": [],
+    "skip_missing": False,
     "forced_subs": False,
     "forced_subs_only": False,
     "forced_s_lang": [],

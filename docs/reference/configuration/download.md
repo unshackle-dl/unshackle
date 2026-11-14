@@ -53,6 +53,7 @@ Common config keys. This is a useful subset, and every `dl` flag works:
 | `speed_limit` | str | *(unlimited)* | Total download speed cap across all downloads combined, e.g. `500k`, `5M`, `1.5G` or plain bytes/sec. Values are bytes, not bits (`5M` = 5.0 MB/s). |
 | `slow` | str | *(unset)* | Inter-title delay, e.g. `"20-40"`. |
 | `best_available` | bool | `false` | Warn instead of failing when a requested resolution, range, video language, or audio language is missing, or when one DRM system does not license under `--all-drm`. The CLI flag is `--best-available`, also spelled `--warn-only`. |
+| `skip_missing` | bool | `false` | Skip a title that misses a required language (`require_audio`, `require_video`, `require_subs`) or a track that a filter asks for, and continue with the next title. A run with one title, or a run that skips every title, still fails. The CLI flag is `--skip-missing`. For REST API jobs, set it in the [`serve`](services.md#serve) block. |
 | `generate_dv` | bool | `false` | With `-r HYBRID`, make Dolby Vision from the HDR10+ metadata or the decoded video when a title has no DV track. With `-r HDR10` or `-r HDR10P`, make it for that base and ignore a DV track. See [Dolby Vision without a DV track](../../guide/downloading.md#dolby-vision-without-a-dv-track). |
 | `proxy` | str | *(unset)* | Default proxy URI or 2-letter country. |
 | `no_folder` | bool | `false` | Do not create a per-title folder. |

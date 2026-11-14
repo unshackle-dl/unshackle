@@ -102,6 +102,7 @@ unshackle dl [OPTIONS] SERVICE [SERVICE ARGS...]
 | `--require-audio` | - | Audio langs that must exist. The title fails even with `--best-available`. Does not select tracks. |
 | `--require-video` | - | Video langs that must exist. The title fails even with `--best-available`. Does not select tracks. |
 | `--require-subs` | - | Subtitle langs that must exist. Fails the title if one is missing. `--s-lang` still decides what to keep. |
+| `--skip-missing` | off | Skip a title that misses a required language or track, and continue with the next title. A run with one title, or a run that skips every title, still fails. |
 | `-fs`, `--forced-subs` | off | Include forced subtitle tracks. |
 | `-fso`, `--forced-subs-only` | off | Keep only forced subtitle tracks; drop the other subtitles. Implies `-fs`. |
 | `-fsl`, `--forced-s-lang` | none | Language(s) wanted for forced subtitles; implies `-fs`. A `-` prefix excludes. |

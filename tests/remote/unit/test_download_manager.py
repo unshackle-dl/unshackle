@@ -626,3 +626,86 @@ def test_client_job_view_hides_debug_fields_without_debug_api() -> None:
     assert client_job_view(job, off) == {"job_id": "j"}
     assert client_job_view(job, None) == {"job_id": "j"}
     assert client_job_view(job, on) == job
+
+
+FAKE_SKIPPING_WORKER = """
+import sys
+from unshackle.core.api import download_worker
+
+
+def skip_then_stop(*args, progress_callback, **kwargs):
+    progress_callback({"skipped_titles": [{"title": "Show S01E02", "reason": "missing ko"}]})
+    raise RuntimeError("Download failed: Skipped all 2 titles")
+
+
+download_worker.perform_download = skip_then_stop
+sys.exit(download_worker.main(["worker"] + sys.argv[1:]))
+"""
+
+
+async def test_a_skip_written_just_before_the_worker_exits_reaches_the_job(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, manager: DownloadQueueManager
+) -> None:
+    import asyncio
+
+    from unshackle.core.api import download_manager
+
+    worker = tmp_path / "worker.py"
+    worker.write_text(FAKE_SKIPPING_WORKER, encoding="utf-8")
+    spawn = asyncio.create_subprocess_exec
+
+    async def spawn_fake_worker(executable: str, *args: str, **kwargs: Any) -> Any:
+        return await spawn(executable, str(worker), *args[2:], **kwargs)
+
+    monkeypatch.setattr(download_manager.asyncio, "create_subprocess_exec", spawn_fake_worker)
+    job = manager.create_job("EXAMPLE", "t")
+    with pytest.raises(Exception, match="Skipped all 2 titles"):
+        await asyncio.wait_for(manager.run_download_async(job), timeout=20)
+    assert job.skipped_titles == [{"title": "Show S01E02", "reason": "missing ko"}]
+    assert job.to_dict()["skipped_titles"] == job.skipped_titles
+
+
+def test_a_stopped_run_names_its_reason_in_the_job_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import sys
+
+    import click
+
+    import unshackle.commands.dl as dl_module
+    from unshackle.core.api import download_manager, handlers
+    from unshackle.core.api.errors import APIError
+    from unshackle.core.services import Services
+
+    class FakeDl:
+        cli = dl_module.dl.cli
+
+        def __init__(self, ctx: click.Context, **kwargs: object) -> None:
+            self.stop_reason = None
+
+        def result(self, **kwargs: object) -> None:
+            self.stop_reason = "Show S01E01: Required audio language(s) not found: ko"
+            sys.exit(1)
+
+    class FakeService:
+        def __init__(self, ctx: click.Context) -> None:
+            pass
+
+    monkeypatch.setattr(dl_module, "dl", FakeDl)
+    monkeypatch.setattr(Services, "get_path", staticmethod(lambda s: tmp_path))
+    monkeypatch.setattr(Services, "load", staticmethod(lambda s: FakeService))
+    monkeypatch.setattr(handlers, "load_full_cdm", lambda *a: None)
+
+    with pytest.raises(APIError, match=r"^Download failed: Show S01E01: Required audio language\(s\) not found: ko$"):
+        download_manager.perform_download("job-1", "EXAMPLE1", "t1", {})
+
+
+def test_job_history_keeps_the_skipped_titles(tmp_path: Path, manager: DownloadQueueManager) -> None:
+    import json
+
+    from unshackle.core.api.download_manager import record_job_history
+
+    job = manager.create_job("EXAMPLE", "t")
+    job.status = JobStatus.COMPLETED
+    job.skipped_titles = [{"title": "Show S01E02", "reason": "missing ko"}]
+    record_job_history(job)
+    entry = json.loads((tmp_path / "api_history.jsonl").read_text(encoding="utf-8").splitlines()[-1])
+    assert entry["skipped_titles"] == job.skipped_titles

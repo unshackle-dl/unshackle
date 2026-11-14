@@ -158,6 +158,13 @@ if TYPE_CHECKING:
     from unshackle.core.remote_service import ServerKeySource
 
 
+class SkippedTitle(TypedDict):
+    """A title skipped because a requested track or language is missing. Accumulated as ``dl.skipped_titles``."""
+
+    title: str
+    reason: str
+
+
 class SkippedSubtitle(TypedDict):
     """A subtitle skipped under ``--skip-subtitle-errors``. Accumulated as ``dl.skipped_subtitles``,
     one entry per track. ``id`` and ``title`` identify which subtitle of which title was unavailable."""
@@ -979,6 +986,12 @@ class dl:
         default=[],
         help="Subtitle languages that must exist. The title fails if one is missing. -sl still decides what to keep.",
     )
+    @click.option(
+        "--skip-missing",
+        is_flag=True,
+        default=False,
+        help="Skip a title that misses a required language or track and continue with the next title.",
+    )
     @click.option("-fs", "--forced-subs", is_flag=True, default=False, help="Include forced subtitle tracks.")
     @click.option(
         "-fso",
@@ -1383,6 +1396,9 @@ class dl:
         # Subtitles skipped under --skip-subtitle-errors, recorded so an embedding caller can
         # report which weren't available without parsing the console output. See SkippedSubtitle.
         self.skipped_subtitles: list[SkippedSubtitle] = []
+        self.skipped_titles: list[SkippedTitle] = []
+        # Why a missing track or language stopped the run, for the API job error.
+        self.stop_reason: Optional[str] = None
         # result() catches a download-worker failure, reports it, and returns rather than
         # re-raising (so the CLI still exits cleanly). Keep it so an embedding caller (the API
         # worker) can tell the title did not complete instead of reading it as a success.
@@ -1765,6 +1781,7 @@ class dl:
         require_audio: list[str],
         require_video: list[str],
         require_subs: list[str],
+        skip_missing: bool,
         forced_subs: bool,
         forced_subs_only: bool,
         forced_s_lang: list[str],
@@ -2348,15 +2365,20 @@ class dl:
                 for folder, context in post_script_last.get(group_key, {}).items():
                     dispatch("success", "season", season_context(context, folder), postscript)
 
-        def skip_title(title: Any, reason: str) -> None:
-            """Skip a title that has no track of the kind an only flag selects.
+        def skip_title(title: Any, reason: str, kind_only: bool = False) -> None:
+            """Skip a title that has no track the selection asks for, and report it to the API job.
 
-            A run with one title stops instead, because it has nothing else to download.
+            Only a kind-only miss (-ado, -fso, no track left) skips without --skip-missing; any other miss
+            stops the run. A run with one title always stops, because it has nothing else to download.
             """
-            if wanted_total <= 1:
-                self.log.error(reason)
+            if wanted_total <= 1 or not (kind_only or skip_missing):
+                self.stop_reason = f"{title}: {reason}"
+                self.log.error(self.stop_reason)
                 sys.exit(1)
-            self.log.warning(f"{reason} Skipping {title}")
+            self.skipped_titles.append(SkippedTitle(title=str(title), reason=reason))
+            if progress_sink:
+                progress_sink({"skipped_titles": list(self.skipped_titles)})
+            self.log.warning(f"Skipping {title}: {reason}")
             if not no_mux:
                 settle_post_script_group(title)
 
@@ -2641,6 +2663,7 @@ class dl:
             elif proxy_download:
                 console.log(f"Using a separate proxy for downloads: {mask_proxy(proxy_download)}")
 
+            missing_required: list[str] = []
             for kind, required, available in (
                 (
                     "audio",
@@ -2659,10 +2682,11 @@ class dl:
                     ],
                 ),
             ):
-                missing_required = missing_required_langs(required, available, title.language, exact=exact_lang)
-                if missing_required:
-                    self.log.error(f"Required {kind} language(s) not found: {', '.join(missing_required)}")
-                    sys.exit(1)
+                if missing := missing_required_langs(required, available, title.language, exact=exact_lang):
+                    missing_required.append(f"Required {kind} language(s) not found: {', '.join(missing)}")
+            if missing_required:
+                skip_title(title, "; ".join(missing_required))
+                continue
 
             if not keep_videos:
                 title.tracks.videos = []
@@ -2690,16 +2714,18 @@ class dl:
                         for codec in missing_codecs:
                             self.log.warning(f"Skipping {codec.name} video tracks as none are available.")
                         if not title.tracks.videos:
-                            self.log.error(f"There's no {', '.join(c.name for c in vcodec)} Video Track...")
-                            sys.exit(1)
+                            skip_title(title, f"There's no {', '.join(c.name for c in vcodec)} Video Track...")
+                            continue
                     elif keep_videos:
                         title.tracks.select_video(lambda x: x.codec != Video.Codec.LCEVC)
 
                     if keep_videos and generated_dv_bases:
                         title.tracks.videos = keep_generated_dv_bases(title.tracks.videos, generated_dv_bases)
                         if not any(v.range in generated_dv_bases for v in title.tracks.videos):
-                            self.log.error(f"There's no {', '.join(r.name for r in generated_dv_bases)} Video Track...")
-                            sys.exit(1)
+                            skip_title(
+                                title, f"There's no {', '.join(r.name for r in generated_dv_bases)} Video Track..."
+                            )
+                            continue
 
                     if keep_videos and range_:
                         # Special handling for HYBRID - don't filter, keep all HDR10 and DV tracks
@@ -2712,8 +2738,8 @@ class dl:
                             if Video.Range.HDR10P in missing_ranges and dv_has_hdr10p:
                                 self.log.warning("A DV track carries HDR10+: use -r DV or -r HYBRID.")
                             if not title.tracks.videos:
-                                self.log.error(f"There's no {', '.join(r.name for r in range_)} Video Track...")
-                                sys.exit(1)
+                                skip_title(title, f"There's no {', '.join(r.name for r in range_)} Video Track...")
+                                continue
 
                     if keep_videos and vbitrate:
                         if any(r == Video.Range.HYBRID for r in range_):
@@ -2723,21 +2749,21 @@ class dl:
                                 lambda x: x.range == Video.Range.DV or bool(x.bitrate and x.bitrate // 1000 == vbitrate)
                             )
                             if not any(x.range != Video.Range.DV for x in title.tracks.videos):
-                                self.log.error(f"There's no {vbitrate}kbps Video Track...")
-                                sys.exit(1)
+                                skip_title(title, f"There's no {vbitrate}kbps Video Track...")
+                                continue
                         else:
                             title.tracks.select_video(lambda x: bool(x.bitrate and x.bitrate // 1000 == vbitrate))
                             if not title.tracks.videos:
-                                self.log.error(f"There's no {vbitrate}kbps Video Track...")
-                                sys.exit(1)
+                                skip_title(title, f"There's no {vbitrate}kbps Video Track...")
+                                continue
 
                     if keep_videos and vbitrate_min is not None and vbitrate_max is not None:
                         title.tracks.select_video(
                             lambda x: bool(x.bitrate and vbitrate_min <= x.bitrate // 1000 <= vbitrate_max)
                         )
                         if not title.tracks.videos:
-                            self.log.error(f"No Video Track in {vbitrate_min}-{vbitrate_max}kbps range...")
-                            sys.exit(1)
+                            skip_title(title, f"No Video Track in {vbitrate_min}-{vbitrate_max}kbps range...")
+                            continue
 
                     if keep_videos and video_excl_r:
                         drop = matched_language_tags(
@@ -2745,8 +2771,8 @@ class dl:
                         )
                         title.tracks.select_video(lambda x: str(x.language) not in drop)
                         if not title.tracks.videos:
-                            self.log.error(f"Every Video Track was excluded by -{', -'.join(video_excl_r)}...")
-                            sys.exit(1)
+                            skip_title(title, f"Every Video Track was excluded by -{', -'.join(video_excl_r)}...")
+                            continue
 
                     effective_video_lang = v_lang or lang
                     video_languages = [lang for lang in effective_video_lang if lang != "best"]
@@ -2776,20 +2802,23 @@ class dl:
                                     )
                                     processed_video_lang = remaining_v_langs
                                 else:
-                                    self.log.error(f"{missing_str} not found in video tracks and no fallback available")
-                                    sys.exit(1)
+                                    skip_title(
+                                        title, f"{missing_str} not found in video tracks and no fallback available"
+                                    )
+                                    continue
                             else:
-                                self.log.error(missing_str + " not found in video tracks")
-                                sys.exit(1)
+                                skip_title(title, missing_str + " not found in video tracks")
+                                continue
                         title.tracks.videos = title.tracks.by_language(
                             title.tracks.videos, processed_video_lang, exact_match=exact_lang
                         )
                         if not title.tracks.videos:
                             # empty only when 'orig' was the sole request and did not resolve
-                            self.log.error(
-                                f"There's no {as_requested(processed_video_lang, v_orig_token) or 'orig'} Video Track..."
+                            skip_title(
+                                title,
+                                f"There's no {as_requested(processed_video_lang, v_orig_token) or 'orig'} Video Track...",
                             )
-                            sys.exit(1)
+                            continue
 
                     has_hybrid = any(r == Video.Range.HYBRID for r in range_)
                     non_hybrid_ranges: list[Video.Range] = [r for r in range_ if r != Video.Range.HYBRID]
@@ -2854,8 +2883,8 @@ class dl:
                                     f"There's no {res_list} Video Track{plural}, continuing with available qualities..."
                                 )
                             else:
-                                self.log.error(f"There's no {res_list} Video Track{plural}...")
-                                sys.exit(1)
+                                skip_title(title, f"There's no {res_list} Video Track{plural}...")
+                                continue
 
                     pre_hybrid_videos: list[Video] = list(title.tracks.videos) if has_hybrid else []
                     if keep_videos and has_hybrid:
@@ -2968,8 +2997,8 @@ class dl:
                                         fallback_selected.append(match)
                                 title.tracks.videos = fallback_selected
                             else:
-                                self.log.error(gate_failure)
-                                sys.exit(1)
+                                skip_title(title, gate_failure)
+                                continue
 
                     fsl = resolve_sort_langs(forced_s_lang, title.language, exact=exact_lang)
                     if keep_subtitles and s_excl_r:
@@ -3031,27 +3060,31 @@ class dl:
                         if forced_subs_only:
                             title.tracks.select_subtitles(lambda x: x.forced)
                             if not title.tracks.subtitles:
-                                skip_title(title, "There's no forced subtitle track for the selected languages.")
+                                skip_title(
+                                    title,
+                                    "There's no forced subtitle track for the selected languages.",
+                                    kind_only=True,
+                                )
                                 continue
 
                 if keep_audio and audio_description_only:
                     title.tracks.select_audio(lambda x: x.descriptive)
                     if not title.tracks.audio:
-                        skip_title(title, "There's no audio description track.")
+                        skip_title(title, "There's no audio description track.", kind_only=True)
                         continue
                 # might have no audio tracks if part of the video, e.g. transport stream hls
                 if keep_audio and len(title.tracks.audio) > 0:
                     if not audio_description:
                         title.tracks.select_audio(lambda x: not x.descriptive)
                         if not title.tracks.audio:
-                            self.log.error("Audio description only, use --audio-description...")
-                            sys.exit(1)
+                            skip_title(title, "Audio description only, use --audio-description...")
+                            continue
                     if acodec:
                         title.tracks.select_audio(lambda x: x.codec in acodec)
                         if not title.tracks.audio:
                             codec_names = ", ".join(c.name for c in acodec)
-                            self.log.error(f"No audio tracks matching codecs: {codec_names}")
-                            sys.exit(1)
+                            skip_title(title, f"No audio tracks matching codecs: {codec_names}")
+                            continue
                     if channels:
                         title.tracks.select_audio(
                             lambda x: bool(
@@ -3059,33 +3092,33 @@ class dl:
                             )
                         )
                         if not title.tracks.audio:
-                            self.log.error(f"There's no {channels} Audio Track...")
-                            sys.exit(1)
+                            skip_title(title, f"There's no {channels} Audio Track...")
+                            continue
                     if no_atmos:
                         title.tracks.audio = [x for x in title.tracks.audio if not x.atmos]
                         if not title.tracks.audio:
-                            self.log.error("No non-Atmos audio tracks available...")
-                            sys.exit(1)
+                            skip_title(title, "No non-Atmos audio tracks available...")
+                            continue
                     if abitrate:
                         title.tracks.select_audio(lambda x: x.bitrate and x.bitrate // 1000 == abitrate)
                         if not title.tracks.audio:
-                            self.log.error(f"There's no {abitrate}kbps Audio Track...")
-                            sys.exit(1)
+                            skip_title(title, f"There's no {abitrate}kbps Audio Track...")
+                            continue
                     if abitrate_min is not None and abitrate_max is not None:
                         title.tracks.select_audio(
                             lambda x: x.bitrate and abitrate_min <= x.bitrate // 1000 <= abitrate_max
                         )
                         if not title.tracks.audio:
-                            self.log.error(f"No Audio Track in {abitrate_min}-{abitrate_max}kbps range...")
-                            sys.exit(1)
+                            skip_title(title, f"No Audio Track in {abitrate_min}-{abitrate_max}kbps range...")
+                            continue
                     if audio_excl_r:
                         drop = matched_language_tags(
                             audio_excl_r, [t.language for t in title.tracks.audio], exact_lang, every_variant=True
                         )
                         title.tracks.select_audio(lambda x: str(x.language) not in drop)
                         if not title.tracks.audio:
-                            self.log.error(f"Every Audio Track was excluded by -{', -'.join(audio_excl_r)}...")
-                            sys.exit(1)
+                            skip_title(title, f"Every Audio Track was excluded by -{', -'.join(audio_excl_r)}...")
+                            continue
                     audio_languages = a_lang or lang
                     if audio_languages:
                         processed_lang = resolve_sort_langs(audio_languages, title.language, exact=exact_lang)
@@ -3115,13 +3148,13 @@ class dl:
                                         )
                                         processed_lang = remaining
                                     else:
-                                        self.log.error(
-                                            f"{missing_str} not found in {audio_noun} and no fallback available"
+                                        skip_title(
+                                            title, f"{missing_str} not found in {audio_noun} and no fallback available"
                                         )
-                                        sys.exit(1)
+                                        continue
                                 else:
-                                    self.log.error(f"{missing_str} not found in {audio_noun}")
-                                    sys.exit(1)
+                                    skip_title(title, f"{missing_str} not found in {audio_noun}")
+                                    continue
 
                         title.tracks.audio = select_best_audio(
                             title.tracks.audio, processed_lang, acodec, audio_description, exact_lang
@@ -3129,11 +3162,11 @@ class dl:
                         if not title.tracks.audio and not embedded_langs:
                             # empty when 'orig' was the sole request, did not resolve, and the
                             # video carries no audio of its own to fall back on
-                            self.log.error(
-                                f"There's no {as_requested(processed_lang, a_orig_token) or 'orig'} "
-                                f"Audio Track, cannot continue..."
+                            skip_title(
+                                title,
+                                f"There's no {as_requested(processed_lang, a_orig_token) or 'orig'} Audio Track...",
                             )
-                            sys.exit(1)
+                            continue
 
                 kept_tracks = []
                 if keep_videos:
@@ -3149,7 +3182,7 @@ class dl:
 
                 title.tracks = Tracks(kept_tracks, manifest_url=title.tracks.manifest_url)
                 if not (title.tracks.videos or title.tracks.audio or title.tracks.subtitles or title.tracks.chapters):
-                    skip_title(title, "There's no track left for the selected options.")
+                    skip_title(title, "There's no track left for the selected options.", kind_only=True)
                     continue
 
             selected_tracks, tracks_progress_callables = title.tracks.tree(add_progress=True)
@@ -4063,6 +4096,13 @@ class dl:
         self.wait_vault_writes()
         if export_path:
             self.log_export_summary()
+        if self.skipped_titles:
+            if len(self.skipped_titles) == wanted_total:
+                self.stop_reason = f"Skipped all {wanted_total} titles"
+                self.log.error(self.stop_reason)
+                sys.exit(1)
+            skipped = ", ".join(t["title"] for t in self.skipped_titles)
+            self.log.warning(f"Skipped {len(self.skipped_titles)} of {wanted_total} titles: {skipped}")
         dl_time = time_elapsed_since(start_time)
 
         console.print(Padding(f"Processed all titles in [progress.elapsed]{dl_time}", (0, 5, 1, 5)))

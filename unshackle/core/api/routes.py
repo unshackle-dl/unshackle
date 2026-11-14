@@ -1008,17 +1008,20 @@ async def download(request: web.Request) -> web.Response:
                 type: array
                 items:
                   type: string
-                description: Audio languages that must exist, else the job fails (default - [])
+                description: Audio languages that must exist, else the job fails or, with skip_missing, skips the title (default - [])
               require_video:
                 type: array
                 items:
                   type: string
-                description: Video languages that must exist, else the job fails (default - [])
+                description: Video languages that must exist, else the job fails or, with skip_missing, skips the title (default - [])
               require_subs:
                 type: array
                 items:
                   type: string
-                description: Subtitle languages that must exist, else the job fails (default - [])
+                description: Subtitle languages that must exist, else the job fails or, with skip_missing, skips the title (default - [])
+              skip_missing:
+                type: boolean
+                description: Skip a title that misses a required language or track and continue with the next title; the job fails when it skips every title (default - false)
               forced_subs:
                 type: boolean
                 description: Include forced subtitle tracks (default - false)

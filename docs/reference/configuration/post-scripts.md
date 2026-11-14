@@ -213,6 +213,10 @@ subs = [p for p in sys.argv[i].removeprefix("--subs=").split("\n") if p]
     nothing about whether the season is complete on disk. Downloading a single episode fires
     the post-script for that season as soon as the episode lands.
 
+    A title that track selection skips (`--skip-missing`, `-ado`, `-fso`) counts as done. The
+    `season` post-script still fires for the episodes that landed, so the folder can be missing
+    the skipped episodes. A run that skips every title fails, and then no `season` post-script fires.
+
     A title that fails stops the whole run. unshackle dispatches the `failure` post-script for
     that title and then returns. It downloads no further title, and no `season` or `run`
     post-script fires after that point. This applies to every title type. If one episode of S01

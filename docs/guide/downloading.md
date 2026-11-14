@@ -531,6 +531,17 @@ The check runs against the full track list, before any language selection or exc
 `orig` resolves to the title language, and `--exact-lang` applies. Audio carried inside the
 video track counts. `--no-audio` and `--no-video` drop the matching requirement.
 
+A failed title stops the whole run. To skip that title and come back for it later, add
+`--skip-missing`, or set `skip_missing: true` under `dl:` in `unshackle.yaml`. It also skips a
+title that has no track for a filter such as `-q`, `-v`, `-r`, `-a` or a language you request.
+A run with one title, or a run that skips every title, still fails. A REST API job lists each
+skipped title and the reason in `skipped_titles`.
+
+```bash
+# download the episodes that have Korean audio, skip the others
+unshackle dl -al ko,en --require-audio ko --skip-missing -w S06 EXAMPLE 0ABC123
+```
+
 ### Forced subtitles and output format
 
 - `-fs` / `--forced-subs`: include forced subtitle tracks (signs/foreign dialogue).
@@ -777,7 +788,8 @@ Additional track-type flags:
     - A flag that drops the same tracks is an error, for example `-ado` with `--no-audio`
       or `-fso` with `-A`.
     - A title with no track of that kind stops a run of one title. A run of more than one
-      title skips that title with a warning and continues.
+      title skips that title with a warning and continues. The run fails when it skips
+      every title.
     - unshackle reads the kind from the manifest or from the service. A track that
       neither of them marks as descriptive or forced does not match.
 
@@ -1214,6 +1226,7 @@ authoritative list.
 | `--require-audio` | | Audio languages that must exist. The title fails if one is missing. |
 | `--require-video` | | Video languages that must exist. The title fails if one is missing. |
 | `--best-available` | | Degrade gracefully instead of failing. |
+| `--skip-missing` | | Skip a title that misses a required language or track, and continue with the next title. |
 | `--output` | `-o` | Output directory for this run. |
 | `--split-audio` / `--merge-video` / `--no-mux` | | Muxing behaviour. |
 | `--postscript` / `--no-postscript` | | Run a command after each output file, or run none. |
