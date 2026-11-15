@@ -176,6 +176,7 @@ class Config:
         self.merge_segments: bool = bool(kwargs.get("merge_segments", False))
 
         self.theme: str = kwargs.get("theme") or "default"
+        self.wide_output: bool = kwargs.get("wide_output", False)
         self.set_terminal_bg: bool = kwargs.get("set_terminal_bg", False)
         self.tag: str = kwargs.get("tag") or ""
         self.tag_group_name: bool = kwargs.get("tag_group_name", True)

@@ -492,14 +492,23 @@ def print_wide(renderable: RenderableType, pad: PaddingDimensions = (1, 3)) -> N
     """Print a listing at the terminal width, indented like the rich-click help panels.
 
     The shared console holds 80 columns to keep logs and progress compact. Long values such as paths
-    and URLs fold badly at that width, so this widens the console for one print and restores it after.
+    and URLs fold badly at that width, so this widens the console for one print and restores it after. It
+    restores ``_width``, because on a legacy Windows console the ``width`` property reads one column less.
     """
-    fixed_width = console.width
-    console.width = max(fixed_width, shutil.get_terminal_size().columns)
+    fixed_width = console._width
+    console.width = max(console.width, shutil.get_terminal_size().columns - console.legacy_windows)
     try:
         console.print(Padding(renderable, pad))
     finally:
-        console.width = fixed_width
+        console._width = fixed_width
+
+
+def print_listing(renderable: RenderableType) -> None:
+    """Print a listing at the terminal width when ``wide_output`` is on, else at the shared console width."""
+    if config.wide_output:
+        print_wide(renderable, (0, 5))
+    else:
+        console.print(Padding(renderable, (0, 5)))
 
 
 _prompt_handler: Optional[Callable[[str], str]] = None
@@ -545,6 +554,7 @@ __all__ = (
     "console",
     "listing_panel",
     "listing_table",
+    "print_listing",
     "print_wide",
     "prompt_user",
     "set_notice_handler",

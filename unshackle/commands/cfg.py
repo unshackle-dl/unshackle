@@ -33,7 +33,7 @@ def cfg(ctx: click.Context, key: str, value: str, unset: bool, list_: bool) -> N
         try:
             value = ast.literal_eval(value)
         except (ValueError, SyntaxError):
-            pass  # probably a str without quotes or similar, assume it's a string value
+            value = ast.literal_eval(value.title()) if value.lower() in ("true", "false") else value
 
     log = logging.getLogger("cfg")
 

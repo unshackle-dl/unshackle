@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import html
 import logging
 import math
@@ -45,7 +46,7 @@ from unshackle.core import __version__, binaries, providers
 from unshackle.core.cdm import DecryptLabsRemoteCDM
 from unshackle.core.cdm.detect import cdm_type_stub, is_playready_cdm, is_remote_cdm, is_widevine_cdm
 from unshackle.core.config import cdm_entry_names_device, config, load_yaml, resolve_cdm_name, resolve_decryption
-from unshackle.core.console import GradientPulseBarColumn, SyncLive, console, listing_panel
+from unshackle.core.console import GradientPulseBarColumn, SyncLive, console, listing_panel, print_listing
 from unshackle.core.constants import (
     DEFAULT_SAMPLE,
     DOWNLOAD_ALL_DRM,
@@ -135,6 +136,7 @@ from unshackle.core.utilities import (
     time_elapsed_since,
 )
 from unshackle.core.utils import tags
+from unshackle.core.utils.audio_vivid import decode_audio_vivid
 from unshackle.core.utils.bitrate import apply_real_bitrates
 from unshackle.core.utils.click_types import (
     AUDIO_CODEC_LIST,
@@ -521,6 +523,35 @@ def remux_music_tracks(title: Any, log: logging.Logger, sample: Optional[tuple[i
 def mux_skipped(no_mux: bool, title: Any) -> bool:
     """A Song has no mux step, so --no-mux never applies to it."""
     return no_mux and not isinstance(title, Song)
+
+
+def take_unmuxable_audio(tracks: Tracks, log: logging.Logger) -> list[Audio]:
+    """Remove and return the Audio Vivid tracks, which no muxer carries, to be saved beside the output.
+
+    With the user's decoder, each one also goes back into the mux as a WAV copy.
+    """
+    kept = [a for a in tracks.audio if a.codec == Audio.Codec.AV3A]
+    tracks.audio = [a for a in tracks.audio if a.codec != Audio.Codec.AV3A]
+    for track in kept:
+        wav = decode_audio_vivid(track.path, log) if track.path else None
+        if wav:
+            decoded = copy.copy(track)
+            decoded.path = wav
+            decoded.codec = Audio.Codec.PCM
+            tracks.audio.append(decoded)
+    return kept
+
+
+def track_file_suffix(track: Any) -> str:
+    """The name part a track file saved on its own adds after the title: language and codec, or subtitle flags."""
+    if isinstance(track, Video):
+        return f".{track.codec.name if track.codec is not None else 'video'}"
+    lang_suffix = f".{track.language}" if track.language else ""
+    if isinstance(track, Audio):
+        return f"{lang_suffix}.{track.codec.name if track.codec is not None else 'audio'}"
+    if isinstance(track, Subtitle):
+        return f"{lang_suffix}{'.forced' if track.forced else ''}{'.sdh' if track.sdh else ''}"
+    return ""
 
 
 def no_mux_extension(track: Any, path: Path, media_info: MediaInfo) -> str:
@@ -2162,7 +2193,7 @@ class dl:
             titles = self.apply_continuous_episodes(titles)
 
         console.print(Padding(Rule(f"[rule.text]{titles.__class__.__name__}: {titles}"), (1, 2)))
-        console.print(Padding(titles.tree(verbose=list_titles), (0, 5)))
+        print_listing(titles.tree(verbose=list_titles))
 
         if list_titles:
             return
@@ -2598,7 +2629,7 @@ class dl:
 
             if list_:
                 available_tracks, _ = title.tracks.tree()
-                console.print(Padding(listing_panel(available_tracks, "Available Tracks"), (0, 5)))
+                print_listing(listing_panel(available_tracks, "Available Tracks"))
                 continue
 
             keep_videos = True
@@ -3589,6 +3620,11 @@ class dl:
                 tagged_paths: set[Path] = set()
                 append_audio_codec_suffix = True
                 skip_mux = mux_skipped(no_mux, title)
+                kept_audio = [] if skip_mux else take_unmuxable_audio(title.tracks, self.log)
+                if kept_audio and not title.tracks:
+                    title.tracks.audio = kept_audio
+                    kept_audio = []
+                    skip_mux = True
 
                 if skip_mux:
                     for track in title.tracks:
@@ -3948,23 +3984,8 @@ class dl:
 
                         track = next((t for t in title.tracks if t.path == track_path), None)
                         if track:
-                            if isinstance(track, Video):
-                                track_suffix = f".{track.codec.name if track.codec is not None else 'video'}"
-                            elif isinstance(track, Audio):
-                                lang_suffix = f".{track.language}" if track.language else ""
-                                track_suffix = (
-                                    f"{lang_suffix}.{track.codec.name if track.codec is not None else 'audio'}"
-                                )
-                            elif isinstance(track, Subtitle):
-                                lang_suffix = f".{track.language}" if track.language else ""
-                                forced_suffix = ".forced" if track.forced else ""
-                                sdh_suffix = ".sdh" if track.sdh else ""
-                                track_suffix = f"{lang_suffix}{forced_suffix}{sdh_suffix}"
-                            else:
-                                track_suffix = ""
-
                             ext = no_mux_extension(track, track_path, media_info)
-                            final_path = final_dir / f"{base_filename}{track_suffix}{ext}"
+                            final_path = final_dir / f"{base_filename}{track_file_suffix(track)}{ext}"
                         else:
                             final_path = final_dir / f"{base_filename}{track_path.suffix}"
 
@@ -4010,6 +4031,16 @@ class dl:
                             shutil.move(muxed_path, final_path)
                         used_final_paths.add(final_path)
                         self.completed_files.append(final_path)
+                        for kept in kept_audio:
+                            assert kept.path is not None
+                            kept_path = final_path.with_name(
+                                f"{final_path.stem}{track_file_suffix(kept)}{kept.path.suffix}"
+                            )
+                            shutil.move(kept.path, kept_path)
+                            self.completed_files.append(kept_path)
+                            sidecar_files.setdefault(muxed_path, []).append(kept_path)
+                            self.log.info(f"Saved {kept_path.name}: no muxer carries Audio Vivid")
+                        kept_audio = []
                         if muxed_path not in tagged_paths:
                             tags.tag_file(
                                 final_path,

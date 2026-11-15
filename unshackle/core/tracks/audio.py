@@ -103,7 +103,7 @@ class Audio(Track):
         @staticmethod
         def from_ts(stream_type: int, registration: bytes) -> Optional[Audio.Codec]:
             """The codec an MPEG-TS PMT entry names by its registration descriptor or ``stream_type``, else None."""
-            if registration == b"AVSA":
+            if registration in (b"AVSA", b"av3a"):
                 return Audio.Codec.AV3A
             return {0x0F: Audio.Codec.AAC, 0x81: Audio.Codec.AC3, 0x87: Audio.Codec.EC3, 0xD5: Audio.Codec.AV3A}.get(
                 stream_type

@@ -40,7 +40,24 @@ def is_ts(data: bytes) -> bool:
 
 
 def ts_streams(data: bytes) -> Optional[list[tuple[int, bytes]]]:
-    """The ``stream_type`` and registration format identifier of each PMT entry, or None without a PMT.
+    """The ``stream_type`` and registration format identifier of each PMT entry, or None without a PMT."""
+    entries = ts_pmt(data)
+    return None if entries is None else [(stream_type, registration) for _, stream_type, registration in entries]
+
+
+def ts_pid(b: bytes, i: int = 1) -> int:
+    """The 13-bit PID at ``b[i]``: a packet header at offset 1, or a PAT or PMT entry."""
+    return ((b[i] & 0x1F) << 8) | b[i + 1]
+
+
+def ts_payload(packet: bytes) -> bytes:
+    """The payload of a TS packet after any adaptation field, or b"" when it carries none."""
+    adaptation = (packet[3] >> 4) & 3
+    return packet[5 + packet[4] if adaptation & 2 else 4 :] if adaptation & 1 else b""
+
+
+def ts_pmt(data: bytes) -> Optional[list[tuple[int, int, bytes]]]:
+    """The PID, ``stream_type`` and registration format identifier of each PMT entry, or None without a PMT.
 
     PAT program 0 names the network information table, so it is skipped. Lengths that run past the packet
     are cut to it, so bad bytes give fewer entries, never an exception.
@@ -48,16 +65,12 @@ def ts_streams(data: bytes) -> Optional[list[tuple[int, bytes]]]:
     # reads only a PAT and PMT that fit in one packet, as packagers write them; reassemble
     # sections across packets if a source with a longer PMT appears
 
-    def pid(b: bytes, i: int) -> int:
-        return ((b[i] & 0x1F) << 8) | b[i + 1]
-
     def length(b: bytes, i: int) -> int:
         return ((b[i] & 0x0F) << 8) | b[i + 1]
 
     def section(packet: bytes, table_id: int) -> bytes:
         """The packet's ``table_id`` section up to its CRC, or b"" when the packet holds no such section."""
-        adaptation = (packet[3] >> 4) & 3
-        payload = packet[5 + packet[4] if adaptation & 2 else 4 :] if adaptation & 1 else b""
+        payload = ts_payload(packet)
         body = payload[1 + payload[0] :] if payload else b""
         body = body[: max(0, 3 + length(body, 1) - 4)] if len(body) >= 3 else b""
         return body if len(body) >= 12 and body[0] == table_id else b""
@@ -67,10 +80,10 @@ def ts_streams(data: bytes) -> Optional[list[tuple[int, bytes]]]:
         packet = data[pos : pos + TS_PACKET]
         if packet[0] != 0x47 or not packet[1] & 0x40:
             continue
-        if pid(packet, 1) == 0 and pmt_pid is None:
+        if ts_pid(packet) == 0 and pmt_pid is None:
             pat = section(packet, 0x00)
-            pmt_pid = next((pid(pat, k + 2) for k in range(8, len(pat) - 3, 4) if pat[k] or pat[k + 1]), None)
-        elif pid(packet, 1) == pmt_pid:
+            pmt_pid = next((ts_pid(pat, k + 2) for k in range(8, len(pat) - 3, 4) if pat[k] or pat[k + 1]), None)
+        elif ts_pid(packet) == pmt_pid:
             pmt = section(packet, 0x02)
             if not pmt:
                 return None
@@ -82,7 +95,7 @@ def ts_streams(data: bytes) -> Optional[list[tuple[int, bytes]]]:
                     if pmt[j] == 0x05 and j + 6 <= info_end:
                         registration = pmt[j + 2 : j + 6]
                     j += 2 + pmt[j + 1]
-                streams.append((pmt[i], registration))
+                streams.append((ts_pid(pmt, i + 1), pmt[i], registration))
                 i = info_end
             return streams
     return None

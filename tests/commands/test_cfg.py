@@ -58,3 +58,11 @@ def test_a_duplicate_only_ruamel_sees_still_gives_its_line(config_file: Path, ca
         result = CliRunner().invoke(cfg_module.cfg, ["a"])
     assert result.exit_code == 1
     assert caplog.messages == [f"{config_file}: duplicate key on line 3. Unshackle uses the later one."]
+
+
+def test_lowercase_true_and_false_are_written_as_booleans_and_no_stays_a_language(config_file: Path) -> None:
+    config_file.write_text("theme: rainbow\n", encoding="utf-8")
+    for key, value in (("wide_output", "false"), ("debug_requests", "TRUE"), ("lang", "no")):
+        assert CliRunner().invoke(cfg_module.cfg, [key, value]).exit_code == 0
+    text = config_file.read_text(encoding="utf-8")
+    assert "wide_output: false\n" in text and "debug_requests: true\n" in text and "lang: no\n" in text

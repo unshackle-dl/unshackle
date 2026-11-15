@@ -450,6 +450,19 @@ An MP4 title loses:
 - SubStation Alpha (`.ass`) subtitles
 - container tags (`mkvpropedit`)
 
+### Audio Vivid output
+
+No muxer carries Audio Vivid (AVS3-P3): Matroska has no CodecID for it, and FFmpeg and MP4Box cannot
+write it to MP4. unshackle leaves an Audio Vivid track out of the mux and saves its original MPEG-TS file
+beside the output, named like a `--no-mux` audio file (`<name>.<language>.AV3A.ts`).
+
+With an Audio Vivid decoder named `avs3Decoder` in a `binaries` folder or on `PATH`, unshackle also
+decodes the track to PCM and muxes that into the output. unshackle does not ship the decoder: the UWA
+reference decoder's licence limits its use. A service that delivers Audio Vivid can declare the decoder so
+that `unshackle env check` lists it.
+
+Without the decoder, a title whose only tracks are Audio Vivid is not muxed.
+
 ### 3D output
 
 A stereoscopic 3D (MV-HEVC) video track also muxes to MP4 with MP4Box, because Matroska has no
