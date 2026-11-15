@@ -439,7 +439,7 @@ Make a download job. It requires `service` and `title_id`. Every other field is 
 | Field | Type | Default | Notes |
 | --- | --- | --- | --- |
 | `profile` | string | `null` | Credential/cookie profile. |
-| `quality` | int[] | `[]` | Target resolution(s); best available if empty. |
+| `quality` | int[] | `[]` | Target resolution(s); best available if empty, or the lowest with `worst`. |
 | `vcodec` | string/string[] | `[]` | Video codec filter. |
 | `acodec` | string/string[] | `[]` | Audio codec filter. |
 | `vbitrate` / `abitrate` | int | `null` | Video / audio bitrate in kbps (positive). |
@@ -480,7 +480,7 @@ Make a download job. It requires `service` and `title_id`. Every other field is 
 | `adaptive_workers` | boolean | `false` | Scale segment workers to measured CDN throughput, up to the `workers` cap. |
 | `download_processes` | int | `1` | Split a track's segments across this many processes. Only engages for large batches. |
 | `downloads` | int | `1` | Concurrent tracks. |
-| `worst` | boolean | `false` | Lowest bitrate within quality. |
+| `worst` | boolean | `false` | Pick the lowest-bitrate video at each resolution in `quality`, or at the lowest resolution if `quality` is empty. With `worst`, `HYBRID` in `range` requires `quality`. |
 | `best_available` | boolean | `false` | Fall back to best available. With `all_drm`, a DRM system that does not license is a warning. |
 | `generate_dv` | boolean | `false` | With `HYBRID` in `range`, make Dolby Vision from the HDR10+ metadata or the decoded video when a title has no DV track. With `HDR10` or `HDR10P` in `range` and no `HYBRID`, make it for that base and ignore a DV track. With none of the three in `range`, the field has no effect. |
 | `repack` | boolean | `false` | Add REPACK tag. |

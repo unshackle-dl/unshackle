@@ -73,7 +73,8 @@ filtering. `--skip-dl` runs the license step but skips the actual segment downlo
 ### Resolution
 
 `-q` / `--quality` takes one or more target resolutions (heights) as a comma-separated
-list. Without it, unshackle picks the **best available** resolution.
+list. Without it, unshackle picks the **best available** resolution, or the lowest resolution with
+`--worst`.
 
 ```shell title="Single resolution"
 unshackle dl -q 1080 EXAMPLE 81234567
@@ -98,7 +99,11 @@ By default a missing requested resolution is an error. Two flags change that:
 | Flag | Behaviour |
 | --- | --- |
 | `--best-available` (`--warn-only`) | If the requested resolution(s) are not present, continue with the best that *is* available instead of failing. Also softens missing video and audio languages and hybrid fallbacks, and with `--all-drm` a DRM system that does not license. |
-| `--worst` | Within the specified quality, pick the **lowest** bitrate rendition. **Requires `-q/--quality`.** |
+| `--worst` | Pick the lowest-bitrate video at each requested resolution. With no requested resolution, pick the lowest-bitrate video at the lowest resolution. |
+
+A `quality` in the config counts as a requested resolution. When `--best-available` finds none of the
+requested resolutions, `--worst` also picks from the lowest resolution. With `--worst`, hybrid mode
+requires `-q`, also when `--generate-dv` switches an HDR10 or HDR10+ request to hybrid mode.
 
 ```shell title="Never fail on a missing resolution"
 unshackle dl -q 2160 --best-available EXAMPLE 0ABC123
@@ -299,6 +304,8 @@ bitrate for the top renditions, overriding the manifest value:
     declared-bitrate renditions of each quality tier, in parallel (video grouped by codec
     and range, audio by codec, channels, language, and descriptive flag). It extends a
     group downward while a lower unprobed rendition could still outrank a probed one.
+    The lowest renditions are often not probed, so `--worst` usually compares their
+    manifest bitrates.
     This keeps probing fast even when a service exposes dozens of renditions. A track
     whose duration unshackle cannot find falls back to `ffprobe`. A probe failure is
     non-fatal: the manifest value stays in place.
@@ -1225,7 +1232,7 @@ authoritative list.
 | `--latest-episodes N` | | Only the N newest episodes. |
 | `--video-only` / `--audio-only` / `--subs-only` | `-V` / `-A` / `-S` | Restrict track types. |
 | `--no-video` / `--no-audio` / `--no-subs` / `--no-chapters` / `--no-attachments` | `-nv` / `-na` / `-ns` / `-nc` / `-nt` | Skip track types. |
-| `--worst` | | Lowest bitrate within `-q`. |
+| `--worst` | | Lowest-bitrate video at each requested resolution, or at the lowest resolution if none is set. |
 | `--require-audio` | | Audio languages that must exist. The title fails if one is missing. |
 | `--require-video` | | Video languages that must exist. The title fails if one is missing. |
 | `--best-available` | | Degrade gracefully instead of failing. |

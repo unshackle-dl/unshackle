@@ -937,7 +937,7 @@ async def download(request: web.Request) -> web.Response:
                 items:
                   type: integer
                 description: >-
-                  Download resolution(s) (default - best available). An API key with a
+                  Download resolution(s) (default - best available; lowest with worst). An API key with a
                   server_cdm_max_height for the service must pass a quality at or under that height.
               vcodec:
                 oneOf:
@@ -1176,7 +1176,9 @@ async def download(request: web.Request) -> web.Response:
                   three in range, the field has no effect.
               worst:
                 type: boolean
-                description: Select the lowest bitrate track within the specified quality. Requires `quality` (default - false)
+                description: >-
+                  Select the lowest bitrate track within the specified quality, or at the lowest resolution if no
+                  quality is set. HYBRID requires `quality` (default - false)
               repack:
                 type: boolean
                 description: Add REPACK tag to the output filename (default - false)

@@ -377,10 +377,16 @@ def hybrid_plan(videos: Sequence[Video], generate_dv: bool) -> tuple[list[Video]
 
 
 def pick_video(candidates: list[Video], worst: bool) -> Optional[Video]:
-    """The best candidate, or with ``worst`` the last one, preferring 2D: a 3D track sorts after 2D at one height."""
+    """The best candidate, or with ``worst`` the lowest bitrate of the lowest resolution, preferring 2D.
+
+    A track with no bitrate or no size counts as the highest, and a full tie goes to the later track.
+    """
     if worst:
-        pool = [v for v in candidates if not v.stereo] or candidates
-        return pool[-1] if pool else None
+        return min(
+            reversed(candidates),
+            key=lambda v: (v.stereo, standard_resolution(v.width, v.height) or math.inf, v.bitrate or math.inf),
+            default=None,
+        )
     return next(iter(candidates), None)
 
 
@@ -1328,7 +1334,8 @@ class dl:
         "--worst",
         is_flag=True,
         default=False,
-        help="Select the lowest bitrate track within the specified quality. Requires -q/--quality.",
+        help="Select the lowest bitrate track within the specified quality, or of the lowest resolution if no "
+        "quality is set. Hybrid mode requires -q/--quality.",
     )
     @click.option(
         "--best-available",
@@ -2022,10 +2029,6 @@ class dl:
         ):
             acodec = AUDIO_CODEC_LIST.convert(acodec)
 
-        if worst and not quality:
-            self.log.error("--worst requires -q/--quality to be specified")
-            sys.exit(1)
-
         if select_titles and wanted:
             self.log.error("--select-titles and -w/--wanted cannot be used together")
             sys.exit(1)
@@ -2050,6 +2053,9 @@ class dl:
 
             if not DoviTool:
                 self.log.error("Unable to run hybrid mode: dovi_tool not found")
+                sys.exit(1)
+            if worst and not quality:
+                self.log.error("--worst requires -q/--quality to be specified in hybrid mode")
                 sys.exit(1)
 
         if cdm_only is None:

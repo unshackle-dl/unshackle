@@ -221,8 +221,49 @@ def test_worst_prefers_the_2d_track_at_one_height(tmp_path: Path) -> None:
     ranked.sort_videos()
     assert pick_video(ranked.videos, worst=True) is videos[1]
     assert pick_video(ranked.videos, worst=False) is videos[0]
-    assert pick_video([videos[3], videos[2]], worst=True) is videos[2]
+    assert pick_video([videos[2], videos[3]], worst=True) is videos[3]
     assert pick_video([], worst=True) is None
+
+
+def test_worst_ranks_unknown_bitrates_and_sizes_highest(tmp_path: Path) -> None:
+    def ranked(*specs: tuple[bool, int, Any]) -> list[Video]:
+        tracks = Tracks([stereo_video(tmp_path, stereo=s, width=h * 16 // 9, height=h, bitrate=b) for s, h, b in specs])
+        tracks.sort_videos()
+        return tracks.videos
+
+    tie = ranked((False, 720, 500_000), (False, 480, 500_000))
+    assert pick_video(tie, worst=True) is tie[1]
+
+    unknown = ranked((False, 1080, 900_000), (False, 1080, 0), (False, 1080, None))
+    assert pick_video(unknown, worst=True) is unknown[0]
+    none_known = ranked((False, 1080, 0), (False, 1080, None))
+    assert pick_video(none_known, worst=True) is none_known[-1]
+
+    sizeless = stereo_video(tmp_path, stereo=False, bitrate=50_000)
+    sized = ranked((False, 720, 900_000))[0]
+    assert pick_video([sized, sizeless], worst=True) is sized
+
+    with_3d = ranked((False, 1080, 5_000_000), (True, 1080, 1_000_000))
+    assert pick_video(with_3d, worst=True) is with_3d[0]
+
+
+def test_worst_ignores_the_language_order() -> None:
+    def rendition(language: str, bitrate: int) -> Video:
+        return Video(
+            url=f"https://x/{language}.mp4",
+            language=language,
+            codec=Video.Codec.HEVC,
+            width=1920,
+            height=1080,
+            bitrate=bitrate,
+        )
+
+    lower, higher = rendition("en-AU", 3_000_000), rendition("en-GB", 6_000_000)
+    tracks = Tracks([lower, higher])
+    tracks.sort_videos(by_language=["en"])
+    candidates = Tracks.by_language(tracks.videos, ["en"])
+    assert candidates == [lower, higher]
+    assert pick_video(candidates, worst=True) is lower
 
 
 def test_hybrid_never_pairs_a_3d_dv_track(tmp_path: Path) -> None:
