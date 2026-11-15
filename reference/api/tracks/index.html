@@ -1985,6 +1985,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#unshackle.core.tracks.Audio.Codec.from_ts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;from_ts
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#unshackle.core.tracks.Audio.Codec.from_ffprobe" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3649,6 +3660,17 @@
   
     <nav class="md-nav" aria-label=" Codec">
       <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#unshackle.core.tracks.Audio.Codec.from_ts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;from_ts
+      
+    </span>
+  </a>
+  
+</li>
         
           <li class="md-nav__item">
   <a href="#unshackle.core.tracks.Audio.Codec.from_ffprobe" class="md-nav__link">
@@ -5774,6 +5796,30 @@ recommended.</p>
 <div class="doc doc-object doc-function">
 
 
+<h4 id="unshackle.core.tracks.Audio.Codec.from_ts" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">from_ts</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-staticmethod"><code>staticmethod</code></small>
+  </span>
+
+<a href="#unshackle.core.tracks.Audio.Codec.from_ts" class="headerlink" title="Permanent link">&para;</a></h4>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">from_ts</span><span class="p">(</span><span class="n">stream_type</span><span class="p">,</span> <span class="n">registration</span><span class="p">)</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>The codec an MPEG-TS PMT entry names by its registration descriptor or <code>stream_type</code>, else None.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
 <h4 id="unshackle.core.tracks.Audio.Codec.from_ffprobe" class="doc doc-heading">
 <code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">from_ffprobe</span>
 
@@ -5946,7 +5992,7 @@ float, so this adds its figures: "5.1.4" -&gt; 10.0.</p>
 
         <p>Remux the track into the container of the codec FFprobe reads from the file, cut to the sample window.</p>
 <p>The declared codec is used only when FFprobe cannot read the file. Every failure raises and keeps the
-downloaded file.</p>
+downloaded file. Audio Vivid raises: FFprobe reads it as MP3, and no music container carries it.</p>
 
 
     </div>
@@ -9073,8 +9119,9 @@ A subtitle in an unlisted codec is always kept.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Sort video tracks by resolution, 2D before 3D, then bitrate, and optionally language.</p>
-<p>A 3D track carries two views, so its higher bitrate would otherwise rank it over the 2D one.</p>
+        <p>Sort video tracks by standard resolution, 2D before 3D, then bitrate, and optionally language.</p>
+<p>The standard resolution puts a 3840x1606 and a 3840x1610 crop in one 2160p group, ordered by bitrate.
+A 3D track carries two views, so its higher bitrate would otherwise rank it over the 2D one.</p>
 
 
     </div>

@@ -2312,7 +2312,7 @@ default. In other words, config only fills in options you did not set on the com
 <td><code>range</code></td>
 <td>list</td>
 <td><code>["SDR"]</code></td>
-<td>Colour range(s): <code>SDR</code>, <code>HLG</code>, <code>HDR10</code>, <code>HDR10P</code>, <code>DV</code>, <code>HYBRID</code>.</td>
+<td>Colour range(s): <code>SDR</code>, <code>HLG</code>, <code>HDR10</code>, <code>HDR10P</code>, <code>VIVID</code>, <code>DV</code>, <code>HYBRID</code>.</td>
 </tr>
 <tr>
 <td><code>channels</code></td>
@@ -2982,6 +2982,12 @@ probes the two highest and the two lowest bitrates first:</p>
 </tr>
 </tbody>
 </table>
+<p>The probe also finds HDR Vivid in HEVC HDR10 and HLG tracks. A track becomes <code>VIVID</code>, so
+<code>-r VIVID</code> selects it, when its first frame carries CUVA HDR Vivid metadata, or when its MPEG-TS
+program map table (PMT) has the <code>cuvv</code> registration. An HLG track never becomes <code>HDR10P</code>. An audio
+track with no codec gets its codec from the PMT of an MPEG-TS first segment: the <code>AVSA</code>
+registration or <code>stream_type</code> <code>0xD5</code> gives <code>Audio Vivid</code>. The probe has no HDR10+ result for an
+MPEG-TS track.</p>
 <p>A probe that fails, or a fragment whose metadata is encrypted, keeps the label from the service.
 unshackle does not probe ISM tracks. Each probe makes one to three small requests: the 64 KiB
 fragment, plus the playlist of an HLS track or the header of a one-file track. The probes run in
