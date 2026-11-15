@@ -29,9 +29,8 @@ from unshackle.core.tracks.chapters import Chapter, Chapters
 from unshackle.core.tracks.subtitle import Subtitle
 from unshackle.core.tracks.track import (
     Track,
-    fix_data_reference_indexes,
     has_mp4_only_audio_entry,
-    strip_duplicate_init_boxes,
+    prepare_for_mp4box,
 )
 from unshackle.core.tracks.video import Video
 from unshackle.core.utilities import (
@@ -713,28 +712,10 @@ class Tracks:
                 continue
             events.emit(events.Types.TRACK_MULTIPLEX, track=track)
 
-            source = track.path
             candidate = config.directories.temp / f"mp4mux_{track.id}_{os.getpid()}_{threading.get_ident()}.mp4"
-            dropped = strip_duplicate_init_boxes(source, candidate)
-            if dropped:
+            source = prepare_for_mp4box(track.path, candidate, track.id)
+            if source == candidate:
                 cleaned.append(candidate)
-                source = candidate
-                log_event(
-                    "mux_mp4_init_deduplicated",
-                    level="DEBUG",
-                    message=f"Dropped {dropped} repeated init box(es) from {track.path.name} for MP4Box",
-                    context={"track_id": track.id, "dropped": dropped},
-                )
-            elif candidate.exists():
-                candidate.unlink()
-            repointed = fix_data_reference_indexes(source)
-            if repointed:
-                log_event(
-                    "mux_mp4_dref_fixed",
-                    level="DEBUG",
-                    message=f"Pointed {repointed} sample entry(s) of {track.path.name} at data reference 1 for MP4Box",
-                    context={"track_id": track.id, "entries": repointed},
-                )
 
             delay = round((track.sample_start - sample_base) * 1000) if config.sample else 0
             moov = read_top_level_box(source, b"moov")

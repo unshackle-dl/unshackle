@@ -203,6 +203,33 @@ def fix_data_reference_indexes(path: Path) -> int:
 MPEGH_SAMPLE_ENTRIES = ("mha1", "mha2", "mhm1", "mhm2")
 
 
+def prepare_for_mp4box(source: Path, candidate: Path, track_id: Any) -> Path:
+    """Return the file MP4Box reads: ``candidate`` when repeated init boxes were dropped into it, else ``source``.
+
+    The returned file also has its sample entries pointed at data reference 1.
+    """
+    dropped = strip_duplicate_init_boxes(source, candidate)
+    if dropped:
+        log_event(
+            "mux_mp4_init_deduplicated",
+            level="DEBUG",
+            message=f"Dropped {dropped} repeated init box(es) from {source.name} for MP4Box",
+            context={"track_id": track_id, "dropped": dropped},
+        )
+    else:
+        candidate.unlink(missing_ok=True)
+    prepared = candidate if dropped else source
+    repointed = fix_data_reference_indexes(prepared)
+    if repointed:
+        log_event(
+            "mux_mp4_dref_fixed",
+            level="DEBUG",
+            message=f"Pointed {repointed} sample entry(s) of {source.name} at data reference 1 for MP4Box",
+            context={"track_id": track_id, "entries": repointed},
+        )
+    return prepared
+
+
 def has_mp4_only_audio_entry(path: Path) -> bool:
     """True if the MP4 holds a DTS-UHD (DTS:X Profile 2) or MPEG-H audio sample entry.
 

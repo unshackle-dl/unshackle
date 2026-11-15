@@ -9,7 +9,6 @@ from typing import Any, Optional
 import click
 
 from unshackle.core.console import console
-from unshackle.core.constants import AnyTrack
 from unshackle.core.credential import Credential
 from unshackle.core.music import (
     build_music_from_songs,
@@ -62,7 +61,6 @@ class MUSIC_EXAMPLE(Service):
         build_song            the full Song field set, and what `data` feeds
         get_tracks            ONE Audio track per codec+bitrate the source offers
         get_chapters          empty, because a song has no chapters
-        on_track_downloaded   restore the real container suffix before tagging
 
     There is no music-specific Service API. A `Song` is an ordinary `Title` on the
     one generic download path, so everything else a music service needs (auth,
@@ -459,24 +457,6 @@ class MUSIC_EXAMPLE(Service):
         # A song has no chapters. Return an empty Chapters() rather than raising; the
         # base class requires the method and the pipeline reads it for every title.
         return Chapters()
-
-    def on_track_downloaded(self, track: AnyTrack) -> None:
-        # Every track downloads to a temp file named `.mp4` whatever it holds, and a
-        # Song skips the muxer entirely, so its download IS the delivered file, suffix
-        # and all. The tagger picks its metadata format off that suffix, so restore the
-        # real container here or a FLAC ships as a `.mp4` the tagger then fails to open
-        # as one.
-        if not isinstance(track, Audio) or not track.path or not track.codec:
-            return
-        # This event fires twice, once before decryption and once at the end of the
-        # download. Decryption still reads the original path, so a track that is still
-        # encrypted has to wait for the second call, by which time drm is cleared.
-        if track.drm:
-            return
-        suffix = self.config["containers"].get(track.codec.name)
-        if not suffix or track.path.suffix == suffix:
-            return
-        track.path = track.path.rename(track.path.with_suffix(suffix))
 
     # DRM is identical to any other service: implement get_widevine_license (and the
     # PlayReady/ClearKey callbacks) and mark the Audio tracks with the DRM the API

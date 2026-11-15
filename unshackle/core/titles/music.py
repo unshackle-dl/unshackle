@@ -34,6 +34,46 @@ SONG_FIELDS = (
 )
 """The `Song` attributes a remote session sends, beyond the fields every title has."""
 
+MUSIC_DATA_KEYS = (
+    "release_date",
+    "composer",
+    "performer",
+    "comment",
+    "source",
+    "service",
+    "track_id",
+    "album_id",
+    "track_url",
+    "album_url",
+    "artists",
+    "replaygain_track_gain",
+    "replaygain_track_peak",
+    "replaygain_album_gain",
+    "replaygain_album_peak",
+    "quality",
+    "quality_label",
+    "lossless",
+    "hires",
+    "atmos",
+    "duration",
+    "released_at",
+    "year",
+    "barcode",
+    "parental_warning",
+    "unavailable_reason",
+    "skip_reason",
+)
+"""The `Song.data` keys the music tagger and renderer read, which a remote session sends as `music_data`."""
+
+
+def song_metadata(song: Any) -> dict[str, Any]:
+    """``Song.data`` with its nested ``metadata`` dict merged over it, as the renderer also reads both."""
+    data = getattr(song, "data", None)
+    if not isinstance(data, dict):
+        return {}
+    nested = data.get("metadata")
+    return {**data, **nested} if isinstance(nested, dict) else data
+
 
 class Song(Title):
     def __init__(

@@ -865,8 +865,8 @@ By default, `mkvmerge` muxes the tracks of a movie or an episode into a single M
     window, or the whole file when the track is one file.
 
 !!! note "Music is never muxed"
-    A song skips the muxer. unshackle keeps the container that the service
-    delivered, such as `.flac`, `.m4a`, or `.mp3`, and writes the metadata into that file.
+    A song skips the muxer. unshackle remuxes it into the container of its codec,
+    such as `.flac`, `.m4a`, or `.mp3`, and writes the metadata into that file.
     Read [Music output files](output-and-naming.md#music-output-files).
 
 ### After the download
@@ -874,7 +874,8 @@ By default, `mkvmerge` muxes the tracks of a movie or an episode into a single M
 `--postscript "<command>"` runs your own command once per output file, with unshackle's
 metadata substituted into `{variable}` placeholders. It is repeatable, and it replaces the
 `post_scripts` config for that run. No `success` post-script operates under `--no-mux`, because
-that run writes no muxed output. A `failure` post-script still operates if the download fails.
+that run writes no muxed output; a song is the exception, because `--no-mux` does not apply to it.
+A `failure` post-script still operates if the download fails.
 
 ```shell title="Hand each finished file to an uploader"
 unshackle dl --postscript "python /opt/upload.py {filepath} --service={service}" EXAMPLE 81234567

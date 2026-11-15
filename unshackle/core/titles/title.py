@@ -186,7 +186,8 @@ class Title:
                 channels_str = f"{len(positions) - heights - lfe}.{lfe}.{heights}"
             else:
                 channels_str = f"{channels:.1f}"
-            builtin = AUDIO_CODEC_MAP.get(codec, codec)
+            profile = getattr(primary_audio_track, "format_profile", None)
+            builtin = AUDIO_CODEC_MAP.get(f"{codec} {profile}") or AUDIO_CODEC_MAP.get(codec, codec)
             audio = rename(builtin)
             spacer = " " if builtin in SPACED_AUDIO_CODECS or audio[-1:].isdigit() else ""
 

@@ -43,7 +43,7 @@ from unshackle.core.proxies.resolve import initialize_proxy_providers, is_loopba
 from unshackle.core.services import Services
 from unshackle.core.session import RnetSession, utf8_text
 from unshackle.core.titles import Episode, Movie, Song, Title_T
-from unshackle.core.titles.music import SONG_FIELDS
+from unshackle.core.titles.music import MUSIC_DATA_KEYS, SONG_FIELDS, song_metadata
 from unshackle.core.titles.title import rename
 from unshackle.core.tracks import Audio, Subtitle, Tracks, Video
 from unshackle.core.tunnel import (
@@ -1577,6 +1577,8 @@ def serialize_title(title: Title_T) -> Dict[str, Any]:
     if is_song:
         for field in SONG_FIELDS:
             result[field] = getattr(title, field, None)
+        metadata = song_metadata(title)
+        result["music_data"] = {key: metadata[key] for key in MUSIC_DATA_KEYS if metadata.get(key) not in (None, "")}
     if isinstance(title, (Episode, Movie)) and getattr(title, "anime", None) is not None:
         result["anime"] = title.anime
 

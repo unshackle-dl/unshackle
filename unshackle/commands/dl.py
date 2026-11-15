@@ -153,7 +153,7 @@ from unshackle.core.utils.hdr10plus import probed_tracks
 from unshackle.core.utils.post_scripts import NO_POST_SCRIPTS, build_context, dispatch, season_context
 from unshackle.core.utils.redact import mask_proxy, redact_secrets
 from unshackle.core.utils.selector import select_multiple
-from unshackle.core.utils.subprocess import ffmpeg_decodes, ffprobe, run_step
+from unshackle.core.utils.subprocess import ffmpeg_decodes, ffprobe
 from unshackle.core.vault import Vault
 from unshackle.core.vaults import Vaults
 
@@ -501,8 +501,8 @@ def post_script_group(candidate: Any) -> Any:
     return ("title", id(candidate))
 
 
-def remux_music_tracks(title: Any, log: logging.Logger) -> None:
-    """Remux each audio track of a Song into the container of its codec.
+def remux_music_tracks(title: Any, log: logging.Logger, sample: Optional[tuple[int, int]] = None) -> None:
+    """Remux each audio track of a Song into the container of its codec, cut to ``sample`` when given.
 
     A Song never reaches the muxer, so each downloaded audio track is itself a delivered
     file. A failure warns, keeps that downloaded track, and moves on to the next one: the
@@ -511,45 +511,22 @@ def remux_music_tracks(title: Any, log: logging.Logger) -> None:
     if not isinstance(title, Song):
         return
     for track in title.tracks.audio:
+        window = (max(sample[0] - track.sample_start, 0), sample[1] - sample[0]) if sample else (0.0, None)
         try:
-            track.to_music_container()
+            track.to_music_container(*window)
         except Exception as e:  # noqa: BLE001
             log.warning(f"Could not remux audio track {track.id} for music: {e}")
 
 
-def cut_music_sample(title: Any, window: tuple[int, int], log: logging.Logger) -> None:
-    """Cut each audio track of a Song to the sample window. A Song has no mux step that cuts it."""
-    if not isinstance(title, Song) or not binaries.FFMPEG:
-        return
-    for track in title.tracks.audio:
-        if not track.path or not track.path.exists():
-            continue
-        cut_path = track.path.with_stem(f"{track.path.stem}_cut")
-        try:
-            run_step(
-                [
-                    binaries.FFMPEG,
-                    "-v",
-                    "error",
-                    "-y",
-                    "-ss",
-                    f"{max(window[0] - track.sample_start, 0):.3f}",
-                    "-i",
-                    track.path,
-                    "-t",
-                    str(window[1] - window[0]),
-                    "-map",
-                    "0",
-                    "-c",
-                    "copy",
-                    cut_path,
-                ],
-                output=cut_path,
-                label="music sample cut",
-            )
-            os.replace(cut_path, track.path)
-        except RuntimeError as e:
-            log.warning(f"Could not cut audio track {track.id} to the sample window, so it holds whole segments: {e}")
+def mux_skipped(no_mux: bool, title: Any) -> bool:
+    """A Song has no mux step, so --no-mux never applies to it."""
+    return no_mux and not isinstance(title, Song)
+
+
+def no_mux_extension(track: Any, path: Path, media_info: MediaInfo) -> str:
+    """The extension of a --no-mux track file: an audio track in an MPEG-4 file is saved as .m4a."""
+    container = media_info.general_tracks[0].format if media_info.general_tracks else None
+    return ".m4a" if isinstance(track, Audio) and path.suffix == ".mp4" and container == "MPEG-4" else path.suffix
 
 
 def apply_service_dl_overrides(ctx: click.Context, service_dl_config: dict[str, Any], log: logging.Logger) -> None:
@@ -2382,7 +2359,7 @@ class dl:
             if progress_sink:
                 progress_sink({"skipped_titles": list(self.skipped_titles)})
             self.log.warning(f"Skipping {title}: {reason}")
-            if not no_mux:
+            if not mux_skipped(no_mux, title):
                 settle_post_script_group(title)
 
         for i, title in enumerate(titles):
@@ -3605,16 +3582,15 @@ class dl:
                         except Exception as e:  # noqa: BLE001
                             self.log.warning(f"VUI normalization skipped for {track.id}: {e}")
 
-                remux_music_tracks(title, self.log)
-                if sample:
-                    cut_music_sample(title, sample, self.log)
+                remux_music_tracks(title, self.log, sample)
 
                 muxed_paths = []
                 muxed_audio_codecs: dict[Path, Optional[Audio.Codec]] = {}
                 tagged_paths: set[Path] = set()
                 append_audio_codec_suffix = True
+                skip_mux = mux_skipped(no_mux, title)
 
-                if no_mux:
+                if skip_mux:
                     for track in title.tracks:
                         if track.path and track.path.exists():
                             muxed_paths.append(track.path)
@@ -3941,7 +3917,7 @@ class dl:
                 else:
                     muxed_paths.extend(track.path for track in title.tracks.audio if track.path and track.path.exists())
 
-                if no_mux:
+                if skip_mux:
                     final_dir = self.output_dir or config.directories.downloads
                     if not no_folder and (
                         isinstance(title, (Episode, Song))
@@ -3987,7 +3963,8 @@ class dl:
                             else:
                                 track_suffix = ""
 
-                            final_path = final_dir / f"{base_filename}{track_suffix}{track_path.suffix}"
+                            ext = no_mux_extension(track, track_path, media_info)
+                            final_path = final_dir / f"{base_filename}{track_suffix}{ext}"
                         else:
                             final_path = final_dir / f"{base_filename}{track_path.suffix}"
 
@@ -4068,7 +4045,7 @@ class dl:
                         if final_path.parent not in post_script_folders:
                             post_script_folders.append(final_path.parent)
 
-                if not no_mux:
+                if not skip_mux:
                     settle_post_script_group(title)
 
                 title_dl_time = time_elapsed_since(dl_start_time)

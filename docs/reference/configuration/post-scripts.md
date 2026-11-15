@@ -328,7 +328,8 @@ credentials and `token=` / `api_key=` query parameters are also masked.
 ## Limitations
 
 - No `success` post-script operates under `--no-mux` or `--skip-dl`, because neither writes a
-  muxed output. A `failure` post-script still runs under `--no-mux` if the download itself fails.
+  muxed output. A song is the exception: `--no-mux` does not apply to it, so its post-scripts
+  operate. A `failure` post-script still runs under `--no-mux` if the download itself fails.
 - `failure` post-scripts only operate in `file` mode.
 - There is no webhook sender. Call `curl` from a script instead.
 - Script output is not captured. Redirect it inside your own script if you want a log.

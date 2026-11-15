@@ -262,22 +262,37 @@ The per-kind folder config keys are `movies`, `series`, `sports`, `songs`, and `
 
 ## Music output files
 
-A song does not go through the muxer. Music services deliver audio in a fragmented MP4, which is
-not a music file. Its header states a length of zero, so a player stops after the first fragment.
-FLAC inside an MP4 is also not a FLAC stream. A rename cannot correct either fault, so unshackle
-remuxes each downloaded audio track into the container of its codec, then moves the file to its
-final path.
+A song does not go through the muxer. Music services deliver audio as a fragmented MP4, a WebM
+file or a plain audio file, and every download has a `.mp4` name. A fragmented MP4 header states a
+length of zero, so a player stops after the first fragment. A rename cannot correct this, so
+unshackle remuxes each downloaded audio track into the container of its codec, then moves the file
+to its final path.
+
+FFprobe reads the codec from the downloaded file. The codec that the service declares is used only
+when FFprobe cannot read the file.
 
 | Codec | Extension |
 |---|---|
 | FLAC | `.flac` |
+| PCM, integer, 24-bit or less | `.flac` |
+| PCM, more than 24-bit or floating point | `.wav` |
 | Opus | `.opus` |
 | Vorbis | `.ogg` |
 | MP3 | `.mp3` |
-| AAC, ALAC, and all other codecs | `.m4a` |
+| DTS, DTS-HD | `.mka` |
+| AAC, ALAC, Dolby Digital, Dolby Digital Plus, and all other codecs | `.m4a` |
 
-unshackle re-encodes FLAC in this step. The audio does not change, but the new file states its
-true length. A plain copy cannot, because it keeps the source header and the zero in it.
+unshackle encodes FLAC and PCM to FLAC in this step. The audio does not change, but the new file
+states its true length. A plain copy cannot, because it keeps the source header and the zero in it.
+FLAC cannot hold floating-point PCM, and FFmpeg writes 32-bit FLAC only as an experimental feature,
+so that audio goes to `.wav`.
+
+FFmpeg writes DTS into MP4 with the wrong codec entry, so DTS goes to Matroska. AC-4, MPEG-H and
+DTS:X Profile 2 (DTS-UHD) go through MP4Box, because FFmpeg cannot write them into MP4. MP4Box
+needs [GPAC](../getting-started/installation.md#recommended-and-optional-tools).
+
+With `--sample`, the same step cuts the song to the sample window. If the window starts after the
+end of the song, unshackle shows a warning and keeps the full download.
 
 unshackle writes no `.mkv` file for music, and the [muxing options](#muxing-options) below do not
 apply.
@@ -295,13 +310,18 @@ around it.
 ### Music metadata
 
 After the file moves, unshackle writes the metadata into the audio file. It uses Vorbis
-comments for FLAC and Ogg, ID3 frames for MP3, and MP4 atoms for M4A. The tags hold the
-track title, artist, album artist, track and disc numbers, date, genre, ISRC, UPC,
-copyright, and record label. When `tag` and `tag_group_name` are set, unshackle also writes the group
-name into a `GROUP` tag.
+comments for FLAC and Ogg, ID3 frames for MP3 and WAV, MP4 atoms for M4A, and Matroska tags for
+MKA. The tags hold the track title, artist, album artist, track and disc numbers, date, genre,
+ISRC, UPC, copyright, and record label. When the service gives them, unshackle also writes each
+artist of a song with several artists into `ARTISTS`, and the ReplayGain values into
+`REPLAYGAIN_*` tags. An Opus file gets no `REPLAYGAIN_*` tags, because RFC 7845 advises against
+them in Opus files. When `tag` and `tag_group_name` are set, unshackle also writes the group name
+into a `GROUP` tag.
 
 unshackle embeds cover art when the service gives an artwork URL. It downloads the image
-and puts it in the file.
+and puts it in the file. With no artwork URL, it uses the first image attachment of the song. It
+converts a WebP image to JPEG. It skips an image larger than 16 MiB, the FLAC limit, with a
+warning. An MKA file gets no cover art.
 
 unshackle writes lyrics when the service supplies them: a `LYRICS` Vorbis comment for FLAC, a
 `USLT` frame for MP3, and a `©lyr` atom for M4A. Ogg uses the same `LYRICS` field as
@@ -314,8 +334,8 @@ the timed lines from that file. The file also comes back to the client from a re
 A metadata fault does not stop the run. The file is already in place, so unshackle writes a
 warning and continues.
 
-!!! warning "`--no-mux` leaves music files untagged"
-    [`--no-mux`](cli-reference.md#output-muxing-files) moves each downloaded track file to the output path without the tagging step. A music file from such a run holds only the metadata that the service put in it.
+!!! note "`--no-mux` does not change music output"
+    A song has no mux step, so [`--no-mux`](cli-reference.md#output-muxing-files) does not apply to it. The song gets the same file name, metadata, cover art and lyrics file as in a run without the flag.
 
 ## Muxing options
 
@@ -486,7 +506,7 @@ A few muxing behaviors are automatic and not configurable:
 - Descriptive audio gets the visually-impaired flag. SDH subtitles get the hearing-impaired flag. Forced subtitles get the forced flag.
 - unshackle writes the chapters from the title's chapter list (see [Chapters](#chapters-naming) below).
 
-The `--no-mux` flag skips muxing entirely and writes the individual track files, each with a track-type suffix, into the same output/folder structure. A track that shaka-packager decrypts has its date set to 1970-01-01; other tracks keep the date of the source file.
+The `--no-mux` flag skips muxing entirely and writes the individual track files, each with a track-type suffix, into the same output/folder structure. An audio track in an MP4 container gets the `.m4a` extension. A track that shaka-packager decrypts has its date set to 1970-01-01; other tracks keep the date of the source file.
 
 ## Sample files
 

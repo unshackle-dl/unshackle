@@ -50,7 +50,7 @@ from unshackle.core.session import MAX_BACKOFF
 from unshackle.core.titles import Title_T, Titles_T, remap_titles
 from unshackle.core.titles.episode import Episode, Series
 from unshackle.core.titles.movie import Movie, Movies
-from unshackle.core.titles.music import SONG_FIELDS, Album, Song
+from unshackle.core.titles.music import MUSIC_DATA_KEYS, SONG_FIELDS, Album, Song
 from unshackle.core.tracks import Audio, Chapter, Chapters, Subtitle, Tracks, Video
 from unshackle.core.tracks.attachment import Attachment
 from unshackle.core.tracks.track import Track
@@ -606,6 +606,9 @@ def apply_title_fields(title: Title_T, info: Dict[str, Any]) -> None:
             setattr(title, key, info[key])
 
     extra = {k: info[k] for k in ("date", "cover_url") if info.get(k) is not None}
+    music_data = info.get("music_data")
+    if isinstance(music_data, dict):
+        extra.update({key: music_data[key] for key in MUSIC_DATA_KEYS if key in music_data})
     if extra:
         if isinstance(title.data, dict):
             title.data.update(extra)

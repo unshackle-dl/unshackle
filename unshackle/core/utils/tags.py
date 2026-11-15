@@ -10,7 +10,7 @@ from xml.sax.saxutils import escape
 
 from unshackle.core import binaries
 from unshackle.core.config import config
-from unshackle.core.music.tagger import write_music_metadata
+from unshackle.core.music.tagger import build_tag_values, write_music_metadata
 from unshackle.core.providers import (
     ExternalIds,
     fuzzy_match,
@@ -98,6 +98,10 @@ def tag_file(
 
     if isinstance(title, Song):
         try:
+            if Path(path).suffix.lower() == ".mka":
+                values = build_tag_values(title).items()
+                apply_tags(path, {key: "; ".join(value) if isinstance(value, list) else value for key, value in values})
+                return
             music_result = write_music_metadata(path, title, session=session)
         except Exception as e:  # the file already moved; a tagging fault must warn, not abort the run
             log.warning("Music tagging failed for %s: %s", path.name, e)
