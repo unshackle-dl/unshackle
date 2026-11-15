@@ -3840,7 +3840,7 @@ ignore it safely. See <a href="../../creating-a-service/#split-episodes">Split e
 <td><code>quality</code></td>
 <td>int[]</td>
 <td><code>[]</code></td>
-<td>Target resolution(s); best available if empty.</td>
+<td>Target resolution(s); best available if empty, or the lowest with <code>worst</code>.</td>
 </tr>
 <tr>
 <td><code>vcodec</code></td>
@@ -4086,7 +4086,7 @@ ignore it safely. See <a href="../../creating-a-service/#split-episodes">Split e
 <td><code>worst</code></td>
 <td>boolean</td>
 <td><code>false</code></td>
-<td>Lowest bitrate within quality.</td>
+<td>Pick the lowest-bitrate video at each resolution in <code>quality</code>, or at the lowest resolution if <code>quality</code> is empty. With <code>worst</code>, <code>HYBRID</code> in <code>range</code> requires <code>quality</code>.</td>
 </tr>
 <tr>
 <td><code>best_available</code></td>

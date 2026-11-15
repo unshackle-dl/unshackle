@@ -3087,7 +3087,7 @@
 <tr>
 <td><code>--worst</code></td>
 <td>off</td>
-<td>Pick the lowest bitrate within the requested quality. <strong>Requires <code>-q</code>.</strong></td>
+<td>Pick the lowest-bitrate video at each requested resolution, or at the lowest resolution if none is set.</td>
 </tr>
 <tr>
 <td><code>--best-available</code>, <code>--warn-only</code></td>
@@ -3544,7 +3544,7 @@ and keeps the service's numbering unchanged. Pick an order that covers the whole
 </table>
 <div class="admonition warning">
 <p class="admonition-title">Some flags cannot be combined</p>
-<p><code>--select-titles</code> and <code>--wanted</code> are mutually exclusive. <code>--worst</code> needs <code>--quality</code>. <code>--vbitrate</code> and <code>--vbitrate-range</code> (and the audio equivalents) are mutually exclusive.</p>
+<p><code>--select-titles</code> and <code>--wanted</code> are mutually exclusive. With <code>--worst</code>, hybrid mode needs <code>--quality</code>. <code>--vbitrate</code> and <code>--vbitrate-range</code> (and the audio equivalents) are mutually exclusive.</p>
 </div>
 <hr />
 <h2 id="search"><code>search</code><a class="headerlink" href="#search" title="Permanent link">&para;</a></h2>
