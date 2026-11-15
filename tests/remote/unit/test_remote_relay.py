@@ -215,7 +215,7 @@ def test_a_quiet_remote_login_shows_its_last_server_lines_as_a_notice(monkeypatc
     shown = []
     monkeypatch.setattr(remote_service, "show_notice", shown.append)
     monkeypatch.setattr(remote_service.time, "sleep", lambda s: None)
-    logs = iter([["+ IP Region: CA"], ["+ Open URL: https://disneyplus.com/start\n+ Enter pair code: 9835-2503"], []])
+    logs = iter([["+ IP Region: CA"], ["+ Open URL: https://example.test/start\n+ Enter pair code: 9835-2503"], []])
     statuses = iter(["authenticating", "authenticating", "authenticating", "authenticated"])
 
     class Client:
@@ -236,7 +236,7 @@ def test_a_quiet_remote_login_shows_its_last_server_lines_as_a_notice(monkeypatc
 
     remote.poll_auth_completion(poll_interval=0)
     # silent while the remote was still logging; the pair code once it went quiet; cleared when done
-    assert shown == ["+ IP Region: CA\n+ Open URL: https://disneyplus.com/start\n+ Enter pair code: 9835-2503", None]
+    assert shown == ["+ IP Region: CA\n+ Open URL: https://example.test/start\n+ Enter pair code: 9835-2503", None]
     assert remote.auth_notice is None
 
 

@@ -236,7 +236,7 @@ The request body accepts the full download parameter set. A few of the most usef
 | `quality` | `[]` | Resolution(s), e.g. `[1080]`; empty means best available |
 | `vcodec` | `[]` | Video codec, e.g. `"H265"` |
 | `acodec` | `[]` | Audio codec, e.g. `"EC3"` |
-| `range` | `["SDR"]` | Dynamic range: `SDR`, `HDR10`, `HDR10+`, `DV`, `HLG`, `HYBRID` |
+| `range` | `["SDR"]` | Dynamic range: `SDR`, `HDR10`, `HDR10+`, `VIVID`, `DV`, `HLG`, `HYBRID` |
 | `wanted` | `[]` | Episodes to fetch, e.g. `["S01E01"]`, or music tracks, e.g. `["1-5"]`. Empty means all |
 | `lang` | `["orig"]` | Video/audio language(s) |
 | `s_lang` | `["all"]` | Subtitle language(s) |

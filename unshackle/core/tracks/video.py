@@ -91,6 +91,7 @@ class Video(Track):
         HLG = "HLG"  # https://en.wikipedia.org/wiki/Hybrid_log%E2%80%93gamma
         HDR10 = "HDR10"  # https://en.wikipedia.org/wiki/HDR10
         HDR10P = "HDR10+"  # https://en.wikipedia.org/wiki/HDR10%2B
+        VIVID = "HDR Vivid"  # CUVA HDR Vivid (T/UWA 005), dynamic metadata over a PQ or HLG base
         DV = "DV"  # https://en.wikipedia.org/wiki/Dolby_Vision
         HYBRID = "HYBRID"  # Selects both HDR10 and DV tracks for hybrid processing with DoviTool
 
@@ -857,6 +858,10 @@ class Video(Track):
         return True
 
 
+PROBED_RANGES = {
+    Video.Range.HDR10: (Video.Range.HDR10P, Video.Range.VIVID),
+    Video.Range.HLG: (Video.Range.VIVID,),
+}
 HDR_TRANSFER = {
     Video.Range.HDR10: "smpte2084",
     Video.Range.HDR10P: "smpte2084",

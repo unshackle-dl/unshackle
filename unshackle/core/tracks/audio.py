@@ -57,6 +57,7 @@ class Audio(Track):
         DTSX = "DTS-X"  # https://en.wikipedia.org/wiki/DTS,_Inc.#DTS:X
         DTSHD = "DTS-HD"  # https://en.wikipedia.org/wiki/DTS-HD_Master_Audio
         MPEGH = "MPEG-H"  # https://en.wikipedia.org/wiki/MPEG-H_3D_Audio
+        AV3A = "Audio Vivid"  # AVS3-P3 Audio Vivid
         ALAC = "ALAC"  # https://en.wikipedia.org/wiki/Apple_Lossless_Audio_Codec
         FLAC = "FLAC"  # https://en.wikipedia.org/wiki/FLAC
         MP3 = "MP3"  # https://en.wikipedia.org/wiki/MP3
@@ -87,6 +88,8 @@ class Audio(Track):
                 return Audio.Codec.DTSHD
             if mime in MPEGH_SAMPLE_ENTRIES:
                 return Audio.Codec.MPEGH
+            if mime == "av3a":
+                return Audio.Codec.AV3A
             if mime == "alac":
                 return Audio.Codec.ALAC
             if mime == "flac":
@@ -96,6 +99,15 @@ class Audio(Track):
             if mime == "mp3":
                 return Audio.Codec.MP3
             raise ValueError(f"The MIME '{mime}' is not a supported Audio Codec")
+
+        @staticmethod
+        def from_ts(stream_type: int, registration: bytes = b"") -> Optional[Audio.Codec]:
+            """The codec an MPEG-TS PMT entry names by its registration descriptor or ``stream_type``, else None."""
+            if registration == b"AVSA":
+                return Audio.Codec.AV3A
+            return {0x0F: Audio.Codec.AAC, 0x81: Audio.Codec.AC3, 0x87: Audio.Codec.EC3, 0xD5: Audio.Codec.AV3A}.get(
+                stream_type
+            )
 
         @staticmethod
         def from_ffprobe(codec_name: str, profile: str = "") -> Optional[Audio.Codec]:
@@ -332,10 +344,12 @@ class Audio(Track):
         """Remux the track into the container of the codec FFprobe reads from the file, cut to the sample window.
 
         The declared codec is used only when FFprobe cannot read the file. Every failure raises and keeps the
-        downloaded file.
+        downloaded file. Audio Vivid raises: FFprobe reads it as MP3, and no music container carries it.
         """
         if not self.path or not self.path.exists():
             raise ValueError("Cannot remux a Track that has not been downloaded.")
+        if self.codec == Audio.Codec.AV3A:
+            raise ValueError(f"No music container carries Audio Vivid track {self.id}")
 
         stream = self.probe_stream()
         probed = Audio.Codec.from_ffprobe(stream.get("codec_name", ""), stream.get("profile", ""))

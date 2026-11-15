@@ -190,10 +190,7 @@ def video_range(value: Any) -> Optional[Video.Range]:
     name = str(value or "").upper()
     if name in Video.Range.__members__:
         return Video.Range[name]
-    try:
-        return Video.Range(name)
-    except ValueError:
-        return None
+    return next((r for r in Video.Range if r.value.upper() == name), None)
 
 
 def int_or_none(value: Any) -> Optional[int]:

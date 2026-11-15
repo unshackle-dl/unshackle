@@ -142,6 +142,7 @@ unshackle dl -v hevc,avc EXAMPLE 81234567
 | `HLG` | Hybrid Log-Gamma |
 | `HDR10` | HDR10 |
 | `HDR10P` | HDR10+ (`-r HDR10+` also works) |
+| `VIVID` | HDR Vivid (`-r "HDR Vivid"` also works) |
 | `DV` | Dolby Vision |
 | `HYBRID` | Fetch both an HDR10/HDR10+ base and a DV track, then merge them |
 
@@ -320,6 +321,7 @@ bitrate for the top renditions, overriding the manifest value:
 | `DTSX` | `DTS-X` | DTS:X Profile 2 (DTS-UHD) |
 | `DTSHD` | `DTS-HD` | DTS-HD High Resolution, Master Audio and Express |
 | `MPEGH` | `MPEG-H` | MPEG-H 3D Audio |
+| `AV3A` | `Audio Vivid` | Audio Vivid (AVS3-P3) |
 | `ALAC` | `ALAC` | Apple Lossless |
 | `FLAC` | `FLAC` | FLAC |
 | `MP3` | `MP3` | MPEG-1 Audio Layer III |

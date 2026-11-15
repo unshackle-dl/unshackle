@@ -67,7 +67,7 @@ def get_local_storage_data(profile_path: Path, hosts: List[str], tmp_dir_path: P
         cursor = conn.cursor()
 
         for host in hosts:
-            # Firefox stores LocalStorage as reversed host (e.g., moc.viki.:https:443)
+            # Firefox stores LocalStorage as reversed host (e.g., moc.example.:https:443)
             # Use strict prefix matching to prevent over-broad harvesting
             reversed_host = host[::-1]
             query = "SELECT key, value FROM webappsstore2 WHERE originKey LIKE ?"

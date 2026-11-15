@@ -11,7 +11,7 @@ import pytest
 
 from unshackle.commands.dl import dl
 from unshackle.core.config import config
-from unshackle.core.export_name import ExportNamer, export_name, move_export, season_episodes
+from unshackle.core.export_name import ExportNamer, export_name, move_export, quality_parts, season_episodes
 from unshackle.core.titles import Episode, Movie, Song
 from unshackle.core.tracks import Audio, Subtitle, Video
 
@@ -251,3 +251,7 @@ def test_summary_when_nothing_was_exported(tmp_path: Path, caplog: pytest.LogCap
     with caplog.at_level(logging.INFO, logger="download"):
         instance.log_export_summary()
     assert "Nothing was exported" in caplog.messages
+
+
+def test_a_range_value_with_a_space_has_none_in_the_name() -> None:
+    assert "hdrvivid" in quality_parts([video(codec=Video.Codec.HEVC, range_=Video.Range.VIVID)])

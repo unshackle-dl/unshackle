@@ -79,7 +79,7 @@ unshackle dl [OPTIONS] SERVICE [SERVICE ARGS...]
 | `-ab`, `--abitrate` | highest | Exact audio bitrate in kbps. |
 | `-vb-range`, `--vbitrate-range` | - | Video bitrate range in kbps, e.g. `6000-7000`; picks highest within. Mutually exclusive with `--vbitrate`. |
 | `-ab-range`, `--abitrate-range` | - | Audio bitrate range in kbps, e.g. `128-256`. Mutually exclusive with `--abitrate`. |
-| `-r`, `--range` | `SDR` | Colour range(s): `SDR`, `HLG`, `HDR10`, `HDR10P` (HDR10+), `DV`, `HYBRID`. |
+| `-r`, `--range` | `SDR` | Colour range(s): `SDR`, `HLG`, `HDR10`, `HDR10P` (HDR10+), `VIVID` (HDR Vivid), `DV`, `HYBRID`. |
 | `--generate-dv` | off | With `-r HYBRID`, make Dolby Vision from the HDR10+ metadata or the decoded video when a title has no Dolby Vision track. With `-r HDR10` or `-r HDR10P`, make it for that base and ignore a Dolby Vision track. See [Dolby Vision without a DV track](downloading.md#dolby-vision-without-a-dv-track). |
 | `-c`, `--channels` | - | Audio channels; matches sub-layouts (5.1 ≈ 6.0). |
 | `-naa`, `--noatmos` | off | Exclude Dolby Atmos audio tracks. |

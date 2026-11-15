@@ -149,7 +149,7 @@ class Title:
                     if base_layer and base_layer != "DV":
                         context["hdr"] += f".{base_layer}"
                 elif (primary_video_track.hdr_format or "").startswith("HDR Vivid"):
-                    context["hdr"] = "HDR"
+                    context["hdr"] = DYNAMIC_RANGE_MAP["HDR Vivid"]
                 else:
                     context["hdr"] = DYNAMIC_RANGE_MAP.get(hdr_format, "")
                     if context["hdr"] == "HDR" and any(v.range == Video.Range.HDR10P for v in self.tracks.videos[:1]):

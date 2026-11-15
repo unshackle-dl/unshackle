@@ -342,9 +342,6 @@ class Hybrid:
             },
         )
         self.log.info("✓ Injection Completed")
-        if self.source == ("itunes" or "appletvplus"):
-            Path.unlink(config.directories.temp / "hdr10.mkv")
-            Path.unlink(config.directories.temp / "dv.mkv")
 
     def extract_stream(self, save_path: Path, type_: str) -> None:
         output = Path(config.directories.temp / f"{type_}.hevc")

@@ -108,7 +108,7 @@ Every variable below is valid in both output and folder templates. unshackle tak
 | `quality` | Standard resolution with scan suffix | `1080p`, `2160p`, `576i` |
 | `resolution` | Standard resolution number only | `1080` |
 | `video` | Video codec | `H.264`, `H.265` |
-| `hdr` | Dynamic-range label | `HDR`, `HDR10P`, `DV`, `DV.HDR`, `DV.HDR10P`, `HLG` |
+| `hdr` | Dynamic-range label | `HDR`, `HDR10P`, `DV`, `DV.HDR`, `DV.HDR10P`, `HDRVivid`, `HLG` |
 | `hfr` | High frame rate marker (frame rate > 30) | `HFR` |
 | `3d` | Stereoscopic 3D marker (MV-HEVC video) | `3D` |
 | `edition` | Edition label from the track, if any | `Directors Cut` |

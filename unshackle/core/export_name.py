@@ -144,7 +144,7 @@ def quality_parts(tracks: Iterable[AnyTrack]) -> list[str]:
     groups = [
         [f"{h}p" for h in heights],
         [c.value.lower().replace(".", "") for c in codecs],
-        [r.value.lower() for r in ranges],
+        [r.value.lower().replace(" ", "") for r in ranges],
         [d.name.lower() for d in manifests],
         list(dict.fromkeys(audio_token(a) for a in audio_sorted)),
     ]

@@ -103,6 +103,20 @@ def test_sort_videos_resolution_outranks_bitrate() -> None:
     assert [t.id for t in tracks.videos] == ["lo-bitrate-2160", "hi-bitrate-720"]
 
 
+def test_sort_videos_orders_crops_of_one_resolution_by_bitrate() -> None:
+    tracks = Tracks()
+    tracks.videos = [
+        make_video("1610-lo", height=1610, bitrate=4_000_000, width=3840),
+        make_video("1606-hi", height=1606, bitrate=15_000_000, width=3840),
+        make_video("1610-hi", height=1610, bitrate=16_000_000, width=3840),
+        make_video("804", height=804, bitrate=20_000_000, width=1920),
+    ]
+
+    tracks.sort_videos()
+
+    assert [t.id for t in tracks.videos] == ["1610-hi", "1606-hi", "1610-lo", "804"]
+
+
 def test_sort_videos_unknown_bitrate_still_wins_on_resolution() -> None:
     tracks = Tracks()
     tracks.videos = [

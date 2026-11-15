@@ -30,6 +30,7 @@ DYNAMIC_RANGE_MAP = {
     "Dolby Vision": "DV",
     "HDR10 / HDR10+": "HDR10P",
     "HDR10 / HDR10": "HDR",
+    "HDR Vivid": "HDRVivid",
 }
 AUDIO_CODEC_MAP = {
     "E-AC-3": "DDP",

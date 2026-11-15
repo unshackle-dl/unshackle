@@ -12,7 +12,7 @@ def adaptation_set(scheme: str, value: str) -> ET.Element:
 @pytest.mark.parametrize(
     "scheme,value",
     [
-        # "description" is the value the DASH role scheme defines. Stan writes it, and reading only
+        # "description" is the value the DASH role scheme defines. A service writes it, and reading only
         # "descriptive" left every audio-description track unflagged.
         ("urn:mpeg:dash:role:2011", "description"),
         ("urn:mpeg:dash:role:2011", "descriptive"),

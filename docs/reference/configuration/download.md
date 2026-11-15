@@ -38,7 +38,7 @@ Common config keys. This is a useful subset, and every `dl` flag works:
 | `quality` | list | `[]` (best) | Resolution(s), e.g. `[1080]`. |
 | `vcodec` | list | `[]` (any) | Video codec(s), e.g. `[H265]`. |
 | `acodec` | list | `[]` (any) | Audio codec(s), e.g. `[EC3]`. |
-| `range` | list | `["SDR"]` | Colour range(s): `SDR`, `HLG`, `HDR10`, `HDR10P`, `DV`, `HYBRID`. |
+| `range` | list | `["SDR"]` | Colour range(s): `SDR`, `HLG`, `HDR10`, `HDR10P`, `VIVID`, `DV`, `HYBRID`. |
 | `channels` | float | *(unset)* | Audio channels, e.g. `6` for 5.1. |
 | `sub_format` | str | *(unset)* | Convert subtitles to this format (`srt`, `vtt`, `original`, ...). |
 | `sub_font` | str | *(unset)* | Font for subtitles converted to ASS; implies `sub_format: ass`. Ignored when `sub_format` is another format. |
@@ -432,6 +432,13 @@ probes the two highest and the two lowest bitrates first:
 | All four carry HDR10+ | Every HDR10 track of the title becomes `HDR10P`. |
 | Some carry HDR10+ | The title has HDR10 and HDR10+ encodes side by side, so unshackle probes every track. |
 | None carry HDR10+ | Every track stays `HDR10`. |
+
+The probe also finds HDR Vivid in HEVC HDR10 and HLG tracks. A track becomes `VIVID`, so
+`-r VIVID` selects it, when its first frame carries CUVA HDR Vivid metadata, or when its MPEG-TS
+program map table (PMT) has the `cuvv` registration. An HLG track never becomes `HDR10P`. An audio
+track with no codec gets its codec from the PMT of an MPEG-TS first segment: the `AVSA`
+registration or `stream_type` `0xD5` gives `Audio Vivid`. The probe has no HDR10+ result for an
+MPEG-TS track.
 
 A probe that fails, or a fragment whose metadata is encrypted, keeps the label from the service.
 unshackle does not probe ISM tracks. Each probe makes one to three small requests: the 64 KiB

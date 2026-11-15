@@ -354,13 +354,22 @@ class Tracks:
     def sort_videos(
         self, by_language: Optional[Sequence[Union[str, Language]]] = None, exact_match: bool = False
     ) -> None:
-        """Sort video tracks by resolution, 2D before 3D, then bitrate, and optionally language.
+        """Sort video tracks by standard resolution, 2D before 3D, then bitrate, and optionally language.
 
+        The standard resolution puts a 3840x1606 and a 3840x1610 crop in one 2160p group, ordered by bitrate.
         A 3D track carries two views, so its higher bitrate would otherwise rank it over the 2D one.
         """
         if not self.videos:
             return
-        self.videos.sort(key=lambda x: (x.height or 0, not x.stereo, float(x.bitrate or 0.0)), reverse=True)
+        self.videos.sort(
+            key=lambda x: (
+                standard_resolution(x.width, x.height) or 0,
+                not x.stereo,
+                float(x.bitrate or 0.0),
+                x.height or 0,
+            ),
+            reverse=True,
+        )
         for language in reversed(by_language or []):
             if str(language) in ("all", "best"):
                 language = self._original_language(self.videos, exact_match)
