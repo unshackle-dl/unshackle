@@ -27,7 +27,12 @@ from unshackle.core.tracks.attachment import Attachment
 from unshackle.core.tracks.audio import Audio
 from unshackle.core.tracks.chapters import Chapter, Chapters
 from unshackle.core.tracks.subtitle import Subtitle
-from unshackle.core.tracks.track import Track, has_mp4_only_audio_entry, strip_duplicate_init_boxes
+from unshackle.core.tracks.track import (
+    Track,
+    fix_data_reference_indexes,
+    has_mp4_only_audio_entry,
+    strip_duplicate_init_boxes,
+)
 from unshackle.core.tracks.video import Video
 from unshackle.core.utilities import (
     FPS,
@@ -722,6 +727,14 @@ class Tracks:
                 )
             elif candidate.exists():
                 candidate.unlink()
+            repointed = fix_data_reference_indexes(source)
+            if repointed:
+                log_event(
+                    "mux_mp4_dref_fixed",
+                    level="DEBUG",
+                    message=f"Pointed {repointed} sample entry(s) of {track.path.name} at data reference 1 for MP4Box",
+                    context={"track_id": track.id, "entries": repointed},
+                )
 
             delay = round((track.sample_start - sample_base) * 1000) if config.sample else 0
             moov = read_top_level_box(source, b"moov")
@@ -803,6 +816,8 @@ class Tracks:
 
             returncode = p.wait()
             if returncode < 2 and any(MP4BOX_OPEN_FAILED.search(line) for line in errors):
+                returncode = 2
+            if returncode and not output_path.exists():
                 returncode = 2
             if config.sample and returncode == 0 and not stereo:
                 start, end = (seconds - sample_base for seconds in config.sample)

@@ -19,6 +19,7 @@ import pytest
 from unshackle.core import binaries
 from unshackle.core.tracks import Audio, Subtitle, Tracks, Video
 from unshackle.core.tracks.track import (
+    fix_data_reference_indexes,
     has_mp4_only_audio_entry,
     iter_top_level_boxes,
     strip_duplicate_init_boxes,
@@ -190,8 +191,25 @@ def test_mp4box_errors_come_back_to_the_caller(tmp_path: Path, monkeypatch: pyte
 
     tracks = build_tracks(tmp_path, b"dtsx")
     _, returncode, errors = tracks.mux("Title", delete=False, output_path=tmp_path / "out.muxed.mkv")
-    assert returncode == 1
+    assert returncode == 2, "MP4Box exits 1 on a failed import, and an exit with no output is no warning"
     assert errors == ["Error importing track: not supported"]
+
+
+def test_an_mp4box_warning_with_output_stays_a_warning(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    class WarningPopen(FakePopen):
+        def __init__(self, args, **kwargs):
+            super().__init__(args, **kwargs)
+            Path(args[-1]).write_bytes(b"muxed")
+
+        def wait(self) -> int:
+            return 1
+
+    monkeypatch.setattr(binaries, "MP4Box", Path("MP4Box"), raising=False)
+    monkeypatch.setattr(subprocess, "Popen", WarningPopen)
+
+    tracks = build_tracks(tmp_path, b"dtsx")
+    _, returncode, _ = tracks.mux("Title", delete=False, output_path=tmp_path / "out.muxed.mkv")
+    assert returncode == 1
 
 
 def init_pair(sample_entry: bytes, stamp: bytes = b"\x00\x00\x00\x01") -> bytes:
@@ -268,3 +286,77 @@ def test_an_unreadable_input_aborts_instead_of_shipping_a_placeholder(
 
     assert returncode >= 2, "a refused input must abort the run, not pass as a warning"
     assert errors
+
+
+def two_entry_video(path: Path, dref_count: int = 1, entry_body: int = 78, decoy: bytes = b"") -> Path:
+    """A video MP4 whose second sample entry names data reference 2; ``decoy`` goes in the trak before mdia."""
+
+    def entry(index: int) -> bytes:
+        return box(b"dvh1", (b"\x00" * 6 + struct.pack(">H", index) + b"\x00" * 70)[:entry_body])
+
+    dref = box(b"dref", struct.pack(">II", 0, dref_count) + box(b"url ", b"\x00\x00\x00\x01"))
+    stsd = box(b"stsd", struct.pack(">II", 0, 2) + entry(1) + entry(2))
+    minf = box(b"minf", box(b"dinf", dref) + box(b"stbl", stsd))
+    path.write_bytes(box(b"ftyp", b"isom") + box(b"moov", box(b"trak", decoy + box(b"mdia", minf))) + fragment(b"x"))
+    return path
+
+
+def repointed(data: bytes) -> bytes:
+    """``data`` with its second dvh1 entry pointed at data reference 1."""
+    expected = bytearray(data)
+    index = expected.rindex(b"dvh1") + 4 + 6
+    expected[index : index + 2] = b"\x00\x01"
+    return bytes(expected)
+
+
+@pytest.mark.parametrize(
+    "decoy",
+    [
+        pytest.param(b"", id="plain"),
+        pytest.param(box(b"meta", box(b"dinf", box(b"dref", struct.pack(">II", 0, 0)))), id="meta-dref-before-mdia"),
+    ],
+)
+def test_a_sample_entry_with_a_missing_data_reference_is_pointed_at_the_first(tmp_path: Path, decoy: bytes) -> None:
+    """A packager can give a second sample entry data_reference_index 2 with one dref entry; MP4Box refuses it.
+
+    Only the media's own dref counts, not one under a meta box before mdia.
+    """
+    path = two_entry_video(tmp_path / "v.mp4", decoy=decoy)
+    expected = repointed(path.read_bytes())
+
+    assert fix_data_reference_indexes(path) == 1
+    assert path.read_bytes() == expected, "only the second entry's index may change"
+    assert fix_data_reference_indexes(path) == 0
+
+
+@pytest.mark.parametrize(
+    ("dref_count", "entry_body"),
+    [pytest.param(0, 78, id="empty-dref"), pytest.param(1, 4, id="short-entry"), pytest.param(1, 0, id="empty-entry")],
+)
+def test_malformed_entries_are_left_alone(tmp_path: Path, dref_count: int, entry_body: int) -> None:
+    """With no dref entry to point at, or no room for the index, the file must not change."""
+    path = two_entry_video(tmp_path / "v.mp4", dref_count=dref_count, entry_body=entry_body)
+    before = path.read_bytes()
+
+    assert fix_data_reference_indexes(path) == 0
+    assert path.read_bytes() == before
+
+
+def test_the_mp4_mux_hands_mp4box_the_repointed_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: dict[str, bytes] = {}
+
+    def fake_popen(args: list[str], **kwargs: object) -> FakePopen:
+        source = next(arg for arg in args if arg.startswith(str(tmp_path / "v.mp4")))
+        seen["video"] = Path(source.split(":lang=")[0]).read_bytes()
+        Path(args[-1]).write_bytes(b"muxed")
+        return FakePopen(args, **kwargs)
+
+    monkeypatch.setattr(binaries, "MP4Box", Path("MP4Box"), raising=False)
+    monkeypatch.setattr(subprocess, "Popen", fake_popen)
+
+    tracks = build_tracks(tmp_path, b"dtsx")
+    original = two_entry_video(tracks.videos[0].path).read_bytes()
+    _, returncode, _ = tracks.mux("Title", delete=False, output_path=tmp_path / "out.muxed.mkv")
+
+    assert returncode == 0
+    assert seen["video"] == repointed(original)

@@ -29,11 +29,13 @@ from unshackle.core.constants import DOWNLOAD_ALL_DRM, DOWNLOAD_CANCELLED, DOWNL
 from unshackle.core.downloaders.requests import requests
 from unshackle.core.drm import DRM_T, BlowfishStripe, ClearKeyCENC, PlayReady, Widevine
 from unshackle.core.drm.verify import (
+    children,
     decrypt_track,
     find_child_box,
     has_encrypted_sample_entry,
     read_top_level_box,
     senc_protects_samples,
+    walk,
 )
 from unshackle.core.events import events
 from unshackle.core.session import MAX_BACKOFF, AnySession, RnetSession, utf8_text
@@ -164,6 +166,38 @@ def strip_duplicate_init_boxes(src: Path, dst: Path) -> int:
                 out.write(chunk)
                 remaining -= len(chunk)
     return dropped
+
+
+def fix_data_reference_indexes(path: Path) -> int:
+    """Point each sample entry whose data_reference_index has no dref entry at entry 1, in place.
+
+    MP4Box refuses a sample of such an entry with "Bad Parameter", while mkvmerge ignores the index.
+    Returns how many entries it changed.
+    """
+    moov_box = next(((offset, size) for kind, offset, size in iter_top_level_boxes(path) if kind == b"moov"), None)
+    if moov_box is None:
+        return 0
+    offset, size = moov_box
+    fixed = 0
+    with path.open("r+b") as f:
+        f.seek(offset)
+        moov = f.read(size)
+        for kind, body, end in walk(moov):
+            if kind != b"minf":
+                continue
+            dref = find_child_box(moov[body:end], b"dref")
+            refs = int.from_bytes(dref[12:16], "big") if dref and len(dref) >= 16 else 1
+            if not refs:
+                continue
+            for box, stsd, stsd_end in walk(moov, body, end):
+                if box != b"stsd":
+                    continue
+                for _, entry, entry_end in children(moov, stsd + 8, stsd_end):
+                    if entry_end - entry >= 8 and not 1 <= int.from_bytes(moov[entry + 6 : entry + 8], "big") <= refs:
+                        f.seek(offset + entry + 6)
+                        f.write(b"\x00\x01")
+                        fixed += 1
+    return fixed
 
 
 MPEGH_SAMPLE_ENTRIES = ("mha1", "mha2", "mhm1", "mhm2")

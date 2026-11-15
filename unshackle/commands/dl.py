@@ -104,7 +104,12 @@ from unshackle.core.tracks.attachment import Attachment
 from unshackle.core.tracks.dv_fixup import apply_dv_fixup
 from unshackle.core.tracks.hybrid import Hybrid
 from unshackle.core.tracks.subtitle_convert import PYCAPTION_WRITERS, SUBSTATION, build_ass_style
-from unshackle.core.tracks.track import Track, assert_fragments_decrypted, has_encrypted_sample_entry
+from unshackle.core.tracks.track import (
+    Track,
+    assert_fragments_decrypted,
+    fix_data_reference_indexes,
+    has_encrypted_sample_entry,
+)
 from unshackle.core.tracks.tracks import at_resolution
 from unshackle.core.utilities import (
     apply_original_language,
@@ -3959,6 +3964,7 @@ class dl:
                     final_dir.mkdir(parents=True, exist_ok=True)
 
                     for track_path in muxed_paths:
+                        fix_data_reference_indexes(track_path)
                         media_info = MediaInfo.parse(track_path)
                         base_filename = title.get_filename(media_info, show_service=not no_source)
                         if sample:
