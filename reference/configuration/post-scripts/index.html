@@ -2770,7 +2770,8 @@ environment variable inside your script rather than putting it in the <code>comm
 <h2 id="limitations">Limitations<a class="headerlink" href="#limitations" title="Permanent link">&para;</a></h2>
 <ul>
 <li>No <code>success</code> post-script operates under <code>--no-mux</code> or <code>--skip-dl</code>, because neither writes a
-  muxed output. A <code>failure</code> post-script still runs under <code>--no-mux</code> if the download itself fails.</li>
+  muxed output. A song is the exception: <code>--no-mux</code> does not apply to it, so its post-scripts
+  operate. A <code>failure</code> post-script still runs under <code>--no-mux</code> if the download itself fails.</li>
 <li><code>failure</code> post-scripts only operate in <code>file</code> mode.</li>
 <li>There is no webhook sender. Call <code>curl</code> from a script instead.</li>
 <li>Script output is not captured. Redirect it inside your own script if you want a log.</li>

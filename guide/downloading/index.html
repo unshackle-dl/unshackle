@@ -4205,15 +4205,16 @@ window, or the whole file when the track is one file.</p>
 </div>
 <div class="admonition note">
 <p class="admonition-title">Music is never muxed</p>
-<p>A song skips the muxer. unshackle keeps the container that the service
-delivered, such as <code>.flac</code>, <code>.m4a</code>, or <code>.mp3</code>, and writes the metadata into that file.
+<p>A song skips the muxer. unshackle remuxes it into the container of its codec,
+such as <code>.flac</code>, <code>.m4a</code>, or <code>.mp3</code>, and writes the metadata into that file.
 Read <a href="../output-and-naming/#music-output-files">Music output files</a>.</p>
 </div>
 <h3 id="after-the-download">After the download<a class="headerlink" href="#after-the-download" title="Permanent link">&para;</a></h3>
 <p><code>--postscript "&lt;command&gt;"</code> runs your own command once per output file, with unshackle's
 metadata substituted into <code>{variable}</code> placeholders. It is repeatable, and it replaces the
 <code>post_scripts</code> config for that run. No <code>success</code> post-script operates under <code>--no-mux</code>, because
-that run writes no muxed output. A <code>failure</code> post-script still operates if the download fails.</p>
+that run writes no muxed output; a song is the exception, because <code>--no-mux</code> does not apply to it.
+A <code>failure</code> post-script still operates if the download fails.</p>
 <div class="language-shell highlight"><span class="filename">Hand each finished file to an uploader</span><pre><span></span><code><span id="__span-41-1"><a id="__codelineno-41-1" name="__codelineno-41-1" href="#__codelineno-41-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>--postscript<span class="w"> </span><span class="s2">"python /opt/upload.py {filepath} --service={service}"</span><span class="w"> </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
 </span></code></pre></div>
 <p><code>--no-postscript</code> operates the run with no post-script at all. It silences the <code>post_scripts</code>

@@ -3074,11 +3074,13 @@ standard height near it, such as 1600x900, keeps its own height. <code>dl -q</co
 <p>Episodes and songs are always foldered. unshackle writes movies directly into the output directory <em>unless</em> you define a <code>movies</code> folder template (or a single-string <code>folder</code> template, which folders every kind). Set one if you want each movie in its own directory.</p>
 </div>
 <h2 id="music-output-files">Music output files<a class="headerlink" href="#music-output-files" title="Permanent link">&para;</a></h2>
-<p>A song does not go through the muxer. Music services deliver audio in a fragmented MP4, which is
-not a music file. Its header states a length of zero, so a player stops after the first fragment.
-FLAC inside an MP4 is also not a FLAC stream. A rename cannot correct either fault, so unshackle
-remuxes each downloaded audio track into the container of its codec, then moves the file to its
-final path.</p>
+<p>A song does not go through the muxer. Music services deliver audio as a fragmented MP4, a WebM
+file or a plain audio file, and every download has a <code>.mp4</code> name. A fragmented MP4 header states a
+length of zero, so a player stops after the first fragment. A rename cannot correct this, so
+unshackle remuxes each downloaded audio track into the container of its codec, then moves the file
+to its final path.</p>
+<p>FFprobe reads the codec from the downloaded file. The codec that the service declares is used only
+when FFprobe cannot read the file.</p>
 <table>
 <thead>
 <tr>
@@ -3090,6 +3092,14 @@ final path.</p>
 <tr>
 <td>FLAC</td>
 <td><code>.flac</code></td>
+</tr>
+<tr>
+<td>PCM, integer, 24-bit or less</td>
+<td><code>.flac</code></td>
+</tr>
+<tr>
+<td>PCM, more than 24-bit or floating point</td>
+<td><code>.wav</code></td>
 </tr>
 <tr>
 <td>Opus</td>
@@ -3104,13 +3114,24 @@ final path.</p>
 <td><code>.mp3</code></td>
 </tr>
 <tr>
-<td>AAC, ALAC, and all other codecs</td>
+<td>DTS, DTS-HD</td>
+<td><code>.mka</code></td>
+</tr>
+<tr>
+<td>AAC, ALAC, Dolby Digital, Dolby Digital Plus, and all other codecs</td>
 <td><code>.m4a</code></td>
 </tr>
 </tbody>
 </table>
-<p>unshackle re-encodes FLAC in this step. The audio does not change, but the new file states its
-true length. A plain copy cannot, because it keeps the source header and the zero in it.</p>
+<p>unshackle encodes FLAC and PCM to FLAC in this step. The audio does not change, but the new file
+states its true length. A plain copy cannot, because it keeps the source header and the zero in it.
+FLAC cannot hold floating-point PCM, and FFmpeg writes 32-bit FLAC only as an experimental feature,
+so that audio goes to <code>.wav</code>.</p>
+<p>FFmpeg writes DTS into MP4 with the wrong codec entry, so DTS goes to Matroska. AC-4, MPEG-H and
+DTS:X Profile 2 (DTS-UHD) go through MP4Box, because FFmpeg cannot write them into MP4. MP4Box
+needs <a href="../../getting-started/installation/#recommended-and-optional-tools">GPAC</a>.</p>
+<p>With <code>--sample</code>, the same step cuts the song to the sample window. If the window starts after the
+end of the song, unshackle shows a warning and keeps the full download.</p>
 <p>unshackle writes no <code>.mkv</code> file for music, and the <a href="#muxing-options">muxing options</a> below do not
 apply.</p>
 <p>The <code>songs</code> output template names the file. The <code>albums</code> folder template names the folder
@@ -3122,12 +3143,17 @@ around it.</p>
 </span></code></pre></div>
 <h3 id="music-metadata">Music metadata<a class="headerlink" href="#music-metadata" title="Permanent link">&para;</a></h3>
 <p>After the file moves, unshackle writes the metadata into the audio file. It uses Vorbis
-comments for FLAC and Ogg, ID3 frames for MP3, and MP4 atoms for M4A. The tags hold the
-track title, artist, album artist, track and disc numbers, date, genre, ISRC, UPC,
-copyright, and record label. When <code>tag</code> and <code>tag_group_name</code> are set, unshackle also writes the group
-name into a <code>GROUP</code> tag.</p>
+comments for FLAC and Ogg, ID3 frames for MP3 and WAV, MP4 atoms for M4A, and Matroska tags for
+MKA. The tags hold the track title, artist, album artist, track and disc numbers, date, genre,
+ISRC, UPC, copyright, and record label. When the service gives them, unshackle also writes each
+artist of a song with several artists into <code>ARTISTS</code>, and the ReplayGain values into
+<code>REPLAYGAIN_*</code> tags. An Opus file gets no <code>REPLAYGAIN_*</code> tags, because RFC 7845 advises against
+them in Opus files. When <code>tag</code> and <code>tag_group_name</code> are set, unshackle also writes the group name
+into a <code>GROUP</code> tag.</p>
 <p>unshackle embeds cover art when the service gives an artwork URL. It downloads the image
-and puts it in the file.</p>
+and puts it in the file. With no artwork URL, it uses the first image attachment of the song. It
+converts a WebP image to JPEG. It skips an image larger than 16 MiB, the FLAC limit, with a
+warning. An MKA file gets no cover art.</p>
 <p>unshackle writes lyrics when the service supplies them: a <code>LYRICS</code> Vorbis comment for FLAC, a
 <code>USLT</code> frame for MP3, and a <code>©lyr</code> atom for M4A. Ogg uses the same <code>LYRICS</code> field as
 FLAC. unshackle does not write synchronized lyrics (<code>SYLT</code>).</p>
@@ -3136,9 +3162,9 @@ the audio, for example <code>08.Get.Lucky.lrc</code> next to <code>08.Get.Lucky.
 the timed lines from that file. The file also comes back to the client from a remote server.</p>
 <p>A metadata fault does not stop the run. The file is already in place, so unshackle writes a
 warning and continues.</p>
-<div class="admonition warning">
-<p class="admonition-title"><code>--no-mux</code> leaves music files untagged</p>
-<p><a href="../cli-reference/#output-muxing-files"><code>--no-mux</code></a> moves each downloaded track file to the output path without the tagging step. A music file from such a run holds only the metadata that the service put in it.</p>
+<div class="admonition note">
+<p class="admonition-title"><code>--no-mux</code> does not change music output</p>
+<p>A song has no mux step, so <a href="../cli-reference/#output-muxing-files"><code>--no-mux</code></a> does not apply to it. The song gets the same file name, metadata, cover art and lyrics file as in a run without the flag.</p>
 </div>
 <h2 id="muxing-options">Muxing options<a class="headerlink" href="#muxing-options" title="Permanent link">&para;</a></h2>
 <div class="admonition note">
@@ -3403,7 +3429,7 @@ wrong colours.</p>
 <li>Descriptive audio gets the visually-impaired flag. SDH subtitles get the hearing-impaired flag. Forced subtitles get the forced flag.</li>
 <li>unshackle writes the chapters from the title's chapter list (see <a href="#chapters-naming">Chapters</a> below).</li>
 </ul>
-<p>The <code>--no-mux</code> flag skips muxing entirely and writes the individual track files, each with a track-type suffix, into the same output/folder structure. A track that shaka-packager decrypts has its date set to 1970-01-01; other tracks keep the date of the source file.</p>
+<p>The <code>--no-mux</code> flag skips muxing entirely and writes the individual track files, each with a track-type suffix, into the same output/folder structure. An audio track in an MP4 container gets the <code>.m4a</code> extension. A track that shaka-packager decrypts has its date set to 1970-01-01; other tracks keep the date of the source file.</p>
 <h2 id="sample-files">Sample files<a class="headerlink" href="#sample-files" title="Permanent link">&para;</a></h2>
 <p><a href="../cli-reference/#output-muxing-files"><code>--sample</code></a> and <code>--include-sample</code> write a sample into a
 <code>Sample</code> folder inside the output folder of the title. The sample keeps the filename of the

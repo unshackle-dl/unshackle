@@ -1973,6 +1973,34 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#unshackle.core.tracks.Audio.Codec" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;Codec
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" Codec">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#unshackle.core.tracks.Audio.Codec.from_ffprobe" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;from_ffprobe
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#unshackle.core.tracks.Audio.parse_channels" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2017,10 +2045,43 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#unshackle.core.tracks.Audio.probe_stream" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;probe_stream
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#unshackle.core.tracks.Audio.to_music_container" class="md-nav__link">
     <span class="md-ellipsis">
       
         <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;to_music_container
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unshackle.core.tracks.Audio.ffmpeg_music_container" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;ffmpeg_music_container
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unshackle.core.tracks.Audio.mp4box_music_container" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;mp4box_music_container
       
     </span>
   </a>
@@ -3578,6 +3639,34 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#unshackle.core.tracks.Audio.Codec" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;Codec
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" Codec">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#unshackle.core.tracks.Audio.Codec.from_ffprobe" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;from_ffprobe
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#unshackle.core.tracks.Audio.parse_channels" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3622,10 +3711,43 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#unshackle.core.tracks.Audio.probe_stream" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;probe_stream
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#unshackle.core.tracks.Audio.to_music_container" class="md-nav__link">
     <span class="md-ellipsis">
       
         <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;to_music_container
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unshackle.core.tracks.Audio.ffmpeg_music_container" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;ffmpeg_music_container
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unshackle.core.tracks.Audio.mp4box_music_container" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;mp4box_music_container
       
     </span>
   </a>
@@ -5482,13 +5604,12 @@ If mime_type is not provided, it will try to guess it.</p>
                 <code>codec</code>
             </td>
             <td>
-                  <code><span title="typing.Optional">Optional</span>[<span title="unshackle.core.tracks.audio.Audio.Codec">Codec</span>]</code>
+                  <code><span title="typing.Optional">Optional</span>[<a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-class&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-class-name&quot;&gt;Codec&lt;/span&gt; (&lt;code&gt;unshackle.core.tracks.audio.Audio.Codec&lt;/code&gt;)" href="#unshackle.core.tracks.Audio.Codec">Codec</a>]</code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>An Audio.Codec enum representing the audio codec.
-If not specified, unshackle uses MediaInfo to get the codec
-after it downloads the track.</p>
+                <p>An Audio.Codec enum representing the audio codec. The music remux
+replaces it with the codec FFprobe reads from the downloaded file.</p>
               </div>
             </td>
             <td>
@@ -5612,6 +5733,76 @@ recommended.</p>
 
 
 
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="unshackle.core.tracks.Audio.Codec" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <span class="doc doc-object-name doc-class-name">Codec</span>
+
+
+<a href="#unshackle.core.tracks.Audio.Codec" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+            <p class="doc doc-class-bases">
+              Bases: <code><span title="str">str</span></code>, <code><span title="enum.Enum">Enum</span></code></p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="unshackle.core.tracks.Audio.Codec.from_ffprobe" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">from_ffprobe</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-staticmethod"><code>staticmethod</code></small>
+  </span>
+
+<a href="#unshackle.core.tracks.Audio.Codec.from_ffprobe" class="headerlink" title="Permanent link">&para;</a></h4>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">from_ffprobe</span><span class="p">(</span><span class="n">codec_name</span><span class="p">,</span> <span class="n">profile</span><span class="o">=</span><span class="s1">''</span><span class="p">)</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Map an FFprobe <code>codec_name</code> to a codec, or None for one core does not name.</p>
+
+
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
 
 <div class="doc doc-object doc-function">
 
@@ -5723,22 +5914,83 @@ float, so this adds its figures: "5.1.4" -&gt; 10.0.</p>
 <div class="doc doc-object doc-function">
 
 
+<h3 id="unshackle.core.tracks.Audio.probe_stream" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">probe_stream</span>
+
+
+<a href="#unshackle.core.tracks.Audio.probe_stream" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">probe_stream</span><span class="p">()</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>FFprobe codec fields of the first audio track plus the file <code>duration</code>; {} when it cannot probe.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
 <h3 id="unshackle.core.tracks.Audio.to_music_container" class="doc doc-heading">
 <code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">to_music_container</span>
 
 
 <a href="#unshackle.core.tracks.Audio.to_music_container" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">to_music_container</span><span class="p">()</span>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">to_music_container</span><span class="p">(</span><span class="n">start</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span> <span class="n">duration</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
 </span></code></pre></div>
 
     <div class="doc doc-contents ">
 
-        <p>Remux the track into the container of its codec, as a standalone audio file.</p>
-<p>Music titles never reach the muxer, so the downloaded file is the delivered file, and
-after decryption that is still a fragmented MP4. Its header states a length of zero, so
-a player stops after the first fragment. FLAC inside an MP4 is also not a FLAC stream.
-A rename cannot correct either fault. Returns True once the new file replaces the
-downloaded one; every failure raises.</p>
+        <p>Remux the track into the container of the codec FFprobe reads from the file, cut to the sample window.</p>
+<p>The declared codec is used only when FFprobe cannot read the file. Every failure raises and keeps the
+downloaded file.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="unshackle.core.tracks.Audio.ffmpeg_music_container" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">ffmpeg_music_container</span>
+
+
+<a href="#unshackle.core.tracks.Audio.ffmpeg_music_container" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">ffmpeg_music_container</span><span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="n">stream</span><span class="p">,</span> <span class="n">start</span><span class="p">,</span> <span class="n">duration</span><span class="p">)</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Remux with FFmpeg. FLAC is encoded, never copied: FFmpeg's FLAC muxer writes a real sample count
+only from an encoder. Float PCM and PCM above 24 bits go to WAV: FLAC has no float samples, and FFmpeg
+writes 32-bit FLAC only as an experimental feature. 16- and 24-bit float, which FFmpeg cannot write,
+widen to 32-bit float. DTS goes to Matroska, because FFmpeg writes it into
+MP4 with an mp4a sample entry. Only AAC, ALAC and AC-3 take the ipod muxer (the M4A brand).</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="unshackle.core.tracks.Audio.mp4box_music_container" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">mp4box_music_container</span>
+
+
+<a href="#unshackle.core.tracks.Audio.mp4box_music_container" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">mp4box_music_container</span><span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="n">start</span><span class="p">,</span> <span class="n">duration</span><span class="p">)</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Rewrite the track as an unfragmented .m4a with MP4Box, for the codecs FFmpeg cannot write into MP4.</p>
 
 
     </div>

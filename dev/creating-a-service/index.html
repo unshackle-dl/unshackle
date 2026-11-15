@@ -2772,9 +2772,9 @@ Optional metadata keywords such as <code>album_artist</code>, <code>genre</code>
 class for the current list.</p>
 <p>From <code>get_tracks()</code>, give one <code>Audio</code> track for each codec and bitrate you offer
 for the song. The framework then selects one with its usual audio options.
-A <code>Song</code> skips the muxer, so restore the real container suffix on the track path
-in <code>on_track_downloaded</code>. The <strong>MUSIC_EXAMPLE</strong> service shows the full music
-surface.</p>
+A <code>Song</code> skips the muxer: the framework reads the codec from the downloaded file
+and gives the file its container, so a service does not rename the track path.
+The <strong>MUSIC_EXAMPLE</strong> service shows the full music surface.</p>
 </div>
 </div>
 </div>
