@@ -3294,8 +3294,8 @@ therefore keeps its <code>3840×1920</code> HDR10 track, even when another range
 </tbody>
 </table>
 <p>A <code>quality</code> in the config counts as a requested resolution. When <code>--best-available</code> finds none of the
-requested resolutions, <code>--worst</code> also picks from the lowest resolution. With <code>--worst</code>, hybrid mode
-requires <code>-q</code>, also when <code>--generate-dv</code> switches an HDR10 or HDR10+ request to hybrid mode.</p>
+requested resolutions, <code>--worst</code> also picks from the lowest resolution. In hybrid mode, that is the
+lowest resolution that has an HDR10 or HDR10+ base.</p>
 <div class="language-shell highlight"><span class="filename">Never fail on a missing resolution</span><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-q<span class="w"> </span><span class="m">2160</span><span class="w"> </span>--best-available<span class="w"> </span>EXAMPLE<span class="w"> </span>0ABC123
 </span></code></pre></div>
 <h2 id="video-codec-and-colour-range">Video codec and colour range<a class="headerlink" href="#video-codec-and-colour-range" title="Permanent link">&para;</a></h2>
@@ -3520,7 +3520,9 @@ download and the HDR10 track are not changed.</p>
 </div>
 <h2 id="bitrate-selection">Bitrate selection<a class="headerlink" href="#bitrate-selection" title="Permanent link">&para;</a></h2>
 <p>By default unshackle keeps the highest-bitrate rendition for each selected
-resolution/codec/range/language combination. You can constrain this.</p>
+resolution/codec/range/language combination. One requested video language is one
+language here, also when it matches more than one regional tag (<code>en</code> can match
+<code>en-AU</code> and <code>en-GB</code>). You can constrain this.</p>
 <table>
 <thead>
 <tr>

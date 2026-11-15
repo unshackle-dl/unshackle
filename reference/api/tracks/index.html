@@ -9297,7 +9297,7 @@ HDR10+. A 3D track is never an ingredient: dovi_tool does not handle a second vi
 
     <div class="doc doc-contents ">
 
-        <p>Mark tracks selected only as hybrid ingredients so the standalone mux loop skips them.</p>
+        <p>Mark every hybrid ingredient, and the ingredient-only ones that the standalone mux loop skips.</p>
 <p>A track that the caller also selected as an explicit deliverable (same track in both
 selections) stays unflagged, and the standalone mux loop muxes it alongside the hybrid.
 A <code>native_hybrid</code> track is the hybrid itself, so it stays unflagged too.</p>
@@ -9325,7 +9325,8 @@ A <code>native_hybrid</code> track is the hybrid itself, so it stays unflagged t
         <p>A filter for the hybrid ingredients of each resolution. It sets <code>native_hybrid</code> on every track.</p>
 <p>A track that already carries DV and an HDR10 or HDR10+ base (DV+HDR10P, HDR10+DV, HDR10P+DV) is a finished
 hybrid, so its resolution takes that track and no base. One that carries HDR10+ comes first. The other
-resolutions get a base only when a DV track can give it an RPU, or with <code>generate_dv</code>.</p>
+resolutions get a base only when a DV track can give it an RPU, or with <code>generate_dv</code>. Each pick follows
+<code>pick_video</code>, and the DV track is the lowest one, the best of that height.</p>
 
 
     </div>
