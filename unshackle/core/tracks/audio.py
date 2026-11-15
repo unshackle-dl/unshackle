@@ -101,7 +101,7 @@ class Audio(Track):
             raise ValueError(f"The MIME '{mime}' is not a supported Audio Codec")
 
         @staticmethod
-        def from_ts(stream_type: int, registration: bytes = b"") -> Optional[Audio.Codec]:
+        def from_ts(stream_type: int, registration: bytes) -> Optional[Audio.Codec]:
             """The codec an MPEG-TS PMT entry names by its registration descriptor or ``stream_type``, else None."""
             if registration == b"AVSA":
                 return Audio.Codec.AV3A

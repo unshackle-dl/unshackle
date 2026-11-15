@@ -21,6 +21,7 @@ PROBE_BYTES = 64 * 1024
 HDR10PLUS_T35 = b"\xb5\x00\x3c\x00\x01\x04"
 CUVA_T35 = b"\x26\x00\x04\x00\x05"
 TS_PACKET = 188
+TS_PROBE_BYTES = 16 * TS_PACKET
 T = TypeVar("T")
 R = TypeVar("R")
 
@@ -98,8 +99,8 @@ def sei_number(rbsp: bytes, i: int) -> tuple[Optional[int], int]:
     return value + rbsp[i], i + 1
 
 
-def sei_has_t35(nal: bytes, t35: bytes = HDR10PLUS_T35) -> bool:
-    """Whether an HEVC SEI NAL holds an ST 2094-40 message, or the T.35 message that ``t35`` starts."""
+def sei_has_t35(nal: bytes, t35: bytes) -> bool:
+    """Whether an HEVC SEI NAL holds the T.35 message that ``t35`` starts."""
     rbsp = remove_emulation_prevention(nal[2:])
     i = 0
     while i < len(rbsp) and rbsp[i] != 0x80:
@@ -113,10 +114,9 @@ def sei_has_t35(nal: bytes, t35: bytes = HDR10PLUS_T35) -> bool:
     return False
 
 
-def fragment_has_hdr10plus(data: bytes, t35: bytes = HDR10PLUS_T35) -> Optional[bool]:
-    """Whether the first sample of an fMP4 fragment carries HDR10+ SEI, or None when the bytes cannot tell.
-
-    ``t35`` picks another T.35 message, such as ``CUVA_T35`` for HDR Vivid.
+def fragment_has_t35(data: bytes, t35: bytes) -> Optional[bool]:
+    """Whether the first sample of an fMP4 fragment carries the T.35 SEI that ``t35`` starts, or None when the bytes
+    cannot tell. ``HDR10PLUS_T35`` finds HDR10+, ``CUVA_T35`` HDR Vivid.
 
     The walk ends at the first VCL NAL, because a prefix SEI comes before it. CENC and cbcs keep
     non-VCL NALs and every NAL length in the clear, so this needs no content key. A sample that is
@@ -241,26 +241,26 @@ def probe_dynamic_hdr(
     if any(ladders) and on_start:
         on_start()
 
-    def probe(video: "Video") -> Union["Video.Range", bool, None]:
-        """The range the first segment proves (HDR10P or VIVID), False for plain HDR10, None when it cannot tell."""
-        found: Union[Video.Range, bool, None] = None
+    def proven(data: Optional[bytes]) -> Optional["Video.Range"]:
+        if not data:
+            return None
+        if is_ts(data):
+            return Video.Range.VIVID if any(reg == b"cuvv" for _, reg in ts_streams(data) or []) else None
+        if fragment_has_t35(data, CUVA_T35):
+            return Video.Range.VIVID
+        return Video.Range.HDR10P if fragment_has_t35(data, HDR10PLUS_T35) else None
+
+    def probe(video: "Video") -> Optional["Video.Range"]:
+        """The range the first segment proves (HDR10P or VIVID), else None."""
         try:
-            data = first_fragment(video, video.session or session)
-            if data and is_ts(data):
-                if any(registration == b"cuvv" for _, registration in ts_streams(data) or []):
-                    found = Video.Range.VIVID
-            elif data and fragment_has_hdr10plus(data, CUVA_T35):
-                found = Video.Range.VIVID
-            elif data:
-                hdr10plus = fragment_has_hdr10plus(data)
-                found = Video.Range.HDR10P if hdr10plus else hdr10plus
+            found = proven(first_fragment(video, video.session or session))
         except Exception as e:
             log.debug(f"{video.id}: dynamic HDR probe failed ({e})")
             return None
         log.debug(f"{video.id}: dynamic HDR probe {found}")
         return found
 
-    def probe_all(tracks: list["Video"]) -> dict[int, Union["Video.Range", bool, None]]:
+    def probe_all(tracks: list["Video"]) -> dict[int, Optional["Video.Range"]]:
         return dict(zip(map(id, tracks), map_probes(probe, tracks, workers)))
 
     plans: list[tuple[list["Video"], list["Video"], list["Video"]]] = []
@@ -282,19 +282,26 @@ def probe_dynamic_hdr(
             label = found.get(id(video), whole)
             if video.range == Video.Range.DV:
                 video.hdr10plus = video.hdr10plus or label == Video.Range.HDR10P
-            elif isinstance(label, Video.Range) and label in PROBED_RANGES.get(video.range, ()):
+            elif label in PROBED_RANGES.get(video.range, ()):
                 video.range = label
 
 
 def probe_audio_codecs(
     audio: list["Audio"], session: Union[Session, RnetSession], *, log: logging.Logger, workers: int
 ) -> None:
-    """Name the codec of each audio track that has none from the PMT of its MPEG-TS first segment."""
+    """Name the codec of each audio track that has none from the PMT of its MPEG-TS first segment.
+
+    Only the first ``TS_PROBE_BYTES`` are read, because an HLS segment opens with its PAT and PMT.
+    """
     from unshackle.core.tracks import Audio
 
     def probe(track: "Audio") -> None:
         try:
-            data = first_fragment(track, track.session or session)
+            track_session = track.session or session
+            segment = first_segment(track, track_session)
+            data = segment and ranged_get(
+                segment[0], track_session, f"bytes={segment[1]}-{segment[1] + TS_PROBE_BYTES - 1}"
+            )
             streams = (ts_streams(data) if data and is_ts(data) else None) or []
         except Exception as e:
             log.debug(f"{track.id}: audio codec probe failed ({e})")

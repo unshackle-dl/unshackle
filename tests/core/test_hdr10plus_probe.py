@@ -12,7 +12,7 @@ from unshackle.core.manifests.snapshot import match_track
 from unshackle.core.remote_service import RemoteService
 from unshackle.core.tracks import Audio, Video
 from unshackle.core.utils import hdr10plus
-from unshackle.core.utils.hdr10plus import HDR10PLUS_T35, TS_PACKET, fragment_has_hdr10plus
+from unshackle.core.utils.hdr10plus import HDR10PLUS_T35, TS_PACKET, fragment_has_t35
 
 
 def box(kind: bytes, body: bytes) -> bytes:
@@ -34,18 +34,18 @@ def fragment(*nals: bytes) -> bytes:
 
 def test_hdr10plus_sei_before_the_slice_is_found() -> None:
     data = fragment(nal(32, b"vps"), sei(137, b"\x00" * 24), sei(4, HDR10PLUS_T35 + b"\x00" * 8), nal(1, b"\xff" * 64))
-    assert fragment_has_hdr10plus(data) is True
+    assert fragment_has_t35(data, HDR10PLUS_T35) is True
 
 
 def test_static_metadata_only_is_plain_hdr10() -> None:
     data = fragment(nal(32, b"vps"), sei(137, b"\x00" * 24), sei(4, b"\xb5\x00\x31GA94"), nal(1, b"\xff" * 64))
-    assert fragment_has_hdr10plus(data) is False
+    assert fragment_has_t35(data, HDR10PLUS_T35) is False
 
 
 def test_encrypted_or_truncated_bytes_prove_nothing() -> None:
-    assert fragment_has_hdr10plus(box(b"moof", b"") + box(b"mdat", b"\xff" * 64)) is None
-    assert fragment_has_hdr10plus(fragment(nal(32, b"vps"))) is None
-    assert fragment_has_hdr10plus(b"\x47" * 188) is None
+    assert fragment_has_t35(box(b"moof", b"") + box(b"mdat", b"\xff" * 64), HDR10PLUS_T35) is None
+    assert fragment_has_t35(fragment(nal(32, b"vps")), HDR10PLUS_T35) is None
+    assert fragment_has_t35(b"\x47" * 188, HDR10PLUS_T35) is None
 
 
 def hevc(track_id: str, height: int, bitrate: int = 1, range_: Video.Range = Video.Range.HDR10) -> Any:
@@ -79,9 +79,7 @@ def probe(monkeypatch: pytest.MonkeyPatch, videos: list[Any]) -> list[str]:
         return video.id[-1].encode()
 
     monkeypatch.setattr(hdr10plus, "first_fragment", fake_fragment)
-    monkeypatch.setattr(
-        hdr10plus, "fragment_has_hdr10plus", lambda data, t35=HDR10PLUS_T35: t35 == HDR10PLUS_T35 and data == b"+"
-    )
+    monkeypatch.setattr(hdr10plus, "fragment_has_t35", lambda data, t35: t35 == HDR10PLUS_T35 and data == b"+")
     hdr10plus.probe_dynamic_hdr(videos, None, log=logging.getLogger("test"), workers=4)  # type: ignore[arg-type]
     return probed
 
@@ -157,7 +155,7 @@ def test_first_fragment_skips_the_header_boxes_of_a_one_file_track(monkeypatch: 
 
     monkeypatch.setattr(hdr10plus, "first_segment", lambda track, session: ("https://cdn/v.mp4", 0))
     monkeypatch.setattr(hdr10plus, "ranged_get", fake_get)
-    assert fragment_has_hdr10plus(hdr10plus.first_fragment(hevc("v", 2160), None) or b"") is True  # type: ignore[arg-type]
+    assert fragment_has_t35(hdr10plus.first_fragment(hevc("v", 2160), None) or b"", HDR10PLUS_T35) is True  # type: ignore[arg-type]
 
 
 def test_first_segment_of_an_hls_playlist_keeps_its_byte_offset() -> None:
@@ -216,7 +214,7 @@ def test_a_fragment_inside_the_first_window_needs_one_request(monkeypatch: pytes
 
     monkeypatch.setattr(hdr10plus, "first_segment", lambda track, session: ("https://cdn/v.mp4", 0))
     monkeypatch.setattr(hdr10plus, "ranged_get", fake_get)
-    assert fragment_has_hdr10plus(hdr10plus.first_fragment(hevc("v", 2160), None) or b"") is True  # type: ignore[arg-type]
+    assert fragment_has_t35(hdr10plus.first_fragment(hevc("v", 2160), None) or b"", HDR10PLUS_T35) is True  # type: ignore[arg-type]
     assert len(requests) == 1
 
 
@@ -297,22 +295,27 @@ def test_ts_streams_skips_program_zero_and_survives_bad_lengths() -> None:
 
 
 def test_audio_without_a_codec_takes_it_from_the_ts_stream_type(monkeypatch: pytest.MonkeyPatch) -> None:
-    fetched: list[str] = []
+    fetched: list[tuple[str, str]] = []
 
-    def fake_fragment(track: Any, session: Any) -> bytes:
-        fetched.append(track.id)
+    def fake_get(url: str, session: Any, byte_range: str) -> bytes:
+        fetched.append((url, byte_range))
         return ts((0xD5, b""))
 
-    monkeypatch.setattr(hdr10plus, "first_fragment", fake_fragment)
+    monkeypatch.setattr(hdr10plus, "first_segment", lambda track, session: (track.id, 376))
+    monkeypatch.setattr(hdr10plus, "ranged_get", fake_get)
     vivid = SimpleNamespace(id="a1", codec=None, session=None)
     named = SimpleNamespace(id="a2", codec=Audio.Codec.AAC, session=None)
     hdr10plus.probe_audio_codecs([vivid, named], None, log=logging.getLogger("test"), workers=4)  # type: ignore[arg-type,list-item]
-    assert (vivid.codec, named.codec, fetched) == (Audio.Codec.AV3A, Audio.Codec.AAC, ["a1"])
+    assert (vivid.codec, named.codec, fetched) == (
+        Audio.Codec.AV3A,
+        Audio.Codec.AAC,
+        [("a1", f"bytes=376-{376 + 16 * TS_PACKET - 1}")],
+    )
     assert "[Audio Vivid]" in str(Audio(url="https://x/a.m3u8", language="zh", codec=Audio.Codec.AV3A))
 
 
 def test_an_avsa_registration_names_audio_vivid(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(hdr10plus, "first_fragment", lambda track, session: ts((0x06, b"AVSA")))
+    serve_segments(monkeypatch, {"a": ts((0x06, b"AVSA"))})
     track = SimpleNamespace(id="a", codec=None, session=None)
     hdr10plus.probe_audio_codecs([track], None, log=logging.getLogger("test"), workers=1)  # type: ignore[arg-type,list-item]
     assert track.codec == Audio.Codec.AV3A
