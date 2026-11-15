@@ -21,7 +21,7 @@ from datetime import date, timedelta
 from functools import partial
 from http.cookiejar import CookieJar, MozillaCookieJar
 from io import StringIO
-from itertools import groupby, product
+from itertools import groupby
 from operator import attrgetter
 from pathlib import Path
 from threading import Lock
@@ -111,7 +111,7 @@ from unshackle.core.tracks.track import (
     fix_data_reference_indexes,
     has_encrypted_sample_entry,
 )
-from unshackle.core.tracks.tracks import at_resolution
+from unshackle.core.tracks.tracks import at_resolution, select_videos
 from unshackle.core.utilities import (
     apply_original_language,
     as_requested,
@@ -374,20 +374,6 @@ def hybrid_plan(videos: Sequence[Video], generate_dv: bool) -> tuple[list[Video]
     base_pool = [v for v in videos if v.height not in native_heights and (dv_tracks or generate_dv)]
     matching_dv = min(dv_tracks, key=lambda v: v.height or 0) if dv_tracks else None
     return select_hybrid_bases(base_pool), matching_dv
-
-
-def pick_video(candidates: list[Video], worst: bool) -> Optional[Video]:
-    """The best candidate, or with ``worst`` the lowest bitrate of the lowest resolution, preferring 2D.
-
-    A track with no bitrate or no size counts as the highest, and a full tie goes to the later track.
-    """
-    if worst:
-        return min(
-            reversed(candidates),
-            key=lambda v: (v.stereo, standard_resolution(v.width, v.height) or math.inf, v.bitrate or math.inf),
-            default=None,
-        )
-    return next(iter(candidates), None)
 
 
 def hybrid_source_tracks(base: Video, dv: Optional[Video], base_container: Optional[Path] = None) -> list[Video]:
@@ -1335,7 +1321,7 @@ class dl:
         is_flag=True,
         default=False,
         help="Select the lowest bitrate track within the specified quality, or of the lowest resolution if no "
-        "quality is set. Hybrid mode requires -q/--quality.",
+        "quality is set.",
     )
     @click.option(
         "--best-available",
@@ -2054,9 +2040,6 @@ class dl:
             if not DoviTool:
                 self.log.error("Unable to run hybrid mode: dovi_tool not found")
                 sys.exit(1)
-            if worst and not quality:
-                self.log.error("--worst requires -q/--quality to be specified in hybrid mode")
-                sys.exit(1)
 
         if cdm_only is None:
             vaults_only = None
@@ -2724,7 +2707,6 @@ class dl:
                     resolution: Optional[int]
                     color_range: Optional[Video.Range]
                     codec: Optional[Video.Codec]
-                    vlang: Optional[str]
                     if keep_videos and vcodec:
                         title.tracks.select_video(lambda x: x.codec in vcodec)
                         missing_codecs = [c for c in vcodec if not any(x.codec == c for x in title.tracks.videos)]
@@ -2793,9 +2775,7 @@ class dl:
 
                     effective_video_lang = v_lang or lang
                     video_languages = [lang for lang in effective_video_lang if lang != "best"]
-                    video_multi_lang = (
-                        "best" in effective_video_lang or "all" in effective_video_lang or len(video_languages) > 1
-                    )
+                    processed_video_lang = video_languages
                     if keep_videos and video_languages and "all" not in video_languages:
                         processed_video_lang = resolve_sort_langs(video_languages, title.language, exact=exact_lang)
                         v_orig_token = orig_token(video_languages, title.language, exact_lang)
@@ -2836,6 +2816,7 @@ class dl:
                                 f"There's no {as_requested(processed_video_lang, v_orig_token) or 'orig'} Video Track...",
                             )
                             continue
+                    video_requests = None if {"best", "all"} & set(effective_video_lang) else processed_video_lang
 
                     has_hybrid = any(r == Video.Range.HYBRID for r in range_)
                     non_hybrid_ranges: list[Video.Range] = [r for r in range_ if r != Video.Range.HYBRID]
@@ -2911,8 +2892,16 @@ class dl:
 
                         hybrid_quality = effective_quality
                         if not hybrid_quality:
-                            best_resolution = max((v.height for v in hybrid_candidate_tracks if v.height), default=None)
-                            hybrid_quality = [best_resolution] if best_resolution else []
+                            height_pool = (
+                                [
+                                    *select_hybrid_bases(hybrid_candidate_tracks),
+                                    *(v for v in hybrid_candidate_tracks if v.finished_hybrid),
+                                ]
+                                if worst
+                                else hybrid_candidate_tracks
+                            )
+                            base_heights = [v.height for v in height_pool if v.height]
+                            hybrid_quality = [(min if worst else max)(base_heights)] if base_heights else []
                         hybrid_selected = []
                         if hybrid_quality:
                             hybrid_filter = title.tracks.select_hybrid(
@@ -2925,56 +2914,22 @@ class dl:
 
                         non_hybrid_selected = []
                         if non_hybrid_ranges and non_hybrid_tracks:
-                            if video_multi_lang:
-                                non_hybrid_langs: list[Optional[str]] = list(
-                                    dict.fromkeys(str(v.language) for v in non_hybrid_tracks)
-                                )
-                            else:
-                                non_hybrid_langs = [None]
-                            for resolution, color_range, codec, vlang in product(
-                                effective_quality or (None,), non_hybrid_ranges, vcodec or (None,), non_hybrid_langs
-                            ):
-                                candidates = [
-                                    t
-                                    for t in non_hybrid_tracks
-                                    if (not resolution or at_resolution(t, resolution))
-                                    and (not color_range or t.range == color_range)
-                                    and (not codec or t.codec == codec)
-                                    and (vlang is None or str(t.language) == vlang)
-                                ]
-                                match = pick_video(candidates, worst)
-                                if match and match not in non_hybrid_selected:
-                                    non_hybrid_selected.append(match)
+                            non_hybrid_selected = select_videos(
+                                non_hybrid_tracks,
+                                effective_quality,
+                                non_hybrid_ranges,
+                                vcodec,
+                                video_requests,
+                                exact_lang,
+                                worst,
+                            )
 
                         title.tracks.videos = Tracks.merge_video_selections(hybrid_selected, non_hybrid_selected)
-
-                        # Flag tracks selected only as hybrid ingredients (the HDR base and/or
-                        # the lowest DV) so the standalone mux loop skips them. Tracks also
-                        # picked as explicit deliverables stay unflagged.
                         Tracks.flag_hybrid_ingredients(hybrid_selected, non_hybrid_selected)
                     elif keep_videos:
-                        selected_videos: list[Video] = []
-                        if video_multi_lang:
-                            unique_video_langs: list[Optional[str]] = list(
-                                dict.fromkeys(str(v.language) for v in title.tracks.videos)
-                            )
-                        else:
-                            unique_video_langs = [None]
-                        for resolution, color_range, codec, vlang in product(
-                            effective_quality or (None,), range_ or (None,), vcodec or (None,), unique_video_langs
-                        ):
-                            candidates = [
-                                t
-                                for t in title.tracks.videos
-                                if (not resolution or at_resolution(t, resolution))
-                                and (not color_range or t.range == color_range)
-                                and (not codec or t.codec == codec)
-                                and (vlang is None or str(t.language) == vlang)
-                            ]
-                            match = pick_video(candidates, worst)
-                            if match and match not in selected_videos:
-                                selected_videos.append(match)
-                        title.tracks.videos = selected_videos
+                        title.tracks.videos = select_videos(
+                            title.tracks.videos, effective_quality, range_, vcodec, video_requests, exact_lang, worst
+                        )
 
                     if keep_videos and any(r == Video.Range.HYBRID for r in range_):
                         gate_failure = hybrid_gate_failure(title.tracks.videos, generate_dv)
@@ -2990,29 +2945,15 @@ class dl:
                                     f"{gate_failure}; continuing with {', '.join(r.name for r in other_ranges)}"
                                 )
                                 range_ = other_ranges
-                                fallback_pool = pre_hybrid_videos
-                                if video_multi_lang:
-                                    fallback_langs: list[Optional[str]] = list(
-                                        dict.fromkeys(str(v.language) for v in fallback_pool)
-                                    )
-                                else:
-                                    fallback_langs = [None]
-                                fallback_selected: list[Video] = []
-                                for resolution, color_range, codec, vlang in product(
-                                    effective_quality or (None,), other_ranges, vcodec or (None,), fallback_langs
-                                ):
-                                    candidates = [
-                                        t
-                                        for t in fallback_pool
-                                        if (not resolution or at_resolution(t, resolution))
-                                        and (not color_range or t.range == color_range)
-                                        and (not codec or t.codec == codec)
-                                        and (vlang is None or str(t.language) == vlang)
-                                    ]
-                                    match = pick_video(candidates, worst)
-                                    if match and match not in fallback_selected:
-                                        fallback_selected.append(match)
-                                title.tracks.videos = fallback_selected
+                                title.tracks.videos = select_videos(
+                                    pre_hybrid_videos,
+                                    effective_quality,
+                                    other_ranges,
+                                    vcodec,
+                                    video_requests,
+                                    exact_lang,
+                                    worst,
+                                )
                             else:
                                 skip_title(title, gate_failure)
                                 continue
@@ -3792,7 +3733,9 @@ class dl:
                                     standalone_groups: list[list[Optional[Video]]] = [
                                         list(g) for g in group_videos_by_variant(standalone_videos, merge=merge_video)
                                     ]
-                                    hybrid_bases, matching_dv = hybrid_plan(title.tracks.videos, generate_dv)
+                                    hybrid_bases, matching_dv = hybrid_plan(
+                                        [v for v in original_videos if v.hybrid_ingredient], generate_dv
+                                    )
                                     hybrid_base_ids.update(v.id for v in hybrid_bases)
                                     hybrids_made = 0
                                     for video in (v for v in original_videos if v.native_hybrid):

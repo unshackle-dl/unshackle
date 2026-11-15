@@ -1178,7 +1178,7 @@ async def download(request: web.Request) -> web.Response:
                 type: boolean
                 description: >-
                   Select the lowest bitrate track within the specified quality, or at the lowest resolution if no
-                  quality is set. HYBRID requires `quality` (default - false)
+                  quality is set (default - false)
               repack:
                 type: boolean
                 description: Add REPACK tag to the output filename (default - false)

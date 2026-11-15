@@ -102,8 +102,8 @@ By default a missing requested resolution is an error. Two flags change that:
 | `--worst` | Pick the lowest-bitrate video at each requested resolution. With no requested resolution, pick the lowest-bitrate video at the lowest resolution. |
 
 A `quality` in the config counts as a requested resolution. When `--best-available` finds none of the
-requested resolutions, `--worst` also picks from the lowest resolution. With `--worst`, hybrid mode
-requires `-q`, also when `--generate-dv` switches an HDR10 or HDR10+ request to hybrid mode.
+requested resolutions, `--worst` also picks from the lowest resolution. In hybrid mode, that is the
+lowest resolution that has an HDR10 or HDR10+ base.
 
 ```shell title="Never fail on a missing resolution"
 unshackle dl -q 2160 --best-available EXAMPLE 0ABC123
@@ -266,7 +266,9 @@ measured for each pixel.
 ## Bitrate selection
 
 By default unshackle keeps the highest-bitrate rendition for each selected
-resolution/codec/range/language combination. You can constrain this.
+resolution/codec/range/language combination. One requested video language is one
+language here, also when it matches more than one regional tag (`en` can match
+`en-AU` and `en-GB`). You can constrain this.
 
 | Flag | Purpose |
 | --- | --- |

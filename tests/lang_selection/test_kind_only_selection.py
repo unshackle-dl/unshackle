@@ -9,12 +9,14 @@ from __future__ import annotations
 
 import inspect
 import logging
+from pathlib import Path
 from typing import Any, Optional, cast
 
 import pytest
 import requests
 
 from unshackle.commands.dl import dl
+from unshackle.core import binaries
 from unshackle.core.api.handlers import DEFAULT_DOWNLOAD_PARAMS
 from unshackle.core.constants import DOWNLOAD_LICENCE_ONLY
 from unshackle.core.service import Service
@@ -79,6 +81,15 @@ class FakeService:
             # the event hooks (on_track_downloaded, ...) and the DRM callbacks a run past selection probes
             return lambda *a, **k: None
         raise AttributeError(name)
+
+
+def stub_hybrid(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Let a hybrid run start without dovi_tool, and load the service's tracks with no probes."""
+    monkeypatch.setattr(binaries, "DoviTool", Path("/unused/dovi_tool"), raising=False)
+    monkeypatch.setattr(
+        "unshackle.commands.dl.load_tracks",
+        lambda service, title, **_: setattr(title, "tracks", service.get_tracks(title)),
+    )
 
 
 def run(

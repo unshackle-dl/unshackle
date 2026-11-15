@@ -234,7 +234,7 @@ order the service used, then renumbers the episodes into the order you asked for
 | `--slow` | - | Inter-title delay. Bare `--slow` = 60-120s; `--slow 20-40` = custom range (minimum 20s). |
 
 !!! warning "Some flags cannot be combined"
-    `--select-titles` and `--wanted` are mutually exclusive. With `--worst`, hybrid mode needs `--quality`. `--vbitrate` and `--vbitrate-range` (and the audio equivalents) are mutually exclusive.
+    `--select-titles` and `--wanted` are mutually exclusive. `--vbitrate` and `--vbitrate-range` (and the audio equivalents) are mutually exclusive.
 
 ---
 

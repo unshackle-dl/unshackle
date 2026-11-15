@@ -304,6 +304,7 @@ class Video(Track):
         self.hdr10_base = hdr10_base
         self.stereo = stereo
         self.hybrid_base_only = False
+        self.hybrid_ingredient = False
         self.native_hybrid = False
 
     def to_dict(self) -> dict[str, Any]:

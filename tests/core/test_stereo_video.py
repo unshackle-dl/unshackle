@@ -11,7 +11,7 @@ from typing import Any
 import pytest
 from langcodes import Language
 
-from unshackle.commands.dl import dl, hybrid_plan, pick_video
+from unshackle.commands.dl import dl, hybrid_plan
 from unshackle.core import binaries
 from unshackle.core.config import config
 from unshackle.core.drm.verify import decrypter_for
@@ -19,6 +19,7 @@ from unshackle.core.manifests import DASH, HLS
 from unshackle.core.titles.movie import Movie
 from unshackle.core.tracks import Audio, Chapter, Chapters, Track, Tracks, Video
 from unshackle.core.tracks import tracks as tracks_module
+from unshackle.core.tracks.tracks import pick_video
 
 VIDEO_IDS = itertools.count()
 

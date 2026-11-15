@@ -8,6 +8,7 @@ import pytest
 from langcodes import Language
 
 from tests.lang_selection import test_kind_only_selection as harness
+from unshackle.commands.dl import hybrid_plan
 from unshackle.core.titles import Episode
 from unshackle.core.tracks import Audio, Subtitle, Tracks, Video
 
@@ -197,3 +198,185 @@ def test_the_meant_variant_does_not_depend_on_codec(
     service = RegionalService("ja", ["ja", "es-ES:EC3", "es-419"], [])
     ids = run(monkeypatch, caplog, service, a_lang=["es"], acodec=[Audio.Codec.AAC, Audio.Codec.EC3])
     assert ids["audio"] == ["es-ES:EC3"]
+
+
+class RegionalVideoService(RegionalService):
+    """A RegionalService whose one video is replaced by `videos`: SDR AVC tracks given as (id, language, height, kbps)."""
+
+    def __init__(self, title_lang: str, videos: list[tuple[Any, ...]]) -> None:
+        super().__init__(title_lang, [title_lang], [])
+        self.videos = videos
+
+    def get_tracks(self, title: Episode) -> Tracks:
+        tracks = super().get_tracks(title)
+        tracks.videos = [self.video(*row) for row in self.videos]
+        return tracks
+
+    def video(self, *row: Any) -> Video:
+        id_, lang, height, kbps = row
+        return Video(
+            id_=id_,
+            url=f"https://x/{id_}",
+            language=lang,
+            codec=Video.Codec.AVC,
+            range_=Video.Range.SDR,
+            width=height * 16 // 9,
+            height=height,
+            bitrate=kbps * 1000,
+        )
+
+
+# en means en-US, and the title has none, so a bare en or orig request takes both regional forms
+MIXED = [("au480", "en-AU", 480, 900), ("gb720", "en-GB", 720, 2000)]
+SAME_HEIGHT = [("au720", "en-AU", 720, 900), ("gb720", "en-GB", 720, 2000)]
+
+
+@pytest.mark.parametrize("request_", [{"v_lang": ["en"]}, {}], ids=["vl-en", "orig"])
+@pytest.mark.parametrize(
+    ("videos", "flags", "expected"),
+    [
+        (MIXED, {}, "gb720"),
+        (MIXED, {"quality": [1], "worst": True, "best_available": True}, "au480"),
+        (SAME_HEIGHT, {"quality": [720]}, "gb720"),
+        (SAME_HEIGHT, {"quality": [720], "worst": True}, "au720"),
+    ],
+    ids=["best", "lowest-resolution", "best-at-720", "worst-at-720"],
+)
+def test_the_regional_forms_of_one_request_rank_as_one_language(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    videos: list,
+    flags: dict,
+    expected: str,
+    request_: dict,
+) -> None:
+    ids = run(monkeypatch, caplog, RegionalVideoService("en", videos), **request_, **flags)
+    assert ids["video"] == [expected]
+
+
+@pytest.mark.parametrize(
+    ("v_lang", "expected"),
+    [
+        (["en-AU"], ["au480"]),
+        (["en-GB", "en-AU"], ["gb720", "au480"]),
+        (["en-AU", "en-GB"], ["au480", "gb720"]),
+        (["all"], ["gb720", "au480"]),
+    ],
+)
+def test_regional_tags_and_several_video_languages_keep_their_selection(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture, v_lang: list, expected: list
+) -> None:
+    assert run(monkeypatch, caplog, RegionalVideoService("en", MIXED), v_lang=v_lang)["video"] == expected
+
+
+@pytest.mark.parametrize(
+    ("flags", "expected"),
+    [
+        ({"v_lang": ["en", "fr"]}, ["gb720", "fr720"]),
+        ({"v_lang": ["en", "orig"]}, ["gb720"]),
+        ({"v_lang": ["en", "de"], "best_available": True}, ["gb720"]),
+    ],
+    ids=["two-languages", "orig-is-en", "missing-language-dropped"],
+)
+def test_each_video_request_gives_one_video_across_its_regional_tags(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture, flags: dict, expected: list
+) -> None:
+    service = RegionalVideoService("en", [*MIXED, ("fr720", "fr-FR", 720, 1500)])
+    assert run(monkeypatch, caplog, service, **flags)["video"] == expected
+
+
+class HdrRegionalService(RegionalVideoService):
+    """A RegionalVideoService of HEVC videos given as (id, language, range, width, height, kbps)."""
+
+    def video(self, *row: Any) -> Video:
+        id_, lang, range_, width, height, kbps = row
+        return Video(
+            id_=id_,
+            url=f"https://x/{id_}",
+            language=lang,
+            codec=Video.Codec.HEVC,
+            range_=Video.Range[range_],
+            width=width,
+            height=height,
+            bitrate=kbps * 1000,
+        )
+
+
+class SelectedWithStandalone(harness.Selected):
+    def __init__(self, tracks: Tracks) -> None:
+        super().__init__(tracks)
+        self.ids["standalone"] = [t.id for t in tracks.videos if not t.hybrid_base_only]
+
+
+def run_hdr(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture, videos: list, ranges: list, **flags: Any
+) -> Any:
+    harness.stub_hybrid(monkeypatch)
+    monkeypatch.setattr(harness, "Selected", SelectedWithStandalone)
+    service = HdrRegionalService("en", videos)
+    range_ = [Video.Range[r] for r in ranges]
+    return run(monkeypatch, caplog, service, quality=[2160], v_lang=["en"], range_=range_, **flags)
+
+
+def test_hybrid_takes_the_best_dv_source_of_the_lowest_height_across_regional_tags(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    videos = [
+        ("hdr", "en-AU", "HDR10", 3840, 2160, 8000),
+        ("dv-au", "en-AU", "DV", 1920, 1080, 2000),
+        ("dv-gb", "en-GB", "DV", 1920, 1080, 6000),
+    ]
+    assert run_hdr(monkeypatch, caplog, videos, ["HYBRID"])["video"] == ["hdr", "dv-gb"]
+
+
+def test_generated_dv_takes_the_best_base_across_regional_tags(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    videos = [("hdr-au", "en-AU", "HDR10", 3840, 1600, 8000), ("hdr-gb", "en-GB", "HDR10", 3840, 2160, 8000)]
+    assert run_hdr(monkeypatch, caplog, videos, ["HDR10"], generate_dv=True)["video"] == ["hdr-gb"]
+
+
+@pytest.mark.parametrize(
+    ("videos", "expected"),
+    [
+        (
+            [
+                ("hdr-au", "en-AU", "HDR10", 3840, 1600, 8000),
+                ("hdr-gb", "en-GB", "HDR10", 3840, 2160, 8000),
+                ("dv", "en-AU", "DV", 1920, 1080, 2000),
+            ],
+            ["hdr-gb"],
+        ),
+        (
+            [
+                ("hdr10p", "en-AU", "HDR10P", 3840, 2160, 8000),
+                ("hdr-crop", "en-AU", "HDR10", 3840, 1600, 9000),
+                ("dv", "en-AU", "DV", 1920, 1080, 2000),
+            ],
+            ["hdr10p"],
+        ),
+    ],
+    ids=["regional-tags", "standalone-at-another-height"],
+)
+def test_a_standalone_range_beside_hybrid_does_not_add_a_hybrid_base(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture, videos: list, expected: list
+) -> None:
+    class Planned(BaseException):
+        def __init__(self, videos: list[Video], generate_dv: bool) -> None:
+            self.base_ids = [v.id for v in hybrid_plan(videos, generate_dv)[0]]
+
+    def stop_at_plan(videos: list[Video], generate_dv: bool) -> None:
+        raise Planned(videos, generate_dv)
+
+    monkeypatch.setattr("unshackle.commands.dl.hybrid_plan", stop_at_plan)
+    monkeypatch.setattr(Video, "normalize_vui", lambda self: None)
+    with pytest.raises(Planned) as planned:
+        run_hdr(monkeypatch, caplog, videos, ["HYBRID", "HDR10"], to_end=True, video_only=True)
+    assert planned.value.base_ids == expected
+
+
+def test_the_fallback_from_a_failed_hybrid_ranks_regional_tags_as_one_language(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    videos = [("sdr-au", "en-AU", "SDR", 3840, 2160, 3000), ("sdr-gb", "en-GB", "SDR", 3840, 2160, 9000)]
+    assert run_hdr(monkeypatch, caplog, videos, ["HYBRID", "SDR"], best_available=True)["video"] == ["sdr-gb"]
