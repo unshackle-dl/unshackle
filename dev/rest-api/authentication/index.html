@@ -2878,7 +2878,7 @@ that reads <code>error_code</code> to classify a <code>429</code> must cope with
 </span></code></pre></div>
 <p>The REST API authenticates with <code>X-Secret-Key</code>. The middleware advertises <code>Authorization</code> because the co-hosted pywidevine / pyplayready CDM endpoints use it. <code>PUT</code> appears in the allowed-methods list, but no REST route uses it. Only <code>GET</code>, <code>POST</code>, and <code>DELETE</code> have routes.</p>
 <h3 id="where-device-access-is-read">Where device access is read<a class="headerlink" href="#where-device-access-is-read" title="Permanent link">&para;</a></h3>
-<p>The map of accepted API keys lives at <code>request.app["config"]["users"]</code>. For DRM operations, an API key's permitted Widevine devices come from its <code>devices</code> list, and PlayReady devices from <code>playready_devices</code>. The server uses the first configured device when a request does not (or may not) override it. A server-wide <code>config.cdm[&lt;service&gt;]</code> mapping, if present, takes precedence over the API key's device list when the server chooses which device to use.</p>
+<p>The map of accepted API keys lives at <code>request.app["config"]["users"]</code>. For DRM operations, an API key's permitted Widevine devices come from its <code>devices</code> list, and PlayReady devices from <code>playready_devices</code>. The server uses the first configured device when a request does not (or may not) override it. A <code>cdm</code> entry for the service takes precedence over the API key's device list when the server chooses which device to use: the API key's own <code>serve.users.&lt;key&gt;.cdm</code> entry, else the server-wide <code>config.cdm[&lt;service&gt;]</code> mapping.</p>
 
 
 
