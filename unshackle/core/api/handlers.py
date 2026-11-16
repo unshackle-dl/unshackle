@@ -58,7 +58,7 @@ from unshackle.core.tunnel import (
 )
 from unshackle.core.utilities import declared_kwargs, kind_only_conflict, original_tag
 from unshackle.core.utils.click_types import AUDIO_CODEC_LIST, QUALITY_LIST, VIDEO_CODEC_LIST
-from unshackle.core.utils.collections import ci_get
+from unshackle.core.utils.collections import ci_get, merge_dict
 from unshackle.core.utils.hdr10plus import probed_tracks
 from unshackle.core.utils.redact import REDACTED, URL_USERINFO_RE, redact_all, redact_secrets, redact_text
 from unshackle.core.utils.service_params import FLAT_DL_KEYS, cast_service_options, service_options
@@ -192,18 +192,21 @@ LIST_HANDLER_TRANSPORT_KEYS = {
 }
 
 
-def load_full_cdm(service: str, profile: Optional[str], cdm_type: Optional[str] = None) -> Optional[Any]:
+def load_full_cdm(
+    service: str, profile: Optional[str], cdm_type: Optional[str] = None, app_config: Any = None
+) -> Optional[Any]:
     """Load a real CDM object for the given service.
 
     Services often touch ``ctx.obj.cdm.security_level`` / ``.device_type`` / ``.system_id``
     inside ``__init__``, so the lightweight ``resolve_server_cdm`` stub is not enough
     for list_titles / list_tracks / search. Mirrors ``dl.get_cdm`` selection logic but
     skips the quality-tier shortcuts (no track context yet) and falls back to the stub
-    if the configuration has no device, or if loading fails.
+    if the configuration has no device, or if loading fails. ``app_config`` is an API key's
+    view from :func:`key_cdm_config`; None reads the server's own ``cdm``.
     """
     from unshackle.core.cdm import load_cdm
-    from unshackle.core.config import config as app_config
 
+    app_config = app_config or config
     if not isinstance(cdm_type, str):
         cdm_type = None
     cdm_name = ci_get(app_config.cdm, service) or ci_get(app_config.cdm, "default")
@@ -221,7 +224,7 @@ def load_full_cdm(service: str, profile: Optional[str], cdm_type: Optional[str] 
             cdm_name = cdm_name.get(profile) or cdm_name.get("default") or ci_get(app_config.cdm, "default")
 
     if not cdm_name or not isinstance(cdm_name, str):
-        return resolve_server_cdm(service, profile, cdm_type)
+        return resolve_server_cdm(service, profile, cdm_type, app_config)
 
     if cdm_type:
         wanted = {"wv": "widevine", "widevine": "widevine", "pr": "playready", "playready": "playready"}.get(
@@ -236,7 +239,7 @@ def load_full_cdm(service: str, profile: Optional[str], cdm_type: Optional[str] 
         log.warning(
             f"load_cdm({sanitize_log(cdm_name)!r}) failed for {sanitize_log(service)}: {exc}; using lightweight stub"
         )
-        return resolve_server_cdm(service, profile, cdm_type)
+        return resolve_server_cdm(service, profile, cdm_type, app_config)
 
 
 SERVICE_YAML: Dict[Path, tuple[int, dict]] = {}
@@ -247,8 +250,6 @@ def load_service_yaml(normalized_service: str) -> dict:
 
     The parsed file is kept until its mtime changes; each caller gets its own copy to change.
     """
-    from unshackle.core.utils.collections import merge_dict
-
     service_config_path = Services.get_path(normalized_service) / config.filenames.config
     try:
         mtime = service_config_path.stat().st_mtime_ns
@@ -385,8 +386,8 @@ def write_client_cache(cache_data: Any, cache_tag: str) -> None:
 
     Each cache key is a file path relative to that directory, and each value is the file as
     base64 of zlib-compressed bytes. The function skips an unsafe key, a file that names a type
-    other than a datetime, or a file it cannot write, and raises INVALID_INPUT for a map that is
-    not an object, has too many entries, or holds a value that is not a string.
+    other than a datetime or a file it cannot write, and raises INVALID_INPUT for a map that is not an
+    object, has too many entries, or holds a value that is not a string.
     """
     if not isinstance(cache_data, dict) or len(cache_data) > MAX_SESSION_CACHE_KEYS:
         raise APIError(APIErrorCode.INVALID_INPUT, f"cache must hold at most {MAX_SESSION_CACHE_KEYS} entries")
@@ -451,19 +452,25 @@ class RequestCache:
         normalized_service: str,
         request: Optional[web.Request],
         client_login: bool,
+        user_config: Dict[str, Any],
     ) -> None:
         """Give the service a new cache directory, seeded from the client's ``cache``.
 
-        Does nothing on a full-mode server, where the operator's own cache stays in use.
+        A full-mode server keeps the operator's own cache, with the key's own identity cache when it has one.
         """
         import uuid
 
         from unshackle.core.api.stats import stats
 
+        api_key = caller_key(request)
         if stats.mode != "remote_only":
+            tag = service_instance.cache.service_tag
+            service_instance.cache = keyed_cache(tag, service_instance, normalized_service, api_key, user_config)
             return
-        self.tag = f"_requests/{api_key_namespace(request)}/{uuid.uuid4()}/{normalized_service}"
-        service_instance.cache = Cacher(self.tag)
+        self.tag = f"_requests/{key_namespace(api_key)}/{uuid.uuid4()}/{normalized_service}"
+        service_instance.cache = keyed_cache(
+            self.tag, service_instance, normalized_service, api_key, user_config, temporary=True
+        )
         cache_data = data.get("cache")
         if cache_data:
             write_client_cache(cache_data, self.tag)
@@ -849,7 +856,9 @@ def setup_list_service(
     instantiate → authenticate. Raises APIError on proxy failure.
     """
 
-    service_config = load_service_yaml(normalized_service)
+    api_key = caller_key(request)
+    user_config = serve_user_config(api_key)
+    service_config = key_service_yaml(normalized_service, user_config)
 
     no_proxy = data.get("no_proxy", False)
     proxy_param, proxy_providers = resolve_handler_proxy(data, normalized_service, request)
@@ -858,7 +867,7 @@ def setup_list_service(
     if account:
         profile = None if account == "default" else account
 
-    cdm = load_full_cdm(normalized_service, profile, data.get("cdm_type"))
+    cdm = load_full_cdm(normalized_service, profile, data.get("cdm_type"), key_cdm_config(user_config))
     cookies, credential = server_login_material(data, normalized_service, account, profile)
 
     parent_ctx = build_parent_ctx(
@@ -874,10 +883,11 @@ def setup_list_service(
     service_instance = instantiate_service(parent_ctx, service_module, title_id, data, LIST_HANDLER_TRANSPORT_KEYS)
 
     if account:
-        service_instance.cache = Cacher(f"_accounts/{normalized_service}/{account}")
+        account_tag = f"_accounts/{normalized_service}/{account}"
+        service_instance.cache = keyed_cache(account_tag, service_instance, normalized_service, api_key, user_config)
     elif request_cache is not None:
         client_login = cookies is not None or credential is not None
-        request_cache.attach(service_instance, data, normalized_service, request, client_login)
+        request_cache.attach(service_instance, data, normalized_service, request, client_login, user_config)
     service_instance._input_bridge = NoUserBridge()
     service_instance.authenticate(cookies, credential)
     return service_instance
@@ -902,14 +912,16 @@ def run_service_search(
     profile = client_profile(data)
     no_proxy = data.get("no_proxy", False)
 
-    service_config = load_service_yaml(normalized_service)
+    api_key = caller_key(request)
+    user_config = serve_user_config(api_key)
+    service_config = key_service_yaml(normalized_service, user_config)
     proxy_param, proxy_providers = resolve_handler_proxy(data, normalized_service, request)
 
     account = resolve_server_account(request, normalized_service, data.get("client_region"))
     if account:
         profile = None if account == "default" else account
 
-    cdm = load_full_cdm(normalized_service, profile, data.get("cdm_type"))
+    cdm = load_full_cdm(normalized_service, profile, data.get("cdm_type"), key_cdm_config(user_config))
     service_module = Services.load(normalized_service)
     anonymous = getattr(service_module, "ANONYMOUS_SEARCH", False)
     cookies, credential = (
@@ -940,10 +952,11 @@ def run_service_search(
         )
 
     if account:
-        service_instance.cache = Cacher(f"_accounts/{normalized_service}/{account}")
+        account_tag = f"_accounts/{normalized_service}/{account}"
+        service_instance.cache = keyed_cache(account_tag, service_instance, normalized_service, api_key, user_config)
     elif request_cache is not None:
         client_login = cookies is not None or credential is not None
-        request_cache.attach(service_instance, data, normalized_service, request, client_login)
+        request_cache.attach(service_instance, data, normalized_service, request, client_login, user_config)
     service_instance._input_bridge = NoUserBridge()
     if not anonymous:
         service_instance.authenticate(cookies, credential)
@@ -1026,6 +1039,103 @@ def serve_user_config(api_key: str) -> Dict[str, Any]:
     }
 
 
+class KeyCdmConfig:
+    """The app config as one API key sees it: ``cdm`` is the key's map, every other setting is the server's."""
+
+    def __init__(self, cdm: Dict[str, Any]) -> None:
+        self.cdm = cdm
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(config, name)
+
+
+def own_cdm(user_config: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """The API key's own ``cdm`` map; empty when it sets none."""
+    own = (user_config or {}).get("cdm")
+    return own if isinstance(own, dict) else {}
+
+
+def key_cdm_config(user_config: Optional[Dict[str, Any]]) -> Any:
+    """The config the CDM lookups read for an API key: ``config`` itself unless the key maps a device of its own.
+
+    Each service entry of the key's own ``cdm`` replaces the server's whole entry for that service.
+    """
+    own = own_cdm(user_config)
+    if not own:
+        return config
+    tags = {str(tag).lower() for tag in own}
+    return KeyCdmConfig({**{t: e for t, e in (config.cdm or {}).items() if str(t).lower() not in tags}, **own})
+
+
+def key_service_config(user_config: Optional[Dict[str, Any]], service: str) -> Dict[str, Any]:
+    """The API key's own ``service_config`` block for ``service``; empty when it sets none."""
+    blocks = (user_config or {}).get("service_config")
+    block = ci_get(blocks, Services.get_tag(service)) if isinstance(blocks, dict) else None
+    return block if isinstance(block, dict) else {}
+
+
+def key_owns_identity(user_config: Optional[Dict[str, Any]], service: str) -> bool:
+    """Whether the API key sets its own device or service config for ``service``."""
+    return bool(key_service_config(user_config, service)) or ci_get(own_cdm(user_config), service) is not None
+
+
+def key_service_yaml(normalized_service: str, user_config: Optional[Dict[str, Any]]) -> dict:
+    """:func:`load_service_yaml` with the API key's own block merged over it.
+
+    A top-level section that sets one of the block's plain values (a profile section with its own identity) takes
+    the key's value too, so a client cannot pick the server's identity back through the profile it names.
+    """
+    service_config = load_service_yaml(normalized_service)
+    block = key_service_config(user_config, normalized_service)
+    if block:
+        merge_dict(copy.deepcopy(block), service_config)
+        scalars = {key for key, value in block.items() if not isinstance(value, (dict, list))}
+        for name, section in service_config.items():
+            if isinstance(section, dict) and name not in block:
+                for key in scalars & section.keys():
+                    section[key] = block[key]
+    return service_config
+
+
+def keyed_cache(
+    tag: str,
+    service_instance: Any,
+    service: str,
+    api_key: str,
+    user_config: Dict[str, Any],
+    temporary: bool = False,
+    client_identity: bool = False,
+) -> Cacher:
+    """A cache on ``tag`` with the service's ``IDENTITY_CACHE`` keys in the API key's own directory.
+
+    Those cache keys move there when the API key has its own identity for the service, or when ``tag`` goes when the
+    request ends (``temporary``) and the identity is not the client's own (``client_identity``), so no client
+    receives an identity the server built and no other API key shares it.
+    """
+    prefixes = tuple(getattr(service_instance, "IDENTITY_CACHE", ()))
+    owns = key_owns_identity(user_config, service)
+    if owns and not prefixes:
+        warn_no_identity_cache(service)
+    if prefixes and (owns or (temporary and not client_identity)):
+        return Cacher(tag, route=(prefixes, f"_identity/{key_namespace(api_key)}/{service}"))
+    return Cacher(tag)
+
+
+@functools.lru_cache(maxsize=None)
+def warn_no_identity_cache(service: str) -> None:
+    """Warn once per service that an API key's own config runs on a service that marks no identity cache keys."""
+    log.warning(f"{service}: an API key sets its own config, but the service lists no IDENTITY_CACHE")
+
+
+def drop_identity_cache(api_keys: Iterable[str]) -> None:
+    """Delete the identity cache directories of API keys the server no longer has."""
+    from unshackle.core.api.session_store import SessionStore
+
+    if (config.directories.cache / "_identity").is_dir():
+        for api_key in api_keys:
+            SessionStore.cleanup_cache_dir(f"_identity/{key_namespace(api_key)}")
+
+
 def server_cdm_allowed(request: Optional[web.Request] = None, service: Optional[str] = None) -> bool:
     """Whether the calling API key may have the server operate the CDM licensing for ``service``."""
     return key_grant_allows(request, service, "server_cdm")
@@ -1078,6 +1188,46 @@ def server_cdm_max_height_error(where: str, value: Any) -> Optional[str]:
         return (
             f"{where}.server_cdm_max_height must be a whole number of pixels or a map of service to one, not {value!r}"
         )
+    return None
+
+
+def key_config_error(where: str, user_cfg: Dict[str, Any], app_config: Any = None) -> Optional[str]:
+    """Why the ``services``, ``cdm`` or ``service_config`` of one serve.users entry cannot work; None when it can.
+
+    Devices are looked up in ``app_config`` (a reload passes the new file). A tag that names no service the server
+    has is logged, not refused: a later services refresh can add it.
+    """
+    app_config = app_config or config
+    if isinstance(user_cfg.get("services"), dict):
+        return f"{where}.services must be a list of service tags; per-service settings go under service_config"
+    cdm, service_config = user_cfg.get("cdm") or {}, user_cfg.get("service_config") or {}
+    for name, entries in (("cdm", cdm), ("service_config", service_config)):
+        if not isinstance(entries, dict):
+            return f"{where}.{name} must be a mapping of service tag to settings"
+        if any(str(tag).lower() == "default" for tag in entries):
+            return f"{where}.{name}.default: name each service tag; a key has no default entry"
+    for tag, entry in cdm.items():
+        named = {"default": entry} if isinstance(entry, str) else entry if isinstance(entry, dict) else {}
+        named = {str(system).lower(): device for system, device in named.items()}
+        if (
+            not named
+            or not set(named) <= {"widevine", "playready", "default"}
+            or not all(isinstance(device, str) for device in named.values())
+        ):
+            return f"{where}.cdm.{tag} must be a device name or a widevine/playready/default mapping of device names"
+        for system, device in named.items():
+            found = detect_cdm_type(device, app_config)
+            if found is None or system != "default" and found != system:
+                return f"{where}.cdm.{tag}: no {'CDM' if system == 'default' else system} device named '{device}'"
+    for tag, entry in service_config.items():
+        if not isinstance(entry, dict):
+            return f"{where}.service_config.{tag} must be a mapping of config key to value"
+    if not cdm and not service_config:
+        return None
+    known = {tag.lower() for tag in Services.get_tags()}
+    for tag in [*cdm, *service_config]:
+        if str(tag).lower() not in known:
+            log.warning(f"{where}: no service {tag} on this server")
     return None
 
 
@@ -2296,6 +2446,12 @@ def enforce_download_gates(params: Dict[str, Any], request: Optional[web.Request
         raise APIError(
             APIErrorCode.FORBIDDEN,
             "Download jobs license with the server CDM, which is not enabled for this API key on this service",
+        )
+    service = params.get("service")
+    if service and key_owns_identity(serve_user_config(caller_key(request)), service):
+        raise APIError(
+            APIErrorCode.FORBIDDEN,
+            "Download jobs run on the server's own device config, and this API key has its own for this service",
         )
     cap = server_cdm_max_height(request, params.get("service"))
     if cap is not None:
@@ -3694,8 +3850,11 @@ def create_service_instance(
     server_cdm: bool = False,
     client_device: bool = False,
     input_bridge: Optional[InputBridge] = None,
+    user_config: Optional[Dict[str, Any]] = None,
 ) -> Any:
     """Make a service instance and resolve its credentials and cookies.
+
+    ``user_config`` is the calling API key's serve.users entry: its own ``cdm`` and ``service_config`` apply.
 
     With ``client_device`` the service sees a stand-in for the client's device, which relays CDM calls
     through ``input_bridge`` when the client can answer them, and a config holding the client's own identity.
@@ -3708,8 +3867,9 @@ def create_service_instance(
     from unshackle.commands.dl import dl
     from unshackle.core.tracks import Video
 
-    server_config = service_config = load_service_yaml(normalized_service)
+    server_config = service_config = key_service_yaml(normalized_service, user_config)
     service_module = Services.load(normalized_service)
+    key_config = key_cdm_config(user_config)
     cdm: Any
     client_identity = False
     if client_device:
@@ -3724,12 +3884,12 @@ def create_service_instance(
             if service_config is not server_config:
                 service_config.clear()
                 service_config.update(server_config)
-            return load_full_cdm(normalized_service, profile, None)
+            return load_full_cdm(normalized_service, profile, None, key_config)
 
         cdm = client_device_cdm(data, input_bridge, lend_server_device)
     else:
-        follows_client = not server_cdm or lists_both_systems(normalized_service, config)
-        cdm = load_full_cdm(normalized_service, profile, data.get("cdm_type") if follows_client else None)
+        follows_client = not server_cdm or lists_both_systems(normalized_service, key_config)
+        cdm = load_full_cdm(normalized_service, profile, data.get("cdm_type") if follows_client else None, key_config)
 
     # Reconstruct enum track-selection params from client data so service code that reads
     # ctx.parent.params (Service.__init__ proxy/range/vcodec/best_available block) sees enums.
@@ -3820,6 +3980,7 @@ async def session_create_handler(data: Dict[str, Any], request: Optional[web.Req
 
         session_id = str(uuid_mod.uuid4())
         api_key = caller_key(request)
+        user_config = serve_user_config(api_key)
         session_cache_dir = f"_sessions/{api_key_namespace(request)}/{session_id}/{normalized_service}"
         session_cache_tag: Optional[str] = session_cache_dir
 
@@ -3857,17 +4018,28 @@ async def session_create_handler(data: Dict[str, Any], request: Optional[web.Req
                     server_cdm=use_server_cdm,
                     client_device=client_device,
                     input_bridge=bridge,
+                    user_config=user_config,
                 )
 
         service_instance, cookies, credential = await asyncio.to_thread(build_service)
         if log_buffer:
             service_instance.log = SessionLogMirror(service_instance.log, log_buffer)
 
+        # the service asked for the server's device in __init__, so the session never licenses live
+        stand_in = getattr(getattr(getattr(service_instance, "ctx", None), "obj", None), "cdm", None)
+        server_device = getattr(stand_in, "lent", False) is True
+        cache_tag = f"_accounts/{normalized_service}/{profile or 'default'}" if server_account else session_cache_dir
         if server_account:
             session_cache_tag = None
-            service_instance.cache = Cacher(f"_accounts/{normalized_service}/{profile or 'default'}")
-        else:
-            service_instance.cache = Cacher(session_cache_dir)
+        service_instance.cache = keyed_cache(
+            cache_tag,
+            service_instance,
+            normalized_service,
+            api_key,
+            user_config,
+            temporary=not server_account,
+            client_identity=client_device and not server_device,
+        )
 
         cache_data = data.get("cache", {})
         if cache_data and session_cache_tag:
@@ -3885,12 +4057,11 @@ async def session_create_handler(data: Dict[str, Any], request: Optional[web.Req
             server_account=(profile or "default") if server_account else None,
         )
         session.cache_tag = session_cache_tag
+        session.user_config = user_config
         session.server_cdm = use_server_cdm
         session.server_cdm_max_height = max_height
         session.server_vault = client_device and server_vault_allowed(request, normalized_service)
-        # the service asked for the server's device in __init__, so the session never licenses live
-        stand_in = getattr(getattr(getattr(service_instance, "ctx", None), "obj", None), "cdm", None)
-        session.server_device = getattr(stand_in, "lent", False) is True
+        session.server_device = server_device
         session.client_auth = not server_account and (
             cookies is not None or credential is not None or bool(cache_data and session_cache_tag)
         )
@@ -4026,6 +4197,15 @@ def cookie_values(cookies: list[Dict[str, Any]]) -> Dict[str, str]:
     return {c["name"]: c["value"] for c in cookies}
 
 
+def session_user_config(session: Any, request: Optional[web.Request]) -> Dict[str, Any]:
+    """The serve.users entry a remote session was created with, so a reload cannot change it for that session.
+
+    An API key with no ``cdm`` entry of its own for the service still follows the server's ``cdm`` after a reload.
+    """
+    pinned = getattr(session, "user_config", None)
+    return pinned if isinstance(pinned, dict) else serve_user_config(caller_key(request))
+
+
 def client_owns_login(session: Any) -> bool:
     """Whether the login state of ``session`` is the client's to take back.
 
@@ -4113,10 +4293,8 @@ async def session_tracks_handler(
 
             session_headers, session_cookies = client_session_auth(session)
 
-        from unshackle.core.config import config as app_config
-
-        api_key = caller_key(request)
-        user_cfg = serve_user_config(api_key)
+        user_cfg = session_user_config(session, request)
+        app_config = key_cdm_config(user_cfg)
         has_wv = bool(user_cfg.get("devices"))
         has_pr = bool(user_cfg.get("playready_devices"))
 
@@ -4249,7 +4427,9 @@ async def session_segments_handler(
         )
 
 
-def resolve_server_cdm(service: str, profile: Optional[str], cdm_type: Optional[str]) -> Optional[Any]:
+def resolve_server_cdm(
+    service: str, profile: Optional[str], cdm_type: Optional[str], app_config: Any = None
+) -> Optional[Any]:
     """Get the CDM for the server context.
 
     Checks the server's own CDM config (``config.cdm[service]``) to
@@ -4261,8 +4441,7 @@ def resolve_server_cdm(service: str, profile: Optional[str], cdm_type: Optional[
     Falls back to a lightweight stub from *cdm_type* only if the configuration
     has no server CDM for the service.
     """
-    from unshackle.core.config import config as app_config
-
+    app_config = app_config or config
     cdm_name = ci_get(app_config.cdm, service)
     if cdm_name:
         if isinstance(cdm_name, dict):
@@ -4751,15 +4930,13 @@ def ensure_track_drm(track: Any, session: Any = None, init_data: Optional[bytes]
 
 
 def resolve_device_name(user_config: dict, drm_type: str, service_tag: str = "") -> str:
-    """Get the CDM device name, checking service-specific config.cdm first.
+    """Get the CDM device name, checking the service's cdm mapping first.
 
     Resolution order:
-    1. config.cdm[service_tag] (service-specific CDM mapping)
+    1. the key's own ``cdm`` entry for the service, else ``config.cdm[service_tag]``
     2. serve.users.{key}.devices / playready_devices (user device list)
     """
-    from unshackle.core.config import config as app_config
-
-    cdm_name = configured_cdm_name(service_tag, drm_type, app_config)
+    cdm_name = configured_cdm_name(service_tag, drm_type, key_cdm_config(user_config))
     if cdm_name:
         return cdm_name
 
@@ -4794,8 +4971,7 @@ def server_drm_candidates(
     system, so the route never plans a licence that fails on the wrong device type. The
     track's own drm_preference moves its system to the front when the server has it.
     """
-    from unshackle.core.config import config as app_config
-
+    app_config = key_cdm_config(user_config)
     server_type = detect_cdm_type_for_service(service_tag, app_config)
     first = server_type or (client_drm_type if client_drm_type in ("widevine", "playready") else "widevine")
     candidates: List[str] = []
@@ -5022,6 +5198,7 @@ def handle_single_server_cdm(
     vault_only: bool = False,
     shared: Optional[Dict[str, Any]] = None,
     track_kid: Optional[uuid.UUID] = None,
+    user_config: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, str]:
     """Do the single-track server_cdm licensing with the DRM class get_content_keys() flow.
 
@@ -5058,8 +5235,8 @@ def handle_single_server_cdm(
             return vault_keys
         raise refusal or APIError(APIErrorCode.NO_CONTENT, "The server vault holds no content key for this track")
 
-    api_key = caller_key(request)
-    user_config = serve_user_config(api_key)
+    if user_config is None:
+        user_config = serve_user_config(caller_key(request))
 
     if drm_type == "playready":
         from pyplayready.system.pssh import PSSH as PlayReadyPSSH
@@ -5338,8 +5515,7 @@ def license_response(
         )
 
     if mode == "server_cdm" and track_ids:
-        api_key = caller_key(request)
-        user_config = serve_user_config(api_key)
+        user_config = session_user_config(session, request)
         service = session.service_instance
         service_tag = session.service_tag
 
@@ -5411,6 +5587,7 @@ def license_response(
                         vault_only=vault_only,
                         shared=shared,
                         track_kid=track_kid,
+                        user_config=user_config,
                     )
                     if keys:
                         keys_by_pssh[cache_key] = {**keys_by_pssh[cache_key], **keys}
@@ -5523,11 +5700,11 @@ def license_response(
         if mode == "server_cdm":
             # The server's config.cdm mapping decides the DRM system, as in the batch path.
             # The client only knows its own local device, which the server never uses here.
-            api_key = caller_key(request)
+            user_config = session_user_config(session, request)
             candidates = (
                 vault_candidates(drm_type)
                 if vault_only
-                else server_drm_candidates(session.service_tag, serve_user_config(api_key), drm_type, track)
+                else server_drm_candidates(session.service_tag, user_config, drm_type, track)
             )
             picked = pick_server_pssh(track, candidates)
             if not picked:
@@ -5559,6 +5736,7 @@ def license_response(
                 live_licence_refusal(session, track),
                 vault_only=vault_only,
                 track_kid=asked_kid,
+                user_config=user_config,
             )
             log.info(f"Server CDM resolved {len(keys)} key(s) for track {track_log_label(track)}")
             note_served_keys(session, keys, key_sources)

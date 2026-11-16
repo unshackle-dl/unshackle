@@ -240,6 +240,42 @@ hold goes back to the client's device. When the service runs the remote session 
 own device (a service option, such as a server-identity flag), the client's own vaults, and the
 server vault with this grant, are the only source, and a missing content key stops the download.
 
+`cdm` gives the API key its own CDM device for a service. It maps a service tag to a device
+name, or to `widevine`, `playready` and `default` sub-entries that name a device for each DRM
+system. Per-profile sub-entries and a `default` service tag are not available here: name each
+service tag. The entry replaces the whole top-level [`cdm`](drm.md#cdm) entry for that service,
+both for the device the service sees when it starts and for the device that licenses its tracks.
+A remote session keeps the API key's entry it started with until it ends, also after a reload. A
+device name that names no device the server has, or any other sub-entry, stops the server at
+startup or refuses the reload.
+
+`service_config` gives the API key its own service config. It maps a service tag to config keys,
+which the server merges over the service's `config.yaml` and the top-level `services` entry. A
+section of the service config that sets one of the same plain (not mapping or list) keys, such as
+a profile section with its own device identity, takes the API key's value too, so a client cannot
+select another identity through its profile name. The values stay on the server: no response sends
+them to a client. The cache that the service builds from them stays on the server only for a
+service that lists its identity cache keys, and the server logs a warning for a service that lists
+none. The server deletes that cache when a reload removes the API key.
+
+```yaml
+serve:
+  users:
+    "key-1":
+      server_cdm: [EXAMPLE]
+      cdm:
+        EXAMPLE: example_device_1
+      service_config:
+        EXAMPLE:
+          device_id: DEVICE-1
+          device_key: KEY-1
+```
+
+An API key with its own `cdm` or `service_config` entry for a service cannot submit
+`/api/download` jobs for that service, because a job runs on the top-level config. On a server
+account, it shares the account's login with the other API keys but keeps its own device identity
+cache.
+
 `admin` is a boolean that lets the API key run the maintenance endpoints (clear-cache, clear-temp, refresh-services). It is `false` unless the entry sets it. Keys that have no `users` entry, such as `api_secret`, keep that access.
 
 `shared` is a boolean for an API key that a gateway in front of the server gives to many people.

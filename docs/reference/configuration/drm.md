@@ -19,6 +19,8 @@ a `widevine` or `playready` sub-entry, or a profile or `default` sub-entry. A pe
 that selects only by quality, or only for a different profile, loads no device when the run
 starts. When `server_cdm` is unset, unshackle then shows a warning, and the server decides who
 licenses the remote session.
+On a server, an API key can replace the entry for a service with its own (see
+[`serve`](services.md#serve)).
 With only the top-level `default` entry, the server CDM licenses when the API key has it. Set
 `server_cdm: true` on the server entry to keep a per-service entry for local runs only. See
 [`remote_services`](services.md#remote_services).

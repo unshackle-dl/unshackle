@@ -132,6 +132,7 @@ async def test_batch_reports_vault_keys_from_the_init_segment_pssh(monkeypatch):
         vault_only=False,
         shared=None,
         track_kid=None,
+        **_,
     ):
         probed.append(track_kid)
         if pssh_str == "init":

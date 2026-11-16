@@ -414,7 +414,12 @@ serve:
   cannot read each other's cached tokens. The server deletes the directory when the
   remote session ends. A remote session that uses a server account (`serve.server_accounts`)
   gets a persistent per-account cache instead, so the account's tokens outlive the
-  remote session. The server and the client both refuse a forwarded cache file that is not
+  remote session. A service can name cache files that hold its device identity in
+  `Service.IDENTITY_CACHE`. A remote session on the server's device, or of an API key with its
+  own device config, writes those files to a directory of the API key, outside the remote
+  session's directory, so the server never sends them to the client and never takes them from
+  the client, and the next remote session of that
+  API key reads them again. The server and the client both refuse a forwarded cache file that is not
   JSON or that names a type other than a date or time, and the service then authenticates again.
 - **A tunnel belongs to its API key.** The server accepts `tunnel:<id>` only from the API key
   that opened the tunnel. Its SOCKS5 proxy listens on loopback only, and it needs a username and
@@ -603,7 +608,9 @@ The handler writes forwarded `cache` files into that directory before authentica
 On `DELETE`, when the login belongs to the client (`client_auth`) and the remote
 session does not run on the server's device, the handler harvests updated cache files from the whole directory tree (compressing each
 with zlib and base64-encoding, **excluding** `titles_*` files) and returns them
-under a `cache` field, so the client can keep refreshed tokens. Each cache key
+under a `cache` field, so the client can keep refreshed tokens. A remote session on the
+server's device keeps the files of the service's `IDENTITY_CACHE` in
+`_identity/<namespace>/<service>` instead, so they are never in that tree. Each cache key
 is the file path relative to that directory, with `/` separators and no `.json`
 suffix, which is the `Cacher` cache key the service reads it with:
 

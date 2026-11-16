@@ -5,6 +5,7 @@ import re
 import signal
 import subprocess
 import sys
+import threading
 from contextlib import suppress
 from datetime import datetime
 from functools import partial
@@ -25,6 +26,8 @@ from unshackle.core.api.handlers import (
     api_key_authentication,
     dashboard_authentication,
     dashboard_key,
+    drop_identity_cache,
+    key_config_error,
     rate_limit_response,
     request_secret_key,
     server_account_regions,
@@ -130,8 +133,10 @@ RESTART_KEYS = ("remote_only", "services_refresh_interval")
 log = logging.getLogger("serve")
 
 
-def _prepare_serve(serve: dict, no_key: bool) -> Optional[str]:
+def _prepare_serve(serve: dict, no_key: bool, app_config: Any = None) -> Optional[str]:
     """Glob the device directories into ``serve``, validate it in place and return the api_secret.
+
+    ``app_config`` is the config ``serve`` belongs to, so a reload checks key devices against the new file.
 
     Raises ValueError on a bad value. The api_secret is None under ``--no-key``.
     """
@@ -179,6 +184,8 @@ def _prepare_serve(serve: dict, no_key: bool) -> Optional[str]:
             if problem := rate_limit_error(f"serve.users.{username}", user_cfg.get("rate_limit")):
                 raise ValueError(problem)
             if problem := server_cdm_max_height_error(f"serve.users.{username}", user_cfg.get("server_cdm_max_height")):
+                raise ValueError(problem)
+            if problem := key_config_error(f"serve.users.{username}", user_cfg, app_config):
                 raise ValueError(problem)
         limit = key_rate_limit(user_key, serve)
         if limit:
@@ -257,7 +264,7 @@ def reload_config(app: web.Application, *, no_key: bool, serve_widevine: bool, s
             raise ValueError("no config file found")
         fresh = Config.from_yaml(config_module.config_path)
         serve = fresh.serve
-        api_secret = _prepare_serve(serve, no_key)
+        api_secret = _prepare_serve(serve, no_key, fresh)
     except Exception as e:
         log.error(f"Config reload rejected, keeping the running config: {e}")
         return False
@@ -279,6 +286,8 @@ def reload_config(app: web.Application, *, no_key: bool, serve_widevine: bool, s
     reset_remote_pool()
     CATALOGUES.clear()
     app["config"]["users"] = serve_config["users"]
+    if removed := old_users - new_users:  # a PBKDF2 per key plus a tree delete: keep it off the event loop
+        threading.Thread(target=drop_identity_cache, args=(removed,), daemon=True).start()
     if serve_widevine:
         app["config"]["devices"] = _device_map(serve_config["devices"])
     if playready_app := app.get("playready_app"):

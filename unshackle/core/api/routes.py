@@ -1224,7 +1224,8 @@ async def download(request: web.Request) -> web.Response:
         description: Invalid request
       '403':
         description: >-
-          A gated parameter is not permitted (FORBIDDEN), or the job goes above the
+          A gated parameter is not permitted, or the API key has its own cdm or
+          service_config entry for the service (FORBIDDEN), or the job goes above the
           server_cdm_max_height of the API key (SERVER_CDM_CAPPED)
     """
     data = await json_body(request)

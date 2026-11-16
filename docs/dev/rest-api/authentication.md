@@ -362,4 +362,4 @@ The REST API authenticates with `X-Secret-Key`. The middleware advertises `Autho
 
 ### Where device access is read
 
-The map of accepted API keys lives at `request.app["config"]["users"]`. For DRM operations, an API key's permitted Widevine devices come from its `devices` list, and PlayReady devices from `playready_devices`. The server uses the first configured device when a request does not (or may not) override it. A server-wide `config.cdm[<service>]` mapping, if present, takes precedence over the API key's device list when the server chooses which device to use.
+The map of accepted API keys lives at `request.app["config"]["users"]`. For DRM operations, an API key's permitted Widevine devices come from its `devices` list, and PlayReady devices from `playready_devices`. The server uses the first configured device when a request does not (or may not) override it. A `cdm` entry for the service takes precedence over the API key's device list when the server chooses which device to use: the API key's own `serve.users.<key>.cdm` entry, else the server-wide `config.cdm[<service>]` mapping.

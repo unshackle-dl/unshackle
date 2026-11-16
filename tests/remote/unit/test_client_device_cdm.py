@@ -376,7 +376,7 @@ def test_a_lent_device_session_returns_no_cache_at_the_end(monkeypatch: pytest.M
 
     monkeypatch.setattr(handlers, "get_validated_session", validated)
     monkeypatch.setattr(session_store, "get_session_store", lambda: Store())
-    monkeypatch.setattr(handlers, "collect_cache_files", lambda tag: {"MSL/server-esn": "tokens"})
+    monkeypatch.setattr(handlers, "collect_cache_files", lambda tag, withhold=(): {"MSL/server-esn": "tokens"})
 
     response = asyncio.run(handlers.session_delete_handler("sid", None))
 

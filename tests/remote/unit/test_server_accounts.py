@@ -126,7 +126,7 @@ def test_server_cdm_ignores_client_cdm_type(monkeypatch):
     not swap it for a stub of the other DRM system."""
     seen = []
     monkeypatch.setattr(handlers, "load_service_yaml", lambda s: {})
-    monkeypatch.setattr(handlers, "load_full_cdm", lambda s, p, t=None: seen.append(t))
+    monkeypatch.setattr(handlers, "load_full_cdm", lambda s, p, t=None, app_config=None: seen.append(t))
     monkeypatch.setattr(handlers.Services, "load", staticmethod(lambda s: object()))
     monkeypatch.setattr(handlers, "instantiate_service", lambda *a: "svc")
     data = {"cdm_type": "playready"}
