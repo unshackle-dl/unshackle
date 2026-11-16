@@ -131,19 +131,50 @@ def select_videos(
     return selected
 
 
-def file_track_ids(path: Path) -> dict[str, int]:
-    """Return the mkvmerge ID of the first track of each type in a file. A TS file can hold its audio first."""
+def mkvmerge_tracks(path: Path) -> list[dict[str, Any]]:
+    """The tracks ``mkvmerge -J`` reports for a file, empty when it reads none."""
     res = subprocess.run(
         [str(binaries.MKVToolNix), "-J", str(path)], capture_output=True, text=True, encoding="utf-8", errors="replace"
     )
+    return json.loads(res.stdout or "{}").get("tracks") or []
+
+
+def file_track_ids(path: Path) -> dict[str, int]:
+    """Return the mkvmerge ID of the first track of each type in a file. A TS file can hold its audio first."""
     ids: dict[str, int] = {}
-    for track in json.loads(res.stdout or "{}").get("tracks") or []:
+    for track in mkvmerge_tracks(path):
         ids.setdefault(track["type"], track["id"])
     if not ids:
         logging.getLogger("Tracks").debug(
             f"mkvmerge found no tracks in {path.name}, so it is addressed as video 0, audio 1"
         )
     return ids or {"video": 0, "audio": 1}
+
+
+def remux_vvc(source: Path) -> Path:
+    """Remux an H.266 file to a temp Matroska file with FFmpeg, the one input mkvmerge keeps as VVC.
+
+    mkvmerge stores VVC from an MP4 as V_QUICKTIME, and FFmpeg before 8.0 writes another codec ID. Both exit 0
+    with video no player decodes, so the codec ID FFmpeg wrote is checked.
+    """
+    if not binaries.FFMPEG:
+        raise EnvironmentError('FFmpeg executable "ffmpeg" was not found but is required to mux H.266.')
+    output = config.directories.temp / f"vvcmux_{source.stem}_{os.getpid()}_{threading.get_ident()}.mkv"
+    cmd: list[Union[str, Path]] = [binaries.FFMPEG, "-nostdin", "-y", "-i", source, "-map", "0:v", "-map", "0:a?"]
+    cmd += ["-map_metadata", "-1", "-fflags", "+bitexact", "-c", "copy", output]
+    run_step(
+        cmd,
+        status="Remuxing H.266 for mkvmerge...",
+        output=output,
+        label="ffmpeg H.266 remux",
+    )
+    codec = next(
+        (t.get("properties", {}).get("codec_id") for t in mkvmerge_tracks(output) if t["type"] == "video"), None
+    )
+    if codec != "V_MPEGI/ISO/VVC":
+        output.unlink(missing_ok=True)
+        raise RuntimeError(f"FFmpeg wrote H.266 as {codec}, muxing H.266 needs FFmpeg 8.0 or later")
+    return output
 
 
 def mp4_track_count(moov: Optional[bytes]) -> int:
@@ -793,7 +824,7 @@ class Tracks:
 
             delay = round((track.sample_start - sample_base) * 1000) if config.sample else 0
             moov = read_top_level_box(source, b"moov")
-            flags = "" if moov else ":tkhd=enable,movie,preview"
+            flags = "" if moov else ":tkhd=enable,movie,preview:ID=-1"
             cl.extend(["-add", f"{source}:lang={track.mux_language}{flags}" + (f":delay={delay}" if delay else "")])
             name = "" if isinstance(track, Video) else (track.get_track_name() or "")
             if name:
@@ -1029,6 +1060,7 @@ class Tracks:
             )
         )
 
+        remuxed: list[Path] = []
         for i, vt in enumerate(self.videos):
             if not vt.path or not vt.path.exists():
                 raise ValueError("Video Track must be downloaded before muxing...")
@@ -1043,7 +1075,12 @@ class Tracks:
             else:
                 is_default = i == 0
 
-            ids = file_track_ids(vt.path)
+            source = vt.path
+            if vt.codec == Video.Codec.VVC and source.suffix.lower() != ".mkv":
+                source = remux_vvc(source)
+                remuxed.append(source)
+
+            ids = file_track_ids(source)
             v = ids.get("video", 0)
             video_args = [
                 "--language",
@@ -1091,7 +1128,7 @@ class Tracks:
                     ]
                 )
 
-            cl.extend(video_args + ["(", str(vt.path), ")"])
+            cl.extend(video_args + ["(", str(source), ")"])
 
         for i, at in enumerate(self.audio):
             if not at.path or not at.path.exists():
@@ -1282,6 +1319,8 @@ class Tracks:
         finally:
             if chapters_path:
                 chapters_path.unlink()
+            for path in remuxed:
+                path.unlink(missing_ok=True)
             if delete:
                 for track in self:
                     track.delete()

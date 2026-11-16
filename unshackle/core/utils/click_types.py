@@ -17,8 +17,8 @@ class VideoCodecChoice(click.Choice):
     A custom Choice type for video codecs that accepts both enum names and values.
 
     Accepts both:
-    - Enum names: avc, hevc, vc1, vp8, vp9, av1
-    - Enum values: H.264, H.265, VC-1, VP8, VP9, AV1
+    - Enum names: avc, hevc, vvc, vc1, vp8, vp9, av1
+    - Enum values: H.264, H.265, H.266, VC-1, VP8, VP9, AV1
     """
 
     def __init__(self, codec_enum: type[Video.Codec]) -> None:
@@ -28,7 +28,7 @@ class VideoCodecChoice(click.Choice):
             for choice in (codec.name.lower(), codec.value.lower()):
                 self._name_to_codec[choice] = codec
 
-        aliases = {"h264": "AVC", "h265": "HEVC"}
+        aliases = {"h264": "AVC", "h265": "HEVC", "h266": "VVC"}
         for alias, target in aliases.items():
             if target in codec_enum.__members__:
                 self._name_to_codec[alias] = codec_enum[target]

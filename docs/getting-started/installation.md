@@ -141,7 +141,7 @@ warning and prints the `directories` lines to add.
 | --- | --- | --- |
 | [Python](https://www.python.org/) | 3.11 to 3.14 | Running unshackle itself |
 | [uv](https://docs.astral.sh/uv/) | ≥ 0.5 | Installing and running unshackle |
-| [FFmpeg](https://ffmpeg.org/) | ≥ 6.0 | Media processing and analysis |
+| [FFmpeg](https://ffmpeg.org/) | ≥ 6.0, or ≥ 8.0 for H.266 | Media processing and analysis |
 | [MKVToolNix](https://mkvtoolnix.download/) | ≥ 80 | MKV muxing and metadata editing |
 | [shaka-packager](https://github.com/shaka-project/shaka-packager) | 2.6.1, or ≥ 3.10.0 | DRM decryption |
 | [Bento4](https://github.com/axiomatic-systems/Bento4) | ≥ 1.6.0-639 | Alternate DRM decryption (`mp4decrypt`) |

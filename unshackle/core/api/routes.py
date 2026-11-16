@@ -945,7 +945,7 @@ async def download(request: web.Request) -> web.Response:
                   - type: array
                     items:
                       type: string
-                description: Video codec(s) to download (e.g., "HEVC" or ["AVC", "HEVC"]) - accepts AVC, H.264, H264, HEVC, H.265, H265, VC1, VC-1, VP8, VP9, AV1, LCEVC (default - [])
+                description: Video codec(s) to download (e.g., "HEVC" or ["AVC", "HEVC"]) - accepts AVC, H.264, H264, HEVC, H.265, H265, VVC, H.266, H266, VC1, VC-1, VP8, VP9, AV1, LCEVC (default - [])
               acodec:
                 oneOf:
                   - type: string

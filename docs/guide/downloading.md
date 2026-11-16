@@ -120,13 +120,14 @@ either enum **names** or their **values**, comma-separated.
 | --- | --- |
 | `AVC` | `H.264` |
 | `HEVC` | `H.265` |
+| `VVC` | `H.266` |
 | `VC1` | `VC-1` |
 | `VP8` | `VP8` |
 | `VP9` | `VP9` |
 | `AV1` | `AV1` |
 | `LCEVC` | `LCEVC` |
 
-`H264` and `H265` are aliases of `AVC` and `HEVC`.
+`H264`, `H265` and `H266` are aliases of `AVC`, `HEVC` and `VVC`.
 
 An LCEVC (MPEG-5 Part 2) track only adds detail on top of its base video track and cannot play
 alone, so unshackle selects it only when you ask for it with `-v LCEVC`.

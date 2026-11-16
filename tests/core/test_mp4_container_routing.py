@@ -171,7 +171,7 @@ def test_mp4_subtitles_get_the_script_their_region_implies(tmp_path: Path, monke
 
     tracks.mux("Title", delete=False, output_path=tmp_path / "out.muxed.mkv")
     command = captured[0].args
-    assert f"{tmp_path / 's.vtt'}:lang=zh-Hant-TW:tkhd=enable,movie,preview" in command
+    assert f"{tmp_path / 's.vtt'}:lang=zh-Hant-TW:tkhd=enable,movie,preview:ID=-1" in command
     assert any(arg.endswith("=Chinese (Traditional)") for arg in command)
 
 

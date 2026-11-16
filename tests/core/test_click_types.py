@@ -217,10 +217,10 @@ def test_empty_video_codec_tokens_are_skipped(value):
     assert VIDEO_CODEC_LIST.convert(value) == [Video.Codec.AVC, Video.Codec.HEVC]
 
 
-@pytest.mark.parametrize("spelling", ["H264", "h265", "H.265", "hevc"])
+@pytest.mark.parametrize("spelling", ["H264", "h265", "H.265", "hevc", "H266", "h.266", "vvc"])
 def test_video_codec_aliases_resolve(spelling):
     """The API advertised H264/H265 while dropping them; both paths now resolve the same."""
-    assert VIDEO_CODEC_LIST.convert(spelling)[0] in (Video.Codec.AVC, Video.Codec.HEVC)
+    assert VIDEO_CODEC_LIST.convert(spelling)[0] in (Video.Codec.AVC, Video.Codec.HEVC, Video.Codec.VVC)
 
 
 def test_audio_codec_list_shell_complete():

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import copy
 import html
 import logging
 import math
@@ -136,7 +135,6 @@ from unshackle.core.utilities import (
     time_elapsed_since,
 )
 from unshackle.core.utils import tags
-from unshackle.core.utils.audio_vivid import decode_audio_vivid
 from unshackle.core.utils.bitrate import apply_real_bitrates
 from unshackle.core.utils.click_types import (
     AUDIO_CODEC_LIST,
@@ -517,20 +515,10 @@ def mux_skipped(no_mux: bool, title: Any) -> bool:
     return no_mux and not isinstance(title, Song)
 
 
-def take_unmuxable_audio(tracks: Tracks, log: logging.Logger) -> list[Audio]:
-    """Remove and return the Audio Vivid tracks, which no muxer carries, to be saved beside the output.
-
-    With the user's decoder, each one also goes back into the mux as a WAV copy.
-    """
+def take_unmuxable_audio(tracks: Tracks) -> list[Audio]:
+    """Remove and return the Audio Vivid tracks, which no muxer carries, to be saved beside the output."""
     kept = [a for a in tracks.audio if a.codec == Audio.Codec.AV3A]
     tracks.audio = [a for a in tracks.audio if a.codec != Audio.Codec.AV3A]
-    for track in kept:
-        wav = decode_audio_vivid(track.path, log) if track.path else None
-        if wav:
-            decoded = copy.copy(track)
-            decoded.path = wav
-            decoded.codec = Audio.Codec.PCM
-            tracks.audio.append(decoded)
     return kept
 
 
@@ -547,8 +535,10 @@ def track_file_suffix(track: Any) -> str:
 
 
 def no_mux_extension(track: Any, path: Path, media_info: MediaInfo) -> str:
-    """The extension of a --no-mux track file: an audio track in an MPEG-4 file is saved as .m4a."""
+    """The extension of a track file saved on its own: .ts for MPEG-TS, .m4a for an audio track in MPEG-4."""
     container = media_info.general_tracks[0].format if media_info.general_tracks else None
+    if container == "MPEG-TS":
+        return ".ts"
     return ".m4a" if isinstance(track, Audio) and path.suffix == ".mp4" and container == "MPEG-4" else path.suffix
 
 
@@ -3567,7 +3557,7 @@ class dl:
                 tagged_paths: set[Path] = set()
                 append_audio_codec_suffix = True
                 skip_mux = mux_skipped(no_mux, title)
-                kept_audio = [] if skip_mux else take_unmuxable_audio(title.tracks, self.log)
+                kept_audio = [] if skip_mux else take_unmuxable_audio(title.tracks)
                 if kept_audio and not title.tracks:
                     title.tracks.audio = kept_audio
                     kept_audio = []
@@ -3982,9 +3972,8 @@ class dl:
                         self.completed_files.append(final_path)
                         for kept in kept_audio:
                             assert kept.path is not None
-                            kept_path = final_path.with_name(
-                                f"{final_path.stem}{track_file_suffix(kept)}{kept.path.suffix}"
-                            )
+                            ext = no_mux_extension(kept, kept.path, MediaInfo.parse(kept.path))
+                            kept_path = final_path.with_name(f"{final_path.stem}{track_file_suffix(kept)}{ext}")
                             shutil.move(kept.path, kept_path)
                             self.completed_files.append(kept_path)
                             sidecar_files.setdefault(muxed_path, []).append(kept_path)
