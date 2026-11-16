@@ -3369,11 +3369,8 @@ Without MP4Box installed the mux stops.</p>
 <p>No muxer carries Audio Vivid (AVS3-P3): Matroska has no CodecID for it, and FFmpeg and MP4Box cannot
 write it to MP4. unshackle leaves an Audio Vivid track out of the mux and saves its original MPEG-TS file
 beside the output, named like a <code>--no-mux</code> audio file (<code>&lt;name&gt;.&lt;language&gt;.AV3A.ts</code>).</p>
-<p>With an Audio Vivid decoder named <code>avs3Decoder</code> in a <code>binaries</code> folder or on <code>PATH</code>, unshackle also
-decodes the track to PCM and muxes that into the output. unshackle does not ship the decoder: the UWA
-reference decoder's licence limits its use. A service that delivers Audio Vivid can declare the decoder so
-that <code>unshackle env check</code> lists it.</p>
-<p>Without the decoder, a title whose only tracks are Audio Vivid is not muxed.</p>
+<p>Audio Vivid needs its own decoder, which you supply. unshackle does not ship one. A title whose only
+tracks are Audio Vivid is not muxed.</p>
 <h3 id="3d-output">3D output<a class="headerlink" href="#3d-output" title="Permanent link">&para;</a></h3>
 <p>A stereoscopic 3D (MV-HEVC) video track also muxes to MP4 with MP4Box, because Matroska has no
 mapping for its second view and <code>mkvmerge</code> drops it. There is no 3D Matroska output. unshackle

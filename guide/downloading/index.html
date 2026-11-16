@@ -3319,6 +3319,10 @@ either enum <strong>names</strong> or their <strong>values</strong>, comma-separ
 <td><code>H.265</code></td>
 </tr>
 <tr>
+<td><code>VVC</code></td>
+<td><code>H.266</code></td>
+</tr>
+<tr>
 <td><code>VC1</code></td>
 <td><code>VC-1</code></td>
 </tr>
@@ -3340,7 +3344,7 @@ either enum <strong>names</strong> or their <strong>values</strong>, comma-separ
 </tr>
 </tbody>
 </table>
-<p><code>H264</code> and <code>H265</code> are aliases of <code>AVC</code> and <code>HEVC</code>.</p>
+<p><code>H264</code>, <code>H265</code> and <code>H266</code> are aliases of <code>AVC</code>, <code>HEVC</code> and <code>VVC</code>.</p>
 <p>An LCEVC (MPEG-5 Part 2) track only adds detail on top of its base video track and cannot play
 alone, so unshackle selects it only when you ask for it with <code>-v LCEVC</code>.</p>
 <div class="language-shell highlight"><span class="filename">Either spelling works</span><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>unshackle<span class="w"> </span>dl<span class="w"> </span>-v<span class="w"> </span>HEVC<span class="w">   </span>EXAMPLE<span class="w"> </span><span class="m">81234567</span>
