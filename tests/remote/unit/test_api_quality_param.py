@@ -48,3 +48,31 @@ def test_a_rest_job_converts_quality_and_passes_cdm_only(tmp_path: Path, monkeyp
         download_manager.perform_download("job-1", "EXAMPLE1", "t1", {"quality": "1080p", "cdm_only": True})
 
     assert exc.value.args == ([1080], [1080], True)
+
+
+def session_params(monkeypatch: pytest.MonkeyPatch, data: dict) -> dict:
+    """The params a remote session's service reads from its parent ctx, with the service machinery stubbed."""
+    seen: dict = {}
+
+    def fake_instantiate(parent_ctx: click.Context, *args: object) -> object:
+        seen["params"] = parent_ctx.params
+        return object()
+
+    monkeypatch.setattr(handlers, "load_service_yaml", lambda service: {})
+    monkeypatch.setattr(handlers, "load_full_cdm", lambda *args: None)
+    monkeypatch.setattr(handlers.Services, "load", lambda service: None)
+    monkeypatch.setattr(handlers, "instantiate_service", fake_instantiate)
+    handlers.create_service_instance("EXAMPLE", "title", data, None, [], None)
+    return seen["params"]
+
+
+@pytest.mark.parametrize(("quality", "heights"), [("1080p", [1080]), (["2160", "342"], [2160, 342]), (None, [])])
+def test_a_remote_session_gets_quality_as_heights(monkeypatch: pytest.MonkeyPatch, quality: Any, heights: list) -> None:
+    assert session_params(monkeypatch, {"quality": quality})["quality"] == heights
+
+
+@pytest.mark.parametrize("quality", ["tall", "0"])
+def test_a_remote_session_refuses_a_malformed_quality(monkeypatch: pytest.MonkeyPatch, quality: str) -> None:
+    with pytest.raises(handlers.APIError) as exc:
+        session_params(monkeypatch, {"quality": quality})
+    assert exc.value.error_code == handlers.APIErrorCode.INVALID_INPUT

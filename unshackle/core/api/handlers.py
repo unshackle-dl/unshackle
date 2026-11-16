@@ -1251,16 +1251,20 @@ def capped_error(message: str, cap: Optional[int] = None) -> APIError:
     return APIError(APIErrorCode.SERVER_CDM_CAPPED, message, details=details)
 
 
-def requested_height(quality: Any) -> Optional[int]:
-    """The tallest height a client asked for with ``-q``; None when it asked for the best there is."""
-    from unshackle.core.utils.click_types import QUALITY_LIST
-
+def requested_heights(quality: Any) -> list[int]:
+    """The heights a client asked for with ``-q``, as the dl option gives them; empty for the best there is."""
     try:
-        heights = QUALITY_LIST.convert(quality)
+        heights = QUALITY_LIST.convert(quality or [])
     except click.BadParameter as e:
         raise APIError(APIErrorCode.INVALID_INPUT, f"quality: {e.message}")
     if any(height <= 0 for height in heights):
         raise APIError(APIErrorCode.INVALID_INPUT, f"quality: every height must be above 0, not {quality!r}")
+    return heights
+
+
+def requested_height(quality: Any) -> Optional[int]:
+    """The tallest height a client asked for with ``-q``; None when it asked for the best there is."""
+    heights = requested_heights(quality)
     return max(heights) if heights else None
 
 
@@ -3909,7 +3913,7 @@ def create_service_instance(
     extra_params = {
         "range_": range_values,
         "vcodec": vcodec_values,
-        "quality": data.get("quality"),
+        "quality": requested_heights(data.get("quality")),
         "best_available": data.get("best_available", False),
         "generate_dv": data.get("generate_dv", False),
         **forwarded_dl_params(data),
