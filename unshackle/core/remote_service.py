@@ -48,6 +48,7 @@ from unshackle.core.proxies.resolve import is_loopback
 from unshackle.core.search_result import SearchResult
 from unshackle.core.session import MAX_BACKOFF
 from unshackle.core.titles import Title_T, Titles_T, remap_titles
+from unshackle.core.titles.availability import availability_metadata
 from unshackle.core.titles.episode import Episode, Series
 from unshackle.core.titles.movie import Movie, Movies
 from unshackle.core.titles.music import MUSIC_DATA_KEYS, SONG_FIELDS, Album, Song
@@ -606,6 +607,9 @@ def apply_title_fields(title: Title_T, info: Dict[str, Any]) -> None:
             setattr(title, key, info[key])
 
     extra = {k: info[k] for k in ("date", "cover_url") if info.get(k) is not None}
+    availability = availability_metadata(info.get("availability"))
+    if availability is not None:
+        extra["availability"] = availability
     music_data = info.get("music_data")
     if isinstance(music_data, dict):
         extra.update({key: music_data[key] for key in MUSIC_DATA_KEYS if key in music_data})

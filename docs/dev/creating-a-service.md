@@ -335,6 +335,19 @@ def get_titles(self) -> Titles_T:
     ])
 ```
 
+### Optional availability metadata
+
+A service may set `title.data["availability"]` to a dict with two optional fields:
+
+- `paid`: a boolean describing the catalogue offer, not the account's entitlement.
+- `access`: `"granted"`, `"denied"`, or `"unknown"` for the authenticated account.
+  Report `"denied"` only when the platform explicitly confirms lack of access.
+  Missing or unverified access is not denial.
+
+Only these allowlisted fields reach the REST API as `availability`, including
+through remote title reconstruction. The CLI's `--list-titles` does not display
+them, and nothing in core reads them to select or authorize downloads.
+
 Common constructor fields:
 
 === "Movie"
