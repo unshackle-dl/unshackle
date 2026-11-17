@@ -337,27 +337,16 @@ def get_titles(self) -> Titles_T:
 
 ### Optional availability metadata
 
-A service may set `title.data["availability"]` to a dict with `paid` (a boolean)
-and `access` (`"granted"`, `"denied"`, or `"unknown"`). The REST API exposes only
-these allowlisted fields as `availability`; it never exposes the rest of `data`.
-Remote title reconstruction preserves these fields.
+A service may set `title.data["availability"]` to a dict with two optional fields:
 
-`paid` describes the catalogue offer, **not** the current account's entitlement.
-Only report `"denied"` when the platform explicitly confirms that the authenticated
-account cannot access that title. An unverified entitlement, expired login,
-network failure or regional error is `"unknown"`, not a paid-access denial.
-If the platform supplies no reliable signal, omit the field or use `"unknown"`.
+- `paid`: a boolean describing the catalogue offer, not the account's entitlement.
+- `access`: `"granted"`, `"denied"`, or `"unknown"` for the authenticated account.
+  Report `"denied"` only when the platform explicitly confirms lack of access.
+  Missing or unverified access is not denial.
 
-```python
-Episode(..., data={"availability": {"paid": True, "access": "denied"}})
-```
-
-This is an account/profile/region-specific snapshot, not an authorization grant.
-Do not reuse it across accounts. Keep caches short-lived and scoped to the
-identity used to fetch the catalogue. Clients may display it and omit explicitly
-denied titles from a batch, but the platform must still enforce access at playback.
-The core does not change download selection based on these advisory fields, and
-services must not hide denied titles from `get_titles()`.
+Only these allowlisted fields reach the REST API as `availability`, including
+through remote title reconstruction. The CLI's `--list-titles` does not display
+them, and nothing in core reads them to select or authorize downloads.
 
 Common constructor fields:
 

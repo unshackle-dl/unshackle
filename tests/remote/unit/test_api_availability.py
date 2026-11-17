@@ -10,12 +10,12 @@ from unshackle.core.titles.episode import Episode
 pytestmark = pytest.mark.unit
 
 
-class Service:
+class EXAMPLE:
     pass
 
 
 def episode(data=None):
-    return Episode(id_="ep-0001", service=Service, title="Show", season=1, number=1, data=data)
+    return Episode(id_="ep-0001", service=EXAMPLE, title="Show", season=1, number=1, data=data)
 
 
 @pytest.mark.parametrize("value", [None, [], "denied", {}, {"paid": 1}, {"access": "false"}, {"access": []}])
@@ -29,7 +29,7 @@ def test_paid_and_access_are_independent_and_round_trip(access):
     data = {"paid": True, "access": access}
     serialized = serialize_title(episode({"availability": data}))
     assert serialized["availability"] == data
-    assert build_title(serialized, "TEST", "fallback").data["availability"] == data
+    assert build_title(serialized, "EXAMPLE", "fallback").data["availability"] == data
 
 
 def test_private_data_and_unknown_fields_never_leak():
@@ -47,5 +47,16 @@ def test_missing_metadata_keeps_response_unchanged():
 def test_remote_input_is_also_allowlisted():
     info = serialize_title(episode())
     info["availability"] = {"paid": True, "access": "denied", "cookies": "secret"}
-    rebuilt = build_title(info, "TEST", "fallback")
+    rebuilt = build_title(info, "EXAMPLE", "fallback")
     assert rebuilt.data["availability"] == {"paid": True, "access": "denied"}
+
+
+def test_availability_appends_without_reordering_existing_fields():
+    title = episode()
+    title.part = 2
+    title.anime = True
+    original = serialize_title(title)
+    title.data = {"availability": {"paid": True, "access": "granted"}}
+    serialized = serialize_title(title)
+    assert list(serialized) == [*original, "availability"]
+    assert {key: serialized[key] for key in original} == original

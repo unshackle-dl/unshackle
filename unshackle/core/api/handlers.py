@@ -1710,8 +1710,6 @@ def serialize_title(title: Title_T) -> Dict[str, Any]:
         "date": date,
         "cover_url": cover_url,
     }
-    if availability is not None:
-        result["availability"] = availability
     # "other" titles carry no year; only Episode/Movie/Song do.
     if isinstance(title, (Episode, Movie, Song)):
         result["year"] = title.year
@@ -1740,6 +1738,8 @@ def serialize_title(title: Title_T) -> Dict[str, Any]:
     if isinstance(title, (Episode, Movie)) and getattr(title, "anime", None) is not None:
         result["anime"] = title.anime
 
+    if availability is not None:
+        result["availability"] = availability
     return result
 
 
