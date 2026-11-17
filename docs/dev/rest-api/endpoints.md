@@ -272,6 +272,21 @@ server, uses the server's own cache and returns no `cache` field.
 
 Each serialized title carries `type` (`"episode"`, `"movie"`, or `"other"`), `name`, `id`, `language`, `description`, `date`, and `cover_url`. Episodes and movies add `year`. Episodes also add `series_title`, `season`, and `number`.
 
+A service can optionally supply `availability`, for example:
+
+```json
+{"paid": true, "access": "denied"}
+```
+
+`paid` is a boolean describing whether the catalogue marks the title as paid.
+`access` is `"granted"`, `"denied"` or `"unknown"` for the authenticated account.
+Both fields are optional. Missing/unknown access does not mean denied, and a paid
+title can be accessible through a subscription. Clients may exclude explicitly
+denied titles from batch selection; other titles remain selectable. This metadata
+is a snapshot, not a replacement for playback authorization. Recheck it when the
+account/profile/region changes. Older services/responses omit `availability`.
+The API only forwards these allowlisted fields, including through remote services.
+
 !!! warning "A song serializes as `"other"`"
     A song has no `type` of its own. The server sends it as `"other"`, and the response
     carries none of its music fields: no artist, no album, no track or disc number, and no
