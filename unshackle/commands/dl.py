@@ -902,6 +902,18 @@ class dl:
         help="Create separate output files per audio codec instead of merging all audio.",
     )
     @click.option(
+        "--skip-existing",
+        is_flag=True,
+        default=False,
+        help="Skip resolved variants recorded in the completion archive (does not check files on disk).",
+    )
+    @click.option(
+        "--force",
+        is_flag=True,
+        default=False,
+        help="Bypass the completion archive check for this run.",
+    )
+    @click.option(
         "--merge-video",
         "merge_video",
         is_flag=True,
@@ -1391,6 +1403,9 @@ class dl:
         # report which weren't available without parsing the console output. See SkippedSubtitle.
         self.skipped_subtitles: list[SkippedSubtitle] = []
         self.skipped_titles: list[SkippedTitle] = []
+        self.already_present: list[dict[str, Any]] = []
+        self.archive_scope = "cli"
+        self.archive_cache: Optional[Path] = None
         # Why a missing track or language stopped the run, for the API job error.
         self.stop_reason: Optional[str] = None
         # result() catches a download-worker failure, reports it, and returns rather than
@@ -1825,6 +1840,8 @@ class dl:
         no_postscript: bool = False,
         all_drm: bool = False,
         generate_dv: bool = False,
+        skip_existing: bool = False,
+        force: bool = False,
         *_: Any,
         **__: Any,
     ) -> None:
@@ -2334,6 +2351,35 @@ class dl:
             for t in selected:
                 unique.setdefault(t.id, t)
             return list(unique.values())
+
+        from unshackle.core.download_archive import DownloadArchive, archive_entries
+
+        archive = (
+            DownloadArchive(self.archive_cache or config.directories.cache, self.archive_scope)
+            if skip_existing and self.archive_scope != "api-unowned"
+            else None
+        )
+        archive_options = {
+            "sample": sample,
+            "skip_dl": skip_dl,
+            "no_mux": no_mux,
+            "video_only": video_only,
+            "audio_only": audio_only,
+            "subs_only": subs_only,
+            "chapters_only": chapters_only,
+            "no_video": no_video,
+            "no_audio": no_audio,
+            "no_subs": no_subs,
+            "no_chapters": no_chapters,
+            "no_attachments": no_attachments,
+            "audio_description_only": audio_description_only,
+            "forced_subs_only": forced_subs_only,
+            "cdm_only": cdm_only,
+            "list_": list_,
+            "list_titles": list_titles,
+            "skip_subtitle_errors": skip_subtitle_errors,
+            "generate_dv": generate_dv,
+        }
 
         base_selection = (v_lang, a_lang, s_lang, range_)
 
@@ -3132,6 +3178,26 @@ class dl:
                 if not (title.tracks.videos or title.tracks.audio or title.tracks.subtitles or title.tracks.chapters):
                     skip_title(title, "There's no track left for the selected options.", kind_only=True)
                     continue
+
+            receipt_entries = archive_entries(self.service, title, archive_options) if archive else []
+            if archive and receipt_entries and not force and archive.contains(receipt_entries):
+                self.already_present.append(
+                    {
+                        "service": self.service,
+                        "title_id": title.id,
+                        "title": str(title),
+                        "reason": "already_present",
+                        "variants": [
+                            {"quality": entry.quality, "range": entry.range, "codec": entry.codec}
+                            for entry in receipt_entries
+                        ],
+                    }
+                )
+                self.log.info(f"Already present in completion archive: {title}")
+                if progress_sink:
+                    progress_sink({"already_present": list(self.already_present)})
+                settle_post_script_group(title)
+                continue
 
             selected_tracks, tracks_progress_callables = title.tracks.tree(add_progress=True)
 
@@ -4016,6 +4082,9 @@ class dl:
 
                 if not skip_mux:
                     settle_post_script_group(title)
+
+                if archive and receipt_entries and not skip_mux and muxed_paths:
+                    archive.record(receipt_entries)
 
                 title_dl_time = time_elapsed_since(dl_start_time)
                 downloaded_label = "Track" if isinstance(title, Song) else "Title"

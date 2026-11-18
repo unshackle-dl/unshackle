@@ -150,6 +150,8 @@ class DownloadJob:
     # X-Secret-Key that created the job; scopes per-caller access, never serialized into to_dict().
     owner_key: Optional[str] = None
 
+    already_present: List[Dict[str, Any]] = field(default_factory=list)
+
     def to_dict(self, include_full_details: bool = False) -> Dict[str, Any]:
         """Convert job to dictionary for JSON response."""
         result: Dict[str, Any] = {
@@ -171,6 +173,7 @@ class DownloadJob:
             "speed": self.speed,
             "skipped_subtitles": self.skipped_subtitles,
             "skipped_titles": self.skipped_titles,
+            "already_present": self.already_present,
             "input_prompt": self.input_prompt,
             "notice": self.notice,
         }
@@ -236,6 +239,7 @@ def record_job_history(job: DownloadJob) -> None:
         "completed_time": job.completed_time.isoformat() if job.completed_time else None,
         "output_files": job.output_files,
         "skipped_titles": job.skipped_titles,
+        "already_present": job.already_present,
         "parameters": redact_parameters(job.parameters),
         "error_message": _redact_text(job.error_message, job.parameters),
     }
@@ -348,6 +352,8 @@ def perform_download(
     title_id: str,
     params: Dict[str, Any],
     progress_callback: Optional[Callable[[Dict[str, Any]], None]] = None,
+    *,
+    archive_scope: str = "api-unowned",
 ) -> List[str]:
     """Do the synchronous download work for a job.
 
@@ -376,6 +382,7 @@ def perform_download(
     # A service caches tokens under cache/<Service>/, keyed by service name only, so two jobs on
     # one service with different credentials would share a cache. When a per-job credential is set,
     # namespace the cache dir by a hash of it so the sessions can't cross.
+    archive_cache = config.directories.cache
     job_credential = params.get("credential")
     if job_credential:
         import hashlib
@@ -457,6 +464,9 @@ def perform_download(
         )
 
     dl_instance = dl(ctx=ctx, proxy_providers=None if params.get("server_proxy") is True else [], **ctx.params)
+    # Scope comes only from the trusted worker envelope, never the request options.
+    dl_instance.archive_scope = archive_scope
+    dl_instance.archive_cache = archive_cache
     # Per-request credential ("user:pass"); feed it into the map get_credentials() reads so a
     # client can authenticate without anything being persisted to disk. Without a profile,
     # get_credentials() falls back to "default", so store it there too rather than dropping it
@@ -545,6 +555,8 @@ def perform_download(
         raise APIError(APIErrorCode.WORKER_ERROR, f"download worker failed: {detail}")
 
     if progress_callback:
+        if already_present := getattr(dl_instance, "already_present", None):
+            progress_callback({"already_present": list(already_present)})
         skipped_subs = getattr(dl_instance, "skipped_subtitles", None)
         if skipped_subs:
             progress_callback({"skipped_subtitles": list(skipped_subs)})
@@ -918,12 +930,16 @@ class DownloadQueueManager:
     async def run_download_async(self, job: DownloadJob) -> List[str]:
         """Invoke a job worker subprocess to do the download."""
 
+        archive_owner = getattr(job, "owner_key", None)
         payload = {
             "job_id": job.job_id,
             "service": job.service,
             "title_id": job.title_id,
             "parameters": job.parameters,
             "speed_limit": self.worker_speed_limit(),
+            "archive_scope": (
+                "api-" + hashlib.sha256(archive_owner.encode()).hexdigest() if archive_owner else "api-unowned"
+            ),
         }
 
         payload_fd, payload_path = tempfile.mkstemp(prefix=f"unshackle_job_{job.job_id}_", suffix="_payload.json")
@@ -1008,6 +1024,8 @@ class DownloadQueueManager:
                                 job.skipped_subtitles = progress_data["skipped_subtitles"]
                             if progress_data.get("skipped_titles"):
                                 job.skipped_titles = progress_data["skipped_titles"]
+                            if "already_present" in progress_data:
+                                job.already_present = progress_data["already_present"]
                             if "progress" in progress_data:
                                 new_progress = float(progress_data["progress"])
                                 if new_progress != job.progress:
@@ -1071,6 +1089,7 @@ class DownloadQueueManager:
 
             if result_data:
                 job.error_traceback = result_data.get("traceback")
+                job.already_present = result_data.get("already_present", job.already_present)
 
             if returncode != 0:
                 message = result_data.get("message") if result_data else "unknown error"
