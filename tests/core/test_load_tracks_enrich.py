@@ -38,6 +38,19 @@ def test_no_enrich_keeps_the_title_from_get_tracks():
     assert (movie.name, movie.year) == ("New", 2017)
 
 
+def test_no_chapters_skips_chapter_discovery():
+    movie = Movie(id_="movie-0001", service=SERVICE, name="Title", year=2016)
+    service = refreshing_service({})
+
+    def unexpected_chapters(title):
+        raise AssertionError("get_chapters should not run with no_chapters=True")
+
+    service.get_chapters = unexpected_chapters
+    load_tracks(service, movie, no_chapters=True)
+
+    assert not movie.tracks.chapters
+
+
 def test_a_song_takes_only_the_language():
     song = Song(id_="song-0001", service=SERVICE, name="Track 1", artist="A", album="B", track=1, disc=1, year=1999)
     apply_enrich(song, "The Gold Seekers", 2017, Language.get("es"))

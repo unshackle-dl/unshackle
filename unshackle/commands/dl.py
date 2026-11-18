@@ -466,10 +466,14 @@ def load_tracks(
     language: Optional[Language] = None,
     workers: Optional[int] = None,
     on_probe: Optional[Callable[[], None]] = None,
+    no_chapters: bool = False,
 ) -> None:
-    """Load the tracks and chapters of a title, then apply the --enrich name, year and language again."""
+    """Load tracks and optional chapters, then reapply the --enrich name, year, and language."""
     title.tracks.add(probed_tracks(service, title, workers=workers, on_probe=on_probe), warn_only=True)
-    title.tracks.chapters = service.get_chapters(title)
+    if no_chapters:
+        title.tracks.chapters = []
+    else:
+        title.tracks.chapters = service.get_chapters(title)
     apply_enrich(title, name, year, language)
 
 
@@ -2491,6 +2495,7 @@ class dl:
                         language=enrich_lang,
                         workers=workers,
                         on_probe=lambda: tracks_spinner.update(text="Probing HDR10 tracks for HDR10+..."),
+                        no_chapters=no_chapters,
                     )
                 except Exception as e:
                     if self.debug_logger:
