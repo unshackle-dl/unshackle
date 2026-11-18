@@ -136,18 +136,29 @@ def main(argv: list[str]) -> int:
 
         def progress_callback(progress_data: Dict[str, Any]) -> None:
             """Write progress updates to file for main process to read."""
-            if progress_path:
-                try:
-                    with progress_lock:
-                        progress_state.update(progress_data)
+            try:
+                with progress_lock:
+                    progress_state.update(progress_data)
+                    if progress_path:
                         write_result(progress_path, progress_state)
-                except Exception as e:
-                    log.error(f"Failed to write progress update: {e}")
+            except Exception as e:
+                log.error(f"Failed to write progress update: {e}")
 
         relay_prompts(progress_callback)
-        output_files = perform_download(job_id, service, title_id, params, progress_callback=progress_callback)
+        output_files = perform_download(
+            job_id,
+            service,
+            title_id,
+            params,
+            progress_callback=progress_callback,
+            archive_scope=payload.get("archive_scope", "api-unowned"),
+        )
 
-        result = {"status": "success", "output_files": output_files}
+        result = {
+            "status": "success",
+            "output_files": output_files,
+            "already_present": progress_state.get("already_present", []),
+        }
 
     except Exception as exc:  # noqa: BLE001 - capture for parent process
         from unshackle.core.api.errors import categorize_exception
@@ -171,6 +182,7 @@ def main(argv: list[str]) -> int:
             "error_details": api_error.message,
             "error_code": api_error.error_code.value,
             "traceback": tb,
+            "already_present": progress_state.get("already_present", []) if "progress_state" in locals() else [],
         }
 
     finally:

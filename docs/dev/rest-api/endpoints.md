@@ -455,6 +455,8 @@ Make a download job. It requires `service` and `title_id`. Every other field is 
 | `require_video` | string[] | `[]` | Video languages that must exist. The job fails if one is missing, even with `best_available`, or skips the title with `skip_missing`. |
 | `require_subs` | string[] | `[]` | Subtitle languages that must exist. The job fails if one is missing, or skips the title with `skip_missing`. `s_lang` still decides what to keep. |
 | `skip_missing` | boolean | `false` | Skip a title that misses a required language or track, and continue with the next title. The job's `skipped_titles` lists each skip. The job fails when it has one title or skips every title. |
+| `skip_existing` | boolean | `false` | Skip variants recorded as completed for this API key, matched after selection by service, title ID, quality, range and codec. Does not verify files on disk or compare audio/subtitle choices. |
+| `force` | boolean | `false` | Bypass the completion archive check for this job. Does not change overwrite behaviour. |
 | `forced_subs` | boolean | `false` | Include forced subtitles. |
 | `forced_subs_only` | boolean | `false` | Download forced subtitles and no other subtitle; implies `forced_subs`. Not valid with `no_subs`, `video_only`, `audio_only` or `chapters_only`. |
 | `forced_s_lang` | string[] | `[]` | Forced subtitle language(s); implies `forced_subs`. |
@@ -587,6 +589,7 @@ Show download jobs, with optional filtering and sorting.
           "speed": "5.2 MB/s",
           "skipped_subtitles": [],
           "skipped_titles": [],
+          "already_present": [],
           "input_prompt": null,
           "notice": null
         }
@@ -856,6 +859,7 @@ Read the persisted history of jobs that reached a terminal state, newest first. 
           "completed_time": "2026-07-03T12:08:00+00:00",
           "output_files": ["/downloads/Example.S01E01.mkv"],
           "skipped_titles": [],
+          "already_present": [],
           "error_message": null,
           "parameters": { "...": "redacted" }
         }
@@ -868,6 +872,12 @@ Read the persisted history of jobs that reached a terminal state, newest first. 
 | --- | --- | --- |
 | `200` | - | History returned. |
 | `400` | `INVALID_PARAMETERS` | Invalid `limit`. |
+
+`already_present` lists completion-archive skips separately from newly produced `output_files`
+and missing-track `skipped_titles`. Each entry contains `service`, `title_id`, `title`,
+`reason: "already_present"`, and `variants` (objects with `quality`, `range`, `codec`). The same
+field is present in job progress/details. A job with only archive matches completes successfully.
+The archive is independent of history retention, isolated per API key, and has no inventory endpoint.
 
 ### `DELETE /api/history/{job_id}`
 

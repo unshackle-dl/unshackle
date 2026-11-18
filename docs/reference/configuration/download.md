@@ -107,6 +107,39 @@ dl:
     config keys it does not know there, `speed_limit` for example. `serve` has its own
     `global_speed_limit`.
 
+### Completion archive
+
+`dl.skip_existing: true` opts CLI downloads into an append-only completion archive under
+`directories.cache/download-archive/cli.jsonl`. `--skip-existing` enables it for one run;
+`--force` bypasses its check and still records successful full outputs when the archive is enabled.
+
+The key is the canonical service tag, title ID (string or integer), and the resolved video
+quality, range and codec. Selection runs normally before checking the archive: a best-available
+720p result can match 720p again, but a later 1080p selection downloads. A different quality,
+range or codec does not match. All selected variants must have receipts to skip the title.
+A higher resolution does not satisfy an explicitly lower request.
+
+Receipts are written only after a full movie/episode has been muxed and its output files have
+been published. Samples, `--skip-dl`, `--no-mux`, track-only and omitted-track modes do not check
+or update the archive. Unknown video metadata, non-string/non-integer IDs, music, stereoscopic
+and generated/hybrid video outputs also fall back to normal downloading. So does
+`--skip-subtitle-errors`, which can publish incomplete output. `--include-sample` still records
+the complete output, not the sample.
+
+This is a completion log, not a media inventory: deleting or moving an output does not remove
+its receipt. It does not compare audio or subtitle choices or inspect existing files. Use
+`--force` when an archived variant needs to be downloaded again. It does not import job history,
+and history trimming or deletion does not affect it. Clearing the cache removes these receipts.
+Concurrent writers lock only local archive I/O; simultaneous downloads may both proceed.
+
+API jobs use separate files named `api-<SHA-256 of caller key>.jsonl` in the same directory.
+They never consult the CLI archive or another caller's archive. Enable this with the request's
+`skip_existing: true`, a `serve.skip_existing` default, or a `services.<TAG>.dl.skip_existing`
+default. API callers cannot choose a scope or archive path. An ownerless internal job does not
+use the archive. Remote service selection uses the local job's completion archive, not a remote
+server's library. Skipped receipts are reported as `already_present` and complete successfully;
+this does not change the separate missing-track `skipped_titles` behaviour.
+
 ## `continue_downloads`
 
 - **Type:** `bool` &nbsp;·&nbsp; **Default:** `false`
