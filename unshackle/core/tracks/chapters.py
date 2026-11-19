@@ -128,11 +128,19 @@ class Chapters(SortedKeyList, ABC):
         return written
 
     def add(self, value: Chapter) -> None:
+        """Add a chapter to the list, handling duplicates gracefully by joining names with '/'."""
         if not isinstance(value, Chapter):
             raise TypeError(f"Can only add {Chapter} objects, not {type(value)}")
 
-        if any(chapter.timestamp == value.timestamp for chapter in self):
-            raise ValueError(f"A Chapter with the Timestamp {value.timestamp} already exists")
+        for chapter in self:
+            if chapter.timestamp == value.timestamp:
+                if value.named:
+                    if chapter.named:
+                        chapter.name = f"{value.name} / {chapter.name}"
+                        return
+                    chapter.name = value.name
+                    return
+                return
 
         super().add(value)
 
