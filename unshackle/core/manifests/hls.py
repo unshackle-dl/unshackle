@@ -10,9 +10,10 @@ import shutil
 import subprocess
 import time
 from contextlib import ExitStack, closing
+from functools import partial
 from itertools import accumulate
 from pathlib import Path
-from typing import Any, Optional, Union, cast
+from typing import Any, BinaryIO, Callable, Optional, Union, cast
 from urllib.parse import urljoin, urlparse
 from uuid import UUID
 from zlib import crc32
@@ -35,7 +36,14 @@ from unshackle.core.drm import DRM_T, ClearKey, ClearKeyCENC, MonaLisa, PlayRead
 from unshackle.core.drm.segment_decrypt import SegmentDecrypter, can_use
 from unshackle.core.drm.verify import decrypt_track
 from unshackle.core.events import events
-from unshackle.core.manifests.dash import RollingMerge, missing_language
+from unshackle.core.manifests.dash import (
+    PeriodRebase,
+    RollingMerge,
+    append_segment,
+    mdhd_timescale,
+    missing_language,
+    rebase_webvtt_files,
+)
 from unshackle.core.session import RnetResponse, RnetSession, utf8_text
 from unshackle.core.tracks import Audio, DownloadContext, Subtitle, Tracks, Video, resume
 from unshackle.core.tracks.track import DRM_PREFERENCE_TYPES, assert_fragments_decrypted
@@ -1241,10 +1249,10 @@ class HLS:
             if isinstance(track, (Video, Audio)):
                 HLS.merge_segments(segments=segments_to_merge, save_path=save_path, progress=progress)
             else:
+                append = HLS.discontinuity_append(track, wanted_segments, segments_to_merge)
                 with open(save_path, "wb") as f:
                     for discontinuity_file in segments_to_merge:
-                        with open(discontinuity_file, "rb") as src:
-                            shutil.copyfileobj(src, f, 1024 * 1024)
+                        append(f, discontinuity_file)
                         f.flush()
                         os.fsync(f.fileno())
                         discontinuity_file.unlink()
@@ -1263,6 +1271,31 @@ class HLS:
             track.drm = None
 
         events.emit(events.Types.TRACK_DOWNLOADED, track=track)
+
+    @staticmethod
+    def discontinuity_starts(wanted_segments: list[Any]) -> list[float]:
+        """Start in seconds of each discontinuity block, counted as download_track numbers the blocks, then the end."""
+        ends = list(accumulate((segment.duration or 0 for segment in wanted_segments), initial=0.0))
+        return [0.0, *(ends[i] for i, segment in enumerate(wanted_segments) if i and segment.discontinuity), ends[-1]]
+
+    @staticmethod
+    def discontinuity_append(
+        track: AnyTrack, wanted_segments: list[Any], blocks: list[Path]
+    ) -> Callable[[BinaryIO, Path], None]:
+        """The append for merging subtitle discontinuity blocks, each placed at its playlist start when it restarts.
+
+        WebVTT blocks are rewritten by rebase_webvtt_files before the merge; fVTT blocks merge through a PeriodRebase.
+        """
+        plain = partial(append_segment, is_text_subtitle=False)
+        bounds = HLS.discontinuity_starts(wanted_segments)
+        if not isinstance(track, Subtitle) or len(blocks) < 2 or len(bounds) != len(blocks) + 1:
+            return plain
+        if track.codec == Subtitle.Codec.WebVTT:
+            rebase_webvtt_files([[block] for block in blocks], [round(t * 1000) for t in bounds])
+        elif track.codec == Subtitle.Codec.fVTT and (timescale := mdhd_timescale(blocks[0].read_bytes())):
+            periods = {i: (bounds[i], bounds[i + 1] - bounds[i], 0.0) for i in range(len(blocks))}
+            return PeriodRebase(periods, timescale).append
+        return plain
 
     @staticmethod
     def merge_segments(segments: list[Path], save_path: Path, progress: Optional[Any] = None) -> int:
