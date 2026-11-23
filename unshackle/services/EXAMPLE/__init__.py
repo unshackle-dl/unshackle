@@ -443,14 +443,17 @@ class EXAMPLE(Service):
         return tracks
 
     def get_chapters(self, title: Title_T) -> Chapters:
-        chapters = Chapters()
+        chapters = []
         for chapter in title.data.get("chapters", []):
             if chapter["name"] == "Intro":
-                chapters.add(Chapter(timestamp=chapter["start"], name="Opening"))
-                chapters.add(Chapter(timestamp=chapter["end"]))  # unnamed marker = chapter break
+                chapters.append(Chapter(timestamp=chapter["start"], name="Opening"))
+                chapters.append(Chapter(timestamp=chapter["end"]))  # unnamed marker = chapter break
             elif chapter["name"] == "Credits":
-                chapters.add(Chapter(timestamp=chapter["start"], name="Credits"))
-        return chapters
+                chapters.append(Chapter(timestamp=chapter["start"], name="Credits"))
+        unique: dict[str, Chapter] = {}
+        for chapter in sorted(chapters, key=lambda c: not c.named):
+            unique.setdefault(chapter.timestamp, chapter)
+        return Chapters(sorted(unique.values(), key=lambda c: c.timestamp))
 
     def get_widevine_service_certificate(self, **_: Any) -> Optional[str]:
         # Returning the service cert enables privacy-mode license requests.
