@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../assets/favicon.svg">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.1">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.2">
     
     
       
@@ -3100,7 +3100,13 @@ because HLS variants carry no language.</p>
 <ul>
 <li><strong>DASH</strong> enumerates tracks from only the <em>first</em> content period, but downloads segments
   from <em>all</em> content periods matching the representation. The parser reads <code>SegmentTemplate</code>,
-  <code>SegmentList</code>, and <code>SegmentBase</code> addressing, and <code>$Number%0Nd$</code> padding.</li>
+  <code>SegmentList</code>, and <code>SegmentBase</code> addressing, and <code>$Number%0Nd$</code> padding.
+  When a period's fragment timeline starts again near 0, as in a stitched ad stream that
+  packages each part of the title on its own, the merge moves that period to follow the
+  periods it keeps before it. A timeline that continues is not changed, so the gaps of filtered ad
+  periods stay in it. Plain WebVTT periods and HLS subtitles across <code>EXT-X-DISCONTINUITY</code> blocks
+  get the same treatment: fVTT through its tfdt, and WebVTT through its cue times, which move to
+  the block's playlist start when that puts more cues inside the block.</li>
 <li><strong>HLS</strong> re-fetches the media playlist at download time, recovers <code>SUPPLEMENTAL-CODECS</code>
   from raw text (python-m3u8 drops it) to detect Dolby Vision composite streams, and uses
   the media-sequence-number IV for AES-128 keys that have no explicit IV.</li>
