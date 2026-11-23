@@ -9,7 +9,7 @@ import re
 import shutil
 import subprocess
 import time
-from contextlib import ExitStack, closing
+from contextlib import ExitStack, closing, suppress
 from functools import partial
 from itertools import accumulate
 from pathlib import Path
@@ -1255,7 +1255,8 @@ class HLS:
                         append(f, discontinuity_file)
                         f.flush()
                         os.fsync(f.fileno())
-                        discontinuity_file.unlink()
+                        with suppress(OSError):
+                            discontinuity_file.unlink()
 
         if save_dir.exists() and save_dir.name.endswith("_segments"):
             try:
@@ -1319,7 +1320,8 @@ class HLS:
         def cleanup_segments_and_dirs() -> None:
             """Clean up segments and directories after successful merge."""
             for segment in segments:
-                segment.unlink(missing_ok=True)
+                with suppress(OSError):
+                    segment.unlink(missing_ok=True)
             for segment_dir in segment_dirs:
                 if segment_dir.exists():
                     try:
@@ -1328,8 +1330,9 @@ class HLS:
                         pass  # Directory cleanup failed, but merge succeeded
 
         if binaries.FFMPEG:
+            demuxer_file = save_path.parent / f"ffmpeg_concat_demuxer_{save_path.stem}.txt"
             try:
-                demuxer_file = save_path.parent / f"ffmpeg_concat_demuxer_{save_path.stem}.txt"
+                concat_timeout = 300 + sum(s.stat().st_size for s in segments) // (5 * 1024 * 1024)
                 demuxer_file.write_text(
                     "\n".join([f"file '{segment.absolute()}'" for segment in segments]),
                     encoding="utf-8",
@@ -1357,13 +1360,23 @@ class HLS:
                         save_path,
                     ],
                     check=True,
-                    timeout=300,
+                    timeout=concat_timeout,
                     capture_output=True,
                     text=True,
                     encoding="utf-8",
                     errors="replace",
                 )
-                demuxer_file.unlink(missing_ok=True)
+            except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as e:
+                stderr = getattr(e, "stderr", None) or ""
+                if isinstance(stderr, bytes):
+                    stderr = stderr.decode("utf-8", "replace")
+                logging.getLogger("HLS").debug(
+                    f"FFmpeg concat failed ({e}), falling back to binary concatenation"
+                    + (f": {stderr.strip()}" if stderr.strip() else "")
+                )
+                with suppress(OSError):
+                    save_path.unlink(missing_ok=True)
+            else:
                 if progress:
                     progress(completed=len(segments))
                 cleanup_segments_and_dirs()
@@ -1376,17 +1389,9 @@ class HLS:
                     output_size=save_path.stat().st_size if save_path.exists() else 0,
                 )
                 return save_path.stat().st_size
-
-            except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as e:
-                stderr = getattr(e, "stderr", None) or ""
-                if isinstance(stderr, bytes):
-                    stderr = stderr.decode("utf-8", "replace")
-                logging.getLogger("HLS").debug(
-                    f"FFmpeg concat failed ({e}), falling back to binary concatenation"
-                    + (f": {stderr.strip()}" if stderr.strip() else "")
-                )
-                demuxer_file.unlink(missing_ok=True)
-                save_path.unlink(missing_ok=True)
+            finally:
+                with suppress(OSError):
+                    demuxer_file.unlink(missing_ok=True)
 
         logging.getLogger("HLS").debug(f"Using binary concatenation for {len(segments)} segments")
         with open(save_path, "wb") as output_file:

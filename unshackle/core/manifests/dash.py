@@ -10,7 +10,7 @@ import re
 import shutil
 from bisect import bisect_right
 from concurrent.futures import Future
-from contextlib import ExitStack, closing
+from contextlib import ExitStack, closing, suppress
 from copy import deepcopy
 from functools import lru_cache, partial
 from pathlib import Path
@@ -958,7 +958,8 @@ class DASH:
                     progress(downloaded="Merging", completed=0, total=len(segments_to_merge))
                 for segment_file in segments_to_merge:
                     append(f, segment_file)
-                    segment_file.unlink()
+                    with suppress(OSError):
+                        segment_file.unlink()
                     progress(advance=1)
 
         track.path = save_path

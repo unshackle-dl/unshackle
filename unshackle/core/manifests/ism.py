@@ -8,7 +8,7 @@ import re
 import shutil
 import struct
 import urllib.parse
-from contextlib import ExitStack, closing
+from contextlib import ExitStack, closing, suppress
 from pathlib import Path
 from typing import Any, BinaryIO, Optional, Union
 
@@ -629,7 +629,8 @@ class ISM:
                     else:
                         with open(segment_file, "rb") as src:
                             shutil.copyfileobj(src, f, 1024 * 1024)
-                    segment_file.unlink()
+                    with suppress(OSError):
+                        segment_file.unlink()
                     progress(advance=1)
 
         track.path = save_path

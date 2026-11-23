@@ -884,7 +884,8 @@ class Track:
                             with save_path.open("wb") as joined, media_path.open("rb") as media:
                                 joined.write(sample_range[0])
                                 shutil.copyfileobj(media, joined)
-                            media_path.unlink()
+                            with contextlib.suppress(OSError):
+                                media_path.unlink()
 
                         self.path = save_path
                         events.emit(events.Types.TRACK_DOWNLOADED, track=self)
