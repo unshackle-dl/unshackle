@@ -1086,6 +1086,12 @@ async def download(request: web.Request) -> web.Response:
               split_audio:
                 type: boolean
                 description: Make separate output files per audio codec instead of merging all audio (default - null)
+              skip_existing:
+                type: boolean
+                description: Skip resolved variants in the caller completion archive without checking files on disk (default - false)
+              force:
+                type: boolean
+                description: Bypass the completion archive check without changing overwrite behaviour (default - false)
               skip_dl:
                 type: boolean
                 description: Skip downloading, only retrieve decryption keys (default - false)
