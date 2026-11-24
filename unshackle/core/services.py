@@ -572,7 +572,7 @@ class Services(click.Group):
                             kwargs["multiple"] = True
                     if param.get("help"):
                         kwargs["help"] = param["help"]
-                    remote_cli = click.option(*opts, **kwargs)(remote_cli)
+                    remote_cli = click.option(param["name"], *opts, **kwargs)(remote_cli)
 
         return remote_cli
 

@@ -252,6 +252,11 @@ def instantiate_service(
     cli_params = getattr(getattr(service_module, "cli", None), "params", []) or []
     names = {p.name for p in cli_params if getattr(p, "name", None) and p.name != "title"}
     data = data or {}
+    nested = data.get("service_params")
+    if isinstance(nested, dict):
+        flagged = {click.Option(p.opts).name: p.name for p in cli_params if p.param_type_name == "option" and p.opts}
+        renamed = {flagged.get(k, k): v for k, v in nested.items() if k not in names}
+        data = {**data, "service_params": {**renamed, **nested}}
     extras = cast_or_refuse(cli_params, parent_ctx, service_options(data, names, transport_keys))
     if data and data.get("service_params") is None:
         for k in names & transport_keys & data.keys():

@@ -1,4 +1,4 @@
-"""make_remote_command resolves names against the remote server's list and reports the failures."""
+"""make_remote_command resolves names against the remote server's list, reports the failures and keeps served option names."""
 
 from __future__ import annotations
 
@@ -10,7 +10,17 @@ import pytest
 from unshackle.core.services import Services
 
 SERVED = [
-    {"tag": "EXAMPLE", "url": "https://example.com", "help": "Example service.", "cli_params": [], "aliases": []},
+    {
+        "tag": "EXAMPLE",
+        "url": "https://example.com",
+        "help": "Example service.",
+        "cli_params": [
+            {"kind": "option", "name": "zone_code", "opts": ["--zone"], "is_flag": False, "default": None},
+            {"kind": "option", "name": "flavour_name", "opts": ["--flavour"], "is_flag": False, "choices": ["a", "b"]},
+            {"kind": "option", "name": "loud_mode", "opts": ["--loud"], "is_flag": True, "default": False},
+        ],
+        "aliases": [],
+    },
     {
         "tag": "DEMO",
         "url": "https://example.com",
@@ -55,3 +65,10 @@ def test_fetch_failure_keeps_stub_instead_of_raising() -> None:
         cmd = _make("EXAMPLE")
     assert cmd.name == "EXAMPLE"
     assert cmd.help is None
+
+
+def test_options_keep_the_served_name() -> None:
+    with patch.object(Services, "fetch_remote_services", return_value=SERVED):
+        cmd = _make("EXAMPLE")
+    ctx = cmd.make_context("EXAMPLE", ["--zone", "eu", "--flavour", "b", "--loud", "an-id"])
+    assert ctx.params == {"title": "an-id", "zone_code": "eu", "flavour_name": "b", "loud_mode": True}
