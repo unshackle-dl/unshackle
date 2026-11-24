@@ -365,8 +365,9 @@ def perform_download(
     import click
 
     from unshackle.commands.dl import dl
-    from unshackle.core.api.errors import APIError, APIErrorCode
+    from unshackle.core.api.errors import APIError
     from unshackle.core.config import config, load_yaml
+    from unshackle.core.remote_protocol import APIErrorCode
     from unshackle.core.services import Services
     from unshackle.core.utils.click_types import ContextData
     from unshackle.core.utils.collections import merge_dict

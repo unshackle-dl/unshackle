@@ -10,45 +10,12 @@ from __future__ import annotations
 import secrets
 import traceback
 from datetime import datetime, timezone
-from enum import Enum
 from typing import Any
 
 from aiohttp import web
 
+from unshackle.core.remote_protocol import APIErrorCode
 from unshackle.core.utils.redact import redact_secrets
-
-
-class APIErrorCode(str, Enum):
-    """Standard API error codes for programmatic error handling."""
-
-    INVALID_INPUT = "INVALID_INPUT"
-    INVALID_SERVICE = "INVALID_SERVICE"
-    INVALID_PROXY = "INVALID_PROXY"
-    INVALID_PARAMETERS = "INVALID_PARAMETERS"
-
-    AUTH_FAILED = "AUTH_FAILED"
-    FORBIDDEN = "FORBIDDEN"
-    SERVER_CDM_CAPPED = "SERVER_CDM_CAPPED"
-    GEOFENCE = "GEOFENCE"
-
-    NOT_FOUND = "NOT_FOUND"
-    NO_CONTENT = "NO_CONTENT"
-    JOB_NOT_FOUND = "JOB_NOT_FOUND"
-    SESSION_NOT_FOUND = "SESSION_NOT_FOUND"
-    TRACK_NOT_FOUND = "TRACK_NOT_FOUND"
-
-    CONFLICT = "CONFLICT"
-
-    RATE_LIMITED = "RATE_LIMITED"
-
-    INTERNAL_ERROR = "INTERNAL_ERROR"
-    SERVICE_ERROR = "SERVICE_ERROR"
-    NETWORK_ERROR = "NETWORK_ERROR"
-    DRM_ERROR = "DRM_ERROR"
-    DOWNLOAD_ERROR = "DOWNLOAD_ERROR"
-    SERVICE_UNAVAILABLE = "SERVICE_UNAVAILABLE"
-    SERVER_DRAINING = "SERVER_DRAINING"
-    WORKER_ERROR = "WORKER_ERROR"
 
 
 class APIError(Exception):

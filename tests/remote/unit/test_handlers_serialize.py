@@ -8,7 +8,7 @@ import pytest
 import requests
 from langcodes import Language
 
-from unshackle.core.api.errors import APIError, APIErrorCode
+from unshackle.core.api.errors import APIError
 from unshackle.core.api.handlers import (
     drm_preference_name,
     listed_titles,
@@ -18,6 +18,7 @@ from unshackle.core.api.handlers import (
     validate_service,
 )
 from unshackle.core.config import config
+from unshackle.core.remote_protocol import APIErrorCode
 from unshackle.core.titles.episode import Episode
 from unshackle.core.titles.movie import Movie
 from unshackle.core.tracks import Audio, Subtitle, Video
@@ -367,8 +368,8 @@ async def test_search_unknown_service_raises_invalid_service() -> None:
 
 def test_resolve_vcodec_rejects_junk_as_invalid_input() -> None:
     """Session routes skip validate_download_parameters, so a bad codec must be a 400, not a 500."""
-    from unshackle.core.api.errors import APIErrorCode
     from unshackle.core.api.handlers import resolve_vcodec
+    from unshackle.core.remote_protocol import APIErrorCode
     from unshackle.core.tracks import Video
 
     assert resolve_vcodec(["H265"]) == [Video.Codec.HEVC]

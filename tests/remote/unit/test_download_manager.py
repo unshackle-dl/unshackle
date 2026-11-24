@@ -386,8 +386,9 @@ def test_a_prompt_discards_an_answer_sent_before_it(tmp_path: Path, monkeypatch:
     import threading
 
     from unshackle.core.api import download_worker
-    from unshackle.core.api.errors import APIErrorCode, categorize_exception
+    from unshackle.core.api.errors import categorize_exception
     from unshackle.core.console import prompt_user, set_prompt_handler
+    from unshackle.core.remote_protocol import APIErrorCode
 
     answers = tmp_path / "stdin"
     answers.write_text('"stale"\n', encoding="utf-8")
@@ -558,8 +559,9 @@ async def test_input_handler_rejects_bad_requests(
     monkeypatch: pytest.MonkeyPatch, manager: DownloadQueueManager
 ) -> None:
     from unshackle.core.api import download_manager
-    from unshackle.core.api.errors import APIError, APIErrorCode
+    from unshackle.core.api.errors import APIError
     from unshackle.core.api.handlers import download_job_input_handler
+    from unshackle.core.remote_protocol import APIErrorCode
 
     monkeypatch.setattr(download_manager, "get_download_manager", lambda: manager)
     job = manager.create_job("EXAMPLE", "t")

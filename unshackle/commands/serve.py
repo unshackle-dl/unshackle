@@ -47,6 +47,7 @@ from unshackle.core.config import Config, config
 from unshackle.core.console import console
 from unshackle.core.constants import context_settings
 from unshackle.core.downloaders import format_speed, parse_speed_limit, set_speed_limit
+from unshackle.core.remote_protocol import HEALTH_ROUTE
 
 
 class _MaskAccessKey(logging.Filter):
@@ -549,7 +550,7 @@ def serve(
                     known = bool(secret_key) and any(
                         hmac.compare_digest(secret_key, k) for k in request.app["config"]["users"]
                     )
-                    if request.path != "/api/health" and secret_key and known:
+                    if request.path != HEALTH_ROUTE and secret_key and known:
                         limited = rate_limit_response(secret_key)
                         if limited is not None:
                             return limited
@@ -569,7 +570,7 @@ def serve(
                             f"https://git.gay/ready-dl/pyplayready serve v{pyplayready_version}"
                         )
 
-                    if request.path != "/api/health" and secret_key and known:
+                    if request.path != HEALTH_ROUTE and secret_key and known:
                         add_rate_limit_headers(response, secret_key)
                     return response
 

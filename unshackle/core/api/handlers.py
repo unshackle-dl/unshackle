@@ -24,8 +24,8 @@ import click
 from aiohttp import web
 
 from unshackle.core.api.compression import safe_inflate
-from unshackle.core.api.errors import APIError, APIErrorCode, categorize_exception, handle_api_exception
-from unshackle.core.api.input_bridge import AuthStatus, InputBridge, NoUserBridge
+from unshackle.core.api.errors import APIError, categorize_exception, handle_api_exception
+from unshackle.core.api.input_bridge import InputBridge, NoUserBridge
 from unshackle.core.api.progress import track_log_label
 from unshackle.core.api.sanitize import MAX_SESSION_CACHE_KEYS, safe_cache_key, safe_cache_payload, sanitize_log
 from unshackle.core.api.session_log import SessionLogBuffer, SessionLogMirror, capture_service_logs
@@ -45,6 +45,26 @@ from unshackle.core.drm import BlowfishStripe, cbcs, is_null_key
 from unshackle.core.manifests.snapshot import capture
 from unshackle.core.providers.anilist import parse_anilist_ref
 from unshackle.core.proxies.resolve import initialize_proxy_providers, is_loopback, resolve_proxy
+from unshackle.core.remote_protocol import (
+    HEALTH_ROUTE,
+    APIErrorCode,
+    AuthStatus,
+    BadKeyReport,
+    LicenseReply,
+    LicenseRequest,
+    LogsReply,
+    PromptAnswer,
+    PromptReply,
+    SegmentFilterReply,
+    SegmentFilterRequest,
+    SessionClosed,
+    SessionCreate,
+    SessionCreated,
+    SessionInfo,
+    TitlesReply,
+    TracksReply,
+    TracksRequest,
+)
 from unshackle.core.services import Services
 from unshackle.core.session import RnetSession, utf8_text
 from unshackle.core.titles import Episode, Song
@@ -1502,7 +1522,7 @@ async def api_key_authentication(request: web.Request, handler: Any) -> web.Stre
     # recovered byte-by-byte from response timing.
     if not any(hmac.compare_digest(secret_key, k) for k in request.app["config"]["users"]):
         return web.json_response({"status": 401, "message": "Secret Key is Invalid."}, status=401)
-    if request.path == "/api/health":
+    if request.path == HEALTH_ROUTE:
         return await handler(request)
     return rate_limit_response(secret_key) or add_rate_limit_headers(await handler(request), secret_key)
 
@@ -3296,36 +3316,8 @@ async def env_check_handler(request: Optional[web.Request] = None) -> web.Respon
         return handle_api_exception(e, context={"operation": "env_check"}, debug_mode=debug_mode)
 
 
-SESSION_TRANSPORT_KEYS = {
-    "service",
-    "title_id",
-    "profile",
-    "service_params",
-    "season",
-    "episode",
-    "part",
-    "wanted",
-    "proxy",
-    "no_proxy",
-    "credentials",
-    "cookies",
-    "cache",
-    "client_region",
-    "proxy_region",
-    "server_cdm",
-    "cdm_type",
-    "cdm_security_level",
-    "cdm_relay",
-    "cdm_system_id",
-    "cdm_device_type",
-    "service_config",
-    "range_",
-    "vcodec",
-    "quality",
-    "best_available",
-    "generate_dv",
-    "dl_params",
-}
+# "client" stays out: a flat "client" value with no service_params is a service option.
+SESSION_TRANSPORT_KEYS = (SessionCreate.__required_keys__ | SessionCreate.__optional_keys__) - {"client"}
 
 
 # A client's service config carries a device identity (an ESN, a few keys), never a bulk payload.
@@ -3656,16 +3648,16 @@ async def session_create_handler(data: Dict[str, Any], request: Optional[web.Req
         auth_task.add_done_callback(_auth_tasks.discard)
 
         return web.json_response(
-            {
-                "session_id": session.session_id,
-                "service": normalized_service,
-                "status": "authenticating",
-                "server_account": server_account,
-                "server_cdm": use_server_cdm,
-                "server_cdm_max_height": max_height,
-                "server_vault": session.server_vault,
-                "server_device": session.server_device,
-            }
+            SessionCreated(
+                session_id=session.session_id,
+                service=normalized_service,
+                status=AuthStatus.AUTHENTICATING,
+                server_account=server_account,
+                server_cdm=use_server_cdm,
+                server_cdm_max_height=max_height,
+                server_vault=session.server_vault,
+                server_device=session.server_device,
+            )
         )
 
     except APIError:
@@ -3708,12 +3700,7 @@ async def session_titles_handler(session_id: str, request: Optional[web.Request]
             serialized_titles.append(stamp_service_flags(serialize_title(t), service_instance))
         SessionStore.publish_update(session)
 
-        return web.json_response(
-            {
-                "session_id": session_id,
-                "titles": serialized_titles,
-            }
-        )
+        return web.json_response(TitlesReply(session_id=session_id, titles=serialized_titles))
 
     except (Exception, SystemExit) as e:
         log.exception("Error getting titles")
@@ -3798,7 +3785,7 @@ def scrub_track_data(data: Optional[Dict[str, Any]], session: Any) -> Optional[D
 
 
 async def session_tracks_handler(
-    data: Dict[str, Any], session_id: str, request: Optional[web.Request] = None
+    data: TracksRequest, session_id: str, request: Optional[web.Request] = None
 ) -> web.Response:
     """Get tracks and chapters for a specific title in the remote session.
 
@@ -3896,6 +3883,17 @@ async def session_tracks_handler(
                 d["data"] = scrub_track_data(d.get("data"), session)
             return {**lists, "attachments": [a for a in map(serialize_attachment, tracks.attachments) if a]}
 
+        session_fields = TracksReply(
+            session_headers=session_headers,
+            session_cookies=cookie_values(session_cookies),
+            session_cookie_jar=session_cookies,
+            server_cdm=session.server_cdm,
+            server_cdm_type=server_cdm_type,
+            sample_decrypt_tracks=[
+                str(t.id) for t in [*tracks.videos, *tracks.audio] if service_instance.decrypts_samples(t)
+            ],
+        )
+
         return web.json_response(
             {
                 "title": stamp_service_flags(serialize_title(title), service_instance),
@@ -3905,14 +3903,7 @@ async def session_tracks_handler(
                     for ch in session.chapters_by_title.get(str(title_id), [])
                 ],
                 **snapshot,
-                "session_headers": session_headers,
-                "session_cookies": cookie_values(session_cookies),
-                "session_cookie_jar": session_cookies,
-                "server_cdm": session.server_cdm,
-                "server_cdm_type": server_cdm_type,
-                "sample_decrypt_tracks": [
-                    str(t.id) for t in [*tracks.videos, *tracks.audio] if service_instance.decrypts_samples(t)
-                ],
+                **session_fields,
             }
         )
 
@@ -4121,25 +4112,25 @@ async def session_prompt_get_handler(session_id: str, request: Optional[web.Requ
     bridge = session.input_bridge
     if bridge and (cdm_call := bridge.get_pending_cdm_call()):
         return web.json_response(
-            {"status": "pending_input", "prompt": bridge.get_pending_prompt(), "cdm_call": cdm_call}
+            PromptReply(status=AuthStatus.PENDING_INPUT, prompt=bridge.get_pending_prompt(), cdm_call=cdm_call)
         )
 
     if session.auth_status == AuthStatus.AUTHENTICATED:
-        return web.json_response({"status": "authenticated"})
+        return web.json_response(PromptReply(status=AuthStatus.AUTHENTICATED))
 
     if session.auth_status == AuthStatus.FAILED:
-        return web.json_response({"status": "failed", "error": session.auth_error or "unknown error"})
+        return web.json_response(PromptReply(status=AuthStatus.FAILED, error=session.auth_error or "unknown error"))
 
     if bridge:
         prompt = bridge.get_pending_prompt()
         if prompt:
-            return web.json_response({"status": "pending_input", "prompt": prompt})
+            return web.json_response(PromptReply(status=AuthStatus.PENDING_INPUT, prompt=prompt))
 
-    return web.json_response({"status": "authenticating"})
+    return web.json_response(PromptReply(status=AuthStatus.AUTHENTICATING))
 
 
 async def session_prompt_post_handler(
-    data: Dict[str, Any], session_id: str, request: Optional[web.Request] = None
+    data: PromptAnswer, session_id: str, request: Optional[web.Request] = None
 ) -> web.Response:
     """Submit a response to a pending interactive prompt.
 
@@ -4172,13 +4163,7 @@ async def session_logs_handler(session_id: str, since: int = 0, request: Optiona
     session = await get_validated_session(session_id, request)
     buffer = session.log_buffer
     logs = buffer.since(since) if buffer else []
-    return web.json_response(
-        {
-            "session_id": session_id,
-            "logs": logs,
-            "last_seq": logs[-1]["seq"] if logs else since,
-        }
-    )
+    return web.json_response(LogsReply(session_id=session_id, logs=logs, last_seq=logs[-1]["seq"] if logs else since))
 
 
 async def get_validated_session(session_id: str, request: Optional[web.Request]) -> Any:
@@ -4930,16 +4915,16 @@ def handle_proxy_license(
         raise APIError(APIErrorCode.SERVICE_ERROR, f"Licence request failed: {exc}") from None
 
     if license_blob is None:
-        return web.json_response({"license": None})
+        return web.json_response(LicenseReply(license=None))
     if isinstance(license_blob, str):
         # a Widevine service may answer in Base64 text, and the client hands its CDM the raw bytes
         license_blob = base64.b64decode(license_blob) if drm_type == "widevine" else license_blob.encode("utf-8")
 
-    return web.json_response({"license": base64.b64encode(license_blob).decode("ascii")})
+    return web.json_response(LicenseReply(license=base64.b64encode(license_blob).decode("ascii")))
 
 
 async def session_segment_filter_handler(
-    data: Dict[str, Any], session_id: str, request: Optional[web.Request] = None
+    data: SegmentFilterRequest, session_id: str, request: Optional[web.Request] = None
 ) -> web.Response:
     """Run the service's HLS ``OnSegmentFilter`` for one track and return the unwanted segment URIs.
 
@@ -4963,7 +4948,7 @@ async def session_segment_filter_handler(
 
     segment_filter = getattr(track, "OnSegmentFilter", None)
     if not callable(segment_filter) or not getattr(track, "url", None):
-        return web.json_response({"unwanted": None})
+        return web.json_response(SegmentFilterReply(unwanted=None))
 
     def unwanted_segments() -> list[str]:
         import m3u8
@@ -4982,7 +4967,7 @@ async def session_segment_filter_handler(
         log.exception(f"Error running the segment filter for track {sanitize_log(str(track_id))}")
         raise APIError(APIErrorCode.SERVICE_ERROR, "Could not run the segment filter for this track") from None
 
-    return web.json_response({"unwanted": unwanted})
+    return web.json_response(SegmentFilterReply(unwanted=unwanted))
 
 
 async def session_samples_handler(
@@ -5039,7 +5024,7 @@ async def session_samples_handler(
 
 
 async def session_license_handler(
-    data: Dict[str, Any], session_id: str, request: Optional[web.Request] = None
+    data: LicenseRequest, session_id: str, request: Optional[web.Request] = None
 ) -> web.Response:
     """Do the DRM licensing in proxy or server_cdm mode.
 
@@ -5059,7 +5044,7 @@ async def session_license_handler(
 
 
 def license_response(
-    data: Dict[str, Any], session: Any, session_id: str, request: Optional[web.Request]
+    data: LicenseRequest, session: Any, session_id: str, request: Optional[web.Request]
 ) -> web.Response:
     """The licence response for :func:`session_license_handler`, made on a worker thread."""
     track_id = data.get("track_id")
@@ -5229,7 +5214,7 @@ def license_response(
                 drm_types[tid] = track_drm_type
                 actual_drm_type = track_drm_type
 
-        response: Dict[str, Any] = {"keys": all_keys}
+        response = LicenseReply(keys=all_keys)
         if clear_tracks:
             response["clear_tracks"] = clear_tracks
         if vault_keys:
@@ -5304,7 +5289,7 @@ def license_response(
             )
             log.info(f"Server CDM resolved {len(keys)} key(s) for track {track_log_label(track)}")
             note_served_keys(session, keys, key_sources)
-            return web.json_response({"keys": keys, "vault_keys": list(key_sources), "drm_type": server_drm_type})
+            return web.json_response(LicenseReply(keys=keys, vault_keys=list(key_sources), drm_type=server_drm_type))
 
         if pssh_b64:
             require_track_pssh(track, pssh_b64, drm_type)
@@ -5348,7 +5333,7 @@ def note_served_keys(session: Any, keys: Dict[str, str], sources: Dict[str, str]
 
 
 async def session_bad_key_handler(
-    data: Dict[str, Any], session_id: str, request: Optional[web.Request] = None
+    data: BadKeyReport, session_id: str, request: Optional[web.Request] = None
 ) -> web.Response:
     """Flag a server-vault content key the client proved wrong, so the next licence reaches the CDM.
 
@@ -5400,15 +5385,15 @@ async def session_info_handler(session_id: str, request: Optional[web.Request] =
     from unshackle.core.api.session_store import get_session_store
 
     return web.json_response(
-        {
-            "session_id": session.session_id,
-            "service": session.service_tag,
-            "valid": True,
-            "expires_in": get_session_store().ttl,
-            "draining": get_session_store().draining,
-            "track_count": len(session.tracks),
-            "title_count": len(session.title_map),
-        }
+        SessionInfo(
+            session_id=session.session_id,
+            service=session.service_tag,
+            valid=True,
+            expires_in=get_session_store().ttl,
+            draining=get_session_store().draining,
+            track_count=len(session.tracks),
+            title_count=len(session.title_map),
+        )
     )
 
 
@@ -5427,7 +5412,7 @@ async def session_delete_handler(session_id: str, request: Optional[web.Request]
 
     await store.delete(session_id)
 
-    response: Dict[str, Any] = {"status": "ok"}
+    response = SessionClosed(status="ok")
     if cache_data:
         response["cache"] = cache_data
     return web.json_response(response)

@@ -7,7 +7,8 @@ import time
 
 import pytest
 
-from unshackle.core.api.input_bridge import AuthStatus, InputBridge
+from unshackle.core.api.input_bridge import InputBridge
+from unshackle.core.remote_protocol import AuthStatus
 
 pytestmark = pytest.mark.unit
 

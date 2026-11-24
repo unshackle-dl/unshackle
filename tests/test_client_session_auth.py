@@ -276,7 +276,8 @@ def test_absent_key_keeps_server_devices(monkeypatch):
 def test_safe_inflate_rejects_non_str_via_isinstance():
     # A non-string cache value must be caught before base64.b64decode raises a 500.
     # Mirror the guard used in session_create_handler.
-    from unshackle.core.api.errors import APIError, APIErrorCode
+    from unshackle.core.api.errors import APIError
+    from unshackle.core.remote_protocol import APIErrorCode
 
     def guard(content):
         if not isinstance(content, str):
@@ -296,9 +297,9 @@ def _run_session(monkeypatch, tmp_path, data, answer, server_account=False, fail
     import zlib
 
     from unshackle.core.api import handlers
-    from unshackle.core.api.input_bridge import AuthStatus
     from unshackle.core.api.session_store import get_session_store
     from unshackle.core.config import config
+    from unshackle.core.remote_protocol import AuthStatus
 
     class PromptingService:
         _input_bridge = None
@@ -356,7 +357,7 @@ def test_prompt_post_rejects_response_the_bridge_refused(monkeypatch):
     import asyncio
 
     from unshackle.core.api import handlers
-    from unshackle.core.api.input_bridge import AuthStatus
+    from unshackle.core.remote_protocol import AuthStatus
 
     bridge = SimpleNamespace(status=AuthStatus.PENDING_INPUT, submit_response=lambda text: False)
 

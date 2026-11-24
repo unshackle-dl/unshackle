@@ -18,9 +18,10 @@ import threading
 import time
 import traceback
 from collections import deque
-from typing import Any, Deque, Dict, List, MutableMapping, Optional, Tuple
+from typing import Any, Deque, List, MutableMapping, Optional, Tuple
 
 from unshackle.core.api.sanitize import sanitize_log
+from unshackle.core.remote_protocol import LogRecord
 
 MAX_RECORDS = 500
 MAX_MESSAGE_LEN = 2000
@@ -30,7 +31,7 @@ class SessionLogBuffer:
     """Thread-safe bounded buffer of log records with a monotonic sequence."""
 
     def __init__(self, maxlen: int = MAX_RECORDS) -> None:
-        self._records: Deque[Dict[str, Any]] = deque(maxlen=maxlen)
+        self._records: Deque[LogRecord] = deque(maxlen=maxlen)
         self._seq = 0
         self._lock = threading.Lock()
 
@@ -38,18 +39,18 @@ class SessionLogBuffer:
         with self._lock:
             self._seq += 1
             self._records.append(
-                {
-                    "seq": self._seq,
-                    "level": logging.getLevelName(level),
-                    "message": sanitize_log(message)[:MAX_MESSAGE_LEN],
-                    "ts": time.time(),
-                }
+                LogRecord(
+                    seq=self._seq,
+                    level=logging.getLevelName(level),
+                    message=sanitize_log(message)[:MAX_MESSAGE_LEN],
+                    ts=time.time(),
+                )
             )
 
-    def since(self, seq: int) -> List[Dict[str, Any]]:
+    def since(self, seq: int) -> List[LogRecord]:
         """Records with a sequence number greater than *seq*, oldest first."""
         with self._lock:
-            return [dict(r) for r in self._records if r["seq"] > seq]
+            return [r.copy() for r in self._records if r["seq"] > seq]
 
     @property
     def last_seq(self) -> int:

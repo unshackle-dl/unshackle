@@ -12,8 +12,9 @@ reference. Each endpoint lists the specific codes it raises, and this page gives
 meanings of those codes.
 
 !!! note "Where this comes from"
-    `unshackle/core/api/errors.py` defines the error format, and the wrapper
-    that turns raised errors into responses lives in `unshackle/core/api/routes.py`.
+    `unshackle/core/api/errors.py` defines the error format, `unshackle/core/remote_protocol.py`
+    defines the error codes, and the wrapper that turns raised errors into responses lives in
+    `unshackle/core/api/routes.py`.
     Nothing on this page is invented. It reflects the actual server behaviour.
 
 ## The standard error shape

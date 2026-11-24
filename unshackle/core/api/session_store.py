@@ -17,9 +17,10 @@ from datetime import datetime, timezone
 from typing import Any, Deque, Dict, List, Optional
 
 from unshackle.core.api.events import bus
-from unshackle.core.api.input_bridge import AUTH_INPUT_TIMEOUT, AuthStatus, InputBridge
+from unshackle.core.api.input_bridge import AUTH_INPUT_TIMEOUT, InputBridge
 from unshackle.core.api.sanitize import sanitize_log
 from unshackle.core.config import config
+from unshackle.core.remote_protocol import AuthStatus
 from unshackle.core.tracks import Track
 
 log = logging.getLogger("api.session")
@@ -369,7 +370,8 @@ session_store: Optional[SessionStore] = None
 
 def refuse_while_draining() -> None:
     """Raise SERVER_DRAINING for a new session or job once the operator has started a drain."""
-    from unshackle.core.api.errors import APIError, APIErrorCode
+    from unshackle.core.api.errors import APIError
+    from unshackle.core.remote_protocol import APIErrorCode
 
     if get_session_store().draining:
         raise APIError(

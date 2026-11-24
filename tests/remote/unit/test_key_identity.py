@@ -10,9 +10,9 @@ import pytest
 
 from unshackle.core.api import handlers
 from unshackle.core.api.errors import APIError
-from unshackle.core.api.input_bridge import AuthStatus
 from unshackle.core.api.session_store import get_session_store
 from unshackle.core.config import config
+from unshackle.core.remote_protocol import AuthStatus
 
 
 @pytest.fixture

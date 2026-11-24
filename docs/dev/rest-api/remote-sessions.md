@@ -656,7 +656,9 @@ it before each title, so it knows of the restart before it occurs.
 ### Reference client: `RemoteService`
 
 Source: `unshackle/core/remote_service.py`. This is the canonical consumer of the
-remote session API and a good template for any client.
+remote session API and a good template for any client. The routes, the `AuthStatus` values,
+the error codes and the request and reply shapes that it shares with the server are in
+`unshackle/core/remote_protocol.py`.
 
 - **`RemoteClient.request`** sets `X-Secret-Key` and `User-Agent: unshackle/<version>`,
   uses the server's `timeout` from `remote_services` (default 120s) as the read timeout,

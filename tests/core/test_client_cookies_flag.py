@@ -6,8 +6,9 @@ import zlib
 import pytest
 
 from unshackle.core.api import handlers
-from unshackle.core.api.errors import APIError, APIErrorCode
+from unshackle.core.api.errors import APIError
 from unshackle.core.api.handlers import load_client_cookies
+from unshackle.core.remote_protocol import APIErrorCode
 
 COOKIE_FILE = "\n".join(
     [

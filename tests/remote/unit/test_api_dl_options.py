@@ -209,7 +209,8 @@ def test_the_worker_keeps_the_code_of_an_api_error(tmp_path, monkeypatch):
     import json
 
     from unshackle.core.api import download_worker
-    from unshackle.core.api.errors import APIError, APIErrorCode
+    from unshackle.core.api.errors import APIError
+    from unshackle.core.remote_protocol import APIErrorCode
 
     def refuse(*args, **kwargs):
         raise APIError(APIErrorCode.INVALID_PARAMETERS, "Invalid workers: expected a number, not a boolean")

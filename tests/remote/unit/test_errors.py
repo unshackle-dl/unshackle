@@ -6,13 +6,8 @@ import json
 
 import pytest
 
-from unshackle.core.api.errors import (
-    APIError,
-    APIErrorCode,
-    build_error_response,
-    categorize_exception,
-    handle_api_exception,
-)
+from unshackle.core.api.errors import APIError, build_error_response, categorize_exception, handle_api_exception
+from unshackle.core.remote_protocol import APIErrorCode
 
 pytestmark = pytest.mark.unit
 

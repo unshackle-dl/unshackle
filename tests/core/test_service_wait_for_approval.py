@@ -57,7 +57,8 @@ def test_a_request_with_no_user_fails_at_once():
 
 
 def test_no_user_message_is_an_authentication_error():
-    from unshackle.core.api.errors import APIErrorCode, categorize_exception
+    from unshackle.core.api.errors import categorize_exception
+    from unshackle.core.remote_protocol import APIErrorCode
 
     assert categorize_exception(RuntimeError(NO_USER_MESSAGE)).error_code == APIErrorCode.AUTH_FAILED
 

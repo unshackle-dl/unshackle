@@ -13,13 +13,7 @@ from aiohttp_swagger3 import SwaggerDocs, SwaggerInfo, SwaggerUiSettings
 
 from unshackle.core import __code_hash__, __version__
 from unshackle.core import services as services_module
-from unshackle.core.api.errors import (
-    APIError,
-    APIErrorCode,
-    build_error_response,
-    categorize_exception,
-    handle_api_exception,
-)
+from unshackle.core.api.errors import APIError, build_error_response, categorize_exception, handle_api_exception
 from unshackle.core.api.handlers import (
     CORS_HEADERS,
     DASHBOARD_EVENTS_ROUTE,
@@ -82,6 +76,23 @@ from unshackle.core.api.handlers import (
 )
 from unshackle.core.api.sanitize import sanitize_log
 from unshackle.core.drm import cbcs
+from unshackle.core.remote_protocol import (
+    BAD_KEY_ROUTE,
+    HEALTH_ROUTE,
+    LICENSE_ROUTE,
+    LOGS_ROUTE,
+    PROMPT_ROUTE,
+    SAMPLES_ROUTE,
+    SEARCH_ROUTE,
+    SEGMENT_FILTER_ROUTE,
+    SEGMENTS_ROUTE,
+    SERVICES_ROUTE,
+    SESSION_CREATE_ROUTE,
+    SESSION_ROUTE,
+    TITLES_ROUTE,
+    TRACKS_ROUTE,
+    APIErrorCode,
+)
 from unshackle.core.services import Services
 from unshackle.core.tunnel import CHECK_ROUTE as TUNNEL_CHECK_ROUTE
 from unshackle.core.tunnel import ROUTE as TUNNEL_ROUTE
@@ -3399,9 +3410,9 @@ async def remote_login_input(request: web.Request) -> web.Response:
 # --remote-only server mode; full mode registers every route. setup_routes registers the
 # routes and their docs from this table, so the live routes and the docs cannot drift.
 ROUTES: list[tuple[str, str, Handler, bool]] = [
-    ("GET", "/api/health", health, True),
-    ("GET", "/api/services", services, True),
-    ("POST", "/api/search", search, True),
+    ("GET", HEALTH_ROUTE, health, True),
+    ("GET", SERVICES_ROUTE, services, True),
+    ("POST", SEARCH_ROUTE, search, True),
     ("POST", "/api/list-titles", list_titles, False),
     ("POST", "/api/list-tracks", list_tracks, False),
     ("POST", "/api/download", download, False),
@@ -3423,21 +3434,21 @@ ROUTES: list[tuple[str, str, Handler, bool]] = [
     ("GET", "/api/env/check", env_check, False),
     ("GET", "/api/remote/logins", remote_logins, False),
     ("POST", "/api/remote/logins/{login_id}/input", remote_login_input, False),
-    ("POST", "/api/session/create", session_create, True),
+    ("POST", SESSION_CREATE_ROUTE, session_create, True),
     ("GET", TUNNEL_ROUTE, tunnel, True),
     ("GET", TUNNEL_CHECK_ROUTE, tunnel_check, True),
-    ("GET", "/api/session/{session_id}/titles", session_titles, True),
-    ("POST", "/api/session/{session_id}/tracks", session_tracks, True),
-    ("POST", "/api/session/{session_id}/segments", session_segments, True),
-    ("POST", "/api/session/{session_id}/segment_filter", session_segment_filter, True),
-    ("POST", "/api/session/{session_id}/samples", session_samples, True),
-    ("POST", "/api/session/{session_id}/license", session_license, True),
-    ("POST", "/api/session/{session_id}/keys/bad", session_bad_key, True),
-    ("GET", "/api/session/{session_id}/logs", session_logs, True),
-    ("GET", "/api/session/{session_id}/prompt", session_prompt_get, True),
-    ("POST", "/api/session/{session_id}/prompt", session_prompt_submit, True),
-    ("GET", "/api/session/{session_id}", session_info, True),
-    ("DELETE", "/api/session/{session_id}", session_delete, True),
+    ("GET", TITLES_ROUTE, session_titles, True),
+    ("POST", TRACKS_ROUTE, session_tracks, True),
+    ("POST", SEGMENTS_ROUTE, session_segments, True),
+    ("POST", SEGMENT_FILTER_ROUTE, session_segment_filter, True),
+    ("POST", SAMPLES_ROUTE, session_samples, True),
+    ("POST", LICENSE_ROUTE, session_license, True),
+    ("POST", BAD_KEY_ROUTE, session_bad_key, True),
+    ("GET", LOGS_ROUTE, session_logs, True),
+    ("GET", PROMPT_ROUTE, session_prompt_get, True),
+    ("POST", PROMPT_ROUTE, session_prompt_submit, True),
+    ("GET", SESSION_ROUTE, session_info, True),
+    ("DELETE", SESSION_ROUTE, session_delete, True),
 ]
 
 DASHBOARD_ROUTES: list[tuple[str, str, Handler, bool]] = [
@@ -3473,7 +3484,7 @@ def setup_routes(
         "POST": router.add_post,
         "DELETE": router.add_delete,
     }
-    api_routes = [r for r in ROUTES if r[1] == "/api/health"] if cdm_only else ROUTES
+    api_routes = [r for r in ROUTES if r[1] == HEALTH_ROUTE] if cdm_only else ROUTES
     for method, path, handler, remote in api_routes + (DASHBOARD_ROUTES if dashboard else []):
         if remote_only and not remote:
             continue

@@ -12,18 +12,9 @@ from __future__ import annotations
 import json
 import threading
 from dataclasses import dataclass, field
-from enum import Enum
 from typing import Any, Optional
 
-
-class AuthStatus(Enum):
-    """Authentication lifecycle states for a remote session."""
-
-    AUTHENTICATING = "authenticating"
-    PENDING_INPUT = "pending_input"
-    AUTHENTICATED = "authenticated"
-    FAILED = "failed"
-
+from unshackle.core.remote_protocol import AuthStatus
 
 # Seconds the server waits for a remote client to answer an input prompt before
 # giving up; also the TTL SessionStore grants AUTHENTICATING/PENDING_INPUT sessions.

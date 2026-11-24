@@ -16,7 +16,8 @@ from unshackle.core.api.download_manager import (
     redact_parameters,
     secret_values,
 )
-from unshackle.core.api.errors import APIError, APIErrorCode
+from unshackle.core.api.errors import APIError
+from unshackle.core.remote_protocol import APIErrorCode
 
 pytestmark = pytest.mark.unit
 

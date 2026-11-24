@@ -16,8 +16,9 @@ from aiohttp import web
 
 from unshackle.core.api import routes
 from unshackle.core.api.compression import compression_middleware
-from unshackle.core.api.errors import APIError, APIErrorCode
+from unshackle.core.api.errors import APIError
 from unshackle.core.api.routes import api_handler, cors_middleware, heartbeat, setup_routes
+from unshackle.core.remote_protocol import APIErrorCode
 
 pytestmark = pytest.mark.unit
 

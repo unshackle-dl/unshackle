@@ -9,8 +9,9 @@ import pytest
 
 from unshackle.core.api import download_manager as dm
 from unshackle.core.api import handlers
-from unshackle.core.api.errors import APIError, APIErrorCode
+from unshackle.core.api.errors import APIError
 from unshackle.core.dl_options import DEFAULT_DOWNLOAD_PARAMS
+from unshackle.core.remote_protocol import APIErrorCode
 
 pytestmark = pytest.mark.unit
 

@@ -22,7 +22,7 @@ import time
 from collections import deque
 from http.cookiejar import CookieJar
 from threading import Event, Lock, Thread, local
-from typing import Any, Callable, Dict, Iterable, Iterator, Optional, Protocol, TypeVar, Union
+from typing import Any, Callable, Dict, Iterable, Iterator, Mapping, Optional, Protocol, TypeVar, Union, cast
 from urllib.parse import urlencode, urlsplit
 from uuid import UUID
 
@@ -42,6 +42,40 @@ from unshackle.core.dl_options import remote_dl_params
 from unshackle.core.drm import cbcs, real_kids
 from unshackle.core.manifests.snapshot import match_track, restore
 from unshackle.core.proxies.resolve import is_loopback
+from unshackle.core.remote_protocol import (
+    BAD_KEY_ROUTE,
+    HEALTH_ROUTE,
+    LICENSE_ROUTE,
+    LOGS_ROUTE,
+    PROMPT_ROUTE,
+    SAMPLES_ROUTE,
+    SEARCH_ROUTE,
+    SEGMENT_FILTER_ROUTE,
+    SERVICES_ROUTE,
+    SESSION_CREATE_ROUTE,
+    SESSION_ROUTE,
+    TITLES_ROUTE,
+    TRACKS_ROUTE,
+    APIErrorCode,
+    AuthStatus,
+    BadKeyReport,
+    ClientErrorKind,
+    ClientLogin,
+    LicenseReply,
+    LicenseRequest,
+    LogsReply,
+    PromptAnswer,
+    PromptReply,
+    SegmentFilterReply,
+    SegmentFilterRequest,
+    SessionClosed,
+    SessionCreate,
+    SessionCreated,
+    SessionInfo,
+    TitlesReply,
+    TracksReply,
+    TracksRequest,
+)
 from unshackle.core.search_result import SearchResult
 from unshackle.core.session import MAX_BACKOFF
 from unshackle.core.titles import Title_T, Titles_T, remap_titles
@@ -65,9 +99,14 @@ SENSITIVE_DATA_KEYS = ("credential", "credentials", "password", "token", "api_ke
 DEFAULT_AUTH_HEADERS = ["X-Secret-Key", "X-Api-Key"]
 
 # error kinds after which the remote session may be gone: the server restarted, or the tunnel it used closed
-SESSION_LOST = ("SESSION_NOT_FOUND", "CONNECT", "TIMEOUT", "TUNNEL_CLOSED")
+SESSION_LOST = (
+    APIErrorCode.SESSION_NOT_FOUND,
+    ClientErrorKind.CONNECT,
+    ClientErrorKind.TIMEOUT,
+    ClientErrorKind.TUNNEL_CLOSED,
+)
 # what a recovering call can meet on its way, so these log only once the recovery fails
-RECOVERABLE = (*SESSION_LOST, "SERVER_DRAINING")
+RECOVERABLE = (*SESSION_LOST, APIErrorCode.SERVER_DRAINING)
 RETRY_AFTER_MAX = 3600
 RETRY_AFTER_LOCK = Lock()
 RATE_LIMIT_TRIES = 3
@@ -108,7 +147,7 @@ def quiet() -> Iterator[None]:
         _mute.quiet = before
 
 
-def redact_secrets(text: str, data: Optional[Dict[str, Any]] = None) -> str:
+def redact_secrets(text: str, data: Optional[Mapping[str, Any]] = None) -> str:
     """Mask URL userinfo and any request-payload secrets before unshackle writes the text to the log."""
     secrets = [v for k in SENSITIVE_DATA_KEYS if isinstance(v := (data or {}).get(k), str) and v]
     return redact_text(text, secrets) or ""
@@ -135,7 +174,7 @@ class RemoteError(SystemExit):
     """A remote call that failed: logged, then exits a CLI run like ``SystemExit(1)``.
 
     A serve relaying for a REST client catches it instead and answers with ``message``; ``kind`` is the
-    remote server's error code, or CONNECT / TIMEOUT / AUTH when the remote session could not be reached or opened.
+    remote server's ``APIErrorCode``, or a ``ClientErrorKind`` when the client failed on its own side.
     (Not ``code``: SystemExit's ``code`` is the exit status.)
     """
 
@@ -200,7 +239,7 @@ class RemoteClient:
         self,
         method: str,
         endpoint: str,
-        data: Optional[Dict[str, Any]] = None,
+        data: Optional[Mapping[str, Any]] = None,
         optional: bool = False,
         expect: tuple[str, ...] = (),
         body: Optional[bytes] = None,
@@ -223,7 +262,9 @@ class RemoteClient:
                 if isinstance(e.args[0] if e.args else None, urllib3.exceptions.ReadTimeoutError):
                     raise self.timed_out(endpoint) from None
                 server_url = safe_display_url(self.server_url)
-                raise RemoteError(f"Could not connect to remote server at {server_url}", "CONNECT") from None
+                raise RemoteError(
+                    f"Could not connect to remote server at {server_url}", ClientErrorKind.CONNECT
+                ) from None
             except requests.Timeout:
                 raise self.timed_out(endpoint) from None
             # servers differ on which header carries the key, so retry the rest before giving up
@@ -263,17 +304,17 @@ class RemoteClient:
             error_msg = redact_secrets(str(detail.get("message", fallback)), data)
             # a gateway's own error page means the server behind it is down, as when it restarts
             error_code = detail.get("error_code") or (
-                "CONNECT" if resp.status_code >= 500 and not detail else "UNKNOWN"
+                ClientErrorKind.CONNECT if resp.status_code >= 500 and not detail else ClientErrorKind.UNKNOWN
             )
             if error_code in expect:
                 return detail
-            if optional and error_code != "SESSION_NOT_FOUND":
+            if optional and error_code != APIErrorCode.SESSION_NOT_FOUND:
                 log.debug(f"Optional endpoint {endpoint} unavailable [{error_code}]: {error_msg}")
                 return {}
             if self.tunnel and self.tunnel.lost:
                 raise RemoteError(
                     "The tunnel to the server closed",
-                    "TUNNEL_CLOSED",
+                    ClientErrorKind.TUNNEL_CLOSED,
                 )
             raise RemoteError(f"Server error [{error_code}]: {error_msg}", error_code)
         return detail
@@ -281,13 +322,13 @@ class RemoteClient:
     def timed_out(self, endpoint: str) -> RemoteError:
         return RemoteError(
             f"Request to remote server timed out after {self.timeout}s: {endpoint}",
-            "TIMEOUT",
+            ClientErrorKind.TIMEOUT,
         )
 
-    def post(self, endpoint: str, data: Dict[str, Any], expect: tuple[str, ...] = ()) -> Dict[str, Any]:
+    def post(self, endpoint: str, data: Mapping[str, Any], expect: tuple[str, ...] = ()) -> Dict[str, Any]:
         return self.request("post", endpoint, data, expect=expect)
 
-    def post_optional(self, endpoint: str, data: Dict[str, Any]) -> Dict[str, Any]:
+    def post_optional(self, endpoint: str, data: Mapping[str, Any]) -> Dict[str, Any]:
         """POST to an endpoint that an older server may not have. Empty dict when the route is missing."""
         return self.request("post", endpoint, data, optional=True)
 
@@ -475,7 +516,7 @@ def remote_service_list(server_name: Optional[str]) -> Optional[list[dict]]:
         services: Optional[list[dict]] = None
         try:
             with quiet():
-                services = remote_client(server_name).get("/api/services").get("services") or []
+                services = remote_client(server_name).get(SERVICES_ROUTE).get("services") or []
         except (Exception, SystemExit) as e:
             log.warning(f"Could not list the services of remote server '{server_name}': {e}")
         _remote_lists[server_name] = (time.monotonic(), services)
@@ -904,7 +945,7 @@ class RemoteService:
             data["proxy"] = resolve_remote_proxy_arg(server_proxy_arg(params), providers)
             self.require_reachable_proxy(data["proxy"])
         try:
-            response = self.client.post("/api/search", data)
+            response = self.client.post(SEARCH_ROUTE, data)
         finally:
             if self.client.tunnel:  # a search is one request, so its tunnel ends with it
                 self.client.tunnel.stop()
@@ -914,16 +955,18 @@ class RemoteService:
                 result["id"], result["title"], result.get("description"), result.get("label"), result.get("url")
             )
 
-    def client_login(self, profile: Optional[str]) -> Dict[str, Any]:
+    def client_login(self, profile: Optional[str]) -> ClientLogin:
         """The credentials, cookies and cache to send, or nothing when the server manages the account."""
+        login = ClientLogin()
         if self._server_accounts is not None:
-            return {}
-        fields = {
-            "credentials": load_credentials_for_transport(self.service_tag, profile),
-            "cookies": load_cookies_for_transport(self.service_tag, profile),
-            "cache": self.load_cache_files(profile),
-        }
-        return {k: v for k, v in fields.items() if v}
+            return login
+        if credentials := load_credentials_for_transport(self.service_tag, profile):
+            login["credentials"] = credentials
+        if cookies := load_cookies_for_transport(self.service_tag, profile):
+            login["cookies"] = cookies
+        if cache := self.load_cache_files(profile):
+            login["cache"] = cache
+        return login
 
     def require_reachable_proxy(self, proxy: Optional[str]) -> None:
         """Refuse a proxy on this machine when the server is elsewhere: the server cannot reach it."""
@@ -951,11 +994,13 @@ class RemoteService:
         proxy = self.ctx.parent.params.get("proxy") if self.ctx.parent else None
         no_proxy = self.ctx.parent.params.get("no_proxy", False) if self.ctx.parent else False
 
-        create_data: Dict[str, Any] = {"service": self.service_tag, "title_id": self.title_id}
+        create_data: SessionCreate = {
+            "service": self.service_tag,
+            "title_id": self.title_id,
+            **self.client_login(profile),
+        }
 
-        if self._server_accounts is None:
-            create_data.update(self.client_login(profile))
-        else:
+        if self._server_accounts is not None:
             self.credential = None
             self.log.info(
                 "The server manages the account for this service" + (" and ignores --profile" if profile else "")
@@ -1079,7 +1124,7 @@ class RemoteService:
         }
 
         try:
-            result = self.client.post("/api/session/create", create_data)
+            result = cast(SessionCreated, self.client.post(SESSION_CREATE_ROUTE, create_data))
         except BaseException:
             if local and self.client.tunnel:  # no session, so close() never runs: free the tunnel now
                 self.client.tunnel.stop()
@@ -1104,8 +1149,8 @@ class RemoteService:
         # without the server vault grant the server refuses every key request, so none is sent
         self._local_vaults_only = self._server_device and not vault
 
-        status = result.get("status", "authenticated")
-        if status == "authenticating":
+        status = result.get("status", AuthStatus.AUTHENTICATED)
+        if status == AuthStatus.AUTHENTICATING:
             self.poll_auth_completion()
         if create_data.get("cdm_relay"):
             self.client.in_flight = self.answering_cdm_calls
@@ -1166,9 +1211,9 @@ class RemoteService:
         a request at an interval of one third of it. The thread stops when ``close()`` or a reopen runs. A client
         that dies stops sending requests, so the server still expires an abandoned remote session.
         """
-        info = self.client.get_optional(f"/api/session/{self._session_id}")
+        info = cast(SessionInfo, self.client.get_optional(SESSION_ROUTE.format(session_id=self._session_id)))
         interval = max(float(info.get("expires_in") or 300) / 3, 5.0)
-        url = f"{self.client.server_url}/api/session/{self._session_id}"
+        url = self.client.server_url + SESSION_ROUTE.format(session_id=self._session_id)
         stop = self._keepalive_stop = Event()
 
         def ping() -> None:
@@ -1208,13 +1253,13 @@ class RemoteService:
                 return self._session_id is not None
             if session_id is None or not self.wait_for_server(accepting=False):
                 return False
-            url = f"{self.client.server_url}/api/session/{session_id}"
+            url = self.client.server_url + SESSION_ROUTE.format(session_id=session_id)
             try:
-                alive = kind != "TUNNEL_CLOSED" and self.client.session.get(url, timeout=30).ok
+                alive = kind != ClientErrorKind.TUNNEL_CLOSED and self.client.session.get(url, timeout=30).ok
             except requests.RequestException:
                 alive = False
             if alive:
-                return kind == "CONNECT"
+                return kind == ClientErrorKind.CONNECT
             self.log.warning("The remote session was lost, opening a new one")
             return self.reopen()
 
@@ -1225,7 +1270,7 @@ class RemoteService:
         warned = False
         while True:
             try:
-                health = self.client.session.get(f"{self.client.server_url}/api/health", timeout=30).json()
+                health = self.client.session.get(self.client.server_url + HEALTH_ROUTE, timeout=30).json()
                 if health.get("status") == "ok" and not (accepting and health.get("draining")):
                     return True
             except (requests.RequestException, ValueError, AttributeError):
@@ -1257,7 +1302,9 @@ class RemoteService:
         try:
             with recovering():
                 self.authenticate(credential=self.credential)
-                listing = self.client.get(f"/api/session/{self._session_id}/titles").get("titles", [])
+                listing = cast(TitlesReply, self.client.get(TITLES_ROUTE.format(session_id=self._session_id))).get(
+                    "titles", []
+                )
                 fresh_titles = [build_title(t, self.service_tag, self.title_id) for t in listing]
                 for old in self._titles or []:
                     same = [t for t in fresh_titles if title_key(t) == title_key(old)]
@@ -1280,7 +1327,9 @@ class RemoteService:
                 raise
             return False
         if (self._server_cdm, self._server_device, self._server_vault) != grants:
-            raise RemoteError("The new remote session licenses differently from the lost one", "GRANTS_CHANGED")
+            raise RemoteError(
+                "The new remote session licenses differently from the lost one", ClientErrorKind.GRANTS_CHANGED
+            )
         return True
 
     def reopen_after_drain(self) -> None:
@@ -1290,13 +1339,17 @@ class RemoteService:
             self.close()
             self._current_title = None
             if not self.reopen():
-                raise RemoteError(f"The remote server did not come back within {REOPEN_WAIT:.0f}s", "CONNECT")
+                raise RemoteError(
+                    f"The remote server did not come back within {REOPEN_WAIT:.0f}s", ClientErrorKind.CONNECT
+                )
 
     def server_draining(self) -> bool:
         """Whether the server announced a restart; asked once per title, as an episode can be shorter than the keepalive."""
         try:
-            url = f"{self.client.server_url}/api/session/{self._session_id}"
-            return bool(self._session_id and self.client.session.get(url, timeout=30).json().get("draining"))
+            url = self.client.server_url + SESSION_ROUTE.format(session_id=self._session_id)
+            return bool(
+                self._session_id and cast(SessionInfo, self.client.session.get(url, timeout=30).json()).get("draining")
+            )
         except (requests.RequestException, ValueError, AttributeError):
             return False
 
@@ -1317,7 +1370,8 @@ class RemoteService:
         with self._log_drain_lock:
             try:
                 with quiet():
-                    resp = self.client.get_optional(f"/api/session/{self._session_id}/logs?since={self._log_seq}")
+                    endpoint = LOGS_ROUTE.format(session_id=self._session_id) + f"?since={self._log_seq}"
+                    resp = cast(LogsReply, self.client.get_optional(endpoint))
             except (Exception, SystemExit):
                 return
             if not resp:
@@ -1347,43 +1401,47 @@ class RemoteService:
 
     def poll_auth(self, deadline: float, poll_interval: float) -> None:
         while time.monotonic() < deadline:
-            resp = self.client.get(f"/api/session/{self._session_id}/prompt")
+            resp = cast(PromptReply, self.client.get(PROMPT_ROUTE.format(session_id=self._session_id)))
             status = resp.get("status")
             seen = self._log_seq
             self.drain_server_logs()
 
-            if status == "authenticated":
+            if status == AuthStatus.AUTHENTICATED:
                 return
 
-            if status == "authenticating" and self._log_seq == seen and self._recent_logs:
+            if status == AuthStatus.AUTHENTICATING and self._log_seq == seen and self._recent_logs:
                 notice = "\n".join(self._recent_logs)
                 if notice != self.auth_notice:
                     self.auth_notice = notice
                     show_notice(notice)
 
-            if status == "failed":
-                raise RemoteError(f"Remote auth failed: {resp.get('error', 'Authentication failed on server')}", "AUTH")
+            if status == AuthStatus.FAILED:
+                raise RemoteError(
+                    f"Remote auth failed: {resp.get('error', 'Authentication failed on server')}", ClientErrorKind.AUTH
+                )
 
-            if status == "pending_input" and isinstance(resp.get("cdm_call"), dict):
+            if status == AuthStatus.PENDING_INPUT and isinstance(resp.get("cdm_call"), dict):
                 self.answer_cdm_call(resp["cdm_call"], self._cdm_sessions)
                 continue
 
-            if status == "pending_input":
-                prompt = resp.get("prompt", "Enter input: ")
+            if status == AuthStatus.PENDING_INPUT:
+                prompt = resp.get("prompt") or "Enter input: "
                 bridge = self._input_bridge
                 try:
                     user_response = bridge.request_input(prompt) if bridge else prompt_user(prompt)
                 except EOFError:
-                    raise RemoteError("Remote auth needs interactive input but stdin is closed", "AUTH") from None
+                    raise RemoteError(
+                        "Remote auth needs interactive input but stdin is closed", ClientErrorKind.AUTH
+                    ) from None
                 self.client.post(
-                    f"/api/session/{self._session_id}/prompt",
-                    {"response": user_response},
+                    PROMPT_ROUTE.format(session_id=self._session_id),
+                    PromptAnswer(response=user_response),
                 )
                 continue
 
             time.sleep(poll_interval)
 
-        raise RemoteError("Remote authentication timed out", "AUTH")
+        raise RemoteError("Remote authentication timed out", ClientErrorKind.AUTH)
 
     def answer_cdm_call(self, call: Dict[str, Any], sessions: Dict[str, bytes]) -> None:
         """Run one of the server's CDM calls on this machine's device and post the answer."""
@@ -1391,7 +1449,7 @@ class RemoteService:
 
         answer = answer_cdm_call(self.local_cdm, call, sessions)
         self.log.debug(f"Answered a server CDM call: {call.get('op')} ({'refused' if 'error' in answer else 'ok'})")
-        self.client.post(f"/api/session/{self._session_id}/prompt", {"response": json.dumps(answer)})
+        self.client.post(PROMPT_ROUTE.format(session_id=self._session_id), PromptAnswer(response=json.dumps(answer)))
 
     @contextlib.contextmanager
     def answering_cdm_calls(self, endpoint: str) -> Iterator[None]:
@@ -1399,8 +1457,9 @@ class RemoteService:
 
         One poller serves every concurrent request, and the local CDM sessions close when the last one ends.
         """
-        if not endpoint.startswith(f"/api/session/{self._session_id}/") or endpoint.partition("?")[0].endswith(
-            ("/prompt", "/logs", "/samples")
+        own = {route.format(session_id=self._session_id) for route in (PROMPT_ROUTE, LOGS_ROUTE, SAMPLES_ROUTE)}
+        if not endpoint.startswith(SESSION_ROUTE.format(session_id=self._session_id) + "/") or (
+            endpoint.partition("?")[0] in own
         ):
             yield
             return
@@ -1420,11 +1479,11 @@ class RemoteService:
                     self._cdm_stop.set()
 
     def poll_cdm_calls(self, stop: Event, interval: float = 0.5) -> None:
-        url = f"{self.client.server_url}/api/session/{self._session_id}/prompt"
+        url = self.client.server_url + PROMPT_ROUTE.format(session_id=self._session_id)
         sessions: Dict[str, bytes] = {}
         while not stop.wait(interval):
             try:
-                call = self.client.session.get(url, timeout=30).json().get("cdm_call")
+                call = cast(PromptReply, self.client.session.get(url, timeout=30).json()).get("cdm_call")
                 if isinstance(call, dict):
                     with quiet():
                         self.answer_cdm_call(call, sessions)
@@ -1445,7 +1504,9 @@ class RemoteService:
         if self._titles is not None:
             return self._titles
         try:
-            result = self.session_call(lambda sid: self.client.get(f"/api/session/{sid}/titles"))
+            result = cast(
+                TitlesReply, self.session_call(lambda sid: self.client.get(TITLES_ROUTE.format(session_id=sid)))
+            )
         finally:
             self.drain_server_logs()
         titles_list = [build_title(t, self.service_tag, self.title_id) for t in result.get("titles", [])]
@@ -1477,7 +1538,8 @@ class RemoteService:
         try:
             result = self.session_call(
                 lambda sid: self.client.post(
-                    f"/api/session/{sid}/tracks", {"title_id": self._title_alias.get(title_id, title_id)}
+                    TRACKS_ROUTE.format(session_id=sid),
+                    TracksRequest(title_id=self._title_alias.get(title_id, title_id)),
                 )
             )
         finally:
@@ -1488,7 +1550,8 @@ class RemoteService:
         if remote_title:
             apply_title_fields(title, remote_title)
 
-        for k, v in result.get("session_headers", {}).items():
+        session_fields = cast(TracksReply, result)
+        for k, v in session_fields.get("session_headers", {}).items():
             if k.lower() not in ("host", "content-length", "content-type"):
                 self._session.headers[k] = v
         apply_session_cookies(self._session, result)
@@ -1496,14 +1559,14 @@ class RemoteService:
         restore(tracks, result)
         apply_service_track_data(tracks, result)
 
-        server_cdm = bool(result.get("server_cdm", False)) or getattr(self, "_server_device", False)
+        server_cdm = bool(session_fields.get("server_cdm", False)) or getattr(self, "_server_device", False)
         if self._server_cdm is None:
             self._server_cdm = server_cdm
         elif self._server_cdm and not server_cdm:
             self._server_cdm = False
             self.report_local_fallback()
-        self.server_cdm_type = result.get("server_cdm_type", "widevine")
-        self._sample_decrypt_tracks.update(result.get("sample_decrypt_tracks") or [])
+        self.server_cdm_type = session_fields.get("server_cdm_type", "widevine")
+        self._sample_decrypt_tracks.update(session_fields.get("sample_decrypt_tracks") or [])
 
         for track in [*tracks.videos, *tracks.audio, *tracks.subtitles]:
             if track.descriptor == Track.Descriptor.HLS:
@@ -1523,7 +1586,7 @@ class RemoteService:
         def samples(body: bytes) -> Dict[str, Any]:
             def call(sid: Optional[str]) -> Dict[str, Any]:
                 query = urlencode({"track_id": self.server_track_id(track.id), "entry": entry})
-                return self.client.request("post", f"/api/session/{sid}/samples?{query}", body=body)
+                return self.client.request("post", SAMPLES_ROUTE.format(session_id=sid) + f"?{query}", body=body)
 
             return self.session_call(call)
 
@@ -1551,8 +1614,13 @@ class RemoteService:
             unwanted = self._segment_filters.get(track_id)
             if unwanted is None:
                 server_id = self.server_track_id(track_id)
-                result = self.session_call(
-                    lambda sid: self.client.post_optional(f"/api/session/{sid}/segment_filter", {"track_id": server_id})
+                result = cast(
+                    SegmentFilterReply,
+                    self.session_call(
+                        lambda sid: self.client.post_optional(
+                            SEGMENT_FILTER_ROUTE.format(session_id=sid), SegmentFilterRequest(track_id=server_id)
+                        )
+                    ),
                 )
                 unwanted = segment_uri_filter(result.get("unwanted") or [])
                 self._segment_filters[track_id] = unwanted
@@ -1591,15 +1659,18 @@ class RemoteService:
         capped: Dict[str, Any] = {}
         try:
             with console.status("Retrieving Remote License...", spinner="dots"):
-                resp = self.session_call(
-                    lambda sid: self.client.post(
-                        f"/api/session/{sid}/license",
-                        {
-                            "track_ids": [self.server_track_id(t.id) for t in keyed],
-                            "mode": "server_cdm",
-                            "drm_type": drm_type,
-                        },
-                    )
+                resp = cast(
+                    LicenseReply,
+                    self.session_call(
+                        lambda sid: self.client.post(
+                            LICENSE_ROUTE.format(session_id=sid),
+                            LicenseRequest(
+                                track_ids=[self.server_track_id(t.id) for t in keyed],
+                                mode="server_cdm",
+                                drm_type=drm_type,
+                            ),
+                        )
+                    ),
                 )
             track_ids = [self.server_track_id(t.id) for t in keyed]
             self.drain_server_logs()
@@ -1723,7 +1794,9 @@ class RemoteService:
         try:
             with quiet():
                 self.session_call(
-                    lambda sid: self.client.post_optional(f"/api/session/{sid}/keys/bad", {"kid": kid.hex, "key": key})
+                    lambda sid: self.client.post_optional(
+                        BAD_KEY_ROUTE.format(session_id=sid), BadKeyReport(kid=kid.hex, key=key)
+                    )
                 )
         except (Exception, RemoteError) as e:
             self.log.debug(f"Could not report the bad content key to the server: {e}")
@@ -1804,18 +1877,21 @@ class RemoteService:
         track: AnyTrack,
     ) -> Optional[Union[bytes, str]]:
         # a missing certificate is legal (services may not use one), so a failed fetch continues without one
-        resp = self.session_call(
-            lambda sid: self.client.post_optional(
-                f"/api/session/{sid}/license",
-                {
-                    "track_id": self.server_track_id(track.id),
-                    "challenge": base64.b64encode(challenge).decode("ascii"),
-                    "drm_type": "widevine",
-                    "is_certificate": True,
-                },
-            )
+        resp = cast(
+            LicenseReply,
+            self.session_call(
+                lambda sid: self.client.post_optional(
+                    LICENSE_ROUTE.format(session_id=sid),
+                    LicenseRequest(
+                        track_id=self.server_track_id(track.id),
+                        challenge=base64.b64encode(challenge).decode("ascii"),
+                        drm_type="widevine",
+                        is_certificate=True,
+                    ),
+                )
+            ),
         )
-        return base64.b64decode(resp["license"]) if resp.get("license") else None
+        return base64.b64decode(certificate) if (certificate := resp.get("license")) else None
 
     def proxy_license(
         self, challenge: Union[bytes, str], track: AnyTrack, drm_type: str, kid: Optional[UUID] = None
@@ -1842,18 +1918,18 @@ class RemoteService:
             refusal: Optional[Dict[str, Any]] = None
             if pssh_b64:
                 try:
-                    request = {"drm_type": drm_type, "mode": "server_cdm", "pssh": pssh_b64}
+                    request = LicenseRequest(drm_type=drm_type, mode="server_cdm", pssh=pssh_b64)
                     if kid:
                         request["kid"] = kid.hex
                     with quiet():
                         resp = self.session_call(
                             lambda sid: self.client.post(
-                                f"/api/session/{sid}/license",
-                                {**request, "track_id": self.server_track_id(track.id)},
-                                expect=("SERVER_CDM_CAPPED",),
+                                LICENSE_ROUTE.format(session_id=sid),
+                                LicenseRequest(**request, track_id=self.server_track_id(track.id)),
+                                expect=(APIErrorCode.SERVER_CDM_CAPPED,),
                             )
                         )
-                    if resp.get("error_code") == "SERVER_CDM_CAPPED":
+                    if resp.get("error_code") == APIErrorCode.SERVER_CDM_CAPPED:
                         refusal = resp.get("details") or {}
                     self.server_cdm_type = resp.get("drm_type", server_type)
                     keys = resp.get("keys", {})
@@ -1875,10 +1951,7 @@ class RemoteService:
 
         pssh_b64 = track_pssh(track, drm_type)
 
-        payload = {
-            "challenge": base64.b64encode(challenge).decode("ascii"),
-            "drm_type": drm_type,
-        }
+        payload = LicenseRequest(challenge=base64.b64encode(challenge).decode("ascii"), drm_type=drm_type)
         if pssh_b64:
             payload["pssh"] = pssh_b64
 
@@ -1886,7 +1959,8 @@ class RemoteService:
             with quiet():
                 resp = self.session_call(
                     lambda sid: self.client.post(
-                        f"/api/session/{sid}/license", {**payload, "track_id": self.server_track_id(track.id)}
+                        LICENSE_ROUTE.format(session_id=sid),
+                        LicenseRequest(**payload, track_id=self.server_track_id(track.id)),
                     )
                 )
         except RemoteError as e:
@@ -1918,7 +1992,7 @@ class RemoteService:
         if session_id:
             try:
                 with quiet():
-                    result = self.client.delete(f"/api/session/{session_id}")
+                    result = cast(SessionClosed, self.client.delete(SESSION_ROUTE.format(session_id=session_id)))
                 profile = self.ctx.parent.params.get("profile") if self.ctx.parent else None
                 self.save_returned_cache(result.get("cache", {}), profile)
             except SystemExit:

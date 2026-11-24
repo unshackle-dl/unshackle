@@ -16,10 +16,11 @@ from tests.core.key_resolver import key_table, resolver
 from tests.remote.key_source import CAPPED, PR_DEVICE, one_title, remote_keys, remote_session
 from unshackle.commands.dl import dl
 from unshackle.core.api import handlers
-from unshackle.core.api.errors import APIError, APIErrorCode
+from unshackle.core.api.errors import APIError
 from unshackle.core.api.session_store import SessionEntry
 from unshackle.core.config import cdm_entry_names_device
 from unshackle.core.drm import Widevine
+from unshackle.core.remote_protocol import APIErrorCode
 from unshackle.core.remote_service import RemoteClient, RemoteService
 from unshackle.core.tracks import Audio, Video
 
