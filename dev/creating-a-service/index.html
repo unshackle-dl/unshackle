@@ -1491,7 +1491,18 @@
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="get_titles: required">
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#optional-availability-metadata" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Optional availability metadata
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Optional availability metadata">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -2243,7 +2254,18 @@
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="get_titles: required">
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#optional-availability-metadata" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Optional availability metadata
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Optional availability metadata">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -2745,6 +2767,17 @@ return at least one title. If you return none, unshackle treats the ID as invali
 </span><span id="__span-8-19"><a id="__codelineno-8-19" name="__codelineno-8-19" href="#__codelineno-8-19"></a>        <span class="p">)</span>
 </span><span id="__span-8-20"><a id="__codelineno-8-20" name="__codelineno-8-20" href="#__codelineno-8-20"></a>    <span class="p">])</span>
 </span></code></pre></div>
+<h3 id="optional-availability-metadata">Optional availability metadata<a class="headerlink" href="#optional-availability-metadata" title="Permanent link">&para;</a></h3>
+<p>A service may set <code>title.data["availability"]</code> to a dict with two optional fields:</p>
+<ul>
+<li><code>paid</code>: a boolean describing the catalogue offer, not the account's entitlement.</li>
+<li><code>access</code>: <code>"granted"</code>, <code>"denied"</code>, or <code>"unknown"</code> for the authenticated account.
+  Report <code>"denied"</code> only when the platform explicitly confirms lack of access.
+  Missing or unverified access is not denial.</li>
+</ul>
+<p>Only these allowlisted fields reach the REST API as <code>availability</code>, including
+through remote title reconstruction. The CLI's <code>--list-titles</code> does not display
+them, and nothing in core reads them to select or authorize downloads.</p>
 <p>Common constructor fields:</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="1:3"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Movie</label><label for="__tabbed_1_2">Episode</label><label for="__tabbed_1_3">Song</label></div>
 <div class="tabbed-content">
