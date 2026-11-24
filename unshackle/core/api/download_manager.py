@@ -49,11 +49,18 @@ def redact_parameters(parameters: Dict[str, Any]) -> Dict[str, Any]:
     return redacted
 
 
-def secret_values(parameters: Dict[str, Any]) -> List[str]:
-    """Raw secret strings carried in job parameters, longest first, for scrubbing free text."""
+def secret_values(parameters: Dict[str, Any], service: Optional[str] = None) -> List[str]:
+    """Raw secret strings carried in job parameters and the credentials configured for ``service``, longest first."""
     if not isinstance(parameters, dict):
         return []
     secrets: List[str] = []
+    if service:
+        from unshackle.core.config import config
+
+        configured = (config.credentials or {}).get(service)
+        for value in configured.values() if isinstance(configured, dict) else [configured]:
+            if isinstance(value, str):
+                secrets.extend(secret_values({"credential": value}))
     for key in ("credential", "password", "token", "api_key"):
         value = parameters.get(key)
         if isinstance(value, str) and value:
@@ -77,10 +84,10 @@ def owner_id(api_key: Optional[str]) -> Optional[str]:
     return hashlib.sha256(api_key.encode()).hexdigest()[:16]
 
 
-def _redact_text(text: Optional[str], parameters: Dict[str, Any]) -> Optional[str]:
+def _redact_text(text: Optional[str], parameters: Dict[str, Any], service: Optional[str] = None) -> Optional[str]:
     """Mask proxy userinfo and any known parameter secrets that leaked into a free-text field
     (error message / details / traceback / job worker stderr) before the API returns the field."""
-    return redact_text(text, secret_values(parameters))
+    return redact_text(text, secret_values(parameters, service))
 
 
 class JobStatus(Enum):
@@ -183,7 +190,10 @@ class DownloadJob:
                 names = ("error_message", "error_details", "error_traceback", "worker_stderr")
                 self.redacted = (
                     raw,
-                    {name: redact_path(_redact_text(text, self.parameters)) for name, text in zip(names, raw)},
+                    {
+                        name: redact_path(_redact_text(text, self.parameters, self.service))
+                        for name, text in zip(names, raw)
+                    },
                 )
             result.update(
                 {
@@ -237,7 +247,7 @@ def record_job_history(job: DownloadJob) -> None:
         "output_files": job.output_files,
         "skipped_titles": job.skipped_titles,
         "parameters": redact_parameters(job.parameters),
-        "error_message": _redact_text(job.error_message, job.parameters),
+        "error_message": _redact_text(job.error_message, job.parameters, job.service),
     }
     try:
         path = history_path()
@@ -867,7 +877,9 @@ class DownloadQueueManager:
                 except Exception as e:
                     job.status = JobStatus.FAILED
                     job.error_message = str(e)
-                    log.error(f"Job {job.job_id} failed: {e}")
+                    log.error(
+                        f"Job {job.job_id} failed: {_redact_text(job.error_message, job.parameters, job.service)}"
+                    )
                 finally:
                     job.completed_time = datetime.now()
                     record_job_history(job)
@@ -905,7 +917,7 @@ class DownloadQueueManager:
             job.error_code = job.error_code or api_error.error_code.value
             job.error_traceback = job.error_traceback or traceback.format_exc()
 
-            log.error(f"Download failed for job {job.job_id}: {e}")
+            log.error(f"Download failed for job {job.job_id}: {_redact_text(str(e), job.parameters, job.service)}")
             raise
 
     def worker_speed_limit(self) -> Optional[float]:
@@ -1045,8 +1057,8 @@ class DownloadQueueManager:
 
             # A service can echo a credential or a proxy URL into its output, so scrub it before
             # it reaches the log as well, not only the API response.
-            safe_stdout = _redact_text(stdout.strip(), job.parameters)
-            safe_stderr = _redact_text(stderr.strip(), job.parameters)
+            safe_stdout = _redact_text(stdout.strip(), job.parameters, job.service)
+            safe_stderr = _redact_text(stderr.strip(), job.parameters, job.service)
             if stdout.strip():
                 log.debug(f"Worker stdout for job {job.job_id}: {safe_stdout}")
             if stderr.strip():

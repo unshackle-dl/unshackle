@@ -630,7 +630,9 @@ class ContentKeyResolver:
                             f"Licence failed, using the {len(drm.content_keys)} known key(s): {redact_secrets(str(e))}"
                         )
                     else:
-                        if isinstance(e, (drm.Exceptions.EmptyLicense, drm.Exceptions.CEKNotFound)):
+                        if isinstance(
+                            e, (drm.Exceptions.EmptyLicense, drm.Exceptions.CEKNotFound, click.ClickException)
+                        ):
                             msg = str(e)
                         else:
                             msg = f"An exception occurred in the Service's license function: {e}"

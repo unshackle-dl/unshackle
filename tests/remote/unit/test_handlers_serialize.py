@@ -91,6 +91,7 @@ def subtitle(**overrides) -> Subtitle:
     [
         ("hello\nworld", "helloworld"),
         ("a\r\nb\x00c", "abc"),
+        ("\x1b[31mred\x1b[0m", "[31mred[0m"),
         ("clean", "clean"),
         (12345, "12345"),
     ],

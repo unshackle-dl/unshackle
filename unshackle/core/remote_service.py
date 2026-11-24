@@ -139,6 +139,15 @@ def recovering() -> Iterator[None]:
 
 
 @contextlib.contextmanager
+def malformed_answer(what: str) -> Iterator[None]:
+    """Turn a server answer that does not decode into one RemoteError line instead of a traceback."""
+    try:
+        yield
+    except (AttributeError, KeyError, TypeError, ValueError) as e:
+        raise RemoteError(f"The remote server sent malformed {what}: {e}", ClientErrorKind.UNKNOWN) from None
+
+
+@contextlib.contextmanager
 def quiet() -> Iterator[None]:
     """Log this thread's RemoteErrors at debug level, because the caller reports them."""
     before = _mute.quiet
@@ -181,11 +190,13 @@ class RemoteError(SystemExit):
     """
 
     def __init__(self, message: str, kind: str) -> None:
+        from unshackle.core.api.sanitize import sanitize_log
+
         super().__init__(1)
-        self.message = message
+        self.message = sanitize_log(message)
         self.kind = kind
         muted = _mute.quiet or (_mute.recovering and kind in RECOVERABLE)
-        (log.debug if muted else log.error)(message)
+        (log.debug if muted else log.error)(self.message)
 
     def __str__(self) -> str:
         return self.message
@@ -274,9 +285,15 @@ class RemoteClient:
             detail = resp.json()
         except ValueError:
             if resp.status_code < 400:
-                raise
+                raise RemoteError(
+                    f"The remote server answered {endpoint} with a body that is not JSON", ClientErrorKind.UNKNOWN
+                )
             detail = {}
-        late_error = isinstance(detail, dict) and detail.get("status") == "error" and "error_code" in detail
+        if not isinstance(detail, dict):
+            raise RemoteError(
+                f"The remote server answered {endpoint} with JSON that is not an object", ClientErrorKind.UNKNOWN
+            )
+        late_error = detail.get("status") == "error" and "error_code" in detail
         if resp.status_code >= 400 or late_error:
             page_title = re.search(r"<title>(.*?)</title>", resp.text, re.S) if not detail else None
             fallback = f"HTTP {resp.status_code}: {page_title.group(1).strip()}" if page_title else resp.text
@@ -1159,6 +1176,8 @@ class RemoteService:
 
         try:
             result = cast(SessionCreated, self.client.post(SESSION_CREATE_ROUTE, create_data))
+            if not isinstance(result.get("session_id"), str):
+                raise RemoteError("The remote server sent malformed session: no session_id", ClientErrorKind.UNKNOWN)
         except BaseException:
             if local and self.client.tunnel:  # no session, so close() never runs: free the tunnel now
                 self.client.tunnel.stop()
@@ -1399,11 +1418,14 @@ class RemoteService:
                 return
             if not resp:
                 return
+            from unshackle.core.api.sanitize import sanitize_log
+
             level_names = logging.getLevelNamesMapping()
             for record in resp.get("logs", []):
                 level = level_names.get(str(record.get("level", "INFO")), logging.INFO)
-                self.log.log(level, str(record.get("message", "")))
-                self._recent_logs.append(str(record.get("message", "")).strip())
+                message = sanitize_log(record.get("message", ""), keep_lines=True)
+                self.log.log(level, message)
+                self._recent_logs.append(message.strip())
             self._log_seq = int(resp.get("last_seq", self._log_seq))
 
     def poll_auth_completion(self, poll_interval: float = 2.0, timeout: float = 600.0) -> None:
@@ -1448,7 +1470,9 @@ class RemoteService:
                 continue
 
             if status == AuthStatus.PENDING_INPUT:
-                prompt = resp.get("prompt") or "Enter input: "
+                from unshackle.core.api.sanitize import sanitize_log
+
+                prompt = sanitize_log(resp.get("prompt") or "Enter input: ", keep_lines=True)
                 bridge = self._input_bridge
                 try:
                     user_response = bridge.request_input(prompt) if bridge else prompt_user(prompt)
@@ -1532,7 +1556,8 @@ class RemoteService:
             )
         finally:
             self.drain_server_logs()
-        titles_list = [build_title(t, self.service_tag, self.title_id) for t in result.get("titles", [])]
+        with malformed_answer("titles"):
+            titles_list = [build_title(t, self.service_tag, self.title_id) for t in result.get("titles") or []]
         first = titles_list[0] if titles_list else None
         if isinstance(first, Episode):
             self._titles = Series(titles_list)
@@ -1567,20 +1592,21 @@ class RemoteService:
             )
         finally:
             self.drain_server_logs()
-        tracks = build_tracks(result)
+        with malformed_answer("tracks"):
+            tracks = build_tracks(result)
 
-        remote_title = result.get("title") or {}
-        if remote_title:
-            apply_title_fields(title, remote_title)
+            remote_title = result.get("title") or {}
+            if remote_title:
+                apply_title_fields(title, remote_title)
 
-        session_fields = cast(TracksReply, result)
-        for k, v in session_fields.get("session_headers", {}).items():
-            if k.lower() not in ("host", "content-length", "content-type"):
-                self._session.headers[k] = v
-        apply_session_cookies(self._session, result)
+            session_fields = cast(TracksReply, result)
+            for k, v in session_fields.get("session_headers", {}).items():
+                if k.lower() not in ("host", "content-length", "content-type"):
+                    self._session.headers[k] = v
+            apply_session_cookies(self._session, result)
 
-        restore(tracks, result)
-        apply_service_track_data(tracks, result)
+            restore(tracks, result)
+            apply_service_track_data(tracks, result)
 
         server_cdm = bool(session_fields.get("server_cdm", False)) or getattr(self, "_server_device", False)
         if self._server_cdm is None:

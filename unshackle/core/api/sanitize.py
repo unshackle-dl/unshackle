@@ -11,9 +11,13 @@ MAX_CACHE_KEY_DEPTH = 8
 MAX_SESSION_CACHE_KEYS = 64
 
 
-def sanitize_log(value: object) -> str:
-    """Sanitise a value for safe logging by removing newlines and control characters."""
-    return str(value).replace("\n", "").replace("\r", "").replace("\x00", "")
+CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f-\x9f]")
+CONTROL_CHARS_BUT_LF = re.compile(r"[\x00-\x09\x0b-\x1f\x7f-\x9f]")
+
+
+def sanitize_log(value: object, keep_lines: bool = False) -> str:
+    """Remove control characters, and so ANSI escapes, from a value; newlines too unless ``keep_lines``."""
+    return (CONTROL_CHARS_BUT_LF if keep_lines else CONTROL_CHARS).sub("", str(value))
 
 
 def safe_cache_key(key: object) -> Optional[str]:

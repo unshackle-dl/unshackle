@@ -9,6 +9,7 @@ from time import monotonic
 from typing import Any, Callable
 from uuid import UUID
 
+import click
 from rich.text import Text
 
 from unshackle.core import binaries
@@ -41,7 +42,7 @@ def mp4decrypt_or_shaka(drm: Any, path: Path) -> None:
 def decrypt_cenc(drm: Any, path: Path, drm_type: str) -> None:
     """Decrypt ``path`` in place with the decrypter ``decrypter_for`` picks, using the content keys of ``drm``."""
     if not drm.content_keys:
-        raise ValueError("Cannot decrypt a Track without any Content Keys...")
+        raise click.ClickException(f"Cannot decrypt the {drm_type} track: no content keys")
 
     if not path or not path.exists():
         raise ValueError("Tried to decrypt a file that does not exist.")

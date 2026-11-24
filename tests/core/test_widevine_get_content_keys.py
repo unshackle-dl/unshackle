@@ -93,3 +93,15 @@ def test_an_empty_challenge_raises_instead_of_licensing() -> None:
         drm.get_content_keys(
             cdm=FakeCdm(challenge=b""), certificate=lambda **_: None, licence=_licence_for(get_widevine_license)
         )
+
+
+def test_a_licence_the_cdm_cannot_parse_is_one_line() -> None:
+    import click
+    from pywidevine.exceptions import InvalidLicenseMessage
+
+    class JunkCdm(FakeCdm):
+        def parse_license(self, session_id: str, response: Any) -> None:
+            raise InvalidLicenseMessage("Could not parse license_message as a SignedMessage")
+
+    with pytest.raises(click.ClickException, match=KID.hex):
+        _drm().get_content_keys(JunkCdm(), certificate=lambda **_: None, licence=lambda **_: b"junk licence")

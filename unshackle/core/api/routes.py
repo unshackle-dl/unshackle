@@ -157,11 +157,14 @@ def api_handler(handler: Handler) -> Handler:
 
 
 async def json_body(request: web.Request) -> Any:
-    """The request's JSON body; raises INVALID_INPUT when it does not parse."""
+    """The request's JSON object; raises INVALID_INPUT when it does not parse or is not an object."""
     try:
-        return await request.json()
+        data = await request.json()
     except Exception as e:
         raise APIError(APIErrorCode.INVALID_INPUT, "Invalid JSON request body", details={"error": str(e)}) from e
+    if not isinstance(data, dict):
+        raise APIError(APIErrorCode.INVALID_INPUT, "The request body must be a JSON object")
+    return data
 
 
 HEARTBEAT_INTERVAL = 30.0

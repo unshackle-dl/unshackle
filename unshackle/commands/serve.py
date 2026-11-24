@@ -556,9 +556,9 @@ def serve(
                             return limited
                     if serve_playready_flag and request.path in ("/playready", "/playready/"):
                         response = await handler(request)
-                    elif secret_key and not request.headers.get("X-Secret-Key"):
-                        if not known:
-                            return web.json_response({"status": 401, "message": "Secret Key is Invalid."}, status=401)
+                    elif secret_key and not known:
+                        return web.json_response({"status": 401, "message": "Secret Key is Invalid."}, status=401)
+                    elif secret_key and (request.path.startswith("/api/") or not request.headers.get("X-Secret-Key")):
                         response = await handler(request)
                     else:
                         response = await pywidevine_serve.authentication(request, handler)

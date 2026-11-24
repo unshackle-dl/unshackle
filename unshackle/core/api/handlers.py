@@ -328,7 +328,12 @@ def write_client_cache(cache_data: Any, cache_tag: str) -> None:
             continue
         if not isinstance(content, str):
             raise APIError(APIErrorCode.INVALID_INPUT, "cache values must be base64 strings")
-        decompressed = safe_inflate(base64.b64decode(content)).decode("utf-8")
+        try:
+            decompressed = safe_inflate(base64.b64decode(content)).decode("utf-8")
+        except (ValueError, zlib.error):
+            raise APIError(
+                APIErrorCode.INVALID_INPUT, f"cache value {sanitize_log(key)} is not compressed text"
+            ) from None
         if not safe_cache_payload(decompressed):
             log.warning(f"Rejecting session cache file {sanitize_log(key)}: it holds a type a peer may not send")
             continue
@@ -1894,6 +1899,23 @@ def resolve_vcodec(value: Any) -> Optional[list]:
         raise APIError(APIErrorCode.INVALID_INPUT, f"Invalid vcodec: {e.format_message()}")
 
 
+def wanted_refusal(wanted: Any) -> Optional[str]:
+    """Why the job worker could not parse ``wanted``, or None when it can."""
+    if not wanted:
+        return None
+    from unshackle.core.utils.click_types import SeasonRange
+
+    tokens = re.split(r"\s*[,;]\s*", wanted) if isinstance(wanted, str) else wanted
+    if not isinstance(tokens, list) or not all(isinstance(t, str) for t in tokens):
+        return "wanted must be a string or a list of strings"
+    try:
+        if any(not re.match(r"^!?\d+x\d+(\.\d+)?$", t) for t in tokens):
+            SeasonRange().parse_tokens(*tokens)
+    except (click.BadParameter, ValueError) as e:
+        return f"Invalid wanted parameter: {e}"
+    return None
+
+
 def validate_download_parameters(data: Dict[str, Any]) -> Optional[str]:
     """
     Validate download parameters and return error message if invalid.
@@ -2180,6 +2202,10 @@ async def download_handler(data: Dict[str, Any], request: Optional[web.Request] 
     require_fields(data, "service", "title_id")
     service_tag = data["service"]
     title_id = data["title_id"]
+    if not isinstance(title_id, str):
+        raise APIError(APIErrorCode.INVALID_INPUT, "title_id must be a string", details={"title_id": title_id})
+    if refusal := wanted_refusal(data.get("wanted")):
+        raise APIError(APIErrorCode.INVALID_INPUT, refusal, details={"wanted": data.get("wanted")})
 
     server, info, data = await relay_target(data, request)
     normalized_service = info["tag"] if info else validate_service(service_tag, request)
@@ -2219,7 +2245,7 @@ async def download_handler(data: Dict[str, Any], request: Optional[web.Request] 
             cast_or_refuse(cli_params, click.Context(click.Command(normalized_service)), sent)
             service_params = {**defaults, **sent}
 
-        filtered_params = {k: v for k, v in data.items() if k not in ["service", "title_id"]}
+        filtered_params = {k: v for k, v in data.items() if k not in ["service", "title_id", "owner_key"]}
         # Overlay any dl-relevant keys from `serve:` config (e.g. downloads, workers) so the API
         # respects server-side defaults without each client having to send them.
         serve_overrides = {
@@ -3937,6 +3963,8 @@ async def session_segments_handler(
     track_ids = data.get("track_ids", [])
     if not track_ids:
         raise APIError(APIErrorCode.INVALID_INPUT, "Missing required parameter: track_ids")
+    if not isinstance(track_ids, list) or not all(isinstance(t, str) for t in track_ids):
+        raise APIError(APIErrorCode.INVALID_INPUT, "track_ids must be an array of strings")
 
     try:
         result: Dict[str, Any] = {}
@@ -4881,7 +4909,10 @@ def handle_proxy_license(
 
     if not challenge_b64:
         raise APIError(APIErrorCode.INVALID_INPUT, "Missing required parameter: challenge")
-    challenge_bytes = base64.b64decode(challenge_b64)
+    try:
+        challenge_bytes = base64.b64decode(challenge_b64)
+    except (TypeError, ValueError):
+        raise APIError(APIErrorCode.INVALID_INPUT, "challenge is not base64") from None
 
     if drm_type not in ("widevine", "playready"):
         raise APIError(
