@@ -1,3 +1,4 @@
+import errno
 import math
 import multiprocessing
 import os
@@ -24,13 +25,20 @@ from typing import Any, Callable, Generator, MutableMapping, Optional, Union, ca
 
 from requests import Session
 from requests.adapters import HTTPAdapter, Retry
+from requests.exceptions import ConnectionError as RequestsConnectionError
+from requests.exceptions import ProxyError, SSLError
 from rich import filesize
 
+from unshackle.core.config import config
 from unshackle.core.constants import DOWNLOAD_CANCELLED, DownloadCancelled
-from unshackle.core.utilities import get_debug_logger, get_extension
+from unshackle.core.utilities import get_debug_logger, get_extension, log_event
+from unshackle.core.utils import run_proxy
 
 MAX_ATTEMPTS = 5
 RETRY_WAIT = 2
+GAVE_UP_NOTE = "gave up after"
+OUTAGE_ATTEMPTS = 9
+LOCAL_DISK_ERRNOS = (errno.ENOSPC, errno.EDQUOT, errno.EROFS)
 MAX_RESUMES = 50
 MIN_RESUME_PROGRESS = 1024 * 1024
 
@@ -53,6 +61,7 @@ SPEED_ROLLING_WINDOW = 10
 
 RANGE_PARALLEL_MIN_SIZE = 64 * 1024 * 1024
 RANGE_PARALLEL_MIN_PART_SIZE = 4 * 1024 * 1024
+RANGE_PARALLEL_PART_SIZE = 16 * 1024 * 1024
 
 MP_MIN_SEGMENTS = 24
 
@@ -134,7 +143,7 @@ def parse_speed_limit(value: Union[str, int, float, None]) -> Optional[float]:
         return None
     match = re.fullmatch(r"(\d*\.?\d+)\s*([kmg]b?|b)?", text)
     if not match:
-        raise ValueError(f"Invalid speed limit {value!r}: use e.g. 500k, 5M, 1.5G, plain bytes/sec, or 'off'.")
+        raise ValueError(f"Invalid speed limit {value!r}: expected 500k, 5M, 1.5G, bytes per second or 'off'")
     return float(match.group(1)) * SPEED_UNITS[match.group(2) or ""]
 
 
@@ -162,6 +171,14 @@ def adaptive_chunk_size(content_length: int) -> int:
     if content_length <= 0:
         return DEFAULT_CHUNK
     return min(MAX_CHUNK, max(MIN_CHUNK, content_length // 4))
+
+
+def rnet_read_timeout() -> float:
+    """The stall timeout for a segment request on rnet: ``network.read_timeout`` when configured, else READ_TIMEOUT.
+
+    A per-request value overrides the rnet client's own, so this must give the configured one.
+    """
+    return config.network.get("read_timeout") or READ_TIMEOUT
 
 
 ADAPTIVE_TICK = 4.0
@@ -299,15 +316,12 @@ class AdaptiveWorkerController:
 def permanent_status(exc: BaseException) -> Optional[int]:
     """HTTP status of ``exc`` when it is a client error that no retry can fix.
 
-    Both session types raise requests' HTTPError; RnetSession wraps it in MaxRetriesError
-    as ``__cause__``, so unwrap one level like retry_sleep does. 408 and 429 do not count:
-    they are transient, and a fan-out that trips a per-client rate limit can still succeed
-    over one sequential connection.
+    408 and 429 do not count: they are transient, and a fan-out that trips a per-client rate
+    limit can still succeed over one sequential connection.
     """
-    response = getattr(exc, "response", None)
-    if response is None:
-        response = getattr(getattr(exc, "__cause__", None), "response", None)
-    status = getattr(response, "status_code", None)
+    from unshackle.core.session import failure_response
+
+    status = getattr(failure_response(exc), "status_code", None)
     if isinstance(status, int) and 400 <= status < 500 and status not in (408, 429):
         return status
     return None
@@ -333,11 +347,9 @@ def retry_sleep(exc: Exception, attempts: int) -> float:
     else exponential growth from RETRY_WAIT with jitter so concurrently rate-limited
     segments do not retry in lockstep. Capped at ``session.MAX_BACKOFF`` either way.
     """
-    from unshackle.core.session import MAX_BACKOFF
+    from unshackle.core.session import MAX_BACKOFF, failure_response
 
-    response = getattr(exc, "response", None)
-    if response is None:
-        response = getattr(getattr(exc, "__cause__", None), "response", None)
+    response = failure_response(exc)
     if response is not None:
         try:
             retry_after = response.headers.get("Retry-After")
@@ -361,6 +373,11 @@ def retry_sleep(exc: Exception, attempts: int) -> float:
     return min(backoff + random.uniform(0, backoff * 0.1), MAX_BACKOFF)
 
 
+def retries_exhausted(exc: BaseException) -> bool:
+    """Whether ``exc`` is the error download() re-raised after it spent every attempt."""
+    return any(str(note).startswith(GAVE_UP_NOTE) for note in getattr(exc, "__notes__", ()))
+
+
 def is_requests_session(session: Any) -> bool:
     """Whether the HTTP session is a standard requests.Session (it has ``resp.raw``)."""
     return isinstance(session, Session)
@@ -378,7 +395,7 @@ def no_retry_session(session: Session) -> Session:
     view.adapters = OrderedDict()
     for prefix, adapter in session.adapters.items():
         twin = copy(adapter)
-        twin.max_retries = Retry(0, read=False)
+        twin.max_retries = Retry(0, read=False)  # type: ignore[attr-defined]
         if isinstance(adapter, HTTPAdapter) and isinstance(twin, HTTPAdapter):
             twin.poolmanager = adapter.poolmanager
             twin.proxy_manager = adapter.proxy_manager
@@ -391,6 +408,21 @@ def is_rnet_session(session: Any) -> bool:
     from unshackle.core.session import RnetSession
 
     return isinstance(session, RnetSession)
+
+
+def is_outage(exc: BaseException) -> bool:
+    """Whether a failure reached no server: a refused or unreachable connection, or a failed name lookup.
+
+    A TLS, proxy or URL error is not an outage, so it keeps the MAX_ATTEMPTS budget.
+    """
+    import rnet
+
+    for error in (exc, exc.__cause__):
+        if isinstance(error, (rnet.ConnectionError, rnet.ConnectionResetError, rnet.DNSResolverError)):
+            return True
+        if isinstance(error, RequestsConnectionError) and not isinstance(error, (ProxyError, SSLError)):
+            return True
+    return False
 
 
 def is_content_encoded(value: Optional[str]) -> bool:
@@ -411,7 +443,7 @@ def probe_ranged(url: str, session: Any, **kwargs: Any) -> tuple[int, bool]:
         headers["Accept-Encoding"] = "identity"
     rest = {k: v for k, v in kwargs.items() if k != "headers"}
     if is_rnet_session(session):
-        rest.setdefault("read_timeout", READ_TIMEOUT)
+        rest.setdefault("read_timeout", rnet_read_timeout())
         rest.setdefault("max_retries", 0)
     else:
         rest.setdefault("timeout", (CONNECT_TIMEOUT, READ_TIMEOUT))
@@ -532,12 +564,14 @@ def force_unblock_stream(stream: Any) -> None:
         pass
 
 
-def split_ranges(size: int, max_parts: int, part_target: int) -> list[tuple[int, int]]:
+def split_ranges(size: int, max_parts: Optional[int], part_target: int) -> list[tuple[int, int]]:
     """Split ``[0, size)`` into inclusive ``[start, end]`` byte ranges with no gaps or overlaps.
 
-    At most ``max_parts`` parts of ~``part_target`` bytes each. Pure, with no I/O, so testable.
+    Parts of ~``part_target`` bytes each, at most ``max_parts`` of them when given. Pure, with no I/O, so testable.
     """
-    n_parts = max(1, min(max_parts, math.ceil(size / part_target)))
+    n_parts = max(1, math.ceil(size / part_target))
+    if max_parts is not None:
+        n_parts = max(1, min(max_parts, n_parts))
     part_size = math.ceil(size / n_parts)
     return [
         (s, e) for i in range(n_parts) for s, e in [(i * part_size, min(size - 1, (i + 1) * part_size - 1))] if s <= e
@@ -592,8 +626,8 @@ def dispatch_parts(
     save_path.parent.mkdir(parents=True, exist_ok=True)
     control_file = save_path.with_name(f"{save_path.name}.!dev")
 
-    part_target = max(RANGE_PARALLEL_MIN_PART_SIZE, math.ceil(total_size / max_workers))
-    parts = split_ranges(total_size, max_workers, part_target)
+    part_target = min(RANGE_PARALLEL_PART_SIZE, max(RANGE_PARALLEL_MIN_PART_SIZE, math.ceil(total_size / max_workers)))
+    parts = split_ranges(total_size, None, part_target)
 
     control_file.write_bytes(b"")
     with open(save_path, "wb") as f:
@@ -614,7 +648,7 @@ def dispatch_parts(
         ):
             events.put(ev)
 
-    pool = ThreadPoolExecutor(max_workers=len(parts))
+    pool = ThreadPoolExecutor(max_workers=min(max_workers, len(parts)))
     futures = [pool.submit(worker, s, e) for s, e in parts]
     pending = set(futures)
 
@@ -775,6 +809,9 @@ def download(
     item_range = has_range_header(kwargs)
 
     attempts = 1
+    outages = 0
+    failures = 0
+    started = _time()
     written = 0
     resumes = 0
     request_limit: Optional[int] = None
@@ -792,12 +829,13 @@ def download(
         resume_start = resume_offset
         last_speed_refresh = _time()
 
+        stream: Any = None
         try:
             use_rnet = is_rnet_session(session)
 
             request_kwargs = dict(kwargs)
             if use_rnet:
-                request_kwargs.setdefault("read_timeout", READ_TIMEOUT)
+                request_kwargs.setdefault("read_timeout", rnet_read_timeout())
                 request_kwargs.setdefault("max_retries", 0)
             else:
                 request_kwargs.setdefault("timeout", (CONNECT_TIMEOUT, READ_TIMEOUT))
@@ -958,7 +996,7 @@ def download(
                 file_mode = "ab" if resumed else "wb"
                 file_buffering = 1_048_576
             with open(save_path if part_mode else tmp_file, file_mode, buffering=file_buffering) as f:
-                if part_mode:
+                if part_mode and part_offset is not None:
                     f.seek(part_offset + written)
 
                 _write = f.write
@@ -1027,6 +1065,7 @@ def download(
                     raise IOError(f"Failed to read part {part_offset}-{part_end}: got {written}/{expected}")
                 if written < expected:
                     attempts = 1
+                    outages = 0
                     continue
             elif content_length and written < content_length:
                 raise IOError(f"Failed to read {content_length} bytes from the track URI.")
@@ -1043,6 +1082,7 @@ def download(
                     if resume_offset > high_water:
                         high_water = resume_offset
                         attempts = 1
+                        outages = 0
                     continue
                 os.replace(tmp_file, save_path)
                 yield dict(file_downloaded=save_path, written=resume_offset + written)
@@ -1056,9 +1096,16 @@ def download(
                 pass
             if claimed is not None and claimed():
                 return
+            failures += 1
             cancelled = DOWNLOAD_CANCELLED.is_set() or (abort is not None and abort.is_set())
-            if cancelled or attempts == MAX_ATTEMPTS:
+            outage = stream is None and is_outage(exc)
+            if outage:
+                outages += 1
+            disk_error = getattr(exc, "errno", None) in LOCAL_DISK_ERRNOS
+            limit = OUTAGE_ATTEMPTS if outage else MAX_ATTEMPTS
+            if cancelled or disk_error or (outages if outage else attempts) >= limit:
                 if not cancelled:
+                    exc.add_note(f"{GAVE_UP_NOTE} {failures} failed attempts over {_time() - started:.0f}s")
                     raise
                 return
             if not part_mode:
@@ -1076,14 +1123,23 @@ def download(
                     on_retry(exc)
                 except Exception:
                     pass
-            delay = retry_sleep(exc, max(1, attempts))
+            tries = outages if outage else max(1, attempts)
+            delay = retry_sleep(exc, tries)
+            from unshackle.core.session import failure_reason
+
+            log_event(
+                "segment_retry",
+                message=f"{failure_reason(exc)}, retry {tries}/{limit - 1} in {delay:.1f}s",
+                context={"file": save_path.name, "failures": failures, "resumes": resumes},
+            )
             if abort is not None:
                 if abort.wait(delay):
                     return
             else:
                 if DOWNLOAD_CANCELLED.wait(delay):
                     return
-            attempts += 1
+            if not outage:
+                attempts += 1
 
 
 def rebuildable_adapter(adapter: Any) -> bool:
@@ -1119,6 +1175,7 @@ def build_session_spec(session: Optional[Any]) -> Optional[dict[str, Any]]:
             "headers": dict(session.headers),
             "cookies": session.cookies,
             "proxies": dict(session.proxies),
+            "trust_env": session.trust_env,
             "params": copy(session.params),
             "verify": session.verify,
             "cert": session.cert,
@@ -1137,7 +1194,7 @@ def build_session_spec(session: Optional[Any]) -> Optional[dict[str, Any]]:
             "kind": "rnet",
             "impersonate": name,
             "headers": dict(session.headers),
-            "cookies": session.cookies.get_dict_by_domain(),
+            "cookies": session.cookies.snapshot(),
             "origin_cookies": session.export_origin_cookies(),
             "proxy": session.proxies.get("all") or session.proxies.get("https") or session.proxies.get("http"),
         }
@@ -1164,6 +1221,7 @@ def rebuild_session(spec: dict[str, Any], max_workers: int) -> Optional[Any]:
             rs.cookies.update(spec["cookies"])
         if spec.get("proxies"):
             rs.proxies.update(spec["proxies"])
+        rs.trust_env = spec.get("trust_env", True)
         if spec.get("params"):
             rs.params = spec["params"]
         rs.verify = spec.get("verify", True)
@@ -1179,12 +1237,7 @@ def rebuild_session(spec: dict[str, Any], max_workers: int) -> Optional[Any]:
         ns = make_session(spec["impersonate"])
         if spec.get("headers"):
             ns.headers.update(spec["headers"])
-        for domain, jar in spec.get("cookies", {}).items():
-            if domain:
-                for name, value in jar.items():
-                    ns.cookies.set(name, value, domain=domain)
-            else:
-                ns.cookies.update(jar)
+        ns.cookies.update(spec.get("cookies") or [])
         if spec.get("proxy"):
             ns.proxies.update({"all": spec["proxy"]})
         ns.import_origin_cookies(spec.get("origin_cookies") or {})
@@ -1206,13 +1259,20 @@ def mp_worker(queue: Any, kwargs: dict[str, Any]) -> None:
                 name, _, value = pair.partition("=")
                 if name in ("READ_TIMEOUT", "RETRY_WAIT", "HEDGE_MIN_WAIT"):
                     setattr(sys.modules[__name__], name, float(value))
+                if name == "READ_TIMEOUT":
+                    config.network = {**config.network, "read_timeout": float(value)}
         spec = kwargs.pop("_session_spec")
         kwargs["session"] = rebuild_session(spec, int(kwargs.get("max_workers") or 1))
         for event in requests(**kwargs):
             queue.put(event)
     except Exception as exc:
-        summary = " ".join(f"{type(exc).__name__}: {exc}".split())
-        queue.put({"__mp_error__": f"{summary}\n{traceback.format_exc()}"})
+        queue.put(
+            {
+                "__mp_error__": " ".join(f"{type(exc).__name__}: {exc}".split()),
+                "__mp_traceback__": traceback.format_exc(),
+                "__mp_notes__": [str(note) for note in getattr(exc, "__notes__", ())],
+            }
+        )
     finally:
         queue.put({"__mp_done__": True})
 
@@ -1321,7 +1381,11 @@ def download_multiprocess(
                 if "__mp_error__" in event:
                     for p in procs:
                         p.terminate()
-                    raise RuntimeError(f"segment download child failed: {event['__mp_error__']}")
+                    log_event("segment_child_failed", level="ERROR", message=event.get("__mp_traceback__", ""))
+                    child_error = RuntimeError(f"segment download child failed: {event['__mp_error__']}")
+                    for note in event.get("__mp_notes__", ()):
+                        child_error.add_note(note)
+                    raise child_error
                 if "total" in event:
                     continue
                 if "downloaded" in event:
@@ -1356,7 +1420,7 @@ def download_multiprocess(
 
 
 def requests(
-    urls: Union[str, list[str], dict[str, Any], list[dict[str, Any]]],
+    urls: Union[str, dict[str, Any], list[str], list[dict[str, Any]], list[Union[str, dict[str, Any]]]],
     output_dir: Path,
     filename: str,
     headers: Optional[MutableMapping[str, Union[str, bytes]]] = None,
@@ -1526,6 +1590,7 @@ def requests(
             session.cookies.update(cookies)
         if proxy:
             session.proxies.update({"all": proxy})
+            run_proxy.pin(session)
         adapter = HTTPAdapter(pool_connections=max_workers, pool_maxsize=max_workers, pool_block=True)
         session.mount("https://", adapter)
         session.mount("http://", adapter)
@@ -1910,16 +1975,16 @@ def requests(
 
                 completed, pending = wait(pending, timeout=0.1, return_when=FIRST_COMPLETED)
                 for future in completed:
-                    exc = future.exception()
-                    if isinstance(exc, KeyboardInterrupt):
+                    err = future.exception()
+                    if isinstance(err, KeyboardInterrupt):
                         raise KeyboardInterrupt()
-                    elif isinstance(exc, TailPartFailed) and permanent_status(exc) is None:
-                        if exc.index not in tail_skipped:
-                            tail_boosted.discard(exc.index)
-                            tail_skipped.add(exc.index)
-                            remaining.appendleft((exc.index, urls[exc.index]))
+                    elif isinstance(err, TailPartFailed) and permanent_status(err) is None:
+                        if err.index not in tail_skipped:
+                            tail_boosted.discard(err.index)
+                            tail_skipped.add(err.index)
+                            remaining.appendleft((err.index, urls[err.index]))
                         continue
-                    elif exc:
+                    elif err:
                         DOWNLOAD_CANCELLED.set()
                         yield dict(downloaded="[red]FAILING")
                         pool.shutdown(wait=False, cancel_futures=True)
@@ -1928,14 +1993,14 @@ def requests(
                             debug_logger.log(
                                 level="ERROR",
                                 operation="downloader_failed",
-                                message=f"Download failed: {exc}",
-                                error=exc,
+                                message=f"Download failed: {err}",
+                                error=err,
                                 context={
                                     "url_count": len(urls),
                                     "output_dir": str(output_dir),
                                 },
                             )
-                        raise exc
+                        raise err
         except KeyboardInterrupt:
             DOWNLOAD_CANCELLED.set()
             yield dict(downloaded="[yellow]CANCELLING")

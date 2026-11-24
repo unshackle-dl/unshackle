@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<MPD xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="urn:mpeg:dash:schema:mpd:2011" xsi:schemaLocation="urn:mpeg:dash:schema:mpd:2011 DASH-MPD.xsd" type="static" mediaPresentationDuration="PT634S" minBufferTime="PT2S" profiles="urn:mpeg:dash:profile:isoff-live:2011">
+  <Period>
+    <AdaptationSet id="1" contentType="video" width="960" height="540" frameRate="30" subsegmentAlignment="true" par="16:9">
+      <!-- Only base layer (quarter-resolution) AVC video -->
+      <SupplementalProperty schemeIdUri="urn:mpeg:dash:preselection:2016"/>
+      <Representation id="1r1" bandwidth="1510172" codecs="avc1.64001f" mimeType="video/mp4" sar="1:1">
+        <BaseURL>lcevc.mp4</BaseURL>
+        <SegmentBase indexRange="865-1664" timescale="15360">
+          <Initialization range="0-864"/>
+        </SegmentBase>
+      </Representation>
+    </AdaptationSet>
+    <!-- Both AVC base and LC-EVC enhancement Layer -->
+    <Preselection id="2" codecs="lvc1" width="1920" height="1080" preselectionComponents="1" selectionPriority="2">
+    </Preselection>
+  </Period>
+</MPD>

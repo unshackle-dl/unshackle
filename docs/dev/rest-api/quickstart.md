@@ -93,7 +93,7 @@ Swagger UI available at http://127.0.0.1:8786/api/docs/
 ```
 
 !!! note "Swagger UI is also behind auth"
-    In `--api-only` mode (without `--no-key`), the Swagger UI at `/api/docs/` requires the `X-Secret-Key` header, the same as every other route. Only `/api/health` is exempt from authentication.
+    In `--api-only` mode (without `--no-key`), the Swagger UI at `/api/docs/` requires the `X-Secret-Key` header, the same as every other route.
 
 For the rest of this page we will assume the server is reachable at `http://127.0.0.1:8786` and store the secret in an environment variable:
 
@@ -106,10 +106,10 @@ export BASE="http://127.0.0.1:8786"
 
 ## Step 3: Make sure that the server is alive
 
-The health endpoint is the one route that never requires an API key. Use it to make sure that the server operates, and to read its version:
+Use the health endpoint to make sure that the server operates, and to read its version. It needs the API key like every other route:
 
 ```shell
-curl "$BASE/api/health"
+curl -H "X-Secret-Key: $SECRET" "$BASE/api/health"
 ```
 
 ```json title="200 OK"
@@ -234,9 +234,9 @@ The request body accepts the full download parameter set. A few of the most usef
 | `title_id` | - | Title identifier (required) |
 | `profile` | `null` | Named credential/cookie profile to use |
 | `quality` | `[]` | Resolution(s), e.g. `[1080]`; empty means best available |
-| `vcodec` | `null` | Video codec, e.g. `"H265"` |
-| `acodec` | `null` | Audio codec, e.g. `"EC3"` |
-| `range` | `["SDR"]` | Dynamic range: `SDR`, `HDR10`, `HDR10+`, `DV`, `HLG`, `HYBRID` |
+| `vcodec` | `[]` | Video codec, e.g. `"H265"` |
+| `acodec` | `[]` | Audio codec, e.g. `"EC3"` |
+| `range` | `["SDR"]` | Dynamic range: `SDR`, `HDR10`, `HDR10+`, `VIVID`, `DV`, `HLG`, `HYBRID` |
 | `wanted` | `[]` | Episodes to fetch, e.g. `["S01E01"]`, or music tracks, e.g. `["1-5"]`. Empty means all |
 | `lang` | `["orig"]` | Video/audio language(s) |
 | `s_lang` | `["all"]` | Subtitle language(s) |
@@ -441,10 +441,12 @@ The `error_code` maps to an HTTP status. The ones you will meet most often:
 | `NOT_FOUND` | 404 | Title or resource does not exist |
 | `JOB_NOT_FOUND` | 404 | No job with that `job_id` |
 | `CONFLICT` | 409 | Illegal state transition (e.g. retry a running job) |
+| `SERVICE_ERROR` | 422 | The service raised an error |
 | `RATE_LIMITED` | 429 | Upstream throttling (retryable) |
-| `INTERNAL_ERROR` | 500 | Unexpected server-side failure |
-| `SERVICE_ERROR` | 502 | The service raised an error |
-| `NETWORK_ERROR` | 503 | Connection/timeout reaching the service (retryable) |
+| `INTERNAL_ERROR` | 422 | Unexpected server-side failure |
+| `NETWORK_ERROR` | 424 | Connection/timeout reaching the service (retryable) |
+
+The [error code catalogue](errors.md#error-code-catalogue) lists every code.
 
 !!! tip "Retry politely"
     Codes marked retryable (`NETWORK_ERROR`, `RATE_LIMITED`, `SERVICE_UNAVAILABLE`) reflect transient conditions. Back off and retry rather than hammering the server.

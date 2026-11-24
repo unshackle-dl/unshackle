@@ -5,6 +5,7 @@ import re
 import signal
 import subprocess
 import sys
+import threading
 from contextlib import suppress
 from datetime import datetime
 from functools import partial
@@ -16,14 +17,17 @@ from aiohttp import web
 
 import unshackle.core.config as config_module
 from unshackle.core import binaries
-from unshackle.core.api import cors_middleware, setup_routes, setup_swagger
+from unshackle.core.api import cors_middleware, no_5xx_middleware, setup_routes
 from unshackle.core.api.compression import compression_middleware
 from unshackle.core.api.events import publish_refresh_events, publish_service_event
 from unshackle.core.api.handlers import (
     DASHBOARD_PREFIX,
+    add_rate_limit_headers,
     api_key_authentication,
     dashboard_authentication,
     dashboard_key,
+    drop_identity_cache,
+    key_config_error,
     rate_limit_response,
     request_secret_key,
     server_account_regions,
@@ -76,6 +80,7 @@ def _install_service_refresh(app: web.Application) -> None:
     from unshackle.core import services
 
     log = logging.getLogger("serve")
+    services.load_all()
     services.log_load_issues()
     services.record_loaded_commits()
     interval = int(config.serve.get("services_refresh_interval", 0) or 0)
@@ -126,16 +131,16 @@ RESTART_KEYS = ("remote_only", "services_refresh_interval")
 log = logging.getLogger("serve")
 
 
-def _prepare_serve(serve: dict, no_key: bool) -> Optional[str]:
+def _prepare_serve(serve: dict, no_key: bool, app_config: Any = None) -> Optional[str]:
     """Glob the device directories into ``serve``, validate it in place and return the api_secret.
+
+    ``app_config`` is the config ``serve`` belongs to, so a reload checks key devices against the new file.
 
     Raises ValueError on a bad value. The api_secret is None under ``--no-key``.
     """
     api_secret = None if no_key else serve.get("api_secret")
     if not no_key and not api_secret:
-        raise ValueError(
-            "API secret key is not configured. Please add 'api_secret' to the 'serve' section in your config."
-        )
+        raise ValueError("No 'api_secret' in the 'serve' section of your config")
 
     for key, directory, pattern in (
         ("devices", config.directories.wvds, "*.wvd"),
@@ -178,6 +183,8 @@ def _prepare_serve(serve: dict, no_key: bool) -> Optional[str]:
                 raise ValueError(problem)
             if problem := server_cdm_max_height_error(f"serve.users.{username}", user_cfg.get("server_cdm_max_height")):
                 raise ValueError(problem)
+            if problem := key_config_error(f"serve.users.{username}", user_cfg, app_config):
+                raise ValueError(problem)
         limit = key_rate_limit(user_key, serve)
         if limit:
             log.info(f"User '{username}' rate limited to {limit} requests/hour")
@@ -211,8 +218,8 @@ def _build_cdm_config(
             user_config["playready_devices"] = []
             if serve_playready:
                 log.warning(
-                    f'User "{key_id(user_key)}" has no "playready_devices" configured; PlayReady access disabled '
-                    f"for this user. Available PlayReady devices: {prd_device_names}"
+                    f'User "{key_id(user_key)}" has no "playready_devices", PlayReady is off for this user '
+                    f"(available: {prd_device_names})"
                 )
     serve_config["devices"] = wvd_devices
     serve_config["playready_devices"] = prd_devices
@@ -255,7 +262,7 @@ def reload_config(app: web.Application, *, no_key: bool, serve_widevine: bool, s
             raise ValueError("no config file found")
         fresh = Config.from_yaml(config_module.config_path)
         serve = fresh.serve
-        api_secret = _prepare_serve(serve, no_key)
+        api_secret = _prepare_serve(serve, no_key, fresh)
     except Exception as e:
         log.error(f"Config reload rejected, keeping the running config: {e}")
         return False
@@ -271,7 +278,14 @@ def reload_config(app: web.Application, *, no_key: bool, serve_widevine: bool, s
     old_users, new_users = set(app["config"]["users"]), set(serve_config["users"])
     old_devices, new_devices = _device_stems(config.serve), _device_stems(serve)
     vars(config).update(vars(fresh))
+    from unshackle.core.api.handlers import reset_remote_pool
+    from unshackle.core.proxies.proxy import CATALOGUES
+
+    reset_remote_pool()
+    CATALOGUES.clear()
     app["config"]["users"] = serve_config["users"]
+    if removed := old_users - new_users:
+        threading.Thread(target=drop_identity_cache, args=(removed,), daemon=True).start()
     if serve_widevine:
         app["config"]["devices"] = _device_map(serve_config["devices"])
     if playready_app := app.get("playready_app"):
@@ -294,6 +308,8 @@ def _install_config_reload(app: web.Application, *, no_key: bool, serve_widevine
         reload = partial(
             reload_config, _app, no_key=no_key, serve_widevine=serve_widevine, serve_playready=serve_playready
         )
+        if sys.platform == "win32":
+            return
         try:
             asyncio.get_running_loop().add_signal_handler(signal.SIGHUP, reload)
         except (AttributeError, NotImplementedError):
@@ -419,6 +435,8 @@ def serve(
         logging.getLogger("api").setLevel(logging.WARNING)
         logging.getLogger("api.remote").setLevel(logging.WARNING)
     ring.setFormatter(logging.Formatter("%(message)s"))
+    if not debug:
+        ring.addFilter(lambda record: record.name != "aiohttp.access")
     logging.getLogger().addHandler(ring)
     logging.getLogger("aiohttp.access").addFilter(_MaskAccessKey())
 
@@ -463,7 +481,7 @@ def serve(
             global_speed_limit = parse_speed_limit(config.serve.get("global_speed_limit"))
             if global_speed_limit:
                 set_speed_limit(global_speed_limit, lock=True)
-                log.info(f"Global speed limit: {format_speed(global_speed_limit)} (shared by all jobs)")
+                log.info(f"Global speed limit: {format_speed(global_speed_limit)} (split evenly across job slots)")
 
             global_services = config.serve.get("services")
             if global_services:
@@ -486,22 +504,17 @@ def serve(
         serve_config, playready_config = _build_cdm_config(config.serve, api_secret, serve_widevine, serve_playready)
         prd_devices = playready_config["devices"]
 
+        base_middlewares = [cors_middleware, no_5xx_middleware, stats_middleware]
         if api_only:
             log.info("Starting REST API server (pywidevine/pyplayready CDM disabled)")
-            if no_key:
-                app = web.Application(
-                    middlewares=[cors_middleware, stats_middleware, dashboard_authentication, compression_middleware]
-                )
-            else:
-                app = web.Application(
-                    middlewares=[
-                        cors_middleware,
-                        stats_middleware,
-                        dashboard_authentication,
-                        api_key_authentication,
-                        compression_middleware,
-                    ]
-                )
+            app = web.Application(
+                middlewares=[
+                    *base_middlewares,
+                    dashboard_authentication,
+                    *([] if no_key else [api_key_authentication]),
+                    compression_middleware,
+                ]
+            )
             app["config"] = serve_config
             app["debug_api"] = debug_api
 
@@ -509,9 +522,8 @@ def serve(
             _install_service_refresh(app)
             _install_config_reload(app, no_key=no_key, serve_widevine=serve_widevine, serve_playready=serve_playready)
 
-            setup_routes(app, remote_only=remote_only, dashboard=dashboard)
+            setup_routes(app, remote_only=remote_only, dashboard=dashboard, docs=not remote_only)
             if not remote_only:
-                setup_swagger(app, dashboard=dashboard)
                 log.info(f"REST API endpoints available at http://{host}:{port}/api/")
                 log.info(f"Swagger UI available at http://{host}:{port}/api/docs/")
             else:
@@ -526,24 +538,23 @@ def serve(
                 cdm_parts.append("pyplayready CDM")
             log.info(f"Starting integrated server ({' + '.join(cdm_parts)} + REST API)")
 
-            def create_serve_authentication(serve_playready_flag: bool):
+            def create_serve_authentication(serve_playready_flag: bool) -> Any:
                 @web.middleware
-                async def serve_authentication(request: web.Request, handler) -> web.StreamResponse:
+                async def serve_authentication(request: web.Request, handler: Any) -> web.StreamResponse:
                     secret_key = request_secret_key(request)
                     if request.path.startswith(DASHBOARD_PREFIX):
                         return await handler(request)
-                    if (
-                        request.path != "/api/health"
-                        and secret_key
-                        and any(hmac.compare_digest(secret_key, k) for k in request.app["config"]["users"])
-                    ):
+                    known = bool(secret_key) and any(
+                        hmac.compare_digest(secret_key, k) for k in request.app["config"]["users"]
+                    )
+                    if request.path != "/api/health" and secret_key and known:
                         limited = rate_limit_response(secret_key)
                         if limited is not None:
                             return limited
                     if serve_playready_flag and request.path in ("/playready", "/playready/"):
                         response = await handler(request)
                     elif secret_key and not request.headers.get("X-Secret-Key"):
-                        if not any(hmac.compare_digest(secret_key, k) for k in request.app["config"]["users"]):
+                        if not known:
                             return web.json_response({"status": 401, "message": "Secret Key is Invalid."}, status=401)
                         response = await handler(request)
                     else:
@@ -556,37 +567,30 @@ def serve(
                             f"https://git.gay/ready-dl/pyplayready serve v{pyplayready_version}"
                         )
 
+                    if request.path != "/api/health" and secret_key and known:
+                        add_rate_limit_headers(response, secret_key)
                     return response
 
                 return serve_authentication
 
-            if no_key:
-                app = web.Application(
-                    middlewares=[
-                        cors_middleware,
-                        stats_middleware,
-                        cdm_log_middleware,
-                        dashboard_authentication,
-                        compression_middleware,
-                    ]
-                )
-            else:
-                serve_auth = create_serve_authentication(serve_playready and bool(prd_devices))
-                app = web.Application(
-                    middlewares=[
-                        cors_middleware,
-                        stats_middleware,
-                        cdm_log_middleware,
-                        dashboard_authentication,
-                        serve_auth,
-                        compression_middleware,
-                    ]
-                )
+            app = web.Application(
+                middlewares=[
+                    *base_middlewares,
+                    cdm_log_middleware,
+                    dashboard_authentication,
+                    *([] if no_key else [create_serve_authentication(serve_playready and bool(prd_devices))]),
+                    compression_middleware,
+                ]
+            )
 
             app["config"] = serve_config
             app["debug_api"] = debug_api
 
-            if not cdm_only:
+            if cdm_only:
+                from unshackle.core import services
+
+                services.load_all()
+            else:
                 _install_session_store(app)
                 _install_service_refresh(app)
             _install_config_reload(app, no_key=no_key, serve_widevine=serve_widevine, serve_playready=serve_playready)
@@ -621,7 +625,9 @@ def serve(
             elif serve_playready:
                 log.info("No PlayReady devices found, skipping PlayReady CDM endpoints")
 
-            setup_routes(app, remote_only=remote_only, dashboard=dashboard, cdm_only=cdm_only)
+            setup_routes(
+                app, remote_only=remote_only, dashboard=dashboard, cdm_only=cdm_only, docs=not (remote_only or cdm_only)
+            )
 
             if serve_widevine:
                 log.info(f"Widevine CDM endpoints available at http://{host}:{port}/{{device}}/open")
@@ -630,7 +636,6 @@ def serve(
             elif remote_only:
                 log.info(f"Remote service endpoints available at http://{host}:{port}/api/session/")
             else:
-                setup_swagger(app, dashboard=dashboard)
                 log.info(f"REST API endpoints available at http://{host}:{port}/api/")
                 log.info(f"Swagger UI available at http://{host}:{port}/api/docs/")
             log.info("(Press CTRL+C to quit)")

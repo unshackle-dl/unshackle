@@ -7,13 +7,14 @@ import subprocess
 import tempfile
 import threading
 import time
-from typing import Optional
+from typing import Any, Optional
 
 import requests
 
 from unshackle.core import binaries
 from unshackle.core.proxies.proxy import Proxy
 from unshackle.core.utilities import get_country_code, get_country_name, get_debug_logger, log_event
+from unshackle.core.utils import run_proxy
 from unshackle.core.utils.ip_info import get_ip_info
 
 gluetun_instances: list["Gluetun"] = []
@@ -21,7 +22,7 @@ cleanup_lock = threading.Lock()
 cleanup_registered = False
 
 
-def cleanup_all_gluetun_containers():
+def cleanup_all_gluetun_containers() -> None:
     """Cleanup all Gluetun containers on exit."""
     with cleanup_lock:
         instances = list(gluetun_instances)
@@ -34,7 +35,7 @@ def cleanup_all_gluetun_containers():
             pass
 
 
-def register_cleanup():
+def register_cleanup() -> None:
     """Add the cleanup handlers to atexit, one time only."""
     global cleanup_registered
     with cleanup_lock:
@@ -161,8 +162,8 @@ class Gluetun(Proxy):
         auth_user: Optional[str] = None,
         auth_password: Optional[str] = None,
         verify_ip: bool = True,
-        **kwargs,
-    ):
+        **kwargs: Any,
+    ) -> None:
         """
         Initialise the Gluetun proxy provider that can use more than one VPN provider.
 
@@ -184,10 +185,7 @@ class Gluetun(Proxy):
             verify_ip: Automatically make sure that the IP and region are correct after connection (default: True)
         """
         if not binaries.Docker:
-            raise RuntimeError(
-                "Docker is not available. Please install Docker to use Gluetun proxy.\n"
-                "Visit: https://docs.docker.com/engine/install/"
-            )
+            raise RuntimeError("Docker not found, the Gluetun proxy needs it")
 
         self.providers = providers or {}
         self.base_port = base_port
@@ -197,7 +195,7 @@ class Gluetun(Proxy):
         self.auth_password = auth_password
         self.verify_ip = verify_ip
 
-        self.active_containers = {}
+        self.active_containers: dict[str, dict[str, Any]] = {}
 
         self._port_lock = threading.Lock()
 
@@ -239,14 +237,14 @@ class Gluetun(Proxy):
         if len(parts) == 1:
             return None
         if len(parts) != 2:
-            raise ValueError(f"Invalid query format: '{query}'. Expected 'provider:region' (e.g., 'windscribe:us')")
+            raise ValueError(f"Invalid query '{query}': expected provider:region, such as windscribe:us")
 
         provider_name = parts[0].lower()
         region = parts[1].lower()
 
         if provider_name not in self.providers:
             available = ", ".join(self.providers.keys())
-            raise ValueError(f"VPN provider '{provider_name}' not configured. Available providers: {available}")
+            raise ValueError(f"VPN provider '{provider_name}' not configured, available: {available}")
 
         query_key = f"{provider_name}:{region}"
         container_name = f"{self.container_prefix}-{provider_name}-{region}"
@@ -308,15 +306,9 @@ class Gluetun(Proxy):
             if re.match(r"^[a-z]{2}$", region):
                 country = get_country_name(region)
                 if not country:
-                    raise ValueError(
-                        f"Country code '{region}' not recognized. "
-                        f"Configure it in server_countries or use a valid ISO 3166-1 alpha-2 code."
-                    )
+                    raise ValueError(f"Country code '{region}' not recognized")
             else:
-                raise ValueError(
-                    f"Region '{region}' not recognized for provider '{provider_name}'. "
-                    f"Configure it in server_countries or server_cities, or use a 2-letter country code."
-                )
+                raise ValueError(f"Region '{region}' not recognized for provider '{provider_name}'")
 
         self.remove_stopped_container(container_name)
 
@@ -364,7 +356,7 @@ class Gluetun(Proxy):
                 del self.active_containers[query_key]
             raise RuntimeError(f"Failed to create Gluetun container: {e}")
 
-    def cleanup(self):
+    def cleanup(self) -> None:
         """Stop and remove all managed Gluetun containers."""
         container_count = len(self.active_containers)
 
@@ -435,13 +427,13 @@ class Gluetun(Proxy):
             "org": container.get("ip_org"),
         }
 
-    def validate_provider_config(self, provider_name: str, config: dict):
+    def validate_provider_config(self, provider_name: str, config: dict) -> None:
         """Validate a provider's configuration."""
         vpn_type = config.get("vpn_type", "wireguard").lower()
         credentials = config.get("credentials", {})
 
         if vpn_type not in ["wireguard", "openvpn"]:
-            raise ValueError(f"Provider '{provider_name}': Invalid vpn_type '{vpn_type}'. Use 'wireguard' or 'openvpn'")
+            raise ValueError(f"Provider '{provider_name}': vpn_type '{vpn_type}' is not wireguard or openvpn")
 
         if vpn_type == "wireguard":
             if "private_key" not in credentials:
@@ -450,16 +442,11 @@ class Gluetun(Proxy):
             provider_lower = provider_name.lower()
 
             if provider_lower == "windscribe":
-                if "preshared_key" not in credentials:
-                    raise ValueError(
-                        f"Provider '{provider_name}': Windscribe WireGuard requires 'preshared_key' in credentials "
-                        "(can be empty string, but must be set). Get it from windscribe.com/getconfig/wireguard"
-                    )
-                if "addresses" not in credentials:
-                    raise ValueError(
-                        f"Provider '{provider_name}': Windscribe WireGuard requires 'addresses' in credentials. "
-                        "Get it from windscribe.com/getconfig/wireguard"
-                    )
+                for key in ("preshared_key", "addresses"):
+                    if key not in credentials:
+                        raise ValueError(
+                            f"Provider '{provider_name}': Windscribe WireGuard needs '{key}' in credentials"
+                        )
 
             elif provider_lower in ["surfshark", "mullvad", "ivpn"]:
                 if "addresses" not in credentials:
@@ -520,8 +507,8 @@ class Gluetun(Proxy):
         country_lower = country_code.lower()
         if provider_name == "surfshark":
             raise ValueError(
-                "Surfshark has no numbered servers. Map the region to a server name such as "
-                f"'{country_lower}-dal.prod.surfshark.com' in server_hostnames instead."
+                f"Surfshark has no numbered servers: map the region in server_hostnames, "
+                f"such as '{country_lower}-dal.prod.surfshark.com'"
             )
         hostname_formats = {
             "nordvpn": f"{country_lower}{server_num}.nordvpn.com",
@@ -593,7 +580,7 @@ class Gluetun(Proxy):
         country: Optional[str] = None,
         city: Optional[str] = None,
         hostname: Optional[str] = None,
-    ):
+    ) -> None:
         """
         Make and start a Gluetun Docker container.
 
@@ -625,7 +612,7 @@ class Gluetun(Proxy):
                 message=f"Failed to pull Docker image: {gluetun_image}",
                 success=False,
             )
-            raise RuntimeError(f"Failed to ensure Gluetun Docker image '{gluetun_image}' is available")
+            raise RuntimeError(f"Failed to pull the Gluetun proxy Docker image '{gluetun_image}'")
 
         vpn_type = provider_config.get("vpn_type", "wireguard").lower()
         credentials = provider_config.get("credentials", {})
@@ -1050,7 +1037,7 @@ class Gluetun(Proxy):
         except (subprocess.TimeoutExpired, FileNotFoundError):
             return ""
 
-    def verify_container(self, query_key: str, max_retries: int = 3):
+    def verify_container(self, query_key: str, max_retries: int = 3) -> None:
         """
         Make sure that the container's VPN IP and region are correct with an ipinfo.io lookup.
 
@@ -1092,6 +1079,7 @@ class Gluetun(Proxy):
         session = requests.Session()
         try:
             session.proxies = {"http": proxy_url, "https": proxy_url}
+            run_proxy.pin(session)
 
             for attempt in range(max_retries):
                 try:
@@ -1192,7 +1180,7 @@ class Gluetun(Proxy):
         )
         raise RuntimeError(
             f"Failed to verify VPN IP for {container['provider']}:{container['region']} "
-            f"after {max_retries} attempts. Last error: {last_error}"
+            f"after {max_retries} attempts: {last_error}"
         )
 
     def remove_stopped_container(self, container_name: str) -> bool:
@@ -1241,7 +1229,7 @@ class Gluetun(Proxy):
         except (subprocess.TimeoutExpired, FileNotFoundError):
             return False
 
-    def remove_container(self, container_name: str):
+    def remove_container(self, container_name: str) -> None:
         """Stop and remove a Docker container."""
         try:
             if self.auto_cleanup:
@@ -1281,7 +1269,7 @@ class Gluetun(Proxy):
             return f"http://{self.auth_user}:{self.auth_password}@localhost:{port}"
         return f"http://localhost:{port}"
 
-    def __del__(self):
+    def __del__(self) -> None:
         """Cleanup containers on object destruction."""
         if hasattr(self, "auto_cleanup") and self.auto_cleanup:
             try:

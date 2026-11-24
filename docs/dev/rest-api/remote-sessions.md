@@ -62,10 +62,11 @@ remote_services:
     url: "https://my-box.example:8786"
     api_key: "your-api-key"
     # Optional: let the server's CDM do the licensing instead of a local CDM
-    server_cdm: false
-    # Optional: per-service config overrides applied locally (title_map, cdm, etc.)
+    server_cdm: true
+    # Optional: per-service config overrides applied locally (title_map, cdm, server_cdm, etc.)
     services:
       EXAMPLE:
+        server_cdm: false        # this service licenses with your local CDM
         title_map:
           "0ABCDEF": "The Show (Renamed Locally)"
 ```
@@ -74,8 +75,8 @@ remote_services:
 |---|---|---|
 | `url` | yes | Base URL of the `unshackle serve` instance (no trailing slash needed) |
 | `api_key` | no | Sent as the `X-Secret-Key` header on every request |
-| `server_cdm` | no | When `true`, DRM keys are resolved by the server's CDM rather than a local device (default `false`) |
-| `services` | no | Per-service local config overrides, keyed by service tag |
+| `server_cdm` | no | `true` asks for the server's CDM, `false` uses your local device; unset follows the API key's server CDM grant |
+| `services` | no | Per-service local config overrides, keyed by service tag in any case; a `server_cdm` here replaces the server entry's value for that service |
 
 !!! warning "Port default"
     The `unshackle serve` default port is **`8786`** (not `8080`). Use the port
@@ -87,17 +88,37 @@ remote_services:
 If you configure exactly one server, unshackle uses it implicitly:
 
 ```bash
-unshackle dl EXAMPLE 0ABCDEF
+unshackle dl --remote EXAMPLE 0ABCDEF
 ```
 
 If you configure **more than one** server, you must pick one with `--server`:
 
 ```bash
-unshackle dl --server my_server EXAMPLE 0ABCDEF
+unshackle dl --remote --server my_server EXAMPLE 0ABCDEF
 ```
 
 With no `remote_services` configured at all, unshackle raises a clear error telling
 you to add the block shown above.
+
+### Making a service remote by default
+
+To run a service on the server without `--remote`, set `remote` in the
+[`services`](../../reference/configuration/services.md#services) block, not in the
+`services` sub-dict of `remote_services`. Add `server` to select one of several servers:
+
+```yaml title="unshackle.yaml (client)"
+services:
+  EXAMPLE:
+    dl:
+      remote: true
+      server: my_server
+```
+
+`unshackle dl EXAMPLE 0ABCDEF` and `unshackle search EXAMPLE "query"` then run on
+`my_server`. A `--server` on the command line overrides the configured server, and `--local`
+runs the local service code for that run. The global
+`dl: remote: true` makes every `dl` run remote, but it has no effect on `search`.
+The REST API ignores both settings: a job runs remote only when its request asks for it.
 
 ---
 
@@ -115,7 +136,7 @@ hood the client walks a remote session through its lifecycle.
     - Local **cookies**, compressed and base64-encoded
     - A resolved **proxy**, or, if you did not set one, your detected
       **client region**. A client that reports no region is not blocked. The
-      proxy must be a full proxy URI unless the operator gives your API key
+      proxy must be a full proxy URI on a public host unless the operator gives your API key
       `server_proxy`. Without `server_proxy` the server does not resolve country
       codes with its own proxy providers, and it rejects the remote session when
       it sits in a different region from the reported one, asking the client to
@@ -126,12 +147,16 @@ hood the client walks a remote session through its lifecycle.
       `controld://<resolver>@dns.controld.com`. The server counts it as a full proxy
       URI and runs its own forwarder for it. A bare region skips Control D, because its
       proxy is a forwarder on the client. See
-      [Control D](../../guide/proxies-and-vpn.md#control-d)
+      [Control D](../../guide/proxies-and-vpn.md#control-d).
       The client also downloads playlists and segments through the same proxy,
       as a local run does. `--no-proxy-download` and `--proxy-download` change
       that for downloads only.
-    - Track-selection hints (`range_`, `vcodec`, `quality`, `best_available`) so
-      the server fetches the right manifests
+    - A `--local-proxy` goes as `tunnel:<id>`. The client opens
+      `GET /api/tunnel` first, and the server replaces the ID with a loopback SOCKS5
+      proxy that relays to the client's own connection. See
+      [Send the server's requests through your machine](../../guide/proxies-and-vpn.md#send-the-servers-requests-through-your-machine).
+    - Track-selection hints (`range_`, `vcodec`, `quality`, `best_available`,
+      `generate_dv`) so the server fetches the right manifests
     - Your language and audio codec selection (`-l`, `-vl`, `-al`, `-a`, `-fs`)
       in a `dl_params` object. Some services fetch one manifest
       for each audio language, and pick the languages from these values
@@ -188,10 +213,13 @@ hood the client walks a remote session through its lifecycle.
     chosen title. The tracks come back with playback URLs, and the server ships
     DASH/ISM manifests as compressed XML so the client can re-parse them locally for
     downloading. A service can build an AdaptationSet of its own that the served
-    manifest does not contain. Each such track gets a one-AdaptationSet MPD in
-    `track_manifests`, and the client re-parses that instead. Any
-    `session_headers` / `session_cookies` the server used are merged into the
-    client's local HTTP session.
+    manifest does not contain. Each such track gets a one-track MPD in
+    `track_manifests`, with the content periods after its own, and the client
+    re-parses that instead. The client skips the same DASH periods as the server. Any
+    `session_headers` and cookies the server used are merged into the
+    client's local HTTP session. Each cookie in `session_cookie_jar` keeps its
+    domain, path and `secure` flag, so it goes only to its own hosts. `session_cookies` carries
+    the same cookies as names and values only, for older clients.
 
     The tracks response repeats the title. A service can rewrite title fields inside
     `get_tracks`, so the client takes this copy in place of the one from the title
@@ -241,22 +269,23 @@ hood the client walks a remote session through its lifecycle.
 
 There are two ways DRM keys get resolved, chosen by the client's `server_cdm` flag.
 
-=== "Proxied CDM (default)"
+=== "Proxied CDM (server_cdm: false)"
 
     Your **local CDM** builds the license challenge. The client sends that challenge
     to `POST /api/session/{id}/license`, the server forwards it to the service, and
     the raw license bytes come back for your local CDM to parse.
 
     - Keeps your CDM local. The server only relays the license request.
-    - Used when `server_cdm` is `false` (the default).
-    - Also used for a run with `dl --cdm <name>`, and for a service whose own entry in
-      your `cdm` config named the loaded device. In each case the client sends
+    - Used when `server_cdm` is `false`, or when it is unset and the API key has no server
+      CDM for the service.
+    - Also used for a run with `dl --cdm <name>`, and, when `server_cdm` is unset, for a
+      service whose own entry in your `cdm` config named the loaded device. In each case the client sends
       `server_cdm: false` when it creates the remote session, and the server builds the
       service on your device even when the API key has the server CDM.
     - A service option that the service lists in `SERVER_DEVICE_OPTIONS` keeps the server
-      CDM. The server reads the option from `service_params`, then from the top level of
-      the request. The create response gives the result in `server_cdm`, and the client
-      shows a warning when the server did not apply its choice.
+      CDM. The server reads the option from `service_params`, or from the top level of
+      a request that has no `service_params`. The create response gives the result in
+      `server_cdm`, and the client shows a warning when the server did not apply its choice.
     - The service on the server sees your device, not the server's: its DRM system,
       security level, system ID and device type. A CDM call that the service makes
       (for example a session-key exchange at login) goes to your client as a `cdm_call`,
@@ -267,7 +296,9 @@ There are two ways DRM keys get resolved, chosen by the client's `server_cdm` fl
     The **server's CDM** does everything. The client sends track IDs (or a PSSH),
     the server checks its key vaults, loads the device configured for your API key,
     runs the CDM flow, and returns `KID:KEY` pairs directly. The client needs no
-    CDM.
+    CDM. When the server's `cdm` entry for the service names a `widevine` and a
+    `playready` device, the server loads the device of your local CDM's DRM system.
+    See [`cdm`](../../reference/configuration/drm.md).
 
     - Enable with `server_cdm: true` in the server entry.
     - The server tells the client which DRM type it used
@@ -277,9 +308,11 @@ There are two ways DRM keys get resolved, chosen by the client's `server_cdm` fl
       decodes, and a wrong pair goes back to `POST /api/session/{id}/keys/bad`. The
       server flags the pair in every local vault it holds, reports it to the vault
       that served it, and the next licence for that KID skips the pair and reaches
-      the CDM. A server with no local SQLite vault cannot store the flag. The
-      server accepts a report only for a pair it served to that remote session. The
-      client never learns the server vault names.
+      the CDM. When the CDM returns the same pair, the server removes the flag,
+      because then the client's check was wrong. A server with no local SQLite
+      vault cannot store the flag. The server accepts a report only for a pair it
+      served to that remote session, and does not flag a pair its CDM licensed.
+      The client never learns the server vault names.
     - A content key in the client's own vaults goes first, even when the server
       already answered. The client proves it, and a server key waits as the next
       candidate.
@@ -290,7 +323,10 @@ There are two ways DRM keys get resolved, chosen by the client's `server_cdm` fl
     the limit in `server_cdm_max_height`. In a server CDM session, the batch licence response
     lists each track the server refused to license live under `capped_tracks`. A single-track
     server CDM licence answers `403 SERVER_CDM_CAPPED` for such a track. In both cases the client
-    licenses those tracks in proxy mode with its own local CDM. See
+    reads its own key vaults first, then licenses those tracks in proxy mode with its own local
+    CDM. When the track has no DRM of that CDM's system, the client uses the device that its own
+    `cdm` entry names for the track's DRM system. With no such device, the download of that track
+    stops. See
     [`server_cdm_max_height`](../../reference/configuration/services.md).
 
 ### Your own device identity
@@ -378,7 +414,18 @@ serve:
   cannot read each other's cached tokens. The server deletes the directory when the
   remote session ends. A remote session that uses a server account (`serve.server_accounts`)
   gets a persistent per-account cache instead, so the account's tokens outlive the
-  remote session.
+  remote session. A service can name cache files that hold its device identity in
+  `Service.IDENTITY_CACHE`. A remote session on the server's device, or of an API key with its
+  own device config, writes those files to a directory of the API key, outside the remote
+  session's directory, so the server never sends them to the client and never takes them from
+  the client, and the next remote session of that
+  API key reads them again. The server and the client both refuse a forwarded cache file that is not
+  JSON or that names a type other than a date or time, and the service then authenticates again.
+- **A tunnel belongs to its API key.** The server accepts `tunnel:<id>` only from the API key
+  that opened the tunnel. Its SOCKS5 proxy listens on loopback only, and it needs a username and
+  password for that tunnel, so a raw `socks5h://127.0.0.1:<port>` proxy from a client fails.
+- **Only the client dials.** The server ignores a request from the client to open a
+  connection, so a tunnel never gives a client access to the server's network.
 - **The server redacts secrets in logs.** It redacts remote session IDs, service tags,
   and other user values before it writes them to the log.
 
@@ -406,10 +453,13 @@ The server mounts all these routes, even in `--remote-only` mode. Paths use the
 | Method | Path | Purpose |
 |---|---|---|
 | `POST` | `/api/session/create` | Build + authenticate a service instance; returns a session ID immediately |
+| `GET` | `/api/tunnel` | WebSocket that relays the connections of a `tunnel:<id>` proxy to the client; `?id=` reconnects, close code 1000 frees the tunnel at once |
+| `GET` | `/api/tunnel/check?id=` | Exit IP address and lookup time through the caller's tunnel, for `unshackle tunnel-test` |
 | `GET` | `/api/session/{id}/titles` | Fetch and cache the title list |
 | `POST` | `/api/session/{id}/tracks` | Resolve tracks, manifests, chapters, headers/cookies for a title |
 | `POST` | `/api/session/{id}/segments` | Resolve per-segment/track download descriptors |
 | `POST` | `/api/session/{id}/segment_filter` | Unwanted HLS segment URIs for one track (ads, bumpers) |
+| `POST` | `/api/session/{id}/samples` | Decrypt the cbcs samples of a track the service decrypts itself |
 | `POST` | `/api/session/{id}/license` | DRM licensing (proxy or server CDM) |
 | `POST` | `/api/session/{id}/keys/bad` | Report a server-vault content key that did not decrypt |
 | `GET` | `/api/session/{id}/logs` | Drain the service's server-side log output |
@@ -427,10 +477,10 @@ The server mounts all these routes, even in `--remote-only` mode. Paths use the
 answers CDM calls), `cdm_system_id` and `cdm_device_type` (Widevine only), `service_config`
 (the identity config keys the service lists in `client_config`), `client` (a freeform identity
 object the dashboard shows as sent), and the track-selection hints `range_`, `vcodec`,
-`quality`, `best_available`, plus arbitrary service CLI options
+`quality`, `best_available`, `generate_dv`, plus arbitrary service CLI options
 (`additionalProperties: true`).
 
-`dl_params` holds the `dl` track selection: `lang`, `v_lang` and `a_lang`
+`dl_params` holds the `dl` track selection: `lang`, `v_lang`, `a_lang` and `s_lang`
 (arrays of language strings), `acodec` (an array of audio codec names, such as
 `EC3`), and `forced_subs` and `exact_lang` (booleans). The server gives these values to the
 service in `ctx.parent.params`, never as service options, so a service option
@@ -558,7 +608,9 @@ The handler writes forwarded `cache` files into that directory before authentica
 On `DELETE`, when the login belongs to the client (`client_auth`) and the remote
 session does not run on the server's device, the handler harvests updated cache files from the whole directory tree (compressing each
 with zlib and base64-encoding, **excluding** `titles_*` files) and returns them
-under a `cache` field, so the client can keep refreshed tokens. Each cache key
+under a `cache` field, so the client can keep refreshed tokens. A remote session on the
+server's device keeps the files of the service's `IDENTITY_CACHE` in
+`_identity/<namespace>/<service>` instead, so they are never in that tree. Each cache key
 is the file path relative to that directory, with `/` separators and no `.json`
 suffix, which is the `Cacher` cache key the service reads it with:
 
@@ -588,10 +640,14 @@ existing file as a directory, and logs a warning.
   "service": "EXAMPLE",
   "valid": true,
   "expires_in": 300,
+  "draining": false,
   "track_count": 12,
   "title_count": 40
 }
 ```
+
+`draining` is `true` after the operator starts a drain before a restart. The client reads
+it before each title, so it knows of the restart before it occurs.
 
 !!! warning "`expires_in` is the configured TTL, not time remaining"
     The `expires_in` value reports the store's configured `session_ttl`, not the
@@ -620,9 +676,29 @@ remote session API and a good template for any client.
 - **Flow.** `authenticate()` → `create` (+ poll `prompt` every 2s up to a 600s
   deadline, answering `pending_input` prompts. With stdin closed the client logs an
   error and raises `SystemExit(1)` instead of posting an empty answer) → `get_titles()` → `get_tracks()`
-  (merging returned `session_headers`/`session_cookies`, re-parsing `manifests`) →
+  (merging returned `session_headers`/`session_cookie_jar`, re-parsing `manifests`) →
   get the licence in proxy mode or `server_cdm` mode → `close()` (`DELETE`, saving any returned
   `cache`).
+- **Server restarts.** The server keeps remote sessions in memory only, so a restart
+  loses them all. The client recovers in two ways:
+    - A drain announced through `draining`: the client finishes the current title, then
+      closes its remote session, so the drain can end and the refreshed cache comes back.
+      It waits until `/api/health` reports the restarted server without `draining`,
+      opens a new remote session, and continues with the next title.
+    - A lost remote session (`SESSION_NOT_FOUND`, a connection error, a timeout, a closed
+      tunnel or a gateway error page): the client waits for `/api/health`, then checks the
+      old remote session. A live remote session takes the call again only after a connection
+      error, because a timed-out call can already have run. A lost one is replaced: the
+      client opens a new remote session, sends `titles` and the current title's `tracks`
+      again, and then sends the failed call again. A title or track that the new remote
+      session gives another ID keeps its old ID on the client, and the client sends the
+      new ID. The client matches a title by season and episode number, and a track by its
+      attributes.
+
+    The client waits up to 30 minutes for the server, which covers a deploy's drain. It
+    stops with an error if the new remote session licenses differently from the old one,
+    for example after a change to the API key's `server_cdm` grant. An interactive login
+    asks for its input again.
 - **Server resolution.** `resolve_server()` reads `config.remote_services.<name>`
   into `{url, api_key, services, server_cdm}`, injecting the `server_cdm` flag into
   the services map as `_server_cdm`.
@@ -631,7 +707,7 @@ remote session API and a good template for any client.
 
 ## Troubleshooting
 
-!!! example "\"Could not connect to remote server ... Is it running?\""
+!!! example "\"Could not connect to remote server at ...\""
     The client could not reach the URL. Make sure that `unshackle serve` operates on
     the server, the `url`/port in `remote_services` are correct (default port `8786`),
     and any firewall or reverse proxy allows the connection.

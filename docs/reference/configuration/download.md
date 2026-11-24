@@ -38,9 +38,10 @@ Common config keys. This is a useful subset, and every `dl` flag works:
 | `quality` | list | `[]` (best) | Resolution(s), e.g. `[1080]`. |
 | `vcodec` | list | `[]` (any) | Video codec(s), e.g. `[H265]`. |
 | `acodec` | list | `[]` (any) | Audio codec(s), e.g. `[EC3]`. |
-| `range` | list | `["SDR"]` | Colour range(s): `SDR`, `HLG`, `HDR10`, `HDR10P`, `DV`, `HYBRID`. |
+| `range` | list | `["SDR"]` | Colour range(s): `SDR`, `HLG`, `HDR10`, `HDR10P`, `VIVID`, `DV`, `HYBRID`. |
 | `channels` | float | *(unset)* | Audio channels, e.g. `6` for 5.1. |
 | `sub_format` | str | *(unset)* | Convert subtitles to this format (`srt`, `vtt`, `original`, ...). |
+| `sub_font` | str | *(unset)* | Font for subtitles converted to ASS; implies `sub_format: ass`. Ignored when `sub_format` is another format. |
 | `forced_subs` | bool | `false` | Include forced subtitle tracks. |
 | `forced_s_lang` | list | `[]` | Forced subtitle language(s); implies `forced_subs`. A `-` prefix excludes. |
 | `forced_subs_only` | bool | `false` | Keep only forced subtitle tracks; implies `forced_subs`. |
@@ -51,7 +52,9 @@ Common config keys. This is a useful subset, and every `dl` flag works:
 | `workers` | int | *(downloader default)* | Threads per track. |
 | `speed_limit` | str | *(unlimited)* | Total download speed cap across all downloads combined, e.g. `500k`, `5M`, `1.5G` or plain bytes/sec. Values are bytes, not bits (`5M` = 5.0 MB/s). |
 | `slow` | str | *(unset)* | Inter-title delay, e.g. `"20-40"`. |
-| `best_available` | bool | `false` | Warn instead of failing when a requested resolution, range, or language is missing, or when one DRM system does not license under `--all-drm`. The CLI flag is `--best-available`, also spelled `--warn-only`. |
+| `best_available` | bool | `false` | Warn instead of failing when a requested resolution, range, video language, or audio language is missing, or when one DRM system does not license under `--all-drm`. The CLI flag is `--best-available`, also spelled `--warn-only`. |
+| `skip_missing` | bool | `false` | Skip a title that misses a required language (`require_audio`, `require_video`, `require_subs`) or a track that a filter asks for, and continue with the next title. A run with one title, or a run that skips every title, still fails. The CLI flag is `--skip-missing`. For REST API jobs, set it in the [`serve`](services.md#serve) block. |
+| `generate_dv` | bool | `false` | With `-r HYBRID`, make Dolby Vision from the HDR10+ metadata or the decoded video when a title has no DV track. With `-r HDR10` or `-r HDR10P`, make it for that base and ignore a DV track. See [Dolby Vision without a DV track](../../guide/downloading.md#dolby-vision-without-a-dv-track). |
 | `proxy` | str | *(unset)* | Default proxy URI or 2-letter country. |
 | `no_folder` | bool | `false` | Do not create a per-title folder. |
 
@@ -111,6 +114,11 @@ dl:
 Keep a failed download's completed segment files so the next download resumes from where it
 stopped instead of restarting from byte zero.
 
+unshackle keeps the segments of a failed track in a `resume` directory inside the temp
+directory, and the next download of the same track takes them back from there. It removes a
+kept entry after 7 days, and `unshackle env clear temp` removes them all. A process that is
+killed, or a job cancelled over the REST API, keeps nothing.
+
 unshackle reuses only whole, fully downloaded segments. It always discards partially written
 segments, and no partial-byte (`Range`) resume across runs takes place. Reuse is possible only
 with proof that the segmentation did not change. The manifest URL, segment count, and byte
@@ -148,11 +156,12 @@ the next segment it needs and appends every segment that is ready in order, then
 segment file. With [`decrypt_segments`](drm.md#decrypt_segments) also on, each segment is
 appended after its decryption completes, never before.
 
-This option is off by default because it disables resume, and because its cost during the
-download is not measured. The append reads each segment straight after a worker wrote it, so
-the read usually comes from the page cache. On a hard disk, the append to one file while the
-workers write many segment files can still make the head seek. If a download gets slower with
-the option on, turn it off.
+This option is off by default because it disables resume. In a measurement of a 3 GiB track in
+1500 segments with 16 workers, on an SSD and a loopback server, the merge during the download took
+0.9 s more than the merge after it on Linux and 1.1 s less on Windows. With each connection limited
+to 8 MiB/s, it took 2.2 s less on Linux and 8.0 s less on Windows. On a hard disk, the append to one
+file while the workers write many segment files can make the head seek. If a download gets slower
+with the option on, turn it off.
 
 This applies to video and audio tracks from DASH, ISM, and HLS. An HLS track qualifies
 only when every segment shares one init segment and one `EXT-X-KEY`, with no
@@ -188,6 +197,8 @@ in or writes them as sidecar files. See [Subtitles](../../guide/subtitles.md) fo
 | `type_priority` | list | *(unset)* | Ordered ranking of subtitle types (`forced`, `normal`, `sdh`; CC counts as SDH). Types you leave out fall to the end. |
 | `group_by` | str | `"type"` | Which key groups the subtitle tracks. `type` puts all forced tracks together, then all normal, then all SDH. `language` keeps each language next to its own variants. |
 | `language_priority` | list | *(unset)* | Languages to sort to the top, in the order you give. The rest keep the default order: original language first, then alphabetical. Nothing is removed. |
+| `ass_style` | dict | *(unset)* | Style for subtitles converted to ASS, as pysubs2 or ASS style fields (`fontname`, `fontsize`, `primarycolor` or `PrimaryColour`, ...) for a 1080-line picture. Makes ASS the output format when `sub_format` is unset. See [Custom font and style](../../guide/subtitles.md#custom-font-and-style). |
+| `dedupe_codecs` | list | *(unset)* | Subtitle codecs in order of preference, by value or name, for example `[VTT, STPP, WVTT]`. When tracks of the same language, forced/SDH/CC type and name come in several listed codecs, unshackle drops the ones in a later codec. It always keeps codecs you leave out. Unset keeps every track. |
 
 ```yaml
 subtitle:
@@ -219,28 +230,34 @@ subtitle:
 
     unshackle removes nothing, unlike `-sl`, which drops every subtitle language it does not name.
 
-    Use `orig` in the list for the title's original language. A base tag also covers its
-    regional forms, so `en` sorts `en-US` and `en-GB`, but `zh` does **not** cover
-    `zh-Hant`, which you must name. The sort ignores entries that match no track, and it
-    ignores entries that are not valid language tags.
+    Use `orig` in the list for the title's original language. A base tag puts the variant it
+    means first and its other regional forms after it, so `en` sorts `en-US` and then
+    `en-GB`, but `zh` does **not** cover `zh-Hant`, which you must name. A tag with a region sorts only that variant, so
+    `[en-US]` puts `en-US` before `en-GB`. The sort ignores entries that match no track, and
+    it ignores entries that are not valid language tags.
 
-    `--exact-lang` applies here too: with it, `en` sorts only `en`, and `en-US` falls to
-    the alphabetical tail with the rest. Name each tag you want when you use that flag.
+    `--exact-lang` applies here too: with it, `en` sorts only the variant it means, and
+    `en-GB` falls to the alphabetical tail with the rest. Name each tag you want when you use
+    that flag.
 
-!!! note "`type_priority` picks the default subtitle only with `muxing.default_language`"
+!!! note "`type_priority` alone does not pick the default subtitle"
     At mux time the `default` flag goes to every forced subtitle whose language matches the
-    first audio track, so a full dialogue track never becomes default on its own.
-    `type_priority` alone does not change that. Name a subtitle language in
-    [`muxing.default_language`](#muxing) and the first track in that language gets the flag
-    instead, which is where `type_priority` decides which track that is:
+    default audio track, so a full dialogue track never becomes default on its own.
+    `type_priority` changes the order of the tracks in the file. It decides the flag only
+    between the tracks of one language, when you set `muxing.default_language.subtitle`. Set
+    [`muxing.default_subtitle_type`](#muxing) to name the type that gets the flag:
 
     ```yaml
     muxing:
+      default_subtitle_type: [normal, sdh, forced]
       default_language:
         subtitle: en
-    subtitle:
-      type_priority: [normal, sdh, forced]
     ```
+
+    Here the flag goes to the full English track, then to the English SDH track when the
+    title has no full one, then to the forced one. Without `default_language.subtitle`, the
+    first track of the type in file order gets the flag, in any language. A forced track is
+    the exception: it gets the flag only in the language of the default audio track.
 
 ## `audio`
 
@@ -277,9 +294,12 @@ Matroska (MKV) muxing options.
 | Sub-key | Type | Default | Description |
 |---------|------|---------|-------------|
 | `set_title` | bool | `true` | Write a human-readable title into the MKV container. |
-| `default_language` | dict | `{}` | Force which language is flagged *default* per track type, e.g. `{audio: en, subtitle: en}`. |
+| `default_language` | dict | `{}` | Force which language is flagged *default* per track type, e.g. `{audio: en, subtitle: en}`. A tag with a region, such as `en-US`, matches only that variant. |
+| `default_subtitle_type` | str or list | unset | The subtitle types that can take the *default* flag, in order: `forced`, `normal`, `sdh` (CC counts as SDH, and `cc` is the same as `sdh`). The first subtitle track of the first type that the title has gets the flag. With `default_language.subtitle`, only the tracks in that language count. unshackle ignores a different word with a warning. `normal` is the value for players that read the forced flag. Read [Muxing](../../guide/output-and-naming.md#muxing-options). |
 | `merge_audio` | bool | `true` | Merge all audio into one file. `--split-audio` on the CLI flips this off. |
 | `merge_video` | bool | `false` | Merge video tracks that share height, range, and codec into one file, so only language varies inside a file. `--merge-video` on the CLI flips this on. |
+| `track_names` | str | `english` | The language of the name unshackle gives a track that the service left unnamed: `english` (`Chinese (Traditional)`), `native`, the name in the language itself (`中文（繁體）`), or `none`, which leaves the track unnamed. Read [Track names and language tags](../../guide/output-and-naming.md#track-names-and-language-tags). |
+| `original_label` | str | unset | Text that unshackle adds after the name of an audio or subtitle track in the title's original language, such as `[Original]`. Read [Track names and language tags](../../guide/output-and-naming.md#track-names-and-language-tags). |
 | `concurrency` | int | `4` | How many mkvmerge processes run at the same time when a title muxes more than one output file (one per video variant or audio codec). Each process uses one CPU core, so this shortens the mux step on an SSD. Set it to `1` on a hard disk, where parallel writes are slower. |
 
 ```yaml
@@ -289,6 +309,7 @@ muxing:
   default_language:
     audio: en
     subtitle: en
+  default_subtitle_type: normal
 ```
 
 ## `language_tags`
@@ -302,16 +323,18 @@ Language-tag remapping and the rule engine behind the `{lang_tag}` filename vari
 | Condition | Meaning |
 |-----------|---------|
 | `audio` | At least one audio language matches. |
+| `audio_contain_all` | Every listed language must be present in the audio. |
 | `subs_contain` | At least one subtitle language matches. |
-| `subs_contain_all` | Every listed language must be present. |
+| `subs_contain_all` | Every listed language must be present in the subtitles. |
 | `dual` / `multi` / `dubbed` | `true` matches when that filename variable is set, `false` when it is not. |
 
 Each language condition takes one language tag or a list of them. A list matches when **any**
-entry matches, except `subs_contain_all`, which needs them all. An entry that is not a valid
-language tag (for example `japanese`) never matches. `dual`, `multi` and `dubbed` take a bare
-`true` or `false`, not a quoted string. unshackle skips a rule with a condition name it does
-not know, or with any other value in a boolean condition. It logs a warning in each of these
-cases and tries the next rule.
+entry matches, except `audio_contain_all` and `subs_contain_all`, which need them all. An empty
+list never matches. An entry that is not a valid language tag (for example `japanese`) never
+matches. A tag with a region matches only that variant, so `audio: es-419` does not match
+`es-ES` audio. `dual`, `multi` and `dubbed` take a bare `true` or `false`, not a quoted string.
+unshackle skips a rule with a condition name it does not know, or with any other value in a
+boolean condition. It logs a warning in each of these cases and tries the next rule.
 
 `dual`, `multi` and `dubbed` carry the same meaning as the
 [filename variables of those names](#dual_multi_mode). Pair one with a language to name a
@@ -331,6 +354,24 @@ language_tags:
       dual: true
       tag: "THAIDUAL"
 ```
+
+unshackle examines the rules in order, so put a rule that needs more languages before a rule that
+needs fewer. Here, a release with both French dubs gets `VF2`, not `VFQ`:
+
+```yaml
+language_tags:
+  rules:
+    - audio_contain_all: [fr-FR, fr-CA]
+      tag: "VF2"
+    - audio: fr-CA
+      tag: "VFQ"
+    - audio: fr-FR
+      tag: "VFF"
+```
+
+!!! tip "Give regional tags in an `_all` list"
+    A tag without a region also matches a regional track, so one `fr-CA` track satisfies both
+    entries of `[fr, fr-CA]`. Use `[fr-FR, fr-CA]` to require two different tracks.
 
 !!! note "Put `{lang_tag}` where you want the name"
     These rules fill `{lang_tag}`. To use your own name in place of the fixed text, keep
@@ -364,4 +405,74 @@ dual_multi_mode: strict
 
 !!! note "Dialects count as one language"
     Regional variants of the same base language (e.g. `en-US` and `en-GB`) collapse to a single
-    language in both modes, so they never trigger `{dual}` on their own.
+    language in both modes, so they never trigger `{dual}` on their own. An individual language
+    counts as its macrolanguage: `cmn` and `zh` are one language, and so are `arb` and `ar`.
+    Norwegian `nb` (Bokmål) and `nn` (Nynorsk) count as `no`.
+    Cantonese (`yue`) stays separate, so `cmn` and `yue` audio give `{dual}`.
+
+## `hdr10plus_probe`
+
+- **Type:** `bool` &nbsp;·&nbsp; **Default:** `true`
+
+Find the HDR10+ tracks that a service labels as HDR10. Before unshackle lists or selects tracks, it
+reads the first fragment of HEVC HDR10 tracks from DASH, HLS fMP4 and one-file sources. A track
+whose first frame carries HDR10+ (SMPTE ST 2094-40) metadata becomes `HDR10P`. Then `-r HDR10P`,
+`--list` and [`--generate-dv`](../../guide/downloading.md#dolby-vision-without-a-dv-track) use it.
+
+unshackle also probes HEVC Dolby Vision tracks. A DV track that carries HDR10+ keeps its `DV`
+range, so `-r DV` selects it, and `--list` shows it as `DV+HDR10P`. `-r HYBRID` uses it as the
+[hybrid](../../guide/downloading.md#colour-range) of its resolution, with no base track. The
+HDR10 tracks and the DV tracks of a title are sampled as two separate sets.
+
+When two HDR10 tracks have the same resolution, they can be an HDR10 encode and an HDR10+ encode
+side by side, so unshackle probes every track. When each track has its own resolution, unshackle
+probes the two highest and the two lowest bitrates first:
+
+| Result | Action |
+|--------|--------|
+| All four carry HDR10+ | Every HDR10 track of the title becomes `HDR10P`. |
+| Some carry HDR10+ | The title has HDR10 and HDR10+ encodes side by side, so unshackle probes every track. |
+| None carry HDR10+ | Every track stays `HDR10`. |
+
+The probe also finds HDR Vivid in HEVC HDR10 and HLG tracks. A track becomes `VIVID`, so
+`-r VIVID` selects it, when its first frame carries CUVA HDR Vivid metadata, or when its MPEG-TS
+program map table (PMT) has the `cuvv` registration. An HLG track never becomes `HDR10P`. An audio
+track with no codec gets its codec from the PMT of an MPEG-TS first segment: the `AVSA`
+registration or `stream_type` `0xD5` gives `Audio Vivid`. The probe has no HDR10+ result for an
+MPEG-TS track.
+
+A probe that fails, or a fragment whose metadata is encrypted, keeps the label from the service.
+unshackle does not probe ISM tracks. Each probe makes one to three small requests: the 64 KiB
+fragment, plus the playlist of an HLS track or the header of a one-file track. The probes run in
+parallel, with no more at a time than `--workers` (or `dl.workers`) sets for a track download.
+
+```yaml
+hdr10plus_probe: true
+```
+
+A remote server probes its tracks before it sends them, so the setting on the server applies to
+remote downloads and to the REST API.
+
+## `generate_dv_mode`
+
+- **Type:** `str` &nbsp;·&nbsp; **Default:** `v29`
+
+How [`--generate-dv`](../../guide/downloading.md#dolby-vision-without-a-dv-track) sets the Level 1 brightness
+values of the Dolby Vision it makes from HDR10+. All modes make one shot per HDR10+ scene and keep the
+same peak and letterbox area. They differ in the scene average, which the TV uses to tone-map.
+
+| Mode | Scene average |
+|------|---------------|
+| `v29` (default) | unshackle's average from the HDR10+ brightness distribution, at least about 2.4 nits. Closest to the pixels. |
+| `v40` | The same average, at least about 10 nits, as in studio Dolby Vision (CM v4.0). Dark scenes read brighter than `v29`. |
+| `legacy` | The `dovi_tool generate --hdr10plus-json` average. Most scenes read brighter than the pixels. |
+
+```yaml
+generate_dv_mode: v29
+```
+
+Dolby Vision that unshackle measures from the decoded video uses its measured average in all modes.
+`v40` raises the lowest average to about 10 nits, and `legacy` is the same as `v29`.
+
+The setting applies on the machine that runs the hybrid step: the client for a remote download, the
+server for a REST API job.

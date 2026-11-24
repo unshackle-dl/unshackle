@@ -136,3 +136,49 @@ def test_cleanup_never_climbs_past_the_segment_store(tmp_path: Path, monkeypatch
     assert keep.exists(), "cleanup deleted an unrelated file in the download directory"
     assert library.exists()
     assert not (library / "temp" / "task_x" / "Audio_1.mp4_segments").exists(), "the segment store was left behind"
+
+
+@pytest.fixture
+def ffmpeg_ok(monkeypatch: pytest.MonkeyPatch) -> list[dict]:
+    """Patch in an ffmpeg that writes b"merged" and succeeds; gives the kwargs of each call."""
+    calls: list[dict] = []
+
+    def fake_run(args, **kwargs):
+        calls.append(kwargs)
+        Path(args[-1]).write_bytes(b"merged")
+        return subprocess.CompletedProcess(args, 0, "", "")
+
+    monkeypatch.setattr("unshackle.core.manifests.hls.binaries.FFMPEG", Path("ffmpeg"))
+    monkeypatch.setattr("unshackle.core.manifests.hls.subprocess.run", fake_run)
+    return calls
+
+
+def test_segment_delete_error_after_ffmpeg_success_keeps_the_output(
+    tmp_path: Path, segments: list[Path], ffmpeg_ok: list[dict], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    real_unlink = Path.unlink
+
+    def locked_unlink(self, *args, **kwargs):
+        if self == segments[1]:
+            raise PermissionError(13, "The process cannot access the file", str(self))
+        return real_unlink(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "unlink", locked_unlink)
+
+    save_path = tmp_path / "out.mp4"
+    size = HLS.merge_segments(segments=segments, save_path=save_path)
+
+    assert size == len(b"merged")
+    assert save_path.read_bytes() == b"merged"
+
+
+def test_ffmpeg_timeout_grows_with_input_size(tmp_path: Path, segments: list[Path], ffmpeg_ok: list[dict]) -> None:
+    HLS.merge_segments(segments=segments, save_path=tmp_path / "small.mp4")
+
+    segments[0].parent.mkdir(exist_ok=True)
+    for i, path in enumerate(segments):
+        path.write_bytes(f"segment-{i}".encode())
+    segments[0].write_bytes(b"\0" * 10 * 1024 * 1024)
+    HLS.merge_segments(segments=segments, save_path=tmp_path / "large.mp4")
+
+    assert [call["timeout"] for call in ffmpeg_ok] == [300, 302]

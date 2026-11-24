@@ -48,7 +48,7 @@ def is_remote_cdm(cdm: Any) -> bool:
     try:
         from pywidevine.remotecdm import RemoteCdm as WidevineRemoteCdm
     except Exception:
-        WidevineRemoteCdm = None
+        WidevineRemoteCdm = None  # type: ignore[misc,assignment]
 
     if WidevineRemoteCdm is not None:
         try:
@@ -197,7 +197,7 @@ def is_widevine_cdm(cdm: Any) -> bool:
     try:
         from pywidevine.cdm import Cdm as WidevineCdm
     except Exception:
-        WidevineCdm = None
+        WidevineCdm = None  # type: ignore[misc,assignment]
 
     if WidevineCdm is not None:
         try:
@@ -208,7 +208,7 @@ def is_widevine_cdm(cdm: Any) -> bool:
     try:
         from pywidevine.remotecdm import RemoteCdm as WidevineRemoteCdm
     except Exception:
-        WidevineRemoteCdm = None
+        WidevineRemoteCdm = None  # type: ignore[misc,assignment]
 
     if WidevineRemoteCdm is not None:
         try:

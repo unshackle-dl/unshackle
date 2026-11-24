@@ -126,12 +126,12 @@ health check is `GET http://127.0.0.1:8786/api/health`.
     available at [`/api/docs/`](http://127.0.0.1:8786/api/docs/). The server generates
     it from the same route table it serves, so it always matches the version you
     operate. Note that in `--api-only` mode the docs page is itself behind the
-    API key. Only `/api/health` is exempt from authentication.
+    API key, like every other route.
 
-A quick smoke test that needs no API key:
+A quick smoke test:
 
 ```shell title="Confirm the server is up"
-curl http://127.0.0.1:8786/api/health
+curl -H "X-Secret-Key: your-api-secret" http://127.0.0.1:8786/api/health
 ```
 
 ```json title="Response"
@@ -156,7 +156,7 @@ request and response in full.
 
 | Method | Path | Purpose |
 |---|---|---|
-| `GET` | `/api/health` | Liveness and version check. Never requires an API key. |
+| `GET` | `/api/health` | Liveness and version check. |
 | `GET` | `/api/services` | List the services available on this server. |
 | `POST` | `/api/search` | Run a service's search for a query. |
 | `POST` | `/api/list-titles` | List the titles behind a service title ID. |
@@ -205,6 +205,7 @@ request and response in full.
 | `POST` | `/api/session/{session_id}/tracks` | Tracks (with URLs) for a chosen title. |
 | `POST` | `/api/session/{session_id}/segments` | Per-track segment/download details. |
 | `POST` | `/api/session/{session_id}/segment_filter` | Server-side HLS segment filter results for one track. |
+| `POST` | `/api/session/{session_id}/samples` | Server-side cbcs sample decryption for one track. |
 | `POST` | `/api/session/{session_id}/license` | Proxy or server-side DRM licensing. |
 | `POST` | `/api/session/{session_id}/keys/bad` | Report a server-vault content key that did not decrypt. |
 | `GET` | `/api/session/{session_id}/logs` | Drain the service's server-side log output. |
@@ -219,7 +220,7 @@ request and response in full.
 ## Authentication in one line
 
 With the default configuration, send your API secret in the `X-Secret-Key` header on
-every request except `/api/health`:
+every request:
 
 ```shell title="An authenticated request"
 curl -X POST http://127.0.0.1:8786/api/search \

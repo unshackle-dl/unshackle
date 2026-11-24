@@ -11,13 +11,14 @@ from pywidevine.device import DeviceTypes
 from requests import Session
 
 from unshackle.core import __version__
+from unshackle.core.vault import is_null_key
 from unshackle.core.vaults import Vaults
 
 
 class MockCertificateChain:
     """Mock certificate chain for PlayReady compatibility."""
 
-    def __init__(self, name: str):
+    def __init__(self, name: str) -> None:
         self._name = name
 
     def get_name(self) -> str:
@@ -27,7 +28,7 @@ class MockCertificateChain:
 class Key:
     """`Key` object compatible with pywidevine."""
 
-    def __init__(self, kid: str, key: str, type_: str = "CONTENT"):
+    def __init__(self, kid: str, key: str, type_: str = "CONTENT") -> None:
         if isinstance(kid, str):
             clean_kid = kid.replace("-", "")
             if len(clean_kid) == 32:
@@ -106,8 +107,8 @@ class DecryptLabsRemoteCDM:
         device_type: Optional[str] = None,
         system_id: Optional[int] = None,
         security_level: Optional[int] = None,
-        **kwargs,
-    ):
+        **kwargs: Any,
+    ) -> None:
         """
         Initialise Decrypt Labs Remote CDM for Widevine and PlayReady schemes.
 
@@ -146,7 +147,7 @@ class DecryptLabsRemoteCDM:
             self.security_level = security_level or 3
 
         self._sessions: Dict[bytes, Dict[str, Any]] = {}
-        self._pssh_b64 = None
+        self._pssh_b64: Optional[str] = None
         self._required_kids: Optional[List[str]] = None
         self._http_session = Session()
         self._http_session.headers.update(
@@ -157,7 +158,7 @@ class DecryptLabsRemoteCDM:
             }
         )
 
-    def get_device_type_enum(self, device_type: str):
+    def get_device_type_enum(self, device_type: str) -> DeviceTypes:
         """Convert device type string to enum for compatibility."""
         device_type_upper = device_type.upper()
         if device_type_upper == "ANDROID":
@@ -412,7 +413,7 @@ class DecryptLabsRemoteCDM:
                     else:
                         kid_uuid = UUID(hex=clean_kid.ljust(32, "0"))
                     key, _ = self.vaults.get_key(kid_uuid)
-                    if key and key.count("0") != len(key):
+                    if not is_null_key(key):
                         vault_keys.append({"kid": kid_str, "key": key, "type": "CONTENT"})
                 except (ValueError, TypeError):
                     continue
@@ -483,10 +484,10 @@ class DecryptLabsRemoteCDM:
             session["tried_cache"] = True
 
             if required_kids_list:
-                available_kids = set()
-                for key in all_available_keys:
-                    if isinstance(key, dict) and "kid" in key:
-                        available_kids.add(key["kid"].replace("-", "").lower())
+                available_kids: set[str] = set()
+                for cached_key in all_available_keys:
+                    if isinstance(cached_key, dict) and "kid" in cached_key:
+                        available_kids.add(cached_key["kid"].replace("-", "").lower())
 
                 required_kids = set(required_kids_list)
                 missing_kids = required_kids - available_kids
@@ -536,7 +537,7 @@ class DecryptLabsRemoteCDM:
             session["decrypt_labs_session_id"] = data["session_id"]
             return challenge
 
-        error_msg = f"Unexpected API response format. message_type={message_type}, available_fields={list(data.keys())}"
+        error_msg = f"Unexpected API response format: message_type={message_type}, available_fields={list(data.keys())}"
         if data.get("message"):
             error_msg = f"API response: {data['message']} - {error_msg}"
         if "details" in data:
@@ -586,10 +587,11 @@ class DecryptLabsRemoteCDM:
             if self.is_playready and license_message.lstrip().startswith("<"):
                 license_message = license_message.encode("utf-8")
             else:
+                license_text = license_message
                 try:
-                    license_message = base64.b64decode(license_message)
+                    license_message = base64.b64decode(license_text)
                 except ValueError:
-                    license_message = license_message.encode("utf-8")
+                    license_message = license_text.encode("utf-8")
 
         pssh = session["pssh"]
         init_data = self.get_init_data_from_pssh(pssh, session.get("pssh_b64"))
@@ -665,7 +667,7 @@ class DecryptLabsRemoteCDM:
         session.pop("vault_keys", None)
 
         if self.vaults and session["keys"]:
-            key_dict = {}
+            key_dict: dict[UUID | str, str] = {}
             for key in session["keys"]:
                 if key["type"] == "CONTENT":
                     try:

@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<MPD xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="urn:mpeg:dash:schema:mpd:2011" xsi:schemaLocation="urn:mpeg:dash:schema:mpd:2011 DASH-MPD.xsd" type="dynamic" availabilityStartTime="2018-12-20T06:04:22Z" publishTime="2018-12-20T06:04:22Z" minimumUpdatePeriod="PT2S" mediaPresentationDuration="PT0H4M9.708S" minBufferTime="PT4S" profiles="urn:mpeg:dash:profile:isoff-live:2011">
+  <Period id="1" start="PT0S">
+    <!-- Video -->
+    <AdaptationSet id="1" mimeType="video/mp4" segmentAlignment="true" startWithSAP="1">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"/>
+      <SegmentTemplate timescale="5994" media="video_$Number$.mp4" initialization="video.mp4">
+        <SegmentTimeline>
+          <S t="0" d="12000" r="154"/>
+        </SegmentTimeline>
+      </SegmentTemplate>
+      <Representation id="1" bandwidth="3732256" codecs="hev1.1.6.L120.90" width="1920" height="1080"/>
+    </AdaptationSet>
+    <!-- Audio (M&E) -->
+    <AdaptationSet id="2" mimeType="audio/mp4" codecs="mhm2.0x0C" segmentAlignment="true" startWithSAP="1">
+      <EssentialProperty schemeIdUri="urn:mpeg:dash:preselection:2016" value="1,2 3"/>
+      <EssentialProperty schemeIdUri="urn:mpeg:dash:preselection:2016" value="2,2 4"/>
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"/>
+      <SegmentTemplate timescale="48000" media="audio0_$Number$.mp4" initialization="audio0.mp4">
+        <SegmentTimeline>
+          <S t="0" d="90112" r="133"/>
+        </SegmentTimeline>
+      </SegmentTemplate>
+      <Representation id="2" bandwidth="132669" audioSamplingRate="48000"/>
+    </AdaptationSet>
+    <!-- Audio (English) -->
+    <AdaptationSet id="3" mimeType="audio/mp4" lang="en" codecs="mhm2.0x0C" segmentAlignment="true" startWithSAP="1">
+      <EssentialProperty schemeIdUri="urn:mpeg:dash:preselection:2016"/>
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"/>
+      <SegmentTemplate timescale="48000" media="audio1_$Number$.mp4" initialization="audio1.mp4">
+        <SegmentTimeline>
+          <S t="0" d="90112" r="133"/>
+        </SegmentTimeline>
+      </SegmentTemplate>
+      <Representation id="3" bandwidth="32494" audioSamplingRate="48000"/>
+    </AdaptationSet>
+    <!-- Audio (Spanish) -->
+    <AdaptationSet id="4" mimeType="audio/mp4" lang="es" codecs="mhm2.0x0C" segmentAlignment="true" startWithSAP="1">
+      <EssentialProperty schemeIdUri="urn:mpeg:dash:preselection:2016"/>
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="dub"/>
+      <SegmentTemplate timescale="48000" media="audio2_$Number$.mp4" initialization="audio2.mp4">
+        <SegmentTimeline>
+          <S t="0" d="90112" r="133"/>
+        </SegmentTimeline>
+      </SegmentTemplate>
+      <Representation id="4" bandwidth="32494" audioSamplingRate="48000"/>
+    </AdaptationSet>
+  </Period>
+</MPD>

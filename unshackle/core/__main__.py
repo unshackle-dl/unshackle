@@ -112,7 +112,7 @@ def main(version: bool, debug: bool) -> None:
 
 
 @atexit.register
-def cleanup():
+def cleanup() -> None:
     """Clean up resources on exit."""
     close_debug_logger()
 

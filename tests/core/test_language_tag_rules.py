@@ -20,9 +20,32 @@ def test_a_list_matches_any_of_its_entries() -> None:
     assert evaluate_language_tag(rules, JA, []) == "ASIAN"
 
 
+def test_a_regional_rule_does_not_match_another_region() -> None:
+    rules = [{"audio": "es-419", "tag": "LATAM"}]
+    assert evaluate_language_tag(rules, [Language.get("es-ES")], []) == ""
+    assert evaluate_language_tag(rules, [Language.get("es-419")], []) == "LATAM"
+
+
 def test_subs_contain_all_needs_every_entry() -> None:
     rules = [{"subs_contain_all": ["en", "fr"], "tag": "MULTI"}]
     assert evaluate_language_tag(rules, JA, EN_ES) == ""
+
+
+def test_audio_contain_all_tags_a_release_with_every_listed_language() -> None:
+    rules = [
+        {"audio_contain_all": ["fr-FR", "fr-CA"], "tag": "VF2"},
+        {"audio": "fr-CA", "tag": "VFQ"},
+        {"audio": "fr-FR", "tag": "VFF"},
+    ]
+    fr_fr, fr_ca, en = Language.get("fr-FR"), Language.get("fr-CA"), Language.get("en-US")
+    assert evaluate_language_tag(rules, [en, fr_fr, fr_ca], []) == "VF2"
+    assert evaluate_language_tag(rules, [en, fr_ca], []) == "VFQ"
+    assert evaluate_language_tag(rules, [en, fr_fr], []) == "VFF"
+
+
+@pytest.mark.parametrize("condition", ["audio_contain_all", "subs_contain_all"])
+def test_an_empty_contain_all_list_matches_nothing(condition) -> None:
+    assert evaluate_language_tag([{condition: [], "tag": "ALL"}], JA, EN_ES) == ""
 
 
 @pytest.mark.parametrize("bad", ["japanese", 1, [["ja"]], {"ja": 1}])

@@ -20,7 +20,7 @@ def test_search_returns_results(http_session, server_url: str, service_case) -> 
     )
     if r.status_code in (400, 401, 403):
         pytest.skip(f"{service} search not available: {r.status_code} {r.text[:200]}")
-    if r.status_code == 502 and "not supported" in r.text.lower():
+    if r.status_code == 422 and "not supported" in r.text.lower():
         pytest.skip(f"{service} does not implement search")
     assert r.status_code == 200, r.text
     body = r.json()

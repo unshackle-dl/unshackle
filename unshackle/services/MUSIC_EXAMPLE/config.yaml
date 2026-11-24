@@ -24,11 +24,3 @@ client:
   mobile:
     user_agent: USER_AGENT
     formats: [aac]
-
-# Audio.Codec name -> the container the API delivers that codec in. A song skips
-# the muxer, so on_track_downloaded restores these suffixes on the downloaded file
-# and the tagger then writes the matching metadata format.
-containers:
-  FLAC: .flac
-  ALAC: .m4a
-  AAC: .m4a

@@ -1,0 +1,11 @@
+#EXTM3U
+#EXT-X-VERSION:7
+#EXT-X-INDEPENDENT-SEGMENTS
+# BBC Testcard Stream
+# Email dash@rd.bbc.co.uk
+# Copyright (c) British Broadcasting Corporation MMXXI. All rights reserved.
+# This stream is made available for engineering test purposes only.
+# Redistribution is not permitted.
+#
+#EXT-X-STREAM-INF:BANDWIDTH=220000,AVERAGE-BANDWIDTH=200000,CODECS="flac"
+https://vod-dash-ww-rd-live.akamaized.net/testcard/2/audio/en-lossless-2_0/audio.m3u8

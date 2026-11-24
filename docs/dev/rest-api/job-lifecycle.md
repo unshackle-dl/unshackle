@@ -162,6 +162,7 @@ full detail:
 | `segments_total` | number | Total segments for the track in progress. |
 | `speed` | string | Transfer speed of the track in progress, e.g. `4.20 MB/s`. |
 | `skipped_subtitles` | list | Subtitles that were skipped as non-fatal failures (when `skip_subtitle_errors` is set). |
+| `skipped_titles` | list | Titles that the run skipped because a requested track or language is missing, each `{title, reason}`. |
 | `input_prompt` | string or `null` | The prompt the service waits on. Answer it with `POST /api/download/jobs/{job_id}/input`. |
 | `notice` | string or `null` | A message the service shows while it waits for an approval on another device, such as a pair code. It needs no answer. |
 

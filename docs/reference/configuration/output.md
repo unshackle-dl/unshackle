@@ -9,7 +9,7 @@ the [Output & naming guide](../../guide/output-and-naming.md).
 - **Type:** `dict` &nbsp;·&nbsp; **Required** (no usable default; `dl` exits with an error if this is missing)
 
 Filename templates keyed by media kind, using `{variable}` placeholders. Recognised kinds are
-`movies`, `series`, and `songs` (and `albums` for folder templates). A trailing `?` on a
+`movies`, `series`, `sports`, and `songs` (and `albums` for folder templates). A trailing `?` on a
 variable (e.g. `{quality?}`) marks it optional: if empty, it and one adjacent separator are
 dropped.
 
@@ -17,16 +17,18 @@ dropped.
 output_template:
   movies: "{title}.{year}.{quality?}.{source}-{tag}"
   series: "{title}.{season_episode}.{episode_name?}.{quality?}.{source}-{tag}"
+  sports: "{title}.{year?}.{date?}.{episode_name}.{quality?}.{source}-{tag}"
   songs: "{track_number}. {title}"
   folder:                       # special nested key, see below
     movies: "{title} ({year})"
     series: "{title} ({year})"
+    sports: "{title}.{year?}"
 ```
 
 **The nested `folder` sub-key** controls output subfolders, and unshackle pops it out of
 `output_template`:
 
-- A **dict** sets per-kind folder templates (kinds: `movies`, `series`, `songs`, `albums`).
+- A **dict** sets per-kind folder templates (kinds: `movies`, `series`, `sports`, `songs`, `albums`).
 - A **str** sets a single folder template for everything.
 
 unshackle validates templates on load and emits warnings for unknown variables, non-string
@@ -38,7 +40,7 @@ folder-kind keys.
     `absolute`, `date`, `quality`, `resolution`, `source`, `tag`, `track_number`, `artist`,
     `album_artist`, `album`, `disc`, `track_total`, `disc_total`, `release_type`, `genre`,
     `explicit`, `isrc`, `upc`, `label`, `audio`, `audio_channels`, `audio_full`, `atmos`,
-    `dual`, `multi`, `dubbed`, `video`, `hdr`, `hfr`, `edition`, `repack`, `lang_tag`,
+    `dual`, `multi`, `dubbed`, `video`, `hdr`, `hfr`, `3d`, `edition`, `repack`, `lang_tag`,
     `title_type`.
 
 !!! warning "`{part?}` is already inside `{season_episode}`"
@@ -57,7 +59,14 @@ folder-kind keys.
     or `{episode}`. Any series with a TVDB absolute order can use it, anime most often.
     Services can supply it, and
     [`--enrich`](../../guide/downloading.md#metadata-and-tagging) fills it in from TVDB.
-    Use `{absolute?}` so the name stays clean when it is unknown.
+    Use `{absolute?}` so the name stays clean when it is unknown. To keep the season and
+    continue the episode number instead (`S02E05`), use
+    [`--continuous-episodes`](../../guide/downloading.md#continuous-episode-numbers).
+
+!!! tip "`sports` names an event by year or date"
+    A service marks an event episode as sport, and that episode then uses the `sports`
+    templates. Without them it uses the `series` templates. For the variables and
+    examples, see [Sports events](../../guide/output-and-naming.md#sports-events).
 
 ## Tagging & naming keys
 
@@ -68,6 +77,35 @@ folder-kind keys.
 | `tag_imdb_tmdb` | bool | `true` | Write IMDb/TMDB/TVDB external-ID tags into the MKV (needs metadata providers). |
 | `chapter_fallback_name` | str | `""` | Fallback template for chapter names, e.g. `"Chapter {i:02}"`. |
 | `unicode_filenames` | bool | `false` | Allow Unicode in filenames; when `false`, names are ASCII-sanitised. |
+
+## `codec_names`
+
+- **Type:** `dict` &nbsp;·&nbsp; **Default:** `{}`
+
+Renames the codec and HDR names in the filename. Each map key is a name that unshackle writes by
+default, and its value is the name to write instead. The map applies to the `video`, `audio`,
+and `hdr` [template variables](../../guide/output-and-naming.md#template-variables), and so
+also to `audio_full`. A name that is not in the map stays as it is, and an empty value removes
+the name. You can also set `codec_names` for one service under `services`.
+
+```yaml title="unshackle.yaml"
+codec_names:
+  DDP: EAC3      # DDP5.1  -> EAC3.5.1
+  DD: AC3        # DD5.1   -> AC3.5.1
+  H.265: HEVC    # H.265   -> HEVC
+  HDR10P: HDR10+ # DV.HDR10P -> DV.HDR10+
+```
+
+For `hdr`, unshackle renames each part of a Dolby Vision label separately, so `HDR10P` also
+changes `DV.HDR10P` to `DV.HDR10+`. When an audio name ends in a digit, `audio_full` puts a
+separator before the channels: `EAC3.5.1`, not `EAC35.1`.
+
+The REST API fields `codec_display` and `range_display` use the same names and the same map.
+The `dl --export` file name does not use `codec_names`.
+
+!!! note "`tag_rules` see the new names"
+    unshackle evaluates [`tag_rules`](#tag_rules) after the rename. With the example above, a
+    rule must match `audio: EAC3`, not `audio: DDP`.
 
 ## `tag_rules`
 
@@ -91,7 +129,7 @@ Rule semantics:
 - A value can be a scalar or a list. A list matches if **any** entry matches.
 - Comparison is case-insensitive string equality.
 - The keys of `when` are the filename template variables for the release itself:
-  `title_type`, `quality`, `resolution`, `source`, `video`, `hdr`, `hfr`, `audio`,
+  `title_type`, `quality`, `resolution`, `source`, `video`, `hdr`, `hfr`, `3d`, `audio`,
   `audio_channels`, `audio_full`, `atmos`, `dual`, `multi`, `dubbed`, `edition`, `repack`,
   and `lang_tag`. Only these are available. unshackle adds the title's own fields (`title`,
   `year`, `season`, `episode`, and so on) after it evaluates the rules, so a condition cannot
@@ -105,8 +143,9 @@ Put the more specific rules first, because unshackle stops at the first match.
     Matching is exact, and `hdr` is a composite label for Dolby Vision titles: a DV title with
     an HDR10 base layer gives `DV.HDR`, and with an HDR10+ base layer `DV.HDR10P`. Plain `DV`
     does **not** match those. Name every variant you want, as the example above does. Note
-    also that HDR10 gives `HDR`, not `HDR10`. The full set of values is `HDR`, `HDR10P`, `DV`,
-    `DV.HDR`, `DV.HDR10P`, and `HLG`, as listed in the
+    also that HDR10 gives `HDR`, not `HDR10`, and so does a PQ video track with no HDR10
+    metadata. The full set of values is `HDR`, `HDR10P`, `DV`, `DV.HDR`, `DV.HDR10P`,
+    `HDRVivid`, and `HLG`, as listed in the
     [variable table](../../guide/output-and-naming.md#template-variables).
 
 ### Operators

@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<MPD type="static" xmlns="urn:mpeg:dash:schema:mpd:2011" xmlns:dvb="urn:dvb:dash-extensions:2014-1" profiles="urn:dvb:dash:profile:dvb-dash:2014,urn:dvb:dash:profile:dvb-dash:isoff-ext-live:2014" minBufferTime="PT2.337S" maxSegmentDuration="PT10S" mediaPresentationDuration="PT10M31.960S">
+	<!-- MPEG DASH encoding of Elephants Dream with Audio, Video and EBU-TT-D Subtitles -->
+	<!-- BBC Research & Development -->
+	<!-- For more information see http://rdmedia.bbc.co.uk -->
+	<!-- Email dash@rd.bbc.co.uk -->
+	<ProgramInformation>
+		<Title>Elephants Dream</Title>
+		<Source>www.elephantsdream.org</Source>
+		<Copyright>(c) copyright 2006, Blender Foundation / Netherlands Media Art Institute</Copyright>
+	</ProgramInformation>
+	<BaseURL serviceLocation="A" dvb:priority="1" dvb:weight="1">https://vod-dash-ww-rd-live.akamaized.net/elephants_dream/1/</BaseURL>
+	<Period duration="PT10M31.960S" start="PT0S">
+		<AdaptationSet startWithSAP="2" segmentAlignment="true" id="1" sar="1:1" frameRate="25" contentType="video" mimeType="video/mp4">
+			<Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"/>
+			<BaseURL>avc3/</BaseURL>
+			<SegmentTemplate timescale="1000" duration="3840" media="$RepresentationID$/$Number%06d$.m4s" initialization="$RepresentationID$/IS.mp4"/>
+			<Representation id="1920x1080p25" codecs="avc3.640028" height="1080" width="1920" scanType="interlaced" bandwidth="13178360" />
+			<Representation id="896x504p25" codecs="avc3.64001f" height="504" width="896" scanType="progressive" bandwidth="3693344" />
+			<Representation id="704x396p25" codecs="avc3.4d401e" height="396" width="704" scanType="progressive" bandwidth="1792632" />
+			<Representation id="512x288p25" codecs="avc3.4d4015" height="288" width="512" scanType="progressive" bandwidth="863032" />
+			<Representation id="1280x720p25" codecs="avc3.640020" height="720" width="1280" scanType="progressive" bandwidth="6556136" />
+		</AdaptationSet>
+		<AdaptationSet startWithSAP="2" segmentAlignment="true" id="3" codecs="mp4a.40.2" audioSamplingRate="48000" lang="eng" contentType="audio" mimeType="audio/mp4">
+			<AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2"/>
+			<Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"/>
+			<BaseURL>audio/</BaseURL>
+			<SegmentTemplate startNumber="1" timescale="1000" duration="3840" media="$RepresentationID$/$Number%06d$.m4s" initialization="$RepresentationID$/IS.mp4"/>
+			<Representation id="128kbps" bandwidth="128000"/>
+		</AdaptationSet>
+		<AdaptationSet startWithSAP="2" segmentAlignment="true" id="5" codecs="stpp" lang="eng" contentType="text" mimeType="application/mp4">
+			<Accessibility schemeIdUri="urn:tva:metadata:cs:AudioPurposeCS:2007" value="2"/>
+			<Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"/>
+			<BaseURL>subs/</BaseURL>
+			<SegmentTemplate startNumber="1" timescale="1000" duration="10000" media="$RepresentationID$/$Number%05d$.m4s" initialization="$RepresentationID$/IS.mp4"/>
+			<Representation id="english-hh" bandwidth="1100"/>
+		</AdaptationSet>
+	</Period>
+	<Metrics metrics="DVBErrors">
+		<Reporting schemeIdUri="urn:dvb:dash:reporting:2014" value="1" dvb:reportingUrl="https://rdmedia.api.bbc.co.uk/dvb-errors/errors" dvb:probability="50"/>
+	</Metrics>
+</MPD>

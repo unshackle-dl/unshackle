@@ -38,17 +38,19 @@ def test_api_error_default_http_status_per_code() -> None:
         APIErrorCode.TRACK_NOT_FOUND: 404,
         APIErrorCode.CONFLICT: 409,
         APIErrorCode.RATE_LIMITED: 429,
-        APIErrorCode.INTERNAL_ERROR: 500,
-        APIErrorCode.DOWNLOAD_ERROR: 500,
-        APIErrorCode.WORKER_ERROR: 500,
-        APIErrorCode.SERVICE_ERROR: 502,
-        APIErrorCode.DRM_ERROR: 502,
-        APIErrorCode.NETWORK_ERROR: 503,
-        APIErrorCode.SERVICE_UNAVAILABLE: 503,
+        APIErrorCode.INTERNAL_ERROR: 422,
+        APIErrorCode.DOWNLOAD_ERROR: 422,
+        APIErrorCode.WORKER_ERROR: 422,
+        APIErrorCode.SERVICE_ERROR: 422,
+        APIErrorCode.DRM_ERROR: 422,
+        APIErrorCode.NETWORK_ERROR: 424,
+        APIErrorCode.SERVICE_UNAVAILABLE: 424,
+        APIErrorCode.SERVER_DRAINING: 409,
     }
     assert {c.name for c in cases} == {c.name for c in APIErrorCode}
     for code, expected in cases.items():
         assert APIError(code, "x").http_status == expected, code
+    assert all(status < 500 for status in cases.values())
 
 
 def test_api_error_explicit_http_status_overrides_default() -> None:
@@ -68,7 +70,7 @@ def test_build_error_response_from_api_error() -> None:
     body = _body(resp)
     assert body["status"] == "error"
     assert body["error_code"] == "SESSION_NOT_FOUND"
-    assert body["message"] == "no such session"
+    assert body["message"] == f"no such session (ref {body['ref']})"
     assert body["details"] == {"session_id": "abc"}
     assert "retryable" not in body
     assert "debug_info" not in body
@@ -83,10 +85,16 @@ def test_build_error_response_retryable_flag() -> None:
 
 def test_build_error_response_from_generic_exception() -> None:
     resp = build_error_response(RuntimeError("oops"))
-    assert resp.status == 500
+    assert resp.status == 422
     body = _body(resp)
     assert body["error_code"] == "INTERNAL_ERROR"
-    assert body["message"] == "oops"
+    assert body["message"] == f"oops (ref {body['ref']})"
+
+
+def test_categorize_fallback_names_no_exception_class() -> None:
+    err = categorize_exception(RuntimeError("oops"), context={"op": "x"})
+    assert err.error_code == APIErrorCode.INTERNAL_ERROR
+    assert err.details == {"op": "x"}
 
 
 def test_build_error_response_debug_mode_includes_traceback() -> None:
@@ -108,10 +116,10 @@ def test_build_error_response_debug_mode_includes_traceback() -> None:
         (TimeoutError("read timeout"), APIErrorCode.NETWORK_ERROR),
         (Exception("Not available in your region"), APIErrorCode.GEOFENCE),
         (Exception("Service is geoblocked in GB"), APIErrorCode.GEOFENCE),
+        (Exception("Content is geo-blocked."), APIErrorCode.GEOFENCE),
+        (Exception("Manifest request failed: GeoLocationBlocked"), APIErrorCode.GEOFENCE),
         (
-            Exception(
-                "Service is not available in your region (GB). Pass --proxy with a proxy outside the blocked regions."
-            ),
+            Exception("Service is not available in your region (GB)"),
             APIErrorCode.GEOFENCE,
         ),
         (Exception("Title not found"), APIErrorCode.NOT_FOUND),
@@ -151,15 +159,15 @@ def test_handle_api_exception_categorizes_generic() -> None:
     "exc, status, code, retryable",
     [
         (Exception("Invalid credentials provided"), 401, "AUTH_FAILED", False),
-        (Exception("Connection refused"), 503, "NETWORK_ERROR", True),
-        (TimeoutError("read timeout"), 503, "NETWORK_ERROR", True),
+        (Exception("Connection refused"), 424, "NETWORK_ERROR", True),
+        (TimeoutError("read timeout"), 424, "NETWORK_ERROR", True),
         (Exception("Not available in your region"), 403, "GEOFENCE", False),
         (Exception("Title not found"), 404, "NOT_FOUND", False),
         (Exception("HTTP 429 too many requests"), 429, "RATE_LIMITED", True),
-        (Exception("DRM license fetch failed"), 502, "DRM_ERROR", False),
-        (Exception("503 service unavailable"), 503, "SERVICE_UNAVAILABLE", True),
+        (Exception("DRM license fetch failed"), 422, "DRM_ERROR", False),
+        (Exception("503 service unavailable"), 424, "SERVICE_UNAVAILABLE", True),
         (ValueError("malformed body"), 400, "INVALID_INPUT", False),
-        (RuntimeError("totally novel failure xyz"), 500, "INTERNAL_ERROR", False),
+        (RuntimeError("totally novel failure xyz"), 422, "INTERNAL_ERROR", False),
     ],
 )
 def test_error_contract_generic_exception(exc: Exception, status: int, code: str, retryable: bool) -> None:
@@ -176,6 +184,38 @@ def test_error_contract_apierror_passthrough_full_shape() -> None:
     assert resp.status == 429
     body = _body(resp)
     assert body["error_code"] == "RATE_LIMITED"
-    assert body["message"] == "slow down"
+    assert body["message"] == f"slow down (ref {body['ref']})"
     assert body["details"] == {"retry_after": 5}
     assert body["retryable"] is True
+
+
+async def test_outer_middleware_never_answers_5xx(aiohttp_client) -> None:
+    from aiohttp import web
+
+    from unshackle.core.api.routes import no_5xx_middleware
+
+    async def broken(request: web.Request) -> web.Response:
+        raise KeyError(request.headers["X-Secret-Key"])
+
+    async def subapp_500(_request: web.Request) -> web.Response:
+        return web.json_response({"status": 500, "message": "device error"}, status=500)
+
+    app = web.Application(middlewares=[no_5xx_middleware])
+    app.router.add_get("/broken", broken)
+    app.router.add_get("/subapp", subapp_500)
+    client = await aiohttp_client(app)
+
+    resp = await client.get("/broken", headers={"X-Secret-Key": "leaky-key"})
+    assert resp.status == 422
+    body = await resp.json()
+    assert body["error_code"] == "INTERNAL_ERROR" and "leaky-key" not in json.dumps(body)
+
+    resp = await client.get("/subapp")
+    assert resp.status == 422 and (await resp.json())["message"] == "device error"
+    assert (await client.get("/missing")).status == 404
+
+
+def test_categorize_system_exit_is_a_service_error() -> None:
+    err = categorize_exception(SystemExit(1), {"service": "EXAMPLE"})
+    assert err.error_code == APIErrorCode.SERVICE_ERROR
+    assert err.message == "Service EXAMPLE exited"

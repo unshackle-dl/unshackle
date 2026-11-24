@@ -158,7 +158,7 @@ def test_a_music_post_script_command_builds_the_argv_a_script_would_get(monkeypa
     dispatch("success", "file", context)
 
     for _ in range(100):
-        if marker.exists():
+        if marker.exists() and marker.stat().st_size:
             break
         import time
 

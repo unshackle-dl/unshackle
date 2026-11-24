@@ -22,6 +22,7 @@ from unshackle.core.api.handlers import (
     validate_download_parameters,
     validate_service,
 )
+from unshackle.core.config import config
 from unshackle.core.titles.episode import Episode
 from unshackle.core.titles.movie import Movie
 from unshackle.core.tracks import Audio, Subtitle, Video
@@ -172,6 +173,22 @@ def test_serialize_video_track_basic() -> None:
     assert "url" not in d
 
 
+def test_display_labels_match_the_filename_labels(monkeypatch: pytest.MonkeyPatch) -> None:
+    """codec_display and range_display use the filename names, after any codec_names override."""
+    hevc = video(codec=Video.Codec.HEVC, range_=Video.Range.DV)
+    hevc.hdr10_base = True
+    assert serialize_audio_track(audio(codec=Audio.Codec.EC3))["codec_display"] == "DDP"
+    assert (serialize_video_track(hevc)["codec_display"], serialize_video_track(hevc)["range_display"]) == (
+        "H.265",
+        "DV+HDR",
+    )
+    assert serialize_video_track(video(codec=Video.Codec.VC1))["codec_display"] == "VC-1"
+
+    monkeypatch.setattr(config, "codec_names", {"DDP": "EAC3", "H.265": "HEVC"})
+    assert serialize_audio_track(audio(codec=Audio.Codec.EC3))["codec_display"] == "EAC3"
+    assert serialize_video_track(hevc)["codec_display"] == "HEVC"
+
+
 def test_serialize_video_track_include_url() -> None:
     d = serialize_video_track(video(), include_url=True)
     assert d["url"] == "https://example.com/v.mpd"
@@ -272,13 +289,17 @@ def test_validate_download_params_accepts_defaults() -> None:
     "data, fragment",
     [
         ({"vcodec": "WUT"}, "Invalid vcodec"),
-        ({"vcodec": 123}, "vcodec must be a string or list"),
+        ({"vcodec": 123}, "Invalid vcodec"),
         ({"acodec": "MP9"}, "Invalid acodec"),
         ({"sub_format": "doc"}, "Invalid sub_format"),
         ({"vbitrate": -1}, "vbitrate"),
         ({"abitrate": "no"}, "abitrate"),
-        ({"vbitrate_range": "no-dash-but-letters"}, None),
-        ({"vbitrate_range": "nope"}, "MIN-MAX"),
+        ({"vbitrate_range": "no-dash-but-letters"}, "MIN-MAX"),
+        ({"vbitrate": 5000, "vbitrate_range": "1-2"}, "vbitrate and vbitrate_range"),
+        ({"abitrate": 128, "abitrate_range": "96-256"}, "abitrate and abitrate_range"),
+        ({"abitrate_range": "1-2-3"}, "MIN-MAX"),
+        ({"quality": "4k"}, "Invalid quality"),
+        ({"quality": [0]}, "above 0"),
         ({"channels": -3}, "channels"),
         ({"workers": 0}, "workers"),
         ({"downloads": 0}, "downloads"),
@@ -287,7 +308,7 @@ def test_validate_download_params_accepts_defaults() -> None:
         ({"no_audio": True, "audio_only": True}, "no_audio and audio_only"),
         ({"require_subs": "en"}, "require_subs must be an array"),
         ({"range": "UHD"}, "Invalid range"),
-        ({"range": ["SDR", "UHD"]}, "Invalid range value"),
+        ({"range": ["SDR", "UHD"]}, "Invalid range"),
     ],
 )
 def test_validate_download_params_errors(data: dict, fragment) -> None:
@@ -308,8 +329,6 @@ def test_validate_download_params_accepts_valid_values() -> None:
                 "sub_format": "VTT",
                 "vbitrate": 6000,
                 "abitrate": 128,
-                "vbitrate_range": "6000-7000",
-                "abitrate_range": "96-192",
                 "channels": 5.1,
                 "workers": 8,
                 "downloads": 2,
@@ -318,6 +337,11 @@ def test_validate_download_params_accepts_valid_values() -> None:
         )
         is None
     )
+
+
+@pytest.mark.parametrize("vrange", ["6000-7000", "7000-6000", " 6000 - 7000 "])
+def test_validate_download_params_accepts_valid_bitrate_ranges(vrange: str) -> None:
+    assert validate_download_parameters({"vbitrate_range": vrange, "abitrate_range": "96-192"}) is None
 
 
 async def test_search_missing_service_raises_invalid_input() -> None:

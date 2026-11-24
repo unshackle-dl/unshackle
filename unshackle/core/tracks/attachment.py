@@ -8,13 +8,10 @@ from typing import Optional, Union
 from urllib.parse import urlparse
 from zlib import crc32
 
-import requests
-
 from unshackle.core.config import config
 from unshackle.core.constants import DOWNLOAD_LICENCE_ONLY
-from unshackle.core.session import RnetSession
-
-AnySession = Union[requests.Session, RnetSession]
+from unshackle.core.session import AnySession
+from unshackle.core.utils import run_proxy
 
 
 class Attachment:
@@ -26,7 +23,7 @@ class Attachment:
         mime_type: Optional[str] = None,
         description: Optional[str] = None,
         session: Optional[AnySession] = None,
-    ):
+    ) -> None:
         """
         Make a new Attachment.
 
@@ -104,31 +101,31 @@ class Attachment:
         no_proxy_download: bool = False,
         proxy_download: Optional[str] = None,
     ) -> None:
-        """Download a URL-backed attachment to the temp directory."""
+        """Download a URL-backed attachment to the temp directory with the same retries as a track."""
         if self.path is not None or not self.url or DOWNLOAD_LICENCE_ONLY.is_set():
             return
 
+        from unshackle.core.downloaders.requests import download
         from unshackle.core.tracks.track import direct_session
 
-        session = session or self.session or requests.Session()
+        session = session or self.session or run_proxy.fallback_session()
         if no_proxy_download:
             if any(session.proxies.values()):
                 session = direct_session(session)
         elif proxy_download:
             session = direct_session(session, proxy_download)
 
-        download_path = config.directories.temp / (self.file_name or "attachment")
+        download_path = (
+            config.directories.temp / f"{crc32(self.url.encode('utf8')):08x}_{self.file_name or 'attachment'}"
+        )
         try:
-            response = session.get(self.url, stream=True)
-            response.raise_for_status()
-            download_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(download_path, "wb") as f:
-                for chunk in response.iter_content(chunk_size=8192):
-                    f.write(chunk)
+            for _ in download(self.url, download_path, session=session):
+                pass
         except Exception as e:
-            raise ValueError(f"Failed to download attachment from URL: {e}")
-
-        self.path = download_path
+            e.add_note(f"attachment {self.name}")
+            raise
+        if download_path.exists():
+            self.path = download_path
 
     def __repr__(self) -> str:
         return "{name}({items})".format(
@@ -136,7 +133,7 @@ class Attachment:
         )
 
     def __str__(self) -> str:
-        return " | ".join(filter(bool, ["ATT", self.name, self.mime_type, self.description]))
+        return " | ".join(filter(None, ["ATT", self.name, self.mime_type, self.description]))
 
     def to_dict(self) -> dict[str, Optional[str]]:
         """Serialise a URL-backed attachment for export/import."""

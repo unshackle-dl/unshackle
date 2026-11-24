@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from collections import Counter, defaultdict
 
 import pytest
 from aiohttp import web
@@ -39,13 +40,10 @@ def make_app():
 
 
 def no_key_required_auth():
-    """Mirror serve.py's api_key_authentication middleware: required X-Secret-Key
-    on every endpoint except /api/health."""
+    """Mirror serve.py's api_key_authentication middleware: a required X-Secret-Key on every endpoint."""
 
     @web.middleware
     async def mw(request, handler):
-        if request.path == "/api/health":
-            return await handler(request)
         secret = request.headers.get("X-Secret-Key")
         if not secret:
             return web.json_response({"status": 401, "message": "Secret Key is Empty."}, status=401)
@@ -131,7 +129,7 @@ async def test_api_handler_maps_apierror(aiohttp_client) -> None:
     body = await resp.json()
     assert body["status"] == "error"
     assert body["error_code"] == "NOT_FOUND"
-    assert body["message"] == "nope"
+    assert body["message"] == f"nope (ref {body['ref']})"
     assert body["details"] == {"x": 1}
 
 
@@ -173,12 +171,48 @@ async def test_heartbeat_keeps_slow_request_alive(aiohttp_client, monkeypatch: p
     assert resp.status == 200 and body["status"] == "error" and body["error_code"] == "SERVICE_ERROR"
 
 
+@pytest.mark.parametrize("delay", [0, 0.2])
+async def test_heartbeat_answers_a_service_exit_and_keeps_serving(
+    aiohttp_client, monkeypatch: pytest.MonkeyPatch, delay: float
+) -> None:
+    """A SystemExit inside the heartbeat task becomes a SERVICE_ERROR instead of stopping the event loop."""
+    monkeypatch.setattr(routes, "HEARTBEAT_INTERVAL", 0.05)
+
+    @heartbeat
+    async def exits(request: web.Request) -> web.Response:
+        await asyncio.sleep(delay)
+        raise SystemExit(1)
+
+    app = web.Application()
+    app["debug_api"] = False
+    app.router.add_get("/exits", api_handler(exits))
+    client = await aiohttp_client(app)
+
+    for _ in range(2):
+        resp = await client.get("/exits")
+        assert json.loads(await resp.text())["error_code"] == "SERVICE_ERROR"
+
+
+async def test_unguarded_route_answers_a_service_exit(aiohttp_client) -> None:
+    async def exits(request: web.Request) -> web.Response:
+        raise SystemExit(1)
+
+    app = web.Application(middlewares=[routes.no_5xx_middleware])
+    app.router.add_get("/exits", exits)
+    client = await aiohttp_client(app)
+
+    for _ in range(2):
+        resp = await client.get("/exits")
+        assert resp.status == 422 and (await resp.json())["error_code"] == "SERVICE_ERROR"
+
+
 async def test_heartbeat_late_error_counts_as_rejected(aiohttp_client, monkeypatch: pytest.MonkeyPatch) -> None:
     """Stats count a late failure by its real status and the bytes the stream sent (with framing), not as an empty 200."""
     from unshackle.core.api.stats import stats, stats_middleware
 
     monkeypatch.setattr(routes, "HEARTBEAT_INTERVAL", 0.05)
     monkeypatch.setattr(stats, "keys", {})
+    monkeypatch.setattr(stats, "errors", defaultdict(Counter))
 
     @heartbeat
     async def slow_fail(request: web.Request) -> web.Response:
@@ -194,6 +228,34 @@ async def test_heartbeat_late_error_counts_as_rejected(aiohttp_client, monkeypat
     sent = len(await resp.read())
     (entry,) = stats.keys.values()
     assert resp.status == 200 and entry.rejected == 1 and entry.bytes_out >= sent > 0
+    assert stats.errors == {"-": {"SERVICE_ERROR": 1}}
+
+
+@pytest.mark.usefixtures("example_service")
+@pytest.mark.parametrize(("service", "counted_as"), [("EXAMPLE", "EXAMPLE"), ("NOT_INSTALLED", "-")])
+async def test_error_is_counted_by_service_and_logged_with_its_ref(
+    aiohttp_client, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture, service: str, counted_as: str
+) -> None:
+    """A gzipped error still reaches the stats: counted under an installed service only, and logged with its ref."""
+    from unshackle.core.api.stats import stats, stats_middleware
+
+    monkeypatch.setattr(stats, "errors", defaultdict(Counter))
+
+    @api_handler
+    async def fail(request: web.Request) -> web.Response:
+        await request.json()
+        raise APIError(APIErrorCode.SERVICE_ERROR, "denied", details={"pad": "x" * 300})
+
+    app = web.Application(middlewares=[stats_middleware, compression_middleware])
+    app["debug_api"] = False
+    app.router.add_post("/fail", fail)
+    client = await aiohttp_client(app)
+
+    resp = await client.post("/fail", json={"service": service}, headers={"Accept-Encoding": "gzip"})
+    body = await resp.json()
+    assert resp.headers["Content-Encoding"] == "gzip"
+    assert stats.errors == {counted_as: {"SERVICE_ERROR": 1}}
+    assert f"Error ref {body['ref']}: SERVICE_ERROR 422 POST /fail service={counted_as}" in caplog.text
 
 
 async def test_heartbeat_client_disconnect_is_quiet(
@@ -232,13 +294,7 @@ async def test_cors_preflight_returns_headers(make_app, aiohttp_client) -> None:
     assert "X-Secret-Key" in resp.headers["Access-Control-Allow-Headers"]
 
 
-async def test_health_endpoint_responds_ok(make_app, aiohttp_client, monkeypatch: pytest.MonkeyPatch) -> None:
-    from unshackle.core.api import routes as routes_mod
-
-    async def no_update(_):
-        return None
-
-    monkeypatch.setattr(routes_mod.UpdateChecker, "check_for_updates", no_update)
+async def test_health_endpoint_responds_ok(make_app, aiohttp_client) -> None:
     app = make_app(remote_only=True)
     client = await aiohttp_client(app)
     resp = await client.get("/api/health")
@@ -248,18 +304,44 @@ async def test_health_endpoint_responds_ok(make_app, aiohttp_client, monkeypatch
     assert "version" in body
 
 
-async def test_health_bypasses_api_key_auth_middleware(make_app, aiohttp_client, monkeypatch) -> None:
-    from unshackle.core.api import routes as routes_mod
+async def test_every_response_carries_a_generic_server_header(make_app, aiohttp_client) -> None:
+    """Returned, raised (404, 405) and streamed responses all lose aiohttp's version banner."""
 
-    async def no_update(_):
-        return None
+    async def stream(request: web.Request) -> web.StreamResponse:
+        response = web.StreamResponse()
+        await response.prepare(request)
+        await response.write(b"x")
+        return response
 
-    monkeypatch.setattr(routes_mod.UpdateChecker, "check_for_updates", no_update)
-
-    app = make_app(remote_only=True, with_auth_middleware=True)
+    app = make_app(remote_only=True)
+    app.router.add_get("/stream", stream)
     client = await aiohttp_client(app)
-    resp = await client.get("/api/health")
-    assert resp.status == 200
+    for method, path in [("GET", "/api/health"), ("DELETE", "/api/health"), ("GET", "/api/nope"), ("GET", "/stream")]:
+        resp = await client.request(method, path)
+        assert resp.headers["Server"] == "unshackle", (method, path, resp.status)
+
+
+async def test_services_load_errors_go_to_the_admin_key_only(
+    make_app, aiohttp_client, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from unshackle.core import services as services_module
+    from unshackle.core.config import config
+
+    monkeypatch.setattr(services_module, "LOAD_ERRORS", ["BAD: failed to import - ImportError: boom"])
+    monkeypatch.setattr(config, "serve", {"api_secret": "admin", "users": {"user": {"services": ["EXAMPLE"]}}})
+    client = await aiohttp_client(make_app(remote_only=True))
+    user = await (await client.get("/api/services", headers={"X-Secret-Key": "user"})).json()
+    admin = await (await client.get("/api/services", headers={"X-Secret-Key": "admin"})).json()
+    assert user["load_errors"] == []
+    assert admin["load_errors"] == ["BAD: failed to import - ImportError: boom"]
+
+
+async def test_health_needs_an_api_key(make_app, aiohttp_client) -> None:
+    app = make_app(remote_only=True, with_auth_middleware=True)
+    app["config"]["users"]["good-key"] = {}
+    client = await aiohttp_client(app)
+    assert (await client.get("/api/health")).status == 401
+    assert (await client.get("/api/health", headers={"X-Secret-Key": "good-key"})).status == 200
 
 
 async def test_auth_middleware_rejects_missing_key(make_app, aiohttp_client) -> None:
@@ -294,3 +376,13 @@ def test_setup_routes_cdm_only_keeps_health_and_dashboard_only() -> None:
     assert "/api/health" in paths
     assert any(path.startswith("/api/dashboard/") for path in paths)
     assert all(path == "/api/health" or path.startswith("/api/dashboard/") for path in paths)
+
+
+def test_setup_routes_with_docs_registers_each_route_once() -> None:
+    """Swagger registers the routes itself, so docs add none twice and drop none."""
+    plain, documented = web.Application(), web.Application()
+    setup_routes(plain, dashboard=True)
+    setup_routes(documented, dashboard=True, docs=True)
+    routes_with_docs = Counter((r.method, r.resource.canonical) for r in documented.router.routes())
+    assert max(routes_with_docs.values()) == 1
+    assert {route for route in routes_with_docs if not route[1].startswith("/api/docs")} == set(collect_paths(plain))

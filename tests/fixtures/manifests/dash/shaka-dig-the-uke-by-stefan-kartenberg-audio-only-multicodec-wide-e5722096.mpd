@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--Generated with https://github.com/google/shaka-packager version ec904f3f79-debug-->
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xlink="http://www.w3.org/1999/xlink" xsi:schemaLocation="urn:mpeg:dash:schema:mpd:2011 DASH-MPD.xsd" xmlns:cenc="urn:mpeg:cenc:2013" profiles="urn:mpeg:dash:profile:isoff-on-demand:2011" minBufferTime="PT2S" type="static" mediaPresentationDuration="PT177.622S">
+  <Period id="0">
+    <AdaptationSet id="0" contentType="audio" lang="xxx" subsegmentAlignment="true">
+      <ContentProtection value="cenc" schemeIdUri="urn:mpeg:dash:mp4protection:2011" cenc:default_KID="fb4a09a6-7eb4-5686-8be6-ef0903045e37"/>
+      <ContentProtection schemeIdUri="urn:uuid:edef8ba9-79d6-4ace-a3c8-27dcd51d21ed">
+        <cenc:pssh>AAAAmXBzc2gAAAAA7e+LqXnWSs6jyCfc1R0h7QAAAHkSEEupw2PLXlQYkCp6Gcj71B4SELgTYXMT+FAogpWwmh9WF4ESEDXPlaHGb1TSnEgW9dvjTGMSECLuZCp/CF6ZgoQd3LKIni4SEPtKCaZ+tFaGi+bvCQMEXjcaDXdpZGV2aW5lX3Rlc3QiCA0SPLKIcQQISOPclZsG</cenc:pssh>
+      </ContentProtection>
+      <Representation id="0" bandwidth="140007" codecs="mp4a.40.2" mimeType="audio/mp4" audioSamplingRate="48000">
+        <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2"/>
+        <BaseURL>a-xxx-0128k-aac.mp4</BaseURL>
+        <SegmentBase indexRange="1057-1628" timescale="48000">
+          <Initialization range="0-1056"/>
+        </SegmentBase>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="1" contentType="audio" lang="xxx">
+      <ContentProtection schemeIdUri="urn:uuid:edef8ba9-79d6-4ace-a3c8-27dcd51d21ed" cenc:default_KID="fb4a09a6-7eb4-5686-8be6-ef0903045e37">
+        <cenc:pssh>AAAAmXBzc2gAAAAA7e+LqXnWSs6jyCfc1R0h7QAAAHkSEEupw2PLXlQYkCp6Gcj71B4SELgTYXMT+FAogpWwmh9WF4ESEDXPlaHGb1TSnEgW9dvjTGMSECLuZCp/CF6ZgoQd3LKIni4SEPtKCaZ+tFaGi+bvCQMEXjcaDXdpZGV2aW5lX3Rlc3QiCA0SPLKIcQQISOPclZsG</cenc:pssh>
+      </ContentProtection>
+      <Representation id="1" bandwidth="142525" codecs="opus" mimeType="audio/webm" audioSamplingRate="48000">
+        <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2"/>
+        <BaseURL>a-xxx-0128k-libopus.webm</BaseURL>
+        <SegmentBase indexRange="371-1122" timescale="1000000">
+          <Initialization range="0-370"/>
+        </SegmentBase>
+      </Representation>
+    </AdaptationSet>
+  </Period>
+</MPD>

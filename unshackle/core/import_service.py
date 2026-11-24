@@ -16,12 +16,12 @@ from langcodes import tag_is_valid
 from unshackle.core.config import config
 from unshackle.core.constants import AnyTrack
 from unshackle.core.credential import Credential
-from unshackle.core.drm import drm_from_dict, real_kids
-from unshackle.core.manifests import DASH, HLS, ISM
+from unshackle.core.drm import ClearKey, MonaLisa, drm_from_dict, real_kids
+from unshackle.core.manifests import DASH, HLS, ISM, MissingLanguageError, snapshot
 from unshackle.core.remote_service import (
     RemoteService,
+    ServerKeySource,
     build_title,
-    match_track,
     resolve_proxy_arg,
     segment_uri_filter,
 )
@@ -30,11 +30,12 @@ from unshackle.core.titles import Episode, Movies, Series, Title_T, Titles_T, re
 from unshackle.core.tracks import Audio, Chapter, Chapters, Subtitle, Tracks, Video
 from unshackle.core.tracks.attachment import Attachment
 from unshackle.core.tracks.track import Track
+from unshackle.core.utils import run_proxy
 
 log = logging.getLogger("import")
 E = TypeVar("E", bound=Enum)
 
-PARSERS = {"DASH": DASH, "HLS": HLS, "ISM": ISM}
+PARSERS: dict[str, type[DASH] | type[HLS] | type[ISM]] = {"DASH": DASH, "HLS": HLS, "ISM": ISM}
 MANIFEST_DATA_KEYS = {"DASH": "dash", "ISM": "ism"}
 
 
@@ -88,6 +89,20 @@ def hls_playlist_kids(track: Any, session: Optional[requests.Session] = None) ->
     return None
 
 
+def content_period_filter(manifest: Any, kept: Any, title: Any) -> Optional[Callable[[Any], bool]]:
+    """A DASH period_filter that drops every period not in ``kept``, the export's ``content_periods`` for this manifest.
+
+    None when there is nothing to filter, or when no kept id is in the re-fetched manifest: the server can name its
+    periods again on each fetch, so the import then warns and keeps every period.
+    """
+    if not kept or not isinstance(manifest, DASH):
+        return None
+    if not set(kept) & {p.get("id") for p in manifest.manifest.findall("Period")}:
+        log.warning(f"No exported content period of '{title}' is in its re-fetched DASH manifest, keeping every period")
+        return None
+    return lambda period: period.get("id") not in kept
+
+
 def resolve_import_manifest_data(
     tracks: Tracks,
     manifest_type: Optional[str],
@@ -95,13 +110,16 @@ def resolve_import_manifest_data(
     session: requests.Session,
     language: Any,
     title: Title_T,
+    saved: Optional[dict[str, Any]] = None,
+    content_periods: Optional[dict[str, list[str]]] = None,
 ) -> None:
     """Fill ``track.data`` for DASH/ISM tracks rebuilt from export dicts.
 
     Exports can be without ``manifest_url`` (for example, when the service never set
-    ``title.tracks.manifest_url``) or carry one MPD per adaptation set. ``Track.from_dict``
-    does not serialise manifest XML, so each exported track's ``url`` is re-fetched and
-    matched to a locally parsed representation before download.
+    ``title.tracks.manifest_url``) or carry one MPD per adaptation set. A track takes its
+    data from the export's manifest snapshot first; else its ``url`` is re-fetched and
+    matched to a locally parsed representation before download. A track that matches none is
+    dropped with a warning, since without its manifest data it fails only when it downloads.
     """
     if manifest_type not in MANIFEST_DATA_KEYS:
         return
@@ -113,34 +131,46 @@ def resolve_import_manifest_data(
         for track in [*tracks.videos, *tracks.audio, *tracks.subtitles]
         if track.descriptor.name == manifest_type and not track.data.get(data_key)
     ]
+    fallback_lang = fallback_language(language)
+    snapshot.restore(Tracks(*pending), saved, language=fallback_lang)
+    pending = [track for track in pending if not track.data.get(data_key)]
     if not pending:
         return
 
-    fallback_lang = fallback_language(language)
     for url in {str(track.url) for track in pending if track.url}:
         try:
             manifest = parser.from_url(url=url, session=session)
-            parsed = manifest.to_tracks(language=fallback_lang)
+            kept = content_period_filter(manifest, (content_periods or {}).get(url), title)
+            parsed = (
+                manifest.to_tracks(language=fallback_lang, period_filter=kept)
+                if kept and isinstance(manifest, DASH)
+                else manifest.to_tracks(language=fallback_lang)
+            )
+        except MissingLanguageError:
+            raise click.ClickException(
+                f"No language for '{title}': the {manifest_type} manifest has none and Title.language is unset"
+            )
         except ValueError as e:
-            if "Language information could not be derived" in str(e):
-                raise click.ClickException(
-                    f"No language for '{title}': the {manifest_type} manifest has none and the "
-                    f"service did not set Title.language."
-                )
-            raise click.ClickException(f"Failed to parse the {manifest_type} manifest for '{title}'. ({e})")
+            raise click.ClickException(f"Failed to parse the {manifest_type} manifest for '{title}': {e}")
         except Exception as e:
             raise click.ClickException(
-                f"Failed to fetch the {manifest_type} manifest for '{title}'. "
-                f"The manifest URL may have expired since export. ({e})"
+                f"Failed to fetch the {manifest_type} manifest for '{title}', the URL may have expired: {e}"
             )
 
         local_tracks = [*parsed.videos, *parsed.audio, *parsed.subtitles]
         for track in pending:
             if track.data.get(data_key) or str(track.url) != url:
                 continue
-            matched = match_track(track, local_tracks)
+            matched = snapshot.match_track(track, local_tracks)
             if matched and matched.data.get(data_key):
                 track.data.update(matched.data)
+
+    unmatched = {str(track.id) for track in pending if not track.data.get(data_key)}
+    for track_id in unmatched:
+        log.warning(f"Skipping exported track {track_id}: its {manifest_type} manifest no longer lists it")
+    tracks.select_video(lambda t: str(t.id) not in unmatched)
+    tracks.select_audio(lambda t: str(t.id) not in unmatched)
+    tracks.select_subtitles(lambda t: str(t.id) not in unmatched)
 
 
 def parse_codec(codec: type[E], parse: Callable[[str], E], value: Any) -> Optional[E]:
@@ -160,10 +190,7 @@ def video_range(value: Any) -> Optional[Video.Range]:
     name = str(value or "").upper()
     if name in Video.Range.__members__:
         return Video.Range[name]
-    try:
-        return Video.Range(name)
-    except ValueError:
-        return None
+    return next((r for r in Video.Range if r.value.upper() == name), None)
 
 
 def int_or_none(value: Any) -> Optional[int]:
@@ -178,15 +205,16 @@ class ImportService:
     """Reconstructs a download from an export JSON.
 
     ImportService does not authenticate and does not license. It rebuilds the tracks from
-    the export and injects the keys directly. ``_server_cdm``/``_server_cdm_type`` keep their
-    underscores: dl.py reads them through getattr as the server-CDM contract that skips
-    client licensing.
+    the export and injects the keys directly. It is a ``ServerKeySource``, so dl takes the keys
+    from the tracks and licenses nothing itself.
     """
 
     ALIASES: tuple[str, ...] = ()
     GEOFENCE: tuple[str, ...] = ()
     GEOBLOCK: tuple[str, ...] = ()
     NO_SUBTITLES: bool = False
+    server_cdm = True
+    local_cdm = None
 
     def __init__(self, ctx: click.Context, service_tag: str, title: str, import_file: Optional[str]) -> None:
         self.__class__.__name__ = service_tag
@@ -218,8 +246,7 @@ class ImportService:
         self.titles: Optional[Titles_T] = None
         self.tracks_by_title: dict[str, Tracks] = {}
 
-        self._server_cdm = True
-        self._server_cdm_type = "playready" if self.exported_drm_system() == "playready" else "widevine"
+        self.server_cdm_type = "playready" if self.exported_drm_system() == "playready" else "widevine"
 
         first = self.doc.titles[0]
         headers = (
@@ -260,8 +287,10 @@ class ImportService:
             "manifest_url": primary.url if primary else None,
             "manifest_type": manifest_type or None,
             "tracks": x.get("tracks") or {},
+            "snapshot": x.get("snapshot"),
             "chapters": entry.chapters,
             "attachments": x.get("attachments") or [],
+            "content_periods": {m.url: m.content_periods for m in entry.manifests if m.content_periods},
         }
 
     @staticmethod
@@ -293,11 +322,12 @@ class ImportService:
         except Exception as e:
             if explicit:
                 raise click.ClickException(f"Failed to resolve proxy '{proxy_query}': {e}")
-            log.warning(f"Could not auto-select a proxy for export region '{region}': {e}. Continuing without proxy.")
+            log.warning(f"No proxy for export region '{region}', continuing without one: {e}")
             proxy = None
 
         if proxy:
             session.proxies.update({"all": proxy})
+            run_proxy.pin(session)
             if not explicit:
                 log.info(f"No --proxy given; using export region '{region}' via your proxy provider.")
         return session
@@ -313,13 +343,30 @@ class ImportService:
         if self.titles is not None:
             return self.titles
         titles_list = [
-            build_title(entry.get("meta", {}), self.service_tag, fallback_id=title_id)
+            build_title(self.title_meta(entry), self.service_tag, fallback_id=title_id)
             for title_id, entry in self.titles_data.items()
         ]
         self.titles = (
             Series(titles_list) if titles_list and isinstance(titles_list[0], Episode) else Movies(titles_list)
         )
         return self.titles
+
+    @staticmethod
+    def title_meta(entry: dict[str, Any]) -> dict[str, Any]:
+        """The title meta, with the language of an exported track when the title has none.
+
+        A service can set no title language yet label its tracks. The manifest re-parse and
+        ``-l orig`` need a title language, so an original-language track gives it, else a video.
+        """
+        meta = entry.get("meta") or {}
+        if fallback_language(meta.get("language")):
+            return meta
+        source = min(
+            (d for d in (entry.get("tracks") or {}).values() if fallback_language(d.get("language"))),
+            key=lambda d: (not d.get("is_original_lang"), d.get("type") != "Video"),
+            default=None,
+        )
+        return {**meta, "language": source["language"]} if source else meta
 
     def get_titles_cached(self, title_id: Optional[str] = None) -> Titles_T:
         """Apply the service's title_map to titles reconstructed from the export sidecar."""
@@ -353,42 +400,49 @@ class ImportService:
 
         parser = PARSERS.get(manifest_type or "")
         if manifest_url and parser is not None and (manifest_type in ("DASH", "ISM") or not tracks_map):
-            try:
-                manifest = parser.from_url(url=manifest_url, session=self.session)
-            except Exception as e:
-                raise click.ClickException(
-                    f"Failed to fetch the {manifest_type} manifest for '{title}'. "
-                    f"The manifest URL may have expired since export. ({e})"
-                )
+            no_language = (
+                f"No language for '{title}': the {manifest_type} manifest has none and Title.language is unset"
+            )
             language = fallback_language(title.language)
-            if language is None and isinstance(manifest, HLS):
-                language = hls_audio_language(manifest)
-                if language is None:
-                    raise click.ClickException(
-                        f"No language for '{title}': the export gives no title language and the HLS "
-                        "manifest gives no audio language."
-                    )
             try:
-                parsed = manifest.to_tracks(language=language)
-            except ValueError as e:
-                if "Language information could not be derived" in str(e):
+                parsed = snapshot.parse(entry.get("snapshot"), str(manifest_url), language)
+            except MissingLanguageError:
+                raise click.ClickException(no_language)
+            if parsed is None:
+                try:
+                    manifest = parser.from_url(url=manifest_url, session=self.session)
+                except Exception as e:
                     raise click.ClickException(
-                        f"No language for '{title}': the {manifest_type} manifest has none and the "
-                        f"service did not set Title.language."
+                        f"Failed to fetch the {manifest_type} manifest for '{title}', the URL may have expired: {e}"
                     )
-                raise click.ClickException(f"Failed to parse the {manifest_type} manifest for '{title}'. ({e})")
-            except Exception as e:
-                raise click.ClickException(f"Failed to parse the {manifest_type} manifest for '{title}'. ({e})")
-            for track in parsed:
-                tracks.add(track)
+                if language is None and isinstance(manifest, HLS):
+                    language = hls_audio_language(manifest)
+                    if language is None:
+                        raise click.ClickException(
+                            f"No language for '{title}': the export and the HLS manifest have none"
+                        )
+                kept = content_period_filter(manifest, entry.get("content_periods", {}).get(manifest_url), title)
+                try:
+                    parsed = (
+                        manifest.to_tracks(language=language, period_filter=kept)
+                        if kept and isinstance(manifest, DASH)
+                        else manifest.to_tracks(language=language)
+                    )
+                except MissingLanguageError:
+                    raise click.ClickException(no_language)
+                except Exception as e:
+                    raise click.ClickException(f"Failed to parse the {manifest_type} manifest for '{title}': {e}")
+            for parsed_track in parsed:
+                tracks.add(parsed_track)
             parsed_ids = {str(t.id) for t in tracks}
             url_dicts = [t for t in tracks_map.values() if t.get("descriptor", "URL") == "URL"]
             manifest_base = str(manifest_url).split("?")[0]
+            fragments = snapshot.fragment_ids(entry.get("snapshot"))
             foreign_dicts = [
                 t
                 for t in tracks_map.values()
                 if t.get("descriptor") == manifest_type
-                and str(t.get("url")).split("?")[0] != manifest_base
+                and (str(t.get("url")).split("?")[0] != manifest_base or str(t.get("id")) in fragments)
                 and str(t.get("id")) not in parsed_ids
             ]
             track_dicts = [*url_dicts, *foreign_dicts]
@@ -425,6 +479,8 @@ class ImportService:
             session=self.session,
             language=title.language,
             title=title,
+            saved=entry.get("snapshot"),
+            content_periods=entry.get("content_periods"),
         )
 
         for attachment in entry.get("attachments") or []:
@@ -493,6 +549,7 @@ class ImportService:
                         width=int_or_none(row.get("width")),
                         height=int_or_none(row.get("height")),
                         fps=row.get("fps") or None,
+                        stereo=bool(row.get("stereo")),
                     )
                 else:
                     track = Audio(
@@ -607,6 +664,14 @@ class ImportService:
             drm_obj.content_keys[UUID(hex=kid_hex)] = key
         return [drm_obj]
 
+    def licenses_locally(self, track: AnyTrack) -> bool:
+        """Always False: an import licenses nothing."""
+        return False
+
+    def vault_source(self, kid: UUID, key: str) -> None:
+        """Always None: no server vault serves an import."""
+        return None
+
     def resolve_server_keys(self, title: Title_T) -> None:
         """Inject exported keys into the selected encrypted tracks by KID (no network).
 
@@ -639,13 +704,15 @@ class ImportService:
                     continue
                 keys = {kid: key for kid, key in pool.items() if kid in declared} if declared else pool
             if track.drm:
-                drm_obj = track.drm[0]
+                drm_obj: Any = next(iter(track.drm))
+                if isinstance(drm_obj, (ClearKey, MonaLisa)):
+                    continue
             else:
                 drm_obj = RemoteService.create_drm_stub(system, [kid.hex for kid in (declared or pool)])
             for kid, key in keys.items():
                 drm_obj.content_keys[kid] = key
             track.drm = [drm_obj]
-            self._server_cdm_type = drm_obj.__class__.__name__.lower()
+            self.server_cdm_type = drm_obj.__class__.__name__.lower()
 
     @classmethod
     def track_is_encrypted(cls, track: Any, session: Optional[requests.Session] = None) -> bool:
@@ -751,10 +818,13 @@ class ImportService:
             }
         )
         subject = f"KID {', '.join(kids)}" if kids else f"track {track}"
-        return click.ClickException(
-            f"The export has no content key for {subject}, and no vault has it. An import does not "
-            "license through a CDM: export the title again with the tracks you need selected."
-        )
+        return click.ClickException(f"The export has no content key to decrypt {subject}, and no vault has it")
+
+    def decrypts_samples(self, track: AnyTrack) -> bool:
+        return False
+
+    def get_sample_decrypter(self, track: AnyTrack, entry: int) -> bytes:
+        raise NotImplementedError("An import does not decrypt samples")
 
     def on_segment_downloaded(self, track: AnyTrack, segment: Any) -> None:
         pass
@@ -776,3 +846,7 @@ class ImportService:
             self.session.close()
         except Exception:
             pass
+
+
+SERVER_KEY_SOURCES: tuple[type[ServerKeySource], ...] = (RemoteService, ImportService)
+"""The services dl takes content keys from before ``prepare_drm``; mypy checks each against ServerKeySource."""

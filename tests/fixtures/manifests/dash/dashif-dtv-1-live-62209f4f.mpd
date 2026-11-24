@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Content provided by Digital TV Labs Bristol, UK -->
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011" minBufferTime="PT1.500000S" type="static" mediaPresentationDuration="PT0H5M0S" maxSegmentDuration="PT3S" profiles="urn:mpeg:dash:profile:isoff-live:2011,http://dashif.org/guidelines/dash264#hd">
+  <Period id="p1">
+    <AdaptationSet segmentAlignment="true" maxWidth="1920" maxHeight="1080" maxFrameRate="25" par="16:9">
+      <Representation id="video.3000" mimeType="video/mp4" codecs="avc1.64001f" width="1280" height="720" frameRate="25" sar="1:1" startWithSAP="1" bandwidth="3000000" scanType="progressive">
+        <SegmentTemplate timescale="1000" duration="3000" media="720p-live/seg-$Number$.m4s" startNumber="1" initialization="720p-live/seg-init.mp4" />
+      </Representation>
+      <Representation id="video.4000" mimeType="video/mp4" codecs="avc1.640028" width="1920" height="1080" 
+        frameRate="25" sar="1:1" startWithSAP="1" bandwidth="4000000" scanType="progressive">
+        <SegmentTemplate timescale="1000" duration="3000" media="1080p-live/seg-$Number$.m4s" startNumber="1" initialization="1080p-live/seg-init.mp4" />
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet segmentAlignment="true" lang="en">
+      <Representation id="audio.128" mimeType="audio/mp4" codecs="mp4a.40.5" audioSamplingRate="48000" startWithSAP="1" bandwidth="128000">
+        <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2" />
+        <SegmentTemplate timescale="1000" duration="2901" media="HeAACv1-live/seg-$Number$.m4s" startNumber="1" initialization="HeAACv1-live/seg-init.mp4" />
+      </Representation>
+    </AdaptationSet>
+  </Period>
+</MPD>

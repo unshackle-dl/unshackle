@@ -20,6 +20,7 @@ real spawns stay fast.
 
 import importlib
 import multiprocessing
+import os
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -96,6 +97,27 @@ def clear_cancel():
     dl.DOWNLOAD_CANCELLED.clear()
 
 
+def die_without_result(queue, kwargs):
+    os._exit(3)
+
+
+def run_mp(urls, tmp_path):
+    for _ in dl.download_multiprocess(
+        urls=urls,
+        output_dir=tmp_path,
+        filename="seg_{i:04}.bin",
+        headers=None,
+        cookies=None,
+        proxy=None,
+        max_workers=2,
+        adaptive=False,
+        spec={"kind": "none"},
+        processes=2,
+        debug_logger=None,
+    ):
+        pass
+
+
 def url(srv, path):
     return f"http://127.0.0.1:{srv.server_address[1]}{path}"
 
@@ -120,20 +142,26 @@ def test_multiprocess_child_crash_raises(server, tmp_path):
     good = {"url": url(server, "/seg/0.bin")}
     bad = {"nourl": True}
     with pytest.raises(RuntimeError):
-        for _ in dl.download_multiprocess(
-            urls=[good, bad],
-            output_dir=tmp_path,
-            filename="seg_{i:04}.bin",
-            headers=None,
-            cookies=None,
-            proxy=None,
-            max_workers=2,
-            adaptive=False,
-            spec={"kind": "none"},
-            processes=2,
-            debug_logger=None,
-        ):
-            pass
+        run_mp([good, bad], tmp_path)
+
+
+def test_multiprocess_child_death_raises(tmp_path, monkeypatch):
+    monkeypatch.setattr(dl, "mp_worker", die_without_result)
+    raised: list[BaseException] = []
+
+    def drive():
+        try:
+            run_mp([{"url": "http://127.0.0.1:1/a"}, {"url": "http://127.0.0.1:1/b"}], tmp_path)
+        except BaseException as exc:
+            raised.append(exc)
+
+    thread = threading.Thread(target=drive, daemon=True)
+    thread.start()
+    thread.join(timeout=30)
+
+    assert not thread.is_alive()
+    assert len(raised) == 1 and isinstance(raised[0], RuntimeError)
+    assert "died without result" in str(raised[0])
 
 
 def test_multiprocess_cancel_terminates_children(server, tmp_path):
@@ -171,11 +199,8 @@ def test_speed_limit_forces_single_process(server, tmp_path, monkeypatch):
     n = dl.MP_MIN_SEGMENTS
     urls = [{"url": url(server, f"/seg/{i}.bin")} for i in range(n)]
     dl.set_speed_limit(1_000_000_000)
-    try:
-        for _ in dl.requests(urls, output_dir=tmp_path, filename="seg_{i:04}.bin", max_workers=4, processes=2):
-            pass
-    finally:
-        dl.set_speed_limit(None)
+    for _ in dl.requests(urls, output_dir=tmp_path, filename="seg_{i:04}.bin", max_workers=4, processes=2):
+        pass
 
     files = sorted(tmp_path.glob("seg_*.bin"))
     assert len(files) == n

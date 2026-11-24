@@ -1,0 +1,23 @@
+<?xml version="1.0" ?>
+<MPD mediaPresentationDuration="PT11.5416666667S" minBufferTime="PT2S" profiles="http://dashif.org/guidelines/dash264,urn:mpeg:dash:profile:isoff-on-demand:2011" type="static" xmlns="urn:mpeg:dash:schema:mpd:2011" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="urn:mpeg:DASH:schema:MPD:2011 DASH-MPD.xsd">
+ <BaseURL>./</BaseURL>
+ <Period>
+  <AdaptationSet codecs="avc1.42c01e" contentType="video" frameRate="24/1" height="480" mimeType="video/mp4" par="16:9" scanType="progressive" subsegmentAlignment="true" subsegmentStartsWithSAP="1" width="848">
+   <Representation bandwidth="1501728" id="6chID_848x480_24fps-avc1.42c01e-11s-848x480-h264-1500000bps_seg" sar="1:1">
+    <BaseURL>6chID_848x480_24fps-avc1.42c01e-11s-848x480-h264-1500000bps_seg.mp4</BaseURL>
+    <SegmentBase indexRange="685-752">
+     <Initialization range="0-684"/>
+    </SegmentBase>
+   </Representation>
+  </AdaptationSet>
+  <AdaptationSet codecs="mp4a.40.30" contentType="audio" lang="en" mimeType="audio/mp4" subsegmentAlignment="true" subsegmentStartsWithSAP="1">
+   <AudioChannelConfiguration schemeIdUri="urn:mpeg:mpegB:cicp:ChannelConfiguration" value="6"/>
+   <Representation audioSamplingRate="48000" bandwidth="99426" id="6ch_ident_48kHz-en-11s-6-mps-96000bps_seg">
+    <BaseURL>6ch_ident_48kHz-en-11s-6-mps-96000bps_seg.mp4</BaseURL>
+    <SegmentBase indexRange="622-689">
+     <Initialization range="0-621"/>
+    </SegmentBase>
+   </Representation>
+  </AdaptationSet>
+ </Period>
+</MPD>

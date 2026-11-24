@@ -113,7 +113,7 @@ values.
 | `{year}` `{season}` `{episode}` `{episode_name}` | Season and episode are plain numbers (`1`, `5`) |
 | `{part}` | Part number of a split episode as a plain number (`1` for `Part.1`). Empty when the episode has no part |
 | `{season_episode}` `{absolute}` `{date}` | As in the filename template: `{season_episode}` keeps the part suffix (`S01E05.Part.1`) while `{episode}` drops it |
-| `{quality}` `{resolution}` `{hdr}` `{hfr}` `{vcodec}` `{acodec}` `{edition}` `{tag}` `{lang_tag}` | As in the filename template, for this file |
+| `{quality}` `{resolution}` `{hdr}` `{hfr}` `{3d}` `{vcodec}` `{acodec}` `{edition}` `{tag}` `{lang_tag}` | As in the filename template, for this file |
 | `{tmdb}` `{imdb}` `{tvdb}` | The tagging IDs in use, otherwise empty. See [Tagging IDs](#tagging-ids) |
 | `{error}` | Failure message. Empty on success |
 
@@ -132,7 +132,7 @@ Every variable from your `output_template` is available here as well, including
       music has none of them.
     - **The naming context renders it empty on purpose.** `{hdr}` is empty for an SDR
       file, because SDR is the absence of an HDR tag in a filename rather than a tag that
-      reads `SDR`. `{edition}`, `{atmos}`, `{multi}`, `{dual}` and `{hfr}` behave the same
+      reads `SDR`. `{edition}`, `{atmos}`, `{multi}`, `{dual}`, `{hfr}` and `{3d}` behave the same
       way. If your script needs the word `SDR`, derive it from an empty `{hdr}` yourself.
     - The post-script is a `failure` one. A failed download has no output file to read metadata
       from, so everything that comes from the output file is empty. See
@@ -212,6 +212,10 @@ subs = [p for p in sys.argv[i].removeprefix("--subs=").split("\n") if p]
     finishes. With `-w S01-S02` the S01 post-script runs while S02 is still downloading. It says
     nothing about whether the season is complete on disk. Downloading a single episode fires
     the post-script for that season as soon as the episode lands.
+
+    A title that track selection skips (`--skip-missing`, `-ado`, `-fso`) counts as done. The
+    `season` post-script still fires for the episodes that landed, so the folder can be missing
+    the skipped episodes. A run that skips every title fails, and then no `season` post-script fires.
 
     A title that fails stops the whole run. unshackle dispatches the `failure` post-script for
     that title and then returns. It downloads no further title, and no `season` or `run`
@@ -324,7 +328,8 @@ credentials and `token=` / `api_key=` query parameters are also masked.
 ## Limitations
 
 - No `success` post-script operates under `--no-mux` or `--skip-dl`, because neither writes a
-  muxed output. A `failure` post-script still runs under `--no-mux` if the download itself fails.
+  muxed output. A song is the exception: `--no-mux` does not apply to it, so its post-scripts
+  operate. A `failure` post-script still runs under `--no-mux` if the download itself fails.
 - `failure` post-scripts only operate in `file` mode.
 - There is no webhook sender. Call `curl` from a script instead.
 - Script output is not captured. Redirect it inside your own script if you want a log.

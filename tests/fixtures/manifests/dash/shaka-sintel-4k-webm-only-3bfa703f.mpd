@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--Generated with https://github.com/google/shaka-packager version 379e9de0e8-debug-->
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xlink="http://www.w3.org/1999/xlink" xsi:schemaLocation="urn:mpeg:dash:schema:mpd:2011 DASH-MPD.xsd" xmlns:cenc="urn:mpeg:cenc:2013" profiles="urn:mpeg:dash:profile:isoff-on-demand:2011" minBufferTime="PT2S" type="static" mediaPresentationDuration="PT888.042S">
+  <Period id="0">
+    <AdaptationSet id="0" contentType="text" lang="nl" subsegmentAlignment="true">
+      <Representation id="0" bandwidth="256" mimeType="text/vtt">
+        <BaseURL>s-dut.webvtt</BaseURL>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="1" contentType="text" lang="en" subsegmentAlignment="true">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"/>
+      <Representation id="1" bandwidth="256" mimeType="text/vtt">
+        <BaseURL>s-eng.webvtt</BaseURL>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="2" contentType="text" lang="fr" subsegmentAlignment="true">
+      <Representation id="2" bandwidth="256" mimeType="text/vtt">
+        <BaseURL>s-fre.webvtt</BaseURL>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="3" contentType="text" lang="de" subsegmentAlignment="true">
+      <Representation id="3" bandwidth="256" mimeType="text/vtt">
+        <BaseURL>s-ger.webvtt</BaseURL>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="4" contentType="text" lang="it" subsegmentAlignment="true">
+      <Representation id="4" bandwidth="256" mimeType="text/vtt">
+        <BaseURL>s-ita.webvtt</BaseURL>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="5" contentType="text" lang="pl" subsegmentAlignment="true">
+      <Representation id="5" bandwidth="256" mimeType="text/vtt">
+        <BaseURL>s-pol.webvtt</BaseURL>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="6" contentType="text" lang="pt" subsegmentAlignment="true">
+      <Representation id="6" bandwidth="256" mimeType="text/vtt">
+        <BaseURL>s-por.webvtt</BaseURL>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="7" contentType="text" lang="ru" subsegmentAlignment="true">
+      <Representation id="7" bandwidth="256" mimeType="text/vtt">
+        <BaseURL>s-rus.webvtt</BaseURL>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="8" contentType="text" lang="es" subsegmentAlignment="true">
+      <Representation id="8" bandwidth="256" mimeType="text/vtt">
+        <BaseURL>s-spa.webvtt</BaseURL>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="9" contentType="text" lang="vi" subsegmentAlignment="true">
+      <Representation id="9" bandwidth="256" mimeType="text/vtt">
+        <BaseURL>s-vie.webvtt</BaseURL>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="10" contentType="video" maxWidth="3840" maxHeight="1636" frameRate="1000000/42000" par="40:17">
+      <Representation id="10" bandwidth="82023" codecs="vp9" mimeType="video/webm" sar="129:128" width="256" height="110">
+        <BaseURL>v-0144p-0100k-vp9.webm</BaseURL>
+        <SegmentBase indexRange="296-4055" timescale="1000000">
+          <Initialization range="0-295"/>
+        </SegmentBase>
+      </Representation>
+      <Representation id="11" bandwidth="204094" codecs="vp9" mimeType="video/webm" sar="427:426" width="426" height="182">
+        <BaseURL>v-0240p-0300k-vp9.webm</BaseURL>
+        <SegmentBase indexRange="296-4111" timescale="1000000">
+          <Initialization range="0-295"/>
+        </SegmentBase>
+      </Representation>
+      <Representation id="12" bandwidth="521203" codecs="vp9" mimeType="video/webm" sar="855:854" width="854" height="364">
+        <BaseURL>v-0480p-0750k-vp9.webm</BaseURL>
+        <SegmentBase indexRange="298-4216" timescale="1000000">
+          <Initialization range="0-297"/>
+        </SegmentBase>
+      </Representation>
+      <Representation id="13" bandwidth="1127443" codecs="vp9" mimeType="video/webm" sar="641:640" width="1280" height="546">
+        <BaseURL>v-0720p-1800k-vp9.webm</BaseURL>
+        <SegmentBase indexRange="298-4244" timescale="1000000">
+          <Initialization range="0-297"/>
+        </SegmentBase>
+      </Representation>
+      <Representation id="14" bandwidth="373438" codecs="vp9" mimeType="video/webm" sar="639:640" width="640" height="272">
+        <BaseURL>v-0360p-0550k-vp9.webm</BaseURL>
+        <SegmentBase indexRange="298-4191" timescale="1000000">
+          <Initialization range="0-297"/>
+        </SegmentBase>
+      </Representation>
+      <Representation id="15" bandwidth="2107044" codecs="vp9" mimeType="video/webm" sar="1921:1920" width="1920" height="818">
+        <BaseURL>v-1080p-3300k-vp9.webm</BaseURL>
+        <SegmentBase indexRange="298-4257" timescale="1000000">
+          <Initialization range="0-297"/>
+        </SegmentBase>
+      </Representation>
+      <Representation id="16" bandwidth="686851" codecs="vp9" mimeType="video/webm" sar="1:1" width="1024" height="436">
+        <BaseURL>v-0576p-1000k-vp9.webm</BaseURL>
+        <SegmentBase indexRange="298-4229" timescale="1000000">
+          <Initialization range="0-297"/>
+        </SegmentBase>
+      </Representation>
+      <Representation id="18" bandwidth="4491792" codecs="vp9" mimeType="video/webm" sar="1:1" width="2560" height="1090">
+        <BaseURL>v-1440p-7500k-vp9.webm</BaseURL>
+        <SegmentBase indexRange="298-4273" timescale="1000000">
+          <Initialization range="0-297"/>
+        </SegmentBase>
+      </Representation>
+      <Representation id="19" bandwidth="8018428" codecs="vp9" mimeType="video/webm" sar="1921:1920" width="3840" height="1636">
+        <BaseURL>v-2160p-14000k-vp9.webm</BaseURL>
+        <SegmentBase indexRange="298-4276" timescale="1000000">
+          <Initialization range="0-297"/>
+        </SegmentBase>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="11" contentType="audio" lang="en">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"/>
+      <Representation id="17" bandwidth="130600" codecs="opus" mimeType="audio/webm" audioSamplingRate="48000">
+        <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2"/>
+        <BaseURL>a-eng-0128k-libopus.webm</BaseURL>
+        <SegmentBase indexRange="320-4097" timescale="1000000">
+          <Initialization range="0-319"/>
+        </SegmentBase>
+      </Representation>
+    </AdaptationSet>
+  </Period>
+</MPD>

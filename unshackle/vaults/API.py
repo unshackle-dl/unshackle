@@ -1,10 +1,9 @@
 from typing import Iterator, Optional, Union
 from uuid import UUID
 
-from requests import Response, Session
+from requests import HTTPError, Response
 
-from unshackle.core import __version__
-from unshackle.core.vault import Vault
+from unshackle.core.vault import RateLimited, Vault, vault_session
 
 
 class API(Vault):
@@ -18,12 +17,11 @@ class API(Vault):
         no_push: bool = False,
         headers: Optional[dict[str, str]] = None,
         timeout: float = 10.0,
-    ):
+    ) -> None:
         super().__init__(name, no_push)
         self.uri = uri.rstrip("/")
         self.timeout = timeout
-        self.session = Session()
-        self.session.headers.update({"User-Agent": f"unshackle v{__version__}"})
+        self.session = vault_session(timeout)
         self.session.headers.update({"Authorization": f"Bearer {token}"})
 
         if headers:
@@ -39,6 +37,8 @@ class API(Vault):
             timeout=self.timeout,
             allow_redirects=False,
         )
+        if response.status_code == 429:
+            raise Exceptions.TooManyRequests()
         response.raise_for_status()
         data = response.json()
 
@@ -169,9 +169,11 @@ class API(Vault):
                         batch_size = 1
                     continue
 
+                if response.status_code == 429:
+                    raise Exceptions.TooManyRequests()
                 response.raise_for_status()
                 data = response.json()
-            except Exception:
+            except (ValueError, HTTPError):
                 if batch_size > 1:
                     if batch_size > 100:
                         batch_size -= 100
@@ -273,7 +275,7 @@ class Exceptions:
     class AuthRejected(Exception):
         """Authentication Error Occurred, is your token valid? Do you have permission to make this call?"""
 
-    class TooManyRequests(Exception):
+    class TooManyRequests(RateLimited):
         """Rate Limited. Sent too many requests in a given amount of time."""
 
     class PageInvalid(Exception):

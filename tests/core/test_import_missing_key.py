@@ -18,6 +18,7 @@ import pytest
 from pywidevine.pssh import PSSH
 from rich.table import Table
 
+from tests.remote.key_source import remote_keys
 from unshackle.commands import dl as dl_module
 from unshackle.commands.dl import dl
 from unshackle.core.drm import Widevine
@@ -69,7 +70,7 @@ def make_cmd(monkeypatch: pytest.MonkeyPatch, vaults: Any) -> dl:
     cmd.service = "EXAMPLE"
     cmd.vaults = vaults
     cmd.vault_cache_tally = None
-    cmd._remote_service = SimpleNamespace(_server_cdm=True, _server_cdm_type="widevine")
+    cmd._remote_service = remote_keys()
     dl.LICENSE_KEY_CACHE.clear()
     dl.DRM_LOCKS.clear()
     return cmd
@@ -111,7 +112,7 @@ def test_the_error_names_the_kids_without_a_content_key() -> None:
 
 def test_the_server_cdm_branch_lets_the_import_error_through(monkeypatch: pytest.MonkeyPatch) -> None:
     drm = FakeDRM({})
-    track = SimpleNamespace(drm=[drm])
+    track = SimpleNamespace(id="vid", drm=[drm])
     cmd = make_cmd(monkeypatch, EmptyVaults())
 
     with pytest.raises(click.ClickException, match=KID.hex):
@@ -130,7 +131,7 @@ def test_the_retry_after_a_bad_vault_key_ends_in_the_import_error(
     assert vaults.get_key(KID) == (BAD, poisoned)
     cmd = make_cmd(monkeypatch, vaults)
     drm = FakeDRM({KID: BAD, OTHER: OTHER_KEY})
-    track = SimpleNamespace(drm=[drm])
+    track = SimpleNamespace(id="vid", drm=[drm])
     calls: list[str] = []
     path = tmp_path / "video.mp4"
     path.write_bytes(b"cipher")
@@ -150,4 +151,4 @@ def test_a_download_stopped_by_a_click_exception_reports_only_its_message() -> N
     lines = dl.failure_lines(error)
 
     assert lines == [":x: Download Failed...", f"   {error.format_message()}"]
-    assert "unexpected error" in dl.failure_lines(ValueError("boom"))[-1]
+    assert dl.failure_lines(ValueError("boom")) == [":x: Download Failed...", "   ValueError: boom"]

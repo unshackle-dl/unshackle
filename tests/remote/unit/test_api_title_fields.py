@@ -20,6 +20,7 @@ from unshackle.core.api.handlers import serialize_title, stamp_service_flags
 from unshackle.core.remote_service import build_title
 from unshackle.core.titles.episode import Episode
 from unshackle.core.titles.movie import Movie
+from unshackle.core.titles.music import Song
 
 pytestmark = pytest.mark.unit
 
@@ -213,3 +214,46 @@ def test_title_to_meta_round_trip_keeps_the_movie_anime_flag() -> None:
     movie.anime = True
     rebuilt = build_title(dl.title_to_meta(movie), "FAKE", "fallback-id")
     assert rebuilt.anime is True
+
+
+def test_song_tag_data_survives_the_remote_round_trip() -> None:
+    song = Song(
+        id_="song-0001",
+        service=_FakeSvc,
+        name="Track 1",
+        artist="A",
+        album="B",
+        track=1,
+        data={
+            "release_date": "2020-01-02",
+            "composer": "C",
+            "track_id": "123",
+            "hires": True,
+            "atmos": True,
+            "unrelated": object(),
+        },
+    )
+
+    rebuilt = build_title(json.loads(json.dumps(serialize_title(song))), "EXAMPLE", "song-0001")
+
+    assert rebuilt.data["release_date"] == "2020-01-02"
+    assert rebuilt.data["composer"] == "C"
+    assert rebuilt.data["track_id"] == "123"
+    assert rebuilt.data["hires"] is True and rebuilt.data["atmos"] is True
+    assert "unrelated" not in rebuilt.data
+
+
+@pytest.mark.parametrize(
+    "music_data",
+    [["not", "a", "dict"], {"metadata": {"title": "Replaced"}, "composer": "C"}],
+    ids=["not-a-dict", "unknown-key"],
+)
+def test_the_client_keeps_only_known_music_data_keys(music_data: Any) -> None:
+    song = Song(id_="song-0001", service=_FakeSvc, name="Track 1", artist="A", album="B", track=1)
+    info = json.loads(json.dumps(serialize_title(song)))
+    info["music_data"] = music_data
+
+    rebuilt = build_title(info, "EXAMPLE", "song-0001")
+
+    assert "metadata" not in (rebuilt.data or {})
+    assert rebuilt.name == "Track 1"

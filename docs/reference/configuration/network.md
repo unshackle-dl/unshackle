@@ -12,7 +12,7 @@ TLS-fingerprinting and HTTP client settings for the rnet-based HTTP session.
 | `http1_only` | bool | *(unset)* | Force HTTP/1.1. |
 | `http2_only` | bool | *(unset)* | Force HTTP/2. |
 | `connect_timeout` | int | `10` | Connect timeout in seconds. |
-| `read_timeout` | int | `30` | Read timeout in seconds (max gap between response chunks). |
+| `read_timeout` | int | `30` | Read timeout in seconds (max gap between response chunks). Applies to every request of an rnet session, segment downloads included. |
 | `timeout` | int | *(unset)* | Total request timeout in seconds. |
 | `allow_redirects` | bool | *(unset)* | Follow redirects automatically (rnet client default when unset). |
 | `pool_idle_timeout` | int | `55` | Seconds an idle pooled connection is kept (default stays under typical ~60s CDN idle kills). |
@@ -61,8 +61,11 @@ headers:
 - **Type:** `dict` &nbsp;·&nbsp; **Default:** `{}`
 
 Proxy/VPN provider configuration. Each sub-key names a proxy provider, and unshackle passes its
-block straight to that provider's constructor. See [Proxies & VPN](../../guide/proxies-and-vpn.md)
-for the full proxy provider guide. Recognised proxy providers and their exit ports:
+block straight to that provider's constructor. A bare `--proxy` query tries Basic first, then
+the other proxy providers in the order of their sub-keys, and Control D last (see
+[Provider load order](../../guide/proxies-and-vpn.md#provider-load-order)). See
+[Proxies & VPN](../../guide/proxies-and-vpn.md) for the full proxy provider guide. Recognised proxy
+providers and their exit ports:
 
 | Provider | Config key | Credentials | Proxy scheme/port |
 |----------|-----------|-------------|-------------------|

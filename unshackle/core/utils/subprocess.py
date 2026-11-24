@@ -56,6 +56,7 @@ FFMPEG_MISSING_REFERENCE = (
     "could not find ref with poc",
 )
 FFMPEG_CHECK_TIMEOUT = 120
+FFMPEG_CHECK_TAIL = 8
 
 
 def ffmpeg_decodes(path: Path, start: Optional[float] = None, seconds: float = 3, video: Optional[bool] = None) -> bool:
@@ -66,13 +67,15 @@ def ffmpeg_decodes(path: Path, start: Optional[float] = None, seconds: float = 3
 
     With ``start``, the check decodes ``seconds`` from that time. An FFmpeg copy cuts the
     window first, so no sample after the window gets to the decoder. Without ``start``, the
-    check decodes the first seconds and the last 4 seconds, because a title can open with
+    check decodes the first seconds and the last seconds, because a title can open with
     a clear or separately keyed lead.
 
     Every frame is decoded, because an HEVC keyframe decrypted with a wrong key can decode
-    without an error. When a window starts inside a GOP and the only error is a missing
-    reference frame, the check decodes the keyframes of that window again and uses that
-    verdict. ``video=False`` skips that second pass.
+    without an error. A pass is not proof: HEVC noise can decode clean for seconds, most
+    often in small frames, so a longer window finds more wrong keys. When a window starts
+    inside a GOP and the only error is a missing reference frame, the check decodes the
+    keyframes of that window again and uses that verdict. ``video=False`` skips that second
+    pass.
 
     A file this FFmpeg build cannot judge counts as a pass, never as a wrong key, and so
     does a check that does not finish in time.
@@ -127,11 +130,13 @@ def ffmpeg_decodes(path: Path, start: Optional[float] = None, seconds: float = 3
             return True
         if not keyframes and video is not False and any(m in err for m in FFMPEG_MISSING_REFERENCE):
             return decode(window, keyframes=True)
+        log_tool_run("FFmpeg decode check", ffmpeg, ff.returncode, window=window, stderr=ff.stderr[-2000:])
         return False
 
+    tail = ["-sseof", f"-{FFMPEG_CHECK_TAIL}", "-t", str(FFMPEG_CHECK_TAIL)]
     if start is not None:
         return decode(["-ss", f"{start:.6f}", "-t", f"{max(seconds - 0.5, seconds / 2):.6f}"], keyframes=False)
-    return decode(["-t", str(seconds)], keyframes=False) and decode(["-sseof", "-4", "-t", "4"], keyframes=False)
+    return decode(["-t", str(seconds)], keyframes=False) and decode(tail, keyframes=False)
 
 
 def ffprobe(uri: Union[bytes, Path]) -> dict:
@@ -139,7 +144,7 @@ def ffprobe(uri: Union[bytes, Path]) -> dict:
     if not binaries.FFProbe:
         raise EnvironmentError('FFProbe executable "ffprobe" not found but is required.')
 
-    args = [binaries.FFProbe, "-v", "quiet", "-of", "json", "-show_streams"]
+    args: list[Union[str, Path]] = [binaries.FFProbe, "-v", "quiet", "-of", "json", "-show_streams"]
     if isinstance(uri, Path):
         args.extend(
             ["-f", "lavfi", "-i", "movie={}[out+subcc]".format(str(uri).replace("\\", "/").replace(":", "\\\\:"))]
@@ -181,22 +186,29 @@ def run_step(
     status: Optional[str] = None,
     output: Optional[Path] = None,
     label: str = "subprocess step",
+    timeout: Optional[float] = None,
 ) -> bytes:
     """Operate a CLI step that writes to `output` (when provided). Returns stderr bytes.
 
     Raises RuntimeError with the stderr tail when the process exits non-zero, or when
-    you give `output` and it does not exist or is empty after the step.
+    you give `output` and it does not exist or is empty after the step. A timeout also
+    raises RuntimeError.
     """
     if output is not None:
         output.unlink(missing_ok=True)
 
     str_args = [str(a) for a in args]
     start = time.monotonic()
-    if status:
-        with console.status(status, spinner="dots"):
-            p = subprocess.run(str_args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    else:
-        p = subprocess.run(str_args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    try:
+        if status:
+            with console.status(status, spinner="dots"):
+                p = subprocess.run(str_args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=timeout)
+        else:
+            p = subprocess.run(str_args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        if output is not None:
+            output.unlink(missing_ok=True)
+        raise RuntimeError(f"{label} timed out after {timeout}s") from None
 
     stderr = p.stderr or b""
     bad_output = output is not None and (not output.exists() or output.stat().st_size == 0)

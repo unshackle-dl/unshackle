@@ -13,7 +13,7 @@ from unshackle.core import binaries
 from unshackle.core.config import POSSIBLE_CONFIG_PATHS, config, config_path
 from unshackle.core.console import console, listing_table, print_wide
 from unshackle.core.constants import context_settings
-from unshackle.core.services import Services
+from unshackle.core.services import Services, load_all
 from unshackle.core.temp import TASK_PREFIX, is_stale
 
 
@@ -46,6 +46,13 @@ def get_dependencies() -> list[dict]:
             "binary": binaries.Mkvpropedit,
             "required": True,
             "desc": "MKV metadata",
+            "cat": "Core",
+        },
+        {
+            "name": "MP4Box",
+            "binary": binaries.MP4Box,
+            "required": False,
+            "desc": "MP4 muxing",
             "cat": "Core",
         },
         {
@@ -134,6 +141,7 @@ def get_dependencies() -> list[dict]:
         },
     ]
 
+    load_all()
     for reg in binaries.get_registered_dependencies():
         deps.append(
             {
@@ -189,7 +197,8 @@ def env() -> None:
 
 
 @env.command()
-def check() -> None:
+@click.option("--verbose", is_flag=True, default=False, help="Also show the path each tool is loaded from.")
+def check(verbose: bool) -> None:
     """Checks environment for the required dependencies."""
     all_deps = get_dependencies()
 
@@ -199,11 +208,14 @@ def check() -> None:
     missing_required = []
 
     table = listing_table("Environment Dependencies", expand=True, show_lines=True)
-    table.add_column("Category", style="cyan", width=10)
-    table.add_column("Tool", style="text", width=16)
-    table.add_column("Status", justify="center", width=10)
+    table.add_column("Category", style="cyan", width=8)
+    table.add_column("Tool", style="text", width=14)
+    table.add_column("Status", justify="center", width=6)
+    table.add_column("Version", style="text2", width=8, overflow="ellipsis")
     table.add_column("Req", justify="center", width=4)
     table.add_column("Purpose", style="text2", overflow="fold")
+    if verbose:
+        table.add_column("Path", style="text2", overflow="fold")
 
     last_cat = None
     for dep in all_deps:
@@ -226,7 +238,11 @@ def check() -> None:
 
         req = "[red]Y[/red]" if dep["required"] else "[bright_black]-[/bright_black]"
 
-        table.add_row(category, dep["name"], status, req, dep["desc"])
+        version = binaries.binary_version(path) or "[bright_black]-[/bright_black]"
+        row = [category, dep["name"], status, version, req, dep["desc"]]
+        if verbose:
+            row.append(str(path) if path else "[bright_black]-[/bright_black]")
+        table.add_row(*row)
 
     print_wide(table)
 
@@ -366,7 +382,7 @@ def info() -> None:
     table.add_column("Path", style="text2", no_wrap=False, overflow="fold")
 
     path_vars = {
-        x: Path(os.getenv(x))
+        x: Path(os.environ[x])
         for x in ("TEMP", "APPDATA", "LOCALAPPDATA", "USERPROFILE")
         if sys.platform == "win32" and os.getenv(x)
     }
@@ -385,11 +401,12 @@ def info() -> None:
             table.add_row(name.title(), paths_str)
         else:
             path = attr_value.resolve()
+            shown = str(path)
             for var, var_path in path_vars.items():
                 if path.is_relative_to(var_path):
-                    path = rf"%{var}%\{path.relative_to(var_path)}"
+                    shown = rf"%{var}%\{path.relative_to(var_path)}"
                     break
-            table.add_row(name.title(), str(path))
+            table.add_row(name.title(), shown)
 
     print_wide(table)
 

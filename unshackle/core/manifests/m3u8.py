@@ -10,6 +10,7 @@ from requests import Session
 from unshackle.core.manifests.hls import HLS
 from unshackle.core.session import RnetSession
 from unshackle.core.tracks import Tracks
+from unshackle.core.utils import run_proxy
 
 
 def parse(
@@ -22,7 +23,7 @@ def parse(
     """Parse a variant playlist to ``Tracks`` with basic information, defer DRM loading."""
     tracks = HLS(master, session=session, url=url).to_tracks(language)
 
-    bool(master.session_keys or HLS.parse_session_data_keys(master, session or Session()))
+    bool(master.session_keys or HLS.parse_session_data_keys(master, session or run_proxy.fallback_session()))
 
     if True:
         for t in tracks.videos + tracks.audio:

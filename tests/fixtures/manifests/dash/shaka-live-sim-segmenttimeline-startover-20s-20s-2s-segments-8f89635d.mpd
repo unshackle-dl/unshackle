@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="urn:mpeg:dash:schema:mpd:2011 DASH-MPD.xsd" profiles="urn:mpeg:dash:profile:isoff-live:2011,http://dashif.org/guidelines/dash-if-simple" type="dynamic" availabilityStartTime="2026-10-26T15:55:55Z" publishTime="2026-10-26T15:56:13Z" minimumUpdatePeriod="PT2S" minBufferTime="PT2S" timeShiftBufferDepth="PT1M" maxSegmentDuration="PT2.006S">
+  <ProgramInformation moreInformationURL="https://github.com/dash-Industry-Forum/livesim-content">
+    <Title>Basic MPD with 640x480@30 video at 300kbp and 48kbps audio</Title>
+    <Source>VoD source for DASH-IF livesim2</Source>
+  </ProgramInformation>
+  <Location>https://livesim2.dashif.org/livesim2/segtimeline_1/start_1793030155/stop_1793030195/timeoffset_0/testpic_2s/Manifest.mpd</Location>
+  <Period id="P0" start="PT0S">
+    <AdaptationSet id="2" lang="en" contentType="audio" segmentAlignment="true" mimeType="audio/mp4" startWithSAP="1">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"></Role>
+      <SegmentTemplate media="$RepresentationID$/$Time$.m4s" initialization="$RepresentationID$/init.mp4" timescale="48000">
+        <SegmentTimeline>
+          <S t="0" d="95232"></S>
+          <S d="96256" r="1"></S>
+          <S d="95232"></S>
+          <S d="96256" r="2"></S>
+          <S d="95232"></S>
+          <S d="96256"></S>
+        </SegmentTimeline>
+      </SegmentTemplate>
+      <Representation id="A48" bandwidth="48000" audioSamplingRate="48000" codecs="mp4a.40.2">
+        <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2"></AudioChannelConfiguration>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="1" contentType="video" par="16:9" minWidth="640" maxWidth="640" minHeight="360" maxHeight="360" maxFrameRate="60/2" segmentAlignment="true" mimeType="video/mp4" startWithSAP="1">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"></Role>
+      <SegmentTemplate media="$RepresentationID$/$Time$.m4s" initialization="$RepresentationID$/init.mp4" timescale="90000">
+        <SegmentTimeline>
+          <S t="0" d="180000" r="8"></S>
+        </SegmentTimeline>
+      </SegmentTemplate>
+      <Representation id="V300" bandwidth="300000" width="640" height="360" sar="1:1" frameRate="60/2" codecs="avc1.64001e"></Representation>
+    </AdaptationSet>
+  </Period>
+  <UTCTiming schemeIdUri="urn:mpeg:dash:utc:http-xsdate:2014" value="https://time.akamai.com/?iso&amp;ms"></UTCTiming>
+</MPD>

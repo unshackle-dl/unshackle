@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import json
 import logging
 import math
 import re
 import subprocess
 import time
 from enum import Enum
+from fractions import Fraction
 from pathlib import Path
 from typing import Any, Optional, Union
 
@@ -13,6 +15,7 @@ from langcodes import Language
 
 from unshackle.core import binaries
 from unshackle.core.config import config
+from unshackle.core.drm.verify import has_second_view
 from unshackle.core.tracks.subtitle import Subtitle
 from unshackle.core.tracks.track import Track
 from unshackle.core.utilities import FPS, get_boxes, log_event
@@ -25,10 +28,12 @@ class Video(Track):
     class Codec(str, Enum):
         AVC = "H.264"
         HEVC = "H.265"
+        VVC = "H.266"
         VC1 = "VC-1"
         VP8 = "VP8"
         VP9 = "VP9"
         AV1 = "AV1"
+        LCEVC = "LCEVC"
 
         @property
         def extension(self) -> str:
@@ -66,6 +71,8 @@ class Video(Track):
                 return Video.Codec.VP9
             if mime == "av01":
                 return Video.Codec.AV1
+            if mime == "lvc1":
+                return Video.Codec.LCEVC
             raise ValueError(f"The MIME '{mime}' is not a supported Video Codec")
 
         @staticmethod
@@ -79,24 +86,12 @@ class Video(Track):
                     pass
             raise ValueError(f"No MIME types matched any supported Video Codecs in '{codecs}'")
 
-        @staticmethod
-        def from_netflix_profile(profile: str) -> Video.Codec:
-            profile = profile.lower().strip()
-            if profile.startswith(("h264", "playready-h264")):
-                return Video.Codec.AVC
-            if profile.startswith("hevc"):
-                return Video.Codec.HEVC
-            if profile.startswith("vp9"):
-                return Video.Codec.VP9
-            if profile.startswith("av1"):
-                return Video.Codec.AV1
-            raise ValueError(f"The Content Profile '{profile}' is not a supported Video Codec")
-
     class Range(str, Enum):
         SDR = "SDR"
         HLG = "HLG"
         HDR10 = "HDR10"
         HDR10P = "HDR10+"
+        VIVID = "HDR Vivid"
         DV = "DV"
         HYBRID = "HYBRID"
 
@@ -177,7 +172,7 @@ class Video(Track):
             if transfer == 5:
                 transfer = 6
 
-            def safe(enum_cls, value):
+            def safe(enum_cls: type[Enum], value: int) -> Any:
                 try:
                     return enum_cls(value)
                 except ValueError:
@@ -227,6 +222,9 @@ class Video(Track):
         scan_type: Optional[Video.ScanType] = None,
         closed_captions: Optional[list[dict[str, Any]]] = None,
         dv_compatible_bitstream: bool = False,
+        hdr10plus: bool = False,
+        hdr10_base: bool = False,
+        stereo: bool = False,
         **kwargs: Any,
     ) -> None:
         """
@@ -245,6 +243,9 @@ class Video(Track):
             fps: A number, float, or string representing the frames/s of the video.
                 Strings may represent numbers, floats, or a fraction (num/den).
                 All strings will be cast to either a number or float.
+            hdr10plus: The DV track also carries HDR10+ metadata. The HDR10+ probe sets it.
+            hdr10_base: The DV track has an HDR10 base layer, as DV profile 8.1 does.
+            stereo: The track is stereoscopic 3D (MV-HEVC), with a second view for the other eye.
 
         Note: If codec, bitrate, width, height, or fps is not specified, unshackle can
         skip some checks or assume a value. Give as much information as possible.
@@ -293,7 +294,12 @@ class Video(Track):
         self.closed_captions: list[dict[str, Any]] = closed_captions or []
         self.needs_duration_fix = False
         self.dv_compatible_bitstream = dv_compatible_bitstream
+        self.hdr10plus = hdr10plus
+        self.hdr10_base = hdr10_base
+        self.stereo = stereo
         self.hybrid_base_only = False
+        self.hybrid_ingredient = False
+        self.native_hybrid = False
 
     def to_dict(self) -> dict[str, Any]:
         data = super().to_dict()
@@ -307,6 +313,9 @@ class Video(Track):
                 "fps": str(self.fps) if self.fps else None,
                 "scan_type": self.scan_type.name if self.scan_type else None,
                 "dv_compatible_bitstream": self.dv_compatible_bitstream,
+                "hdr10plus": self.hdr10plus,
+                "hdr10_base": self.hdr10_base,
+                "stereo": self.stereo,
             }
         )
         return data
@@ -324,23 +333,79 @@ class Video(Track):
             fps=data.get("fps"),
             scan_type=Video.ScanType[data["scan_type"]] if data.get("scan_type") else None,
             dv_compatible_bitstream=data.get("dv_compatible_bitstream", False),
+            hdr10plus=data.get("hdr10plus", False),
+            hdr10_base=data.get("hdr10_base", False),
+            stereo=data.get("stereo", False),
         )
 
+    @staticmethod
+    def dv_fourccs(codecs: Optional[str]) -> set[str]:
+        """The Dolby Vision fourccs in a codecs list (comma or space separated, ``/brand`` suffixes allowed)."""
+        fourccs = {token.split("/")[0].split(".")[0] for token in re.split(r"[\s,]+", (codecs or "").lower())}
+        return fourccs & {"dva1", "dvav", "dvhe", "dvh1"}
+
+    @staticmethod
+    def has_dv_codec(codecs: Optional[str]) -> bool:
+        """Whether a codecs list names a Dolby Vision codec."""
+        return bool(Video.dv_fourccs(codecs))
+
+    @staticmethod
+    def is_stereo(
+        codecs: Optional[str], supplemental_codecs: Optional[str] = None, video_layout: Optional[str] = None
+    ) -> bool:
+        """Whether a track is stereoscopic 3D: the HLS REQ-VIDEO-LAYOUT names CH-STEREO, or a codec is DV profile 20."""
+        tokens = re.split(r"[\s,]+", f"{codecs or ''},{supplemental_codecs or ''}".lower())
+        return "CH-STEREO" in (video_layout or "").upper() or any(
+            re.match(r"dvh[1e]\.20(\.|$)", token) for token in tokens
+        )
+
+    @staticmethod
+    def is_dv_composite(
+        codec: Optional[Video.Codec], codecs: Optional[str], supplemental_codecs: Optional[str]
+    ) -> bool:
+        """Whether an HEVC track names DV only in its supplemental codecs: DV profile 8 on an HDR10, SDR or HLG base."""
+        return (
+            codec == Video.Codec.HEVC
+            and not Video.has_dv_codec(codecs)
+            and bool(Video.dv_fourccs(supplemental_codecs) & {"dvh1", "dvhe"})
+        )
+
+    @property
+    def carries_hdr10plus(self) -> bool:
+        """Whether the track carries HDR10+, as its range or, on a DV track, found by the HDR10+ probe."""
+        return self.hdr10plus or self.range == Video.Range.HDR10P
+
+    @property
+    def finished_hybrid(self) -> bool:
+        """Whether the track already carries DV and an HDR10 or HDR10+ base, so ``-r HYBRID`` needs no build."""
+        if self.range == Video.Range.DV:
+            return self.hdr10plus
+        return self.dv_compatible_bitstream and self.range in (Video.Range.HDR10, Video.Range.HDR10P)
+
+    @property
+    def range_label(self) -> str:
+        """The range that ``-r`` selects the track by, then any second format it carries: HDR10+DV, DV+HDR10, DV+HDR10P."""
+        label = self.range.name + ("+HDR10P" if self.hdr10plus else "+HDR10" if self.hdr10_base else "")
+        return f"{label}+DV" if self.dv_compatible_bitstream and self.range != Video.Range.DV else label
+
     def __str__(self) -> str:
+        labels = filter(
+            None, [self.codec.value if self.codec else None, self.range_label, "3D" if self.stereo else None]
+        )
         return " | ".join(
             filter(
-                bool,
+                None,
                 [
                     "VID",
-                    "[" + (", ".join(filter(bool, [self.codec.value if self.codec else None, self.range.name]))) + "]",
+                    f"[{', '.join(labels)}]",
                     str(self.language),
                     ", ".join(
                         filter(
-                            bool,
+                            None,
                             [
                                 " @ ".join(
                                     filter(
-                                        bool,
+                                        None,
                                         [
                                             f"{self.width}x{self.height}" if self.width and self.height else None,
                                             f"{self.bitrate // 1000} kb/s" if self.bitrate else None,
@@ -352,6 +417,7 @@ class Video(Track):
                         )
                     ),
                     ", ".join(self.edition) if self.edition else None,
+                    self.note,
                 ],
             )
         )
@@ -408,34 +474,44 @@ class Video(Track):
         self.path = output_path
         original_path.unlink()
 
+    def download(self, *args: Any, **kwargs: Any) -> None:
+        """Download the track and mark it 3D when the file holds a second view; a 3D track is never repacked."""
+        super().download(*args, **kwargs)
+        if not self.stereo and self.path and has_second_view(self.path):
+            self.stereo = True
+        if self.stereo:
+            self.needs_repack = False
+
+    def repackage(self, bsf_v: Optional[str] = None) -> bool:
+        """Remux with FFmpeg, except a 3D track: an FFmpeg remux rewrites its stereo and DV boxes."""
+        if self.stereo:
+            logging.getLogger("Video").warning(
+                f"Skipped the FFmpeg repack of 3D track {self.id}: FFmpeg rewrites its stereo boxes"
+            )
+            return False
+        return super().repackage(bsf_v)
+
     def vui_bsf(self) -> Optional[str]:
         """Return the ``-bsf:v`` value that rewrites SPS VUI colour metadata to match ``self.range``.
 
-        Returns None when a rewrite is not necessary: SDR/DV/HYBRID ranges, non-AVC/HEVC codecs, a
-        missing file, or when the bitstream already ships the correct colour metadata. Otherwise
+        Returns None when a rewrite is not necessary or not safe: SDR/DV/HYBRID ranges, non-AVC/HEVC
+        codecs, a 3D track (an FFmpeg remux rewrites its stereo and DV boxes), a missing file, or when the
+        bitstream already ships the correct colour metadata. Otherwise
         returns a ``{h264,hevc}_metadata=...`` string suitable for FFmpeg ``-bsf:v``.
         """
         if not self.path or not self.path.exists():
             return None
-        if self.codec not in (Video.Codec.AVC, Video.Codec.HEVC):
+        if self.codec not in (Video.Codec.AVC, Video.Codec.HEVC) or self.stereo:
             return None
         if self.range in (Video.Range.SDR, Video.Range.DV, Video.Range.HYBRID):
             return None
 
-        vui = {
-            Video.Range.HDR10: (9, 16, 9),
-            Video.Range.HDR10P: (9, 16, 9),
-            Video.Range.HLG: (9, 18, 9),
-        }.get(self.range)
-        if not vui:
+        transfer_name = HDR_TRANSFER.get(self.range)
+        if not transfer_name:
             return None
 
-        expected = {
-            Video.Range.HDR10: ("bt2020", "smpte2084", "bt2020nc"),
-            Video.Range.HDR10P: ("bt2020", "smpte2084", "bt2020nc"),
-            Video.Range.HLG: ("bt2020", "arib-std-b67", "bt2020nc"),
-        }.get(self.range)
-        if expected and binaries.FFProbe:
+        expected = ("bt2020", transfer_name, "bt2020nc")
+        if binaries.FFProbe:
             probe = subprocess.run(
                 [
                     binaries.FFProbe,
@@ -459,7 +535,7 @@ class Video(Track):
             if current == expected:
                 return None
 
-        primaries, transfer, matrix = vui
+        primaries, transfer, matrix = TRANSFER_CICP[transfer_name]
         filter_key = {Video.Codec.AVC: "h264_metadata", Video.Codec.HEVC: "hevc_metadata"}[self.codec]
         return (
             f"{filter_key}=colour_primaries={primaries}"
@@ -526,6 +602,76 @@ class Video(Track):
         )
         return True
 
+    def vp9_colour_args(self, track_id: int) -> list[str]:
+        """Return mkvmerge colour args for an HDR VP9 track.
+
+        mkvmerge drops the MP4 vpcC/SmDm/CoLL colour boxes of VP9, which leaves an HDR10 file tagged as SDR.
+        The transfer the file states wins; ``self.range`` applies only when the file states none.
+        """
+        stream = self._probe_colour()
+        transfer = stream.get("color_transfer", "unknown")
+        codes = TRANSFER_CICP.get(transfer if transfer != "unknown" else HDR_TRANSFER.get(self.range, ""))
+        if not codes:
+            return []
+
+        opts: dict[str, object] = dict(
+            zip(("--colour-primaries", "--colour-transfer-characteristics", "--colour-matrix-coefficients"), codes)
+        )
+        for data in stream.get("side_data_list", []):
+            try:
+                if data.get("side_data_type") == "Mastering display metadata":
+                    xy = ("red_x", "red_y", "green_x", "green_y", "blue_x", "blue_y", "white_point_x", "white_point_y")
+                    coords = [f"{float(Fraction(data[key])):.5f}" for key in xy]
+                    opts.update(
+                        {
+                            "--chromaticity-coordinates": ",".join(coords[:6]),
+                            "--white-colour-coordinates": ",".join(coords[6:]),
+                            "--max-luminance": f"{float(Fraction(data['max_luminance'])):.6f}",
+                            "--min-luminance": f"{float(Fraction(data['min_luminance'])):.6f}",
+                        }
+                    )
+                elif data.get("side_data_type") == "Content light level metadata" and data.get("max_content"):
+                    opts.update(
+                        {"--max-content-light": int(data["max_content"]), "--max-frame-light": int(data["max_average"])}
+                    )
+            except (KeyError, TypeError, ValueError, ZeroDivisionError):
+                continue
+        return [arg for flag, value in opts.items() for arg in (flag, f"{track_id}:{value}")]
+
+    def _probe_colour(self) -> dict[str, Any]:
+        """Return the FFprobe colour transfer and side data of the first video track, or {} when it cannot probe."""
+        if not binaries.FFProbe or not self.path or not self.path.exists():
+            return {}
+        probe_start = time.monotonic()
+        probe = subprocess.run(
+            [
+                binaries.FFProbe,
+                "-v",
+                "error",
+                "-seekable",
+                "0",
+                "-select_streams",
+                "v:0",
+                "-show_entries",
+                "stream=color_transfer:stream_side_data",
+                "-of",
+                "json",
+                str(self.path),
+            ],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+        log_tool_run(
+            "ffprobe colour", "ffprobe", probe.returncode, duration_ms=round((time.monotonic() - probe_start) * 1000, 1)
+        )
+        try:
+            stream: dict[str, Any] = json.loads(probe.stdout)["streams"][0]
+        except (ValueError, KeyError, IndexError, TypeError):
+            return {}
+        return stream
+
     def ccextractor(
         self, track_id: Any, out_path: Union[Path, str], language: Language, original: bool = False
     ) -> Optional[Subtitle]:
@@ -537,12 +683,13 @@ class Video(Track):
             raise EnvironmentError("ccextractor executable was not found.")
 
         out_path = Path(out_path)
+        ccextractor = binaries.CCExtractor
 
-        def run_ccextractor(fallback: str) -> bool:
+        def run_ccextractor(video_path: Path, fallback: str) -> bool:
             cc_start = time.monotonic()
             try:
                 subprocess.run(
-                    [binaries.CCExtractor, "-trim", "-nobom", "-noru", "-ru1", "-o", out_path, self.path],
+                    [ccextractor, "-trim", "-nobom", "-noru", "-ru1", "-o", out_path, video_path],
                     check=True,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
@@ -557,7 +704,7 @@ class Video(Track):
                 )
                 if e.returncode < 0:
                     logging.getLogger("Video").warning(
-                        f"ccextractor crashed (signal {-e.returncode}) on {self.path.name}; {fallback}"
+                        f"ccextractor crashed (signal {-e.returncode}) on {video_path.name}; {fallback}"
                     )
                     return out_path.exists()
                 if e.returncode != 10:
@@ -571,9 +718,9 @@ class Video(Track):
             )
             return out_path.exists()
 
-        if not run_ccextractor("retrying on a repackaged copy"):
+        if not run_ccextractor(self.path, "retrying on a repackaged copy"):
             self.repackage()
-            run_ccextractor("skipping CC extraction")
+            run_ccextractor(self.path, "skipping CC extraction")
 
         if out_path.exists():
             cc_track = Subtitle(
@@ -691,5 +838,16 @@ class Video(Track):
 
         return True
 
+
+PROBED_RANGES = {
+    Video.Range.HDR10: (Video.Range.HDR10P, Video.Range.VIVID),
+    Video.Range.HLG: (Video.Range.VIVID,),
+}
+HDR_TRANSFER = {
+    Video.Range.HDR10: "smpte2084",
+    Video.Range.HDR10P: "smpte2084",
+    Video.Range.HLG: "arib-std-b67",
+}
+TRANSFER_CICP = {"smpte2084": (9, 16, 9), "arib-std-b67": (9, 18, 9)}
 
 __all__ = ("Video",)

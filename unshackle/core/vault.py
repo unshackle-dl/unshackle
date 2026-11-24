@@ -2,11 +2,62 @@ from abc import ABCMeta, abstractmethod
 from typing import Iterator, Optional, Union
 from uuid import UUID
 
+from requests import ConnectionError as RequestsConnectionError
+from requests import Session, Timeout
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+
+from unshackle.core import __version__
+from unshackle.core.session import POOL_MAX_SIZE
+
+RATE_LIMIT_RETRIES = 3
+
+
+class RateLimited(Exception):
+    """The vault still answered 429 after the retries."""
+
+    def __init__(self, message: str = f"still rate limited after {RATE_LIMIT_RETRIES} retries") -> None:
+        super().__init__(message)
+
+
+UNREACHABLE = (RequestsConnectionError, Timeout, ConnectionError, TimeoutError)
+
+
+def is_null_key(key: Optional[str]) -> bool:
+    """True for a blank or all-zero content key, the null key that no vault stores."""
+    return not key or key.count("0") == len(key)
+
+
+def vault_session(timeout: float) -> Session:
+    """An HTTP session for a remote vault that retries a 429 and nothing else.
+
+    A 429 means the request was not processed, so a POST is safe to send again. A connect or read
+    failure is not retried: a lookup waits on every remote vault, so a retry multiplies the timeout.
+    """
+    retry = Retry(
+        total=RATE_LIMIT_RETRIES,
+        connect=0,
+        read=0,
+        other=0,
+        backoff_factor=1,
+        status_forcelist=[429],
+        allowed_methods=None,
+        retry_after_max=int(timeout),
+        raise_on_status=False,
+    )
+    session = Session()
+    adapter = HTTPAdapter(pool_connections=POOL_MAX_SIZE, pool_maxsize=POOL_MAX_SIZE, max_retries=retry)
+    session.mount("https://", adapter)
+    session.mount("http://", adapter)
+    session.headers.update({"User-Agent": f"unshackle v{__version__}"})
+    return session
+
 
 class Vault(metaclass=ABCMeta):
     local: bool = False
+    report_now: bool = False
 
-    def __init__(self, name: str, no_push: bool = False):
+    def __init__(self, name: str, no_push: bool = False) -> None:
         self.name = name
         self.no_push = no_push
 

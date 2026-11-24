@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<MPD xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="urn:mpeg:dash:schema:mpd:2011" xsi:schemaLocation="urn:mpeg:dash:schema:mpd:2011 DASH-MPD.xsd" type="dynamic" availabilityStartTime="2018-12-20T06:04:22Z" publishTime="2018-12-20T06:04:22Z" minimumUpdatePeriod="PT2S" mediaPresentationDuration="PT0H4M9.708S" minBufferTime="PT4S" profiles="urn:mpeg:dash:profile:isoff-live:2011">
+  <Period id="1" start="PT0S">
+    <!-- Video -->
+    <AdaptationSet id="1" mimeType="video/mp4" codecs="hev1.1.6.L120.90" segmentAlignment="true" startWithSAP="1">
+      <SegmentTemplate timescale="5994" media="video_$Number$.mp4" initialization="video.mp4">
+        <SegmentTimeline>
+          <S t="0" d="12000" r="154"/>
+        </SegmentTimeline>
+      </SegmentTemplate>
+      <Representation id="1" bandwidth="3732256" width="1920" height="1080"/>
+    </AdaptationSet>
+    <!-- Audio -->
+    <AdaptationSet id="2" mimeType="audio/mp4" codecs="mp4a.40.2,mp4a.40.2,mp4a.40.2" segmentAlignment="true" startWithSAP="1">
+      <EssentialProperty schemeIdUri="urn:mpeg:dash:preselection:2016"/>
+      <ContentComponent id="3">
+        <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"/>
+      </ContentComponent>
+      <ContentComponent id="4" lang="en">
+        <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"/>
+      </ContentComponent>
+      <ContentComponent id="5" lang="es">
+        <Role schemeIdUri="urn:mpeg:dash:role:2011" value="dub"/>
+      </ContentComponent>
+      <SegmentTemplate timescale="48000" media="audio0_$Number$.mp4" initialization="audio0.mp4">
+        <SegmentTimeline>
+          <S t="0" d="90112" r="133"/>
+        </SegmentTimeline>
+      </SegmentTemplate>
+      <Representation id="2" bandwidth="132669" audioSamplingRate="48000"/>
+    </AdaptationSet>
+    <!-- Preselections -->
+    <Preselection id="1" tag="1" lang="en" preselectionComponents="3 4">
+      <AudioChannelConfiguration schemeIdUri="urn:mpeg:mpegB:cicp:ChannelConfiguration" value="2"/>
+      <Label id="1">Main English</Label>
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"/>
+    </Preselection>
+    <Preselection id="2" tag="2" lang="es" preselectionComponents="3 5">
+      <AudioChannelConfiguration schemeIdUri="urn:mpeg:mpegB:cicp:ChannelConfiguration" value="2"/>
+      <Label id="1">Main Spanish</Label>
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="dub"/>
+    </Preselection>
+  </Period>
+</MPD>

@@ -135,24 +135,14 @@ def test_job_status_values() -> None:
     }
 
 
-def test_normalize_sub_format_preserves_original_sentinel() -> None:
-    """An API job asking for sub_format="original" must keep the "original" sentinel.
-
-    dl.py treats "original" as "keep source format" (skip conversion). If it were normalized to
-    None (as to_enum(["original"]) yields, since there is no such enum member), dl.py would fall
-    into the default branch and re-encode TTML -> WebVTT, contradicting the CLI.
-    """
-    from unshackle.core.api.download_manager import normalize_sub_format
+def test_api_sub_format_keeps_the_original_sentinel() -> None:
+    """sub_format "original" keeps the source format, so the API cast must not turn it into a codec or None."""
+    from unshackle.commands.dl import dl
+    from unshackle.core.api.handlers import cast_dl_params
     from unshackle.core.tracks import Subtitle
-    from unshackle.core.utils.click_types import SubtitleCodecChoice
 
-    assert normalize_sub_format("original") == "original"
-    assert normalize_sub_format("ORIGINAL") == "original"
-
-    assert SubtitleCodecChoice(Subtitle.Codec).convert("original") == "original"
-
-    assert normalize_sub_format("srt") is Subtitle.Codec.SubRip
-    assert normalize_sub_format("nonsense") is None
+    assert cast_dl_params(dl.cli, {"sub_format": "ORIGINAL"})["sub_format"] == "original"
+    assert cast_dl_params(dl.cli, {"sub_format": "srt"})["sub_format"] is Subtitle.Codec.SubRip
 
 
 def test_worker_write_result_retries_denied_replace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -189,17 +179,18 @@ class _CapturedCtx(Exception):
 @pytest.mark.parametrize(
     ("params", "expected"),
     [
-        ({}, (["orig"], [], [], [], False, False)),
+        ({}, (["orig"], [], [], ["all"], [], False, False)),
         (
             {
                 "lang": ["es-419"],
                 "v_lang": ["en"],
                 "a_lang": ["ja"],
+                "s_lang": ["ko"],
                 "acodec": "AAC,EC3",
                 "forced_subs": True,
                 "exact_lang": True,
             },
-            (["es-419"], ["en"], ["ja"], ["AAC", "EC3"], True, True),
+            (["es-419"], ["en"], ["ja"], ["ko"], ["AAC", "EC3"], True, True),
         ),
     ],
 )
@@ -214,7 +205,7 @@ def test_perform_download_puts_the_lang_selection_in_the_service_ctx(
     from unshackle.core.services import Services
 
     class FakeDl:
-        cli = click.Command("dl")
+        cli = dl_module.dl.cli
 
         def __init__(self, ctx: click.Context, **kwargs: object) -> None:
             raise _CapturedCtx(ctx)
@@ -228,7 +219,8 @@ def test_perform_download_puts_the_lang_selection_in_the_service_ctx(
 
     ctx = exc.value.args[0]
     p = ctx.params
-    selection = (p["lang"], p["v_lang"], p["a_lang"], [c.name for c in p["acodec"]], p["forced_subs"], p["exact_lang"])
+    acodec = [c.name for c in p["acodec"]]
+    selection = (p["lang"], p["v_lang"], p["a_lang"], p["s_lang"], acodec, p["forced_subs"], p["exact_lang"])
     assert selection == expected
 
 
@@ -240,7 +232,7 @@ def test_perform_download_passes_latest_episodes_to_dl_result(tmp_path: Path, mo
     from unshackle.core.services import Services
 
     class FakeDl:
-        cli = click.Command("dl")
+        cli = dl_module.dl.cli
 
         def __init__(self, ctx: click.Context, **kwargs: object) -> None:
             pass
@@ -261,6 +253,79 @@ def test_perform_download_passes_latest_episodes_to_dl_result(tmp_path: Path, mo
         download_manager.perform_download("job-1", "EXAMPLE", "t1", {"latest_episodes": 3})
 
     assert exc.value.args[0]["latest_episodes"] == 3
+
+
+def test_perform_download_gives_dl_the_defaults_for_null_and_empty_values(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import click
+
+    import unshackle.commands.dl as dl_module
+    from unshackle.core.api import download_manager, handlers
+    from unshackle.core.services import Services
+
+    seen: dict[str, dict] = {}
+
+    class FakeDl:
+        cli = dl_module.dl.cli
+
+        def __init__(self, ctx: click.Context, **kwargs: object) -> None:
+            seen["init"] = kwargs
+
+        def result(self, **kwargs: object) -> None:
+            seen["result"] = kwargs
+            raise RuntimeError("stop")
+
+    class FakeService:
+        def __init__(self, ctx: click.Context) -> None:
+            seen["parent"] = dict(ctx.parent.params)
+
+    monkeypatch.setattr(dl_module, "dl", FakeDl)
+    monkeypatch.setattr(Services, "get_path", staticmethod(lambda s: tmp_path))
+    monkeypatch.setattr(Services, "load", staticmethod(lambda s: FakeService))
+    monkeypatch.setattr(handlers, "load_full_cdm", lambda *a: None)
+
+    params: dict[str, object] = {"quality": None, "vcodec": None, "acodec": None, "lang": None, "output_dir": ""}
+    with pytest.raises(RuntimeError, match="stop"):
+        download_manager.perform_download("job-1", "EXAMPLE", "t1", params)
+
+    assert seen["init"]["output_dir"] is None
+    for view in (seen["parent"], seen["result"]):
+        assert view["quality"] == [] and view["vcodec"] == [] and view["acodec"] == [] and view["lang"] == ["orig"]
+
+
+def test_perform_download_casts_service_options(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import click
+
+    import unshackle.commands.dl as dl_module
+    from unshackle.core.api import download_manager, handlers
+    from unshackle.core.services import Services
+
+    class FakeDl:
+        cli = dl_module.dl.cli
+
+        def __init__(self, ctx: click.Context, **kwargs: object) -> None:
+            pass
+
+    class FakeService:
+        cli = click.Command(
+            "svc", params=[click.Option(["--episodes"], type=int), click.Option(["--tag"], multiple=True)]
+        )
+
+        def __init__(self, ctx: click.Context, episodes: object = None, tag: object = ()) -> None:
+            raise _CapturedCtx(episodes, tag)
+
+    monkeypatch.setattr(dl_module, "dl", FakeDl)
+    monkeypatch.setattr(Services, "get_path", staticmethod(lambda s: tmp_path))
+    monkeypatch.setattr(Services, "load", staticmethod(lambda s: FakeService))
+    monkeypatch.setattr(handlers, "load_full_cdm", lambda *a: None)
+
+    with pytest.raises(_CapturedCtx) as exc:
+        download_manager.perform_download(
+            "job-1", "EXAMPLE", "t1", {"service_params": {"episodes": "2", "tag": ["a", "b"]}}
+        )
+
+    assert exc.value.args == (2, ("a", "b"))
 
 
 def test_worker_relays_a_prompt_and_reads_the_answer(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -559,3 +624,86 @@ def test_client_job_view_hides_debug_fields_without_debug_api() -> None:
     assert client_job_view(job, off) == {"job_id": "j"}
     assert client_job_view(job, None) == {"job_id": "j"}
     assert client_job_view(job, on) == job
+
+
+FAKE_SKIPPING_WORKER = """
+import sys
+from unshackle.core.api import download_worker
+
+
+def skip_then_stop(*args, progress_callback, **kwargs):
+    progress_callback({"skipped_titles": [{"title": "Show S01E02", "reason": "missing ko"}]})
+    raise RuntimeError("Download failed: Skipped all 2 titles")
+
+
+download_worker.perform_download = skip_then_stop
+sys.exit(download_worker.main(["worker"] + sys.argv[1:]))
+"""
+
+
+async def test_a_skip_written_just_before_the_worker_exits_reaches_the_job(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, manager: DownloadQueueManager
+) -> None:
+    import asyncio
+
+    from unshackle.core.api import download_manager
+
+    worker = tmp_path / "worker.py"
+    worker.write_text(FAKE_SKIPPING_WORKER, encoding="utf-8")
+    spawn = asyncio.create_subprocess_exec
+
+    async def spawn_fake_worker(executable: str, *args: str, **kwargs: Any) -> Any:
+        return await spawn(executable, str(worker), *args[2:], **kwargs)
+
+    monkeypatch.setattr(download_manager.asyncio, "create_subprocess_exec", spawn_fake_worker)
+    job = manager.create_job("EXAMPLE", "t")
+    with pytest.raises(Exception, match="Skipped all 2 titles"):
+        await asyncio.wait_for(manager.run_download_async(job), timeout=20)
+    assert job.skipped_titles == [{"title": "Show S01E02", "reason": "missing ko"}]
+    assert job.to_dict()["skipped_titles"] == job.skipped_titles
+
+
+def test_a_stopped_run_names_its_reason_in_the_job_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import sys
+
+    import click
+
+    import unshackle.commands.dl as dl_module
+    from unshackle.core.api import download_manager, handlers
+    from unshackle.core.api.errors import APIError
+    from unshackle.core.services import Services
+
+    class FakeDl:
+        cli = dl_module.dl.cli
+
+        def __init__(self, ctx: click.Context, **kwargs: object) -> None:
+            self.stop_reason = None
+
+        def result(self, **kwargs: object) -> None:
+            self.stop_reason = "Show S01E01: Required audio language(s) not found: ko"
+            sys.exit(1)
+
+    class FakeService:
+        def __init__(self, ctx: click.Context) -> None:
+            pass
+
+    monkeypatch.setattr(dl_module, "dl", FakeDl)
+    monkeypatch.setattr(Services, "get_path", staticmethod(lambda s: tmp_path))
+    monkeypatch.setattr(Services, "load", staticmethod(lambda s: FakeService))
+    monkeypatch.setattr(handlers, "load_full_cdm", lambda *a: None)
+
+    with pytest.raises(APIError, match=r"^Download failed: Show S01E01: Required audio language\(s\) not found: ko$"):
+        download_manager.perform_download("job-1", "EXAMPLE1", "t1", {})
+
+
+def test_job_history_keeps_the_skipped_titles(tmp_path: Path, manager: DownloadQueueManager) -> None:
+    import json
+
+    from unshackle.core.api.download_manager import record_job_history
+
+    job = manager.create_job("EXAMPLE", "t")
+    job.status = JobStatus.COMPLETED
+    job.skipped_titles = [{"title": "Show S01E02", "reason": "missing ko"}]
+    record_job_history(job)
+    entry = json.loads((tmp_path / "api_history.jsonl").read_text(encoding="utf-8").splitlines()[-1])
+    assert entry["skipped_titles"] == job.skipped_titles

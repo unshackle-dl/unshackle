@@ -13,7 +13,14 @@ from unshackle.core.constants import (
     SPACED_AUDIO_CODECS,
     VIDEO_CODEC_MAP,
 )
-from unshackle.core.tracks import Tracks
+from unshackle.core.tracks import Tracks, Video
+from unshackle.core.utilities import spoken_language, standard_resolution
+
+
+def rename(name: Optional[str]) -> str:
+    """Return the user's `codec_names` override for a filename label, read here so per-service overrides are covered."""
+    value = config.codec_names.get(name, name) if name else name
+    return "" if value is None else str(value)
 
 
 class Title:
@@ -51,13 +58,15 @@ class Title:
         self.id = id_
         self.service = service
         self.language = language
-        self.data = data
+        self.data: Any = data
         self.anime: Optional[bool] = None
         self.daily: Optional[bool] = None
 
         self.tracks = Tracks()
 
-    def __eq__(self, other: Title) -> bool:
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Title):
+            return NotImplemented
         return self.id == other.id
 
     def build_base_template_context(self, media_info: MediaInfo, show_service: bool = True) -> dict:
@@ -68,21 +77,18 @@ class Title:
         returned dict with their specific fields (e.g., season/episode).
         """
         primary_video_track = next(iter(media_info.video_tracks), None)
-        original_lang_tag = str(self.language).split("-")[0].lower() if self.language else ""
-        primary_audio_track = None
-        if original_lang_tag:
-            primary_audio_track = next(
-                (
-                    t
-                    for t in media_info.audio_tracks
-                    if t.language and t.language.split("-")[0].lower() == original_lang_tag
-                ),
-                None,
-            )
-        if primary_audio_track is None:
-            primary_audio_track = next(iter(media_info.audio_tracks), None)
-        audio_lang_bases = {x.language.split("-")[0].lower() for x in media_info.audio_tracks if x.language}
-        unique_audio_languages = len(audio_lang_bases)
+        original_lang_tag = spoken_language(self.language)
+        spoken_audio = [spoken_language(t.language) for t in media_info.audio_tracks]
+        primary_audio_track = next(
+            (
+                t
+                for t, lang in zip(media_info.audio_tracks, spoken_audio)
+                if original_lang_tag and lang == original_lang_tag
+            ),
+            next(iter(media_info.audio_tracks), None),
+        )
+        audio_languages = set(spoken_audio) - {""}
+        unique_audio_languages = len(audio_languages)
 
         context: dict[str, Any] = {
             "source": self.service.__name__ if show_service else "",
@@ -100,6 +106,7 @@ class Title:
             "video": "",
             "hdr": "",
             "hfr": "",
+            "3d": "",
             "edition": "",
             "lang_tag": "",
             "title_type": {"Movie": "movie", "Episode": "series", "Song": "music"}.get(
@@ -113,40 +120,15 @@ class Title:
                 context["edition"] = " ".join(first_track.edition)
 
         if primary_video_track:
-            width = getattr(primary_video_track, "width", primary_video_track.height)
-            resolution = min(width, primary_video_track.height)
-            try:
-                dar = getattr(primary_video_track, "other_display_aspect_ratio", None) or []
-                if dar and dar[0]:
-                    aspect_ratio = [int(float(plane)) for plane in str(dar[0]).split(":")]
-                    if len(aspect_ratio) == 1:
-                        aspect_ratio.append(1)
-                    ratio = aspect_ratio[0] / aspect_ratio[1]
-                    if ratio not in (16 / 9, 4 / 3, 9 / 16, 3 / 4):
-                        if abs(width - 3840) <= 50:
-                            width = 3840
-                        elif abs(width - 2560) <= 50:
-                            width = 2560
-                        elif abs(width - 1920) <= 50 or abs(width - 1620) <= 50:
-                            width = 1920
-                        elif abs(width - 1280) <= 50 or abs(width - 1080) <= 50:
-                            width = 1280
-
-                        resolution = int(max(width, primary_video_track.height) * (9 / 16))
-
-                        track_height = primary_video_track.height
-                        if abs(resolution - track_height) <= 10 or track_height in (2160, 1440, 1080, 720, 480):
-                            resolution = track_height
-            except (ValueError, TypeError, ZeroDivisionError):
-                pass
+            resolution = standard_resolution(primary_video_track.width, primary_video_track.height)
 
             scan_suffix = "i" if str(getattr(primary_video_track, "scan_type", "")).lower() == "interlaced" else "p"
 
             context.update(
                 {
-                    "quality": f"{resolution}{scan_suffix}",
-                    "resolution": str(resolution),
-                    "video": VIDEO_CODEC_MAP.get(primary_video_track.format, primary_video_track.format),
+                    "quality": f"{resolution}{scan_suffix}" if resolution else "",
+                    "resolution": str(resolution) if resolution else "",
+                    "video": rename(VIDEO_CODEC_MAP.get(primary_video_track.format, primary_video_track.format)),
                 }
             )
 
@@ -156,19 +138,33 @@ class Title:
                 if (primary_video_track.hdr_format or "").startswith("Dolby Vision"):
                     context["hdr"] = "DV"
                     base_layer = DYNAMIC_RANGE_MAP.get(hdr_format)
+                    profile = getattr(primary_video_track, "hdr_format_profile", None) or ""
+                    if (
+                        base_layer in (None, "DV")
+                        and trc
+                        and "PQ" in trc
+                        and profile.startswith(("dvhe.07", "dvhe.08"))
+                    ):
+                        base_layer = "HDR"
                     if base_layer and base_layer != "DV":
                         context["hdr"] += f".{base_layer}"
                 elif (primary_video_track.hdr_format or "").startswith("HDR Vivid"):
-                    context["hdr"] = "HDR"
+                    context["hdr"] = DYNAMIC_RANGE_MAP["HDR Vivid"]
                 else:
                     context["hdr"] = DYNAMIC_RANGE_MAP.get(hdr_format, "")
+                    if context["hdr"] == "HDR" and any(v.range == Video.Range.HDR10P for v in self.tracks.videos[:1]):
+                        context["hdr"] = DYNAMIC_RANGE_MAP["HDR10+"]
             elif trc and "HLG" in trc:
                 context["hdr"] = "HLG"
+            elif trc and "PQ" in trc:
+                context["hdr"] = "HDR"
             else:
                 context["hdr"] = ""
+            context["hdr"] = ".".join(filter(None, map(rename, context["hdr"].split("."))))
 
             frame_rate = float(primary_video_track.frame_rate) if primary_video_track.frame_rate else 0.0
             context["hfr"] = "HFR" if frame_rate > 30 else ""
+            context["3d"] = "3D" if any(v.stereo for v in self.tracks.videos[:1]) else ""
 
         if primary_audio_track:
             codec = primary_audio_track.format
@@ -190,8 +186,10 @@ class Title:
                 channels_str = f"{len(positions) - heights - lfe}.{lfe}.{heights}"
             else:
                 channels_str = f"{channels:.1f}"
-            audio = AUDIO_CODEC_MAP.get(codec, codec)
-            spacer = " " if audio in SPACED_AUDIO_CODECS else ""
+            profile = getattr(primary_audio_track, "format_profile", None)
+            builtin = AUDIO_CODEC_MAP.get(f"{codec} {profile}") or AUDIO_CODEC_MAP.get(codec, codec)
+            audio = rename(builtin)
+            spacer = " " if builtin in SPACED_AUDIO_CODECS or audio[-1:].isdigit() else ""
 
             context.update(
                 {
@@ -206,10 +204,10 @@ class Title:
         if unique_audio_languages > 2:
             context["multi"] = "MULTi"
         elif unique_audio_languages == 2:
-            if not strict or (original_lang_tag and original_lang_tag in audio_lang_bases):
+            if not strict or (original_lang_tag and original_lang_tag in audio_languages):
                 context["dual"] = "DUAL"
         elif unique_audio_languages == 1 and strict:
-            if original_lang_tag and original_lang_tag not in audio_lang_bases:
+            if original_lang_tag and original_lang_tag not in audio_languages:
                 context["dubbed"] = "DUBBED"
 
         language_tags = config.language_tags if isinstance(config.language_tags, dict) else {}

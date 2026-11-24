@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<MPD xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="urn:mpeg:dash:schema:mpd:2011" xsi:schemaLocation="urn:mpeg:dash:schema:mpd:2011 DASH-MPD.xsd" profiles="urn:mpeg:dash:profile:full:2011" maxSegmentDuration="PT2S" minBufferTime="PT2S" type="static" mediaPresentationDuration="PT14S">
+   <ProgramInformation moreInformationURL="https://github.com/dash-Industry-Forum/livesim-content">
+      <Title>Manifest.mpd extended with image subtitles in side-loaded TTML format (not supported by livesim)</Title>
+      <Source>VoD source for DASH-IF livesim2</Source>
+   </ProgramInformation>
+   <Period id="precambrian" start="PT0S">
+      <AdaptationSet contentType="audio" mimeType="audio/mp4" lang="en" segmentAlignment="true" startWithSAP="1">
+         <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"/>
+         <SegmentTemplate startNumber="1" initialization="$RepresentationID$/init.mp4" duration="2" media="$RepresentationID$/$Number$.m4s"/>
+         <Representation id="A48" codecs="mp4a.40.2" bandwidth="48000" audioSamplingRate="48000">
+            <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2"/>
+         </Representation>
+      </AdaptationSet>
+      <AdaptationSet contentType="video" mimeType="video/mp4" segmentAlignment="true" startWithSAP="1" par="16:9" minWidth="640" maxWidth="640" minHeight="360" maxHeight="360" maxFrameRate="60/2">
+         <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"/>
+         <SegmentTemplate startNumber="1" initialization="$RepresentationID$/init.mp4" duration="2" media="$RepresentationID$/$Number$.m4s"/>
+         <Representation id="V300" codecs="avc1.64001e" bandwidth="300000" width="640" height="360" frameRate="30" sar="1:1"/>
+      </AdaptationSet>
+      <AdaptationSet contentType="text" mimeType="application/ttml+xml" segmentAlignment="true" lang="en-px">
+         <Role schemeIdUri="urn:mpeg:dash:role:2011" value="subtitle"/>
+         <Representation id="subs_reg_px" bandwidth="1000">
+             <BaseURL>img_subs_region_px.ttml</BaseURL>
+         </Representation>
+      </AdaptationSet>
+      <AdaptationSet contentType="text" mimeType="application/ttml+xml" segmentAlignment="true" lang="en-pc">
+         <Role schemeIdUri="urn:mpeg:dash:role:2011" value="subtitle"/>
+         <Representation id="subs_reg_pc" bandwidth="1000">
+             <BaseURL>img_subs_region_percent.ttml</BaseURL>
+         </Representation>
+      </AdaptationSet>
+      <!-- Specifying extent & origin in div is not following TTML and is not supported -->
+      <!-- AdaptationSet contentType="text" mimeType="application/ttml+xml" segmentAlignment="true" lang="en-div">
+         <Role schemeIdUri="urn:mpeg:dash:role:2011" value="subtitle"/>
+         <Representation id="subs_div" bandwidth="1000">
+             <BaseURL>img_subs_div.ttml</BaseURL>
+         </Representation>
+      </AdaptationSet-->
+      <AdaptationSet contentType="text" mimeType="application/ttml+xml" segmentAlignment="true" lang="se">
+         <Role schemeIdUri="urn:mpeg:dash:role:2011" value="subtitle"/>
+         <Representation id="img_subs_swe" bandwidth="1000">
+             <BaseURL>img_subs_swe.ttml</BaseURL>
+         </Representation>
+      </AdaptationSet>
+   </Period>
+</MPD>

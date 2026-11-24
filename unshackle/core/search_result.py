@@ -9,7 +9,7 @@ class SearchResult:
         description: Optional[str] = None,
         label: Optional[str] = None,
         url: Optional[str] = None,
-    ):
+    ) -> None:
         """
         A search result for any title type a service can give.
 
@@ -39,6 +39,16 @@ class SearchResult:
         self.description = description
         self.label = label
         self.url = url
+
+    def to_dict(self) -> dict[str, Union[str, int, None]]:
+        """The result as the REST API returns it."""
+        return {
+            "id": self.id,
+            "title": self.title,
+            "description": self.description,
+            "label": self.label,
+            "url": self.url,
+        }
 
 
 __all__ = ("SearchResult",)

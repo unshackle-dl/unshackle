@@ -19,7 +19,8 @@ import pytest
 from unshackle.core import binaries
 from unshackle.core.tracks import Audio, Subtitle, Tracks, Video
 from unshackle.core.tracks.track import (
-    has_dts_uhd_sample_entry,
+    fix_data_reference_indexes,
+    has_mp4_only_audio_entry,
     iter_top_level_boxes,
     strip_duplicate_init_boxes,
 )
@@ -36,9 +37,9 @@ def write_mp4(path: Path, sample_entry: bytes) -> Path:
     return path
 
 
-@pytest.mark.parametrize("fourcc", [b"dtsx", b"dtsy"])
-def test_dts_uhd_sample_entries_are_detected(tmp_path: Path, fourcc: bytes) -> None:
-    assert has_dts_uhd_sample_entry(write_mp4(tmp_path / "a.mp4", fourcc)) is True
+@pytest.mark.parametrize("fourcc", [b"dtsx", b"dtsy", b"mha1", b"mha2", b"mhm1", b"mhm2"])
+def test_dts_uhd_and_mpeg_h_sample_entries_are_detected(tmp_path: Path, fourcc: bytes) -> None:
+    assert has_mp4_only_audio_entry(write_mp4(tmp_path / "a.mp4", fourcc)) is True
 
 
 @pytest.mark.parametrize("fourcc", [b"dtsc", b"dtse", b"dtsh", b"dtsl", b"ec-3", b"mp4a"])
@@ -47,13 +48,13 @@ def test_other_dts_profiles_stay_in_matroska(tmp_path: Path, fourcc: bytes) -> N
     DTS:X Profile 1 is DTS-HD Master Audio underneath and Matroska stores it as
     A_DTS, so it must not be pulled out of Matroska by the DTS:X container rule.
     """
-    assert has_dts_uhd_sample_entry(write_mp4(tmp_path / "a.mp4", fourcc)) is False
+    assert has_mp4_only_audio_entry(write_mp4(tmp_path / "a.mp4", fourcc)) is False
 
 
 def test_a_file_with_no_moov_is_not_detected(tmp_path: Path) -> None:
     path = tmp_path / "a.mp4"
     path.write_bytes(box(b"ftyp", b"isom") + box(b"mdat", b"dtsx" * 8))
-    assert has_dts_uhd_sample_entry(path) is False, "a 4CC in mdat is not a sample entry"
+    assert has_mp4_only_audio_entry(path) is False, "a 4CC in mdat is not a sample entry"
 
 
 def build_tracks(tmp_path: Path, audio_entry: bytes) -> Tracks:
@@ -96,7 +97,7 @@ def test_dts_uhd_audio_routes_the_mux_to_mp4(tmp_path: Path, monkeypatch: pytest
     assert out.suffix == ".mp4", "a DTS-UHD title must not be delivered as Matroska"
     assert returncode == 0 and not errors
     command = captured[0].args
-    assert command[0] == "MP4Box"
+    assert command[:2] == ["MP4Box", "-for-test"]
     assert command[-2:] == ["-new", str(out)]
     assert f"{tmp_path / 'a.mp4'}:lang=en" in command
     assert captured[0].kwargs["stdout"] is subprocess.PIPE
@@ -112,10 +113,10 @@ def test_other_audio_still_muxes_with_mkvmerge(tmp_path: Path, monkeypatch: pyte
         tracks.mux("Title", delete=False, output_path=tmp_path / "out.muxed.mkv")
 
 
-def test_a_missing_mp4box_names_the_install(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_a_missing_mp4box_names_the_binary(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(binaries, "MP4Box", None, raising=False)
     tracks = build_tracks(tmp_path, b"dtsx")
-    with pytest.raises(RuntimeError, match="gpac"):
+    with pytest.raises(RuntimeError, match="MP4Box"):
         tracks.mux("Title", delete=False, output_path=tmp_path / "out.muxed.mkv")
 
 
@@ -147,6 +148,30 @@ def test_substation_alpha_subtitles_are_left_out(tmp_path: Path, monkeypatch: py
     assert "s.vtt:lang=es" in command
 
 
+def test_mp4_subtitles_get_the_script_their_region_implies(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: list[FakePopen] = []
+
+    def fake_popen(args: list[str], **kwargs: object) -> FakePopen:
+        p = FakePopen(args, **kwargs)
+        captured.append(p)
+        Path(args[-1]).write_bytes(b"muxed")
+        return p
+
+    monkeypatch.setattr(binaries, "MP4Box", Path("MP4Box"), raising=False)
+    monkeypatch.setattr(subprocess, "Popen", fake_popen)
+
+    tracks = build_tracks(tmp_path, b"dtsx")
+    vtt = Subtitle(id_="s1", url="https://x/s", codec=Subtitle.Codec.WebVTT, language="zh-TW")
+    vtt.path = tmp_path / "s.vtt"
+    vtt.path.write_text("WEBVTT\n")
+    tracks.add(vtt)
+
+    tracks.mux("Title", delete=False, output_path=tmp_path / "out.muxed.mkv")
+    command = captured[0].args
+    assert f"{tmp_path / 's.vtt'}:lang=zh-Hant-TW:tkhd=enable,movie,preview:ID=-1" in command
+    assert any(arg.endswith("=Chinese (Traditional)") for arg in command)
+
+
 def test_mp4box_errors_come_back_to_the_caller(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """A failed mux does not raise; the caller inspects the return code and lines."""
 
@@ -163,8 +188,25 @@ def test_mp4box_errors_come_back_to_the_caller(tmp_path: Path, monkeypatch: pyte
 
     tracks = build_tracks(tmp_path, b"dtsx")
     _, returncode, errors = tracks.mux("Title", delete=False, output_path=tmp_path / "out.muxed.mkv")
-    assert returncode == 1
+    assert returncode == 2, "MP4Box exits 1 on a failed import, and an exit with no output is no warning"
     assert errors == ["Error importing track: not supported"]
+
+
+def test_an_mp4box_warning_with_output_stays_a_warning(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    class WarningPopen(FakePopen):
+        def __init__(self, args, **kwargs):
+            super().__init__(args, **kwargs)
+            Path(args[-1]).write_bytes(b"muxed")
+
+        def wait(self) -> int:
+            return 1
+
+    monkeypatch.setattr(binaries, "MP4Box", Path("MP4Box"), raising=False)
+    monkeypatch.setattr(subprocess, "Popen", WarningPopen)
+
+    tracks = build_tracks(tmp_path, b"dtsx")
+    _, returncode, _ = tracks.mux("Title", delete=False, output_path=tmp_path / "out.muxed.mkv")
+    assert returncode == 1
 
 
 def init_pair(sample_entry: bytes, stamp: bytes = b"\x00\x00\x00\x01") -> bytes:
@@ -241,3 +283,77 @@ def test_an_unreadable_input_aborts_instead_of_shipping_a_placeholder(
 
     assert returncode >= 2, "a refused input must abort the run, not pass as a warning"
     assert errors
+
+
+def two_entry_video(path: Path, dref_count: int = 1, entry_body: int = 78, decoy: bytes = b"") -> Path:
+    """A video MP4 whose second sample entry names data reference 2; ``decoy`` goes in the trak before mdia."""
+
+    def entry(index: int) -> bytes:
+        return box(b"dvh1", (b"\x00" * 6 + struct.pack(">H", index) + b"\x00" * 70)[:entry_body])
+
+    dref = box(b"dref", struct.pack(">II", 0, dref_count) + box(b"url ", b"\x00\x00\x00\x01"))
+    stsd = box(b"stsd", struct.pack(">II", 0, 2) + entry(1) + entry(2))
+    minf = box(b"minf", box(b"dinf", dref) + box(b"stbl", stsd))
+    path.write_bytes(box(b"ftyp", b"isom") + box(b"moov", box(b"trak", decoy + box(b"mdia", minf))) + fragment(b"x"))
+    return path
+
+
+def repointed(data: bytes) -> bytes:
+    """``data`` with its second dvh1 entry pointed at data reference 1."""
+    expected = bytearray(data)
+    index = expected.rindex(b"dvh1") + 4 + 6
+    expected[index : index + 2] = b"\x00\x01"
+    return bytes(expected)
+
+
+@pytest.mark.parametrize(
+    "decoy",
+    [
+        pytest.param(b"", id="plain"),
+        pytest.param(box(b"meta", box(b"dinf", box(b"dref", struct.pack(">II", 0, 0)))), id="meta-dref-before-mdia"),
+    ],
+)
+def test_a_sample_entry_with_a_missing_data_reference_is_pointed_at_the_first(tmp_path: Path, decoy: bytes) -> None:
+    """A packager can give a second sample entry data_reference_index 2 with one dref entry; MP4Box refuses it.
+
+    Only the media's own dref counts, not one under a meta box before mdia.
+    """
+    path = two_entry_video(tmp_path / "v.mp4", decoy=decoy)
+    expected = repointed(path.read_bytes())
+
+    assert fix_data_reference_indexes(path) == 1
+    assert path.read_bytes() == expected, "only the second entry's index may change"
+    assert fix_data_reference_indexes(path) == 0
+
+
+@pytest.mark.parametrize(
+    ("dref_count", "entry_body"),
+    [pytest.param(0, 78, id="empty-dref"), pytest.param(1, 4, id="short-entry"), pytest.param(1, 0, id="empty-entry")],
+)
+def test_malformed_entries_are_left_alone(tmp_path: Path, dref_count: int, entry_body: int) -> None:
+    """With no dref entry to point at, or no room for the index, the file must not change."""
+    path = two_entry_video(tmp_path / "v.mp4", dref_count=dref_count, entry_body=entry_body)
+    before = path.read_bytes()
+
+    assert fix_data_reference_indexes(path) == 0
+    assert path.read_bytes() == before
+
+
+def test_the_mp4_mux_hands_mp4box_the_repointed_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: dict[str, bytes] = {}
+
+    def fake_popen(args: list[str], **kwargs: object) -> FakePopen:
+        source = next(arg for arg in args if arg.startswith(str(tmp_path / "v.mp4")))
+        seen["video"] = Path(source.split(":lang=")[0]).read_bytes()
+        Path(args[-1]).write_bytes(b"muxed")
+        return FakePopen(args, **kwargs)
+
+    monkeypatch.setattr(binaries, "MP4Box", Path("MP4Box"), raising=False)
+    monkeypatch.setattr(subprocess, "Popen", fake_popen)
+
+    tracks = build_tracks(tmp_path, b"dtsx")
+    original = two_entry_video(tracks.videos[0].path).read_bytes()
+    _, returncode, _ = tracks.mux("Title", delete=False, output_path=tmp_path / "out.muxed.mkv")
+
+    assert returncode == 0
+    assert seen["video"] == repointed(original)

@@ -14,20 +14,21 @@ from collections import Counter, defaultdict
 from collections.abc import Iterable
 from concurrent import futures
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import ExitStack
 from copy import deepcopy
 from datetime import date, timedelta
 from functools import partial
 from http.cookiejar import CookieJar, MozillaCookieJar
 from io import StringIO
-from itertools import product
+from itertools import groupby
+from operator import attrgetter
 from pathlib import Path
 from threading import Lock
-from typing import Any, Callable, Collection, Optional, Sequence, TypedDict, Union
+from typing import TYPE_CHECKING, Any, Callable, Collection, Optional, Sequence, TypedDict, Union, cast
 from uuid import UUID
 
 import click
 import mediaexport
-import yaml
 from click.core import ParameterSource
 from langcodes import Language, tag_is_valid
 from pymediainfo import MediaInfo
@@ -43,34 +44,57 @@ from rich.tree import Tree
 from unshackle.core import __version__, binaries, providers
 from unshackle.core.cdm import DecryptLabsRemoteCDM
 from unshackle.core.cdm.detect import cdm_type_stub, is_playready_cdm, is_remote_cdm, is_widevine_cdm
-from unshackle.core.config import cdm_entry_names_device, config, resolve_cdm_name, resolve_decryption
-from unshackle.core.console import GradientPulseBarColumn, SyncLive, console, listing_panel
+from unshackle.core.config import cdm_entry_names_device, config, load_yaml, resolve_cdm_name, resolve_decryption
+from unshackle.core.console import GradientPulseBarColumn, SyncLive, console, listing_panel, print_listing
 from unshackle.core.constants import (
     DEFAULT_SAMPLE,
     DOWNLOAD_ALL_DRM,
     DOWNLOAD_CANCELLED,
     DOWNLOAD_LICENCE_ONLY,
     AnyTrack,
+    DownloadCancelled,
     context_settings,
 )
 from unshackle.core.credential import Credential
-from unshackle.core.downloaders import default_max_workers, format_speed, parse_speed_limit, set_speed_limit
-from unshackle.core.drm import DRM_T, ClearKeyCENC, MonaLisa, PlayReady, Widevine, own_kids, verify
+from unshackle.core.downloaders import (
+    default_max_workers,
+    format_speed,
+    parse_speed_limit,
+    retries_exhausted,
+    set_speed_limit,
+)
+from unshackle.core.drm import (
+    DRM_T,
+    ClearKey,
+    ClearKeyCENC,
+    MonaLisa,
+    PlayReady,
+    Widevine,
+    cbcs,
+    drop_null_keys,
+    is_null_key,
+    own_kids,
+    real_kids,
+    verify,
+)
 from unshackle.core.events import events
 from unshackle.core.export_name import ExportNamer, move_export, plural, season_episodes, title_label
+from unshackle.core.manifests.snapshot import capture
 from unshackle.core.providers.anilist import parse_anilist_ref
 from unshackle.core.providers.tvdb import SEASON_TYPES, parse_int
 from unshackle.core.proxies.resolve import (
     REGION,
+    describe_explicit_proxy,
     describe_proxy,
     is_loopback,
     load_proxy_providers,
     pick_proxy,
+    require_alone_local_proxy,
     resolve_proxy,
     split_proxy_query,
 )
 from unshackle.core.service import Service, grow_session_pool
-from unshackle.core.services import Services
+from unshackle.core.services import ROUTING_PARAMS, Services
 from unshackle.core.temp import with_task_temp
 from unshackle.core.title_cacher import get_account_hash
 from unshackle.core.titles import Movie, Movies, Series, Song, Title_T
@@ -79,26 +103,34 @@ from unshackle.core.tracks import Audio, Subtitle, Tracks, Video
 from unshackle.core.tracks.attachment import Attachment
 from unshackle.core.tracks.dv_fixup import apply_dv_fixup
 from unshackle.core.tracks.hybrid import Hybrid
-from unshackle.core.tracks.track import assert_fragments_decrypted, has_encrypted_sample_entry
+from unshackle.core.tracks.subtitle_convert import PYCAPTION_WRITERS, SUBSTATION, build_ass_style
+from unshackle.core.tracks.track import (
+    Track,
+    assert_fragments_decrypted,
+    fix_data_reference_indexes,
+    has_encrypted_sample_entry,
+)
+from unshackle.core.tracks.tracks import at_resolution, select_videos
 from unshackle.core.utilities import (
     apply_original_language,
     as_requested,
     declared_kwargs,
     embedded_audio_langs,
-    excluded_language_tags,
     find_font_with_fallbacks,
     find_missing_langs,
     get_debug_logger,
     get_system_fonts,
     init_debug_logger,
-    is_close_match,
-    is_exact_match,
-    keep_forced_subtitle,
     kind_only_conflict,
     log_event,
+    matched_language_tags,
+    matching_languages,
     missing_required_langs,
+    orig_token,
     partition_exclusions,
+    plain_subtitle_tags,
     resolve_sort_langs,
+    standard_resolution,
     suggest_font_packages,
     time_elapsed_since,
 )
@@ -117,12 +149,25 @@ from unshackle.core.utils.click_types import (
     MultipleChoice,
 )
 from unshackle.core.utils.collections import ci_get, merge_dict
+from unshackle.core.utils.hdr10plus import probed_tracks
 from unshackle.core.utils.post_scripts import NO_POST_SCRIPTS, build_context, dispatch, season_context
-from unshackle.core.utils.redact import mask_proxy
+from unshackle.core.utils.redact import mask_proxy, redact_secrets
 from unshackle.core.utils.selector import select_multiple
-from unshackle.core.utils.subprocess import ffmpeg_decodes, ffprobe, run_step
+from unshackle.core.utils.subprocess import ffmpeg_decodes, ffprobe
 from unshackle.core.vault import Vault
 from unshackle.core.vaults import Vaults
+
+if TYPE_CHECKING:
+    import pysubs2
+
+    from unshackle.core.remote_service import ServerKeySource
+
+
+class SkippedTitle(TypedDict):
+    """A title skipped because a requested track or language is missing. Accumulated as ``dl.skipped_titles``."""
+
+    title: str
+    reason: str
 
 
 class SkippedSubtitle(TypedDict):
@@ -171,10 +216,7 @@ def validate_metadata_ids(
         (flag, value) for flag, value in (("--tmdb", tmdb_id), ("--imdb", imdb_id), ("--tvdb", tvdb_id)) if value
     ]
     if len(supplied) > 1:
-        raise click.UsageError(
-            f"{', '.join(flag for flag, _ in supplied)} cannot be used together. "
-            "Give one ID and unshackle resolves the others from it."
-        )
+        raise click.UsageError(f"{', '.join(flag for flag, _ in supplied)} cannot be used together; give one ID")
     if not supplied:
         return
 
@@ -187,9 +229,7 @@ def validate_metadata_ids(
 
     if consumers:
         keys = sorted({ID_PROVIDER_KEYS[cls.NAME] for cls in consumers if cls.NAME in ID_PROVIDER_KEYS})
-        raise click.UsageError(
-            f"{flag} needs the {consumers[0].NAME} provider. Set {' or '.join(keys)} in your config."
-        )
+        raise click.UsageError(f"{flag} needs the {consumers[0].NAME} provider: set {' or '.join(keys)} in your config")
     names = sorted({cls.NAME for cls in providers.REGISTRY.values() if cls.ID_KIND == id_kind})
     raise click.UsageError(
         f"{flag} needs the {' or '.join(names)} provider, which your metadata_providers config leaves out."
@@ -212,29 +252,157 @@ def group_videos_by_variant(videos: list[Video], *, merge: bool) -> list[list[Vi
     return list(groups.values())
 
 
+HYBRID_BASE_RANGES = (Video.Range.HDR10P, Video.Range.HDR10)
+
+
+def convert_scc(subtitle: Subtitle, sub_format: Optional[Union[Subtitle.Codec, str]]) -> Subtitle.Codec:
+    """
+    Convert an SCC subtitle to sub_format when pycaption can write it, else to SRT, and return the new codec.
+    Only pycaption reads SCC, and nothing later in the pipeline (styling, SDH strip, mux) can.
+    """
+    target = Subtitle.Codec.SubRip
+    if isinstance(sub_format, Subtitle.Codec) and sub_format in PYCAPTION_WRITERS:
+        target = sub_format
+    subtitle.convert(target)
+    if subtitle.path and not subtitle.path.read_text("utf8").strip():
+        logging.getLogger("Subtitle").warning(f"SCC subtitle {subtitle.language} has no CC1 captions")
+    return target
+
+
 def select_hybrid_bases(videos: Sequence[Video]) -> list[Video]:
-    """The HDR10 or HDR10+ track that is the hybrid base for each height, tallest first."""
+    """The HDR10 or HDR10+ track that is the hybrid base for each height, tallest first.
+
+    Only HEVC tracks qualify, because dovi_tool injects the RPU into an HEVC stream. HDR10+ comes before
+    HDR10 at one height.
+    """
     bases: dict[int, Video] = {}
     for video in sorted(
-        (v for v in videos if v.range in (Video.Range.HDR10P, Video.Range.HDR10)),
-        key=lambda v: v.height or 0,
+        (v for v in videos if v.range in HYBRID_BASE_RANGES and v.codec in (Video.Codec.HEVC, None)),
+        key=lambda v: (v.height or 0, v.range == Video.Range.HDR10P),
         reverse=True,
     ):
         bases.setdefault(video.height or 0, video)
     return list(bases.values())
 
 
-def hybrid_source_tracks(base: Video, dv: Video, base_container: Optional[Path] = None) -> list[Video]:
+def generated_dv_ranges(
+    range_: Sequence[Video.Range], generate_dv: bool
+) -> tuple[list[Video.Range], list[Video.Range]]:
+    """Turn ``-r HDR10 --generate-dv`` (or HDR10P) into a HYBRID run on that base alone.
+
+    Returns the ranges to run with, and the base ranges the user named. The second list is empty when
+    the flag is off, HYBRID or DV is in the ranges, or no base range is. The service still gets the
+    ranges the user gave, so it fetches no DV track.
+    """
+    bases = [r for r in range_ if r in HYBRID_BASE_RANGES]
+    if not generate_dv or not bases or Video.Range.HYBRID in range_ or Video.Range.DV in range_:
+        return list(range_), []
+    return [Video.Range.HYBRID, *(r for r in range_ if r not in bases)], bases
+
+
+def keep_generated_dv_bases(videos: Sequence[Video], bases: Sequence[Video.Range]) -> list[Video]:
+    """The videos without the DV tracks and without a hybrid base range the user did not name."""
+    return [v for v in videos if v.range != Video.Range.DV and (v.range not in HYBRID_BASE_RANGES or v.range in bases)]
+
+
+def subtitle_look(
+    sub_format: Optional[Union[Subtitle.Codec, str]],
+    sub_font: Optional[str],
+    style_fields: Any,
+    *,
+    typed_font: bool = True,
+    typed_format: bool = True,
+) -> tuple[Optional[Union[Subtitle.Codec, str]], Optional[pysubs2.SSAStyle]]:
+    """The subtitle format and ASS style for --sub-font and the subtitle.ass_style config.
+
+    A style makes ASS the format when none is set. Another format leaves the style unused. A typed --sub-font
+    overrides a format from config, refuses a typed one, and a font from config is ignored like the config style.
+    """
+    if typed_font and sub_font and sub_format is not None and sub_format not in SUBSTATION:
+        if typed_format:
+            raise ValueError(f"--sub-font needs ASS subtitles, not {getattr(sub_format, 'name', sub_format)}")
+        sub_format = None
+    if not (style_fields or sub_font) or sub_format not in (None, *SUBSTATION):
+        return sub_format, None
+    if not isinstance(style_fields, (dict, type(None))):
+        raise ValueError("subtitle.ass_style must be a mapping of style fields")
+    style = build_ass_style({**(style_fields or {}), **({"fontname": sub_font} if sub_font else {})})
+    return sub_format or Subtitle.Codec.SubStationAlphav4, style
+
+
+def set_subtitle_look(
+    subtitles: Iterable[Subtitle], style: Optional[pysubs2.SSAStyle], videos: Iterable[Video]
+) -> None:
+    """Give each subtitle that is not already SSA/ASS the style, and every subtitle the size of the first video."""
+    size = next(((v.width, v.height) for v in videos if v.width and v.height), None)
+    for subtitle in subtitles:
+        subtitle.ass_style = None if subtitle.codec in SUBSTATION else style
+        subtitle.ass_video_size = size
+
+
+def hybrid_gate_failure(videos: Sequence[Video], generate_dv: bool) -> Optional[str]:
+    """The message that stops HYBRID for these selected videos, or None when it can go on."""
+    if any(v.native_hybrid for v in videos):
+        return None
+    hdr_tracks = [v for v in videos if v.range in HYBRID_BASE_RANGES]
+    base_tracks = [v for v in hdr_tracks if v.codec in (Video.Codec.HEVC, None)]
+    dv_tracks = [v for v in videos if v.range == Video.Range.DV]
+    ranges = ", ".join(sorted(set(v.range.name for v in videos))) or "none"
+    missing = f"HYBRID needs HDR10/HDR10+ and DV tracks, available ranges: {ranges}"
+
+    if not hdr_tracks:
+        return missing
+    if not base_tracks:
+        codecs = sorted(set(v.codec.name for v in hdr_tracks if v.codec))
+        return f"HYBRID needs an HEVC HDR10/HDR10+ base, available codecs: {', '.join(codecs)}"
+    if not dv_tracks and not generate_dv:
+        return f"{missing}; add --generate-dv to make DV"
+    return None
+
+
+def hybrid_plan(videos: Sequence[Video], generate_dv: bool) -> tuple[list[Video], Optional[Video]]:
+    """The hybrid bases and the 2D DV track to pair with them.
+
+    With no DV track, a base qualifies only with ``--generate-dv``. A resolution with a
+    finished hybrid (``native_hybrid``) gets no base: that track is its hybrid.
+    """
+    dv_tracks = [v for v in videos if v.range == Video.Range.DV and not v.stereo]
+    native_heights = {v.height for v in videos if v.native_hybrid}
+    base_pool = [v for v in videos if v.height not in native_heights and (dv_tracks or generate_dv)]
+    matching_dv = min(dv_tracks, key=lambda v: v.height or 0) if dv_tracks else None
+    return select_hybrid_bases(base_pool), matching_dv
+
+
+def hybrid_source_tracks(base: Video, dv: Optional[Video], base_container: Optional[Path] = None) -> list[Video]:
     """Copies of the base and DV tracks for the hybrid step, with the base on its container file.
 
     The hybrid step reads the duration and seeks, and the raw stream from the DV fixup
-    permits neither.
+    permits neither. With no DV track, the hybrid step makes Dolby Vision for the base.
     """
-    tracks = [deepcopy(base), deepcopy(dv)]
+    tracks = [deepcopy(track) for track in (base, dv) if track]
     tracks[0].path = base_container or base.path
-    for track in tracks:
-        track.needs_duration_fix = True
     return tracks
+
+
+def hybrid_step_error(tracks: list[Video], source: str, output_name: str) -> Optional[str]:
+    """Run the hybrid step for one resolution; the error that failed it, or None.
+
+    A failure here is this resolution's alone: the title goes on with its other resolutions.
+    """
+    try:
+        Hybrid(tracks, source, output_name=output_name)
+    except (ValueError, KeyError, OSError, RuntimeError) as e:
+        return str(e) or type(e).__name__
+    return None
+
+
+def missing_hybrid_error(bases: Sequence[Video], made: int) -> Optional[str]:
+    """Why the title has no hybrid file, or None when at least one was made."""
+    if made:
+        return None
+    if not bases:
+        return "No HEVC HDR10 or HDR10+ track to make a hybrid from"
+    return f"Every hybrid failed ({', '.join(f'{v.height or 0}p' for v in bases)}), so the title has no hybrid file"
 
 
 def title_wanted(candidate: Any, wanted: Collection[str]) -> bool:
@@ -294,9 +462,11 @@ def load_tracks(
     name: Optional[str] = None,
     year: Optional[int] = None,
     language: Optional[Language] = None,
+    workers: Optional[int] = None,
+    on_probe: Optional[Callable[[], None]] = None,
 ) -> None:
     """Load the tracks and chapters of a title, then apply the --enrich name, year and language again."""
-    title.tracks.add(service.get_tracks(title), warn_only=True)
+    title.tracks.add(probed_tracks(service, title, workers=workers, on_probe=on_probe), warn_only=True)
     title.tracks.chapters = service.get_chapters(title)
     apply_enrich(title, name, year, language)
 
@@ -321,8 +491,8 @@ def post_script_group(candidate: Any) -> Any:
     return ("title", id(candidate))
 
 
-def remux_music_tracks(title: Any, log: logging.Logger) -> None:
-    """Remux each audio track of a Song into the container of its codec.
+def remux_music_tracks(title: Any, log: logging.Logger, sample: Optional[tuple[int, int]] = None) -> None:
+    """Remux each audio track of a Song into the container of its codec, cut to ``sample`` when given.
 
     A Song never reaches the muxer, so each downloaded audio track is itself a delivered
     file. A failure warns, keeps that downloaded track, and moves on to the next one: the
@@ -331,52 +501,54 @@ def remux_music_tracks(title: Any, log: logging.Logger) -> None:
     if not isinstance(title, Song):
         return
     for track in title.tracks.audio:
+        window = (max(sample[0] - track.sample_start, 0), sample[1] - sample[0]) if sample else (0.0, None)
         try:
-            track.to_music_container()
+            track.to_music_container(*window)
         except Exception as e:  # noqa: BLE001
             log.warning(f"Could not remux audio track {track.id} for music: {e}")
 
 
-def cut_music_sample(title: Any, window: tuple[int, int], log: logging.Logger) -> None:
-    """Cut each audio track of a Song to the sample window. A Song has no mux step that cuts it."""
-    if not isinstance(title, Song) or not binaries.FFMPEG:
-        return
-    for track in title.tracks.audio:
-        if not track.path or not track.path.exists():
-            continue
-        cut_path = track.path.with_stem(f"{track.path.stem}_cut")
-        try:
-            run_step(
-                [
-                    binaries.FFMPEG,
-                    "-v",
-                    "error",
-                    "-y",
-                    "-ss",
-                    f"{max(window[0] - track.sample_start, 0):.3f}",
-                    "-i",
-                    track.path,
-                    "-t",
-                    str(window[1] - window[0]),
-                    "-map",
-                    "0",
-                    "-c",
-                    "copy",
-                    cut_path,
-                ],
-                output=cut_path,
-                label="music sample cut",
-            )
-            os.replace(cut_path, track.path)
-        except RuntimeError as e:
-            log.warning(f"Could not cut audio track {track.id} to the sample window, so it holds whole segments: {e}")
+def mux_skipped(no_mux: bool, title: Any) -> bool:
+    """A Song has no mux step, so --no-mux never applies to it."""
+    return no_mux and not isinstance(title, Song)
+
+
+def take_unmuxable_audio(tracks: Tracks) -> list[Audio]:
+    """Remove and return the Audio Vivid tracks, which no muxer carries, to be saved beside the output."""
+    kept = [a for a in tracks.audio if a.codec == Audio.Codec.AV3A]
+    tracks.audio = [a for a in tracks.audio if a.codec != Audio.Codec.AV3A]
+    return kept
+
+
+def track_file_suffix(track: Any) -> str:
+    """The name part a track file saved on its own adds after the title: language and codec, or subtitle flags."""
+    if isinstance(track, Video):
+        return f".{track.codec.name if track.codec is not None else 'video'}"
+    lang_suffix = f".{track.language}" if track.language else ""
+    if isinstance(track, Audio):
+        return f"{lang_suffix}.{track.codec.name if track.codec is not None else 'audio'}"
+    if isinstance(track, Subtitle):
+        return f"{lang_suffix}{'.forced' if track.forced else ''}{'.sdh' if track.sdh else ''}"
+    return ""
+
+
+def no_mux_extension(track: Any, path: Path, media_info: MediaInfo) -> str:
+    """The extension of a track file saved on its own: .ts for MPEG-TS, .m4a for an audio track in MPEG-4."""
+    container = media_info.general_tracks[0].format if media_info.general_tracks else None
+    if container == "MPEG-TS":
+        return ".ts"
+    return ".m4a" if isinstance(track, Audio) and path.suffix == ".mp4" and container == "MPEG-4" else path.suffix
 
 
 def apply_service_dl_overrides(ctx: click.Context, service_dl_config: dict[str, Any], log: logging.Logger) -> None:
     """Apply ``services.<TAG>.dl`` config onto ``ctx.params``. Explicit CLI/env values win.
-    The config replaces defaults and global ``dl:`` default_map values."""
+    The config replaces defaults and global ``dl:`` default_map values.
+    ``remote`` and ``server`` are skipped: they pick the code that runs, so ``Services.resolve_command`` sets
+    them before the service loads, and an API job takes them from its request."""
     params_by_name = {param.name: param for param in ctx.command.params if param.name}
     for name, value in normalize_dl_config(service_dl_config).items():
+        if name in ROUTING_PARAMS:
+            continue
         param = params_by_name.get(name)
         if param is None:
             log.warning(f"Ignoring unknown dl option '{name}' in service config")
@@ -393,10 +565,7 @@ def apply_service_dl_overrides(ctx: click.Context, service_dl_config: dict[str, 
             ctx.params[name] = param.type_cast_value(ctx, value)
             log.debug(f"Applied service dl override '{name}': {ctx.params[name]}")
         except Exception as e:
-            log.warning(
-                f"Failed to apply service dl override '{name}'={value!r}: {e}. "
-                f"Check that the value is valid for this parameter."
-            )
+            log.warning(f"Failed to apply service dl override '{name}'={value!r}: {e}")
 
 
 def download_tracks_in_passes(
@@ -422,7 +591,7 @@ def download_tracks_in_passes(
     DOWNLOAD_CANCELLED.clear()
     indexed = list(enumerate(tracks))
     if skip_subtitle_errors:
-        primary = [(i, t) for i, t in indexed if not isinstance(t, Subtitle)]
+        primary: list[tuple[int, AnyTrack]] = [(i, t) for i, t in indexed if not isinstance(t, Subtitle)]
         skippable = [(i, t) for i, t in indexed if isinstance(t, Subtitle)]
     else:
         primary, skippable = indexed, []
@@ -464,8 +633,10 @@ class dl:
             font_name: Font family name to find
 
         Returns:
-            Path to font file, or None if not found
+            Path to font file, or None if not found. A name that is a path, not one folder name, finds nothing.
         """
+        if Path(font_name).name != font_name or font_name in ("", ".."):
+            return None
         family_dir = Path(config.directories.fonts, font_name)
         if family_dir.exists():
             fonts = list(family_dir.glob("*.*tf"))
@@ -508,6 +679,8 @@ class dl:
         Returns:
             Tuple of (fonts_attached_count, missing_fonts_list)
         """
+        if not font_names:
+            return 0, []
         system_fonts = get_system_fonts()
 
         font_count = 0
@@ -804,6 +977,12 @@ class dl:
         default=[],
         help="Subtitle languages that must exist. The title fails if one is missing. -sl still decides what to keep.",
     )
+    @click.option(
+        "--skip-missing",
+        is_flag=True,
+        default=False,
+        help="Skip a title that misses a required language or track and continue with the next title.",
+    )
     @click.option("-fs", "--forced-subs", is_flag=True, default=False, help="Include forced subtitle tracks.")
     @click.option(
         "-fso",
@@ -823,13 +1002,19 @@ class dl:
         "--exact-lang",
         is_flag=True,
         default=False,
-        help="Use exact language matching (no variants). With this flag, -l es-419 matches ONLY es-419, not es-ES or other variants.",
+        help="A language tag without a region selects only the variant it means and never falls back to another: -l es does not select es-419. A tag with a region, such as es-419, is always exact.",
     )
     @click.option(
         "--proxy",
         type=str,
         default=None,
         help="Proxy URI to use. If a 2-letter country is provided, it will try to get a proxy from the config.",
+    )
+    @click.option(
+        "--local-proxy",
+        is_flag=True,
+        default=False,
+        help="With --remote, the server sends its service requests out through this machine's own connection (and any VPN on it), or through a --proxy dialled from this machine.",
     )
     @click.option(
         "--tag",
@@ -878,6 +1063,13 @@ class dl:
         "a series' Streaming Order is 'alternate'. Defaults to the tvdb_order config option.",
     )
     @click.option(
+        "-ce",
+        "--continuous-episodes",
+        is_flag=True,
+        default=False,
+        help="Number each season on from the season before it, e.g. S02E05 after a four-episode season one.",
+    )
+    @click.option(
         "--anilist",
         "anilist_id",
         type=str,
@@ -914,6 +1106,12 @@ class dl:
         type=SUBTITLE_CODEC,
         default=None,
         help="Set Output Subtitle Format, only converting if necessary. Use 'original' to keep source format.",
+    )
+    @click.option(
+        "--sub-font",
+        type=str,
+        default=None,
+        help="Font for subtitles converted to ASS, with the subtitle.ass_style look. Implies --sub-format ASS.",
     )
     @click.option("-V", "--video-only", is_flag=True, default=False, help="Only download video tracks.")
     @click.option("-A", "--audio-only", is_flag=True, default=False, help="Only download audio tracks.")
@@ -1110,7 +1308,8 @@ class dl:
         "--worst",
         is_flag=True,
         default=False,
-        help="Select the lowest bitrate track within the specified quality. Requires -q/--quality.",
+        help="Select the lowest bitrate track within the specified quality, or of the lowest resolution if no "
+        "quality is set.",
     )
     @click.option(
         "--best-available",
@@ -1118,14 +1317,20 @@ class dl:
         "best_available",
         is_flag=True,
         default=False,
-        help="Warn instead of failing when a requested resolution, range, or language is missing, and continue with what is available.",
+        help="Warn instead of failing when a requested resolution, range, video language, or audio language is missing.",
     )
     @click.option(
-        "--remote",
+        "--generate-dv",
         is_flag=True,
         default=False,
+        help="Make Dolby Vision from HDR10+ or the decoded video: with -r HYBRID when a title has no DV track, "
+        "with -r HDR10 or HDR10P for that base alone.",
+    )
+    @click.option(
+        "--remote/--local",
+        default=False,
         is_eager=True,
-        help="Use a remote unshackle server instead of local service code.",
+        help="Use a remote unshackle server instead of local service code. --local overrides a remote: true config.",
     )
     @click.option(
         "--server",
@@ -1140,10 +1345,14 @@ class dl:
 
     DRM_LOCKS: dict[str, Lock] = {}
     DRM_LOCKS_GUARD = Lock()
+    LICENCE_LOCK = Lock()
     VAULT_WRITER = ThreadPoolExecutor(1, thread_name_prefix="vault-writer")
     EXPORT_LOCK = Lock()
+    export_snapshots: dict[str, Optional[dict[str, Any]]]
     LICENSE_KEY_CACHE: dict[UUID, str] = {}
     ALL_DRM_LOCK = Lock()
+    _remote_service: Optional["ServerKeySource"] = None
+    typed_params: frozenset[str] = frozenset()
 
     def __init__(
         self,
@@ -1157,6 +1366,7 @@ class dl:
         imdb_id: Optional[str] = None,
         tvdb_id: Optional[int] = None,
         tvdb_order: Optional[str] = None,
+        continuous_episodes: bool = False,
         anilist_id: Optional[Union[int, str]] = None,
         enrich: bool = False,
         daily: bool = False,
@@ -1164,25 +1374,28 @@ class dl:
         proxy_providers: Optional[list[Any]] = None,
         *_: Any,
         **__: Any,
-    ):
+    ) -> None:
         if not ctx.invoked_subcommand:
             raise ValueError("A subcommand to invoke was not specified, the main code cannot continue.")
 
         self.log = logging.getLogger("download")
+        self.typed_params = frozenset(
+            name
+            for name in ("sub_font", "sub_format")
+            if ctx.get_parameter_source(name) not in (None, ParameterSource.DEFAULT, ParameterSource.DEFAULT_MAP)
+        )
         self.completed_files: list[Path] = []
         self.skipped_subtitles: list[SkippedSubtitle] = []
-        self.download_failed: bool = False
+        self.skipped_titles: list[SkippedTitle] = []
+        self.stop_reason: Optional[str] = None
+        self.download_error: Optional[BaseException] = None
 
         if not config.output_template:
-            raise click.ClickException(
-                "No 'output_template' configured in your unshackle.yaml.\n"
-                "Please add an 'output_template' section with movies, series, and songs/music templates.\n"
-                "See unshackle-example.yaml for examples."
-            )
+            raise click.ClickException("No 'output_template' in your unshackle.yaml")
 
         self.service = Services.get_tag(ctx.invoked_subcommand)
         self.vault_service = Services.get_vault_tag(self.service)
-        apply_service_dl_overrides(ctx, config.services.get(self.service, {}).get("dl", {}), self.log)
+        apply_service_dl_overrides(ctx, (ci_get(config.services, self.service) or {}).get("dl") or {}, self.log)
 
         no_proxy = ctx.params.get("no_proxy", no_proxy)
         profile = ctx.params.get("profile", profile)
@@ -1193,6 +1406,7 @@ class dl:
         imdb_id = ctx.params.get("imdb_id", imdb_id)
         tvdb_id = ctx.params.get("tvdb_id", tvdb_id)
         tvdb_order = ctx.params.get("tvdb_order", tvdb_order)
+        continuous_episodes = ctx.params.get("continuous_episodes", continuous_episodes)
         anilist_id = ctx.params.get("anilist_id", anilist_id)
         enrich = ctx.params.get("enrich", enrich)
         daily = ctx.params.get("daily", daily)
@@ -1208,6 +1422,7 @@ class dl:
         self.tvdb_order = (tvdb_order or config.tvdb_order or "").lower()
         if self.tvdb_order and self.tvdb_order not in SEASON_TYPES:
             raise click.UsageError(f"tvdb_order must be one of {', '.join(SEASON_TYPES)}, not {self.tvdb_order!r}")
+        self.continuous_episodes = continuous_episodes
         self.enrich = enrich
         self.daily = daily
         self.output_dir = output_dir
@@ -1220,7 +1435,7 @@ class dl:
             )
 
         if self.daily and not self.enrich:
-            self.log.warning("--daily fills air dates from TVDB only with --enrich. A service can set them itself.")
+            self.log.warning("--daily takes TVDB air dates only with --enrich")
 
         if config.debug or logging.root.level == logging.DEBUG:
             from collections import defaultdict
@@ -1263,7 +1478,7 @@ class dl:
                     },
                 )
 
-                binary_versions = {}
+                binary_versions: dict[str, Optional[dict[str, Optional[str]]]] = {}
                 for name, binary in [
                     ("shaka_packager", binaries.ShakaPackager),
                     ("mp4decrypt", binaries.Mp4decrypt),
@@ -1271,56 +1486,9 @@ class dl:
                     ("ffmpeg", binaries.FFMPEG),
                     ("ffprobe", binaries.FFProbe),
                 ]:
-                    if binary:
-                        version = None
-                        try:
-                            if name == "shaka_packager":
-                                r = subprocess.run(
-                                    [str(binary), "--version"],
-                                    capture_output=True,
-                                    text=True,
-                                    encoding="utf-8",
-                                    errors="replace",
-                                    timeout=5,
-                                )
-                                version = (r.stdout or r.stderr or "").strip()
-                            elif name in ("ffmpeg", "ffprobe"):
-                                r = subprocess.run(
-                                    [str(binary), "-version"],
-                                    capture_output=True,
-                                    text=True,
-                                    encoding="utf-8",
-                                    errors="replace",
-                                    timeout=5,
-                                )
-                                version = (r.stdout or "").split("\n")[0].strip()
-                            elif name == "mkvmerge":
-                                r = subprocess.run(
-                                    [str(binary), "--version"],
-                                    capture_output=True,
-                                    text=True,
-                                    encoding="utf-8",
-                                    errors="replace",
-                                    timeout=5,
-                                )
-                                version = (r.stdout or "").strip()
-                            elif name == "mp4decrypt":
-                                r = subprocess.run(
-                                    [str(binary)],
-                                    capture_output=True,
-                                    text=True,
-                                    encoding="utf-8",
-                                    errors="replace",
-                                    timeout=5,
-                                )
-                                output = (r.stdout or "") + (r.stderr or "")
-                                lines = [line.strip() for line in output.split("\n") if line.strip()]
-                                version = " | ".join(lines[:2]) if lines else None
-                        except Exception:
-                            version = "<error getting version>"
-                        binary_versions[name] = {"path": str(binary), "version": version}
-                    else:
-                        binary_versions[name] = None
+                    binary_versions[name] = (
+                        {"path": str(binary), "version": binaries.binary_version(binary)} if binary else None
+                    )
 
                 self.debug_logger.log(
                     level="DEBUG",
@@ -1342,7 +1510,7 @@ class dl:
                 try:
                     service_config_path = Services.get_path(self.service) / config.filenames.config
                     if service_config_path.exists():
-                        self.service_config = yaml.safe_load(service_config_path.read_text(encoding="utf8"))
+                        self.service_config = load_yaml(service_config_path)
                         self.log.info("Service Config loaded")
                         log_event(
                             "load_service_config",
@@ -1355,9 +1523,9 @@ class dl:
                         )
                 except KeyError:
                     pass
-            merge_dict(config.services.get(self.service), self.service_config)
+            merge_dict(ci_get(config.services, self.service), self.service_config)
 
-        service_config = config.services.get(self.service, {})
+        service_config = ci_get(config.services, self.service, {})
         if service_config:
             reserved_keys = {
                 "profiles",
@@ -1489,20 +1657,29 @@ class dl:
                 if cdm_info:
                     log_event("load_cdm", level="INFO", service=self.service, context={"cdm": cdm_info})
 
-        self.remote_needs_public_proxy = self.is_remote and not is_loopback(server_url(ctx.params.get("server")))
+        if ctx.params.get("local_proxy"):
+            require_alone_local_proxy(ctx)
+            proxy, no_proxy = ctx.params.get("proxy"), bool(ctx.params.get("no_proxy"))
+
+        self.remote_needs_public_proxy = (
+            self.is_remote
+            and not ctx.params.get("local_proxy")
+            and not is_loopback(server_url(ctx.params.get("server")))
+        )
 
         self.proxy_providers = []
         if no_proxy:
             ctx.params["proxy"] = None
         else:
             if self.remote_needs_public_proxy and proxy and proxy.lower().startswith("gluetun:"):
-                raise click.UsageError("Gluetun runs on your machine, so --remote cannot use it.")
+                raise click.UsageError("Gluetun runs on your machine, so --remote needs --local-proxy to use it.")
             if proxy_providers is not None:
                 self.proxy_providers = list(proxy_providers)
             else:
                 with console.status("Loading Proxy Providers...", spinner="dots"):
                     self.proxy_providers = load_proxy_providers()
 
+            ctx.params["proxy_arg"] = proxy
             if proxy and proxy.startswith("controld://"):
                 proxy = ctx.params["proxy"] = resolve_proxy(proxy, [])
             if proxy:
@@ -1531,12 +1708,9 @@ class dl:
                     ctx.params["proxy_query"] = proxy_query
                     ctx.params["proxy_provider"] = requested_provider
                 else:
-                    self.log.info(f"Using explicit Proxy: {mask_proxy(ctx.params['proxy'])}")
+                    self.log.info(describe_explicit_proxy(ctx.params["proxy"]))
                     ctx.params["proxy_query"] = None
                     ctx.params["proxy_provider"] = None
-
-            if self.remote_needs_public_proxy and ctx.params.get("proxy") and is_loopback(ctx.params["proxy"]):
-                raise click.UsageError("That proxy is on your machine, so --remote cannot use it.")
 
         ctx.obj = ContextData(
             config=self.service_config,
@@ -1544,6 +1718,7 @@ class dl:
             proxy_providers=self.proxy_providers,
             profile=self.profile,
             cdm_entry=self.cdm_from_service_entry(),
+            cdm_for=self.cdm_for,
         )
 
         if repack:
@@ -1562,29 +1737,31 @@ class dl:
         quality: list[int],
         vcodec: list[Video.Codec],
         acodec: list[Audio.Codec],
-        vbitrate: int,
-        abitrate: int,
+        vbitrate: Optional[int],
+        abitrate: Optional[int],
         vbitrate_range: Optional[str],
         abitrate_range: Optional[str],
         range_: list[Video.Range],
-        channels: float,
+        channels: Optional[float],
         no_atmos: bool,
         select_titles: bool,
         wanted: list[str],
         latest_episode: bool,
         latest_episodes: Optional[int],
         lang: list[str],
-        v_lang: list[str],
-        a_lang: list[str],
-        s_lang: list[str],
+        v_lang: Optional[list[str]],
+        a_lang: Optional[list[str]],
+        s_lang: Optional[list[str]],
         require_audio: list[str],
         require_video: list[str],
         require_subs: list[str],
+        skip_missing: bool,
         forced_subs: bool,
         forced_subs_only: bool,
         forced_s_lang: list[str],
         exact_lang: bool,
         sub_format: Optional[Union[Subtitle.Codec, str]],
+        sub_font: Optional[str],
         video_only: bool,
         audio_only: bool,
         subs_only: bool,
@@ -1601,7 +1778,7 @@ class dl:
         list_: bool,
         list_titles: bool,
         skip_dl: bool,
-        export: bool,
+        export: Optional[bool],
         cdm_only: Optional[bool],
         no_proxy: bool,
         no_proxy_download: bool,
@@ -1627,6 +1804,7 @@ class dl:
         postscript: Sequence[str] = (),
         no_postscript: bool = False,
         all_drm: bool = False,
+        generate_dv: bool = False,
         *_: Any,
         **__: Any,
     ) -> None:
@@ -1648,12 +1826,11 @@ class dl:
         self.search_source = None
         self.service_anime = bool(getattr(service, "ANIME", False))
         self.service_daily = bool(getattr(service, "DAILY", False))
-        self.server_cdm = getattr(service, "_server_cdm", False)
-        from unshackle.core.import_service import ImportService
+        from unshackle.core.import_service import SERVER_KEY_SOURCES, ImportService
 
         if self.cdm_override and isinstance(service, ImportService):
             self.log.warning("--cdm is ignored: an import uses the keys in the export")
-        self._remote_service = service if hasattr(service, "_server_cdm") else None
+        self._remote_service = service if isinstance(service, SERVER_KEY_SOURCES) else None
         start_time = time.time()
 
         lang, lang_excl = partition_exclusions(lang)
@@ -1669,7 +1846,7 @@ class dl:
             ("-fsl/--forced-s-lang", fsl_excl),
         ):
             if any(token.lower() == "all" for token in excludes):
-                self.log.error(f"{flag}: 'all' cannot be excluded. Name the languages to exclude instead.")
+                self.log.error(f"{flag}: 'all' cannot be excluded")
                 sys.exit(1)
         if lang_excl and not lang:
             lang = ["orig"]
@@ -1773,7 +1950,7 @@ class dl:
                 if vbitrate_min > vbitrate_max:
                     vbitrate_min, vbitrate_max = vbitrate_max, vbitrate_min
             except (ValueError, IndexError):
-                self.log.error("Invalid --vbitrate-range format. Use 'MIN-MAX' (e.g., '6000-7000').")
+                self.log.error("Invalid --vbitrate-range: expected MIN-MAX, such as 6000-7000")
                 sys.exit(1)
 
         abitrate_min, abitrate_max = None, None
@@ -1789,7 +1966,7 @@ class dl:
                 if abitrate_min > abitrate_max:
                     abitrate_min, abitrate_max = abitrate_max, abitrate_min
             except (ValueError, IndexError):
-                self.log.error("Invalid --abitrate-range format. Use 'MIN-MAX' (e.g., '128-256').")
+                self.log.error("Invalid --abitrate-range: expected MIN-MAX, such as 128-256")
                 sys.exit(1)
 
         if not acodec:
@@ -1801,20 +1978,30 @@ class dl:
         ):
             acodec = AUDIO_CODEC_LIST.convert(acodec)
 
-        if worst and not quality:
-            self.log.error("--worst requires -q/--quality to be specified")
-            sys.exit(1)
-
         if select_titles and wanted:
             self.log.error("--select-titles and -w/--wanted cannot be used together")
             sys.exit(1)
 
+        try:
+            sub_format, ass_style = subtitle_look(
+                sub_format,
+                sub_font,
+                config.subtitle.get("ass_style"),
+                typed_font="sub_font" in self.typed_params,
+                typed_format="sub_format" in self.typed_params,
+            )
+        except ValueError as e:
+            self.log.error(str(e))
+            sys.exit(1)
+
+        if generate_dv and Video.Range.DV in range_ and Video.Range.HYBRID not in range_:
+            self.log.warning("--generate-dv ignored: DV is in the selected ranges")
+        range_, generated_dv_bases = generated_dv_ranges(range_, generate_dv)
         if any(r == Video.Range.HYBRID for r in range_):
             from unshackle.core.binaries import DoviTool
 
             if not DoviTool:
-                self.log.error("Unable to run hybrid mode: dovi_tool not detected")
-                self.log.error("Please install dovi_tool from https://github.com/quietvoid/dovi_tool")
+                self.log.error("Unable to run hybrid mode: dovi_tool not found")
                 sys.exit(1)
 
         if cdm_only is None:
@@ -1933,13 +2120,13 @@ class dl:
             if enrich_lang:
                 self.log.info(f"Original language from metadata: {enrich_lang}")
             if not (enrich_title or enrich_year or enrich_lang):
-                self.log.warning("--enrich found no metadata. Is the provider's API key configured?")
+                self.log.warning("--enrich found no metadata")
             elif missing := [
                 name
                 for name, value in (("title", enrich_title), ("year", enrich_year), ("language", enrich_lang))
                 if not value
             ]:
-                self.log.warning(f"--enrich source gave no {', '.join(missing)}. Those fields are unchanged.")
+                self.log.warning(f"--enrich source gave no {', '.join(missing)}, kept the service's values")
 
             if isinstance(titles, (Series, Movies)):
                 for t in titles:
@@ -1954,8 +2141,11 @@ class dl:
         if self.tvdb_order and isinstance(titles, Series):
             titles = self.apply_tvdb_order(titles, title_cacher, cache_title_id, cache_region, cache_account_hash)
 
+        if self.continuous_episodes and isinstance(titles, Series):
+            titles = self.apply_continuous_episodes(titles)
+
         console.print(Padding(Rule(f"[rule.text]{titles.__class__.__name__}: {titles}"), (1, 2)))
-        console.print(Padding(titles.tree(verbose=list_titles), (0, 5)))
+        print_listing(titles.tree(verbose=list_titles))
 
         if list_titles:
             return
@@ -1989,7 +2179,7 @@ class dl:
             console.print(Padding(Rule("[rule.text]Select Titles"), (1, 2)))
 
             selection_titles = []
-            dependencies = {}
+            dependencies: dict[int, list[int]] = {}
             original_indices = {}
 
             current_season = None
@@ -2089,8 +2279,10 @@ class dl:
                             t for t in audio if t.language == language and (codec is None or t.codec == codec)
                         ]
                     else:
-                        pool = [t for t in audio if codec is None or t.codec == codec]
-                        candidates = Tracks.by_language(pool, [language], per_language=0, exact_match=exact_lang)
+                        tags = matching_languages(language, [t.language for t in audio], exact_lang)
+                        candidates = [
+                            t for t in audio if str(t.language) in tags and (codec is None or t.codec == codec)
+                        ]
                     if not candidates:
                         continue
                     if audio_description:
@@ -2102,8 +2294,10 @@ class dl:
                             selected.append(descs[0])
                     else:
                         selected.append(candidates[0])
-            seen_ids: set[str] = set()
-            return [t for t in selected if not (t.id in seen_ids or seen_ids.add(t.id))]
+            unique: dict[str, Audio] = {}
+            for t in selected:
+                unique.setdefault(t.id, t)
+            return list(unique.values())
 
         base_selection = (v_lang, a_lang, s_lang, range_)
 
@@ -2125,16 +2319,21 @@ class dl:
                 for folder, context in post_script_last.get(group_key, {}).items():
                     dispatch("success", "season", season_context(context, folder), postscript)
 
-        def skip_title(title: Any, reason: str) -> None:
-            """Skip a title that has no track of the kind an only flag selects.
+        def skip_title(title: Any, reason: str, kind_only: bool = False) -> None:
+            """Skip a title that has no track the selection asks for, and report it to the API job.
 
-            A run with one title stops instead, because it has nothing else to download.
+            Only a kind-only miss (-ado, -fso, no track left) skips without --skip-missing; any other miss
+            stops the run. A run with one title always stops, because it has nothing else to download.
             """
-            if wanted_total <= 1:
-                self.log.error(reason)
+            if wanted_total <= 1 or not (kind_only or skip_missing):
+                self.stop_reason = f"{title}: {reason}"
+                self.log.error(self.stop_reason)
                 sys.exit(1)
-            self.log.warning(f"{reason} Skipping {title}")
-            if not no_mux:
+            self.skipped_titles.append(SkippedTitle(title=str(title), reason=reason))
+            if progress_sink:
+                progress_sink({"skipped_titles": list(self.skipped_titles)})
+            self.log.warning(f"Skipping {title}: {reason}")
+            if not mux_skipped(no_mux, title):
                 settle_post_script_group(title)
 
         for i, title in enumerate(titles):
@@ -2232,8 +2431,8 @@ class dl:
                 delay = random.randint(slow[0], slow[1])
                 spinner = Spinner("dots", text=f"Delaying by {delay} seconds...")
                 with SyncLive(Padding(spinner, (0, 5)), console=console, refresh_per_second=12.5, transient=True):
-                    for remaining in range(delay, 0, -1):
-                        spinner.update(text=f"Delaying by {remaining} seconds...")
+                    for seconds_left in range(delay, 0, -1):
+                        spinner.update(text=f"Delaying by {seconds_left} seconds...")
                         time.sleep(1)
 
             with console.status("Subscribing to events...", spinner="dots"):
@@ -2245,9 +2444,18 @@ class dl:
                 events.subscribe(events.Types.TRACK_MULTIPLEX, service.on_track_multiplex)
 
             tracks_label = "Getting Remote Tracks..." if self.is_remote else "Getting Tracks..."
-            with console.status(tracks_label, spinner="dots"):
+            tracks_spinner = Spinner("dots", text=tracks_label)
+            with SyncLive(Padding(tracks_spinner, (0, 5)), console=console, refresh_per_second=12.5, transient=True):
                 try:
-                    load_tracks(service, title, name=enrich_title, year=enrich_year, language=enrich_lang)
+                    load_tracks(
+                        service,
+                        title,
+                        name=enrich_title,
+                        year=enrich_year,
+                        language=enrich_lang,
+                        workers=workers,
+                        on_probe=lambda: tracks_spinner.update(text="Probing HDR10 tracks for HDR10+..."),
+                    )
                 except Exception as e:
                     if self.debug_logger:
                         self.debug_logger.log_error(
@@ -2298,13 +2506,15 @@ class dl:
                         level="INFO", operation="get_tracks", service=self.service, context=tracks_info
                     )
 
+            if dedupe_codecs := config.subtitle.get("dedupe_codecs"):
+                codecs = map(SUBTITLE_CODEC.convert, dedupe_codecs)
+                title.tracks.dedupe_subtitle_codecs([c for c in codecs if isinstance(c, Subtitle.Codec)])
+
             if config.subtitle.get("strip_sdh", True):
+                plain_langs = [x.language for x in title.tracks.subtitles if not x.sdh and not x.forced]
                 for subtitle in title.tracks.subtitles:
-                    if subtitle.sdh and not any(
-                        is_close_match(subtitle.language, [x.language])
-                        for x in title.tracks.subtitles
-                        if not x.sdh and not x.forced
-                    ):
+                    if subtitle.sdh and not matching_languages(subtitle.language, plain_langs, exact=True):
+                        plain_langs.append(subtitle.language)
                         non_sdh_sub = deepcopy(subtitle)
                         non_sdh_sub.id += "_stripped"
                         non_sdh_sub.sdh = False
@@ -2339,16 +2549,20 @@ class dl:
                 subtitle_priority = config.subtitle.get("language_priority") or []
 
                 title.tracks.sort_videos(
-                    by_language=resolve_sort_langs(v_lang or lang, title.language),
+                    by_language=resolve_sort_langs(v_lang or lang, title.language, exact=exact_lang),
                     exact_match=exact_lang,
                 )
                 title.tracks.sort_audio(
-                    by_language=resolve_sort_langs([*audio_priority, *(a_lang or lang)], title.language),
+                    by_language=resolve_sort_langs(
+                        [*audio_priority, *(a_lang or lang)], title.language, exact=exact_lang
+                    ),
                     codec_priority=config.audio.get("codec_priority"),
                     exact_match=exact_lang,
                 )
                 title.tracks.sort_subtitles(
-                    by_language=resolve_sort_langs([*subtitle_priority, *(s_lang or [])], title.language),
+                    by_language=resolve_sort_langs(
+                        [*subtitle_priority, *(s_lang or [])], title.language, exact=exact_lang
+                    ),
                     type_priority=config.subtitle.get("type_priority"),
                     group_by=config.subtitle.get("group_by"),
                     exact_match=exact_lang,
@@ -2356,7 +2570,7 @@ class dl:
 
             if list_:
                 available_tracks, _ = title.tracks.tree()
-                console.print(Padding(listing_panel(available_tracks, "Available Tracks"), (0, 5)))
+                print_listing(listing_panel(available_tracks, "Available Tracks"))
                 continue
 
             keep_videos = True
@@ -2401,6 +2615,7 @@ class dl:
             elif proxy_download:
                 console.log(f"Using a separate proxy for downloads: {mask_proxy(proxy_download)}")
 
+            missing_required: list[str] = []
             for kind, required, available in (
                 (
                     "audio",
@@ -2412,13 +2627,18 @@ class dl:
                 (
                     "subtitle",
                     require_subs if keep_subtitles else [],
-                    [t.language for t in title.tracks.subtitles if t.forced or not forced_subs_only],
+                    [
+                        t.language
+                        for t in title.tracks.subtitles
+                        if (t.forced if forced_subs_only else forced_subs or not t.forced)
+                    ],
                 ),
             ):
-                missing_required = missing_required_langs(required, available, title.language, exact=exact_lang)
-                if missing_required:
-                    self.log.error(f"Required {kind} language(s) not found: {', '.join(missing_required)}")
-                    sys.exit(1)
+                if missing := missing_required_langs(required, available, title.language, exact=exact_lang):
+                    missing_required.append(f"Required {kind} language(s) not found: {', '.join(missing)}")
+            if missing_required:
+                skip_title(title, "; ".join(missing_required))
+                continue
 
             if not keep_videos:
                 title.tracks.videos = []
@@ -2430,98 +2650,88 @@ class dl:
                 title.tracks.chapters = []
 
             with console.status("Selecting tracks...", spinner="dots"):
-
-                def resolve_excludes(excludes: list[str], _title: Title_T = title) -> list[str]:
-                    """Change 'orig' to this title's language. An 'orig' with no language excludes nothing."""
-                    resolved: list[str] = []
-                    for token in excludes:
-                        value = str(_title.language) if token == "orig" else token
-                        if token == "orig" and not _title.language:
-                            continue
-                        if value not in resolved:
-                            resolved.append(value)
-                    return resolved
-
-                video_excl_r = resolve_excludes(video_excl)
-                audio_excl_r = resolve_excludes(audio_excl)
-                s_excl_r = resolve_excludes(s_lang_excl)
-                fsl_excl_r = resolve_excludes(fsl_excl)
+                video_excl_r = resolve_sort_langs(video_excl, title.language, exact=exact_lang)
+                audio_excl_r = resolve_sort_langs(audio_excl, title.language, exact=exact_lang)
+                s_excl_r = resolve_sort_langs(s_lang_excl, title.language, exact=exact_lang)
+                fsl_excl_r = resolve_sort_langs(fsl_excl, title.language, exact=exact_lang)
 
                 if isinstance(title, (Movie, Episode)):
+                    resolution: Optional[int]
+                    color_range: Optional[Video.Range]
+                    codec: Optional[Video.Codec]
                     if keep_videos and vcodec:
                         title.tracks.select_video(lambda x: x.codec in vcodec)
                         missing_codecs = [c for c in vcodec if not any(x.codec == c for x in title.tracks.videos)]
                         for codec in missing_codecs:
                             self.log.warning(f"Skipping {codec.name} video tracks as none are available.")
                         if not title.tracks.videos:
-                            self.log.error(f"There's no {', '.join(c.name for c in vcodec)} Video Track...")
-                            sys.exit(1)
+                            skip_title(title, f"There's no {', '.join(c.name for c in vcodec)} Video Track...")
+                            continue
+                    elif keep_videos:
+                        title.tracks.select_video(lambda x: x.codec != Video.Codec.LCEVC)
+
+                    if keep_videos and generated_dv_bases:
+                        title.tracks.videos = keep_generated_dv_bases(title.tracks.videos, generated_dv_bases)
+                        if not any(v.range in generated_dv_bases for v in title.tracks.videos):
+                            skip_title(
+                                title, f"There's no {', '.join(r.name for r in generated_dv_bases)} Video Track..."
+                            )
+                            continue
 
                     if keep_videos and range_:
                         if Video.Range.HYBRID not in range_:
+                            dv_has_hdr10p = any(x.hdr10plus for x in title.tracks.videos)
                             title.tracks.select_video(lambda x: x.range in range_)
                             missing_ranges = [r for r in range_ if not any(x.range == r for x in title.tracks.videos)]
                             for color_range in missing_ranges:
                                 self.log.warning(f"Skipping {color_range.name} video tracks as none are available.")
+                            if Video.Range.HDR10P in missing_ranges and dv_has_hdr10p:
+                                self.log.warning("A DV track carries HDR10+: use -r DV or -r HYBRID.")
                             if not title.tracks.videos:
-                                self.log.error(f"There's no {', '.join(r.name for r in range_)} Video Track...")
-                                sys.exit(1)
+                                skip_title(title, f"There's no {', '.join(r.name for r in range_)} Video Track...")
+                                continue
 
                     if keep_videos and vbitrate:
                         if any(r == Video.Range.HYBRID for r in range_):
                             title.tracks.select_video(
-                                lambda x: x.range == Video.Range.DV or (x.bitrate and x.bitrate // 1000 == vbitrate)
+                                lambda x: x.range == Video.Range.DV or bool(x.bitrate and x.bitrate // 1000 == vbitrate)
                             )
                             if not any(x.range != Video.Range.DV for x in title.tracks.videos):
-                                self.log.error(f"There's no {vbitrate}kbps Video Track...")
-                                sys.exit(1)
+                                skip_title(title, f"There's no {vbitrate}kbps Video Track...")
+                                continue
                         else:
-                            title.tracks.select_video(lambda x: x.bitrate and x.bitrate // 1000 == vbitrate)
+                            title.tracks.select_video(lambda x: bool(x.bitrate and x.bitrate // 1000 == vbitrate))
                             if not title.tracks.videos:
-                                self.log.error(f"There's no {vbitrate}kbps Video Track...")
-                                sys.exit(1)
+                                skip_title(title, f"There's no {vbitrate}kbps Video Track...")
+                                continue
 
                     if keep_videos and vbitrate_min is not None and vbitrate_max is not None:
                         title.tracks.select_video(
-                            lambda x: x.bitrate and vbitrate_min <= x.bitrate // 1000 <= vbitrate_max
+                            lambda x: bool(x.bitrate and vbitrate_min <= x.bitrate // 1000 <= vbitrate_max)
                         )
                         if not title.tracks.videos:
-                            self.log.error(f"No Video Track in {vbitrate_min}-{vbitrate_max}kbps range...")
-                            sys.exit(1)
+                            skip_title(title, f"No Video Track in {vbitrate_min}-{vbitrate_max}kbps range...")
+                            continue
 
                     if keep_videos and video_excl_r:
-                        drop = excluded_language_tags(
-                            video_excl_r, [t.language for t in title.tracks.videos], exact_lang
+                        drop = matched_language_tags(
+                            video_excl_r, [t.language for t in title.tracks.videos], exact_lang, every_variant=True
                         )
                         title.tracks.select_video(lambda x: str(x.language) not in drop)
                         if not title.tracks.videos:
-                            self.log.error(f"Every Video Track was excluded by -{', -'.join(video_excl_r)}...")
-                            sys.exit(1)
+                            skip_title(title, f"Every Video Track was excluded by -{', -'.join(video_excl_r)}...")
+                            continue
 
                     effective_video_lang = v_lang or lang
                     video_languages = [lang for lang in effective_video_lang if lang != "best"]
-                    video_multi_lang = (
-                        "best" in effective_video_lang or "all" in effective_video_lang or len(video_languages) > 1
-                    )
+                    processed_video_lang = video_languages
                     if keep_videos and video_languages and "all" not in video_languages:
-                        processed_video_lang = []
-                        v_orig_token: Optional[str] = None
-                        for language in video_languages:
-                            if language == "orig":
-                                if title.language:
-                                    orig_lang = str(title.language)
-                                    v_orig_token = orig_lang
-                                    if orig_lang not in processed_video_lang:
-                                        processed_video_lang.append(orig_lang)
-                                else:
-                                    self.log.warning(
-                                        "Original language not available for title, skipping 'orig' selection for video"
-                                    )
-                            else:
-                                if language not in processed_video_lang:
-                                    processed_video_lang.append(language)
-                        if v_orig_token in video_languages:
-                            v_orig_token = None
+                        processed_video_lang = resolve_sort_langs(video_languages, title.language, exact=exact_lang)
+                        v_orig_token = orig_token(video_languages, title.language, exact_lang)
+                        if "orig" in video_languages and not title.language:
+                            self.log.warning(
+                                "Original language not available for title, skipping 'orig' selection for video"
+                            )
                         missing_v_langs = find_missing_langs(
                             processed_video_lang,
                             [v.language for v in title.tracks.videos],
@@ -2538,22 +2748,26 @@ class dl:
                                     )
                                     processed_video_lang = remaining_v_langs
                                 else:
-                                    self.log.error(f"{missing_str} not found in video tracks and no fallback available")
-                                    sys.exit(1)
+                                    skip_title(
+                                        title, f"{missing_str} not found in video tracks and no fallback available"
+                                    )
+                                    continue
                             else:
-                                self.log.error(missing_str + " not found in video tracks")
-                                sys.exit(1)
+                                skip_title(title, missing_str + " not found in video tracks")
+                                continue
                         title.tracks.videos = title.tracks.by_language(
                             title.tracks.videos, processed_video_lang, exact_match=exact_lang
                         )
                         if not title.tracks.videos:
-                            self.log.error(
-                                f"There's no {as_requested(processed_video_lang, v_orig_token) or 'orig'} Video Track..."
+                            skip_title(
+                                title,
+                                f"There's no {as_requested(processed_video_lang, v_orig_token) or 'orig'} Video Track...",
                             )
-                            sys.exit(1)
+                            continue
+                    video_requests = None if {"best", "all"} & set(effective_video_lang) else processed_video_lang
 
                     has_hybrid = any(r == Video.Range.HYBRID for r in range_)
-                    non_hybrid_ranges = [r for r in range_ if r != Video.Range.HYBRID]
+                    non_hybrid_ranges: list[Video.Range] = [r for r in range_ if r != Video.Range.HYBRID]
                     effective_quality = quality
                     if keep_videos and quality:
                         missing_resolutions = []
@@ -2565,9 +2779,7 @@ class dl:
                                 v for v in non_hybrid_tracks if v.range in non_hybrid_ranges
                             ]
                             for resolution in quality:
-                                if any(v.height == resolution for v in deliverable_pool):
-                                    continue
-                                if any(v.width and int(v.width * 9 / 16) == resolution for v in deliverable_pool):
+                                if any(at_resolution(v, resolution) for v in deliverable_pool):
                                     continue
                                 missing_resolutions.append(resolution)
 
@@ -2575,18 +2787,13 @@ class dl:
                                 effective_quality = []
                             else:
                                 hybrid_filter = title.tracks.select_hybrid(
-                                    hybrid_candidate_tracks, quality, worst=worst
+                                    hybrid_candidate_tracks, quality, worst=worst, generate_dv=generate_dv
                                 )
                                 hybrid_selected = list(filter(hybrid_filter, hybrid_candidate_tracks))
 
                                 if non_hybrid_ranges and non_hybrid_tracks:
                                     non_hybrid_selected = [
-                                        v
-                                        for v in non_hybrid_tracks
-                                        if any(
-                                            v.height == res or (v.width and int(v.width * (9 / 16)) == res)
-                                            for res in quality
-                                        )
+                                        v for v in non_hybrid_tracks if any(at_resolution(v, res) for res in quality)
                                     ]
                                     title.tracks.videos = Tracks.merge_video_selections(
                                         hybrid_selected, non_hybrid_selected
@@ -2598,9 +2805,7 @@ class dl:
                             title.tracks.by_resolutions(quality)
 
                             for resolution in quality:
-                                if any(v.height == resolution for v in title.tracks.videos):
-                                    continue
-                                if any(v.width and int(v.width * 9 / 16) == resolution for v in title.tracks.videos):
+                                if any(at_resolution(v, resolution) for v in title.tracks.videos):
                                     continue
                                 missing_resolutions.append(resolution)
 
@@ -2620,8 +2825,8 @@ class dl:
                                     f"There's no {res_list} Video Track{plural}, continuing with available qualities..."
                                 )
                             else:
-                                self.log.error(f"There's no {res_list} Video Track{plural}...")
-                                sys.exit(1)
+                                skip_title(title, f"There's no {res_list} Video Track{plural}...")
+                                continue
 
                     pre_hybrid_videos: list[Video] = list(title.tracks.videos) if has_hybrid else []
                     if keep_videos and has_hybrid:
@@ -2629,192 +2834,114 @@ class dl:
                             title.tracks.videos, non_hybrid_ranges
                         )
 
-                        if not effective_quality:
-                            best_resolution = max((v.height for v in hybrid_candidate_tracks), default=None)
-                            if best_resolution:
-                                hybrid_filter = title.tracks.select_hybrid(
-                                    hybrid_candidate_tracks, [best_resolution], worst=worst
-                                )
-                                hybrid_selected = list(filter(hybrid_filter, hybrid_candidate_tracks))
-                            else:
-                                hybrid_selected = []
-                        else:
+                        hybrid_quality = effective_quality
+                        if not hybrid_quality:
+                            height_pool = (
+                                [
+                                    *select_hybrid_bases(hybrid_candidate_tracks),
+                                    *(v for v in hybrid_candidate_tracks if v.finished_hybrid),
+                                ]
+                                if worst
+                                else hybrid_candidate_tracks
+                            )
+                            base_heights = [v.height for v in height_pool if v.height]
+                            hybrid_quality = [(min if worst else max)(base_heights)] if base_heights else []
+                        hybrid_selected = []
+                        if hybrid_quality:
                             hybrid_filter = title.tracks.select_hybrid(
-                                hybrid_candidate_tracks, effective_quality, worst=worst
+                                hybrid_candidate_tracks, hybrid_quality, worst=worst, generate_dv=generate_dv
                             )
                             hybrid_selected = list(filter(hybrid_filter, hybrid_candidate_tracks))
+                            for res in hybrid_quality:
+                                if not any(at_resolution(v, res) for v in hybrid_selected):
+                                    self.log.warning(f"Skipping {res}p: nothing at that resolution can make a hybrid")
 
-                        non_hybrid_selected: list[Video] = []
+                        non_hybrid_selected = []
                         if non_hybrid_ranges and non_hybrid_tracks:
-                            if video_multi_lang:
-                                non_hybrid_langs = list(dict.fromkeys(str(v.language) for v in non_hybrid_tracks))
-                            else:
-                                non_hybrid_langs = [None]
-                            for resolution, color_range, codec, vlang in product(
-                                effective_quality or [None], non_hybrid_ranges, vcodec or [None], non_hybrid_langs
-                            ):
-                                candidates = [
-                                    t
-                                    for t in non_hybrid_tracks
-                                    if (
-                                        not resolution
-                                        or t.height == resolution
-                                        or (t.width and int(t.width * (9 / 16)) == resolution)
-                                    )
-                                    and (not color_range or t.range == color_range)
-                                    and (not codec or t.codec == codec)
-                                    and (vlang is None or str(t.language) == vlang)
-                                ]
-                                match = candidates[-1] if worst and candidates else next(iter(candidates), None)
-                                if match and match not in non_hybrid_selected:
-                                    non_hybrid_selected.append(match)
+                            non_hybrid_selected = select_videos(
+                                non_hybrid_tracks,
+                                effective_quality,
+                                non_hybrid_ranges,
+                                vcodec,
+                                video_requests,
+                                exact_lang,
+                                worst,
+                            )
 
                         title.tracks.videos = Tracks.merge_video_selections(hybrid_selected, non_hybrid_selected)
-
                         Tracks.flag_hybrid_ingredients(hybrid_selected, non_hybrid_selected)
                     elif keep_videos:
-                        selected_videos: list[Video] = []
-                        if video_multi_lang:
-                            unique_video_langs = list(dict.fromkeys(str(v.language) for v in title.tracks.videos))
-                        else:
-                            unique_video_langs = [None]
-                        for resolution, color_range, codec, vlang in product(
-                            effective_quality or [None], range_ or [None], vcodec or [None], unique_video_langs
-                        ):
-                            candidates = [
-                                t
-                                for t in title.tracks.videos
-                                if (
-                                    not resolution
-                                    or t.height == resolution
-                                    or (t.width and int(t.width * (9 / 16)) == resolution)
-                                )
-                                and (not color_range or t.range == color_range)
-                                and (not codec or t.codec == codec)
-                                and (vlang is None or str(t.language) == vlang)
-                            ]
-                            match = candidates[-1] if worst and candidates else next(iter(candidates), None)
-                            if match and match not in selected_videos:
-                                selected_videos.append(match)
-                        title.tracks.videos = selected_videos
+                        title.tracks.videos = select_videos(
+                            title.tracks.videos, effective_quality, range_, vcodec, video_requests, exact_lang, worst
+                        )
 
                     if keep_videos and any(r == Video.Range.HYBRID for r in range_):
-                        base_tracks = [
-                            v for v in title.tracks.videos if v.range in (Video.Range.HDR10, Video.Range.HDR10P)
-                        ]
-                        dv_tracks = [v for v in title.tracks.videos if v.range == Video.Range.DV]
+                        gate_failure = hybrid_gate_failure(title.tracks.videos, generate_dv)
+                        if not gate_failure and not any(
+                            v.range == Video.Range.DV or v.native_hybrid for v in title.tracks.videos
+                        ):
+                            self.log.info("No Dolby Vision track: Dolby Vision will be generated")
 
-                        hybrid_failed = False
-                        if not base_tracks and not dv_tracks:
-                            available_ranges = sorted(set(v.range.name for v in title.tracks.videos))
-                            msg = "HYBRID mode requires both HDR10/HDR10+ and DV tracks, but neither is available"
-                            msg_detail = (
-                                f"Available ranges: {', '.join(available_ranges) if available_ranges else 'none'}"
-                            )
-                            hybrid_failed = True
-                        elif not base_tracks:
-                            available_ranges = sorted(set(v.range.name for v in title.tracks.videos))
-                            msg = "HYBRID mode requires both HDR10/HDR10+ and DV tracks, but only DV is available"
-                            msg_detail = f"Available ranges: {', '.join(available_ranges)}"
-                            hybrid_failed = True
-                        elif not dv_tracks:
-                            available_ranges = sorted(set(v.range.name for v in title.tracks.videos))
-                            msg = "HYBRID mode requires both HDR10/HDR10+ and DV tracks, but only HDR10 is available"
-                            msg_detail = f"Available ranges: {', '.join(available_ranges)}"
-                            hybrid_failed = True
-
-                        if hybrid_failed:
-                            other_ranges = [r for r in range_ if r != Video.Range.HYBRID]
+                        if gate_failure:
+                            other_ranges: list[Video.Range] = [r for r in range_ if r != Video.Range.HYBRID]
                             if best_available and other_ranges:
-                                self.log.warning(msg)
                                 self.log.warning(
-                                    f"Continuing with remaining range(s): {', '.join(r.name for r in other_ranges)}"
+                                    f"{gate_failure}; continuing with {', '.join(r.name for r in other_ranges)}"
                                 )
                                 range_ = other_ranges
-                                fallback_pool = pre_hybrid_videos
-                                if video_multi_lang:
-                                    fallback_langs = list(dict.fromkeys(str(v.language) for v in fallback_pool))
-                                else:
-                                    fallback_langs = [None]
-                                fallback_selected: list[Video] = []
-                                for resolution, color_range, codec, vlang in product(
-                                    effective_quality or [None], other_ranges, vcodec or [None], fallback_langs
-                                ):
-                                    candidates = [
-                                        t
-                                        for t in fallback_pool
-                                        if (
-                                            not resolution
-                                            or t.height == resolution
-                                            or (t.width and int(t.width * (9 / 16)) == resolution)
-                                        )
-                                        and (not color_range or t.range == color_range)
-                                        and (not codec or t.codec == codec)
-                                        and (vlang is None or str(t.language) == vlang)
-                                    ]
-                                    match = candidates[-1] if worst and candidates else next(iter(candidates), None)
-                                    if match and match not in fallback_selected:
-                                        fallback_selected.append(match)
-                                title.tracks.videos = fallback_selected
+                                title.tracks.videos = select_videos(
+                                    pre_hybrid_videos,
+                                    effective_quality,
+                                    other_ranges,
+                                    vcodec,
+                                    video_requests,
+                                    exact_lang,
+                                    worst,
+                                )
                             else:
-                                self.log.error(msg)
-                                self.log.error(msg_detail)
-                                sys.exit(1)
+                                skip_title(title, gate_failure)
+                                continue
 
-                    fsl = [t for t in forced_s_lang if t != "orig"]
-                    if "orig" in forced_s_lang and title.language:
-                        fsl.append(str(title.language))
+                    fsl = resolve_sort_langs(forced_s_lang, title.language, exact=exact_lang)
                     if keep_subtitles and s_excl_r:
-                        drop = excluded_language_tags(
-                            s_excl_r, [t.language for t in title.tracks.subtitles], exact_lang
+                        drop = matched_language_tags(
+                            s_excl_r, [t.language for t in title.tracks.subtitles], exact_lang, every_variant=True
                         )
                         title.tracks.select_subtitles(lambda x: str(x.language) not in drop)
                     if keep_subtitles and s_lang and "all" not in s_lang:
-                        match_func = is_exact_match if exact_lang else is_close_match
-
+                        s_orig_token = orig_token(s_lang, title.language, exact_lang)
+                        s_lang = resolve_sort_langs(s_lang, title.language, exact=exact_lang)
                         missing_langs = find_missing_langs(
                             s_lang,
-                            [sub.language for sub in title.tracks.subtitles],
+                            [sub.language for sub in title.tracks.subtitles if forced_subs or not sub.forced],
                             exact=exact_lang,
                         )
                         if missing_langs:
-                            missing_str = ", ".join(missing_langs)
-                            if best_available:
-                                remaining = [tok for tok in s_lang if tok not in missing_langs]
-                                if remaining:
-                                    self.log.warning(
-                                        f"{missing_str} not found in subtitle tracks, continuing with: {', '.join(remaining)}"
-                                    )
-                                    s_lang = remaining
-                                else:
-                                    self.log.warning(
-                                        f"{missing_str} not found in subtitle tracks, continuing without subtitles"
-                                    )
-                                    title.tracks.select_subtitles(
-                                        lambda x: (
-                                            x.forced and keep_forced_subtitle(x.forced, x.language, fsl, exact_lang)
-                                        )
-                                    )
-                            else:
-                                self.log.error(missing_str + " not found in subtitle tracks")
-                                sys.exit(1)
+                            remaining = [tok for tok in s_lang if tok not in missing_langs]
+                            tail = (
+                                f"continuing with: {as_requested(remaining, s_orig_token)}"
+                                if remaining
+                                else "continuing without subtitles"
+                            )
+                            self.log.warning(
+                                f"{as_requested(missing_langs, s_orig_token)} not found in subtitle tracks, {tail}"
+                            )
 
                         if s_lang and title.tracks.subtitles:
-                            title.tracks.select_subtitles(
-                                lambda x: (
-                                    match_func(x.language, s_lang)
-                                    or bool(x.forced and fsl and match_func(x.language, fsl))
-                                )
+                            plain_tags = plain_subtitle_tags(s_lang, title.tracks.subtitles, exact_lang)
+                            forced_tags = matched_language_tags(
+                                [*s_lang, *fsl], [x.language for x in title.tracks.subtitles if x.forced], exact_lang
                             )
-                            if not title.tracks.subtitles and not best_available:
-                                self.log.error(f"There's no {s_lang} Subtitle Track...")
-                                sys.exit(1)
+                            title.tracks.select_subtitles(
+                                lambda x: str(x.language) in (forced_tags if x.forced else plain_tags)
+                            )
 
                     if keep_subtitles:
                         if fsl:
-                            title.tracks.select_subtitles(
-                                lambda x: keep_forced_subtitle(x.forced, x.language, fsl, exact_lang)
+                            fsl_tags = matched_language_tags(
+                                fsl, [x.language for x in title.tracks.subtitles if x.forced], exact_lang
                             )
+                            title.tracks.select_subtitles(lambda x: not x.forced or str(x.language) in fsl_tags)
                             if not any(x.forced for x in title.tracks.subtitles):
                                 self.log.warning(
                                     f"No forced subtitle tracks matched --forced-s-lang ({', '.join(forced_s_lang)})"
@@ -2822,33 +2949,40 @@ class dl:
                         elif not forced_subs:
                             title.tracks.select_subtitles(lambda x: not x.forced)
                         if fsl_excl_r:
-                            drop = excluded_language_tags(
-                                fsl_excl_r, [t.language for t in title.tracks.subtitles if t.forced], exact_lang
+                            drop = matched_language_tags(
+                                fsl_excl_r,
+                                [t.language for t in title.tracks.subtitles if t.forced],
+                                exact_lang,
+                                every_variant=True,
                             )
                             title.tracks.select_subtitles(lambda x: not (x.forced and str(x.language) in drop))
                         if forced_subs_only:
                             title.tracks.select_subtitles(lambda x: x.forced)
                             if not title.tracks.subtitles:
-                                skip_title(title, "There's no forced subtitle track for the selected languages.")
+                                skip_title(
+                                    title,
+                                    "There's no forced subtitle track for the selected languages.",
+                                    kind_only=True,
+                                )
                                 continue
 
                 if keep_audio and audio_description_only:
                     title.tracks.select_audio(lambda x: x.descriptive)
                     if not title.tracks.audio:
-                        skip_title(title, "There's no audio description track.")
+                        skip_title(title, "There's no audio description track.", kind_only=True)
                         continue
                 if keep_audio and len(title.tracks.audio) > 0:
                     if not audio_description:
                         title.tracks.select_audio(lambda x: not x.descriptive)
                         if not title.tracks.audio:
-                            self.log.error("Audio description only, use --audio-description...")
-                            sys.exit(1)
+                            skip_title(title, "Audio description only, use --audio-description...")
+                            continue
                     if acodec:
                         title.tracks.select_audio(lambda x: x.codec in acodec)
                         if not title.tracks.audio:
                             codec_names = ", ".join(c.name for c in acodec)
-                            self.log.error(f"No audio tracks matching codecs: {codec_names}")
-                            sys.exit(1)
+                            skip_title(title, f"No audio tracks matching codecs: {codec_names}")
+                            continue
                     if channels:
                         title.tracks.select_audio(
                             lambda x: bool(
@@ -2856,53 +2990,39 @@ class dl:
                             )
                         )
                         if not title.tracks.audio:
-                            self.log.error(f"There's no {channels} Audio Track...")
-                            sys.exit(1)
+                            skip_title(title, f"There's no {channels} Audio Track...")
+                            continue
                     if no_atmos:
                         title.tracks.audio = [x for x in title.tracks.audio if not x.atmos]
                         if not title.tracks.audio:
-                            self.log.error("No non-Atmos audio tracks available...")
-                            sys.exit(1)
+                            skip_title(title, "No non-Atmos audio tracks available...")
+                            continue
                     if abitrate:
                         title.tracks.select_audio(lambda x: x.bitrate and x.bitrate // 1000 == abitrate)
                         if not title.tracks.audio:
-                            self.log.error(f"There's no {abitrate}kbps Audio Track...")
-                            sys.exit(1)
+                            skip_title(title, f"There's no {abitrate}kbps Audio Track...")
+                            continue
                     if abitrate_min is not None and abitrate_max is not None:
                         title.tracks.select_audio(
                             lambda x: x.bitrate and abitrate_min <= x.bitrate // 1000 <= abitrate_max
                         )
                         if not title.tracks.audio:
-                            self.log.error(f"No Audio Track in {abitrate_min}-{abitrate_max}kbps range...")
-                            sys.exit(1)
+                            skip_title(title, f"No Audio Track in {abitrate_min}-{abitrate_max}kbps range...")
+                            continue
                     if audio_excl_r:
-                        drop = excluded_language_tags(
-                            audio_excl_r, [t.language for t in title.tracks.audio], exact_lang
+                        drop = matched_language_tags(
+                            audio_excl_r, [t.language for t in title.tracks.audio], exact_lang, every_variant=True
                         )
                         title.tracks.select_audio(lambda x: str(x.language) not in drop)
                         if not title.tracks.audio:
-                            self.log.error(f"Every Audio Track was excluded by -{', -'.join(audio_excl_r)}...")
-                            sys.exit(1)
+                            skip_title(title, f"Every Audio Track was excluded by -{', -'.join(audio_excl_r)}...")
+                            continue
                     audio_languages = a_lang or lang
                     if audio_languages:
-                        processed_lang = []
-                        a_orig_token: Optional[str] = None
-                        for language in audio_languages:
-                            if language == "orig":
-                                if title.language:
-                                    orig_lang = str(title.language)
-                                    a_orig_token = orig_lang
-                                    if orig_lang not in processed_lang:
-                                        processed_lang.append(orig_lang)
-                                else:
-                                    self.log.warning(
-                                        "Original language not available for title, skipping 'orig' selection"
-                                    )
-                            else:
-                                if language not in processed_lang:
-                                    processed_lang.append(language)
-                        if a_orig_token in audio_languages:
-                            a_orig_token = None
+                        processed_lang = resolve_sort_langs(audio_languages, title.language, exact=exact_lang)
+                        a_orig_token = orig_token(audio_languages, title.language, exact_lang)
+                        if "orig" in audio_languages and not title.language:
+                            self.log.warning("Original language not available for title, skipping 'orig' selection")
 
                         embedded_langs = embedded_audio_langs(
                             title.tracks.videos, keep_videos and not audio_description_only
@@ -2926,23 +3046,23 @@ class dl:
                                         )
                                         processed_lang = remaining
                                     else:
-                                        self.log.error(
-                                            f"{missing_str} not found in {audio_noun} and no fallback available"
+                                        skip_title(
+                                            title, f"{missing_str} not found in {audio_noun} and no fallback available"
                                         )
-                                        sys.exit(1)
+                                        continue
                                 else:
-                                    self.log.error(f"{missing_str} not found in {audio_noun}")
-                                    sys.exit(1)
+                                    skip_title(title, f"{missing_str} not found in {audio_noun}")
+                                    continue
 
                         title.tracks.audio = select_best_audio(
                             title.tracks.audio, processed_lang, acodec, audio_description, exact_lang
                         )
                         if not title.tracks.audio and not embedded_langs:
-                            self.log.error(
-                                f"There's no {as_requested(processed_lang, a_orig_token) or 'orig'} "
-                                f"Audio Track, cannot continue..."
+                            skip_title(
+                                title,
+                                f"There's no {as_requested(processed_lang, a_orig_token) or 'orig'} Audio Track...",
                             )
-                            sys.exit(1)
+                            continue
 
                 kept_tracks = []
                 if keep_videos:
@@ -2957,6 +3077,9 @@ class dl:
                     kept_tracks.extend(title.tracks.attachments)
 
                 title.tracks = Tracks(kept_tracks, manifest_url=title.tracks.manifest_url)
+                if not (title.tracks.videos or title.tracks.audio or title.tracks.subtitles or title.tracks.chapters):
+                    skip_title(title, "There's no track left for the selected options.", kind_only=True)
+                    continue
 
             selected_tracks, tracks_progress_callables = title.tracks.tree(add_progress=True)
 
@@ -2994,7 +3117,7 @@ class dl:
             download_table = Table.grid()
             download_table.add_row(selected_tracks)
 
-            def prepare_drm_for(track: AnyTrack) -> Callable:
+            def prepare_drm_for(track: AnyTrack) -> partial:
                 prepare = partial(
                     partial(self.prepare_drm, table=download_table),
                     track=track,
@@ -3012,8 +3135,8 @@ class dl:
                 return prepare
 
             server_cdm_type = None
-            if getattr(self._remote_service, "_server_cdm", False):
-                server_cdm_type = getattr(self._remote_service, "_server_cdm_type", "widevine")
+            if self._remote_service and self._remote_service.server_cdm:
+                server_cdm_type = self._remote_service.server_cdm_type
                 self.cdm = cdm_type_stub(server_cdm_type)
                 from unshackle.core.import_service import ImportService
 
@@ -3055,23 +3178,17 @@ class dl:
                     system_cdms = [self.cdm_for(system.lower(), height) for height in heights]
                     if not all(system_cdm and matches(system_cdm) for system_cdm in system_cdms):
                         hint = (
-                            "--cdm selects one device, so remove it."
+                            "drop --cdm, which selects one device"
                             if self.cdm_override
-                            else f"Set cdm.{self.service}.{system.lower()} in the configuration."
+                            else f"set cdm.{self.service}.{system.lower()}"
                         )
-                        raise click.ClickException(f"--all-drm needs a {system} CDM for {self.service}. {hint}")
+                        raise click.ClickException(f"--all-drm needs a {system} CDM for {self.service}: {hint}")
                     if is_remote_cdm(system_cdms[0]) and system not in self.all_drm_warned:
                         self.all_drm_warned.add(system)
-                        self.log.warning(
-                            f"The {system} CDM is remote. It can answer from its own key cache "
-                            "and send no licence request."
-                        )
+                        self.log.warning(f"The {system} CDM is remote and can answer with cached content keys")
 
-            if hasattr(service, "resolve_server_keys"):
-                service.resolve_server_keys(title)
-                if not cdm_only:
-                    self.prefer_vault_keys(title)
-                self.cache_resolved_keys(title)
+            if self._remote_service:
+                self.take_server_keys(self._remote_service, title, bool(cdm_only))
 
             if sample and not skip_dl:
                 whole_files = [
@@ -3102,6 +3219,19 @@ class dl:
                             download_processes=download_processes,
                             progress=tracks_progress_callables[i],
                         )
+                        if (
+                            track.path
+                            and service.decrypts_samples(track)
+                            and not DOWNLOAD_CANCELLED.is_set()
+                            and not DOWNLOAD_LICENCE_ONLY.is_set()
+                        ):
+                            progress = tracks_progress_callables[i]
+                            progress(downloaded="Decrypting", completed=0, total=None)
+                            cbcs.decrypt_file(
+                                track.path, lambda _l, entry: service.get_sample_decrypter(track, entry.index)
+                            )
+                            assert_fragments_decrypted(track.path)
+                            progress(downloaded="Decrypted", completed=100, total=100)
                         if export_path:
                             self.write_export(export_path, title, track)
 
@@ -3156,9 +3286,9 @@ class dl:
                     self.log_export_summary()
                 return
             except Exception as e:  # noqa
-                self.download_failed = True
+                self.download_error = e
                 console.print(Padding(Group(*self.failure_lines(e)), (1, 5)))
-                if not isinstance(e, click.ClickException):
+                if not isinstance(e, click.ClickException) and not retries_exhausted(e):
                     console.print_exception()
 
                 if self.debug_logger:
@@ -3211,15 +3341,20 @@ class dl:
                     if sidecar_format == "original":
                         config.directories.temp.mkdir(parents=True, exist_ok=True)
                         for subtitle in sidecar_subtitles:
+                            assert subtitle.path is not None
                             original_path = (
                                 config.directories.temp / f"sidecar_original_{subtitle.id}{subtitle.path.suffix}"
                             )
                             shutil.copy2(subtitle.path, original_path)
                             sidecar_original_paths[subtitle.id] = original_path
 
+                set_subtitle_look(title.tracks.subtitles, ass_style, title.tracks.videos)
                 with console.status("Converting Subtitles..."):
                     sub_conversions: dict[tuple[str, str], int] = {}
                     for subtitle in title.tracks.subtitles:
+                        if subtitle.codec == Subtitle.Codec.SCC:
+                            scc_dst = convert_scc(subtitle, sub_format).name
+                            sub_conversions[("SCC", scc_dst)] = sub_conversions.get(("SCC", scc_dst), 0) + 1
                         if sub_format == "original":
                             continue
                         if sub_format:
@@ -3260,13 +3395,9 @@ class dl:
                     if missing_fonts and sys.platform != "win32":
                         self.suggest_missing_fonts(missing_fonts)
 
-                service_name = service.__class__.__name__.upper()
-                decryption_method = resolve_decryption(config.decryption_map, config.decryption, service_name)
-                decrypt_tool = "mp4decrypt" if decryption_method.lower() == "mp4decrypt" else "Shaka Packager"
-
                 drm_tracks = [track for track in title.tracks if track.drm]
                 if drm_tracks:
-                    with console.status(f"Decrypting tracks with {decrypt_tool}..."):
+                    with console.status("Decrypting tracks..."):
                         has_decrypted = False
                         for track in drm_tracks:
                             drm = track.get_drm_for_cdm(self.cdm)
@@ -3281,7 +3412,7 @@ class dl:
                                     f"No matching DRM found for track {track} with CDM type {type(self.cdm).__name__}"
                                 )
                         if has_decrypted:
-                            self.log.info(f"Decrypted tracks with {decrypt_tool}")
+                            self.log.info("Decrypted tracks")
 
                 if (
                     not no_subs
@@ -3344,10 +3475,7 @@ class dl:
                             has_repacked = True
                             events.emit(events.Types.TRACK_REPACKED, track=track)
                             if has_encrypted_sample_entry(track.path):
-                                self.log.warning(
-                                    f"Track {track.id} still has an encrypted sample entry after repacking, so "
-                                    "decryption likely failed and the muxed output may be unplayable."
-                                )
+                                self.log.warning(f"Track {track.id} still has an encrypted sample entry after repack")
                     if has_repacked:
                         self.log.info("Repacked one or more tracks with FFMPEG")
 
@@ -3360,16 +3488,20 @@ class dl:
                         except Exception as e:  # noqa: BLE001
                             self.log.warning(f"VUI normalization skipped for {track.id}: {e}")
 
-                remux_music_tracks(title, self.log)
-                if sample:
-                    cut_music_sample(title, sample, self.log)
+                remux_music_tracks(title, self.log, sample)
 
                 muxed_paths = []
                 muxed_audio_codecs: dict[Path, Optional[Audio.Codec]] = {}
                 tagged_paths: set[Path] = set()
                 append_audio_codec_suffix = True
+                skip_mux = mux_skipped(no_mux, title)
+                kept_audio = [] if skip_mux else take_unmuxable_audio(title.tracks)
+                if kept_audio and not title.tracks:
+                    title.tracks.audio = kept_audio
+                    kept_audio = []
+                    skip_mux = True
 
-                if no_mux:
+                if skip_mux:
                     for track in title.tracks:
                         if track.path and track.path.exists():
                             muxed_paths.append(track.path)
@@ -3484,10 +3616,11 @@ class dl:
                         head = next((v for v in video_tracks if v), None)
                         if head:
                             if len(quality) > 1:
-                                task_description += f" {head.height}p"
+                                task_description += f" {standard_resolution(head.width, head.height)}p"
                             if len(range_) > 1:
                                 task_description += f" {head.range.name}"
                             if len(vcodec) > 1:
+                                assert head.codec is not None
                                 task_description += f" {head.codec.name}"
 
                         task_tracks = Tracks(title.tracks) + title.tracks.chapters + title.tracks.attachments
@@ -3524,16 +3657,22 @@ class dl:
                                     standalone_groups: list[list[Optional[Video]]] = [
                                         list(g) for g in group_videos_by_variant(standalone_videos, merge=merge_video)
                                     ]
-                                    dv_tracks = [v for v in title.tracks.videos if v.range == Video.Range.DV]
-                                    hybrid_bases = select_hybrid_bases(title.tracks.videos) if dv_tracks else []
+                                    hybrid_bases, matching_dv = hybrid_plan(
+                                        [v for v in original_videos if v.hybrid_ingredient], generate_dv
+                                    )
                                     hybrid_base_ids.update(v.id for v in hybrid_bases)
+                                    hybrids_made = 0
+                                    for video in (v for v in original_videos if v.native_hybrid):
+                                        self.log.info(
+                                            f"The {video.height}p {video.range_label} track is already the hybrid"
+                                        )
+                                        hybrids_made += 1
 
                                     for group in sorted(standalone_groups, key=group_file_size, reverse=True):
                                         mux_video_group(group)
 
                                     for hdr10_track in hybrid_bases:
                                         resolution = hdr10_track.height or 0
-                                        matching_dv = min(dv_tracks, key=lambda v: v.height)
                                         container = container_paths.get(hdr10_track.id)
                                         resolution_tracks = hybrid_source_tracks(hdr10_track, matching_dv, container)
 
@@ -3541,12 +3680,11 @@ class dl:
                                         hybrid_output_path = config.directories.temp / hybrid_filename
                                         hybrid_temp_paths.append(hybrid_output_path)
 
-                                        if len({track.sample_start for track in resolution_tracks}) > 1:
-                                            raise click.ClickException(
-                                                "--sample cut the HDR10 and Dolby Vision tracks at different "
-                                                "points, so a hybrid of them would not line up."
-                                            )
-                                        Hybrid(resolution_tracks, self.service, output_name=hybrid_filename)
+                                        step_error = hybrid_step_error(resolution_tracks, self.service, hybrid_filename)
+                                        if step_error:
+                                            self.log.error(f"Hybrid {resolution}p failed, skipping it: {step_error}")
+                                            continue
+                                        hybrids_made += 1
 
                                         if container:
                                             try:
@@ -3568,6 +3706,10 @@ class dl:
                                         task_tracks.videos = [hybrid_track]
 
                                         enqueue_mux_tasks(task_description, task_tracks, hybrid=True)
+
+                                    no_hybrid = missing_hybrid_error(hybrid_bases, hybrids_made)
+                                    if no_hybrid:
+                                        raise click.ClickException(no_hybrid)
 
                                     console.print()
                                 else:
@@ -3637,7 +3779,7 @@ class dl:
                                         sidecar_files[first_path] = list(created)
                                         self.log.info(f"Saved {len(created)} sidecar subtitle files")
 
-                                    for muxed_path, base_filename, sidecar_dir in sidecar_targets[1:]:
+                                    for sidecar_path, base_filename, sidecar_dir in sidecar_targets[1:]:
                                         sidecar_dir.mkdir(parents=True, exist_ok=True)
                                         copies = []
                                         for source in created:
@@ -3646,7 +3788,7 @@ class dl:
                                                 shutil.copy2(source, target)
                                             copies.append(target)
                                         if copies:
-                                            sidecar_files[muxed_path] = copies
+                                            sidecar_files[sidecar_path] = copies
                                             self.log.info(f"Saved {len(copies)} sidecar subtitle files")
 
                             for track in title.tracks:
@@ -3671,6 +3813,7 @@ class dl:
                             "RPU_L5.bin",
                             "RPU_L6.bin",
                             "L5.json",
+                            "HDR10Plus.json",
                         ):
                             leftover_path = config.directories.temp / leftover
                             try:
@@ -3681,7 +3824,7 @@ class dl:
                 else:
                     muxed_paths.extend(track.path for track in title.tracks.audio if track.path and track.path.exists())
 
-                if no_mux:
+                if skip_mux:
                     final_dir = self.output_dir or config.directories.downloads
                     if not no_folder and (
                         isinstance(title, (Episode, Song))
@@ -3704,6 +3847,7 @@ class dl:
                     final_dir.mkdir(parents=True, exist_ok=True)
 
                     for track_path in muxed_paths:
+                        fix_data_reference_indexes(track_path)
                         media_info = MediaInfo.parse(track_path)
                         base_filename = title.get_filename(media_info, show_service=not no_source)
                         if sample:
@@ -3711,22 +3855,8 @@ class dl:
 
                         track = next((t for t in title.tracks if t.path == track_path), None)
                         if track:
-                            if isinstance(track, Video):
-                                track_suffix = f".{track.codec.name if hasattr(track.codec, 'name') else 'video'}"
-                            elif isinstance(track, Audio):
-                                lang_suffix = f".{track.language}" if track.language else ""
-                                track_suffix = (
-                                    f"{lang_suffix}.{track.codec.name if hasattr(track.codec, 'name') else 'audio'}"
-                                )
-                            elif isinstance(track, Subtitle):
-                                lang_suffix = f".{track.language}" if track.language else ""
-                                forced_suffix = ".forced" if track.forced else ""
-                                sdh_suffix = ".sdh" if track.sdh else ""
-                                track_suffix = f"{lang_suffix}{forced_suffix}{sdh_suffix}"
-                            else:
-                                track_suffix = ""
-
-                            final_path = final_dir / f"{base_filename}{track_suffix}{track_path.suffix}"
+                            ext = no_mux_extension(track, track_path, media_info)
+                            final_path = final_dir / f"{base_filename}{track_file_suffix(track)}{ext}"
                         else:
                             final_path = final_dir / f"{base_filename}{track_path.suffix}"
 
@@ -3772,6 +3902,15 @@ class dl:
                             shutil.move(muxed_path, final_path)
                         used_final_paths.add(final_path)
                         self.completed_files.append(final_path)
+                        for kept in kept_audio:
+                            assert kept.path is not None
+                            ext = no_mux_extension(kept, kept.path, MediaInfo.parse(kept.path))
+                            kept_path = final_path.with_name(f"{final_path.stem}{track_file_suffix(kept)}{ext}")
+                            shutil.move(kept.path, kept_path)
+                            self.completed_files.append(kept_path)
+                            sidecar_files.setdefault(muxed_path, []).append(kept_path)
+                            self.log.info(f"Saved {kept_path.name}: no muxer carries Audio Vivid")
+                        kept_audio = []
                         if muxed_path not in tagged_paths:
                             tags.tag_file(
                                 final_path,
@@ -3785,6 +3924,11 @@ class dl:
                             )
                         if include_sample:
                             self.write_sample(final_path, title, media_info)
+                        if isinstance(title, Song) and title.synced_lyrics and title.lyrics_suffix:
+                            lyrics_path = final_path.with_suffix(title.lyrics_suffix)
+                            lyrics_path.write_text(f"{title.synced_lyrics}\n", encoding="utf-8")
+                            sidecar_files.setdefault(muxed_path, []).append(lyrics_path)
+                            self.log.info(f"Saved lyrics to {lyrics_path.name}")
 
                         post_script_context = build_context(
                             title,
@@ -3802,7 +3946,7 @@ class dl:
                         if final_path.parent not in post_script_folders:
                             post_script_folders.append(final_path.parent)
 
-                if not no_mux:
+                if not skip_mux:
                     settle_post_script_group(title)
 
                 title_dl_time = time_elapsed_since(dl_start_time)
@@ -3834,6 +3978,13 @@ class dl:
         self.wait_vault_writes()
         if export_path:
             self.log_export_summary()
+        if self.skipped_titles:
+            if len(self.skipped_titles) == wanted_total:
+                self.stop_reason = f"Skipped all {wanted_total} titles"
+                self.log.error(self.stop_reason)
+                sys.exit(1)
+            skipped = ", ".join(t["title"] for t in self.skipped_titles)
+            self.log.warning(f"Skipped {len(self.skipped_titles)} of {wanted_total} titles: {skipped}")
         dl_time = time_elapsed_since(start_time)
 
         console.print(Padding(f"Processed all titles in [progress.elapsed]{dl_time}", (0, 5, 1, 5)))
@@ -3842,8 +3993,13 @@ class dl:
         """Cut a 60 second sample from a finished file into a ``Sample`` folder next to it.
 
         The sample starts 2 minutes in. A file shorter than 3 minutes gives its middle 60 seconds.
+        mkvmerge cuts only Matroska: an MP4 (3D video, or audio Matroska cannot carry) gets no sample.
         """
+        if source.suffix.lower() != ".mkv":
+            self.log.warning(f"No sample for {source.name}: mkvmerge cuts only Matroska files")
+            return
         duration = float(media_info.general_tracks[0].duration or 0) / 1000
+        start: float
         start, end = DEFAULT_SAMPLE
         length = end - start
         if duration < end:
@@ -3966,6 +4122,26 @@ class dl:
         if filled:
             self.log.info("Filled absolute numbers for %d episode(s) from TVDB (ID %s).", filled, tvdb_id)
 
+    def apply_continuous_episodes(self, titles: Series) -> Series:
+        """Number each season on from the last episode of the season before it.
+
+        Season 0 and episode 0 keep their numbers, and a season that already starts past the season before it is kept.
+        The Series is rebuilt, as it does not re-sort an episode whose number changed.
+        """
+        last = 0
+        renumbered = 0
+        for season, group in groupby(titles, key=attrgetter("season")):
+            episodes = [t for t in group if t.number]
+            if not season or not episodes:
+                continue
+            if min(t.number for t in episodes) <= last:
+                for t in episodes:
+                    t.number += last
+                renumbered += len(episodes)
+            last = max(t.number for t in episodes)
+        self.log.info("Numbered %d episode(s) on from the season before.", renumbered)
+        return type(titles)(list(titles))
+
     def apply_tvdb_order(
         self,
         titles: Series,
@@ -4016,9 +4192,7 @@ class dl:
         collisions = [slot for slot, count in Counter(renumbered).items() if count > 1]
         if collisions:
             self.log.error(
-                "TVDB's %s order does not cover %d of this series' episodes, and renumbering the rest "
-                "would give %d season/episode slot(s) two episodes each. Keeping the %s numbering "
-                "%s uses. Pick an order that covers the whole series.",
+                "TVDB's %s order misses %d episode(s) and puts two in %d slot(s), keeping the %s numbering of %s",
                 self.tvdb_order,
                 unmapped,
                 len(collisions),
@@ -4073,6 +4247,8 @@ class dl:
                 meta["absolute"] = title.absolute
             if getattr(title, "daily", None) is not None:
                 meta["daily"] = title.daily
+            if title.sport:
+                meta["sport"] = True
         elif isinstance(title, Movie):
             meta.update(type="movie", name=title.name, year=title.year)
         else:
@@ -4089,9 +4265,19 @@ class dl:
         content keys live once per title. ``drm`` may be None (DRM-free track) or a DRM
         system without ``to_dict``/``content_keys`` (e.g. ClearKey) - the export still
         records the track, manifest, chapter and attachment info. unshackle's full track
-        dicts and title meta go under ``x-unshackle`` for its own importer.
+        dicts, title meta and manifest snapshot go under ``x-unshackle`` for its own importer.
         """
         namer: Optional[ExportNamer] = getattr(self, "export_namer", None)
+        snapshots = getattr(self, "export_snapshots", None)
+        if snapshots is None:
+            snapshots = self.export_snapshots = {}
+        if str(title.id) not in snapshots:
+            try:
+                fresh = capture(title.tracks)
+                snapshots[str(title.id)] = fresh if any(fresh.values()) else None
+            except Exception as e:
+                self.log.warning(f"Not saving the manifest of {title.id} in {export}: {e!r}")
+                snapshots[str(title.id)] = None
         with self.EXPORT_LOCK:
             if namer and namer.path:
                 export = namer.path
@@ -4117,6 +4303,8 @@ class dl:
                 track_dict["unwanted_segments"] = unwanted
             elif unwanted is not None:
                 track_dict.pop("unwanted_segments", None)
+            if saved := snapshots[str(title.id)]:
+                entry.ext("unshackle")["snapshot"] = saved
             track_kids = [kid.hex for kid in own_kids(drm)] if drm is not None else []
             for row in entry.tracks:
                 if row.get("id") == str(track.id):
@@ -4206,7 +4394,7 @@ class dl:
         keys = len(doc.key_pool())
         self.log.info(f"Saved the export to {namer.path}: {plural(len(doc.titles), 'title')}, {plural(keys, 'key')}")
         if keys:
-            self.log.warning("The export holds content keys. Keep it private.")
+            self.log.warning("The export holds content keys: keep it private")
 
     def export_entry(self, title: Title_T) -> mediaexport.Entry:
         """A mediaexport entry for ``title``: manifests, chapters, a small track list, no keys yet."""
@@ -4220,13 +4408,32 @@ class dl:
         )
         session = getattr(getattr(self, "export_service", None), "session", None)
         headers = dict(getattr(session, "headers", None) or {})
-        manifests = [mediaexport.Manifest(primary_url, manifest_type, headers, role="primary")] if primary_url else []
+        manifests = (
+            [
+                mediaexport.Manifest(
+                    primary_url,
+                    manifest_type,
+                    headers,
+                    role="primary",
+                    content_periods=self.content_periods(all_tracks, primary_url),
+                )
+            ]
+            if primary_url
+            else []
+        )
         seen = {primary_url}
         for t in all_tracks:
             url = str(t.url)
             if t.descriptor in (Video.Descriptor.DASH, Video.Descriptor.ISM) and url not in seen:
                 seen.add(url)
-                manifests.append(mediaexport.Manifest(url, t.descriptor.name.lower(), role="extra"))
+                manifests.append(
+                    mediaexport.Manifest(
+                        url,
+                        t.descriptor.name.lower(),
+                        role="extra",
+                        content_periods=self.content_periods(all_tracks, url),
+                    )
+                )
 
         rows = []
         for t in all_tracks:
@@ -4240,6 +4447,8 @@ class dl:
             }
             if isinstance(t, Video):
                 row.update(width=t.width, height=t.height, range=t.range.name.lower() if t.range else "")
+                if t.stereo:
+                    row["stereo"] = True
             elif isinstance(t, Audio):
                 row.update(channels=str(t.channels) if t.channels else "", atmos=bool(t.joc), descriptive=t.descriptive)
             elif isinstance(t, Subtitle):
@@ -4276,19 +4485,38 @@ class dl:
         )
 
     @staticmethod
-    def failure_lines(e: BaseException) -> list[str]:
-        """Return the lines that report a failed download.
+    def content_periods(tracks: Sequence[Track], url: str) -> list[str]:
+        """The ids of the DASH periods a service kept in the manifest at ``url``, empty when it filtered none.
 
-        A ClickException is a deliberate stop with a message for the user, so it gets no
-        "unexpected error" line, and the caller prints no traceback for it.
+        An import re-fetches the manifest without the service, so its period filter must travel in the export.
+        Empty also when a kept period has no id, since an id allow-list cannot name it.
+        """
+        dash = next(
+            (d for t in tracks if (d := t.data.get("dash") or {}).get("filtered_period_ids") and str(t.url) == url),
+            None,
+        )
+        if dash is None:
+            return []
+        kept = [
+            p.get("id") for p in dash["manifest"].findall("Period") if p.get("id") not in dash["filtered_period_ids"]
+        ]
+        return kept if all(kept) else []
+
+    @staticmethod
+    def failure_lines(e: BaseException) -> list[str]:
+        """Return the header and the one line that report a failed download.
+
+        A ClickException is a deliberate stop with a message for the user, so it is reported
+        without its type, and the caller prints no traceback for it. Neither does a request
+        that failed on every retry: its line ends with its retry notes.
         """
         if isinstance(e, click.ClickException):
-            return [":x: Download Failed...", f"   {e.format_message()}"]
-        lines = [":x: Download Failed...", f"   {type(e).__name__}: {e}"]
-        if (returncode := getattr(e, "returncode", None)) is not None:
-            lines.append(f"   Binary call failed, Process exit code: {returncode}")
-        lines.append("   An unexpected error occurred in one of the download workers.")
-        return lines
+            line = e.format_message()
+        else:
+            line = f"{type(e).__name__}: {e}"
+            if retries_exhausted(e):
+                line += f", {'; '.join(e.__notes__)}"
+        return [":x: Download Failed...", f"   {line}"]
 
     def decrypt_verified(
         self,
@@ -4305,18 +4533,23 @@ class dl:
         then copied to the other vaults, once FFmpeg can decode the result. Without FFmpeg
         neither happens. For a fragmented MP4, ``verify.kid_windows`` reads from the ciphertext
         which fragments each KID encrypts, and FFmpeg decodes windows inside each KID's
-        fragments, so only a KID that fails is flagged. A KID that is not in the map, and every KID
-        of any other file, gets a start and end check of the whole file, and a failure there flags
-        each of those KIDs. On failure the pair is flagged in the local vaults and reported
-        to the vault that served it, the ciphertext is restored, and the licence runs again. Every vault skips a
-        flagged pair, so each pass burns at most one vault; when the vaults run out the CDM
-        answers, and a CDM key is not checked. A CDM that returns the flagged key clears the
-        flag and stores the content key again, because then the decode check was wrong.
+        fragments, so only a KID that fails is flagged. A complete map does not judge a KID it does
+        not hold, so a clear file judges and copies no KID. A KID that is not in an incomplete map,
+        and every KID of any other file, gets a start and end check of the whole file, and a
+        failure there flags each of those KIDs. On failure the pair is flagged in the local
+        vaults, the ciphertext is restored, and the licence runs again; ``Vaults`` tells the
+        vault that served it. Every vault skips a flagged pair, so each pass burns at most one
+        vault; when the vaults run out the CDM answers, and a CDM key is not checked. A CDM
+        that returns the flagged key clears the flag and stores the content key again, because
+        then the decode check was wrong.
 
         With ``decrypt=False`` the downloader already decrypted the segments in place, so a
         failure can only flag and raise; the next run skips the flagged pair.
+
+        Before the decrypt, each KID the DRM names without a content key is licensed when the file
+        uses it, or when the file cannot be mapped, because ``prepare_drm`` licensed only for the track's KID.
         """
-        keys = getattr(drm, "content_keys", None)
+        keys: Any = getattr(drm, "content_keys", None)
         if keys is None:
             if decrypt:
                 drm.decrypt(path)
@@ -4332,24 +4565,48 @@ class dl:
                 self.LICENSE_KEY_CACHE.pop(kid)
             return key
 
-        def relicense(dropped: set[UUID]) -> None:
-            """Licence again, then ask for each dropped KID that is still without a content key.
+        def relicense(bad: dict[UUID, str], kids: dict[UUID, Vault]) -> None:
+            """Licence again for each dropped KID, then settle each dropped pair against the new key.
 
             prepare_drm licenses only for a KID it is told to need, so without the second call a
-            track that still holds other content keys would decrypt without the dropped one.
+            track that still holds other content keys would decrypt without the dropped one. A
+            licence can replace the DRM's dict, so ``keys`` is read from the DRM again afterwards.
+            A licence key equal to the dropped one proves the decode check wrong and clears its flag.
             """
+            nonlocal keys
             if not licence:
                 return
             licence(drm, track_kid=track_kid)
-            for kid in sorted(dropped):
+            for kid in sorted(bad):
                 if kid != track_kid and kid not in getattr(drm, "content_keys", {}):
                     licence(drm, track_kid=kid)
+            keys = getattr(drm, "content_keys", keys)
+            for kid, key in bad.items():
+                new = keys.get(kid)
+                if new is None:
+                    continue
+                source = self.vaults.sources.get(kid)
+                if source is None:
+                    if new == key:
+                        self.vaults.unflag_bad_key(kid, key)
+                        self.flush_vault_writes([partial(self.vaults.add_key, kid, key)])
+                    elif not self.vaults.held_locally(kid, new):
+                        self.flush_vault_writes([partial(self.vaults.add_key, kid, new)])
+                elif new == key and kid in kids and source[1] is kids[kid]:
+                    raise ValueError(f"{key} from {kids[kid].name} was bad and no other source has the key")
 
         known_bad = flagged_kids()
         if known_bad and licence:
-            for kid in known_bad:
-                drop(kid)
-            relicense(set(known_bad))
+            relicense({kid: drop(kid) for kid in known_bad}, {})
+
+        unkeyed = [kid for kid in getattr(drm, "kids", None) or [] if kid not in keys]
+        mapped = bool(unkeyed and decrypt and licence)
+        kid_map = verify.kid_windows(path) if mapped else None
+        if mapped and licence:
+            for kid in unkeyed:
+                if kid_map is None or kid in kid_map.windows:
+                    licence(drm, track_kid=kid)
+            keys = getattr(drm, "content_keys", keys)
 
         def vault_kids() -> dict[UUID, Vault]:
             """The KIDs whose key on the track came from a vault, with that vault."""
@@ -4364,12 +4621,19 @@ class dl:
                 os.link(path, backup)
             except OSError as e:
                 self.log.debug(f"Cannot keep the ciphertext for a decrypt retry: {e!r}")
-        kid_map = verify.kid_windows(path) if checking else None
+        kid_map = (kid_map if mapped else verify.kid_windows(path)) if checking else None
         windows = kid_map.windows if kid_map else {}
         video = kid_map.video if kid_map else None
 
         def window_decodes(start: float, end: float) -> bool:
             return ffmpeg_decodes(path, start=start, seconds=end - start if end > start else 0.5, video=video)
+
+        def judged_kids() -> dict[UUID, Vault]:
+            """The vault KIDs this file can judge. A map whose KIDs all have keys skips the KIDs it lacks."""
+            kids = vault_kids()
+            if kid_map is not None and all(kid in keys for kid in windows):
+                return {kid: vault for kid, vault in kids.items() if kid in windows}
+            return kids
 
         def failed_kids(kids: dict[UUID, Vault]) -> set[UUID]:
             """The vault KIDs whose content key did not decode.
@@ -4392,7 +4656,7 @@ class dl:
         def passes_left(done: int) -> bool:
             """One pass per source that can still answer: every loaded vault, the server's vaults as
             one source that walks them itself over --remote, and one for the CDM."""
-            remote = 1 if getattr(getattr(self, "_remote_service", None), "_server_cdm", False) else 0
+            remote = 1 if self._remote_service and self._remote_service.server_cdm else 0
             return done < len(self.vaults) + remote + 1
 
         try:
@@ -4401,20 +4665,21 @@ class dl:
                 done += 1
                 if decrypt:
                     drm.decrypt(path)
-                kids = vault_kids()
+                kids = judged_kids()
                 stale = flagged_kids()
                 failed: set[UUID] = set()
                 if not stale:
-                    if not kids or not binaries.FFMPEG or not path.exists():
-                        return
-                    failed = failed_kids(kids)
+                    checked = bool(kids and binaries.FFMPEG and path.exists())
+                    failed = failed_kids(kids) if checked else set()
                     if not failed:
-                        self.flush_vault_writes(
-                            [
-                                partial(self.vaults.add_key, kid, keys[kid], excluding=vault)
-                                for kid, vault in kids.items()
-                            ]
-                        )
+                        if checked:
+                            self.flush_vault_writes(
+                                [
+                                    partial(self.vaults.add_key, kid, keys[kid], excluding=vault)
+                                    for kid, vault in kids.items()
+                                ]
+                            )
+                        self.vaults.report_replaced(keys)
                         return
                 bad = {kid: drop(kid) for kid in {*failed, *stale}}
                 for kid, key in bad.items():
@@ -4422,22 +4687,11 @@ class dl:
                         continue
                     self.log.warning(f"{key} from {kids[kid].name} was bad, trying other vaults")
                     self.vaults.flag_bad_key(kid, key)
-                    if report := getattr(kids[kid], "report_bad", None):
-                        report(kid, key)
                 if not backup.exists() or not licence:
                     raise ValueError("The content key from the vault did not decrypt the track; run again")
                 path.unlink()
                 os.link(backup, path)
-                relicense(set(bad))
-                for kid, key in bad.items():
-                    if keys.get(kid) != key:
-                        continue
-                    source = self.vaults.sources.get(kid)
-                    if source is None:
-                        self.vaults.unflag_bad_key(kid, key)
-                        self.flush_vault_writes([partial(self.vaults.add_key, kid, key)])
-                    elif kid in kids and source[1] is kids[kid]:
-                        raise ValueError(f"{key} from {kids[kid].name} was bad and no other source has the key")
+                relicense(bad, kids)
             raise ValueError("No vault or CDM produced a content key that decrypts the track")
         finally:
             backup.unlink(missing_ok=True)
@@ -4463,7 +4717,17 @@ class dl:
         self.vault_cache_tally = None
         self.log.info(f"Cached {keys} Key{'' if keys == 1 else 's'} to {successful_caches}/{len(self.vaults)} Vaults")
 
-    def prefer_vault_keys(self, title: Title_T) -> None:
+    def take_server_keys(self, source: "ServerKeySource", title: Title_T, cdm_only: bool) -> None:
+        """Put the content keys of ``source`` on the tracks of ``title``, drop the null keys, then cache the rest."""
+        source.resolve_server_keys(title)
+        for track in title.tracks:
+            for drm in track.drm or []:
+                drop_null_keys(drm)
+        if not cdm_only:
+            self.prefer_vault_keys(source, title)
+        self.cache_resolved_keys(source, title)
+
+    def prefer_vault_keys(self, source: "ServerKeySource", title: Title_T) -> None:
         """Let the client vaults answer before a content key the server batch licence returned.
 
         The client only learns the KIDs from the batch response, so the server has already
@@ -4471,19 +4735,26 @@ class dl:
         poisoned row; the server key waits as the next candidate. A server CDM key is trusted
         like a local CDM key: it goes to the run cache and the vaults, and a retry after a
         flagged vault key takes it before any vault. A server vault key is unproven, so it
-        waits in ``Vaults.candidates`` and gets the same check when its turn comes.
+        waits in ``Vaults.candidates`` and gets the same check when its turn comes. Only the KIDs
+        the DRM names are looked up, each once, so sibling keys add no remote vault requests.
         """
-        server_vault_keys = getattr(self._remote_service, "server_vault_keys", {})
+        looked_up: dict[UUID, tuple[Optional[str], Any]] = {}
         for track in title.tracks:
             for drm in getattr(track, "drm", None) or []:
-                for kid, server_key in list(getattr(drm, "content_keys", {}).items()):
-                    vault_key, vault = self.vaults.get_key(kid)
+                content_keys = getattr(drm, "content_keys", {})
+                named = set(real_kids(drm) or content_keys)
+                for kid, server_key in list(content_keys.items()):
+                    if kid not in named:
+                        continue
+                    if kid not in looked_up:
+                        looked_up[kid] = self.vaults.get_key(kid)
+                    vault_key, vault = looked_up[kid]
                     if not vault_key or vault_key == server_key:
                         continue
                     drm.content_keys[kid] = vault_key
-                    if server_vault_keys.get(kid) == server_key:
-                        source = self._remote_service.server_vault
-                        self.vaults.candidates.setdefault(kid, []).append((server_key, source))
+                    server_vault = source.vault_source(kid, server_key)
+                    if server_vault is not None:
+                        self.vaults.candidates.setdefault(kid, []).append((server_key, server_vault))
                     elif kid not in self.LICENSE_KEY_CACHE:
                         self.LICENSE_KEY_CACHE[kid] = server_key
                         self.flush_vault_writes([partial(self.cache_keys_to_vaults, {kid: server_key})])
@@ -4491,22 +4762,22 @@ class dl:
                         f"{vault.name} holds a different key for {kid.hex} than the server, testing it first"
                     )
 
-    def cache_resolved_keys(self, title: Title_T) -> None:
+    def cache_resolved_keys(self, source: "ServerKeySource", title: Title_T) -> None:
         """Cache the keys a batch licence or an import put on the tracks.
 
         Both fill track.drm before any prepare_drm call, so this is the only point where those
-        keys can still reach the local vaults.
+        keys can still reach the local vaults. A content key a local vault already holds is not pushed again.
         """
-        server_vault_keys = getattr(getattr(self, "_remote_service", None), "server_vault_keys", {})
-        keys = {
+        resolved = {
             kid: key
             for track in title.tracks
             for drm in (getattr(track, "drm", None) or [])
             for kid, key in getattr(drm, "content_keys", {}).items()
             if kid not in self.LICENSE_KEY_CACHE
-            and server_vault_keys.get(kid) != key
+            and source.vault_source(kid, key) is None
             and self.vaults.sources.get(kid, (None,))[0] != key
         }
+        keys = {kid: key for kid, key in resolved.items() if not self.vaults.held_locally(kid, key)}
         if keys:
             self.LICENSE_KEY_CACHE.update(keys)
             self.flush_vault_writes([partial(self.cache_keys_to_vaults, keys)])
@@ -4516,10 +4787,8 @@ class dl:
         flag came from a decode check that was wrong, and a local vault refuses a flagged pair."""
         if not content_keys or not self.vaults:
             return
-        for kid, key in content_keys.items():
-            if self.vaults.is_flagged(kid, key):
-                self.vaults.unflag_bad_key(kid, key)
-        successful_caches = self.vaults.add_keys(content_keys)
+        self.vaults.clear_licensed_flags(content_keys)
+        successful_caches = self.vaults.add_keys(cast(dict[Union[UUID, str], str], content_keys))
         kids, caches = self.vault_cache_tally or (set(), successful_caches)
         self.vault_cache_tally = (kids | content_keys.keys(), min(caches, successful_caches))
 
@@ -4528,8 +4797,8 @@ class dl:
         """Return the lock for one DRM's set of content keys.
 
         Tracks that share KIDs still take turns, so the second one finds the content keys in
-        LICENSE_KEY_CACHE and skips the challenge. Tracks with different KIDs send a challenge
-        and query the key vaults at the same time.
+        LICENSE_KEY_CACHE and skips the challenge. Tracks with different KIDs query the key vaults
+        at the same time; their licences take turns under ``take_licence_turn``.
 
         Callers take the lock after get_drm_for_cdm(), which folds a track's sibling PlayReady
         objects into the returned one, so the KID set is complete for that track's DRM list
@@ -4542,6 +4811,280 @@ class dl:
         key = ",".join(sorted(getattr(k, "hex", str(k)) for k in kids)) or getattr(drm, "content_id", None)
         with cls.DRM_LOCKS_GUARD:
             return cls.DRM_LOCKS.setdefault(key or type(drm).__name__, Lock())
+
+    def take_licence_turn(
+        self,
+        turn: ExitStack,
+        drm: Union[ClearKeyCENC, Widevine, PlayReady, MonaLisa],
+        kids: list[UUID],
+        track: AnyTrack,
+        track_kid: Optional[UUID],
+        cek_tree: Optional[Tree],
+    ) -> None:
+        """Hold LICENCE_LOCK until ``turn`` closes, then take the content keys of ``kids`` an earlier licence cached.
+
+        One licence can carry the keys of a DRM with other KIDs, so licences take turns. The caller
+        holds its ``drm_lock`` first, so the vault lookups before this still run at the same time.
+        """
+        turn.enter_context(self.LICENCE_LOCK)
+        if DOWNLOAD_CANCELLED.is_set():
+            raise DownloadCancelled()
+        for kid in kids:
+            if kid not in drm.content_keys:
+                self.take_cached_key(drm, kid, track, track_kid, cek_tree)
+
+    def take_cached_key(
+        self,
+        drm: Union[ClearKeyCENC, Widevine, PlayReady, MonaLisa],
+        kid: UUID,
+        track: AnyTrack,
+        track_kid: Optional[UUID],
+        cek_tree: Optional[Tree],
+    ) -> bool:
+        """Give the DRM the content key LICENSE_KEY_CACHE holds for ``kid``, and return whether it held one."""
+        key = self.LICENSE_KEY_CACHE.get(kid)
+        if not key:
+            return False
+        drm.content_keys[kid] = key
+        if cek_tree is not None:
+            self.add_key_label(cek_tree, kid, key, track_kid, "from cache")
+        log_event(
+            "license_cache_hit",
+            level="INFO",
+            service=self.service,
+            context={"kid": kid.hex, "content_key": key, "track": str(track), "drm_type": type(drm).__name__},
+        )
+        return True
+
+    def take_vault_key(
+        self,
+        drm: Union[ClearKeyCENC, Widevine, PlayReady, MonaLisa],
+        kid: UUID,
+        track: AnyTrack,
+        track_kid: Optional[UUID],
+        cek_tree: Optional[Tree],
+    ) -> bool:
+        """Give the DRM the content key a key vault holds for ``kid``, cache it for the run, and return whether one did."""
+        key, vault = self.vaults.get_key(kid)
+        if not key:
+            return False
+        drm.content_keys[kid] = key
+        self.LICENSE_KEY_CACHE[kid] = key
+        if cek_tree is not None:
+            self.add_key_label(cek_tree, kid, key, track_kid, f"from {vault}")
+        if self.debug_logger:
+            self.debug_logger.log_vault_query(
+                vault_name=str(vault),
+                operation="get_key_success",
+                service=self.service,
+                context={
+                    "kid": kid.hex,
+                    "content_key": key,
+                    "track": str(track),
+                    "from_cache": True,
+                    "drm_type": type(drm).__name__,
+                },
+            )
+        return True
+
+    @staticmethod
+    def with_track_kid(drm: Any, track_kid: Optional[UUID]) -> list[UUID]:
+        """Return the KIDs the DRM names, plus the track's own KID when the DRM leaves it out."""
+        kids = list(getattr(drm, "kids", None) or [])
+        if track_kid and track_kid not in kids:
+            kids.append(track_kid)
+        return kids
+
+    def take_known_keys(
+        self,
+        drm: Union[ClearKeyCENC, Widevine, PlayReady, MonaLisa],
+        kids: list[UUID],
+        track: AnyTrack,
+        track_kid: Optional[UUID],
+        cek_tree: Optional[Tree],
+        use_cache: bool = True,
+        use_vaults: bool = True,
+        stop_at_miss: bool = False,
+    ) -> list[UUID]:
+        """Give the DRM the content keys of ``kids`` the run cache or a key vault holds, and return the KIDs still missing.
+
+        ``stop_at_miss`` returns at the first miss, so no more vaults are asked for a run that fails anyway.
+        """
+        missing = []
+        for kid in kids:
+            if kid in drm.content_keys:
+                if cek_tree is not None:
+                    self.add_key_label(cek_tree, kid, drm.content_keys[kid], track_kid)
+                continue
+            if use_cache and self.take_cached_key(drm, kid, track, track_kid, cek_tree):
+                continue
+            if not (use_vaults and self.take_vault_key(drm, kid, track, track_kid, cek_tree)):
+                missing.append(kid)
+                if stop_at_miss:
+                    break
+        return missing
+
+    def license_drm(
+        self,
+        drm: Union[ClearKeyCENC, Widevine, PlayReady],
+        get_keys: Callable[[], None],
+        track: AnyTrack,
+        title: Title_T,
+        track_kid: Optional[UUID],
+        table: Table,
+        cdm_only: bool,
+        vaults_only: bool,
+        force: bool,
+    ) -> None:
+        """Give a Widevine, PlayReady or ClearKey DRM its content keys: run cache, then key vaults, then ``get_keys``.
+
+        A held key for ``track_kid`` skips the licence, as the file is encrypted with that KID;
+        ``decrypt_verified`` licenses any other KID the file turns out to use.
+        ``force`` skips the run cache, so the licence runs again for each KID no vault answers.
+        A licence can answer a KID with a blank or null key; a vault key for that KID wins.
+        """
+        pssh: Optional[str] = None
+        if isinstance(drm, ClearKeyCENC):
+            name = "ClearKey"
+        else:
+            name = type(drm).__name__
+            pssh = drm.pssh.dumps() if isinstance(drm, Widevine) else drm.pssh_b64 or ""
+        if pssh is not None and self.debug_logger:
+            self.debug_logger.log_drm_operation(
+                drm_type=name,
+                operation="prepare_drm",
+                service=self.service,
+                context={
+                    "track": str(track),
+                    "title": str(title),
+                    "pssh": pssh,
+                    "kids": [k.hex for k in drm.kids],
+                    "track_kid": track_kid.hex if track_kid else None,
+                },
+            )
+        pending_vault_writes: list[Callable[[], Any]] = []
+        with self.drm_lock(drm), ExitStack() as licence_turn:
+            label = [(f"({self.truncate_pssh_for_display(pssh, name)})", "text")] if pssh is not None else []
+            cek_tree = Tree(Text.assemble((name, "cyan"), *label, overflow="fold"))
+            pre_existing_tree = next(
+                (x for x in table.columns[0].cells if isinstance(x, Tree) and x.label == cek_tree.label), None
+            )
+            if pre_existing_tree:
+                cek_tree = pre_existing_tree
+
+            def show_error(msg: str) -> None:
+                cek_tree.add(f"[logging.level.error]{msg}")
+                if not pre_existing_tree:
+                    table.add_row(cek_tree)
+                self.flush_vault_writes(pending_vault_writes)
+
+            all_kids = self.with_track_kid(drm, track_kid)
+            stop_at_miss = vaults_only and not cdm_only
+            missing = self.take_known_keys(
+                drm, all_kids, track, track_kid, cek_tree, not force, not cdm_only, stop_at_miss
+            )
+            if missing and stop_at_miss:
+                msg = f"No Vault has a Key for {missing[0].hex} and --vaults-only was used"
+                log_event(
+                    "vault_key_not_found",
+                    level="ERROR",
+                    service=self.service,
+                    message=msg,
+                    context={"kid": missing[0].hex, "track": str(track), "drm_type": type(drm).__name__},
+                )
+                show_error(msg)
+                raise drm.Exceptions.CEKNotFound(msg)
+
+            need_license = bool(missing) and (force or not track_kid or track_kid not in drm.content_keys)
+            if need_license:
+                self.take_licence_turn(licence_turn, drm, [] if force else all_kids, track, track_kid, cek_tree)
+                need_license = not all(kid in drm.content_keys for kid in all_kids)
+
+            if need_license and not vaults_only:
+                from_vaults = drm.content_keys.copy()
+                log_event(
+                    "get_license",
+                    level="INFO",
+                    service=self.service,
+                    message=f"Requesting {name} license from service",
+                    context={
+                        "track": str(track),
+                        "drm_type": type(drm).__name__,
+                        "kids_needed": [k.hex for k in all_kids if k not in drm.content_keys],
+                    },
+                )
+                try:
+                    get_keys()
+                except Exception as e:
+                    if drm.content_keys and (not track_kid or track_kid in drm.content_keys):
+                        self.log.warning(
+                            f"Licence failed, using the {len(drm.content_keys)} known key(s): {redact_secrets(str(e))}"
+                        )
+                    else:
+                        if isinstance(e, (drm.Exceptions.EmptyLicense, drm.Exceptions.CEKNotFound)):
+                            msg = str(e)
+                        else:
+                            msg = f"An exception occurred in the Service's license function: {e}"
+                        if self.debug_logger:
+                            self.debug_logger.log_error(
+                                "get_license" if name == "Widevine" else f"get_license_{name.lower()}",
+                                e,
+                                service=self.service,
+                                context={
+                                    "track": str(track),
+                                    "exception_type": type(e).__name__,
+                                    "drm_type": type(drm).__name__,
+                                },
+                            )
+                        show_error(msg)
+                        raise
+                else:
+                    log_event(
+                        "license_keys_retrieved",
+                        level="INFO",
+                        service=self.service,
+                        context={
+                            "track": str(track),
+                            "drm_type": type(drm).__name__,
+                            "keys_count": len(drm.content_keys),
+                            "kids": [k.hex for k in drm.content_keys.keys()],
+                        },
+                    )
+
+                for kid, key in drm.content_keys.items():
+                    self.add_key_label(cek_tree, kid, f"[red]{key}[/]" if is_null_key(key) else key, track_kid)
+                drop_null_keys(drm)
+                drm.content_keys.update(from_vaults)
+                self.LICENSE_KEY_CACHE.update(drm.content_keys)
+                pending_vault_writes.append(
+                    partial(
+                        self.cache_keys_to_vaults,
+                        {k: v for k, v in drm.content_keys.items() if k not in from_vaults},
+                    )
+                )
+
+            if track_kid and track_kid not in drm.content_keys:
+                msg = f"No Content Key for KID {track_kid.hex} was returned in the License"
+                show_error(msg)
+                raise drm.Exceptions.CEKNotFound(msg)
+
+            if cek_tree.children and not pre_existing_tree:
+                table.add_row()
+                table.add_row(cek_tree)
+
+        self.flush_vault_writes(pending_vault_writes)
+
+    @staticmethod
+    def add_key_label(tree: Tree, kid: UUID, key: str, track_kid: Optional[UUID] = None, source: str = "") -> None:
+        """Add ``kid:key`` to a content key tree once, with ``*`` on the track's own KID and ``source`` after it."""
+        if any(f"{kid.hex}:{key}" in str(x.label) for x in tree.children):
+            return
+        label = f"[text2]{kid.hex}:{key}"
+        if kid == track_kid:
+            label += "*"
+        if source:
+            label += f" {source}"
+        tree.add(label)
 
     def service_licence(self, service: Service, drm_system: Optional[str] = None, **kwargs: Any) -> Any:
         """Call the service's licence function for the track's DRM system.
@@ -4569,7 +5112,7 @@ class dl:
             cdm = self.get_cdm(self.service, self.profile, drm=system)
         return cdm
 
-    def licence_one_drm(self, prepare: Callable, drm: DRM_T, track_kid: Optional[UUID]) -> None:
+    def licence_one_drm(self, prepare: Callable, drm: Union[Widevine, PlayReady], track_kid: Optional[UUID]) -> None:
         """Send one challenge for the KIDs of this DRM, also when the DRM or a vault has the content keys.
 
         This is the ``--cdm-only`` path. The challenge goes out the first time a run sees the KIDs
@@ -4610,19 +5153,19 @@ class dl:
         a run. A DRM system that fails stops the title. With ``tolerate`` it is a warning, if the
         other DRM system gave the content key of the track.
         """
-        if type(drm) not in (Widevine, PlayReady):
+        if not isinstance(drm, (Widevine, PlayReady)):
             prepare(drm, track_kid=track_kid)
             return
 
         other_type = PlayReady if type(drm) is Widevine else Widevine
-        others = [d for d in track.drm or [] if type(d) is other_type]
+        others = [d for d in track.drm or [] if isinstance(d, (Widevine, PlayReady)) and type(d) is other_type]
         if other_type is PlayReady and len(others) > 1:
-            others[0].absorb(*others[1:])
+            playready = [d for d in others if isinstance(d, PlayReady)]
+            playready[0].absorb(*playready[1:])
         if not others and other_type.__name__ not in self.all_drm_warned:
             self.all_drm_warned.add(other_type.__name__)
             self.log.warning(
-                f"A track does not offer {other_type.__name__}, so it licenses with "
-                f"{type(drm).__name__} only. This warning shows one time: {track}"
+                f"Track {track} has no {other_type.__name__} DRM, licensing with {type(drm).__name__} only"
             )
 
         targets = [drm, *others[:1]]
@@ -4657,14 +5200,14 @@ class dl:
 
     def prepare_drm(
         self,
-        drm: DRM_T,
+        drm: Union[ClearKeyCENC, Widevine, PlayReady, MonaLisa],
         track: AnyTrack,
         title: Title_T,
         certificate: Callable,
         licence: Callable,
         clearkey_licence: Optional[Callable] = None,
         track_kid: Optional[UUID] = None,
-        table: Table = None,
+        table: Optional[Table] = None,
         cdm_only: bool = False,
         vaults_only: bool = False,
         export: Optional[Path] = None,
@@ -4679,59 +5222,54 @@ class dl:
         """
         if not drm:
             return
+        assert table is not None
 
-        svc_for_cdm = getattr(self, "_remote_service", None)
-        server_cdm = getattr(svc_for_cdm, "_server_cdm", getattr(self, "server_cdm", False))
-        client_licensed = getattr(svc_for_cdm, "client_licensed", ())
-        licensed_locally = bool(client_licensed) and str(track.id) in client_licensed
+        remote = self._remote_service
+        server_cdm = bool(remote and remote.server_cdm)
+        licensed_locally = bool(remote and remote.licenses_locally(track))
 
         if server_cdm and not licensed_locally:
-            with self.drm_lock(drm):
+            assert remote is not None
+            with self.drm_lock(drm), ExitStack() as licence_turn:
                 pending_vault_writes: list[Callable[[], Any]] = []
-                vault_kids = list(getattr(drm, "kids", None) or [])
-                if track_kid and track_kid not in vault_kids:
-                    vault_kids.append(track_kid)
-                for kid in vault_kids:
-                    if kid in drm.content_keys:
-                        continue
-                    content_key = self.LICENSE_KEY_CACHE.get(kid)
-                    if not content_key and not cdm_only:
-                        content_key, vault_used = self.vaults.get_key(kid)
-                    if content_key:
-                        drm.content_keys[kid] = content_key
-                        self.LICENSE_KEY_CACHE[kid] = content_key
-
-                known_keys = set(drm.content_keys)
+                vault_kids = self.with_track_kid(drm, track_kid)
+                self.take_known_keys(drm, vault_kids, track, track_kid, None, use_vaults=not cdm_only)
 
                 def missing_track_key() -> bool:
                     return not drm.content_keys or bool(track_kid and track_kid not in drm.content_keys)
 
                 if missing_track_key():
+                    self.take_licence_turn(licence_turn, drm, vault_kids, track, track_kid, None)
+                known_keys = set(drm.content_keys)
+
+                if missing_track_key():
+                    from unshackle.core.remote_service import RemoteError
+
                     try:
                         licence(
                             drm_system="playready" if drm.__class__.__name__ == "PlayReady" else "widevine",
                             challenge=b"",
+                            kid=track_kid,
                         )
                     except click.ClickException:
                         raise
-                    except Exception as e:
+                    except (Exception, RemoteError) as e:
                         self.log.debug(f"Server CDM licence with an empty challenge failed: {e!r}")
+                drop_null_keys(drm)
 
-                server_vault_keys = {} if cdm_only else getattr(svc_for_cdm, "server_vault_keys", {})
+                new_keys = {}
                 for kid, key in drm.content_keys.items():
-                    if server_vault_keys.get(kid) == key:
-                        self.vaults.sources[kid] = (key, svc_for_cdm.server_vault)
-                new_keys = {
-                    kid: key
-                    for kid, key in drm.content_keys.items()
-                    if kid not in known_keys and server_vault_keys.get(kid) != key
-                }
+                    source = None if cdm_only else remote.vault_source(kid, key)
+                    if source is not None:
+                        self.vaults.sources[kid] = (key, source)
+                    elif kid not in known_keys:
+                        new_keys[kid] = key
                 if new_keys:
                     self.LICENSE_KEY_CACHE.update(new_keys)
                     pending_vault_writes.append(partial(self.cache_keys_to_vaults, new_keys))
                 self.flush_vault_writes(pending_vault_writes)
 
-            licensed_locally = bool(client_licensed) and str(track.id) in client_licensed
+            licensed_locally = bool(remote and remote.licenses_locally(track))
         if server_cdm and not licensed_locally:
             if not drm.content_keys:
                 self.log.warning("Server CDM did not resolve any keys for this track")
@@ -4741,11 +5279,9 @@ class dl:
                 if isinstance(drm, PlayReady):
                     raise PlayReady.Exceptions.CEKNotFound(msg)
                 raise Widevine.Exceptions.CEKNotFound(msg)
-            svc = getattr(self, "_remote_service", None)
-            server_drm_type = getattr(svc, "_server_cdm_type", None) if svc else None
-            drm_name = {"widevine": "Widevine", "playready": "PlayReady"}.get(
-                server_drm_type or "", drm.__class__.__name__
-            )
+            assert remote is not None
+            server_drm_type = remote.server_cdm_type
+            drm_name = {"widevine": "Widevine", "playready": "PlayReady"}.get(server_drm_type, drm.__class__.__name__)
             log_event(
                 "drm_content_keys",
                 level="INFO",
@@ -4772,17 +5308,13 @@ class dl:
                     cek_tree = Tree(Text.assemble((drm_name, "cyan"), (f"({pssh_str})", "text"), overflow="fold"))
                 else:
                     cek_tree = Tree(Text.assemble((drm_name, "cyan"), overflow="fold"))
-                all_kids = list(getattr(drm, "kids", []))
-                if track_kid and track_kid not in all_kids:
-                    all_kids.append(track_kid)
+                all_kids = self.with_track_kid(drm, track_kid)
                 for kid in all_kids:
                     if kid in drm.content_keys:
-                        is_track_kid = ["", "*"][kid == track_kid]
-                        key = drm.content_keys[kid]
-                        cek_tree.add(f"[text2]{kid.hex}:{key}{is_track_kid}")
+                        self.add_key_label(cek_tree, kid, drm.content_keys[kid], track_kid)
                 for kid, key in drm.content_keys.items():
                     if kid not in all_kids:
-                        cek_tree.add(f"[text2]{kid.hex}:{key}")
+                        self.add_key_label(cek_tree, kid, key)
                 if not any(isinstance(x, Tree) and x.label == cek_tree.label for x in table.columns[0].cells):
                     table.add_row(cek_tree)
             if export:
@@ -4797,9 +5329,15 @@ class dl:
 
         track_cdm = self.cdm
         if licensed_locally:
-            track_cdm = getattr(svc_for_cdm, "local_cdm", None)
+            assert remote is not None
+            track_cdm = remote.local_cdm
             local_drm = track.get_drm_for_cdm(track_cdm)
+            if isinstance(local_drm, (Widevine, PlayReady)) and isinstance(local_drm, PlayReady) != is_playready_cdm(
+                track_cdm
+            ):
+                track_cdm = self.cdm_for("playready" if isinstance(local_drm, PlayReady) else "widevine", track_quality)
             if local_drm is not None and local_drm is not drm:
+                assert not isinstance(local_drm, ClearKey)
                 self.prepare_drm(
                     local_drm,
                     track,
@@ -4818,538 +5356,31 @@ class dl:
                     drm.content_keys.update(local_drm.content_keys)
                 return
 
-        licence = partial(licence, drm_system="playready" if isinstance(drm, PlayReady) else "widevine")
+        drm_system = "playready" if isinstance(drm, PlayReady) else "widevine"
+        licence = partial(licence, drm_system=drm_system)
 
-        if not server_cdm:
-            if isinstance(drm, Widevine):
-                if not is_widevine_cdm(self.cdm):
-                    widevine_cdm = self.cdm_for("widevine", track_quality)
-                    if widevine_cdm and is_widevine_cdm(widevine_cdm):
-                        if track_quality:
-                            self.log.info(f"Switching to Widevine CDM for Widevine {track_quality}p content")
-                        else:
-                            self.log.info("Switching to Widevine CDM for Widevine content")
-                        self.cdm = widevine_cdm
-                        track_cdm = widevine_cdm
-                    else:
-                        raise ValueError(f"Title needs a Widevine CDM but {self.service} is configured with PlayReady.")
+        if not server_cdm and isinstance(drm, (Widevine, PlayReady)):
+            matches = is_playready_cdm if drm_system == "playready" else is_widevine_cdm
+            if not matches(self.cdm):
+                name, other = ("PlayReady", "Widevine") if drm_system == "playready" else ("Widevine", "PlayReady")
+                system_cdm = self.cdm_for(drm_system, track_quality)
+                if system_cdm and matches(system_cdm):
+                    self.log.info(f"Switching to the {name} CDM")
+                    self.cdm = system_cdm
+                    track_cdm = system_cdm
+                elif self.cdm is None:
+                    raise click.ClickException(f"No CDM configured for {self.service} and no default CDM")
+                else:
+                    raise ValueError(f"Title needs a {name} CDM but {self.service} is configured with {other}.")
 
-            elif isinstance(drm, PlayReady):
-                if not is_playready_cdm(self.cdm):
-                    playready_cdm = self.cdm_for("playready", track_quality)
-                    if playready_cdm and is_playready_cdm(playready_cdm):
-                        if track_quality:
-                            self.log.info(f"Switching to PlayReady CDM for PlayReady {track_quality}p content")
-                        else:
-                            self.log.info("Switching to PlayReady CDM for PlayReady content")
-                        self.cdm = playready_cdm
-                        track_cdm = playready_cdm
-                    else:
-                        raise ValueError(f"Title needs a PlayReady CDM but {self.service} is configured with Widevine.")
-
-        if isinstance(drm, Widevine):
-            if self.debug_logger:
-                self.debug_logger.log_drm_operation(
-                    drm_type="Widevine",
-                    operation="prepare_drm",
-                    service=self.service,
-                    context={
-                        "track": str(track),
-                        "title": str(title),
-                        "pssh": drm.pssh.dumps() if drm.pssh else None,
-                        "kids": [k.hex for k in drm.kids],
-                        "track_kid": track_kid.hex if track_kid else None,
-                    },
+        if isinstance(drm, (Widevine, PlayReady, ClearKeyCENC)):
+            if isinstance(drm, ClearKeyCENC):
+                get_keys = partial(
+                    drm.get_content_keys, licence=clearkey_licence or (lambda **_: None), session=service_session
                 )
-
-            pending_vault_writes: list[Callable[[], Any]] = []
-            with self.drm_lock(drm):
-                pssh_display = self.truncate_pssh_for_display(drm.pssh.dumps(), "Widevine")
-                cek_tree = Tree(Text.assemble(("Widevine", "cyan"), (f"({pssh_display})", "text"), overflow="fold"))
-                pre_existing_tree = next(
-                    (x for x in table.columns[0].cells if isinstance(x, Tree) and x.label == cek_tree.label), None
-                )
-                if pre_existing_tree:
-                    cek_tree = pre_existing_tree
-
-                need_license = False
-                all_kids = list(drm.kids)
-                if track_kid and track_kid not in all_kids:
-                    all_kids.append(track_kid)
-
-                for kid in all_kids:
-                    if kid in drm.content_keys:
-                        is_track_kid = ["", "*"][kid == track_kid]
-                        key = drm.content_keys[kid]
-                        label = f"[text2]{kid.hex}:{key}{is_track_kid}"
-                        if not any(f"{kid.hex}:{key}" in x.label for x in cek_tree.children):
-                            cek_tree.add(label)
-                        continue
-
-                    is_track_kid = ["", "*"][kid == track_kid]
-
-                    cached_key = None if force else self.LICENSE_KEY_CACHE.get(kid)
-                    if cached_key:
-                        drm.content_keys[kid] = cached_key
-                        label = f"[text2]{kid.hex}:{cached_key}{is_track_kid} from cache"
-                        if not any(f"{kid.hex}:{cached_key}" in x.label for x in cek_tree.children):
-                            cek_tree.add(label)
-                        log_event(
-                            "license_cache_hit",
-                            level="INFO",
-                            service=self.service,
-                            context={
-                                "kid": kid.hex,
-                                "content_key": cached_key,
-                                "track": str(track),
-                                "drm_type": "Widevine",
-                            },
-                        )
-                        continue
-
-                    if not cdm_only:
-                        content_key, vault_used = self.vaults.get_key(kid)
-                        if content_key:
-                            drm.content_keys[kid] = content_key
-                            label = f"[text2]{kid.hex}:{content_key}{is_track_kid} from {vault_used}"
-                            if not any(f"{kid.hex}:{content_key}" in x.label for x in cek_tree.children):
-                                cek_tree.add(label)
-                            self.LICENSE_KEY_CACHE[kid] = content_key
-
-                            if self.debug_logger:
-                                self.debug_logger.log_vault_query(
-                                    vault_name=vault_used,
-                                    operation="get_key_success",
-                                    service=self.service,
-                                    context={
-                                        "kid": kid.hex,
-                                        "content_key": content_key,
-                                        "track": str(track),
-                                        "from_cache": True,
-                                    },
-                                )
-                        elif vaults_only:
-                            msg = f"No Vault has a Key for {kid.hex} and --vaults-only was used"
-                            cek_tree.add(f"[logging.level.error]{msg}")
-                            if not pre_existing_tree:
-                                table.add_row(cek_tree)
-                            log_event(
-                                "vault_key_not_found",
-                                level="ERROR",
-                                service=self.service,
-                                message=msg,
-                                context={"kid": kid.hex, "track": str(track)},
-                            )
-                            self.flush_vault_writes(pending_vault_writes)
-                            raise Widevine.Exceptions.CEKNotFound(msg)
-                        else:
-                            need_license = True
-
-                    if kid not in drm.content_keys and cdm_only:
-                        need_license = True
-
-                if need_license and all(kid in drm.content_keys for kid in all_kids):
-                    need_license = False
-
-                if need_license and not vaults_only:
-                    from_vaults = drm.content_keys.copy()
-
-                    log_event(
-                        "get_license",
-                        level="INFO",
-                        service=self.service,
-                        message="Requesting Widevine license from service",
-                        context={
-                            "track": str(track),
-                            "kids_needed": [k.hex for k in all_kids if k not in drm.content_keys],
-                        },
-                    )
-
-                    try:
-                        drm.get_content_keys(cdm=track_cdm, licence=licence, certificate=certificate)
-                    except Exception as e:
-                        if drm.content_keys:
-                            self.log.debug(f"License call failed but keys already in content_keys: {e}")
-                        else:
-                            if isinstance(e, (Widevine.Exceptions.EmptyLicense, Widevine.Exceptions.CEKNotFound)):
-                                msg = str(e)
-                            else:
-                                msg = f"An exception occurred in the Service's license function: {e}"
-                            cek_tree.add(f"[logging.level.error]{msg}")
-                            if not pre_existing_tree:
-                                table.add_row(cek_tree)
-                            if self.debug_logger:
-                                self.debug_logger.log_error(
-                                    "get_license",
-                                    e,
-                                    service=self.service,
-                                    context={"track": str(track), "exception_type": type(e).__name__},
-                                )
-                            self.flush_vault_writes(pending_vault_writes)
-                            raise e
-
-                    log_event(
-                        "license_keys_retrieved",
-                        level="INFO",
-                        service=self.service,
-                        context={
-                            "track": str(track),
-                            "keys_count": len(drm.content_keys),
-                            "kids": [k.hex for k in drm.content_keys.keys()],
-                        },
-                    )
-
-                    for kid_, key in drm.content_keys.items():
-                        if key == "0" * 32:
-                            key = f"[red]{key}[/]"
-                        is_track_kid_marker = ["", "*"][kid_ == track_kid]
-                        label = f"[text2]{kid_.hex}:{key}{is_track_kid_marker}"
-                        if not any(f"{kid_.hex}:{key}" in x.label for x in cek_tree.children):
-                            cek_tree.add(label)
-
-                    drm.content_keys = {
-                        kid_: key for kid_, key in drm.content_keys.items() if key and key.count("0") != len(key)
-                    }
-
-                    drm.content_keys.update(from_vaults)
-
-                    self.LICENSE_KEY_CACHE.update(drm.content_keys)
-
-                    pending_vault_writes.append(
-                        partial(
-                            self.cache_keys_to_vaults,
-                            {k: v for k, v in drm.content_keys.items() if k not in from_vaults},
-                        )
-                    )
-
-                if track_kid and track_kid not in drm.content_keys:
-                    msg = f"No Content Key for KID {track_kid.hex} was returned in the License"
-                    cek_tree.add(f"[logging.level.error]{msg}")
-                    if not pre_existing_tree:
-                        table.add_row(cek_tree)
-                    self.flush_vault_writes(pending_vault_writes)
-                    raise Widevine.Exceptions.CEKNotFound(msg)
-
-                if cek_tree.children and not pre_existing_tree:
-                    table.add_row()
-                    table.add_row(cek_tree)
-
-            self.flush_vault_writes(pending_vault_writes)
-            if export:
-                self.write_export(export, title, track, drm)
-
-        elif isinstance(drm, PlayReady):
-            if self.debug_logger:
-                self.debug_logger.log_drm_operation(
-                    drm_type="PlayReady",
-                    operation="prepare_drm",
-                    service=self.service,
-                    context={
-                        "track": str(track),
-                        "title": str(title),
-                        "pssh": drm.pssh_b64 or "",
-                        "kids": [k.hex for k in drm.kids],
-                        "track_kid": track_kid.hex if track_kid else None,
-                    },
-                )
-
-            pending_vault_writes = []
-            with self.drm_lock(drm):
-                pssh_display = self.truncate_pssh_for_display(drm.pssh_b64 or "", "PlayReady")
-                cek_tree = Tree(
-                    Text.assemble(
-                        ("PlayReady", "cyan"),
-                        (f"({pssh_display})", "text"),
-                        overflow="fold",
-                    )
-                )
-                pre_existing_tree = next(
-                    (x for x in table.columns[0].cells if isinstance(x, Tree) and x.label == cek_tree.label), None
-                )
-                if pre_existing_tree:
-                    cek_tree = pre_existing_tree
-
-                need_license = False
-                all_kids = list(drm.kids)
-                if track_kid and track_kid not in all_kids:
-                    all_kids.append(track_kid)
-
-                for kid in all_kids:
-                    if kid in drm.content_keys:
-                        is_track_kid = ["", "*"][kid == track_kid]
-                        key = drm.content_keys[kid]
-                        label = f"[text2]{kid.hex}:{key}{is_track_kid}"
-                        if not any(f"{kid.hex}:{key}" in x.label for x in cek_tree.children):
-                            cek_tree.add(label)
-                        continue
-
-                    is_track_kid = ["", "*"][kid == track_kid]
-
-                    cached_key = None if force else self.LICENSE_KEY_CACHE.get(kid)
-                    if cached_key:
-                        drm.content_keys[kid] = cached_key
-                        label = f"[text2]{kid.hex}:{cached_key}{is_track_kid} from cache"
-                        if not any(f"{kid.hex}:{cached_key}" in x.label for x in cek_tree.children):
-                            cek_tree.add(label)
-                        log_event(
-                            "license_cache_hit",
-                            level="INFO",
-                            service=self.service,
-                            context={
-                                "kid": kid.hex,
-                                "content_key": cached_key,
-                                "track": str(track),
-                                "drm_type": "PlayReady",
-                            },
-                        )
-                        continue
-
-                    if not cdm_only:
-                        content_key, vault_used = self.vaults.get_key(kid)
-                        if content_key:
-                            drm.content_keys[kid] = content_key
-                            label = f"[text2]{kid.hex}:{content_key}{is_track_kid} from {vault_used}"
-                            if not any(f"{kid.hex}:{content_key}" in x.label for x in cek_tree.children):
-                                cek_tree.add(label)
-                            self.LICENSE_KEY_CACHE[kid] = content_key
-
-                            if self.debug_logger:
-                                self.debug_logger.log_vault_query(
-                                    vault_name=vault_used,
-                                    operation="get_key_success",
-                                    service=self.service,
-                                    context={
-                                        "kid": kid.hex,
-                                        "content_key": content_key,
-                                        "track": str(track),
-                                        "from_cache": True,
-                                        "drm_type": "PlayReady",
-                                    },
-                                )
-                        elif vaults_only:
-                            msg = f"No Vault has a Key for {kid.hex} and --vaults-only was used"
-                            cek_tree.add(f"[logging.level.error]{msg}")
-                            if not pre_existing_tree:
-                                table.add_row(cek_tree)
-                            log_event(
-                                "vault_key_not_found",
-                                level="ERROR",
-                                service=self.service,
-                                message=msg,
-                                context={"kid": kid.hex, "track": str(track), "drm_type": "PlayReady"},
-                            )
-                            self.flush_vault_writes(pending_vault_writes)
-                            raise PlayReady.Exceptions.CEKNotFound(msg)
-                        else:
-                            need_license = True
-
-                    if kid not in drm.content_keys and cdm_only:
-                        need_license = True
-
-                if need_license and all(kid in drm.content_keys for kid in all_kids):
-                    need_license = False
-
-                if need_license and not vaults_only:
-                    from_vaults = drm.content_keys.copy()
-
-                    try:
-                        drm.get_content_keys(cdm=track_cdm, licence=licence, certificate=certificate)
-                    except Exception as e:
-                        if drm.content_keys:
-                            self.log.debug(f"License call failed but keys already in content_keys: {e}")
-                        else:
-                            if isinstance(e, (PlayReady.Exceptions.EmptyLicense, PlayReady.Exceptions.CEKNotFound)):
-                                msg = str(e)
-                            else:
-                                msg = f"An exception occurred in the Service's license function: {e}"
-                            cek_tree.add(f"[logging.level.error]{msg}")
-                            if not pre_existing_tree:
-                                table.add_row(cek_tree)
-                            if self.debug_logger:
-                                self.debug_logger.log_error(
-                                    "get_license_playready",
-                                    e,
-                                    service=self.service,
-                                    context={
-                                        "track": str(track),
-                                        "exception_type": type(e).__name__,
-                                        "drm_type": "PlayReady",
-                                    },
-                                )
-                            self.flush_vault_writes(pending_vault_writes)
-                            raise e
-
-                    for kid_, key in drm.content_keys.items():
-                        is_track_kid_marker = ["", "*"][kid_ == track_kid]
-                        label = f"[text2]{kid_.hex}:{key}{is_track_kid_marker}"
-                        if not any(f"{kid_.hex}:{key}" in x.label for x in cek_tree.children):
-                            cek_tree.add(label)
-
-                    drm.content_keys.update(from_vaults)
-
-                    self.LICENSE_KEY_CACHE.update(drm.content_keys)
-
-                    pending_vault_writes.append(
-                        partial(
-                            self.cache_keys_to_vaults,
-                            {k: v for k, v in drm.content_keys.items() if k not in from_vaults},
-                        )
-                    )
-
-                if track_kid and track_kid not in drm.content_keys:
-                    msg = f"No Content Key for KID {track_kid.hex} was returned in the License"
-                    cek_tree.add(f"[logging.level.error]{msg}")
-                    if not pre_existing_tree:
-                        table.add_row(cek_tree)
-                    self.flush_vault_writes(pending_vault_writes)
-                    raise PlayReady.Exceptions.CEKNotFound(msg)
-
-                if cek_tree.children and not pre_existing_tree:
-                    table.add_row()
-                    table.add_row(cek_tree)
-
-            self.flush_vault_writes(pending_vault_writes)
-            if export:
-                self.write_export(export, title, track, drm)
-
-        elif isinstance(drm, ClearKeyCENC):
-            pending_vault_writes = []
-            with self.drm_lock(drm):
-                cek_tree = Tree(Text.assemble(("ClearKey", "cyan"), overflow="fold"))
-                pre_existing_tree = next(
-                    (x for x in table.columns[0].cells if isinstance(x, Tree) and x.label == cek_tree.label), None
-                )
-                if pre_existing_tree:
-                    cek_tree = pre_existing_tree
-
-                need_license = False
-                all_kids = list(drm.kids)
-                if track_kid and track_kid not in all_kids:
-                    all_kids.append(track_kid)
-
-                for kid in all_kids:
-                    if kid in drm.content_keys:
-                        is_track_kid = ["", "*"][kid == track_kid]
-                        key = drm.content_keys[kid]
-                        label = f"[text2]{kid.hex}:{key}{is_track_kid}"
-                        if not any(f"{kid.hex}:{key}" in x.label for x in cek_tree.children):
-                            cek_tree.add(label)
-                        continue
-
-                    is_track_kid = ["", "*"][kid == track_kid]
-
-                    cached_key = self.LICENSE_KEY_CACHE.get(kid)
-                    if cached_key:
-                        drm.content_keys[kid] = cached_key
-                        label = f"[text2]{kid.hex}:{cached_key}{is_track_kid} from cache"
-                        if not any(f"{kid.hex}:{cached_key}" in x.label for x in cek_tree.children):
-                            cek_tree.add(label)
-                        log_event(
-                            "license_cache_hit",
-                            level="INFO",
-                            service=self.service,
-                            context={
-                                "kid": kid.hex,
-                                "content_key": cached_key,
-                                "track": str(track),
-                                "drm_type": "ClearKeyCENC",
-                            },
-                        )
-                        continue
-
-                    if not cdm_only:
-                        content_key, vault_used = self.vaults.get_key(kid)
-                        if content_key:
-                            drm.content_keys[kid] = content_key
-                            label = f"[text2]{kid.hex}:{content_key}{is_track_kid} from {vault_used}"
-                            if not any(f"{kid.hex}:{content_key}" in x.label for x in cek_tree.children):
-                                cek_tree.add(label)
-                            self.LICENSE_KEY_CACHE[kid] = content_key
-                        elif vaults_only:
-                            msg = f"No Vault has a Key for {kid.hex} and --vaults-only was used"
-                            cek_tree.add(f"[logging.level.error]{msg}")
-                            if not pre_existing_tree:
-                                table.add_row(cek_tree)
-                            log_event(
-                                "vault_key_not_found",
-                                level="ERROR",
-                                service=self.service,
-                                message=msg,
-                                context={"kid": kid.hex, "track": str(track), "drm_type": "ClearKeyCENC"},
-                            )
-                            self.flush_vault_writes(pending_vault_writes)
-                            raise ClearKeyCENC.Exceptions.CEKNotFound(msg)
-                        else:
-                            need_license = True
-
-                    if kid not in drm.content_keys and cdm_only:
-                        need_license = True
-
-                if need_license and all(kid in drm.content_keys for kid in all_kids):
-                    need_license = False
-
-                if need_license and not vaults_only:
-                    from_vaults = drm.content_keys.copy()
-
-                    try:
-                        drm.get_content_keys(licence=clearkey_licence or (lambda **_: None), session=service_session)
-                    except Exception as e:
-                        if drm.content_keys:
-                            self.log.debug(f"License call failed but keys already in content_keys: {e}")
-                        else:
-                            if isinstance(
-                                e, (ClearKeyCENC.Exceptions.EmptyLicense, ClearKeyCENC.Exceptions.CEKNotFound)
-                            ):
-                                msg = str(e)
-                            else:
-                                msg = f"An exception occurred in the Service's license function: {e}"
-                            cek_tree.add(f"[logging.level.error]{msg}")
-                            if not pre_existing_tree:
-                                table.add_row(cek_tree)
-                            if self.debug_logger:
-                                self.debug_logger.log_error(
-                                    "get_license_clearkey",
-                                    e,
-                                    service=self.service,
-                                    context={
-                                        "track": str(track),
-                                        "exception_type": type(e).__name__,
-                                        "drm_type": "ClearKeyCENC",
-                                    },
-                                )
-                            self.flush_vault_writes(pending_vault_writes)
-                            raise e
-
-                    for kid_, key in drm.content_keys.items():
-                        is_track_kid_marker = ["", "*"][kid_ == track_kid]
-                        label = f"[text2]{kid_.hex}:{key}{is_track_kid_marker}"
-                        if not any(f"{kid_.hex}:{key}" in x.label for x in cek_tree.children):
-                            cek_tree.add(label)
-
-                    drm.content_keys.update(from_vaults)
-
-                    self.LICENSE_KEY_CACHE.update(drm.content_keys)
-
-                    pending_vault_writes.append(
-                        partial(
-                            self.cache_keys_to_vaults,
-                            {k: v for k, v in drm.content_keys.items() if k not in from_vaults},
-                        )
-                    )
-
-                if track_kid and track_kid not in drm.content_keys:
-                    msg = f"No Content Key for KID {track_kid.hex} was returned in the License"
-                    cek_tree.add(f"[logging.level.error]{msg}")
-                    if not pre_existing_tree:
-                        table.add_row(cek_tree)
-                    self.flush_vault_writes(pending_vault_writes)
-                    raise ClearKeyCENC.Exceptions.CEKNotFound(msg)
-
-                if cek_tree.children and not pre_existing_tree:
-                    table.add_row()
-                    table.add_row(cek_tree)
-
-            self.flush_vault_writes(pending_vault_writes)
+            else:
+                get_keys = partial(drm.get_content_keys, cdm=track_cdm, licence=licence, certificate=certificate)
+            self.license_drm(drm, get_keys, track, title, track_kid, table, cdm_only, vaults_only, force)
             if export:
                 self.write_export(export, title, track, drm)
 
@@ -5365,9 +5396,7 @@ class dl:
                     cek_tree = pre_existing_tree
 
                 for kid_, key in drm.content_keys.items():
-                    label = f"[text2]{kid_.hex}:{key}*"
-                    if not any(f"{kid_.hex}:{key}" in x.label for x in cek_tree.children):
-                        cek_tree.add(label)
+                    self.add_key_label(cek_tree, kid_, key, track_kid=kid_)
 
                 if cek_tree.children and not pre_existing_tree:
                     table.add_row()
@@ -5389,6 +5418,7 @@ class dl:
             return profile_cookie_file
         elif default_cookie_file.exists():
             return default_cookie_file
+        return None
 
     @staticmethod
     def get_cookie_jar(service: str, profile: Optional[str]) -> Optional[CookieJar]:
@@ -5418,11 +5448,18 @@ class dl:
     @staticmethod
     def load_cookie_file(cookie_file: Path) -> MozillaCookieJar:
         """Load a Netscape cookie file with every expiry blanked, so no layer drops an expired cookie."""
-        cookie_jar = MozillaCookieJar(cookie_file)
-        cookie_data = html.unescape(cookie_file.read_text("utf-8-sig")).splitlines(keepends=False)
+        cookie_jar = dl.parse_cookie_text(cookie_file.read_text("utf-8-sig"), str(cookie_file))
+        cookie_jar.filename = str(cookie_file)
+        return cookie_jar
+
+    @staticmethod
+    def parse_cookie_text(text: str, source: str) -> MozillaCookieJar:
+        """Parse Netscape cookie text the way :meth:`load_cookie_file` does; ``source`` names it in errors."""
+        cookie_jar = MozillaCookieJar()
+        cookie_data = html.unescape(text).splitlines(keepends=False)
         head = next((line.lstrip() for line in cookie_data if line.strip()), "")
         if head[:1] in ("[", "{"):
-            raise ValueError(f"{cookie_file} is a JSON export; export it again in Netscape format")
+            raise ValueError(f"{source} is a JSON export; export it again in Netscape format")
         for i, line in enumerate(cookie_data):
             body = line.lstrip()
             prefix = "#HttpOnly_" if body.startswith("#HttpOnly_") else ""
@@ -5433,18 +5470,18 @@ class dl:
             if len(line_data) == 6:
                 line_data.append("")
             if len(line_data) != 7:
-                raise ValueError(f"{cookie_file} line {i + 1} is not a Netscape cookie row: {line!r}")
+                raise ValueError(f"{source} line {i + 1} is not a Netscape cookie row: {line!r}")
             line_data[4] = ""
             line_data[1] = str(line_data[0].startswith(".")).upper()
             cookie_data[i] = prefix + "\t".join(line_data)
         cookie_data.insert(0, "# Netscape HTTP Cookie File")
-        cookie_jar._really_load(StringIO("\n".join(cookie_data)), str(cookie_file), True, True)  # type: ignore[attr-defined]
+        cookie_jar._really_load(StringIO("\n".join(cookie_data)), source, True, True)  # type: ignore[attr-defined]
         if not len(cookie_jar):
-            raise ValueError(f"{cookie_file} holds no cookies; export it again in Netscape format")
+            raise ValueError(f"{source} holds no cookies; export it again in Netscape format")
         return cookie_jar
 
     @staticmethod
-    def save_cookies(path: Path, cookies: CookieJar):
+    def save_cookies(path: Path, cookies: CookieJar) -> None:
         if hasattr(cookies, "jar"):
             cookies = cookies.jar
 
@@ -5469,6 +5506,7 @@ class dl:
                 if isinstance(credentials, list):
                     return Credential(*credentials)
                 return Credential.loads(credentials)  # type: ignore
+        return None
 
     def cdm_from_service_entry(self) -> bool:
         """Whether the service's own ``cdm`` entry named the loaded device, not ``--cdm`` or the ``default`` entry."""
@@ -5484,7 +5522,7 @@ class dl:
         profile: Optional[str] = None,
         drm: Optional[str] = None,
         quality: Optional[int] = None,
-    ) -> Optional[object]:
+    ) -> Any:
         """
         Get CDM for a specified service (either Local or Remote CDM).
         Now supports quality-based selection when the caller gives a quality.
@@ -5508,7 +5546,7 @@ class dl:
                     ):
                         quality_keys.append(key)
 
-                def sort_quality_key(key):
+                def sort_quality_key(key: str) -> tuple[int, int]:
                     if key.isdigit():
                         return (0, int(key))
                     elif key.startswith(">="):

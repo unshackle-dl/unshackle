@@ -3,6 +3,8 @@ from pathlib import Path
 from typing import Optional
 from uuid import UUID
 
+import pytest
+
 from unshackle.core.drm.verify import PIFF_TENC, PIFF_TFXD, KidMap, kid_windows, pick_windows
 
 A, B, C = UUID(int=0xA), UUID(int=0xB), UUID(int=0xC)
@@ -17,10 +19,14 @@ def full(kind: bytes, payload: bytes, version: int = 0, flags: int = 0) -> bytes
     return box(kind, bytes([version]) + flags.to_bytes(3, "big") + payload)
 
 
-def encv(kid: UUID, piff: bool = False) -> bytes:
+def sinf(kid: UUID, piff: bool = False) -> bytes:
     tenc_body = b"\x00\x00\x01\x08" + kid.bytes
     tenc = box(b"uuid", PIFF_TENC, bytes(4) + tenc_body) if piff else full(b"tenc", tenc_body)
-    return box(b"encv", bytes(78), box(b"sinf", box(b"frma", b"avc1"), box(b"schi", tenc)))
+    return box(b"sinf", box(b"frma", b"avc1"), box(b"schi", tenc))
+
+
+def encv(kid: UUID, piff: bool = False) -> bytes:
+    return box(b"encv", bytes(78), sinf(kid, piff))
 
 
 def enca(kid: UUID) -> bytes:
@@ -44,15 +50,28 @@ def sbgp(*runs: tuple[int, int]) -> bytes:
     return full(b"sbgp", b"seig" + struct.pack(">I", len(runs)) + b"".join(struct.pack(">II", *run) for run in runs))
 
 
-def movie(*sample_entries: bytes, handler: bytes = b"vide", stbl: bytes = b"") -> bytes:
+def trak(*sample_entries: bytes, track: int = 1, handler: bytes = b"vide", stbl: bytes = b"") -> bytes:
     stsd = full(b"stsd", struct.pack(">I", len(sample_entries)) + b"".join(sample_entries))
     hdlr = full(b"hdlr", bytes(4) + handler + bytes(12))
-    trak = box(
+    return box(
         b"trak",
-        full(b"tkhd", bytes(8) + struct.pack(">I", 1)),
+        full(b"tkhd", bytes(8) + struct.pack(">I", track)),
         box(b"mdia", full(b"mdhd", bytes(8) + struct.pack(">I", 1000)), hdlr, box(b"minf", box(b"stbl", stsd, stbl))),
     )
-    return box(b"ftyp", b"iso6") + box(b"moov", trak, box(b"mvex", full(b"trex", struct.pack(">III", 1, 1, 0))))
+
+
+def movie(*sample_entries: bytes, handler: bytes = b"vide", stbl: bytes = b"", others: bytes = b"") -> bytes:
+    moov = box(
+        b"moov",
+        trak(*sample_entries, handler=handler, stbl=stbl),
+        others,
+        box(b"mvex", full(b"trex", struct.pack(">III", 1, 1, 0))),
+    )
+    return box(b"ftyp", b"iso6") + moov
+
+
+def clear_audio(others: bytes = b"") -> bytes:
+    return movie(box(b"mp4a", bytes(28)), handler=b"soun", others=others)
 
 
 def moof(
@@ -176,4 +195,46 @@ def test_oversized_box(tmp_path: Path) -> None:
 def test_not_a_fragmented_mp4(tmp_path: Path) -> None:
     path = tmp_path / "video.ts"
     path.write_bytes(b"\x47" * 188 * 4)
+    assert kid_windows(path) is None
+
+
+def test_clear_mp4_maps_no_kid(tmp_path: Path) -> None:
+    path = tmp_path / "clear.m4a"
+    path.write_bytes(clear_audio() + moof(1, 0))
+    assert kid_windows(path) == KidMap({}, False)
+
+
+def test_encrypted_entry_without_a_tenc_is_not_clear(tmp_path: Path) -> None:
+    path = tmp_path / "enc.mp4"
+    path.write_bytes(movie(box(b"encv", bytes(78), box(b"sinf", box(b"frma", b"avc1")))) + moof(1, 0))
+    assert kid_windows(path) is None
+
+
+@pytest.mark.parametrize("kind", [b"enct", b"encs", b"drmi"])
+def test_other_encrypted_entry_kinds_are_not_clear(tmp_path: Path, kind: bytes) -> None:
+    path = tmp_path / "enc.mp4"
+    path.write_bytes(movie(box(kind, bytes(16)), handler=b"text") + moof(1, 0))
+    assert kid_windows(path) is None
+
+
+def test_a_clear_entry_with_a_protecting_senc_is_not_clear(tmp_path: Path) -> None:
+    path = tmp_path / "enc.m4a"
+    senc = full(b"senc", struct.pack(">I", 1) + bytes(8))
+    path.write_bytes(clear_audio() + moof(1, 0, senc))
+    assert kid_windows(path) is None
+    path.write_bytes(clear_audio() + moof(1, 0, full(b"senc", bytes(4))))
+    assert kid_windows(path) == KidMap({}, False)
+
+
+def test_only_the_tracks_with_fragments_decide_clear(tmp_path: Path) -> None:
+    path = tmp_path / "clear.m4a"
+    path.write_bytes(clear_audio(others=trak(encv(A), track=2)) + moof(1, 0))
+    assert kid_windows(path) == KidMap({}, False)
+    path.write_bytes(clear_audio(others=trak(encv(A), track=2)))
+    assert kid_windows(path) is None
+
+
+def test_a_clear_lead_beside_an_encrypted_entry_is_not_clear(tmp_path: Path) -> None:
+    path = tmp_path / "lead.mp4"
+    path.write_bytes(movie(box(b"avc1", bytes(78)), encv(A)) + moof(1, 0))
     assert kid_windows(path) is None

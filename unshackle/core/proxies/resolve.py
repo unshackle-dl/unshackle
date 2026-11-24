@@ -3,17 +3,22 @@
 from __future__ import annotations
 
 import ipaddress
+import json
 import logging
 import re
 from typing import Any, List, Optional
 from urllib.parse import urlparse
+
+import click
+import requests
+from click.core import ParameterSource
 
 from unshackle.core.proxies.proxy import Proxy
 from unshackle.core.utils.redact import mask_proxy
 
 log = logging.getLogger("proxies")
 
-REGION = r"[a-z]{2,4}(?:_[a-z0-9]{2,4})?(?:-[a-z0-9]+|:[a-z][a-z0-9]*)*\d*"
+REGION = r"[a-z]{2,4}(?:_[a-z0-9]{2,4})?(?:-[a-z0-9]+|:[a-z][a-z0-9]*)*\d*(?:@-?[a-z0-9][a-z0-9._-]*)?"
 
 
 class Unavailable(Proxy):
@@ -50,10 +55,11 @@ def find_provider(proxy_providers: List[Any], name: str, hint: str = "") -> Any:
 
 def load_proxy_providers(exclude: tuple[str, ...] = (), raise_errors: bool = False, quiet: bool = False) -> List[Any]:
     """
-    Build the proxy providers set in config, in the order a bare query tries them.
+    Build the proxy providers set in config: Basic first, then config key order, Control D last.
 
     Each proxy provider loads on its own. One that fails is logged and kept as Unavailable, so a bare
     query skips it and a query that names it reports why. *raise_errors* raises the failure instead.
+    The first query fetches a catalogue, not this function.
     *exclude* holds lowercase class names to leave out.
     """
     from unshackle.core import binaries
@@ -71,7 +77,15 @@ def load_proxy_providers(exclude: tuple[str, ...] = (), raise_errors: bool = Fal
     )
 
     settings = config.proxy_providers
-    classes = (Basic, ExpressVPN, NordVPN, ProtonVPN, SurfsharkVPN, WindscribeVPN, Gluetun, Hola, ControlD)
+    rank = {key: i for i, key in enumerate(settings)}
+    classes = [
+        Basic,
+        *sorted(
+            (ExpressVPN, NordVPN, ProtonVPN, SurfsharkVPN, WindscribeVPN, Gluetun, Hola),
+            key=lambda c: rank.get(c.__name__.lower(), len(rank)),
+        ),
+        ControlD,
+    ]
 
     def build(cls: type) -> Any:
         key = cls.__name__.lower()
@@ -93,7 +107,7 @@ def load_proxy_providers(exclude: tuple[str, ...] = (), raise_errors: bool = Fal
             if provider is None:
                 continue
             if not quiet:
-                log.info(f"Loaded {name}: {provider}")
+                log.info(f"Loaded {name}")
         except Exception as e:
             if raise_errors:
                 raise
@@ -109,12 +123,11 @@ def initialize_proxy_providers(raise_errors: bool = False, quiet: bool = False) 
     Load the proxy providers for the REST API and the remote service client.
 
     Gluetun is not offered on this path, because it starts a local Docker container. *quiet* drops the
-    per-provider summary lines: rendering a proxy provider asks some of them for their server catalogue
-    over the network, which a repeated caller must not pay for.
+    per-provider summary lines.
     """
     proxy_providers = load_proxy_providers(("gluetun",), raise_errors, quiet)
     if not quiet and not proxy_providers:
-        log.warning("No proxy providers were loaded. Check your proxy provider configuration in unshackle.yaml")
+        log.warning("No proxy providers were loaded")
     return proxy_providers
 
 
@@ -141,12 +154,17 @@ def pick_proxy(proxy_providers: List[Any], query: str, provider_name: Optional[s
     """
     Get a proxy provider and its proxy URI: from the named one, or else from the first one that answers.
 
-    A named proxy provider's error goes to the caller. In a bare query, a proxy provider that fails is
+    A named proxy provider's error goes to the caller as a ValueError. In a bare query, a proxy provider that fails is
     logged and skipped, so a later one can still answer. Raises ValueError when no proxy provider answers.
     """
     if provider_name:
         provider = find_provider(proxy_providers, provider_name)
-        uri = provider.get_proxy(query)
+        try:
+            uri = provider.get_proxy(query)
+        except Exception as e:
+            if isinstance(e, ValueError) and not isinstance(e, (json.JSONDecodeError, requests.RequestException)):
+                raise
+            raise ValueError(f"The proxy provider {provider_name} failed for {query}: {e}") from e
         if not uri:
             raise ValueError(f"The proxy provider {provider_name} had no proxy for {query}")
         return provider, uri
@@ -184,6 +202,39 @@ def describe_proxy(provider: Any, uri: str, query: str, allow_debug: bool = True
         if display:
             return f"Using {name} Proxy {display}"
     return f"Using {name} Proxy: {mask_proxy(uri, isinstance(provider, Basic), allow_debug)}"
+
+
+def require_alone_local_proxy(ctx: click.Context) -> None:
+    """Check ``--local-proxy``: it needs a remote run, and takes no proxy option but a typed ``--proxy``.
+
+    A typed ``--proxy`` becomes the tunnel's exit on this machine. A proxy option that comes from the ``dl``
+    config defaults, not the command line, is cleared instead.
+    """
+    if not ctx.params.get("remote"):
+        raise click.UsageError(
+            "--local-proxy needs --remote: it sends a remote server's requests through this machine."
+        )
+    given = []
+    for key in ("proxy", "no_proxy", "proxy_download", "no_proxy_download"):
+        if not ctx.params.get(key):
+            continue
+        if ctx.get_parameter_source(key) in (ParameterSource.DEFAULT, ParameterSource.DEFAULT_MAP):
+            ctx.params[key] = False if key.startswith("no_") else None
+        elif key != "proxy":
+            given.append("--" + key.replace("_", "-"))
+    if given:
+        raise click.UsageError(f"--local-proxy does not work with {', '.join(given)}.")
+
+
+def describe_explicit_proxy(uri: str) -> str:
+    """The log line for a proxy URI typed in full: a proxy on this machine shows only as its port."""
+    if is_loopback(uri):
+        try:
+            port = urlparse(uri if "//" in uri else f"//{uri}").port
+        except ValueError:
+            port = None
+        return f"Using a local proxy on port {port}" if port else "Using a local proxy"
+    return f"Using explicit Proxy: {mask_proxy(uri)}"
 
 
 def resolve_proxy(proxy: str, proxy_providers: List[Any]) -> Optional[str]:

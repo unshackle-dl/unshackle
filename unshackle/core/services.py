@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 import click
+from click.core import ParameterSource
 
 from unshackle.core import binaries
 from unshackle.core.config import config
@@ -19,6 +20,7 @@ from unshackle.core.constants import DEFAULT_SAMPLE
 from unshackle.core.service import Service
 from unshackle.core.service_repo import DirtyServiceRepo, head, is_repo_spec, refresh_repo, resolve_service_repo
 from unshackle.core.utilities import import_module_by_path
+from unshackle.core.utils.collections import ci_get
 from unshackle.core.utils.redact import redact_path
 
 log = logging.getLogger("services")
@@ -85,7 +87,7 @@ def compiled_import_hint(missing: str, path: Path) -> str:
     )
 
 
-def load_service(path: Path) -> object:
+def load_service(path: Path) -> type[Service]:
     """Load one Service module, returning its tag-named class.
 
     Raises a concise, single-line error naming the Service and the real cause so
@@ -94,7 +96,7 @@ def load_service(path: Path) -> object:
     tag = path.parent.stem
     try:
         module = import_module_by_path(path)
-    except Exception as e:
+    except (Exception, SystemExit) as e:
         hint = compiled_import_hint(e.name, path) if isinstance(e, ModuleNotFoundError) and e.name else ""
         raise RuntimeError(f"{tag}: failed to import - {type(e).__name__}: {e}{hint} ({path.name})") from e
     try:
@@ -105,25 +107,7 @@ def load_service(path: Path) -> object:
         ) from e
 
 
-def load_services(paths: list[Path]) -> tuple[dict[str, object], list[str]]:
-    """Load every Service, returning the good ones plus a list of load errors.
-
-    Importing this module must never raise: several commands import it, and Python
-    does not cache a failed import, so raising here would re-run and re-report for
-    every command. Instead we collect failures and let the caller surface them once,
-    cleanly, when it uses the services.
-    """
-    modules: dict[str, object] = {}
-    errors: list[str] = []
-    for path in paths:
-        try:
-            modules[path.parent.stem] = load_service(path)
-        except Exception as e:
-            errors.append(str(e))
-    return modules, errors
-
-
-def register_service_binaries(modules: dict[str, object]) -> None:
+def register_service_binaries(modules: dict[str, type[Service]]) -> None:
     """Register custom binary dependencies declared by services via get_binaries()."""
 
     for tag, service_cls in modules.items():
@@ -141,15 +125,46 @@ def register_service_binaries(modules: dict[str, object]) -> None:
                 log.warning(f"Failed to register custom binaries for service {tag}: {e}")
 
 
-MODULES, LOAD_ERRORS = load_services(SERVICES)
-register_service_binaries(MODULES)
-
-ALIASES = {tag: getattr(module, "ALIASES", ()) for tag, module in MODULES.items()}
+MODULES: dict[str, type[Service]] = {}
+LOAD_ERRORS: list[str] = []
+ALIASES: dict[str, tuple[str, ...]] = {}
 
 PENDING: set[str] = set()
 PENDING_SINCE: dict[str, float] = {}
 LOADED_COMMITS: dict[str, str] = {}
-RELOAD_LOCK = threading.Lock()
+RELOAD_LOCK = threading.RLock()
+
+
+def ensure_loaded(tag: str) -> type[Service] | None:
+    """Import one discovered service on first use; None when the tag is unknown or its import failed.
+
+    Startup imports no service: a command that runs one service pays only for that one.
+    A failed import is kept in ``LOAD_ERRORS`` and is not tried again until a reload.
+    """
+    service = MODULES.get(tag)
+    if service is not None or tag in failed_tags(LOAD_ERRORS):
+        return service
+    with RELOAD_LOCK:
+        if tag in MODULES or tag in failed_tags(LOAD_ERRORS):
+            return MODULES.get(tag)
+        path = next((path for path in SERVICES if path.parent.stem == tag), None)
+        if path is None:
+            return None
+        try:
+            service = load_service(path)
+        except Exception as e:
+            LOAD_ERRORS.append(str(e))
+            return None
+        MODULES[tag] = service
+        ALIASES[tag] = getattr(service, "ALIASES", ())
+        register_service_binaries({tag: service})
+        return service
+
+
+def load_all() -> None:
+    """Import every discovered service, for the callers that need all of them (help, serve, env)."""
+    for tag in Services.get_tags():
+        ensure_loaded(tag)
 
 
 def record_loaded_commits(tags: Iterable[str] | None = None) -> None:
@@ -315,7 +330,7 @@ def log_load_issues() -> None:
         log.error(f"Service skipped: {err}")
 
 
-def check_load_errors() -> None:
+def check_load_errors(tag: str | None = None) -> None:
     """Log a one-line load summary (once) and raise a single clean error on failures.
 
     unshackle calls this when it needs the services (listing/resolving), so Click
@@ -323,32 +338,34 @@ def check_load_errors() -> None:
     command that imports this module. This function summarises the duplicate services
     (a tag that an earlier, higher-priority source also gives, and which unshackle
     ignores). The full list - naming the path used and the duplicate ignored - is
-    debug-only.
+    debug-only. With *tag*, only that service's load error counts, and the summary names
+    only a duplicate of that tag.
     """
     if DIRTY_REPOS:
         joined = "\n".join(f"  - {p}" for p in DIRTY_REPOS)
-        raise click.ClickException(
-            "Service repo has local changes - refusing to refresh so your edits are not lost.\n"
-            "Commit and push them to the upstream repo (or revert them), then retry:\n" + joined
-        )
+        raise click.ClickException("Service repo has local changes, not refreshing:\n" + joined)
+    errors = [err for err in LOAD_ERRORS if tag is None or err.startswith(f"{tag}: ")]
+    if errors:
+        joined = "\n".join(f"  - {err}" for err in errors)
+        raise click.ClickException(f"Failed to load {len(errors)} service(s):\n{joined}")
     global SUMMARY_LOGGED
-    if not SUMMARY_LOGGED:
-        SUMMARY_LOGGED = True
-        summary = f"Loaded {len(MODULES)} services"
-        if SHADOWED:
-            summary += f" ({len(SHADOWED)} duplicate(s) ignored)"
-        log.info(summary)
-        for shadow in SHADOWED:
-            log.debug("%s", shadow)
-    if LOAD_ERRORS:
-        joined = "\n".join(f"  - {err}" for err in LOAD_ERRORS)
-        raise click.ClickException(f"Failed to load {len(LOAD_ERRORS)} service(s):\n{joined}")
+    if SUMMARY_LOGGED:
+        return
+    SUMMARY_LOGGED = True
+    shadows = SHADOWED if tag is None else [shadow for shadow in SHADOWED if shadow.startswith(f"{tag}: ")]
+    if tag is None:
+        log.info(f"Loaded {len(MODULES)} services" + (f" ({len(SHADOWED)} duplicate(s) ignored)" if SHADOWED else ""))
+    elif shadows:
+        log.info(f"{tag}: {len(shadows)} duplicate(s) ignored")
+    for shadow in shadows:
+        log.debug("%s", shadow)
+
+
+ROUTING_PARAMS = ("remote", "server")
 
 
 class Services(click.Group):
     """Lazy-loaded command group of project services."""
-
-    remote_services_cache: list[dict] | None = None
 
     def format_help(self, ctx: click.Context, formatter: click.HelpFormatter) -> None:
         """Name the commands panel ``Services``, because this group's commands are services."""
@@ -383,7 +400,7 @@ class Services(click.Group):
         """
         remote = ctx.params.get("remote") or (ctx.parent and ctx.parent.params.get("remote"))
         if remote:
-            remote_services = Services.fetch_remote_services(ctx)
+            remote_services = Services.fetch_remote_services(ctx.params.get("server"))
             if remote_services is not None:
                 return [s["tag"] for s in remote_services]
             tags = Services.get_tags()
@@ -392,22 +409,24 @@ class Services(click.Group):
                     if remote_tag not in tags:
                         tags.append(remote_tag)
             return tags
+        load_all()
         check_load_errors()
         return Services.get_tags()
 
     def get_command(self, ctx: click.Context, name: str) -> click.Command:
         """Load the Service and return the Click CLI method."""
-        check_load_errors()
         tag = Services.get_tag(name)
 
-        import_file = ctx.params.get("import_file") or (ctx.parent and ctx.parent.params.get("import_file"))
-        if import_file:
+        if Services.is_import(ctx):
             return Services.make_import_command(tag, ctx)
 
-        remote = ctx.params.get("remote") or (ctx.parent and ctx.parent.params.get("remote"))
+        routing = Services.routing(ctx, tag)
+        remote = routing.get("remote") or (ctx.parent and ctx.parent.params.get("remote"))
         if remote:
-            return Services.make_remote_command(name, ctx)
+            return Services.make_remote_command(name, routing.get("server"))
 
+        ensure_loaded(tag)
+        check_load_errors(tag)
         try:
             service = Services.load(tag)
         except KeyError as e:
@@ -416,7 +435,7 @@ class Services(click.Group):
                 raise click.ClickException(
                     f"There are no Services added yet, therefore the '{name}' Service could not be found."
                 )
-            raise click.ClickException(f"{e}. Available Services: {', '.join(available_services)}")
+            raise click.ClickException(f"{e}, available: {', '.join(available_services)}")
 
         if hasattr(service, "cli"):
             cli = service.cli
@@ -427,6 +446,49 @@ class Services(click.Group):
             return cli
 
         raise click.ClickException(f"Service '{tag}' has no 'cli' method configured.")
+
+    def resolve_command(
+        self, ctx: click.Context, args: list[str]
+    ) -> tuple[str | None, click.Command | None, list[str]]:
+        """Resolve the service, then store its routing in ``ctx.params`` for the callback.
+
+        ``get_command`` has already computed it, but help and shell completion call ``get_command`` on its own,
+        so only this path may store it.
+        """
+        cmd_name, cmd, rest = super().resolve_command(ctx, args)
+        if cmd_name:
+            ctx.params.update(Services.routing(ctx, Services.get_tag(cmd_name)))
+        return cmd_name, cmd, rest
+
+    @staticmethod
+    def is_import(ctx: click.Context) -> bool:
+        return bool(ctx.params.get("import_file") or (ctx.parent and ctx.parent.params.get("import_file")))
+
+    @staticmethod
+    def routing(ctx: click.Context, tag: str) -> dict[str, Any]:
+        """The ``remote`` and ``server`` values for one service: CLI/env, then ``services.<TAG>.dl``, then defaults.
+
+        Built from the parameter sources, never read back from ``ctx.params``: help and shell completion resolve
+        every service on one context, so a value stored for one service must not route the next one.
+        An import never routes.
+        """
+        if Services.is_import(ctx):
+            return {}
+        service_dl = (ci_get(config.services, tag) or {}).get("dl") or {}
+        routing: dict[str, Any] = {}
+        for param in ctx.command.params:
+            name = param.name
+            if name not in ROUTING_PARAMS or name not in ctx.params:
+                continue
+            if ctx.get_parameter_source(name) not in (ParameterSource.DEFAULT, ParameterSource.DEFAULT_MAP):
+                routing[name] = ctx.params[name]
+                continue
+            value = service_dl.get(name)
+            try:
+                routing[name] = param.type_cast_value(ctx, param.get_default(ctx) if value is None else value)
+            except click.BadParameter as e:
+                raise click.ClickException(f"services.{tag}.dl.{name}: {e.format_message()}") from e
+        return routing
 
     @staticmethod
     def docstring_help(doc: str) -> str:
@@ -442,46 +504,29 @@ class Services(click.Group):
         return "\n\n".join([first] + [f"\b\n{p}" for p in rest])
 
     @staticmethod
-    def fetch_remote_services(ctx: click.Context) -> list[dict] | None:
-        """Fetch the service list from the remote server (cached per process)."""
-        if Services.remote_services_cache is not None:
-            return Services.remote_services_cache
-        try:
-            from unshackle.core.remote_service import RemoteClient, resolve_server
+    def fetch_remote_services(server_name: str | None) -> list[dict] | None:
+        """Fetch the service list from the remote server (cached); None when it is unreachable."""
+        from unshackle.core.remote_service import remote_service_list, resolve_server
 
-            server_name = ctx.params.get("server")
-            server_url, api_key, services_config = resolve_server(server_name)
-            client = RemoteClient(
-                server_url, api_key, services_config.get("_auth_headers"), services_config.get("_timeout")
-            )
-            result = client.get("/api/services")
-            Services.remote_services_cache = result.get("services", [])
-            return Services.remote_services_cache
-        except click.ClickException:
-            raise
-        except Exception:
-            return None
+        resolve_server(server_name)
+        return remote_service_list(server_name)
 
     @staticmethod
-    def make_remote_command(name: str, ctx: click.Context) -> click.Command:
+    def make_remote_command(name: str, server_name: str | None) -> click.Command:
         """Make a Click command for a remote service, with the options the remote server gives."""
-        services = Services.fetch_remote_services(ctx)
+        services = Services.fetch_remote_services(server_name)
         if services is None:
             svc_info = None
             tag = Services.get_tag(name)
         else:
-            lowered = name.lower()
-            svc_info = next((svc for svc in services if str(svc.get("tag", "")).lower() == lowered), None)
-            if svc_info is None:
-                svc_info = next(
-                    (svc for svc in services if lowered in (str(a).lower() for a in svc.get("aliases") or [])), None
-                )
+            from unshackle.core.remote_service import find_remote_service
+
+            svc_info = find_remote_service(services, name)
             if svc_info is None:
                 if services:
                     available = ", ".join(sorted(svc["tag"] for svc in services))
                     raise click.ClickException(
-                        f"The remote server does not offer a service named '{name}'. "
-                        f"It offers these services: {available}"
+                        f"The remote server does not offer a service named '{name}', available: {available}"
                     )
                 raise click.ClickException("The remote server offers no services to your API key.")
             tag = svc_info["tag"]
@@ -499,14 +544,9 @@ class Services(click.Group):
         @click.argument("title", type=str, required=bool(title_arg.get("required", True)) if title_arg else True)
         @click.pass_context
         def remote_cli(ctx: click.Context, title: str, **kwargs: object) -> object:
-            from unshackle.core.remote_service import RemoteService, resolve_server
+            from unshackle.core.remote_service import make_remote_service
 
-            server_name = ctx.parent.params.get("server") if ctx.parent else None
-            server_url, api_key, services_config = resolve_server(server_name)
-            services_config["_server_accounts"] = svc_info.get("server_accounts") if svc_info else None
-            services_config["_client_config"] = svc_info.get("client_config") if svc_info else None
-            service_params = {k: v for k, v in kwargs.items() if v is not None and v is not False}
-            return RemoteService(ctx, tag, title, server_url, api_key, services_config, service_params=service_params)
+            return make_remote_service(ctx, server_name, tag, title, {"service_params": kwargs})
 
         if cli_params:
             for param in cli_params:
@@ -541,7 +581,9 @@ class Services(click.Group):
         def import_cli(ctx: click.Context, title: str, **kwargs: object) -> object:
             from unshackle.core.import_service import ImportService
 
-            import_file = ctx.params.get("import_file") or (ctx.parent and ctx.parent.params.get("import_file"))
+            import_file = ctx.params.get("import_file") or (
+                ctx.parent.params.get("import_file") if ctx.parent else None
+            )
             return ImportService(ctx, tag, title, import_file)
 
         return import_cli
@@ -577,15 +619,17 @@ class Services(click.Group):
                 return tag
 
         for tag in tags:
+            if tag not in ALIASES:
+                ensure_loaded(tag)
             if any(value_lower == alias.lower() for alias in ALIASES.get(tag, ())):
                 return tag
 
         return value
 
     @staticmethod
-    def load(tag: str) -> Service:
+    def load(tag: str) -> type[Service]:
         """Load a Service module by Service tag."""
-        module = MODULES.get(tag)
+        module = ensure_loaded(tag)
         if module:
             return module
 

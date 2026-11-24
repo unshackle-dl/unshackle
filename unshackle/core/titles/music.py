@@ -12,6 +12,68 @@ from unshackle.core.titles.title import Title
 from unshackle.core.utilities import sanitize_filename
 from unshackle.core.utils.template_formatter import TemplateFormatter, detect_spacer
 
+SONG_FIELDS = (
+    "artist",
+    "album",
+    "track",
+    "disc",
+    "album_artist",
+    "release_type",
+    "total_tracks",
+    "total_discs",
+    "genre",
+    "explicit",
+    "isrc",
+    "upc",
+    "copyright",
+    "label",
+    "lyrics",
+    "synced_lyrics",
+    "lyrics_suffix",
+    "artwork_url",
+)
+"""The `Song` attributes a remote session sends, beyond the fields every title has."""
+
+MUSIC_DATA_KEYS = (
+    "release_date",
+    "composer",
+    "performer",
+    "comment",
+    "source",
+    "service",
+    "track_id",
+    "album_id",
+    "track_url",
+    "album_url",
+    "artists",
+    "replaygain_track_gain",
+    "replaygain_track_peak",
+    "replaygain_album_gain",
+    "replaygain_album_peak",
+    "quality",
+    "quality_label",
+    "lossless",
+    "hires",
+    "atmos",
+    "duration",
+    "released_at",
+    "year",
+    "barcode",
+    "parental_warning",
+    "unavailable_reason",
+    "skip_reason",
+)
+"""The `Song.data` keys the music tagger and renderer read, which a remote session sends as `music_data`."""
+
+
+def song_metadata(song: Any) -> dict[str, Any]:
+    """``Song.data`` with its nested ``metadata`` dict merged over it, as the renderer also reads both."""
+    data = getattr(song, "data", None)
+    if not isinstance(data, dict):
+        return {}
+    nested = data.get("metadata")
+    return {**data, **nested} if isinstance(nested, dict) else data
+
 
 class Song(Title):
     def __init__(
@@ -38,7 +100,13 @@ class Song(Title):
         label: Optional[str] = None,
         lyrics: Optional[str] = None,
         artwork_url: Optional[str] = None,
+        synced_lyrics: Optional[str] = None,
+        lyrics_suffix: Optional[str] = None,
     ) -> None:
+        """`lyrics` is the plain text the tagger embeds.
+
+        `synced_lyrics` (timed LRC or TTML) is saved beside the audio file with `lyrics_suffix` (".lrc", ".ttml").
+        """
         super().__init__(id_, service, language, data)
 
         if not name:
@@ -90,6 +158,10 @@ class Song(Title):
             raise TypeError(f"Expected lyrics to be a str, not {lyrics!r}")
         if artwork_url is not None and not isinstance(artwork_url, str):
             raise TypeError(f"Expected artwork_url to be a str, not {artwork_url!r}")
+        if synced_lyrics is not None and not isinstance(synced_lyrics, str):
+            raise TypeError(f"Expected synced_lyrics to be a str, not {synced_lyrics!r}")
+        if lyrics_suffix is not None and not (isinstance(lyrics_suffix, str) and lyrics_suffix.startswith(".")):
+            raise TypeError(f"Expected lyrics_suffix to be a str starting with '.', not {lyrics_suffix!r}")
 
         name = name.strip()
         artist = artist.strip()
@@ -135,6 +207,8 @@ class Song(Title):
         self.label = label
         self.lyrics = lyrics
         self.artwork_url = artwork_url
+        self.synced_lyrics = synced_lyrics.strip() if synced_lyrics else None
+        self.lyrics_suffix = lyrics_suffix
 
     def __str__(self) -> str:
         return "{artist} - {album} ({year}) / {track:02}. {name}".format(
@@ -196,7 +270,7 @@ class Song(Title):
 class Music(SortedKeyList, ABC):
     """A grouped music release, such as an album, EP, single, compilation, or playlist."""
 
-    def __new__(cls, *args: Any, **kwargs: Any):
+    def __new__(cls, *args: Any, **kwargs: Any) -> "Music":
         return super().__new__(cls)
 
     def __init__(
@@ -212,7 +286,7 @@ class Music(SortedKeyList, ABC):
         total_duration: Optional[int] = None,
         owner: Optional[str] = None,
         description: Optional[str] = None,
-    ):
+    ) -> None:
         if not isinstance(kind, str):
             raise TypeError(f"Expected kind to be a str, not {kind!r}")
         if title is not None and not isinstance(title, str):

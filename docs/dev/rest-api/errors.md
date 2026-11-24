@@ -25,7 +25,8 @@ A structured error is always a JSON object with `status` set to the literal stri
 {
   "status": "error",
   "error_code": "INVALID_PARAMETERS",
-  "message": "vcodec must be one of: H264, H265, ...",
+  "message": "vcodec must be one of: H264, H265, ... (ref 7f3a2c)",
+  "ref": "7f3a2c",
   "timestamp": "2026-07-03T12:34:56.789012+00:00",
   "details": { "field": "vcodec" },
   "retryable": true,
@@ -40,7 +41,8 @@ A structured error is always a JSON object with `status` set to the literal stri
 |---|---|---|---|
 | `status` | string | Yes | Always the literal `"error"`. Lets a client distinguish an error body from a success body at a glance. |
 | `error_code` | string | Yes | A stable, machine-readable code from the [catalogue below](#error-code-catalogue). Match on this, not on `message`. |
-| `message` | string | Yes | A human-readable description of what went wrong. Wording may change between versions, so do not parse it. |
+| `message` | string | Yes | A human-readable description of what went wrong, followed by `(ref <ref>)`. Wording may change between versions, so do not parse it. |
+| `ref` | string | Yes | A short random reference for this one error. The server logs it with the request, so an operator can find the record from a user's report. |
 | `timestamp` | string | Yes | ISO 8601 timestamp (UTC) of when the error response was built. |
 | `details` | object | Only when non-empty | Structured, error-specific context (for example the invalid field, a list of available titles, or the set of currently active jobs). |
 | `retryable` | boolean | Only when `true` | Present and set to `true` when retrying the same request may succeed later (network blips, rate limiting, transient outages). Absent otherwise. |
@@ -51,6 +53,17 @@ A structured error is always a JSON object with `status` set to the literal stri
     as a coarse fallback for anything you do not recognise. The two are consistent:
     every code maps to a default status (see the catalogue), and the pairing is
     stable across releases.
+
+### Find an error from its `ref`
+
+For each error response, the server logs one `WARNING` line on the `api` logger:
+
+```text
+Error ref 7f3a2c: SERVICE_ERROR 422 POST /api/session/<id>/license service=EXAMPLE user=alice: Licence request failed: ...
+```
+
+Search the server log for `Error ref <ref>`. The handler's traceback, when there is one,
+is directly above that line. The [developer dashboard](dashboard.md) log view also shows it.
 
 ### The `details` object
 
@@ -87,8 +100,13 @@ When it is absent, assume the request will keep failing until you change somethi
 
 Every code below is a member of the `APIErrorCode` enumeration. The **Status** column
 is the default HTTP status the server returns for that code. A handler can override
-the status in special cases (for example, a network error is always forced to `503`),
-but the defaults hold for the overwhelming majority of responses.
+the status in special cases, but the defaults hold for the overwhelming majority of responses.
+
+The server never answers with a `5xx` status. A proxy such as Cloudflare can replace the
+body of a `5xx` with its own page, and the JSON error is then lost. Server-side failures
+use `422`, and the ones that a retry can fix use `424`. Read `error_code` to tell them apart.
+A `5xx` that a client receives comes from a proxy in front of the server, for example
+while the server restarts.
 
 ### Client errors (4xx)
 
@@ -108,6 +126,9 @@ but the defaults hold for the overwhelming majority of responses.
 | `SESSION_NOT_FOUND` | 404 | The remote-dl session does not exist or has expired. |
 | `TRACK_NOT_FOUND` | 404 | A referenced track ID is not present in the remote session. |
 | `CONFLICT` | 409 | The target resource is in a state that disallows the action (retrying a running job, prioritising a non-queued job, clearing cache during an active download). |
+| `SERVER_DRAINING` | 409 | The server is about to restart and starts no new remote session or download job. Open work continues. Retryable after the restart. A `dl --remote` client waits for the restart and opens a new remote session. |
+| `SERVICE_ERROR` | 422 | The streaming service's API returned an error, or the service does not support the requested operation, or the service code exited (`sys.exit`). |
+| `DRM_ERROR` | 422 | DRM or license acquisition failed. |
 | `RATE_LIMITED` | 429 | The streaming service is rate-limiting requests. Retryable. |
 
 !!! warning "Not every `429` is `RATE_LIMITED`"
@@ -119,21 +140,20 @@ but the defaults hold for the overwhelming majority of responses.
     the window is fixed, so an early retry only spends the next window. See
     [Authentication](authentication.md#rate-limit-rejections).
 
-### Server errors (5xx)
+### Server errors (422 and 424)
 
 | Code | Status | Meaning |
 |---|---|---|
-| `INTERNAL_ERROR` | 500 | An unexpected server-side error. This is the fallback for any exception the server could not categorise. |
-| `DOWNLOAD_ERROR` | 500 | The download process itself failed. |
-| `WORKER_ERROR` | 500 | The download worker subprocess errored out. |
-| `SERVICE_ERROR` | 502 | The streaming service's API returned an error, or the service does not support the requested operation. |
-| `DRM_ERROR` | 502 | DRM or license acquisition failed. Retryable. |
-| `NETWORK_ERROR` | 503 | A network connectivity problem (connection, timeout, DNS, TLS). Retryable. |
-| `SERVICE_UNAVAILABLE` | 503 | The service is temporarily unavailable or under maintenance. Retryable. |
+| `INTERNAL_ERROR` | 422 | An unexpected server-side error. This is the fallback for any exception the server could not categorise, and for an exception that no handler caught. |
+| `DOWNLOAD_ERROR` | 422 | The download process itself failed. |
+| `WORKER_ERROR` | 422 | The download worker subprocess errored out. |
+| `NETWORK_ERROR` | 424 | A network connectivity problem (connection, timeout, DNS, TLS). Retryable. |
+| `SERVICE_UNAVAILABLE` | 424 | The service is temporarily unavailable or under maintenance. Retryable. |
 
 !!! note "Fallback status"
     If a code is ever emitted without a mapped status, the server falls back to
-    `500`. In practice every code above has an explicit mapping.
+    `422`. In practice every code above has an explicit mapping. A middleware
+    in every server mode also changes any `5xx` answer, such as one from a CDM subapplication, to `422`.
 
 ## How the server produces errors
 
@@ -152,14 +172,14 @@ The classification is keyword-based, checked in order:
 | If the error mentions... | It becomes | Retryable |
 |---|---|---|
 | `auth`, `login`, `credential`, `unauthorized`, `forbidden`, `token` | `AUTH_FAILED` (401) | no |
-| `connection`, `timeout`, `network`, `unreachable`, `socket`, `dns`, `resolve` (or `ConnectionError`, `TimeoutError`, `URLError`, `SSLError`) | `NETWORK_ERROR` (503) | yes |
+| `connection`, `timeout`, `network`, `unreachable`, `socket`, `dns`, `resolve` (or `ConnectionError`, `TimeoutError`, `URLError`, `SSLError`) | `NETWORK_ERROR` (424) | yes |
 | `geofence`, `geoblock`, `region`, `not available in`, `territory` | `GEOFENCE` (403) | no |
 | `not found`, `404`, `does not exist`, `invalid id` | `NOT_FOUND` (404) | no |
 | `rate limit`, `too many requests`, `429`, `throttle` | `RATE_LIMITED` (429) | yes |
-| `drm`, `license`, `widevine`, `playready`, `decrypt` | `DRM_ERROR` (502) | no |
-| `service unavailable`, `503`, `maintenance`, `temporarily unavailable` | `SERVICE_UNAVAILABLE` (503) | yes |
+| `drm`, `license`, `widevine`, `playready`, `decrypt` | `DRM_ERROR` (422) | no |
+| `service unavailable`, `503`, `maintenance`, `temporarily unavailable` | `SERVICE_UNAVAILABLE` (424) | yes |
 | `invalid`, `malformed`, `validation` (or `ValueError`, `ValidationError`) | `INVALID_INPUT` (400) | no |
-| anything else | `INTERNAL_ERROR` (500) | no |
+| anything else | `INTERNAL_ERROR` (422) | no |
 
 Categorised errors include a `reason` tag inside `details` (such as
 `"network_connectivity"` or `"drm_failure"`) so a client can react without parsing
@@ -201,8 +221,7 @@ body that uses an integer `status` and no `error_code` or `timestamp`.
 !!! warning "Handle both shapes"
     A client must expect two error formats: the standard structured error
     (string `status` of `"error"`, with `error_code`), and this authentication error
-    (integer `status`, no `error_code`). The `GET /api/health` endpoint is exempt
-    from authentication, so it never returns the key-error shape.
+    (integer `status`, no `error_code`).
 
 ## Late failures with status `200`
 
@@ -262,16 +281,16 @@ For anyone writing a consumer of the API, a durable strategy is:
    body.
 2. **Branch on `error_code`.** For structured errors, this is the stable identifier
    to switch on. Do not use `message` as the identifier.
-3. **Respect `retryable`.** When it is `true`, back off and try the request again. The
-   reference client retries `429`, `500`, `502`, `503`, and `504` with exponential
-   backoff. When absent, fix the request rather than repeating it.
+3. **Respect `retryable`.** When it is `true`, back off and try the request again.
+   When absent, fix the request rather than repeating it.
 4. **Fall back gracefully.** For an unrecognised code, show the `message` and the
    HTTP status.
 
 !!! note "Reference consumer"
     unshackle's own remote-download client treats any status of `400` or above as
     fatal, and a `200` body with `"status": "error"` and an `error_code` too: it logs
-    `Server error [<error_code>]: <message>` and exits. It also wraps
-    requests in a retry adapter (five attempts, backing off on `429`, `500`, `502`,
-    `503`, and `504`). This is a reasonable template for your own client's error
+    `Server error [<error_code>]: <message>` and exits. It retries a request once,
+    after one second, only when a `502`, `503` or `504` arrives with a body that is
+    not JSON: that is a page from the proxy in front of the server, not an answer
+    from the server. This is a reasonable template for your own client's error
     handling.

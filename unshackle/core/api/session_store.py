@@ -24,6 +24,8 @@ from unshackle.core.tracks import Track
 
 log = logging.getLogger("api.session")
 
+DRAIN_WARNING = "This server restarts for an update after the open downloads finish; this download continues"
+
 
 @dataclass
 class SessionEntry:
@@ -49,6 +51,7 @@ class SessionEntry:
     server_vault: bool = False
     server_device: bool = False
     client_auth: bool = False
+    user_config: Optional[Dict[str, Any]] = None
     input_bridge: Optional[InputBridge] = None
     log_buffer: Optional[Any] = None
     auth_status: AuthStatus = AuthStatus.AUTHENTICATED
@@ -71,7 +74,7 @@ class SessionEntry:
         """
         return self.lock.locked()
 
-    def summary(self) -> Dict[str, Any]:
+    def summary(self, include_actions: bool = True) -> Dict[str, Any]:
         """Dashboard view of the session: no service instance, no raw owner key."""
         from unshackle.core.api.stats import mask_key
 
@@ -96,7 +99,7 @@ class SessionEntry:
             "server_cdm_max_height": self.server_cdm_max_height,
             "log_seq": self.log_buffer.last_seq if self.log_buffer else 0,
             "client": self.client,
-            "actions": list(self.actions),
+            **({"actions": list(self.actions)} if include_actions else {}),
             "created_at": self.created_at.isoformat(),
             "last_accessed": self.last_accessed.isoformat(),
             "created_ts": self.created_at.timestamp(),
@@ -113,10 +116,15 @@ def _schedule_pending_reload(service_tag: str) -> None:
     schedule_pending_reload(service_tag)
 
 
-def _publish(action: str, entry: SessionEntry, reason: Optional[str] = None) -> None:
-    data = {"action": action, **entry.summary()}
+def _publish(
+    action: str, entry: SessionEntry, reason: Optional[str] = None, action_entry: Optional[Dict[str, Any]] = None
+) -> None:
+    """Tell dashboard listeners about a remote session; ``action_entry`` replaces the action log with that one action."""
+    data = {"action": action, **entry.summary(include_actions=action_entry is None)}
     if reason:
         data["reason"] = reason
+    if action_entry is not None:
+        data["action_entry"] = action_entry
     bus.publish("session", data)
 
 
@@ -127,6 +135,7 @@ class SessionStore:
         self._sessions: Dict[str, SessionEntry] = {}
         self._lock = asyncio.Lock()
         self._cleanup_task: Optional[asyncio.Task] = None
+        self.draining = False
 
     @property
     def ttl(self) -> int:
@@ -153,6 +162,7 @@ class SessionStore:
         server_account: Optional[str] = None,
     ) -> SessionEntry:
         """Make a new remote session with an authenticated service instance."""
+        evicted_tag: Optional[str] = None
         async with self._lock:
             max_sessions = self.max_sessions
             if max_sessions is not None and len(self._sessions) >= max_sessions:
@@ -162,7 +172,7 @@ class SessionStore:
                 evicted = self._sessions.pop(oldest_id)
                 if evicted.input_bridge:
                     evicted.input_bridge.cancel()
-                self.cleanup_cache_dir(evicted.cache_tag)
+                evicted_tag = evicted.cache_tag
                 _publish("delete", evicted, "evicted")
                 _schedule_pending_reload(evicted.service_tag)
 
@@ -178,7 +188,8 @@ class SessionStore:
             self._sessions[session_id] = entry
             _publish("create", entry)
             log.info(f"Created session {sanitize_log(session_id)} for service {sanitize_log(service_tag)}")
-            return entry
+        await self.remove_cache_dirs([evicted_tag])
+        return entry
 
     async def get(self, session_id: str) -> Optional[SessionEntry]:
         """Get a remote session by ID, returns None if not found or expired."""
@@ -187,17 +198,19 @@ class SessionStore:
             if entry is None:
                 return None
 
+            expired = False
             if not entry.in_use and entry.auth_status not in (AuthStatus.AUTHENTICATING, AuthStatus.PENDING_INPUT):
                 elapsed = (datetime.now(timezone.utc) - entry.last_accessed).total_seconds()
                 if elapsed > self.ttl:
                     log.info(f"Session {sanitize_log(session_id)} expired (elapsed={elapsed:.0f}s, ttl={self.ttl}s)")
-                    self.cleanup_cache_dir(entry.cache_tag)
                     _publish("delete", self._sessions.pop(session_id), "expired")
                     _schedule_pending_reload(entry.service_tag)
-                    return None
-
-            entry.touch()
-            return entry
+                    expired = True
+            if not expired:
+                entry.touch()
+                return entry
+        await self.remove_cache_dirs([entry.cache_tag])
+        return None
 
     def peek(self, session_id: str) -> Optional[SessionEntry]:
         """A remote session entry without touching it, for read-only observers.
@@ -211,15 +224,15 @@ class SessionStore:
         """Delete a remote session. Returns True if it existed."""
         async with self._lock:
             entry = self._sessions.pop(session_id, None)
-            if entry:
-                if entry.input_bridge:
-                    entry.input_bridge.cancel()
-                self.cleanup_cache_dir(entry.cache_tag)
-                _publish("delete", entry, "closed")
-                log.info(f"Deleted session {sanitize_log(session_id)}")
-                _schedule_pending_reload(entry.service_tag)
-                return True
-            return False
+            if not entry:
+                return False
+            if entry.input_bridge:
+                entry.input_bridge.cancel()
+            _publish("delete", entry, "closed")
+            log.info(f"Deleted session {sanitize_log(session_id)}")
+            _schedule_pending_reload(entry.service_tag)
+        await self.remove_cache_dirs([entry.cache_tag])
+        return True
 
     async def cleanup_expired(self) -> int:
         """Remove all expired sessions. Returns count of removed sessions."""
@@ -236,18 +249,20 @@ class SessionStore:
                 elif elapsed > self.ttl:
                     expired.append(sid)
             ended_tags: set[str] = set()
+            cache_tags: list[Optional[str]] = []
             for sid in expired:
                 entry = self._sessions.pop(sid)
                 if entry.input_bridge:
                     entry.input_bridge.cancel()
-                self.cleanup_cache_dir(entry.cache_tag)
+                cache_tags.append(entry.cache_tag)
                 _publish("delete", entry, "expired")
                 ended_tags.add(entry.service_tag)
             for tag in ended_tags:
                 _schedule_pending_reload(tag)
             if expired:
                 log.info(f"Cleaned up {len(expired)} expired sessions")
-            return len(expired)
+        await self.remove_cache_dirs(cache_tags)
+        return len(expired)
 
     async def start_cleanup_loop(self) -> None:
         """Start periodic cleanup of expired sessions."""
@@ -280,6 +295,12 @@ class SessionStore:
             count = len(self._sessions)
         if count:
             log.info(f"Cancelled bridges for {count} active session(s)")
+
+    @classmethod
+    async def remove_cache_dirs(cls, cache_tags: List[Optional[str]]) -> None:
+        """Remove the cache directories of ended remote sessions on a worker thread, outside the store lock."""
+        if any(cache_tags):
+            await asyncio.to_thread(lambda: [cls.cleanup_cache_dir(tag) for tag in cache_tags])
 
     @staticmethod
     def cleanup_cache_dir(cache_tag: Optional[str]) -> None:
@@ -314,11 +335,26 @@ class SessionStore:
         if entry is None:
             return
         entry.actions.append(action)
-        _publish("update", entry)
+        _publish("update", entry, action_entry=action)
 
     def list(self) -> List[SessionEntry]:
         """Snapshot of every live session."""
         return list(self._sessions.values())
+
+    def start_drain(self) -> None:
+        """Refuse new sessions and jobs until the restart, and warn each open session through its service log."""
+        if self.draining:
+            return
+        self.draining = True
+        log.warning(f"Draining: new sessions and jobs are refused, {len(self._sessions)} session(s) open")
+        for entry in self._sessions.values():
+            if entry.log_buffer is not None:
+                entry.log_buffer.append(logging.WARNING, DRAIN_WARNING)
+
+    def stop_drain(self) -> None:
+        if self.draining:
+            self.draining = False
+            log.warning("Drain cancelled: new sessions and jobs are accepted again")
 
     @property
     def session_count(self) -> int:
@@ -327,6 +363,18 @@ class SessionStore:
 
 
 session_store: Optional[SessionStore] = None
+
+
+def refuse_while_draining() -> None:
+    """Raise SERVER_DRAINING for a new session or job once the operator has started a drain."""
+    from unshackle.core.api.errors import APIError, APIErrorCode
+
+    if get_session_store().draining:
+        raise APIError(
+            APIErrorCode.SERVER_DRAINING,
+            "This server restarts for an update and starts no new sessions or downloads",
+            retryable=True,
+        )
 
 
 def get_session_store() -> SessionStore:

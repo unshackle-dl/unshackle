@@ -47,7 +47,7 @@ def test_rnet_spec_round_trips_cookie_domains() -> None:
     rebuilt = rebuild_session(pickle.loads(pickle.dumps(spec)), 1)
     assert rebuilt is not None
 
-    assert rebuilt.cookies.get_dict_by_domain() == ns.cookies.get_dict_by_domain()
+    assert [vars(c) for c in rebuilt.cookies.snapshot()] == [vars(c) for c in ns.cookies.snapshot()]
     assert rebuilt.cookies.get_dict() == ns.cookies.get_dict()
     assert rebuilt.cookies.get("cdn_token", domain="cdn.example.com") == "abc"
     assert rebuilt.cookies.get("api_token", domain="api.example.com") == "def"
@@ -71,17 +71,35 @@ def test_rnet_spec_cookies_carry_domain_information() -> None:
     spec = build_session_spec(ns)
     assert spec is not None
 
-    cookies = spec["cookies"]
-    assert set(cookies) == {"cdn.example.com", "api.example.com", ""}
-    assert all(isinstance(jar, dict) for jar in cookies.values())
-    assert cookies["cdn.example.com"] == {"cdn_token": "abc"}
+    assert {(c.domain, c.path, c.name, c.value) for c in spec["cookies"]} == {
+        ("cdn.example.com", "/", "cdn_token", "abc"),
+        ("api.example.com", "/", "api_token", "def"),
+        ("", "/", "loose", "ghi"),
+    }
+
+
+def test_rnet_spec_keeps_same_name_cookies_on_their_paths() -> None:
+    """Same-name cookies on two paths must reach a child apart, or a stale one goes to every path."""
+    ns = make_session("Chrome131")
+    ns.cookies.set("hdntl", "one", domain=".cdn.example.com", path="/t/1")
+    ns.cookies.set("hdntl", "two", domain=".cdn.example.com", path="/t/2")
+
+    spec = build_session_spec(ns)
+    assert spec is not None
+    rebuilt = rebuild_session(pickle.loads(pickle.dumps(spec)), 1)
+    assert rebuilt is not None
+
+    assert rebuilt.cookies.get("hdntl", path="/t/1") == "one"
+    assert rebuilt.cookies.get("hdntl", path="/t/2") == "two"
 
 
 def test_rnet_spec_is_picklable() -> None:
     spec = build_session_spec(rnet_session_with_cookies())
     assert spec is not None
 
-    assert pickle.loads(pickle.dumps(spec)) == spec
+    loaded = pickle.loads(pickle.dumps(spec))
+    assert [vars(c) for c in loaded.pop("cookies")] == [vars(c) for c in spec.pop("cookies")]
+    assert loaded == spec
 
 
 def test_rnet_spec_without_impersonate_is_not_rebuildable() -> None:
@@ -189,6 +207,19 @@ def test_requests_spec_carries_verify() -> None:
     assert rebuilt is not None
 
     assert rebuilt.verify is False
+
+
+def test_requests_spec_carries_trust_env() -> None:
+    """A proxied session ignores env proxies, so a child must not let HTTPS_PROXY win again."""
+    rs = Session()
+    rs.trust_env = False
+
+    spec = build_session_spec(rs)
+    assert spec is not None
+    rebuilt = rebuild_session(pickle.loads(pickle.dumps(spec)), 1)
+    assert rebuilt is not None
+
+    assert rebuilt.trust_env is False
 
 
 def test_requests_spec_carries_params() -> None:

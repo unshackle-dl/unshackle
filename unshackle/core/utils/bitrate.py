@@ -7,12 +7,13 @@ import time
 from collections import OrderedDict, defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Callable, Hashable, Optional, Union
+from typing import TYPE_CHECKING, Callable, Hashable, Optional, Sequence, Union, cast
 from urllib.parse import urljoin
 
 from requests import Session
 
 from unshackle.core.binaries import FFProbe
+from unshackle.core.constants import TrackT
 from unshackle.core.session import RnetSession, utf8_text
 from unshackle.core.utils.subprocess import log_tool_run
 
@@ -105,11 +106,11 @@ def measure_real_bitrate(
 
 
 def apply_real_bitrates(
-    tracks: list["Track"],
+    tracks: list[TrackT],
     session: Union[Session, RnetSession],
     *,
     log: logging.Logger,
-    group_key: Callable[["Track"], Hashable],
+    group_key: Callable[[TrackT], Hashable],
     per_group: int = 5,
     workers: int = 8,
 ) -> None:
@@ -124,7 +125,7 @@ def apply_real_bitrates(
     outrank a probed one), it probes the next track too, until the probed set is
     safely above the rest. Unprobed tracks keep their manifest-declared bitrate.
     """
-    groups: defaultdict[Hashable, list["Track"]] = defaultdict(list)
+    groups: defaultdict[Hashable, list[TrackT]] = defaultdict(list)
     for track in tracks:
         groups[group_key(track)].append(track)
     for group in groups.values():
@@ -145,7 +146,7 @@ def apply_real_bitrates(
 
 
 def probe_batch(
-    tracks: list["Track"],
+    tracks: Sequence["Track"],
     session: Union[Session, RnetSession],
     *,
     log: logging.Logger,
@@ -271,9 +272,12 @@ def extract_dash(track: "Track", session: Union[Session, RnetSession]) -> list[S
     stored_period = data.get("period")
     track_url = track.url if isinstance(track.url, str) else track.url[0]
 
-    content_periods = [p for p in manifest.findall("Period") if DASH.is_content_period(p, filtered_period_ids)]
+    periods = manifest.findall("Period")
+    durations = dict(zip(map(id, periods), DASH.period_durations(manifest)))
+    content_periods = [p for p in periods if DASH.is_content_period(p, filtered_period_ids)]
 
     raw_segments: list[tuple[str, Optional[str]]] = []
+    kept: list[Optional[float]] = []
     for period in content_periods:
         if period is stored_period:
             matched_as, matched_rep = adaptation_set, representation
@@ -290,12 +294,14 @@ def extract_dash(track: "Track", session: Union[Session, RnetSession]) -> list[S
             track=track,
             track_url=track_url,
             session=session,
+            duration=durations[id(period)],
         )
         raw_segments.extend(period_segments)
+        kept.append(durations[id(period)])
 
-    total_duration: Optional[float] = None
+    total_duration: Optional[float] = sum(cast(list[float], kept)) if kept and None not in kept else None
     mpd_duration = manifest.get("mediaPresentationDuration")
-    if mpd_duration:
+    if total_duration is None and mpd_duration:
         total_duration = DASH.pt_to_sec(mpd_duration)
 
     return uniform_segments(raw_segments, total_duration)

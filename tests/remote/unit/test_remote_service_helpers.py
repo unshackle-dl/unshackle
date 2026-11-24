@@ -6,6 +6,8 @@ from enum import Enum
 
 import pytest
 
+from unshackle.core.api.handlers import serialize_audio_track, serialize_subtitle_track, serialize_video_track
+from unshackle.core.manifests.snapshot import match_track
 from unshackle.core.remote_service import (
     RemoteService,
     build_title,
@@ -14,7 +16,6 @@ from unshackle.core.remote_service import (
     deserialize_subtitle,
     deserialize_video,
     enum_get,
-    match_track,
     reconstruct_drm,
 )
 from unshackle.core.titles.episode import Episode
@@ -50,6 +51,34 @@ def test_deserialize_video_minimal() -> None:
     assert v.width == 1920
     assert v.height == 1080
     assert v.range is Video.Range.SDR
+
+
+def test_a_dv_track_keeps_its_hdr10_base_label_over_remote() -> None:
+    v = Video(url="https://x/v.mp4", language="en", codec=Video.Codec.HEVC, range_=Video.Range.DV, hdr10_base=True)
+    assert deserialize_video(serialize_video_track(v)).range_label == "DV+HDR10"
+
+
+def test_a_stereo_track_stays_3d_over_remote() -> None:
+    v = Video(url="https://x/v.mp4", language="en", codec=Video.Codec.HEVC, range_=Video.Range.DV, stereo=True)
+    assert deserialize_video(serialize_video_track(v)).stereo
+
+
+def test_a_track_note_shows_over_remote_and_export_and_is_not_an_edition() -> None:
+    from unshackle.core.tracks.track import Track
+
+    v = Video(url="https://x/v.mp4", language="ja", codec=Video.Codec.AVC, note="h264mpl40-dash")
+    a = Audio(url="https://x/a.mp4", language="ja", codec=Audio.Codec.AAC, note="heaac-2-dash")
+    s = Subtitle(url="https://x/s.vtt", language="en", codec=Subtitle.Codec.WebVTT, note="webvtt-lssdh")
+    copies = [deserialize_video(serialize_video_track(v)), deserialize_audio(serialize_audio_track(a))]
+    copies += [deserialize_subtitle(serialize_subtitle_track(s))]
+    copies += [Track.from_dict(t.to_dict()) for t in (v, a, s)]
+    for copy in copies:
+        assert copy.note and str(copy).endswith(f"| {copy.note}")
+        assert copy.edition == []
+
+
+def test_a_note_that_is_not_text_is_dropped_not_fatal() -> None:
+    assert deserialize_video({"id": "v1", "codec": "AVC", "width": 1, "height": 1, "note": {"x": 1}}).note is None
 
 
 def test_deserialize_video_unknown_codec_falls_back_to_none() -> None:
@@ -174,6 +203,14 @@ def test_match_track_by_attributes_keeps_range_and_bitrate_apart() -> None:
         }
     )
     assert match_track(remote, [sdr, hdr]) is hdr
+
+
+def test_match_track_by_attributes_matches_probed_hdr10p_to_local_hdr10() -> None:
+    common = {"codec": "HEVC", "width": 3840, "height": 2160, "language": "en", "bitrate": 15000000}
+    sdr = deserialize_video({**common, "id": "a", "range": "SDR"})
+    hdr10 = deserialize_video({**common, "id": "b", "range": "HDR10"})
+    remote = deserialize_video({**common, "id": "z", "range": "HDR10P"})
+    assert match_track(remote, [sdr, hdr10]) is hdr10
 
 
 def test_match_track_no_candidates_returns_none() -> None:
@@ -308,7 +345,7 @@ def test_load_cache_files_wiring(tmp_path, monkeypatch) -> None:
 
 
 def test_load_cache_files_forwards_nested_keys(tmp_path, monkeypatch) -> None:
-    """A service that keeps its cache in subfolders (NF: session_web/<sha1>.json) must have
+    """A service that keeps its cache in subfolders (session_web/<sha1>.json) must have
     those files forwarded under the Cacher key, and the credential filter must still apply
     to the basename of a nested file."""
     import base64
@@ -375,20 +412,20 @@ def test_save_returned_cache_writes_nested_keys_and_rejects_escapes(tmp_path, mo
     RemoteService.save_returned_cache(
         stub,
         {
-            "tokens": blob("flat"),
-            "session_web/abc": blob("nested"),
-            "session_web\\def": blob("windows"),
-            "MSL/keys.v2": blob("dotted"),
-            "../escape": blob("bad"),
-            "/abs": blob("bad"),
-            "C:/x": blob("bad"),
+            "tokens": blob('"flat"'),
+            "session_web/abc": blob('"nested"'),
+            "session_web\\def": blob('"windows"'),
+            "MSL/keys.v2": blob('"dotted"'),
+            "../escape": blob('"bad"'),
+            "/abs": blob('"bad"'),
+            "C:/x": blob('"bad"'),
         },
     )
 
-    assert (tmp_path / tag / "tokens.json").read_text() == "flat"
-    assert (tmp_path / tag / "session_web" / "abc.json").read_text() == "nested"
-    assert (tmp_path / tag / "session_web" / "def.json").read_text() == "windows"
-    assert (tmp_path / tag / "MSL" / "keys.v2.json").read_text() == "dotted"
+    assert (tmp_path / tag / "tokens.json").read_text() == '"flat"'
+    assert (tmp_path / tag / "session_web" / "abc.json").read_text() == '"nested"'
+    assert (tmp_path / tag / "session_web" / "def.json").read_text() == '"windows"'
+    assert (tmp_path / tag / "MSL" / "keys.v2.json").read_text() == '"dotted"'
     assert not (tmp_path / "escape.json").exists()
     written = sorted(p.relative_to(tmp_path).as_posix() for p in tmp_path.rglob("*.json"))
     assert written == [
@@ -413,7 +450,7 @@ def test_save_returned_cache_drops_other_profiles_files(tmp_path, monkeypatch) -
     monkeypatch.setattr(config.directories, "cache", tmp_path)
     monkeypatch.setattr(config, "credentials", {tag: {"default": "a@example.com:pw", "work": "b@example.com:pw"}})
     stub = SimpleNamespace(service_tag=tag, log=logging.getLogger("test"))
-    blob = base64.b64encode(zlib.compress(b"x")).decode("ascii")
+    blob = base64.b64encode(zlib.compress(b'"x"')).decode("ascii")
 
     RemoteService.save_returned_cache(stub, {"tokens_work": blob, "tokens_default": blob, "tokens": blob}, "work")
 
@@ -480,7 +517,7 @@ def test_resolve_manifest_data_matches_across_per_range_manifests() -> None:
     from tests.core.test_ism_init import VIDEO_HEVC_PQ_CPD, VIDEO_HEVC_SDR_CPD
     from tests.core.test_ism_range import manifest_xml
     from unshackle.core.manifests import ISM
-    from unshackle.core.remote_service import resolve_manifest_data
+    from unshackle.core.manifests.snapshot import restore
 
     urls = {"sdr": "https://x/sdr/manifest", "hdr": "https://x/hdr/manifest"}
     xml = {"sdr": manifest_xml(VIDEO_HEVC_SDR_CPD), "hdr": manifest_xml(VIDEO_HEVC_PQ_CPD)}
@@ -505,7 +542,7 @@ def test_resolve_manifest_data_matches_across_per_range_manifests() -> None:
         for k in ("sdr", "hdr")
     ]
 
-    resolve_manifest_data(tracks, manifests)
+    restore(tracks, {"manifests": manifests})
 
     assert remote_hdr.data["ism"]["quality_level"].get("CodecPrivateData") == VIDEO_HEVC_PQ_CPD
 
@@ -538,14 +575,15 @@ def test_session_create_writes_nested_cache_and_skips_colliding_keys(tmp_path, m
         "create_service_instance",
         lambda *args, **kwargs: (SimpleNamespace(log=logging.getLogger("Svc")), None, None),
     )
+    monkeypatch.setattr("unshackle.core.api.session_store.refuse_while_draining", lambda: None)
     monkeypatch.setattr("unshackle.core.api.session_store.get_session_store", lambda: (_ for _ in ()).throw(Stop()))
 
-    cache = {"x": blob("flat"), "x.json/y": blob("collides"), "MSL/keys.v2": blob("dotted")}
+    cache = {"x": blob('"flat"'), "x.json/y": blob('"collides"'), "MSL/keys.v2": blob('"dotted"')}
     response = asyncio.run(handlers.session_create_handler({"service": "TESTSVC", "title_id": "t", "cache": cache}))
-    assert response.status == 500
+    assert response.status == 422
 
     written = {p.name: p.read_text() for p in tmp_path.rglob("*.json") if p.is_file()}
-    assert written == {"x.json": "flat", "keys.v2.json": "dotted"}
+    assert written == {"x.json": '"flat"', "keys.v2.json": '"dotted"'}
 
 
 class _SentCreate(Exception):
@@ -588,12 +626,13 @@ def test_the_client_session_downloads_through_the_proxy_it_sends(
     """The client fetches playlists and segments itself, so --proxy must reach its own session too."""
     from unshackle.core import remote_service
 
-    monkeypatch.setattr(remote_service, "resolve_remote_proxy_arg", lambda proxy: proxy)
+    monkeypatch.setattr(remote_service, "resolve_remote_proxy_arg", lambda proxy, providers=None: proxy)
     monkeypatch.setattr("unshackle.core.utils.ip_info.get_ip_info", lambda *args, **kwargs: None)
     svc = _remote_service({"no_proxy": no_proxy, "proxy": "http://proxy.example:8080"}, {})
     with pytest.raises(_SentCreate) as exc:
         svc.authenticate()
     assert dict(svc._session.proxies) == expected
+    assert svc._session.trust_env is no_proxy
     assert exc.value.args[0].get("proxy") == (None if no_proxy else "http://proxy.example:8080")
 
 
@@ -602,6 +641,7 @@ def test_dl_selection_travels_nested_and_a_service_option_cannot_override_it() -
         "lang": ["orig", "es-419"],
         "v_lang": [],
         "a_lang": [],
+        "s_lang": ["ko"],
         "acodec": [Audio.Codec.EC3],
         "forced_subs": True,
         "exact_lang": True,
@@ -611,13 +651,47 @@ def test_dl_selection_travels_nested_and_a_service_option_cannot_override_it() -
         "lang": ["orig", "es-419"],
         "v_lang": [],
         "a_lang": [],
+        "s_lang": ["ko"],
         "acodec": ["EC3"],
         "forced_subs": True,
         "exact_lang": True,
     }
-    assert data["lang"] == 3
+    assert "lang" not in data and "a_lang" not in data
     assert data["service_params"] == {"lang": 3, "a_lang": "x"}
+
+
+def test_a_service_profile_option_travels_nested_and_keeps_the_credential_profile() -> None:
+    data = _sent_create_data({"profile": "work"}, {"profile": "QC"})
+    assert data["profile"] == "work"
+    assert data["service_params"] == {"profile": "QC"}
 
 
 def test_no_dl_params_when_the_ctx_has_no_selection() -> None:
     assert "dl_params" not in _sent_create_data({}, {})
+
+
+def test_resolve_manifest_data_keeps_the_periods_the_server_filtered() -> None:
+    """A service drops periods (a mid-roll ad) on the server only. The client must skip the
+    same periods after it re-parses the manifest, or a remote download joins them back in."""
+    from unshackle.core.manifests import DASH
+    from unshackle.core.manifests.snapshot import capture, restore
+
+    periods = "".join(
+        f"""<Period id="{pid}" duration="PT1S"><AdaptationSet contentType="video" mimeType="video/mp4" lang="en">
+        <Representation id="v0" codecs="avc1.640028" bandwidth="1000000" width="1920" height="1080">
+        <SegmentTemplate timescale="1" duration="1" startNumber="1" initialization="{pid}/i.mp4"
+        media="{pid}/$Number$.m4s"/></Representation></AdaptationSet></Period>"""
+        for pid in ("main1", "ad1", "main2")
+    )
+    mpd = f"""<?xml version="1.0"?><MPD xmlns="urn:mpeg:dash:schema:mpd:2011" type="static"
+    mediaPresentationDuration="PT3S"><BaseURL>https://x/</BaseURL>{periods}</MPD>"""
+    server = DASH.from_text(mpd, url="https://x/manifest.mpd").to_tracks(language="en")
+    for track in server:
+        track.data["dash"]["filtered_period_ids"] = ["ad1"]
+
+    remote = deserialize_video(serialize_video_track(server.videos[0]))
+    tracks = build_tracks({"video": [], "audio": [], "subtitles": []})
+    tracks.videos.append(remote)
+    restore(tracks, capture(server))
+
+    assert remote.data["dash"]["filtered_period_ids"] == ["ad1"]

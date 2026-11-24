@@ -63,7 +63,8 @@ directories:
     The **automatic** 24 h-TTL refresh that happens during a normal `dl`/`search` run
     **refuses to refresh and exits** (naming the offending clone) if that clone has
     uncommitted changes to tracked files or unpushed local commits. Untracked files (new
-    service folders, `__pycache__`) never block it. The **manual**
+    service folders, `__pycache__`), Python bytecode (`.pyc`, `.pyo`, also when the repo
+    commits it) and `.DS_Store` never block it. The **manual**
     `unshackle util refresh-services` command instead **hard-resets** the clone to upstream,
     discarding any local edits.
 

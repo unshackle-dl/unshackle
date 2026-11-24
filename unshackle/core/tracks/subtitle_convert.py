@@ -16,11 +16,13 @@ from __future__ import annotations
 
 import html
 import logging
+import math
 import re
 import subprocess
 import time
+from itertools import pairwise
 from pathlib import Path
-from typing import Optional, Protocol
+from typing import Any, Mapping, Optional, Protocol
 
 import pycaption
 import pysubs2
@@ -111,6 +113,8 @@ def subtitleedit_args(
     return args
 
 
+SUBSTATION: frozenset[Codec] = frozenset({Codec.SubStationAlpha, Codec.SubStationAlphav4})
+
 LOSSY_DOWNCONVERTS: frozenset[tuple[Codec, Codec]] = frozenset(
     {
         (Codec.SubStationAlpha, Codec.SubRip),
@@ -149,10 +153,7 @@ class SubtitleEditBackend:
         return source in self.reads and target in self.writes
 
     def rank(self, source: Codec, target: Codec) -> int:
-        if source in (Codec.SubStationAlpha, Codec.SubStationAlphav4) and target in (
-            Codec.TimedTextMarkupLang,
-            Codec.WebVTT,
-        ):
+        if source in SUBSTATION and target in (Codec.TimedTextMarkupLang, Codec.WebVTT):
             return 3
         return 0
 
@@ -175,7 +176,7 @@ class SubtitleEditBackend:
             target=str(target),
         )
         if not out.exists():
-            produced = next((p for p in src.parent.glob(f"{src.stem}.*") if p not in (src, out)), None)
+            produced = next((p for p in out.parent.glob(f"{src.stem}.*") if p not in (src, out)), None)
             if produced is None:
                 raise FileNotFoundError(f"SubtitleEdit produced no output for {src.name} -> {target.name}")
             produced.replace(out)
@@ -194,7 +195,7 @@ class Pysubs2Backend:
         return source in self.formats and target in self.formats
 
     def rank(self, source: Codec, target: Codec) -> int:
-        return 1 if source in (Codec.SubStationAlpha, Codec.SubStationAlphav4) else 2
+        return 1 if source in SUBSTATION else 2
 
     def convert(self, source: Codec, src: Path, target: Codec, out: Path) -> None:
         subs = pysubs2.load(str(src), encoding="utf-8-sig")
@@ -242,7 +243,9 @@ class PycaptionBackend:
     """pycaption: last resort. Flattens positioning/italics (devine #39), so ranked last."""
 
     name = "pycaption"
-    reads = frozenset({Codec.SubRip, Codec.TimedTextMarkupLang, Codec.WebVTT, Codec.SAMI, Codec.fTTML, Codec.fVTT})
+    reads = frozenset(
+        {Codec.SubRip, Codec.TimedTextMarkupLang, Codec.WebVTT, Codec.SAMI, Codec.SCC, Codec.fTTML, Codec.fVTT}
+    )
     writes = frozenset(PYCAPTION_WRITERS)
 
     def is_available(self) -> bool:
@@ -303,6 +306,110 @@ def decode_entities(out: Path) -> None:
         out.write_text(decoded, encoding="utf8")
 
 
+ASS_CANVAS_HEIGHT = 1080
+ASS_STYLE_DEFAULTS: dict[str, Any] = {
+    "fontsize": 72,
+    "bold": True,
+    "outline": 3.6,
+    "shadow": 1.5,
+    "backcolor": "&HA0000000",
+    "marginl": 100,
+    "marginr": 100,
+    "marginv": 60,
+}
+NON_NEGATIVE_STYLE_FIELDS = frozenset({"fontsize", "outline", "shadow", "scalex", "scaley"})
+
+
+def ass_color(text: str) -> pysubs2.Color:
+    """Read an ``&HAABBGGRR`` colour, the form an ASS style line uses."""
+    value = int(text.strip().upper().removeprefix("&H").rstrip("&"), 16)
+    if not 0 <= value <= 0xFFFFFFFF:
+        raise ValueError(f"{text!r} is not an &HAABBGGRR colour")
+    return pysubs2.Color(value & 0xFF, value >> 8 & 0xFF, value >> 16 & 0xFF, value >> 24 & 0xFF)
+
+
+def style_field_value(name: str, current: Any, value: Any) -> Any:
+    """``value`` as the type of the style field that holds ``current``; ValueError or TypeError when it does not fit."""
+    if isinstance(current, pysubs2.Color):
+        if not isinstance(value, str):
+            raise ValueError
+        return ass_color(value)
+    if isinstance(current, bool) != isinstance(value, bool):
+        raise ValueError
+    if isinstance(current, bool):
+        return value
+    if isinstance(current, str):
+        if not isinstance(value, str) or not value.strip() or "," in value or not value.isprintable():
+            raise ValueError
+        return value
+    number = float(value)
+    if not math.isfinite(number) or (name in NON_NEGATIVE_STYLE_FIELDS and number < 0):
+        raise ValueError
+    if isinstance(current, float):
+        return number
+    if not number.is_integer():
+        raise ValueError
+    return type(current)(int(number))
+
+
+def build_ass_style(fields: Mapping[str, Any]) -> pysubs2.SSAStyle:
+    """Build the style for converted subtitles from style fields over ``ASS_STYLE_DEFAULTS``.
+
+    A field is a pysubs2 name (``primarycolor``) or an ASS one (``PrimaryColour``). Sizes and margins are for a
+    1080-line canvas. A value that does not fit its field raises ValueError.
+    """
+    style = pysubs2.SSAStyle()
+    for name, value in {**ASS_STYLE_DEFAULTS, **fields}.items():
+        field = str(name).lower().replace("colour", "color")
+        if field not in vars(style):
+            raise ValueError(f"ass_style has no field {name!r}")
+        try:
+            setattr(style, field, style_field_value(field, getattr(style, field), value))
+        except (ValueError, TypeError):
+            raise ValueError(f"ass_style {name}: {value!r} is not valid") from None
+    return style
+
+
+def style_substation(path: Path, style: pysubs2.SSAStyle, video_size: Optional[tuple[int, int]]) -> None:
+    """Give every style of a converted SSA/ASS file the look of ``style``.
+
+    A file with no PlayResY gets a 1080-line canvas in the shape of the video. A file with one keeps it, so positions
+    a converter wrote stay put, and the style scales to it. Each style keeps its own alignment and italic flag.
+    """
+    try:
+        subs = pysubs2.load(str(path), encoding="utf-8-sig")
+    except (pysubs2.exceptions.Pysubs2Error, UnicodeDecodeError, ValueError) as e:
+        log.warning(f"Cannot style {path.name}: {e}")
+        return
+    try:
+        height = float(subs.info["PlayResY"])
+    except (KeyError, ValueError):
+        height = 0.0
+    if height <= 0:
+        width, video_height = video_size or (16, 9)
+        height = ASS_CANVAS_HEIGHT
+        subs.info["PlayResX"] = str(round(height * width / video_height))
+        subs.info["PlayResY"] = str(ASS_CANVAS_HEIGHT)
+        if video_size:
+            subs.info["LayoutResX"], subs.info["LayoutResY"] = str(width), str(video_height)
+    subs.info["ScaledBorderAndShadow"] = "yes"
+
+    scale = height / ASS_CANVAS_HEIGHT
+    scaled = style.copy()
+    for name in ("fontsize", "outline", "shadow", "spacing"):
+        setattr(scaled, name, getattr(style, name) * scale)
+    for name in ("marginl", "marginr", "marginv"):
+        setattr(scaled, name, round(getattr(style, name) * scale))
+
+    styles = {}
+    for name, old in subs.styles.items():
+        styles[name] = scaled.copy()
+        styles[name].alignment, styles[name].italic = old.alignment, old.italic
+    styles["Default"] = scaled
+    subs.styles = styles
+    subs.save(str(path), format_=subs.format, encoding="utf-8")
+
+
 def finalize(sub: Subtitle, target: Codec, out: Path) -> Path:
     """Swap the track onto the converted file and fire the OnConverted callback."""
     original = sub.path
@@ -313,6 +420,26 @@ def finalize(sub: Subtitle, target: Codec, out: Path) -> Path:
     if callable(sub.OnConverted):
         sub.OnConverted(target)
     return out
+
+
+def time_sorted_copy(src: Path) -> Optional[Path]:
+    """
+    Copy an SSA/ASS file with its events in start-time order, or return None when it is already in order.
+
+    Layered sign events are often out of time order, and SubtitleEdit and the pysubs2 SRT writer keep file order.
+    The source stays as it is, because ASS draws the events of one layer in file order.
+    """
+    try:
+        subs = pysubs2.load(str(src), encoding="utf-8-sig")
+    except (pysubs2.exceptions.Pysubs2Error, UnicodeDecodeError, ValueError) as e:
+        log.debug(f"Cannot read {src.name} to sort it by start time, converting it unsorted: {e}")
+        return None
+    if all(a.start <= b.start for a, b in pairwise(subs.events)):
+        return None
+    subs.sort()
+    copy = src.with_name(f"{src.stem}.sorted{src.suffix}")
+    subs.save(str(copy), format_=subs.format, encoding="utf-8")
+    return copy
 
 
 def run_conversion(sub: Subtitle, target: Codec, *, pin: Optional[str] = None, forced: bool = False) -> Path:
@@ -344,16 +471,23 @@ def run_conversion(sub: Subtitle, target: Codec, *, pin: Optional[str] = None, f
         raise NotImplementedError(f"Cannot convert {source.name} to {target.name}.")
 
     out = src.with_suffix(f".{target.value.lower()}")
+    sorted_src = time_sorted_copy(src) if source in SUBSTATION and target not in SUBSTATION else None
     last_exc: Optional[Exception] = None
-    for backend in chain:
-        try:
-            backend.convert(source, src, target, out)
-        except Exception as e:
-            last_exc = e
-            log.debug(f"Subtitle backend {backend.name} failed ({source.name}->{target.name}): {e}")
-            continue
-        if target in PLAIN_TEXT_TARGETS:
-            decode_entities(out)
-        return finalize(sub, target, out)
+    try:
+        for backend in chain:
+            try:
+                backend.convert(source, sorted_src or src, target, out)
+            except Exception as e:
+                last_exc = e
+                log.debug(f"Subtitle backend {backend.name} failed ({source.name}->{target.name}): {e}")
+                continue
+            if target in PLAIN_TEXT_TARGETS:
+                decode_entities(out)
+            if sub.ass_style and target in SUBSTATION and source not in SUBSTATION:
+                style_substation(out, sub.ass_style, sub.ass_video_size)
+            return finalize(sub, target, out)
+    finally:
+        if sorted_src:
+            sorted_src.unlink(missing_ok=True)
 
     raise RuntimeError(f"All subtitle backends failed for {source.name}->{target.name}") from last_exc

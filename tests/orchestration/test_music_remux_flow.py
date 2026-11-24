@@ -20,9 +20,10 @@ from pymediainfo import MediaInfo
 
 from tests.core.test_music_container import fragmented_mp4, header_length
 from tests.core.test_music_tagger_roundtrip import make_song
-from unshackle.commands.dl import remux_music_tracks
+from unshackle.commands.dl import mux_skipped, no_mux_extension, remux_music_tracks
 from unshackle.core.config import config
-from unshackle.core.tracks import Audio, Tracks
+from unshackle.core.titles.movie import Movie
+from unshackle.core.tracks import Audio, Tracks, Video
 from unshackle.core.utils import tags
 
 pytestmark = pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="requires ffmpeg")
@@ -119,3 +120,44 @@ def test_a_fragmented_flac_song_ends_playable_named_and_tagged(tmp_path: Path, d
     audio = FLAC(final_path)
     assert audio["TITLE"] == ["Example Track"]
     assert audio["ARTIST"] == ["Example Artist"]
+
+
+def test_the_hook_cuts_a_song_to_the_sample_window(tmp_path: Path) -> None:
+    song = make_song()
+    track = make_audio(fragmented_mp4(tmp_path / "Audio_a1.mp4", "flac"), Audio.Codec.FLAC, "a1")
+    track.sample_start = 10.0
+    song.tracks = Tracks([track])
+
+    remux_music_tracks(song, log, sample=(11, 13))
+
+    assert header_length(track.path) == pytest.approx(2.0, abs=0.3)
+
+
+def test_an_mp3_song_is_named_mp3(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """MediaInfo calls MP3 'MPEG Audio', which named a file …MPEG.Audio2.0.mp3."""
+    monkeypatch.setattr(config, "output_template", {"songs": "{track_number}.{title}.{audio}"})
+    song = make_song()
+    track = make_audio(fragmented_mp4(tmp_path / "Audio_a1.mp4", "libmp3lame"), Audio.Codec.MP3, "a1")
+    song.tracks = Tracks([track])
+
+    remux_music_tracks(song, log)
+
+    assert song.get_filename(MediaInfo.parse(track.path), show_service=False).endswith(".MP3")
+
+
+def test_no_mux_never_skips_the_song_path() -> None:
+    """A --no-mux Song must still be renamed, tagged and get its .lrc, like any other Song."""
+    movie = Movie(id_="movie-0001", service=type("EXAMPLE", (), {}), name="Some Movie", year=2024)
+
+    assert mux_skipped(True, make_song()) is False
+    assert mux_skipped(True, movie) is True
+    assert mux_skipped(False, movie) is False
+
+
+def test_a_no_mux_audio_track_in_mpeg_4_is_saved_as_m4a(tmp_path: Path) -> None:
+    path = fragmented_mp4(tmp_path / "Audio_a1.mp4", "aac")
+    media_info = MediaInfo.parse(path)
+    video = Video(id_="v1", url="https://example.test/v1.mp4", language="en", codec=Video.Codec.AVC)
+
+    assert no_mux_extension(make_audio(path, Audio.Codec.AAC, "a1"), path, media_info) == ".m4a"
+    assert no_mux_extension(video, path, media_info) == ".mp4"

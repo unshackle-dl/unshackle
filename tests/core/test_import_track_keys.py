@@ -19,7 +19,7 @@ import click
 from pywidevine.pssh import PSSH
 
 from unshackle.commands.dl import dl
-from unshackle.core.drm import Widevine
+from unshackle.core.drm import ClearKey, Widevine
 from unshackle.core.drm.key_args import ZERO_KID
 from unshackle.core.import_service import ImportService
 from unshackle.core.manifests import DASH, HLS
@@ -260,3 +260,19 @@ def test_a_subtitle_that_lists_its_kid_keeps_its_key(tmp_path: Path) -> None:
     drm = hls_import(tmp_path, subtitle_drm=widevine(SUB_KID, SUB_KEY))
 
     assert drm["es"] and drm["es"][0].content_keys == {SUB_KID: SUB_KEY}
+
+
+def test_a_track_whose_drm_holds_its_own_key_is_left_alone() -> None:
+    """HLS AES-128 has no content_keys to fill, so injecting the pool into it must not crash."""
+    svc = ImportService.__new__(ImportService)
+    track = Video(url="https://example.invalid/v.m3u8", language="en", drm=[ClearKey(key=VIDEO_KEY)])
+    title = SimpleNamespace(id="movie-1", tracks=[track])
+    with (
+        patch.object(ImportService, "key_pool", return_value=POOL),
+        patch.object(ImportService, "exported_drm_system", return_value="widevine"),
+        patch.object(ImportService, "exported_kids", return_value=[VIDEO_KID.hex]),
+        patch.object(ImportService, "exported_keys", return_value={VIDEO_KID: VIDEO_KEY}),
+    ):
+        svc.resolve_server_keys(cast(Any, title))
+
+    assert isinstance(track.drm[0], ClearKey)

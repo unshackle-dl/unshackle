@@ -1,0 +1,52 @@
+<?xml version="1.0" ?>
+<MPD mediaPresentationDuration="PT653.696S" minBufferTime="PT2S" profiles="urn:mpeg:dash:profile:isoff-on-demand:2011" type="static" xmlns="urn:mpeg:dash:schema:mpd:2011" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="urn:mpeg:DASH:schema:MPD:2011 DASH-MPD.xsd">
+ <BaseURL>./</BaseURL>
+ <Period>
+	<AdaptationSet mimeType="text/vtt" lang="en"> 
+		<Representation id="caption_en" bandwidth="256">
+			<BaseURL>https://dash.akamaized.net/akamai/test/caption_test/ElephantsDream/ElephantsDream_en.vtt</BaseURL> 
+		</Representation>
+	</AdaptationSet>
+  <AdaptationSet codecs="avc1.42c01e" mimeType="video/mp4" subsegmentAlignment="true" subsegmentStartsWithSAP="1">
+   <Representation bandwidth="1500000" height="480" id="1" width="848">
+    <BaseURL>ED_SD_480p_reenc-avc1.42c01e-0s-848x480-h264-1500000bps_seg.mp4</BaseURL>
+    <SegmentBase indexRange="685-2288">
+     <Initialization range="0-684"/>
+    </SegmentBase>
+   </Representation>
+  </AdaptationSet>
+  <AdaptationSet codecs="mp4a.40.5" mimeType="audio/mp4" lang="en" subsegmentAlignment="true" subsegmentStartsWithSAP="1">
+   <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="6"/>
+   <Representation bandwidth="320000" id="2">
+    <BaseURL>ED-CM-5.1-DVD_length_fixed-653s-6-heaac-320000bps_seg.mp4</BaseURL>
+    <SegmentBase indexRange="607-2210">
+     <Initialization range="0-606"/>
+    </SegmentBase>
+   </Representation>
+   <Representation bandwidth="192000" id="3">
+    <BaseURL>ED-CM-5.1-DVD_length_fixed-653s-6-heaac-192000bps_seg.mp4</BaseURL>
+    <SegmentBase indexRange="607-2210">
+     <Initialization range="0-606"/>
+    </SegmentBase>
+   </Representation>
+   <Representation bandwidth="64000" id="4">
+    <BaseURL>ED-CM-5.1-DVD_length_fixed-653s-6-heaac-64000bps_seg.mp4</BaseURL>
+    <SegmentBase indexRange="607-2210">
+     <Initialization range="0-606"/>
+    </SegmentBase>
+   </Representation>
+   <Representation bandwidth="128000" id="5">
+    <BaseURL>ED-CM-5.1-DVD_length_fixed-653s-6-heaac-128000bps_seg.mp4</BaseURL>
+    <SegmentBase indexRange="607-2210">
+     <Initialization range="0-606"/>
+    </SegmentBase>
+   </Representation>
+   <Representation bandwidth="96000" id="6">
+    <BaseURL>ED-CM-5.1-DVD_length_fixed-653s-6-heaac-96000bps_seg.mp4</BaseURL>
+    <SegmentBase indexRange="607-2210">
+     <Initialization range="0-606"/>
+    </SegmentBase>
+   </Representation>
+  </AdaptationSet>
+ </Period>
+</MPD>

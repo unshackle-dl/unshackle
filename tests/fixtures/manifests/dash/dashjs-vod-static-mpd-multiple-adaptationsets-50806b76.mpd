@@ -1,0 +1,73 @@
+<?xml version="1.0" ?>
+<MPD xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="urn:mpeg:dash:schema:mpd:2011" profiles="urn:mpeg:dash:profile:isoff-on-demand:2011" minBufferTime="PT5.00S" mediaPresentationDuration="PT30.040S" type="static" xsi:schemaLocation="urn:mpeg:dash:schema:mpd:2011 https://raw.githubusercontent.com/MPEGGroup/DASHSchema/6th-Ed/DASH-MPD.xsd">
+  <!-- Created with Bento4 mp4-dash.py, VERSION=2.0.0-637 -->
+  <Period>
+    <!-- Video -->
+    <AdaptationSet id="0" mimeType="video/mp4" segmentAlignment="true" startWithSAP="1" maxWidth="1920" maxHeight="1080">
+      <Label lang="en">Video</Label>
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"/>
+      <SegmentTemplate timescale="1000" duration="5000" initialization="$RepresentationID$/init.mp4" media="$RepresentationID$/seg-$Number$.m4s" startNumber="1"/>
+      <Representation id="video/avc1" codecs="avc1.4D4029" width="1920" height="1080" scanType="progressive" frameRate="25" bandwidth="638625"/>
+    </AdaptationSet>
+    <!-- Audio -->
+    <AdaptationSet id="1" mimeType="audio/mp4" startWithSAP="1" segmentAlignment="true" lang="en" selectionPriority="97">
+      <Label lang="en">AAC - Stereo</Label>
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"/>
+      <SegmentTemplate timescale="1000" duration="5000" initialization="$RepresentationID$/init.mp4" media="$RepresentationID$/seg-$Number$.m4s" startNumber="1"/>
+      <Representation id="audio/en/mp4a/1" codecs="mp4a.40.2" bandwidth="63929" audioSamplingRate="48000">
+        <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2"/>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="2" mimeType="audio/mp4" startWithSAP="1" segmentAlignment="true" lang="en" selectionPriority="98">
+      <Label lang="en">Dolby Digital Plus - 5.1</Label>
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"/>
+      <SegmentTemplate timescale="1000" duration="5000" initialization="$RepresentationID$/init.mp4" media="$RepresentationID$/seg-$Number$.m4s" startNumber="1"/>
+      <Representation id="audio/en/ec-3/1" codecs="ec-3" bandwidth="385179" audioSamplingRate="48000">
+        <AudioChannelConfiguration schemeIdUri="urn:mpeg:mpegB:cicp:ChannelConfiguration" value="6"/>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="3" mimeType="audio/mp4" startWithSAP="1" segmentAlignment="true" lang="en" selectionPriority="99">
+      <Label lang="en">Dolby Atmos</Label>
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"/>
+      <SegmentTemplate timescale="1000" duration="5000" initialization="$RepresentationID$/init.mp4" media="$RepresentationID$/seg-$Number$.m4s" startNumber="1"/>
+      <Representation id="audio/en/ec-3/2" codecs="ec-3" bandwidth="641179" audioSamplingRate="48000">
+        <AudioChannelConfiguration schemeIdUri="urn:mpeg:mpegB:cicp:ChannelConfiguration" value="6"/>
+        <SupplementalProperty schemeIdUri="tag:dolby.com,2018:dash:EC3_ExtensionType:2018" value="JOC"/>
+        <SupplementalProperty schemeIdUri="tag:dolby.com,2018:dash:EC3_ExtensionComplexityIndex:2018" value="12"/>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="4" mimeType="audio/mp4" startWithSAP="1" segmentAlignment="true" lang="en" selectionPriority="100">
+      <Label lang="en">Dolby AC-4 - 5.1</Label>
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"/>
+      <SegmentTemplate timescale="1000" duration="5000" initialization="$RepresentationID$/init.mp4" media="$RepresentationID$/seg-$Number$.m4s" startNumber="1"/>
+      <Representation id="audio/und/ac-4/1" codecs="ac-4.02.01.01" bandwidth="193766" audioSamplingRate="48000">
+        <AudioChannelConfiguration schemeIdUri="urn:mpeg:mpegB:cicp:ChannelConfiguration" value="6"/>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="5" mimeType="audio/mp4" startWithSAP="1" segmentAlignment="true" lang="en" selectionPriority="101">
+      <Label lang="en">Dolby AC-4 with Dolby Atmos</Label>
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"/>
+      <SegmentTemplate timescale="1000" duration="5000" initialization="$RepresentationID$/init.mp4" media="$RepresentationID$/seg-$Number$.m4s" startNumber="1"/>
+      <Representation id="audio/und/ac-4/2" codecs="ac-4.02.01.02" bandwidth="385766" audioSamplingRate="48000">
+        <AudioChannelConfiguration schemeIdUri="urn:mpeg:mpegB:cicp:ChannelConfiguration" value="16"/>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="6" mimeType="audio/mp4" startWithSAP="1" segmentAlignment="true" lang="es" selectionPriority="96">
+      <Label lang="en">Dolby Digital Plus - 5.1 - Spanish</Label>
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"/>
+      <SegmentTemplate timescale="1000" duration="5000" initialization="$RepresentationID$/init.mp4" media="$RepresentationID$/seg-$Number$.m4s" startNumber="1"/>
+      <Representation id="audio/es/ec-3" codecs="ec-3" bandwidth="385179" audioSamplingRate="48000">
+        <AudioChannelConfiguration schemeIdUri="urn:mpeg:mpegB:cicp:ChannelConfiguration" value="6"/>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet id="7" mimeType="audio/mp4" startWithSAP="1" segmentAlignment="true" lang="en" selectionPriority="95">
+      <Label lang="en">Dolby Digital Plus - Stereo - AudioDescription</Label>
+      <Accessibility schemeIdUri="urn:mpeg:dash:role:2011" value="description"/>
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="alternate"/>
+      <SegmentTemplate timescale="1000" duration="5000" initialization="$RepresentationID$/init.mp4" media="$RepresentationID$/seg-$Number$.m4s" startNumber="1"/>
+      <Representation id="audio/en/ec-3/3" codecs="ec-3" bandwidth="97179" audioSamplingRate="48000">
+        <AudioChannelConfiguration schemeIdUri="urn:mpeg:mpegB:cicp:ChannelConfiguration" value="2"/>
+      </Representation>
+    </AdaptationSet>
+  </Period>
+</MPD>

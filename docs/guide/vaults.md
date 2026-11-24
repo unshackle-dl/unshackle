@@ -25,6 +25,8 @@ A vault stores every content key as a **KID → KEY** pair, grouped by **service
 
 When unshackle needs a content key during a download it asks your vaults **in the order they appear in your config**. It returns the first non-null key it finds and stops searching. If a vault raises a permission error or is unreachable, unshackle skips it and continues the search with the next one.
 
+A track needs no licence when a vault holds the content key of the KID that encrypts it. The DRM header of the track can name more KIDs, for example those of other tracks. Before the decrypt, unshackle reads the downloaded file, and licenses each of those KIDs that the file uses and no vault holds. When unshackle cannot read which KIDs the file uses, it licenses all of them.
+
 When unshackle recovers new keys from a license, it pushes them to **all** configured vaults, so every vault gradually converges on the same set of keys. Two rules apply to pushing:
 
 - unshackle skips keys that already exist in a vault (it never overwrites or deletes existing data).
@@ -34,11 +36,11 @@ unshackle pushes keys from every source, not only a local CDM. A run against a r
 
 ### Wrong keys from a poisoned vault
 
-A public vault can return the right KID with a wrong content key. The decrypters accept a wrong content key and write noise. unshackle therefore trusts a content key from a vault only after FFmpeg decodes the decrypted track with strict error detection. For a fragmented MP4, unshackle reads from the encrypted file which fragments each KID encrypts, and FFmpeg decodes up to three windows of each KID: from its first, middle and last fragment on through the next fragments of that KID, for up to 4 seconds. A window never runs into a fragment of another KID or a clear fragment. A clear lead or a lead under another KID therefore cannot hide a wrong content key, and only the KID that fails is flagged. A KID that is not in this map, and every KID of any other file, gets one check of the whole file. FFmpeg decodes the first seconds and the last seconds. A failure there flags each of those KIDs. When a mapped KID fails, the KIDs that are not in the map get no verdict from that pass; the retry with the replaced key judges them. Content keys from a licence skip this check. A file this FFmpeg build cannot judge counts as a pass, never as a wrong content key: a codec it has no decoder for, or a header it cannot read. Without FFmpeg there is no check at all.
+A public vault can return the right KID with a wrong content key. The decrypters accept a wrong content key and write noise. unshackle therefore trusts a content key from a vault only after FFmpeg decodes the decrypted track with strict error detection. For a fragmented MP4, unshackle reads from the encrypted file which fragments each KID encrypts, and FFmpeg decodes up to three windows of each KID: from its first, middle and last fragment on through the next fragments of that KID, for up to 4 seconds. A window never runs into a fragment of another KID or a clear fragment. A clear lead or a lead under another KID therefore cannot hide a wrong content key, and only the KID that fails is flagged. When every KID in the map has a content key, the map is complete, and a KID that is not in it does not encrypt this file. This file does not judge that KID; the file of its own track judges it. A file with no encrypted sample entry and no encrypted fragment, for example a clear audio track, judges no KID, so it neither flags nor copies a content key. A KID that is not in an incomplete map, for example one with an all-zero KID, and every KID of any other file, gets one check of the whole file. FFmpeg decodes the first seconds and the last seconds. A failure there flags each of those KIDs. When a mapped KID fails, the KIDs that are not in the map get no verdict from that pass; the retry with the replaced key judges them. Content keys from a licence skip this check. A file this FFmpeg build cannot judge counts as a pass, never as a wrong content key: a codec it has no decoder for, or a header it cannot read. A pass is not proof. A wrong content key for HEVC video can decode without an error for some seconds, most often at a low resolution, and that content key passes the check. Without FFmpeg there is no check at all.
 
 When the decode fails, unshackle:
 
-1. Flags the KID:KEY in the `bad_keys` table of every local SQLite vault, with the service and the name of the vault it came from. The pair also goes out of the service table, except in a vault marked `no_push`, where only the flag is written. A flagged pair cannot go back into a local vault from another vault, a later run, or `kv copy`. A licence that returns the pair clears the flag and stores it. An `API` vault that served the pair also gets a report; `HTTP` and `MySQL` vaults have no report route. A pair from a local vault goes to no remote vault, even when a remote vault holds the same pair.
+1. Flags the KID:KEY in the `bad_keys` table of every local SQLite vault, with the service and the name of the vault it came from. The pair also goes out of the service table, except in a vault marked `no_push`, where only the flag is written. A flagged pair cannot go back into a local vault from another vault, a later run, or `kv copy`. A licence that returns the pair clears the flag and stores it. An `API` vault that served the pair gets a report only when a different content key for that KID is accepted. When the CDM returns the same content key, that vault gets no report. `HTTP` and `MySQL` vaults have no report route. A pair from a local vault goes to no remote vault, even when a remote vault holds the same pair.
 2. Restores the ciphertext from a hard link it made before decryption, then asks for the content key again. Every vault lookup skips a flagged pair, so the request reaches the remaining vaults and then the CDM. A remote answer that arrived after the winning one is reused instead of queried again.
 3. Removes the flag when the CDM returns the same content key, because then the decode check was wrong, not the content key. A content key from another vault is checked in its turn, and flagged as well if it also fails.
 
@@ -46,7 +48,7 @@ The download stops with an error instead of writing noise when no ciphertext is 
 
 Per-segment decryption gives up the retry. With `decrypt_segments` on, and always with MonaLisa, the plaintext replaces each segment as it arrives, so no ciphertext is left. A failed decode then flags the pair and stops the download. The next run skips the flagged pair.
 
-unshackle copies a content key from one vault to the others only after this check passes, so a wrong content key does not spread. Without FFmpeg, a content key from a vault is not copied at all. To see or clear the flags, open the SQLite file and read or delete rows in `bad_keys`.
+unshackle copies a content key from one vault to the others only after this check passes, so a content key that fails the check does not spread. Without FFmpeg, a content key from a vault is not copied at all. To see or clear the flags, open the SQLite file and read or delete rows in `bad_keys`.
 
 !!! tip "A good two-vault setup"
     A common arrangement is a fast local **SQLite** vault plus a shared remote vault (**MySQL**, **HTTP**, or **API**). The local vault answers instantly and works offline; the remote vault lets you share keys across machines or with a group.
@@ -316,6 +318,16 @@ $ unshackle kv copy local shared community
 | `-l`, `--local-only` | Only copy services you have installed locally, skipping tables for unknown services. |
 
 `--service` and `--local-only` are mutually exclusive.
+
+To import an SQLite vault file that is not in the config, give its path as the source:
+
+```console
+$ unshackle kv copy local ~/Downloads/key_store.db -s EXAMPLE
+```
+
+`kv copy` only reads from a source, so the file stays unchanged. `kv sync` also accepts a path, but it writes content keys into that file.
+
+With `--service`, `kv copy` reads the table named by the service's vault tag and the table named by its plain tag. It writes both into the vault-tag table, which is the table a download reads. Without `--service`, each table keeps its name.
 
 A pair the destination vault has flagged in `bad_keys` is left behind, so a copy does not undo a flag. `bad_keys` is never treated as a service, so its rows are never copied into a service table.
 

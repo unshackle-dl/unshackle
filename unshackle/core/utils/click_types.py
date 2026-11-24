@@ -1,10 +1,10 @@
 import re
 from datetime import date, timedelta
-from typing import Any, Optional, Union
+from enum import Enum
+from typing import Any, Callable, Optional, Sequence, Union
 
 import click
 from click.shell_completion import CompletionItem
-from pywidevine.cdm import Cdm as WidevineCdm
 
 from unshackle.core.constants import DEFAULT_SAMPLE
 from unshackle.core.tracks.audio import Audio
@@ -17,8 +17,8 @@ class VideoCodecChoice(click.Choice):
     A custom Choice type for video codecs that accepts both enum names and values.
 
     Accepts both:
-    - Enum names: avc, hevc, vc1, vp8, vp9, av1
-    - Enum values: H.264, H.265, VC-1, VP8, VP9, AV1
+    - Enum names: avc, hevc, vvc, vc1, vp8, vp9, av1
+    - Enum values: H.264, H.265, H.266, VC-1, VP8, VP9, AV1
     """
 
     def __init__(self, codec_enum: type[Video.Codec]) -> None:
@@ -28,7 +28,7 @@ class VideoCodecChoice(click.Choice):
             for choice in (codec.name.lower(), codec.value.lower()):
                 self._name_to_codec[choice] = codec
 
-        aliases = {"h264": "AVC", "h265": "HEVC"}
+        aliases = {"h264": "AVC", "h265": "HEVC", "h266": "VVC"}
         for alias, target in aliases.items():
             if target in codec_enum.__members__:
                 self._name_to_codec[alias] = codec_enum[target]
@@ -88,7 +88,7 @@ class SubtitleCodecChoice(click.Choice):
     - Common aliases: srt (for SubRip)
     """
 
-    def __init__(self, codec_enum):
+    def __init__(self, codec_enum: type[Subtitle.Codec]) -> None:
         self.codec_enum = codec_enum
         choices = []
         aliases = {}
@@ -135,7 +135,9 @@ class SubtitleCodecChoice(click.Choice):
         self.aliases = aliases
         super().__init__(choices, case_sensitive=False)
 
-    def convert(self, value: Any, param: Optional[click.Parameter] = None, ctx: Optional[click.Context] = None):
+    def convert(
+        self, value: Any, param: Optional[click.Parameter] = None, ctx: Optional[click.Context] = None
+    ) -> Union[Subtitle.Codec, str, None]:
         if not value:
             return None
 
@@ -160,16 +162,18 @@ class ContextData:
     def __init__(
         self,
         config: dict,
-        cdm: WidevineCdm,
+        cdm: Any,
         proxy_providers: list,
         profile: Optional[str] = None,
         cdm_entry: bool = False,
-    ):
+        cdm_for: Optional[Callable[[str, Optional[int]], Any]] = None,
+    ) -> None:
         self.config = config
         self.cdm = cdm
         self.proxy_providers = proxy_providers
         self.profile = profile
         self.cdm_entry = cdm_entry
+        self.cdm_for = cdm_for
 
 
 class SeasonRange(click.ParamType):
@@ -337,7 +341,7 @@ class QualityList(click.ParamType):
 
     def convert(
         self,
-        value: Union[str, int, list[Union[str, int]]],
+        value: Union[str, int, Sequence[Union[str, int]]],
         param: Optional[click.Parameter] = None,
         ctx: Optional[click.Context] = None,
     ) -> list[int]:
@@ -428,7 +432,7 @@ class AudioCodecList(click.ParamType):
 class MultipleChoice(click.Choice):
     """
     The multiple choice type takes several values. Each value must be in a fixed
-    set of permitted values.
+    set of permitted values. An Enum choice also matches its value, so HDR10+ selects HDR10P.
 
     It internally uses and extends click.Choice.
     """
@@ -452,7 +456,11 @@ class MultipleChoice(click.Choice):
 
         chosen_values: list[Any] = []
         for value in values:
-            chosen_values.append(super().convert(value, param, ctx))
+            member = next(
+                (c for c in self.choices if isinstance(c, Enum) and str(c.value).casefold() == str(value).casefold()),
+                None,
+            )
+            chosen_values.append(member if member is not None else super().convert(value, param, ctx))
 
         return chosen_values
 
@@ -490,7 +498,7 @@ class SlowDelayRange(click.ParamType):
 
         match = re.match(r"^(\d+)-(\d+)$", str(value))
         if not match:
-            self.fail(f"'{value}' is not a valid range. Use format: MIN-MAX (e.g., 20-40)", param, ctx)
+            self.fail(f"'{value}' is not a valid range, expected MIN-MAX such as 20-40", param, ctx)
 
         low, high = int(match.group(1)), int(match.group(2))
         if low < 5:
@@ -516,7 +524,7 @@ class SampleRange(click.ParamType):
 
         match = re.match(r"^(\d+)-(\d+)$", str(value))
         if not match or int(match.group(1)) >= int(match.group(2)):
-            self.fail(f"'{value}' is not a valid sample window. Use format: START-END (e.g., 60-120)", param, ctx)
+            self.fail(f"'{value}' is not a valid sample window, expected START-END such as 60-120", param, ctx)
 
         return (int(match.group(1)), int(match.group(2)))
 

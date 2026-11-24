@@ -73,17 +73,18 @@ unshackle dl [OPTIONS] SERVICE [SERVICE ARGS...]
 |---|---|---|
 | `-p`, `--profile` | - | Profile for credentials and cookies. |
 | `-q`, `--quality` | best | Resolution(s), comma-separated, e.g. `1080,720`. `-q 1080` also matches anamorphic tracks by 16:9 canvas. |
-| `-v`, `--vcodec` | any | Video codec(s). Accepts names or values: `AVC`/`H.264`/`H264`, `HEVC`/`H.265`/`H265`, `VC1`/`VC-1`, `VP8`, `VP9`, `AV1`. |
-| `-a`, `--acodec` | any | Audio codec(s), comma-separated. Accepts `AAC`, `AC3`/`DD`, `EC3`/`DD+`/`eac3`/`ddp`, `AC4`/`AC-4`, `OPUS`, `OGG`/`VORB`/`vorbis`, `DTS`, `DTSX`/`DTS-X`, `ALAC`, `FLAC`. |
+| `-v`, `--vcodec` | any | Video codec(s). Accepts names or values: `AVC`/`H.264`/`H264`, `HEVC`/`H.265`/`H265`, `VVC`/`H.266`/`H266`, `VC1`/`VC-1`, `VP8`, `VP9`, `AV1`. |
+| `-a`, `--acodec` | any | Audio codec(s), comma-separated. Accepts `AAC`, `AC3`/`DD`, `EC3`/`DD+`/`eac3`/`ddp`, `AC4`/`AC-4`, `OPUS`, `OGG`/`VORB`/`vorbis`, `DTS`, `DTSX`/`DTS-X`, `ALAC`, `FLAC`, `MP3`. |
 | `-vb`, `--vbitrate` | highest | Exact video bitrate in kbps. |
 | `-ab`, `--abitrate` | highest | Exact audio bitrate in kbps. |
 | `-vb-range`, `--vbitrate-range` | - | Video bitrate range in kbps, e.g. `6000-7000`; picks highest within. Mutually exclusive with `--vbitrate`. |
 | `-ab-range`, `--abitrate-range` | - | Audio bitrate range in kbps, e.g. `128-256`. Mutually exclusive with `--abitrate`. |
-| `-r`, `--range` | `SDR` | Colour range(s): `SDR`, `HLG`, `HDR10`, `HDR10P` (HDR10+), `DV`, `HYBRID`. |
+| `-r`, `--range` | `SDR` | Colour range(s): `SDR`, `HLG`, `HDR10`, `HDR10P` (HDR10+), `VIVID` (HDR Vivid), `DV`, `HYBRID`. |
+| `--generate-dv` | off | With `-r HYBRID`, make Dolby Vision from the HDR10+ metadata or the decoded video when a title has no Dolby Vision track. With `-r HDR10` or `-r HDR10P`, make it for that base and ignore a Dolby Vision track. See [Dolby Vision without a DV track](downloading.md#dolby-vision-without-a-dv-track). |
 | `-c`, `--channels` | - | Audio channels; matches sub-layouts (5.1 ≈ 6.0). |
 | `-naa`, `--noatmos` | off | Exclude Dolby Atmos audio tracks. |
-| `--worst` | off | Pick the lowest bitrate within the requested quality. **Requires `-q`.** |
-| `--best-available`, `--warn-only` | off | Warn and continue when a requested resolution, range, or language is absent, instead of failing. With `--all-drm`, also when one DRM system does not license. |
+| `--worst` | off | Pick the lowest-bitrate video at each requested resolution, or at the lowest resolution if none is set. |
+| `--best-available`, `--warn-only` | off | Warn and continue when a requested resolution, range, video language, or audio language is absent, instead of failing. With `--all-drm`, also when one DRM system does not license. |
 | `-rvb`, `--real-video-bitrate` | off | Probe real media size for true video bitrates, overriding the manifest. |
 | `-rab`, `--real-audio-bitrate` | off | Same for audio (slower). |
 
@@ -101,11 +102,13 @@ unshackle dl [OPTIONS] SERVICE [SERVICE ARGS...]
 | `--require-audio` | - | Audio langs that must exist. The title fails even with `--best-available`. Does not select tracks. |
 | `--require-video` | - | Video langs that must exist. The title fails even with `--best-available`. Does not select tracks. |
 | `--require-subs` | - | Subtitle langs that must exist. Fails the title if one is missing. `--s-lang` still decides what to keep. |
+| `--skip-missing` | off | Skip a title that misses a required language or track, and continue with the next title. A run with one title, or a run that skips every title, still fails. |
 | `-fs`, `--forced-subs` | off | Include forced subtitle tracks. |
 | `-fso`, `--forced-subs-only` | off | Keep only forced subtitle tracks; drop the other subtitles. Implies `-fs`. |
 | `-fsl`, `--forced-s-lang` | none | Language(s) wanted for forced subtitles; implies `-fs`. A `-` prefix excludes. |
-| `--exact-lang` | off | Exact matching only: `-l es-419` matches `es-419`, not `es-ES`. Applies to selection and to sort order. |
+| `--exact-lang` | off | A tag without a region selects only the variant it means and never falls back to another: `-l es` does not select `es-419`. A tag with a region, such as `es-419`, is always exact. Applies to selection and to sort order. |
 | `--sub-format` | - | Output subtitle format (`SRT`/`srt`, `VTT`/`webvtt`, `ASS`/`ssa`, `TTML`, `SMI`, ...), or `original` to keep the source format. |
+| `--sub-font` | - | Font for subtitles converted to ASS, with the rest of the look from `subtitle.ass_style`. Implies `--sub-format ASS` and overrides a `sub_format` from the configuration file; a typed `--sub-format` of another format is an error. |
 
 !!! tip "These flags select languages, they do not order them"
     Naming languages with `-l` or `-sl` removes the others. To keep every language but put
@@ -171,6 +174,7 @@ Keep only certain track types, or skip certain track types.
 | `--enrich` | Overwrite show title, year and original language with the external source's. **Requires** one of `--tmdb`, `--imdb`, `--tvdb`, or `--anilist`. |
 | `--daily` | Treat the title as daily/date-based content and fill missing episode air dates from TVDB. The fill needs `--enrich` and a TVDB ID. See [Daily and date-based content](downloading.md#daily-and-date-based-content). |
 | `--tvdb-order` | Renumber episodes to a TVDB season order: `official` (aired), `dvd`, `absolute`, `alternate`, or `regional`. Needs `tvdb_api_key`. |
+| `-ce` / `--continuous-episodes` | Number each season on from the season before it. After a season one of four episodes, season two starts at `S02E05`. Season 0 and episode 0 keep their numbers. |
 
 !!! note "One ID at a time"
     You cannot combine `--tmdb`, `--imdb` and `--tvdb`. Give one and unshackle finds the
@@ -206,10 +210,12 @@ order the service used, then renumbers the episodes into the order you asked for
 | Flag | Description |
 |---|---|
 | `--proxy` | Proxy URI, a country or location code resolved from configured providers, or `provider:region` (e.g. `nordvpn:ca`, `gluetun:us`, `protonvpn:de:berlin`, `controld:yul`). |
+| `--local-proxy` | With `--remote`, send the server's service requests through your machine's own connection, or through a `--proxy` that your machine connects to. Check it first with `unshackle tunnel-test`. See [Proxies & VPN](proxies-and-vpn.md#send-the-servers-requests-through-your-machine). |
 | `--no-proxy` | Force-disable all proxy use. |
 | `--no-proxy-download` | Bypass the proxy for **all downloads** (manifest, licence, and auth stay proxied). |
 | `--proxy-download` | Use a different proxy for **all downloads**, in the same forms as `--proxy` (manifest, licence, and auth stay on `--proxy`). |
 | `--remote` | Use a remote unshackle server. |
+| `--local` | Use the local service code, also when the config sets `remote: true`. |
 | `--server` | Name a remote server from the `remote_services` config. |
 
 ### Concurrency, caching & listing
@@ -228,7 +234,7 @@ order the service used, then renumbers the episodes into the order you asked for
 | `--slow` | - | Inter-title delay. Bare `--slow` = 60-120s; `--slow 20-40` = custom range (minimum 20s). |
 
 !!! warning "Some flags cannot be combined"
-    `--select-titles` and `--wanted` are mutually exclusive. `--worst` needs `--quality`. `--vbitrate` and `--vbitrate-range` (and the audio equivalents) are mutually exclusive.
+    `--select-titles` and `--wanted` are mutually exclusive. `--vbitrate` and `--vbitrate-range` (and the audio equivalents) are mutually exclusive.
 
 ---
 
@@ -248,20 +254,25 @@ unshackle logs in to the service before the search. A service that declares a se
 |---|---|
 | `-p`, `--profile` | Profile for credentials and cookies. |
 | `--proxy` | Proxy URI, country or location code, or `provider:region` (e.g. `controld:ca`). |
+| `--local-proxy` | With `--remote`, send the server's search requests through your machine's own connection, or through a `--proxy` that your machine connects to. |
 | `--no-proxy` | Force-disable all proxy use. |
+| `--remote` | Search on a remote unshackle server. The server logs in to the service. unshackle sends it your credentials, cookies and cache for the profile, and saves the cache that the server sends back. A service that searches with no login gets none of them. |
+| `--local` | Search with the local service code, also when the config sets `remote: true` for the service. |
+| `--server` | Name a remote server from the `remote_services` config. |
 
 !!! example
     ```shell
     unshackle search EXAMPLE "My Show"
     unshackle search -p myprofile EXAMPLE "Another Show"
     unshackle search --proxy nordvpn:ca SERVICE "query"
+    unshackle search --remote --server my_server SERVICE "query"
     ```
 
 ---
 
 ## `import`
 
-Reconstruct a download (download → decrypt → mux) from an `--export` JSON file without re-contacting the service. It re-fetches the manifest, injects the stored keys, and then runs the normal `dl` pipeline. The service tag is read from the export file, not passed by you.
+Reconstruct a download (download → decrypt → mux) from an `--export` JSON file without re-contacting the service. It uses the DASH or ISM manifest that the export saved, or fetches the manifest again when the export has none. It injects the stored keys and then runs the normal `dl` pipeline. The service tag is read from the export file, not passed by you.
 
 ```
 unshackle import EXPORT_FILE [DL_ARGS...]
@@ -276,6 +287,25 @@ unshackle forwards any `dl` options after the file verbatim, so you can override
     ```
 
 The export file can be a `mediaexport` file from `dl --export`, an export from an older version of unshackle, or an export from unidl. The file must name the service it came from.
+
+---
+
+## `tunnel-test`
+
+Check `--local-proxy` before a real `--remote` run. The command finds the IP address that this
+machine exits from, opens a tunnel to the server, and makes the server look up its exit IP address
+through the tunnel. It stops at the first step that fails.
+
+```
+unshackle tunnel-test [--server NAME] [--proxy VALUE]
+```
+
+| Flag | Description |
+|---|---|
+| `--server` | Name of the remote server from `remote_services` config, if you configure more than one. |
+| `--proxy` | Test the route through this proxy, as `--local-proxy --proxy` uses it. Takes any `--proxy` value. |
+
+See [Proxies & VPN](proxies-and-vpn.md#send-the-servers-requests-through-your-machine).
 
 ---
 
@@ -313,7 +343,7 @@ unshackle cfg [KEY] [VALUE] [OPTIONS]
 | `--list` | List all set configuration values. |
 
 !!! warning "Comments are stripped"
-    Writing a value through `cfg` rewrites the configuration file and **removes all comments** from it. If your config relies on comments, edit it by hand instead. Setting a value and using `--unset` together is an error.
+    Writing a value through `cfg` rewrites the configuration file and **removes all comments** from it. If your config relies on comments, edit it by hand instead. Setting a value and using `--unset` together is an error. If a config key is set twice in the same block, every command warns with the line numbers of the two copies and uses the later copy. `cfg` stops without a change.
 
 !!! example
     ```shell
@@ -338,10 +368,14 @@ unshackle env COMMAND [ARGS]...
 ### `env check`
 
 ```
-unshackle env check
+unshackle env check [--verbose]
 ```
 
-Prints a dependency table (Category / Tool / Status / Required / Purpose) that shows which external tools unshackle finds on your `PATH`. It also gives a summary of how many required tools are present. If a required tool is missing, it tells you to run [`unshackle setup`](#setup).
+| Option | Description |
+|---|---|
+| `--verbose` | Adds a Path column with the file that unshackle loads for each tool. Use it to find a tool that you want to replace. |
+
+Prints a dependency table (Category / Tool / Status / Version / Required / Purpose) that shows which external tools unshackle finds on your `PATH` and the version that each one reports. The version is `-` when a tool does not report one. It also gives a summary of how many required tools are present. If a required tool is missing, it tells you to run [`unshackle setup`](#setup).
 
 | Category | Tools |
 |---|---|
@@ -403,6 +437,8 @@ unshackle kv COMMAND [ARGS]...
 
 Copy content keys from one or more source vaults into a destination vault. unshackle skips rows whose KIDs match, unless the existing row has no content key. unshackle never alters or deletes existing data.
 
+A vault argument is the name of a vault in the config, or the path to an SQLite vault file. Use a path to import a vault file that is not in the config.
+
 | Option | Description |
 |---|---|
 | `-s`, `--service` | Only copy data for a specific service. |
@@ -436,6 +472,7 @@ Make service tables on vaults that use tables, for every installed service, wher
     ```shell
     unshackle kv copy main backup1 backup2
     unshackle kv copy main backup -s EXAMPLE
+    unshackle kv copy main ~/Downloads/key_store.db -s EXAMPLE
     unshackle kv sync main mysql_vault
     unshackle kv add keys.txt EXAMPLE main backup
     unshackle kv search 0123456789abcdef0123456789abcdef -s EXAMPLE -v main
@@ -542,7 +579,7 @@ unshackle serve [OPTIONS]
 | `--debug` | off | Enable debug logging for API operations. |
 | `--remote-only` | off | Expose only the remote service session endpoints (health, services, search, session). Implies `--api-only`. |
 
-WVD files in the WVDs directory and PRD files in the PRDs directory are auto-loaded. The REST API lives under `http://<host>:<port>/api/`, with Swagger UI at `/api/docs/` and a health check at `/api/health` (exempt from auth).
+WVD files in the WVDs directory and PRD files in the PRDs directory are auto-loaded. The REST API lives under `http://<host>:<port>/api/`, with Swagger UI at `/api/docs/` and a health check at `/api/health`.
 
 !!! warning "Configure `api_secret` first"
     Unless you pass `--no-key`, `serve.api_secret` must be set in your config. Requests authenticate with the `X-Secret-Key` header. `--no-key` disables authentication entirely. Only use it on a trusted, private network.

@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011" xmlns:dvb="urn:dvb:dash-extensions:2014-1" type="static" profiles="urn:dvb:dash:profile:dvb-dash:2014,urn:dvb:dash:profile:dvb-dash:isoff-ext-live:2014" minBufferTime="PT9.65S" maxSegmentDuration="PT10S" mediaPresentationDuration="PT1H">
+  <!-- BBC Testcard DASH Stream -->
+  <!-- Email dash@rd.bbc.co.uk -->
+  <!-- Copyright (c) British Broadcasting Corporation MMXXIII. All rights reserved.-->
+  <!-- This stream is made available for engineering test purposes only. -->
+  <!-- Redistribution is not permitted. -->
+  <ProgramInformation>
+    <Title>BBC Testcard DASH Stream</Title>
+    <Source>BBC</Source>
+    <Copyright>(c) British Broadcasting Corporation MMXXIII. All rights reserved.</Copyright>
+  </ProgramInformation>
+  <BaseURL serviceLocation="A" dvb:priority="1" dvb:weight="3">https://vod-dash-ww-rd-live.akamaized.net/testcard/2/</BaseURL>
+  <BaseURL serviceLocation="C" dvb:priority="1" dvb:weight="1">https://vod-dash-ww-rd.live.cf.md.bbci.co.uk/testcard/2/</BaseURL>
+  <BaseURL serviceLocation="A" dvb:priority="3" dvb:weight="1">https://vod-dash-ww-rd-live.akamaized.net/testcard/2/</BaseURL>
+  <BaseURL serviceLocation="C" dvb:priority="4" dvb:weight="1">https://vod-dash-ww-rd.live.cf.md.bbci.co.uk/testcard/2/</BaseURL>
+  <Period id="first">
+    <AdaptationSet startWithSAP="2" segmentAlignment="true" par="16:9" sar="1:1" id="1" contentType="video" mimeType="video/mp4" scanType="progressive">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"/>
+      <BaseURL>avc3/</BaseURL>
+      <SegmentTemplate timescale="200" duration="768" media="$RepresentationID$/$Number%06d$.m4s" initialization="$RepresentationID$/IS.mp4"/>
+      <Representation id="1920x1080p50" codecs="avc3.64002a" height="1080" width="1920" frameRate="50" bandwidth="10535552"/>
+      <Representation id="1280x720p50" codecs="avc3.640020" height="720" width="1280" frameRate="50" bandwidth="5197928"/>
+      <Representation id="704x396p50" codecs="avc3.64001f" height="396" width="704" frameRate="50" bandwidth="1632392"/>
+      <Representation id="704x396p25" codecs="avc3.4d401e" height="396" width="704" frameRate="25" bandwidth="906616"/>
+    </AdaptationSet>
+    <AdaptationSet startWithSAP="2" segmentAlignment="true" id="4" codecs="mp4a.40.2" audioSamplingRate="48000" contentType="audio" lang="eng" mimeType="audio/mp4">
+      <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2"/>
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"/>
+      <BaseURL>audio/</BaseURL>
+      <SegmentTemplate timescale="48000" duration="184320" media="$RepresentationID$/$Number%06d$.m4s" initialization="$RepresentationID$/IS.mp4"/>
+      <Representation id="en-320kbps-2_0" bandwidth="318808"/>
+      <Representation id="en-128kbps" bandwidth="126528"/>
+    </AdaptationSet>
+    <AdaptationSet startWithSAP="2" segmentAlignment="true" id="888" codecs="stpp.ttml.etd1|im1t" lang="eng" contentType="text" mimeType="application/mp4">
+      <EssentialProperty schemeIdUri="urn:dvb:dash:fontdownload:2014" value="1" dvb:url="https://rdmedia.bbc.co.uk/fonts/bbcrd_massif-woff.woff" dvb:mimeType="application/font-woff" dvb:fontFamily="BBCRD_Massif"/>
+      <Accessibility schemeIdUri="urn:tva:metadata:cs:AudioPurposeCS:2007" value="2"/>
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"/>
+      <BaseURL>subtitles/</BaseURL>
+      <SegmentTemplate timescale="200" duration="2000" media="$RepresentationID$/$Number%06d$.m4s" initialization="$RepresentationID$/IS.mp4"/>
+      <Representation id="fd-subs" bandwidth="7200"/>
+    </AdaptationSet>
+  </Period>
+  <Metrics metrics="DVBErrors">
+    <Reporting schemeIdUri="urn:dvb:dash:reporting:2014" value="1" dvb:reportingUrl="https://rdmedia.api.bbc.co.uk/dvb-errors/errors" dvb:probability="500"/>
+  </Metrics>
+</MPD>

@@ -1,5 +1,10 @@
+import os
+import re
 import shutil
+import signal
+import subprocess  # nosec B404
 import sys
+from contextlib import suppress
 from pathlib import Path
 from typing import Optional
 
@@ -42,9 +47,9 @@ def find(*names: str, search_dirs: Optional[list[Path]] = None) -> Optional[Path
                     if sys.platform == "win32" or (path.stat().st_mode & 0o111):
                         return path
 
-        path = shutil.which(name)
-        if path:
-            return Path(path)
+        found = shutil.which(name)
+        if found:
+            return Path(found)
     return None
 
 
@@ -69,6 +74,7 @@ __binaries = {
     "DoviTool": ("dovi_tool",),
     "HDR10PlusTool": ("hdr10plus_tool", "HDR10Plus_tool"),
     "Mp4decrypt": ("mp4decrypt",),
+    "MP4Box": ("MP4Box", "mp4box"),
     "Docker": ("docker",),
     "Git": ("git",),
 }
@@ -94,6 +100,84 @@ def register(
 def get_registered_dependencies() -> list[dict]:
     """Return all registered custom binary dependencies for env check."""
     return list(_registered_binaries.values())
+
+
+DOTTED_NUMBER = r"\d+\.\d+(?:\.\d+)*"
+VERSION_RE = re.compile(DOTTED_NUMBER)
+LABELLED_VERSION_RE = re.compile(rf"(?i)\bversion[:\s]+[a-z]?({DOTTED_NUMBER})")
+GIT_BUILD_RE = re.compile(r"\bversion\s+(?:N-\d+-g[0-9a-f]+-(\d{8})\b|(?:git-)?(\d{4}-\d{2}-\d{2})\b|(N-\d+)-g)")
+VERSION_WORD_RE = re.compile(r"(?i)\bversion\b")
+BARE_VERSION_TOOLS = {"mp4decrypt"}
+PROBE_TIMEOUT = 5.0
+
+
+def parse_version(text: str) -> Optional[str]:
+    """Return the version from the first line that says "version" or holds a dotted number.
+
+    That line is the tool's own banner; later lines carry library and compiler versions.
+    A git build of FFmpeg has no release number, so its build date (YYYYMMDD) stands in, or N-<revision> when undated.
+    """
+    for line in text.splitlines():
+        if match := LABELLED_VERSION_RE.search(line):
+            return match.group(1)
+        if match := GIT_BUILD_RE.search(line):
+            date, dashed_date, revision = match.groups()
+            return revision or (date or dashed_date).replace("-", "")
+        if VERSION_WORD_RE.search(line):
+            return None
+        if match := VERSION_RE.search(line):
+            return match.group(0)
+    return None
+
+
+def probe_output(path: Path, args: list[str]) -> Optional[str]:
+    """Run a binary and return its stdout and stderr, or None when it does not start or times out.
+
+    A timeout kills the whole tree: on Windows subprocess.run waits with no limit for a grandchild that holds the pipes.
+    """
+    try:
+        proc = subprocess.Popen(  # nosec B603
+            [str(path), *args],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            start_new_session=True,
+        )
+    except (OSError, ValueError):
+        return None
+    with proc:
+        try:
+            out, err = proc.communicate(timeout=PROBE_TIMEOUT)
+        except subprocess.TimeoutExpired:
+            if sys.platform == "win32":
+                subprocess.run(["taskkill", "/F", "/T", "/PID", str(proc.pid)], capture_output=True)  # nosec B603 B607
+            else:
+                with suppress(ProcessLookupError):
+                    os.killpg(proc.pid, signal.SIGKILL)
+            with suppress(subprocess.TimeoutExpired):
+                proc.communicate(timeout=1)
+            return None
+    return f"{out}\n{err}"
+
+
+def binary_version(path: Optional[Path]) -> Optional[str]:
+    """Best-effort version probe of a binary. Returns None when nothing is parseable.
+
+    BARE_VERSION_TOOLS run with no arguments because they print their version only in the usage text.
+    """
+    if not path:
+        return None
+    bare = path.stem.lower() in BARE_VERSION_TOOLS
+    for args in [[]] if bare else [["--version"], ["-version"]]:
+        output = probe_output(path, args)
+        if output is None:
+            return None
+        if version := parse_version(output):
+            return version
+    return None
 
 
 _services_loaded = False
@@ -136,6 +220,7 @@ __all__ = (
     "DoviTool",
     "HDR10PlusTool",
     "Mp4decrypt",
+    "MP4Box",
     "Docker",
     "Git",
     "find",

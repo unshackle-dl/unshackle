@@ -20,7 +20,9 @@ pytestmark = pytest.mark.unit
 def fake_video(tmp_path: Path, track_id: str, range_: Video.Range, height: int = 2160) -> Any:
     path = tmp_path / f"{track_id}.mp4"
     path.write_bytes(b"x")
-    return SimpleNamespace(id=track_id, path=path, height=height, range=range_, dv_compatible_bitstream=True)
+    return SimpleNamespace(
+        id=track_id, path=path, height=height, range=range_, codec=Video.Codec.HEVC, dv_compatible_bitstream=True
+    )
 
 
 @pytest.fixture
@@ -69,7 +71,6 @@ def test_hybrid_step_reads_the_container_after_the_fixup(fake_demux: None, tmp_p
     assert base.path == tmp_path / "base.dv.hevc"
     assert hybrid_base.path == tmp_path / "base.mp4"
     assert hybrid_dv.path == dv.path
-    assert hybrid_base.needs_duration_fix and hybrid_dv.needs_duration_fix
 
 
 def test_one_hybrid_base_for_each_height(tmp_path: Path) -> None:

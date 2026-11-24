@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<MPD xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns="urn:mpeg:dash:schema:mpd:2011"
+	xmlns:xlink="http://www.w3.org/1999/xlink"
+	xsi:schemaLocation="urn:mpeg:DASH:schema:MPD:2011 http://standards.iso.org/ittf/PubliclyAvailableStandards/MPEG-DASH_schema_files/DASH-MPD.xsd"
+	profiles="urn:mpeg:dash:profile:isoff-live:2011"
+	type="dynamic"
+	minimumUpdatePeriod="PT500S"
+	availabilityStartTime="2026-10-26T01:00:03.839Z"
+	publishTime="2026-10-26T15:55:53.542Z"
+	timeShiftBufferDepth="PT6.0S"
+	maxSegmentDuration="PT2.0S"
+	minBufferTime="PT1.0S">
+	<ProgramInformation>
+	</ProgramInformation>
+	<ServiceDescription id="0">
+		<Latency target="3000" referenceId="1"/>
+	</ServiceDescription>
+	<Period id="0" start="PT0.0S">
+		<AdaptationSet id="0" contentType="video" startWithSAP="1" segmentAlignment="true" bitstreamSwitching="true" frameRate="30000/1001" maxWidth="1280" maxHeight="720" par="16:9">
+			<Resync dT="33367" type="0"/>
+			<Representation id="0" mimeType="video/mp4" codecs="avc1.64001f" bandwidth="2000000" width="1280" height="720" sar="1:1">
+				<ProducerReferenceTime id="0" inband="true" type="captured" wallClockTime="2026-10-26T01:00:03.840Z" presentationTime="0">
+					<UTCTiming schemeIdUri="urn:mpeg:dash:utc:http-xsdate:2014" value="https://time.akamai.com?iso&amp;ms"/>
+				</ProducerReferenceTime>
+				<Resync dT="1001000" type="1"/>
+				<SegmentTemplate timescale="1000000" duration="2002000" availabilityTimeOffset="1.969" availabilityTimeComplete="false" initialization="1792976403/init-stream_$RepresentationID$.m4s" media="1792976403/chunk-stream_$RepresentationID$-$Number%05d$.m4s" startNumber="1">
+				</SegmentTemplate>
+			</Representation>
+		</AdaptationSet>
+		<AdaptationSet id="1" contentType="audio" startWithSAP="1" segmentAlignment="true" bitstreamSwitching="true" lang="eng">
+			<Resync dT="21333" type="0"/>
+			<Representation id="1" mimeType="audio/mp4" codecs="mp4a.40.2" bandwidth="96000" audioSamplingRate="48000">
+				<AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2" />
+				<ProducerReferenceTime id="1" inband="true" type="captured" wallClockTime="2026-10-26T01:00:03.839Z" presentationTime="0">
+					<UTCTiming schemeIdUri="urn:mpeg:dash:utc:http-xsdate:2014" value="https://time.akamai.com?iso&amp;ms"/>
+				</ProducerReferenceTime>
+				<Resync dT="21333" type="1"/>
+				<SegmentTemplate timescale="1000000" duration="2002000" availabilityTimeOffset="1.981" availabilityTimeComplete="false" initialization="1792976403/init-stream_$RepresentationID$.m4s" media="1792976403/chunk-stream_$RepresentationID$-$Number%05d$.m4s" startNumber="1">
+				</SegmentTemplate>
+			</Representation>
+		</AdaptationSet>
+	</Period>
+	<UTCTiming schemeIdUri="urn:mpeg:dash:utc:http-xsdate:2014" value="https://time.akamai.com?iso&amp;ms"/>
+</MPD>

@@ -6,8 +6,7 @@ import pytest
 from langcodes import Language
 from lxml import etree
 
-from unshackle.core.api.handlers import extract_track_manifests
-from unshackle.core.remote_service import resolve_track_manifests
+from unshackle.core.manifests.snapshot import capture, restore
 from unshackle.core.tracks import Subtitle, Tracks
 
 pytestmark = pytest.mark.unit
@@ -52,8 +51,8 @@ def test_detached_adaptation_set_round_trips() -> None:
     )
     tracks = Tracks([track])
 
-    fragments = extract_track_manifests(tracks)
-    assert len(fragments) == 1
+    snapshot = capture(tracks)
+    assert len(snapshot["track_manifests"]) == 1
 
     client_track = Subtitle(
         id_="abc123",
@@ -62,7 +61,7 @@ def test_detached_adaptation_set_round_trips() -> None:
         language=Language.get("en"),
         descriptor=Subtitle.Descriptor.URL,
     )
-    resolve_track_manifests(Tracks([client_track]), fragments)
+    restore(Tracks([client_track]), snapshot)
 
     dash = client_track.data["dash"]
     assert dash["manifest"].find("BaseURL").text == "https://cdn.example/base/"
@@ -71,10 +70,46 @@ def test_detached_adaptation_set_round_trips() -> None:
     assert client_track.descriptor == Subtitle.Descriptor.DASH
 
 
+def test_single_track_manifest_round_trips_by_id() -> None:
+    """A manifest that holds only its own track ships as a fragment, so the client needs no attribute match."""
+    manifest = etree.fromstring(MPD.encode())
+    period = manifest.find("Period")
+    adaptation_set = period.find("AdaptationSet")
+    track = Subtitle(
+        id_="abc123",
+        url="https://cdn.example/manifest.mpd",
+        codec=Subtitle.Codec.WebVTT,
+        language=Language.get("en"),
+        sdh=True,
+        descriptor=Subtitle.Descriptor.DASH,
+        data={
+            "dash": {
+                "manifest": manifest,
+                "period": period,
+                "adaptation_set": adaptation_set,
+                "representation": adaptation_set.find("Representation"),
+            }
+        },
+    )
+    client_track = Subtitle(
+        id_="abc123",
+        url=track.url,
+        codec=Subtitle.Codec.WebVTT,
+        language=Language.get("en"),
+        sdh=True,
+        descriptor=Subtitle.Descriptor.URL,
+    )
+    restore(Tracks([client_track]), capture(Tracks([track])))
+
+    assert client_track.descriptor == Subtitle.Descriptor.DASH
+    assert client_track.data["dash"]["representation_id"] == "sub-0"
+
+
 def test_in_tree_adaptation_set_is_not_shipped() -> None:
     manifest = etree.fromstring(MPD.encode())
     period = manifest.find("Period")
     adaptation_set = period.find("AdaptationSet")
+    adaptation_set.append(etree.fromstring(b'<Representation id="sub-1" bandwidth="2000"/>'))
     track = Subtitle(
         id_="abc123",
         url="https://cdn.example/manifest.mpd",
@@ -90,7 +125,7 @@ def test_in_tree_adaptation_set_is_not_shipped() -> None:
             }
         },
     )
-    assert extract_track_manifests(Tracks([track])) == []
+    assert capture(Tracks([track]))["track_manifests"] == []
 
 
 def test_fragment_keeps_only_the_track_representation() -> None:
@@ -116,7 +151,7 @@ def test_fragment_keeps_only_the_track_representation() -> None:
         language=Language.get("en"),
         descriptor=Subtitle.Descriptor.URL,
     )
-    resolve_track_manifests(Tracks([client_track]), extract_track_manifests(Tracks([track])))
+    restore(Tracks([client_track]), capture(Tracks([track])))
 
     dash = client_track.data["dash"]
     assert dash["representation_id"] == "sub-1"

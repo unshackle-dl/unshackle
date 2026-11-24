@@ -22,11 +22,12 @@ a query to a real proxy URL: [basic static proxies](#basic-static-proxies),
 
 ## The `--proxy` flag
 
-Four options on the `dl` command control proxying at download time:
+Five options on the `dl` command control proxying at download time:
 
 | Option | Effect |
 |---|---|
 | `--proxy` | The proxy to use. Either an explicit URI, or a query that unshackle resolves against your configured providers. |
+| `--local-proxy` | With `--remote`, send the server's service requests through your machine's own connection, or through a `--proxy` that your machine connects to. See [Send the server's requests through your machine](#send-the-servers-requests-through-your-machine). |
 | `--no-proxy` | Force **all** proxy use off. No providers are initialised and no proxy query is resolved. |
 | `--no-proxy-download` | Use the proxy for the manifest, licence, and authentication, but bypass it for the **downloads** themselves. |
 | `--proxy-download` | Use `--proxy` for the manifest, licence, and authentication, and a different proxy for the **downloads**. Takes the same forms as `--proxy`. |
@@ -112,7 +113,8 @@ flowchart TD
 
 unshackle compares the query against a region grammar: a country or location code of two
 to four letters, with an optional `_code` part (`res_yyz`), then an optional server
-number and/or a `:city` or `-city` part. A `host:port` value never matches. It then
+number and/or a `:city` or `-city` part, and an optional `@` network part (see
+[Choose a server network](#choose-a-server-network)). A `host:port` value never matches. It then
 lowercases the query and hands it to the proxy provider. Its section below gives the
 exact forms each proxy provider accepts.
 
@@ -123,14 +125,18 @@ forwarder for it. See [Control D](#control-d).
 ### Provider load order
 
 When you do a download without `--no-proxy`, unshackle instantiates every configured
-proxy provider once, in this fixed order. It uses that same order for bare-query
-resolution:
+proxy provider once. It uses that same order for bare-query resolution:
 
-**Basic → ExpressVPN → NordVPN → Proton VPN → Surfshark → Windscribe → Gluetun → Hola → Control D**
+1. Basic is always first, so your own proxies win.
+2. The other proxy providers follow in the order of their keys under `proxy_providers` in
+   `unshackle.yaml`. Proxy providers that load without a config key, such as Hola, come
+   after the listed ones in this default order:
+   **ExpressVPN → NordVPN → Proton VPN → Surfshark → Windscribe → Gluetun → Hola**
+3. Control D is always last.
 
-So if you have both Basic and NordVPN configured and use `--proxy us`, a `us` entry in
-your Basic config wins, because unshackle tries Basic first. To skip ahead to a specific
-proxy provider, prefix the query (`--proxy nordvpn:us`).
+So if you list `windscribevpn` above `nordvpn` and use `--proxy us`, a `us` entry in your
+Basic config answers first, then Windscribe. To skip ahead to a specific proxy provider,
+prefix the query (`--proxy nordvpn:us`).
 
 If a proxy provider cannot load, for example because its server list cannot be fetched
 or its config is not valid, unshackle logs a warning and continues with the other proxy
@@ -159,7 +165,59 @@ where you came out:
 - **Gluetun** reports the verified exit IP, country, and city of the container.
 - **ExpressVPN** and **Proton VPN** print a location summary such as
   `(USA - New York, #3 of 5): .214`.
+- **NordVPN** and **Windscribe** name the server, its IP, and its network, for example
+  `Using NordVPN Proxy fr1154.proxy.nordvpn.com (187.14.108.15, Datacamp Limited)`.
+  **Surfshark** prints the same line when the query has an `@` part.
 - Other proxy providers log the resolved proxy URL.
+
+### Choose a server network
+
+A VPN rents its servers from different hosting companies, and each hosting company has its own
+network. A service often blocks all the IPs of one network, so a random server in a country
+works on one run and fails on the next. NordVPN, Surfshark and Windscribe accept an `@` part after the query that keeps or skips a network, or one server IP:
+
+| Query | Meaning |
+|---|---|
+| `nordvpn:ca@datacamp` | A random Canadian server on a network whose name contains `datacamp`. |
+| `nordvpn:ca@-datacamp` | A random Canadian server on any other network. |
+| `windscribevpn:fr:paris@m247` | A random Paris server on an M247 network. |
+| `nordvpn:fr@187.14.108.15` | The French server with that IP. Any of the three proxy providers takes an IP. |
+| `surfsharkvpn:fr-bod@-195.86.24.103` | A random Bordeaux server IP other than that one. |
+
+A network name matches without case, spaces or punctuation, and part of the name is enough.
+Read the name or IP to use from the connection line of an earlier run. To keep a server that works,
+run again with `@<ip>`. When a server is blocked, run again with `@-<name>` to skip its network.
+
+unshackle gets the network of each server IP from the Team Cymru whois service
+(`whois.cymru.com`, TCP port 43). The NordVPN and Windscribe connection line uses it too, on every run.
+If that port is blocked, a query with an `@` part fails, and the connection line shows no network
+name. unshackle tries the port once per run.
+An `@` part skips `server_map`, except on Surfshark, where it selects from the servers of
+the mapped cluster. A query that already names one server, such as `nordvpn:us1234`,
+does not accept an `@` part. An IP selector needs no whois lookup. On NordVPN it searches every server in
+the country, not only the recommended ones, so a pinned server still works when it is busy.
+
+To keep a selector for every run, put it in `server_map`. A value that starts with `-` or `@` applies
+to the region of its config key, and a value with `@` after a server name is a whole query. A selector in
+`--proxy` wins over one in `server_map`.
+
+```yaml title="unshackle.yaml"
+proxy_providers:
+  nordvpn:
+    server_map:
+      ca: -datacamp               # --proxy nordvpn:ca means nordvpn:ca@-datacamp
+  windscribevpn:
+    server_map:
+      fr:paris: "@m247"           # quote a value that starts with @
+  surfsharkvpn:
+    server_map:
+      fr: fr-bod@195.86.24.103    # always this one server
+```
+
+!!! note "Not every proxy provider"
+    Only NordVPN, Surfshark and Windscribe read the `@` part. With a bare query such as
+    `--proxy fr@datacamp`, the other proxy providers have no proxy for it, so prefix
+    the query to be sure which proxy provider answers.
 
 ### Exit check
 
@@ -175,6 +233,126 @@ the check without the IP comparison. unshackle does not compare the exit country
 because geolocation data can be out of date.
 
 Over the REST API, the server returns this failure to the client as `INVALID_PROXY`.
+
+### System proxy and environment variables
+
+`--proxy` takes priority over the `HTTP_PROXY` and `HTTPS_PROXY` environment variables
+and over the Windows system proxy. unshackle still reads a `REQUESTS_CA_BUNDLE` or
+`CURL_CA_BUNDLE` certificate bundle, so a local debugging proxy with its own certificate
+authority continues to work. Without `--proxy`, unshackle uses the system proxy.
+
+### Requests outside the proxy
+
+With a proxy active, unshackle logs a warning when service code sends a request that does
+not go through the proxy:
+
+```text
+A request to api.example.com did not go through the proxy, so api.example.com sees your own IP (EXAMPLE/__init__.py:120)
+```
+
+The host in the message sees your own IP address, and a service can treat that as proxy
+detection. The request still goes: unshackle only warns. Report the message, with the
+file and line, to the service maintainer.
+
+A request to your own machine or to your local network gives no warning. This includes a
+private IP address such as `192.168.1.50`, and a `.local`, `.lan` or `.home.arpa` host name.
+A request to the `host` of a remote CDM in `remote_cdm` also gives no warning. The CDM API
+sees your own IP, but the service does not.
+
+A `socks5://` proxy makes the DNS lookup of each host on your machine and gives no warning.
+Use `socks5h://` to make the proxy do the DNS lookups too.
+
+### Send the server's requests through your machine
+
+With `--remote`, the server sends the service requests, and they leave from the server's own
+connection. Add `--local-proxy` to send them through your machine's connection instead:
+
+```shell
+unshackle dl --remote --local-proxy EXAMPLE 81234567
+```
+
+A VPN app that covers your whole machine then also covers the server's requests, so the
+service sees your VPN's IP address. `--local-proxy` needs `--remote` (or a service with
+`remote: true`). unshackle stops if you also give `--no-proxy`, `--proxy-download` or
+`--no-proxy-download`. A proxy option from the `dl` config defaults does not count:
+`--local-proxy` turns it off for the run.
+
+Add `--proxy` to send the server's requests through a proxy that your machine connects to. The
+proxy can be on your machine, such as the local port of a VPN app or `hola-proxy`, or any value
+that `--proxy` takes, such as `ca` or `nordvpn:us`:
+
+```shell
+unshackle dl --remote --local-proxy --proxy http://127.0.0.1:8080 EXAMPLE 81234567
+```
+
+The proxy must be `http://`, `https://`, `socks5://` or `socks5h://`, with a username and
+password in the URI if it needs them. If the proxy fails, the request fails: unshackle never
+sends it from your own connection instead. Your machine still refuses a target on your own
+machine or network, and a host name that your machine resolves to a local address only.
+
+Without `--local-proxy`, a `--proxy` on `localhost` or a loopback address stops a `--remote` run
+with `--remote cannot use a proxy on this machine without --local-proxy`, because the server
+cannot reach it.
+
+#### Test it first
+
+`unshackle tunnel-test` checks the route before a real run. Add `--server <name>` to test a
+server other than the default one, and `--proxy <value>` to test the route through a proxy:
+
+```shell
+unshackle tunnel-test
+```
+
+It does three steps, and it stops at the first one that fails:
+
+1. It looks up the IP address that your machine exits from, through `--proxy` if you give one.
+2. It opens a tunnel to the server.
+3. It makes the server look up its exit IP address through the tunnel. That address must be
+   the same as in step 1, or in the same country when one lookup used IPv4 and the other IPv6.
+   It fails when the lookup left from the server's own address. It also shows how long one
+   lookup takes.
+
+#### How the tunnel works
+
+1. The client opens a WebSocket on the server, on the same host and port as the other
+   remote session requests. Only a client opens a tunnel. The server never connects to
+   a host for a client, so a tunnel gives no access to the server's network.
+2. The server gives the service a SOCKS5 proxy on its loopback address, with a username and
+   password for that tunnel only. Another API key cannot use it.
+3. The server sends each connection that the service opens through the tunnel. The client
+   connects to the host and relays the bytes.
+
+The client logs `The server sends its requests through your connection on this machine`. You
+do not configure ports: the server picks a free one, and your
+machine opens none, because the client opens the connection to the server. A NAT router, a
+firewall, or a Cloudflare tunnel in front of the server does not stop it.
+
+The service traffic stays encrypted from the server to the service, so the client relays only
+encrypted bytes. The client refuses to connect to `localhost`, and to a host name that resolves
+only to an address on your machine or local network: loopback, private, link-local, CGNAT
+(`100.64.0.0/10`) or multicast. An IP address that the server sends must also be public, and
+the client closes a connection that reaches one of its own addresses. Other devices on your
+network that have a public IPv6 address, and your router's public address, are not blocked.
+
+Some VPN and proxy apps answer a host name with a synthetic address, for example fake-IP DNS in
+TUN mode (`198.18.0.0/15`), and map it back to the real host. The client accepts any such
+address for a host name, so `--local-proxy` works with these apps. The client cannot see the
+real address behind a synthetic one, so it cannot stop a host name that points into your local
+network.
+
+!!! note "Each request crosses the tunnel twice"
+    A request from the server goes to your machine and then to the service, so it takes
+    longer than a request that the server sends directly. The segments do not go through the
+    tunnel: the client downloads them as before.
+
+A service that uses a server account does not work with `--local-proxy`, because the server
+logs in with its own account. If the tunnel drops, the client connects again, and a new request
+from the server waits up to 10 seconds for it. A request that was in progress when the tunnel
+dropped fails. The server closes a tunnel when its client has not connected for 60 seconds, and
+the client then stops with `The tunnel to the server closed`. A client that exits closes its
+tunnel at once. An API key can have 4 tunnels open at once (4 for each person on a key with
+`shared: true`, see [services configuration](../reference/configuration/services.md)). A fifth run waits for a free
+tunnel and tries again every 15 seconds, for one hour at most.
 
 ## Basic (static proxies)
 
@@ -260,7 +438,8 @@ run. Give `profile` and `resolver` only to use a profile that you made yourself 
 [How unshackle chooses a profile](#how-unshackle-chooses-a-profile)).
 
 The returned proxy is HTTP on loopback,
-`http://127.0.0.1:{port}`. The locations themselves are read from Control D at startup
+`http://127.0.0.1:{port}`. The log shows the location and a masked resolver ID, for example
+`Using ControlD Proxy (YUL - Montreal): abcd***@dns.controld.com`. The locations themselves are read from Control D at startup
 (107 of them across 68 countries, at the time of writing), so there is nothing to list:
 
 | Query | Meaning |
@@ -363,11 +542,18 @@ it next needs them.
 
 ### Troubleshooting Control D
 
+When the forwarder cannot connect to a host, it answers `502 Bad Gateway` and gives the reason in brackets.
+Python-Requests shows it as `Tunnel connection failed: 502 Bad Gateway (<reason>)`. The forwarder also logs
+each reason once as a warning, `Could not reach <host>:<port>: <reason>`, because some HTTP clients do not
+show the reason.
+
 | Symptom | Cause and fix |
 |---|---|
 | `Proxy check failed`, because the exit IP is your own IP. | The profile does not redirect. Make sure that the plan includes traffic redirection (*Full Control*, not *Some Control*). After a region change, wait for the TTL of the previous answer to end. |
-| A `502 Bad Gateway` for one host. With `-d`, the log shows `Control D returned no A record for …`. | Control D gave no IPv4 address for that host. |
-| A `502 Bad Gateway` for one host only. With `-d`, the log shows `Refused …, an address that Control D cannot redirect`. | The request names the host by IP address. The forwarder refuses it. See the note on IPv4 above. |
+| `502 Bad Gateway (Control D returned no A record for …)` | Control D gave no IPv4 address for that host. |
+| `502 Bad Gateway (an IP address skips Control D's DNS …)` | The request names the host by IP address. The forwarder refuses it. See the note on IPv4 above. |
+| `502 Bad Gateway (Control D sent … to …, which did not answer: …)` | Control D gave an address for the host, but the connection to that address failed. This is usually a temporary fault on Control D's network. Try again, or use `--no-proxy-download` to download without the proxy. |
+| `502 Bad Gateway (Control D DNS timed out)`, `(Control D DNS could not be reached …)` or `(Control D DNS answered HTTP …)` | unshackle got no answer from Control D's DNS at `dns.controld.com`. Check the network connection of this machine. |
 | An HTTP `401` or `403` from `api.controld.com`. | The token is a *Read* token, or its *Allowed IPs* do not include this machine. Use a *Write* token. |
 | `Control D needs both a profile and a resolver` or `Control D needs max_profiles of 1 or more` at startup. | The `controld` config is not valid. Give `profile` and `resolver` together, and a `max_profiles` of 1 or more. Every run fails until you correct it, also a run that does not use Control D. |
 | `Could not read Control D's locations`. | unshackle could not get the location list. It tries again at the next Control D query. |
@@ -396,8 +582,7 @@ in unshackle itself.
 
 !!! warning "Docker is required"
     Gluetun needs a working [Docker](https://docs.docker.com/get-docker/) installation on
-    your `PATH`. If Docker is not found, the proxy provider fails to load with an error linking
-    to the install docs. The container also needs the `NET_ADMIN` capability and access
+    your `PATH`. If Docker is not found, the proxy provider fails to load. The container also needs the `NET_ADMIN` capability and access
     to `/dev/net/tun` to bring up the tunnel. unshackle requests both automatically.
 
 ### Query format
@@ -480,6 +665,7 @@ proxy_providers:
     - `surfshark`, `mullvad`, and `ivpn` also require `addresses`.
     - `windscribe` additionally requires **both** `addresses` and `preshared_key`
       (`preshared_key` may be an empty string, but the config key must be present).
+      Get both from the [Windscribe WireGuard config generator](https://windscribe.com/getconfig/wireguard).
     - NordVPN and Proton VPN need only `private_key`.
 
 === "OpenVPN"
@@ -647,7 +833,8 @@ combined username and password must be exactly 48 alphanumeric characters (case-
 the username must not contain an `@`. If validation fails, you have almost certainly used
 your login credentials instead of your service credentials.
 
-`server_map` is optional and maps a region (or `code:city`) to a pinned NordVPN server ID.
+`server_map` is optional and maps a region (or `code:city`) to a pinned NordVPN server ID, or to a
+selector (see [Choose a server network](#choose-a-server-network)).
 Its main use is to tune performance: for a given streaming service one specific server
 often performs noticeably better than NordVPN's recommended pick. So you can hard-code
 that server for a day or two as a workaround, until it degrades and you swap in another.
@@ -665,6 +852,7 @@ that server for a day or two as a workaround, until it degrades and you swap in 
 | `us1234` | The specific server `us1234`. |
 | `nordvpn:us:seattle` | A recommended server in Seattle. |
 | `228` | A NordVPN numeric country ID. |
+| `nordvpn:us@-datacamp` | A recommended US server that is not on a Datacamp network. See [Choose a server network](#choose-a-server-network). |
 
 The returned proxy is HTTPS on **port 89** (NordVPN disabled its plain-HTTP proxies on
 port 80 in 2021).
@@ -787,7 +975,8 @@ proxy_providers:
 
 **Required keys:** `username`, `password`, validated with the same 48-character rule as
 NordVPN (combined username+password must be 48 alphanumeric characters, case-insensitive, no `@`).
-`server_map` optionally pins a server per region. Give the server name from Surfshark's
+`server_map` optionally pins a server per region, or holds a selector (see
+[Choose a server network](#choose-a-server-network)). Give the server name from Surfshark's
 server list, for example `us-dal`. A full hostname such as `us-dal.prod.surfshark.com` also
 works. Surfshark does not use numeric server IDs. unshackle ignores a numeric or empty value
 and logs a warning. A `us:seattle` entry applies only to that city query, and it does not
@@ -800,6 +989,8 @@ fall back to the `us` entry.
 | `surfsharkvpn:us` | A random US server. `uk` and `gb` both give a UK server. |
 | `surfsharkvpn:us-bos` | A specific server from Surfshark's server list. |
 | `surfsharkvpn:us:seattle` | A random server in Seattle. |
+| `surfsharkvpn:fr-bod@datacamp` | A random Bordeaux server IP on a Datacamp network. See [Choose a server network](#choose-a-server-network). |
+| `surfsharkvpn:fr-bod@195.86.24.103` | The server at that IP, in the `fr-bod` cluster. |
 
 unshackle ignores case, spaces, hyphens and accents in a city name, so `us:new-york`
 matches New York. A city also matches the start of a longer name: `de:frankfurt` matches
@@ -808,6 +999,18 @@ proxy provider earlier in the order, and a bare `us:seattle` does not work, so u
 `surfsharkvpn:` prefix for those forms.
 
 The returned proxy is HTTPS on **port 443**.
+
+A Surfshark server name such as `fr-bod` is a cluster: its DNS name points at many server
+IPs, and each connection can go to a different one. Surfshark publishes no name for each server, so
+unshackle lists the IPs of a cluster from its nameserver. With an `@` part, unshackle connects to one
+of those IPs through a local port on `127.0.0.1`. That port checks the server certificate against the
+cluster name, so your credentials go only to a real Surfshark server. The connection line shows the
+IP, so you can pin a server that works with `@<ip>`. Surfshark changes its server IPs from time to
+time, and a pinned IP can stop working.
+
+With `--remote`, the client sends a Surfshark query with an `@` part to the server as you typed it,
+because the local port is on your machine. The server then selects and pins the server with its own
+Surfshark configuration. This needs the `server_proxy` grant on your API key.
 
 ## Windscribe
 
@@ -825,7 +1028,8 @@ proxy_providers:
       us:seattle: us-seattle.totallyacdn.com
 ```
 
-**Required keys:** `username`, `password`. `server_map` optionally maps a region (or
+**Required keys:** `username`, `password`. `server_map` optionally takes a selector (see
+[Choose a server network](#choose-a-server-network)), or maps a region (or
 `region:city`) directly to a hostname.
 
 **Query forms:**
@@ -835,6 +1039,7 @@ proxy_providers:
 | `us` | A random US server. |
 | `us150` / `sg007` | A specific numbered server. |
 | `windscribevpn:us:seattle` | A random server in Seattle. |
+| `windscribevpn:fr@-datacamp` | A random French server that is not on a Datacamp network. See [Choose a server network](#choose-a-server-network). |
 
 The returned proxy is HTTPS on **port 443**.
 
@@ -847,34 +1052,42 @@ The returned proxy is HTTPS on **port 443**.
 
 ## Developer notes
 
-!!! note "Two resolution paths (developers)"
-    unshackle has **two** proxy-resolution code paths that are intentionally not
-    identical:
-
-    - `unshackle/commands/dl.py` inlines its own logic and loads **all nine** providers,
-      including Windscribe and Gluetun.
-    - `unshackle/core/proxies/resolve.py::initialize_proxy_providers()` is the shared
-      resolver used by the REST API handlers and the remote-service client. It **omits**
-      Windscribe and Gluetun.
-
-    Both paths accept the same query grammar (a direct URI, a `provider:query`, a bare
-    country query tried against providers in order, or a `controld://` resolver), but the
-    set of available providers differs. Keep this in mind when you add a proxy provider:
-    an entry in `dl.py` does not make it available over the API, and the opposite is also
-    true.
+!!! note "One resolution path (developers)"
+    `dl`, `search`, the REST API handlers and the remote-service client all load proxy
+    providers through `load_proxy_providers()` in `unshackle/core/proxies/resolve.py`.
+    The REST API and the remote-service client call it through
+    `initialize_proxy_providers()`, which leaves out Gluetun because Gluetun starts a
+    local Docker container. All paths accept the same query grammar: a direct URI, a
+    `provider:query`, a bare query tried against providers in order, or a `controld://`
+    resolver.
 
     The remote-service client resolves `--proxy` with its own
     `resolve_remote_proxy_arg()`. It changes a `controld:` query to a `controld://`
     resolver for the server with `get_remote_proxy()`, and it removes Control D from a bare
     query, because a loopback forwarder is of no use to a server on another machine.
 
+!!! note "Keeping service requests on the proxy (developers)"
+    `unshackle/core/utils/run_proxy.py` holds the proxy rules for service traffic:
+
+    - `pin(session)` stops environment and system proxies from overriding the proxy of a
+      requests HTTP session, and keeps the environment CA bundle. Call it on each requests
+      HTTP session that gets a proxy.
+    - `fallback_session()` gives a core helper with no HTTP session (a manifest parser, a DRM
+      class) a session on the proxy of the service that called it.
+    - An audit hook on `socket.getaddrinfo` and on `socket.connect` to a host name, and a
+      check in `RnetSession.request`, warn about requests from service code that do not use
+      the proxy. A service sets
+      `proxy_exempt = True` on an HTTP session that goes direct on purpose.
+
 !!! note "Implementing a new provider (developers)"
     Every proxy provider subclasses `unshackle.core.proxies.proxy.Proxy` and has three
     methods:
 
     - `__init__(self, **kwargs)` receives its `proxy_providers` sub-dict splatted as
-      keyword arguments, so YAML keys map 1:1 to constructor parameters. Do authentication
-      and catalogue pre-fetching here.
+      keyword arguments, so YAML keys map 1:1 to constructor parameters. Check the
+      configuration here, but make no request: every `dl` run builds every configured
+      proxy provider, even for a run with no proxy. Read the server or location catalogue
+      through a `functools.cached_property`, so the first query fetches it.
     - `__repr__(self)` is a human summary, conventionally `"{n} Countries ({m} Servers)"`.
     - `get_proxy(self, query)` returns a Requests-compatible proxy URI, or `None` only
       when the query was valid but no proxy exists. Raise on genuine errors or bad queries.

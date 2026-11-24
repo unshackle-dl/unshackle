@@ -22,7 +22,7 @@ SERVED = [
 
 
 def _make(name: str) -> click.Command:
-    return Services.make_remote_command(name, ctx=click.Context(click.Command("dl")))
+    return Services.make_remote_command(name, None)
 
 
 def test_unknown_name_raises_with_typed_name_and_available_list() -> None:

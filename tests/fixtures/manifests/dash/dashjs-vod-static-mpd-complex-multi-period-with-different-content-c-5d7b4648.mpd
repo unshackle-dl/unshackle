@@ -1,0 +1,630 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<!--Created with Axinom.MediaProcessing.Glue v1.0.0-001082-662119b-->
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011" minBufferTime="PT1.500S" type="static" mediaPresentationDuration="PT26M42.09S" maxSegmentDuration="PT0H0M4.011S" profiles="urn:mpeg:dash:profile:isoff-live:2011,http://dashif.org/guidelines/dash264">
+  <Period duration="PT12M14.08S">
+    <!--
+Version information:
+Axinom.MediaProcessing.Makemedia v3.1.0-001088-f129956 targeting General Purpose Media Format specification v8
+ffmpeg version N-86383-g4705edb Copyright (c) 2000-2017 the FFmpeg developers
+x265 [info]: HEVC encoder version 2.4+14-bc0e9bd7c08f5ddc
+x264 0.150.2833 df79067
+MP4Box - GPAC version 0.7.2-DEV-rev133-g732afbe-master
+MediaInfoLib - v0.7.96
+AAC Package version:    1.5.4.0
+-->
+    <AdaptationSet segmentAlignment="true" group="1" maxWidth="4860" maxHeight="2160" maxFrameRate="24" par="648:288" lang="und" selectionPriority="0">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main" />
+      <SegmentTemplate timescale="24" media="Period01/$RepresentationID$/$Number%04d$.m4s" startNumber="1" duration="96" initialization="Period01/$RepresentationID$/init.mp4" />
+      <Representation id="1" mimeType="video/mp4" codecs="avc1.64001F" width="648" height="288" frameRate="24" sar="1:1" startWithSAP="1" bandwidth="384873"></Representation>
+      <Representation id="2" mimeType="video/mp4" codecs="avc1.640020" width="808" height="360" frameRate="24" sar="405:404" startWithSAP="1" bandwidth="757757"></Representation>
+      <Representation id="3" mimeType="video/mp4" codecs="avc1.640028" width="1080" height="480" frameRate="24" sar="1:1" startWithSAP="1" bandwidth="1099116"></Representation>
+      <Representation id="4" mimeType="video/mp4" codecs="avc1.640032" width="1620" height="720" frameRate="24" sar="1:1" startWithSAP="1" bandwidth="1857149"></Representation>
+      <Representation id="5" mimeType="video/mp4" codecs="avc1.640033" width="2432" height="1080" frameRate="24" sar="1215:1216" startWithSAP="1" bandwidth="2529934"></Representation>
+      <Representation id="6" mimeType="video/mp4" codecs="avc1.640034" width="3240" height="1440" frameRate="24" sar="1:1" startWithSAP="1" bandwidth="3679343"></Representation>
+      <Representation id="7" mimeType="video/mp4" codecs="avc1.640034" width="4860" height="2160" frameRate="24" sar="1:1" startWithSAP="1" bandwidth="4670638"></Representation>
+    </AdaptationSet>
+    <AdaptationSet segmentAlignment="true" group="1" maxWidth="4860" maxHeight="2160" maxFrameRate="1200000/49997" par="648:288" lang="und">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main" />
+      <SegmentTemplate timescale="1200000" media="Period01/$RepresentationID$/$Number%04d$.m4s" startNumber="1" duration="4800038" initialization="Period01/$RepresentationID$/init.mp4" />
+      <Representation id="8" mimeType="video/mp4" codecs="hev1.2.4.L63.90" width="648" height="288" frameRate="24" sar="1:1" startWithSAP="1" bandwidth="395872"></Representation>
+      <Representation id="9" mimeType="video/mp4" codecs="hev1.2.4.L90.90" width="808" height="360" frameRate="24" sar="405:404" startWithSAP="1" bandwidth="689768"></Representation>
+      <Representation id="10" mimeType="video/mp4" codecs="hev1.2.4.L90.90" width="1080" height="480" frameRate="24" sar="1:1" startWithSAP="1" bandwidth="885100"></Representation>
+      <Representation id="11" mimeType="video/mp4" codecs="hev1.2.4.L120.90" width="1620" height="720" frameRate="24" sar="1:1" startWithSAP="1" bandwidth="1476540"></Representation>
+      <Representation id="12" mimeType="video/mp4" codecs="hev1.2.4.L150.90" width="2432" height="1080" frameRate="24" sar="1215:1216" startWithSAP="1" bandwidth="1969646"></Representation>
+      <Representation id="13" mimeType="video/mp4" codecs="hev1.2.4.L150.90" width="3240" height="1440" frameRate="24" sar="1:1" startWithSAP="1" bandwidth="2951267"></Representation>
+      <Representation id="14" mimeType="video/mp4" codecs="hev1.2.4.L180.90" width="4860" height="2160" frameRate="24" sar="1:1" startWithSAP="1" bandwidth="4428868"></Representation>
+    </AdaptationSet>
+    <AdaptationSet segmentAlignment="true" group="2" lang="en" selectionPriority="0">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main" />
+      <SegmentTemplate timescale="24000" media="Period01/$RepresentationID$/$Number%04d$.m4s" startNumber="1" duration="95232" initialization="Period01/$RepresentationID$/init.mp4" />
+      <Representation id="15" mimeType="audio/mp4" codecs="mp4a.40.29" audioSamplingRate="48000" startWithSAP="1" bandwidth="65104">
+        <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="1" />
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet segmentAlignment="true" group="2" lang="en-x-high">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main" />
+      <SegmentTemplate timescale="24000" media="Period01/$RepresentationID$/$Number%04d$.m4s" startNumber="1" duration="95232" initialization="Period01/$RepresentationID$/init.mp4" />
+      <Representation id="16" mimeType="audio/mp4" codecs="mp4a.40.29" audioSamplingRate="48000" startWithSAP="1" bandwidth="65104">
+        <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="1" />
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet segmentAlignment="true" group="2" lang="en-x-low">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main" />
+      <SegmentTemplate timescale="24000" media="Period01/$RepresentationID$/$Number%04d$.m4s" startNumber="1" duration="95232" initialization="Period01/$RepresentationID$/init.mp4" />
+      <Representation id="17" mimeType="audio/mp4" codecs="mp4a.40.29" audioSamplingRate="48000" startWithSAP="1" bandwidth="65104">
+        <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="1" />
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet segmentAlignment="true" group="2" lang="x-popmusic">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main" />
+      <SegmentTemplate timescale="24000" media="Period01/$RepresentationID$/$Number%04d$.m4s" startNumber="1" duration="95232" initialization="Period01/$RepresentationID$/init.mp4" />
+      <Representation id="18" mimeType="audio/mp4" codecs="mp4a.40.29" audioSamplingRate="48000" startWithSAP="1" bandwidth="65104">
+        <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="1" />
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet segmentAlignment="true" group="3" lang="zh-cmn" selectionPriority="0">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main" />
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="subtitle" />
+      <SegmentTemplate timescale="1000" media="Period01/$RepresentationID$/$Number%04d$.m4s" startNumber="1" duration="3917" initialization="Period01/$RepresentationID$/init.mp4" />
+      <Representation id="19" mimeType="application/mp4" codecs="wvtt" startWithSAP="1" bandwidth="441"></Representation>
+    </AdaptationSet>
+    <AdaptationSet segmentAlignment="true" group="3" lang="zh-cmn">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main" />
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="subtitle" />
+      <SegmentTemplate timescale="1000" media="Period01/$RepresentationID$/$Number%04d$.m4s" startNumber="1" duration="3965" initialization="Period01/$RepresentationID$/init.mp4" />
+      <Representation id="20" mimeType="application/mp4" codecs="stpp" startWithSAP="1" bandwidth="1126"></Representation>
+    </AdaptationSet>
+    <AdaptationSet segmentAlignment="true" group="3" lang="ru">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main" />
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="subtitle" />
+      <SegmentTemplate timescale="1000" media="Period01/$RepresentationID$/$Number%04d$.m4s" startNumber="1" duration="3917" initialization="Period01/$RepresentationID$/init.mp4" />
+      <Representation id="21" mimeType="application/mp4" codecs="wvtt" startWithSAP="1" bandwidth="459"></Representation>
+    </AdaptationSet>
+    <AdaptationSet segmentAlignment="true" group="3" lang="ru">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main" />
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="subtitle" />
+      <SegmentTemplate timescale="1000" media="Period01/$RepresentationID$/$Number%04d$.m4s" startNumber="1" duration="3965" initialization="Period01/$RepresentationID$/init.mp4" />
+      <Representation id="22" mimeType="application/mp4" codecs="stpp" startWithSAP="1" bandwidth="1168"></Representation>
+    </AdaptationSet>
+    <AdaptationSet segmentAlignment="true" group="3" lang="en">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main" />
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="subtitle" />
+      <SegmentTemplate timescale="1000" media="Period01/$RepresentationID$/$Number%04d$.m4s" startNumber="1" duration="3917" initialization="Period01/$RepresentationID$/init.mp4" />
+      <Representation id="23" mimeType="application/mp4" codecs="wvtt" startWithSAP="1" bandwidth="441"></Representation>
+    </AdaptationSet>
+    <AdaptationSet segmentAlignment="true" group="3" lang="en">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main" />
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="subtitle" />
+      <SegmentTemplate timescale="1000" media="Period01/$RepresentationID$/$Number%04d$.m4s" startNumber="1" duration="3965" initialization="Period01/$RepresentationID$/init.mp4" />
+      <Representation id="24" mimeType="application/mp4" codecs="stpp" startWithSAP="1" bandwidth="1119"></Representation>
+    </AdaptationSet>
+    <AdaptationSet segmentAlignment="true" group="3" lang="es">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main" />
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="subtitle" />
+      <SegmentTemplate timescale="1000" media="Period01/$RepresentationID$/$Number%04d$.m4s" startNumber="1" duration="3917" initialization="Period01/$RepresentationID$/init.mp4" />
+      <Representation id="25" mimeType="application/mp4" codecs="wvtt" startWithSAP="1" bandwidth="443"></Representation>
+    </AdaptationSet>
+    <AdaptationSet segmentAlignment="true" group="3" lang="es">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main" />
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="subtitle" />
+      <SegmentTemplate timescale="1000" media="Period01/$RepresentationID$/$Number%04d$.m4s" startNumber="1" duration="3965" initialization="Period01/$RepresentationID$/init.mp4" />
+      <Representation id="26" mimeType="application/mp4" codecs="stpp" startWithSAP="1" bandwidth="1127"></Representation>
+    </AdaptationSet>
+    <AdaptationSet segmentAlignment="true" group="3" lang="nl-NL">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main" />
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="subtitle" />
+      <SegmentTemplate timescale="1000" media="Period01/$RepresentationID$/$Number%04d$.m4s" startNumber="1" duration="3896" initialization="Period01/$RepresentationID$/init.mp4" />
+      <Representation id="27" mimeType="application/mp4" codecs="wvtt" startWithSAP="1" bandwidth="443"></Representation>
+    </AdaptationSet>
+    <AdaptationSet segmentAlignment="true" group="3" lang="nl-NL">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main" />
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="subtitle" />
+      <SegmentTemplate timescale="1000" media="Period01/$RepresentationID$/$Number%04d$.m4s" startNumber="1" duration="3965" initialization="Period01/$RepresentationID$/init.mp4" />
+      <Representation id="28" mimeType="application/mp4" codecs="stpp" startWithSAP="1" bandwidth="1123"></Representation>
+    </AdaptationSet>
+    <AdaptationSet segmentAlignment="true" lang="x-complex" group="3" selectionPriority="0">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main" />
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="subtitle" />
+      <SegmentTemplate timescale="1000" media="Period01/$RepresentationID$/$Number%04d$.m4s" startNumber="1" duration="4000" initialization="Period01/$RepresentationID$/init.mp4" />
+      <Representation id="29" mimeType="application/mp4" codecs="wvtt" startWithSAP="1" bandwidth="392"></Representation>
+    </AdaptationSet>
+    <AdaptationSet segmentAlignment="true" lang="x-complex" group="3">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main" />
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="subtitle" />
+      <SegmentTemplate timescale="1000" media="Period01/$RepresentationID$/$Number%04d$.m4s" startNumber="1" duration="4000" initialization="Period01/$RepresentationID$/init.mp4" />
+      <Representation id="30" mimeType="application/mp4" codecs="stpp" startWithSAP="1" bandwidth="966"></Representation>
+    </AdaptationSet>
+  </Period>
+  <Period duration="PT0H0M30.123S">
+    <!--
+Version information:
+Axinom.MediaProcessing.Makemedia v3.1.0-001088-f129956 targeting General Purpose Media Format specification v8
+ffmpeg version N-86383-g4705edb Copyright (c) 2000-2017 the FFmpeg developers
+x265 [info]: HEVC encoder version 2.4+14-bc0e9bd7c08f5ddc
+x264 0.150.2833 df79067
+MP4Box - GPAC version 0.7.2-DEV-rev133-g732afbe-master
+MediaInfoLib - v0.7.96
+AAC Package version:    1.5.4.0
+-->
+    <AdaptationSet segmentAlignment="true" group="1" maxWidth="2880" maxHeight="2160" maxFrameRate="25" par="4:3" lang="und" selectionPriority="0">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main" />
+      <SegmentTemplate timescale="25" media="Period02/$RepresentationID$/$Number%04d$.m4s" startNumber="1" duration="100" initialization="Period02/$RepresentationID$/init.mp4" />
+      <Representation id="1" mimeType="video/mp4" codecs="avc1.640016" width="384" height="288" frameRate="25" sar="1:1" startWithSAP="1" bandwidth="396380"></Representation>
+      <Representation id="2" mimeType="video/mp4" codecs="avc1.64001F" width="480" height="360" frameRate="25" sar="1:1" startWithSAP="1" bandwidth="773729"></Representation>
+      <Representation id="3" mimeType="video/mp4" codecs="avc1.640020" width="640" height="480" frameRate="25" sar="1:1" startWithSAP="1" bandwidth="1133686"></Representation>
+      <Representation id="4" mimeType="video/mp4" codecs="avc1.640032" width="960" height="720" frameRate="25" sar="1:1" startWithSAP="1" bandwidth="1976128"></Representation>
+      <Representation id="5" mimeType="video/mp4" codecs="avc1.640032" width="1440" height="1080" frameRate="25" sar="1:1" startWithSAP="1" bandwidth="2784858"></Representation>
+      <Representation id="6" mimeType="video/mp4" codecs="avc1.640033" width="1920" height="1440" frameRate="25" sar="1:1" startWithSAP="1" bandwidth="4216182"></Representation>
+      <Representation id="7" mimeType="video/mp4" codecs="avc1.640034" width="2880" height="2160" frameRate="25" sar="1:1" startWithSAP="1" bandwidth="5400602"></Representation>
+    </AdaptationSet>
+    <AdaptationSet segmentAlignment="true" group="1" maxWidth="2880" maxHeight="2160" maxFrameRate="1200000/47935" par="4:3" lang="und">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main" />
+      <SegmentTemplate timescale="1200000" media="Period02/$RepresentationID$/$Number%04d$.m4s" startNumber="1" duration="4800000" initialization="Period02/$RepresentationID$/init.mp4" />
+      <Representation id="8" mimeType="video/mp4" codecs="hev1.2.4.L60.90" width="384" height="288" frameRate="25" sar="1:1" startWithSAP="1" bandwidth="403327"></Representation>
+      <Representation id="9" mimeType="video/mp4" codecs="hev1.2.4.L63.90" width="480" height="360" frameRate="25" sar="1:1" startWithSAP="1" bandwidth="702840"></Representation>
+      <Representation id="10" mimeType="video/mp4" codecs="hev1.2.4.L90.90" width="640" height="480" frameRate="25" sar="1:1" startWithSAP="1" bandwidth="900722"></Representation>
+      <Representation id="11" mimeType="video/mp4" codecs="hev1.2.4.L93.90" width="960" height="720" frameRate="25" sar="1:1" startWithSAP="1" bandwidth="1507037"></Representation>
+      <Representation id="12" mimeType="video/mp4" codecs="hev1.2.4.L120.90" width="1440" height="1080" frameRate="25" sar="1:1" startWithSAP="1" bandwidth="2011253"></Representation>
+      <Representation id="13" mimeType="video/mp4" codecs="hev1.2.4.L150.90" width="1920" height="1440" frameRate="25" sar="1:1" startWithSAP="1" bandwidth="3015095"></Representation>
+      <Representation id="14" mimeType="video/mp4" codecs="hev1.2.4.L150.90" width="2880" height="2160" frameRate="25" sar="1:1" startWithSAP="1" bandwidth="4522029"></Representation>
+    </AdaptationSet>
+    <AdaptationSet segmentAlignment="true" group="2" lang="x-moose" selectionPriority="0">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main" />
+      <SegmentTemplate timescale="24000" media="Period02/$RepresentationID$/$Number%04d$.m4s" startNumber="1" duration="95232" initialization="Period02/$RepresentationID$/init.mp4" />
+      <Representation id="15" mimeType="audio/mp4" codecs="mp4a.40.29" audioSamplingRate="48000" startWithSAP="1" bandwidth="65482">
+        <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="1" />
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet segmentAlignment="true" group="2" lang="x-dubstep">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main" />
+      <SegmentTemplate timescale="24000" media="Period02/$RepresentationID$/$Number%04d$.m4s" startNumber="1" duration="95232" initialization="Period02/$RepresentationID$/init.mp4" />
+      <Representation id="16" mimeType="audio/mp4" codecs="mp4a.40.29" audioSamplingRate="48000" startWithSAP="1" bandwidth="65482">
+        <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="1" />
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet segmentAlignment="true" group="2" lang="x-scifi">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main" />
+      <SegmentTemplate timescale="24000" media="Period02/$RepresentationID$/$Number%04d$.m4s" startNumber="1" duration="95232" initialization="Period02/$RepresentationID$/init.mp4" />
+      <Representation id="17" mimeType="audio/mp4" codecs="mp4a.40.29" audioSamplingRate="48000" startWithSAP="1" bandwidth="65482">
+        <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="1" />
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet segmentAlignment="true" group="2" lang="x-popmusic">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main" />
+      <SegmentTemplate timescale="24000" media="Period02/$RepresentationID$/$Number%04d$.m4s" startNumber="1" duration="95232" initialization="Period02/$RepresentationID$/init.mp4" />
+      <Representation id="18" mimeType="audio/mp4" codecs="mp4a.40.29" audioSamplingRate="48000" startWithSAP="1" bandwidth="65482">
+        <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="1" />
+      </Representation>
+    </AdaptationSet>
+  </Period>
+  <Period duration="PT0H10M0.149S">
+    <!--
+Version information:
+Axinom.MediaProcessing.Makemedia v3.1.0-001088-f129956 targeting General Purpose Media Format specification v8
+ffmpeg version N-86383-g4705edb Copyright (c) 2000-2017 the FFmpeg developers
+x265 [info]: HEVC encoder version 2.4+14-bc0e9bd7c08f5ddc
+x264 0.150.2833 df79067
+MP4Box - GPAC version 0.7.2-DEV-rev133-g732afbe-master
+MediaInfoLib - v0.7.96
+AAC Package version:    1.5.4.0
+-->
+    <AdaptationSet segmentAlignment="true" group="1" maxWidth="548" maxHeight="288" maxFrameRate="2997/100" par="526080:276192" lang="und" selectionPriority="0">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main" />
+      <SegmentTemplate timescale="2997" media="Period03/$RepresentationID$/$Number%04d$.m4s" startNumber="1" duration="11800" initialization="Period03/$RepresentationID$/init.mp4" />
+      <Representation id="1" mimeType="video/mp4" codecs="avc1.64001F" width="548" height="288" frameRate="2997/100" sar="960:959" startWithSAP="1" bandwidth="385899"></Representation>
+    </AdaptationSet>
+    <AdaptationSet segmentAlignment="true" group="1" maxWidth="548" maxHeight="288" maxFrameRate="30000/1001" par="526080:276192" lang="und">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main" />
+      <SegmentTemplate timescale="1200000" media="Period03/$RepresentationID$/$Number%04d$.m4s" startNumber="1" duration="4724767" initialization="Period03/$RepresentationID$/init.mp4" />
+      <Representation id="2" mimeType="video/mp4" codecs="hev1.2.4.L63.90" width="548" height="288" frameRate="30000/1001" sar="960:959" startWithSAP="1" bandwidth="393912"></Representation>
+    </AdaptationSet>
+    <AdaptationSet segmentAlignment="true" group="2" lang="en" selectionPriority="0">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main" />
+      <SegmentTemplate timescale="24000" media="Period03/$RepresentationID$/$Number%04d$.m4s" startNumber="1" duration="95232" initialization="Period03/$RepresentationID$/init.mp4" />
+      <Representation id="3" mimeType="audio/mp4" codecs="mp4a.40.29" audioSamplingRate="48000" startWithSAP="1" bandwidth="65109">
+        <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="1" />
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet segmentAlignment="true" group="2" lang="es">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main" />
+      <SegmentTemplate timescale="24000" media="Period03/$RepresentationID$/$Number%04d$.m4s" startNumber="1" duration="95232" initialization="Period03/$RepresentationID$/init.mp4" />
+      <Representation id="4" mimeType="audio/mp4" codecs="mp4a.40.29" audioSamplingRate="48000" startWithSAP="1" bandwidth="65109">
+        <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="1" />
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet segmentAlignment="true" group="2" lang="x-popmusic">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main" />
+      <SegmentTemplate timescale="24000" media="Period03/$RepresentationID$/$Number%04d$.m4s" startNumber="1" duration="95232" initialization="Period03/$RepresentationID$/init.mp4" />
+      <Representation id="5" mimeType="audio/mp4" codecs="mp4a.40.29" audioSamplingRate="48000" startWithSAP="1" bandwidth="65109">
+        <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="1" />
+      </Representation>
+    </AdaptationSet>
+  </Period>
+  <Period duration="PT0H0M27.648S">
+    <!--
+Version information:
+Axinom.MediaProcessing.Makemedia v3.1.0-001088-f129956 targeting General Purpose Media Format specification v8
+ffmpeg version N-86383-g4705edb Copyright (c) 2000-2017 the FFmpeg developers
+x265 [info]: HEVC encoder version 2.4+14-bc0e9bd7c08f5ddc
+x264 0.150.2833 df79067
+MP4Box - GPAC version 0.7.2-DEV-rev133-g732afbe-master
+MediaInfoLib - v0.7.96
+AAC Package version:    1.5.4.0
+-->
+    <AdaptationSet segmentAlignment="true" group="1" maxWidth="1920" maxHeight="1080" maxFrameRate="30" par="16:9" lang="und" selectionPriority="0">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main" />
+      <SegmentTemplate timescale="30" media="Period04/$RepresentationID$/$Number%04d$.m4s" startNumber="1" duration="120" initialization="Period04/$RepresentationID$/init.mp4" />
+      <Representation id="1" mimeType="video/mp4" codecs="avc1.64001F" width="512" height="288" frameRate="30" sar="1:1" startWithSAP="1" bandwidth="411310"></Representation>
+      <Representation id="2" mimeType="video/mp4" codecs="avc1.64001F" width="640" height="360" frameRate="30" sar="1:1" startWithSAP="1" bandwidth="809421"></Representation>
+      <Representation id="3" mimeType="video/mp4" codecs="avc1.640028" width="852" height="480" frameRate="30" sar="640:639" startWithSAP="1" bandwidth="1201188"></Representation>
+      <Representation id="4" mimeType="video/mp4" codecs="avc1.640032" width="1280" height="720" frameRate="30" sar="1:1" startWithSAP="1" bandwidth="2054038"></Representation>
+      <Representation id="5" mimeType="video/mp4" codecs="avc1.640033" width="1920" height="1080" frameRate="30" sar="1:1" startWithSAP="1" bandwidth="2870062"></Representation>
+    </AdaptationSet>
+    <AdaptationSet segmentAlignment="true" group="1" maxWidth="1920" maxHeight="1080" maxFrameRate="1200000/39950" par="16:9" lang="und">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main" />
+      <SegmentTemplate timescale="1200000" media="Period04/$RepresentationID$/$Number%04d$.m4s" startNumber="1" duration="4799952" initialization="Period04/$RepresentationID$/init.mp4" />
+      <Representation id="6" mimeType="video/mp4" codecs="hev1.2.4.L63.90" width="512" height="288" frameRate="30" sar="1:1" startWithSAP="1" bandwidth="408468"></Representation>
+      <Representation id="7" mimeType="video/mp4" codecs="hev1.2.4.L63.90" width="640" height="360" frameRate="30" sar="1:1" startWithSAP="1" bandwidth="714616"></Representation>
+      <Representation id="8" mimeType="video/mp4" codecs="hev1.2.4.L90.90" width="852" height="480" frameRate="30" sar="640:639" startWithSAP="1" bandwidth="924982"></Representation>
+      <Representation id="9" mimeType="video/mp4" codecs="hev1.2.4.L93.90" width="1280" height="720" frameRate="30" sar="1:1" startWithSAP="1" bandwidth="1534338"></Representation>
+      <Representation id="10" mimeType="video/mp4" codecs="hev1.2.4.L120.90" width="1920" height="1080" frameRate="30" sar="1:1" startWithSAP="1" bandwidth="2043308"></Representation>
+    </AdaptationSet>
+    <AdaptationSet segmentAlignment="true" group="2" lang="x-dance" selectionPriority="0">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main" />
+      <SegmentTemplate timescale="24000" media="Period04/$RepresentationID$/$Number%04d$.m4s" startNumber="1" duration="95232" initialization="Period04/$RepresentationID$/init.mp4" />
+      <Representation id="11" mimeType="audio/mp4" codecs="mp4a.40.29" audioSamplingRate="48000" startWithSAP="1" bandwidth="65499">
+        <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="1" />
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet segmentAlignment="true" group="2" lang="x-popmusic">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main" />
+      <SegmentTemplate timescale="24000" media="Period04/$RepresentationID$/$Number%04d$.m4s" startNumber="1" duration="95232" initialization="Period04/$RepresentationID$/init.mp4" />
+      <Representation id="12" mimeType="audio/mp4" codecs="mp4a.40.29" audioSamplingRate="48000" startWithSAP="1" bandwidth="65500">
+        <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="1" />
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet segmentAlignment="true" lang="nl-NL" group="3" selectionPriority="0">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main" />
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="subtitle" />
+      <SegmentTemplate timescale="1000" media="Period04/$RepresentationID$/$Number%04d$.m4s" startNumber="1" duration="4000" initialization="Period04/$RepresentationID$/init.mp4" />
+      <Representation id="13" mimeType="application/mp4" codecs="wvtt" startWithSAP="1" bandwidth="649"></Representation>
+    </AdaptationSet>
+    <AdaptationSet segmentAlignment="true" lang="nl-NL" group="3">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main" />
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="subtitle" />
+      <SegmentTemplate timescale="1000" media="Period04/$RepresentationID$/$Number%04d$.m4s" startNumber="1" duration="4000" initialization="Period04/$RepresentationID$/init.mp4" />
+      <Representation id="14" mimeType="application/mp4" codecs="stpp" startWithSAP="1" bandwidth="1289"></Representation>
+    </AdaptationSet>
+  </Period>
+  <Period duration="PT0H2M30.187S">
+    <!--
+Version information:
+Axinom.MediaProcessing.Makemedia v3.1.0-001088-f129956 targeting General Purpose Media Format specification v8
+ffmpeg version N-86383-g4705edb Copyright (c) 2000-2017 the FFmpeg developers
+x265 [info]: HEVC encoder version 2.4+14-bc0e9bd7c08f5ddc
+x264 0.150.2833 df79067
+MP4Box - GPAC version 0.7.2-DEV-rev133-g732afbe-master
+MediaInfoLib - v0.7.96
+AAC Package version:    1.5.4.0
+-->
+    <AdaptationSet segmentAlignment="true" group="1" maxWidth="1920" maxHeight="1080" maxFrameRate="24" par="16:9" lang="und" selectionPriority="0">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main" />
+      <SegmentTemplate timescale="24" media="Period05/$RepresentationID$/$Number%04d$.m4s" startNumber="1" duration="96" initialization="Period05/$RepresentationID$/init.mp4" />
+      <Representation id="1" mimeType="video/mp4" codecs="avc1.64001F" width="512" height="288" frameRate="24" sar="1:1" startWithSAP="1" bandwidth="395882"></Representation>
+      <Representation id="2" mimeType="video/mp4" codecs="avc1.64001F" width="640" height="360" frameRate="24" sar="1:1" startWithSAP="1" bandwidth="784587"></Representation>
+      <Representation id="3" mimeType="video/mp4" codecs="avc1.640028" width="852" height="480" frameRate="24" sar="640:639" startWithSAP="1" bandwidth="1167437"></Representation>
+      <Representation id="4" mimeType="video/mp4" codecs="avc1.640032" width="1280" height="720" frameRate="24" sar="1:1" startWithSAP="1" bandwidth="1986884"></Representation>
+      <Representation id="5" mimeType="video/mp4" codecs="avc1.640033" width="1920" height="1080" frameRate="24" sar="1:1" startWithSAP="1" bandwidth="2838970"></Representation>
+    </AdaptationSet>
+    <AdaptationSet segmentAlignment="true" group="1" maxWidth="1920" maxHeight="1080" maxFrameRate="1200000/49986" par="16:9" lang="und">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main" />
+      <SegmentTemplate timescale="1200000" media="Period05/$RepresentationID$/$Number%04d$.m4s" startNumber="1" duration="4800038" initialization="Period05/$RepresentationID$/init.mp4" />
+      <Representation id="6" mimeType="video/mp4" codecs="hev1.2.4.L63.90" width="512" height="288" frameRate="24" sar="1:1" startWithSAP="1" bandwidth="396385"></Representation>
+      <Representation id="7" mimeType="video/mp4" codecs="hev1.2.4.L63.90" width="640" height="360" frameRate="24" sar="1:1" startWithSAP="1" bandwidth="691208"></Representation>
+      <Representation id="8" mimeType="video/mp4" codecs="hev1.2.4.L90.90" width="852" height="480" frameRate="24" sar="640:639" startWithSAP="1" bandwidth="892462"></Representation>
+      <Representation id="9" mimeType="video/mp4" codecs="hev1.2.4.L93.90" width="1280" height="720" frameRate="24" sar="1:1" startWithSAP="1" bandwidth="1484673"></Representation>
+      <Representation id="10" mimeType="video/mp4" codecs="hev1.2.4.L120.90" width="1920" height="1080" frameRate="24" sar="1:1" startWithSAP="1" bandwidth="1990249"></Representation>
+    </AdaptationSet>
+    <AdaptationSet segmentAlignment="true" group="2" lang="zxx" selectionPriority="0">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main" />
+      <SegmentTemplate timescale="24000" media="Period05/$RepresentationID$/$Number%04d$.m4s" startNumber="1" duration="95232" initialization="Period05/$RepresentationID$/init.mp4" />
+      <Representation id="11" mimeType="audio/mp4" codecs="mp4a.40.29" audioSamplingRate="48000" startWithSAP="1" bandwidth="65164">
+        <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="1" />
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet segmentAlignment="true" group="2" lang="x-popmusic">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main" />
+      <SegmentTemplate timescale="24000" media="Period05/$RepresentationID$/$Number%04d$.m4s" startNumber="1" duration="95232" initialization="Period05/$RepresentationID$/init.mp4" />
+      <Representation id="12" mimeType="audio/mp4" codecs="mp4a.40.29" audioSamplingRate="48000" startWithSAP="1" bandwidth="65165">
+        <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="1" />
+      </Representation>
+    </AdaptationSet>
+  </Period>
+  <Period duration="PT0H0M19.157S">
+    <!--
+Version information:
+Axinom.MediaProcessing.Makemedia v3.1.0-001088-f129956 targeting General Purpose Media Format specification v8
+ffmpeg version N-86383-g4705edb Copyright (c) 2000-2017 the FFmpeg developers
+x265 [info]: HEVC encoder version 2.4+14-bc0e9bd7c08f5ddc
+x264 0.150.2833 df79067
+MP4Box - GPAC version 0.7.2-DEV-rev133-g732afbe-master
+MediaInfoLib - v0.7.96
+AAC Package version:    1.5.4.0
+-->
+    <AdaptationSet segmentAlignment="true" group="1" maxWidth="1920" maxHeight="1080" maxFrameRate="2997/100" par="16:9" lang="und" selectionPriority="0">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main" />
+      <SegmentTemplate timescale="2997" media="Period06/$RepresentationID$/$Number%04d$.m4s" startNumber="1" duration="11800" initialization="Period06/$RepresentationID$/init.mp4" />
+      <Representation id="1" mimeType="video/mp4" codecs="avc1.64001F" width="512" height="288" frameRate="2997/100" sar="1:1" startWithSAP="1" bandwidth="415847"></Representation>
+      <Representation id="2" mimeType="video/mp4" codecs="avc1.64001F" width="640" height="360" frameRate="2997/100" sar="1:1" startWithSAP="1" bandwidth="831192"></Representation>
+      <Representation id="3" mimeType="video/mp4" codecs="avc1.640028" width="852" height="480" frameRate="2997/100" sar="640:639" startWithSAP="1" bandwidth="1237428"></Representation>
+      <Representation id="4" mimeType="video/mp4" codecs="avc1.640032" width="1280" height="720" frameRate="2997/100" sar="1:1" startWithSAP="1" bandwidth="2144043"></Representation>
+      <Representation id="5" mimeType="video/mp4" codecs="avc1.640033" width="1920" height="1080" frameRate="2997/100" sar="1:1" startWithSAP="1" bandwidth="3039446"></Representation>
+    </AdaptationSet>
+    <AdaptationSet segmentAlignment="true" group="1" maxWidth="1920" maxHeight="1080" maxFrameRate="1200000/39971" par="16:9" lang="und">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main" />
+      <SegmentTemplate timescale="1200000" media="Period06/$RepresentationID$/$Number%04d$.m4s" startNumber="1" duration="4724767" initialization="Period06/$RepresentationID$/init.mp4" />
+      <Representation id="6" mimeType="video/mp4" codecs="hev1.2.4.L63.90" width="512" height="288" frameRate="30000/1001" sar="1:1" startWithSAP="1" bandwidth="416691"></Representation>
+      <Representation id="7" mimeType="video/mp4" codecs="hev1.2.4.L63.90" width="640" height="360" frameRate="30000/1001" sar="1:1" startWithSAP="1" bandwidth="720900"></Representation>
+      <Representation id="8" mimeType="video/mp4" codecs="hev1.2.4.L90.90" width="852" height="480" frameRate="30000/1001" sar="640:639" startWithSAP="1" bandwidth="931172"></Representation>
+      <Representation id="9" mimeType="video/mp4" codecs="hev1.2.4.L93.90" width="1280" height="720" frameRate="30000/1001" sar="1:1" startWithSAP="1" bandwidth="1548510"></Representation>
+      <Representation id="10" mimeType="video/mp4" codecs="hev1.2.4.L120.90" width="1920" height="1080" frameRate="30000/1001" sar="1:1" startWithSAP="1" bandwidth="2061250"></Representation>
+    </AdaptationSet>
+    <AdaptationSet segmentAlignment="true" group="2" lang="x-soul" selectionPriority="0">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main" />
+      <SegmentTemplate timescale="24000" media="Period06/$RepresentationID$/$Number%04d$.m4s" startNumber="1" duration="95232" initialization="Period06/$RepresentationID$/init.mp4" />
+      <Representation id="11" mimeType="audio/mp4" codecs="mp4a.40.29" audioSamplingRate="48000" startWithSAP="1" bandwidth="65690">
+        <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="1" />
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet segmentAlignment="true" group="2" lang="x-popmusic">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main" />
+      <SegmentTemplate timescale="24000" media="Period06/$RepresentationID$/$Number%04d$.m4s" startNumber="1" duration="95232" initialization="Period06/$RepresentationID$/init.mp4" />
+      <Representation id="12" mimeType="audio/mp4" codecs="mp4a.40.29" audioSamplingRate="48000" startWithSAP="1" bandwidth="65691">
+        <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="1" />
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet segmentAlignment="true" lang="zh-cmn" group="3" selectionPriority="0">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main" />
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="subtitle" />
+      <SegmentTemplate timescale="1000" media="Period06/$RepresentationID$/$Number%04d$.m4s" startNumber="1" duration="4000" initialization="Period06/$RepresentationID$/init.mp4" />
+      <Representation id="13" mimeType="application/mp4" codecs="wvtt" startWithSAP="1" bandwidth="709"></Representation>
+    </AdaptationSet>
+    <AdaptationSet segmentAlignment="true" lang="zh-cmn" group="3">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main" />
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="subtitle" />
+      <SegmentTemplate timescale="1000" media="Period06/$RepresentationID$/$Number%04d$.m4s" startNumber="1" duration="4000" initialization="Period06/$RepresentationID$/init.mp4" />
+      <Representation id="14" mimeType="application/mp4" codecs="stpp" startWithSAP="1" bandwidth="1335"></Representation>
+    </AdaptationSet>
+  </Period>
+  <Period duration="PT0H0M10.155S">
+    <!--
+Version information:
+Axinom.MediaProcessing.Makemedia v3.1.0-001088-f129956 targeting General Purpose Media Format specification v8
+ffmpeg version N-86383-g4705edb Copyright (c) 2000-2017 the FFmpeg developers
+x265 [info]: HEVC encoder version 2.4+14-bc0e9bd7c08f5ddc
+x264 0.150.2833 df79067
+MP4Box - GPAC version 0.7.2-DEV-rev133-g732afbe-master
+MediaInfoLib - v0.7.96
+AAC Package version:    1.5.4.0
+-->
+    <AdaptationSet segmentAlignment="true" group="1" maxWidth="2160" maxHeight="2160" maxFrameRate="25" par="1:1" lang="und" selectionPriority="0">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main" />
+      <SegmentTemplate timescale="25" media="Period07/$RepresentationID$/$Number%04d$.m4s" startNumber="1" duration="100" initialization="Period07/$RepresentationID$/init.mp4" />
+      <Representation id="1" mimeType="video/mp4" codecs="avc1.640016" width="288" height="288" frameRate="25" sar="1:1" startWithSAP="1" bandwidth="421557"></Representation>
+      <Representation id="2" mimeType="video/mp4" codecs="avc1.64001F" width="360" height="360" frameRate="25" sar="1:1" startWithSAP="1" bandwidth="837922"></Representation>
+      <Representation id="3" mimeType="video/mp4" codecs="avc1.64001F" width="480" height="480" frameRate="25" sar="1:1" startWithSAP="1" bandwidth="1223424"></Representation>
+      <Representation id="4" mimeType="video/mp4" codecs="avc1.640028" width="720" height="720" frameRate="25" sar="1:1" startWithSAP="1" bandwidth="2083543"></Representation>
+      <Representation id="5" mimeType="video/mp4" codecs="avc1.640032" width="1080" height="1080" frameRate="25" sar="1:1" startWithSAP="1" bandwidth="2818008"></Representation>
+      <Representation id="6" mimeType="video/mp4" codecs="avc1.640033" width="1440" height="1440" frameRate="25" sar="1:1" startWithSAP="1" bandwidth="3978520"></Representation>
+      <Representation id="7" mimeType="video/mp4" codecs="avc1.640034" width="2160" height="2160" frameRate="25" sar="1:1" startWithSAP="1" bandwidth="4615292"></Representation>
+    </AdaptationSet>
+    <AdaptationSet segmentAlignment="true" group="1" maxWidth="2160" maxHeight="2160" maxFrameRate="1200000/47807" par="1:1" lang="und">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main" />
+      <SegmentTemplate timescale="1200000" media="Period07/$RepresentationID$/$Number%04d$.m4s" startNumber="1" duration="4800000" initialization="Period07/$RepresentationID$/init.mp4" />
+      <Representation id="8" mimeType="video/mp4" codecs="hev1.2.4.L60.90" width="288" height="288" frameRate="25" sar="1:1" startWithSAP="1" bandwidth="430014"></Representation>
+      <Representation id="9" mimeType="video/mp4" codecs="hev1.2.4.L63.90" width="360" height="360" frameRate="25" sar="1:1" startWithSAP="1" bandwidth="747426"></Representation>
+      <Representation id="10" mimeType="video/mp4" codecs="hev1.2.4.L63.90" width="480" height="480" frameRate="25" sar="1:1" startWithSAP="1" bandwidth="957367"></Representation>
+      <Representation id="11" mimeType="video/mp4" codecs="hev1.2.4.L90.90" width="720" height="720" frameRate="25" sar="1:1" startWithSAP="1" bandwidth="1595547"></Representation>
+      <Representation id="12" mimeType="video/mp4" codecs="hev1.2.4.L120.90" width="1080" height="1080" frameRate="25" sar="1:1" startWithSAP="1" bandwidth="2111165"></Representation>
+      <Representation id="13" mimeType="video/mp4" codecs="hev1.2.4.L120.90" width="1440" height="1440" frameRate="25" sar="1:1" startWithSAP="1" bandwidth="3167133"></Representation>
+      <Representation id="14" mimeType="video/mp4" codecs="hev1.2.4.L150.90" width="2160" height="2160" frameRate="25" sar="1:1" startWithSAP="1" bandwidth="4735695"></Representation>
+    </AdaptationSet>
+    <AdaptationSet segmentAlignment="true" group="2" lang="x-badass" selectionPriority="0">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main" />
+      <SegmentTemplate timescale="24000" media="Period07/$RepresentationID$/$Number%04d$.m4s" startNumber="1" duration="95232" initialization="Period07/$RepresentationID$/init.mp4" />
+      <Representation id="15" mimeType="audio/mp4" codecs="mp4a.40.29" audioSamplingRate="48000" startWithSAP="1" bandwidth="66260">
+        <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="1" />
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet segmentAlignment="true" group="2" lang="x-popmusic">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main" />
+      <SegmentTemplate timescale="24000" media="Period07/$RepresentationID$/$Number%04d$.m4s" startNumber="1" duration="95232" initialization="Period07/$RepresentationID$/init.mp4" />
+      <Representation id="16" mimeType="audio/mp4" codecs="mp4a.40.29" audioSamplingRate="48000" startWithSAP="1" bandwidth="66262">
+        <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="1" />
+      </Representation>
+    </AdaptationSet>
+  </Period>
+  <Period duration="PT0H0M10.197S">
+    <!--
+Version information:
+Axinom.MediaProcessing.Makemedia v3.1.0-001088-f129956 targeting General Purpose Media Format specification v8
+ffmpeg version N-86383-g4705edb Copyright (c) 2000-2017 the FFmpeg developers
+x265 [info]: HEVC encoder version 2.4+14-bc0e9bd7c08f5ddc
+x264 0.150.2833 df79067
+MP4Box - GPAC version 0.7.2-DEV-rev133-g732afbe-master
+MediaInfoLib - v0.7.96
+AAC Package version:    1.5.4.0
+-->
+    <AdaptationSet segmentAlignment="true" group="1" maxWidth="1280" maxHeight="720" maxFrameRate="25" par="16:9" lang="und" selectionPriority="0">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main" />
+      <SegmentTemplate timescale="25" media="Period08/$RepresentationID$/$Number%04d$.m4s" startNumber="1" duration="100" initialization="Period08/$RepresentationID$/init.mp4" />
+      <Representation id="1" mimeType="video/mp4" codecs="avc1.64001F" width="512" height="288" frameRate="25" sar="1:1" startWithSAP="1" bandwidth="377076"></Representation>
+      <Representation id="2" mimeType="video/mp4" codecs="avc1.64001F" width="640" height="360" frameRate="25" sar="1:1" startWithSAP="1" bandwidth="745756"></Representation>
+      <Representation id="3" mimeType="video/mp4" codecs="avc1.640028" width="852" height="480" frameRate="25" sar="640:639" startWithSAP="1" bandwidth="1081096"></Representation>
+      <Representation id="4" mimeType="video/mp4" codecs="avc1.640032" width="1280" height="720" frameRate="25" sar="1:1" startWithSAP="1" bandwidth="1529112"></Representation>
+    </AdaptationSet>
+    <AdaptationSet segmentAlignment="true" group="1" maxWidth="1280" maxHeight="720" maxFrameRate="1200000/47808" par="16:9" lang="und">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main" />
+      <SegmentTemplate timescale="1200000" media="Period08/$RepresentationID$/$Number%04d$.m4s" startNumber="1" duration="4800000" initialization="Period08/$RepresentationID$/init.mp4" />
+      <Representation id="5" mimeType="video/mp4" codecs="hev1.2.4.L63.90" width="512" height="288" frameRate="25" sar="1:1" startWithSAP="1" bandwidth="409084"></Representation>
+      <Representation id="6" mimeType="video/mp4" codecs="hev1.2.4.L63.90" width="640" height="360" frameRate="25" sar="1:1" startWithSAP="1" bandwidth="708949"></Representation>
+      <Representation id="7" mimeType="video/mp4" codecs="hev1.2.4.L90.90" width="852" height="480" frameRate="25" sar="640:639" startWithSAP="1" bandwidth="902291"></Representation>
+      <Representation id="8" mimeType="video/mp4" codecs="hev1.2.4.L93.90" width="1280" height="720" frameRate="25" sar="1:1" startWithSAP="1" bandwidth="1482821"></Representation>
+    </AdaptationSet>
+    <AdaptationSet segmentAlignment="true" group="2" lang="x-funny" selectionPriority="0">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main" />
+      <SegmentTemplate timescale="24000" media="Period08/$RepresentationID$/$Number%04d$.m4s" startNumber="1" duration="95232" initialization="Period08/$RepresentationID$/init.mp4" />
+      <Representation id="9" mimeType="audio/mp4" codecs="mp4a.40.29" audioSamplingRate="48000" startWithSAP="1" bandwidth="66253">
+        <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="1" />
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet segmentAlignment="true" group="2" lang="x-badass">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main" />
+      <SegmentTemplate timescale="24000" media="Period08/$RepresentationID$/$Number%04d$.m4s" startNumber="1" duration="95232" initialization="Period08/$RepresentationID$/init.mp4" />
+      <Representation id="10" mimeType="audio/mp4" codecs="mp4a.40.29" audioSamplingRate="48000" startWithSAP="1" bandwidth="66255">
+        <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="1" />
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet segmentAlignment="true" group="2" lang="x-popmusic">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main" />
+      <SegmentTemplate timescale="24000" media="Period08/$RepresentationID$/$Number%04d$.m4s" startNumber="1" duration="95232" initialization="Period08/$RepresentationID$/init.mp4" />
+      <Representation id="11" mimeType="audio/mp4" codecs="mp4a.40.29" audioSamplingRate="48000" startWithSAP="1" bandwidth="66255">
+        <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="1" />
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet segmentAlignment="true" lang="zh-cmn" group="3" selectionPriority="0">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main" />
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="subtitle" />
+      <SegmentTemplate timescale="1000" media="Period08/$RepresentationID$/$Number%04d$.m4s" startNumber="1" duration="4000" initialization="Period08/$RepresentationID$/init.mp4" />
+      <Representation id="12" mimeType="application/mp4" codecs="wvtt" startWithSAP="1" bandwidth="1052"></Representation>
+    </AdaptationSet>
+    <AdaptationSet segmentAlignment="true" lang="zh-cmn" group="3">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main" />
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="subtitle" />
+      <SegmentTemplate timescale="1000" media="Period08/$RepresentationID$/$Number%04d$.m4s" startNumber="1" duration="4000" initialization="Period08/$RepresentationID$/init.mp4" />
+      <Representation id="13" mimeType="application/mp4" codecs="stpp" startWithSAP="1" bandwidth="1825"></Representation>
+    </AdaptationSet>
+  </Period>
+  <Period duration="PT0H0M10.197S">
+    <!--
+Version information:
+Axinom.MediaProcessing.Makemedia v3.1.0-001088-f129956 targeting General Purpose Media Format specification v8
+ffmpeg version N-86383-g4705edb Copyright (c) 2000-2017 the FFmpeg developers
+x265 [info]: HEVC encoder version 2.4+14-bc0e9bd7c08f5ddc
+x264 0.150.2833 df79067
+MP4Box - GPAC version 0.7.2-DEV-rev133-g732afbe-master
+MediaInfoLib - v0.7.96
+AAC Package version:    1.5.4.0
+-->
+    <AdaptationSet segmentAlignment="true" group="1" maxWidth="1152" maxHeight="720" maxFrameRate="25" par="8:5" lang="und" selectionPriority="0">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main" />
+      <SegmentTemplate timescale="25" media="Period09/$RepresentationID$/$Number%04d$.m4s" startNumber="1" duration="100" initialization="Period09/$RepresentationID$/init.mp4" />
+      <Representation id="1" mimeType="video/mp4" codecs="avc1.64001F" width="460" height="288" frameRate="25" sar="576:575" startWithSAP="1" bandwidth="361929"></Representation>
+      <Representation id="2" mimeType="video/mp4" codecs="avc1.64001F" width="576" height="360" frameRate="25" sar="1:1" startWithSAP="1" bandwidth="720884"></Representation>
+      <Representation id="3" mimeType="video/mp4" codecs="avc1.640028" width="768" height="480" frameRate="25" sar="1:1" startWithSAP="1" bandwidth="992396"></Representation>
+      <Representation id="4" mimeType="video/mp4" codecs="avc1.640032" width="1152" height="720" frameRate="25" sar="1:1" startWithSAP="1" bandwidth="1664586"></Representation>
+    </AdaptationSet>
+    <AdaptationSet segmentAlignment="true" group="1" maxWidth="1152" maxHeight="720" maxFrameRate="1200000/47808" par="8:5" lang="und">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main" />
+      <SegmentTemplate timescale="1200000" media="Period09/$RepresentationID$/$Number%04d$.m4s" startNumber="1" duration="4800000" initialization="Period09/$RepresentationID$/init.mp4" />
+      <Representation id="5" mimeType="video/mp4" codecs="hev1.2.4.L63.90" width="460" height="288" frameRate="25" sar="576:575" startWithSAP="1" bandwidth="380292"></Representation>
+      <Representation id="6" mimeType="video/mp4" codecs="hev1.2.4.L63.90" width="576" height="360" frameRate="25" sar="1:1" startWithSAP="1" bandwidth="669829"></Representation>
+      <Representation id="7" mimeType="video/mp4" codecs="hev1.2.4.L90.90" width="768" height="480" frameRate="25" sar="1:1" startWithSAP="1" bandwidth="875659"></Representation>
+      <Representation id="8" mimeType="video/mp4" codecs="hev1.2.4.L93.90" width="1152" height="720" frameRate="25" sar="1:1" startWithSAP="1" bandwidth="1472007"></Representation>
+    </AdaptationSet>
+    <AdaptationSet segmentAlignment="true" group="2" lang="x-groovy" selectionPriority="0">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main" />
+      <SegmentTemplate timescale="24000" media="Period09/$RepresentationID$/$Number%04d$.m4s" startNumber="1" duration="95232" initialization="Period09/$RepresentationID$/init.mp4" />
+      <Representation id="9" mimeType="audio/mp4" codecs="mp4a.40.29" audioSamplingRate="48000" startWithSAP="1" bandwidth="66254">
+        <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="1" />
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet segmentAlignment="true" group="2" lang="x-badass">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main" />
+      <SegmentTemplate timescale="24000" media="Period09/$RepresentationID$/$Number%04d$.m4s" startNumber="1" duration="95232" initialization="Period09/$RepresentationID$/init.mp4" />
+      <Representation id="10" mimeType="audio/mp4" codecs="mp4a.40.29" audioSamplingRate="48000" startWithSAP="1" bandwidth="66255">
+        <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="1" />
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet segmentAlignment="true" group="2" lang="x-popmusic">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main" />
+      <SegmentTemplate timescale="24000" media="Period09/$RepresentationID$/$Number%04d$.m4s" startNumber="1" duration="95232" initialization="Period09/$RepresentationID$/init.mp4" />
+      <Representation id="11" mimeType="audio/mp4" codecs="mp4a.40.29" audioSamplingRate="48000" startWithSAP="1" bandwidth="66255">
+        <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="1" />
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet segmentAlignment="true" lang="zh-cmn" group="3" selectionPriority="0">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main" />
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="subtitle" />
+      <SegmentTemplate timescale="1000" media="Period09/$RepresentationID$/$Number%04d$.m4s" startNumber="1" duration="4000" initialization="Period09/$RepresentationID$/init.mp4" />
+      <Representation id="12" mimeType="application/mp4" codecs="wvtt" startWithSAP="1" bandwidth="1052"></Representation>
+    </AdaptationSet>
+    <AdaptationSet segmentAlignment="true" lang="zh-cmn" group="3">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main" />
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="subtitle" />
+      <SegmentTemplate timescale="1000" media="Period09/$RepresentationID$/$Number%04d$.m4s" startNumber="1" duration="4000" initialization="Period09/$RepresentationID$/init.mp4" />
+      <Representation id="13" mimeType="application/mp4" codecs="stpp" startWithSAP="1" bandwidth="1825"></Representation>
+    </AdaptationSet>
+  </Period>
+  <Period duration="PT0H0M10.197S">
+    <!--
+Version information:
+Axinom.MediaProcessing.Makemedia v3.1.0-001088-f129956 targeting General Purpose Media Format specification v8
+ffmpeg version N-86383-g4705edb Copyright (c) 2000-2017 the FFmpeg developers
+x265 [info]: HEVC encoder version 2.4+14-bc0e9bd7c08f5ddc
+x264 0.150.2833 df79067
+MP4Box - GPAC version 0.7.2-DEV-rev133-g732afbe-master
+MediaInfoLib - v0.7.96
+AAC Package version:    1.5.4.0
+-->
+    <AdaptationSet segmentAlignment="true" group="1" maxWidth="1280" maxHeight="720" maxFrameRate="25" par="16:9" lang="und" selectionPriority="0">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main" />
+      <SegmentTemplate timescale="25" media="Period10/$RepresentationID$/$Number%04d$.m4s" startNumber="1" duration="100" initialization="Period10/$RepresentationID$/init.mp4" />
+      <Representation id="1" mimeType="video/mp4" codecs="avc1.64001F" width="512" height="288" frameRate="25" sar="1:1" startWithSAP="1" bandwidth="404323"></Representation>
+      <Representation id="2" mimeType="video/mp4" codecs="avc1.64001F" width="640" height="360" frameRate="25" sar="1:1" startWithSAP="1" bandwidth="794120"></Representation>
+      <Representation id="3" mimeType="video/mp4" codecs="avc1.640028" width="852" height="480" frameRate="25" sar="640:639" startWithSAP="1" bandwidth="1161064"></Representation>
+      <Representation id="4" mimeType="video/mp4" codecs="avc1.640032" width="1280" height="720" frameRate="25" sar="1:1" startWithSAP="1" bandwidth="1831218"></Representation>
+    </AdaptationSet>
+    <AdaptationSet segmentAlignment="true" group="1" maxWidth="1280" maxHeight="720" maxFrameRate="1200000/47808" par="16:9" lang="und">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main" />
+      <SegmentTemplate timescale="1200000" media="Period10/$RepresentationID$/$Number%04d$.m4s" startNumber="1" duration="4800000" initialization="Period10/$RepresentationID$/init.mp4" />
+      <Representation id="5" mimeType="video/mp4" codecs="hev1.2.4.L63.90" width="512" height="288" frameRate="25" sar="1:1" startWithSAP="1" bandwidth="417300"></Representation>
+      <Representation id="6" mimeType="video/mp4" codecs="hev1.2.4.L63.90" width="640" height="360" frameRate="25" sar="1:1" startWithSAP="1" bandwidth="727976"></Representation>
+      <Representation id="7" mimeType="video/mp4" codecs="hev1.2.4.L90.90" width="852" height="480" frameRate="25" sar="640:639" startWithSAP="1" bandwidth="930041"></Representation>
+      <Representation id="8" mimeType="video/mp4" codecs="hev1.2.4.L93.90" width="1280" height="720" frameRate="25" sar="1:1" startWithSAP="1" bandwidth="1546061"></Representation>
+    </AdaptationSet>
+    <AdaptationSet segmentAlignment="true" group="2" lang="x-sexy" selectionPriority="0">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main" />
+      <SegmentTemplate timescale="24000" media="Period10/$RepresentationID$/$Number%04d$.m4s" startNumber="1" duration="95232" initialization="Period10/$RepresentationID$/init.mp4" />
+      <Representation id="9" mimeType="audio/mp4" codecs="mp4a.40.29" audioSamplingRate="48000" startWithSAP="1" bandwidth="66252">
+        <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="1" />
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet segmentAlignment="true" group="2" lang="x-badass">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main" />
+      <SegmentTemplate timescale="24000" media="Period10/$RepresentationID$/$Number%04d$.m4s" startNumber="1" duration="95232" initialization="Period10/$RepresentationID$/init.mp4" />
+      <Representation id="10" mimeType="audio/mp4" codecs="mp4a.40.29" audioSamplingRate="48000" startWithSAP="1" bandwidth="66255">
+        <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="1" />
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet segmentAlignment="true" group="2" lang="x-popmusic">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main" />
+      <SegmentTemplate timescale="24000" media="Period10/$RepresentationID$/$Number%04d$.m4s" startNumber="1" duration="95232" initialization="Period10/$RepresentationID$/init.mp4" />
+      <Representation id="11" mimeType="audio/mp4" codecs="mp4a.40.29" audioSamplingRate="48000" startWithSAP="1" bandwidth="66255">
+        <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="1" />
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet segmentAlignment="true" lang="zh-cmn" group="3" selectionPriority="0">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main" />
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="subtitle" />
+      <SegmentTemplate timescale="1000" media="Period10/$RepresentationID$/$Number%04d$.m4s" startNumber="1" duration="4000" initialization="Period10/$RepresentationID$/init.mp4" />
+      <Representation id="12" mimeType="application/mp4" codecs="wvtt" startWithSAP="1" bandwidth="1052"></Representation>
+    </AdaptationSet>
+    <AdaptationSet segmentAlignment="true" lang="zh-cmn" group="3">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main" />
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="subtitle" />
+      <SegmentTemplate timescale="1000" media="Period10/$RepresentationID$/$Number%04d$.m4s" startNumber="1" duration="4000" initialization="Period10/$RepresentationID$/init.mp4" />
+      <Representation id="13" mimeType="application/mp4" codecs="stpp" startWithSAP="1" bandwidth="1825"></Representation>
+    </AdaptationSet>
+  </Period>
+</MPD>

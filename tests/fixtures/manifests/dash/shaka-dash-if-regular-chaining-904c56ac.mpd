@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011" minBufferTime="PT1.500000S" type="static" mediaPresentationDuration="PT0H10M54.00S" profiles="urn:mpeg:dash:profile:isoff-live:2011,http://dashif.org/guidelines/dash264">
+
+ <Period id="" duration="PT0H10M54.00S">
+    <AdaptationSet segmentAlignment="true" maxWidth="1280" maxHeight="720" maxFrameRate="24" par="16:9">
+      <Representation id="1" mimeType="video/mp4" codecs="avc1.4d401f" width="1280" height="720" frameRate="24" sar="1:1" startWithSAP="1" bandwidth="1621834">
+        <SegmentTemplate timescale="12288" presentationTimeOffset="1024" duration="61440" media="ED_720_1M_MPEG2_video_$Number$.mp4" startNumber="1" initialization="ED_720_1M_MPEG2_video_init.mp4" />
+      </Representation>
+      <Representation id="2" mimeType="video/mp4" codecs="avc1.4d401f" width="1280" height="720" frameRate="24" sar="1:1" startWithSAP="1" bandwidth="2313663">
+        <SegmentTemplate timescale="12288" presentationTimeOffset="1024" duration="61440" media="ED_720_2M_MPEG2_video_$Number$.mp4" startNumber="1" initialization="ED_720_2M_MPEG2_video_init.mp4" />
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet segmentAlignment="true">
+      <Representation id="3" mimeType="audio/mp4" codecs="mp4a.40.29" audioSamplingRate="48000" startWithSAP="1" bandwidth="33026">
+        <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2" />
+        <SegmentTemplate timescale="48000" duration="239615" media="ED_MPEG2_32k_$Number$.mp4" startNumber="1" initialization="ED_MPEG2_32k_init.mp4" />
+      </Representation>
+    </AdaptationSet>
+  </Period>
+ <SupplementalProperty schemeIdUri="urn:mpeg:dash:chaining:2016" value="http://dash.akamaized.net/dash264/TestCases/1b/qualcomm/2/MultiRate.mpd" /> 
+</MPD>

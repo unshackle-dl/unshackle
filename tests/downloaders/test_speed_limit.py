@@ -90,7 +90,19 @@ def test_bucket_holds_aggregate_rate_across_threads():
         t.join()
     achieved = sum(totals) / (time.monotonic() - start)
     assert achieved <= rate * 1.1
-    assert achieved >= rate * 0.5
+
+
+def test_bucket_refills_at_the_rate(monkeypatch):
+    """On a simulated clock the throughput is exact, so a slow refill fails like a fast one."""
+    clock = [0.0]
+    monkeypatch.setattr(requests_downloader, "time", SimpleNamespace(monotonic=lambda: clock[0]))
+    monkeypatch.setattr(
+        requests_downloader, "DOWNLOAD_CANCELLED", SimpleNamespace(wait=lambda s: clock.__setitem__(0, clock[0] + s))
+    )
+    bucket = TokenBucket(1_000)
+    for _ in range(50):
+        bucket.consume(100)
+    assert clock[0] == pytest.approx(5.0)
 
 
 def test_bucket_chunk_larger_than_capacity_does_not_deadlock(monkeypatch):
@@ -104,15 +116,11 @@ def test_bucket_chunk_larger_than_capacity_does_not_deadlock(monkeypatch):
 
 def test_locked_limit_ignores_unlocked_calls():
     """serve's global_speed_limit must survive the per-job set in dl.result()."""
-    try:
-        set_speed_limit(5_000_000, lock=True)
-        set_speed_limit(None)
-        set_speed_limit(1_000_000)
-        limiter = requests_downloader.speed_limiter
-        assert limiter is not None and limiter.rate == 5_000_000
-    finally:
-        requests_downloader.speed_limit_locked = False
-        requests_downloader.speed_limiter = None
+    set_speed_limit(5_000_000, lock=True)
+    set_speed_limit(None)
+    set_speed_limit(1_000_000)
+    limiter = requests_downloader.speed_limiter
+    assert limiter is not None and limiter.rate == 5_000_000
 
 
 def test_bucket_wait_aborts_on_cancellation():

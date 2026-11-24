@@ -39,6 +39,9 @@ def fake_server_vaults(pushes: list, vault_list: list[FakeVault]) -> Any:
         def __len__(self) -> int:
             return len(vault_list)
 
+        def clear_licensed_flags(self, content_keys: dict) -> list:
+            return []
+
         def add_keys(self, key_map: dict) -> int:
             pushes.append(key_map)
             return sum(vault.ok for vault in vault_list)
@@ -62,4 +65,21 @@ def test_server_pushes_again_after_one_vault_failed(monkeypatch: pytest.MonkeyPa
     monkeypatch.setattr(handlers, "CACHED_PAIRS", set())
     handlers.cache_to_vaults({KID.hex: KEY}, "SVC")
     handlers.cache_to_vaults({KID.hex: KEY}, "SVC")
+    assert len(pushes) == 2
+
+
+def test_one_licence_request_builds_the_server_vaults_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    builds: list = []
+    pushes: list = []
+
+    def build(name: str) -> Any:
+        builds.append(name)
+        return fake_server_vaults(pushes, [FakeVault(False)])
+
+    monkeypatch.setattr(handlers, "load_server_vaults", build)
+    monkeypatch.setattr(handlers, "CACHED_PAIRS", set())
+    shared: dict = {}
+    handlers.cache_to_vaults({KID.hex: KEY}, "SVC", shared=shared)
+    handlers.cache_to_vaults({KID.hex: KEY}, "SVC", shared=shared)
+    assert len(builds) == 1
     assert len(pushes) == 2

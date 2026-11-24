@@ -47,6 +47,7 @@ import fault_server
 from rich.console import Console
 from rich.table import Table
 
+from unshackle.core.config import config
 from unshackle.core.constants import DOWNLOAD_CANCELLED
 from unshackle.core.downloaders.requests import requests as download_batch
 
@@ -55,6 +56,7 @@ dl_mod = importlib.import_module("unshackle.core.downloaders.requests")
 MIB = 1024 * 1024
 TAIL_FRACTION = 0.25
 TAIL_SLOW_KIB = 256
+SLOW_CONN_KIB = 2048
 console = Console()
 
 
@@ -74,6 +76,7 @@ class SegmentServer(socketserver.ThreadingTCPServer):
         self.faults = faults
         self.total_segments = total_segments
         self.attempts: dict[int, int] = {}
+        self.connections = 0
         self.lock = threading.Lock()
         self.stall_event = threading.Event()
         super().__init__(("127.0.0.1", 0), SegmentHandler)
@@ -81,6 +84,7 @@ class SegmentServer(socketserver.ThreadingTCPServer):
     def reset(self) -> None:
         with self.lock:
             self.attempts.clear()
+            self.connections = 0
 
     def handle_error(self, request: Any, client_address: Any) -> None:
         pass
@@ -91,6 +95,13 @@ class SegmentHandler(http.server.BaseHTTPRequestHandler):
 
     def log_message(self, *_: Any) -> None:
         pass
+
+    def setup(self) -> None:
+        super().setup()
+        server: SegmentServer = self.server  # type: ignore[assignment]
+        with server.lock:
+            server.connections += 1
+            self.slow_conn = server.connections <= server.faults["slow_conn"]
 
     def _parse_range(self, total: int) -> Optional[tuple[int, int]]:
         header = self.headers.get("Range")
@@ -134,6 +145,8 @@ class SegmentHandler(http.server.BaseHTTPRequestHandler):
             rate = TAIL_SLOW_KIB
         if f["tail_slow_once"] and attempt == 1 and idx >= server.total_segments - f["tail_slow_once"]:
             rate = TAIL_SLOW_KIB
+        if self.slow_conn:
+            rate = SLOW_CONN_KIB
         self._serve(rate=rate)
 
     def _serve(self, rate: int = 0, stall: bool = False, reset: bool = False) -> None:
@@ -570,6 +583,19 @@ def run_fault_mode(
     help=f"Last N segments throttled to {TAIL_SLOW_KIB} KiB/s on attempt 1 only; a hedge/retry runs full speed.",
 )
 @click.option(
+    "--fault-slow-conn",
+    default=0,
+    show_default=True,
+    help=f"First N accepted connections are throttled to {SLOW_CONN_KIB} KiB/s for their whole life.",
+)
+@click.option(
+    "--part-size-mib",
+    type=int,
+    default=0,
+    show_default=True,
+    help="Bench-only: override RANGE_PARALLEL_PART_SIZE (MiB); a very large value gives one part per worker.",
+)
+@click.option(
     "--fast-timeouts",
     is_flag=True,
     help="Bench-only: shrink READ_TIMEOUT/RETRY_WAIT/HEDGE_MIN_WAIT so fault runs finish fast.",
@@ -603,6 +629,8 @@ def main(
     fault_503: int,
     fault_tail_slow: int,
     fault_tail_slow_once: int,
+    fault_slow_conn: int,
+    part_size_mib: int,
     fast_timeouts: bool,
     urls_file: Optional[str],
     impersonate: Optional[str],
@@ -620,10 +648,12 @@ def main(
         "http503": fault_503,
         "tail_slow": fault_tail_slow,
         "tail_slow_once": fault_tail_slow_once,
+        "slow_conn": fault_slow_conn,
     }
     server: Optional[SegmentServer] = None
     session: Optional[Any] = None
     saved: dict[str, Any] = {}
+    saved_network: Optional[dict] = None
     total = segments
     expected_bytes: Optional[bytes] = None
 
@@ -632,7 +662,13 @@ def main(
         saved = {k: getattr(dl_mod, k) for k in fast}
         for k, v in fast.items():
             setattr(dl_mod, k, v)
+        saved_network = config.network
+        config.network = {**config.network, "read_timeout": fast["READ_TIMEOUT"]}
         os.environ["UNSHACKLE_DL_TIMING_OVERRIDES"] = ",".join(f"{k}={v}" for k, v in fast.items())
+
+    if part_size_mib and hasattr(dl_mod, "RANGE_PARALLEL_PART_SIZE"):
+        saved["RANGE_PARALLEL_PART_SIZE"] = dl_mod.RANGE_PARALLEL_PART_SIZE
+        dl_mod.RANGE_PARALLEL_PART_SIZE = part_size_mib * MIB
 
     if no_read1:
         if hasattr(dl_mod, "RACER_READ1"):
@@ -695,6 +731,8 @@ def main(
             server.shutdown()
         for k, v in saved.items():
             setattr(dl_mod, k, v)
+        if saved_network is not None:
+            config.network = saved_network
         os.environ.pop("UNSHACKLE_DL_TIMING_OVERRIDES", None)
 
 

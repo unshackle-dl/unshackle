@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<MPD xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="urn:mpeg:dash:schema:mpd:2011" xsi:schemaLocation="urn:mpeg:dash:schema:mpd:2011 DASH-MPD.xsd urn:mpeg:dash:schema:urlparam:2016 DASH-MPD-UP.xsd" type="static" mediaPresentationDuration="PT3256S" minBufferTime="PT1.2S" profiles="urn:mpeg:dash:profile:advanced-linear:2025">
+  <Period>
+    <AdaptationSet mimeType="video/mp4" segmentAlignment="true" startWithSAP="1" maxWidth="1280" maxHeight="720" maxFrameRate="25" par="16:9">
+      <EssentialProperty xmlns:up="urn:mpeg:dash:schema:urlparam:2014" schemeIdUri="urn:mpeg:dash:urlparam:2014">
+        <up:UrlQueryInfo xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="http://www.example.com/dash/xlinked.mpd" xlink:actuate="onRequest"/>
+      </EssentialProperty>
+      <SegmentTemplate duration="2" startNumber="1" media="video_$Number$_$Bandwidth$bps.mp4"/>
+      <Representation id="v0" codecs="avc3.4d401f" width="1280" height="720" frameRate="25" sar="1:1" bandwidth="3000000"/>
+      <Representation id="v1" codecs="avc3.4d401f" width="640" height="360" frameRate="25" sar="1:1" bandwidth="1500000"/>
+    </AdaptationSet>
+    <SupplementalProperty xmlns:up="urn:mpeg:dash:schema:urlparam:2014" schemeIdUri="urn:mpeg:dash:urlparam:2014">
+      <up:UrlQueryInfo xmlns:up="urn:mpeg:dash:schema:urlparam:2014" queryTemplate="$querypart$" queryString="param=justintimecomputedvalue"/>
+    </SupplementalProperty>
+  </Period>
+</MPD>

@@ -35,14 +35,27 @@ jobs:
         run: uv run ruff format --check .
       - name: Import order
         run: uv run isort --check-only unshackle tests --skip-glob "*/services/*"
+      - name: Type check
+        if: ${{ !cancelled() }}
+        run: |
+          out=$(uv run mypy unshackle) || rc=$?
+          echo "$out"
+          echo "$out" | sed -nE 's/^([^:]+):([0-9]+): error: (.*)$/::error file=\1,line=\2::\3/p'
+          exit ${rc:-0}
+      - name: Security lint
+        if: ${{ !cancelled() }}
+        run: uv run bandit -q -c pyproject.toml -r unshackle --severity-level medium --confidence-level medium
 
   test:
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        python-version: ["3.11", "3.14"]
+        python-version: ${{ fromJSON(github.event_name == 'push' && github.ref == 'refs/heads/dev' && '["3.11"]' || '["3.11", "3.14"]') }}
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    env:
+      UV_NO_SYNC: "1"
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v8.3.2
@@ -50,13 +63,11 @@ jobs:
           python-version: ${{ matrix.python-version }}
           enable-cache: true
       - name: Install
-        run: uv sync --locked --group test
-      - name: Import check
-        run: uv run python -c "import unshackle; print(unshackle.__name__, 'imports OK')"
+        run: uv sync --locked --no-default-groups --group test
       - name: CLI loads
         run: uv run unshackle --help
       - name: Tests
-        run: uv run pytest -m "not live and not slow"
+        run: uv run pytest -n auto --dist worksteal -m "not live and not slow"
 
   build:
     runs-on: ubuntu-latest

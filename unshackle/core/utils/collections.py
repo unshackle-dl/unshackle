@@ -57,7 +57,9 @@ def merge_dict(source: dict, destination: dict) -> None:
         return
     for key, value in source.items():
         if isinstance(value, dict):
-            node = destination.setdefault(key, {})
+            node = destination.get(key)
+            if not isinstance(node, dict):
+                node = destination[key] = {}
             merge_dict(value, node)
         else:
             destination[key] = value

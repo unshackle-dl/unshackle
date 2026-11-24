@@ -41,4 +41,6 @@ def test_remote_service_implements_contract(name: str) -> None:
 
 def test_get_clearkey_license_returns_none() -> None:
     svc = RemoteService.__new__(RemoteService)
+    svc._track_alias = {}
+    svc._title_alias = {}
     assert svc.get_clearkey_license(challenge=b"", title=None, track=None) is None

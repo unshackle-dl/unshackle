@@ -870,7 +870,7 @@ def describe(code: int) -> str | None:
 
 if __name__ == "__main__":
     assert describe(0x8004C065) == describe(-2147172251)
-    assert "DEVCERT_REVOKED" in describe(-2147172251)
+    assert "DEVCERT_REVOKED" in (describe(-2147172251) or "")
     assert describe(-1021) is None
     assert is_revocation(0x8004C065) and is_revocation(-2147172251)
     assert not is_revocation(0x8004C006)

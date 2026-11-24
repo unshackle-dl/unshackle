@@ -1,15 +1,23 @@
+import logging
 import os
 import struct
 from pathlib import Path
 from typing import Any, BinaryIO, Callable, Iterator, NamedTuple, Optional
 from uuid import UUID
 
+from unshackle.core.config import config
+
+log = logging.getLogger(__name__)
+
 DECRYPT_HOOK: Optional[Callable[..., None]] = None
 
 CONTAINERS = {b"moov", b"trak", b"mdia", b"minf", b"stbl", b"mvex", b"moof", b"traf", b"sinf", b"schi"}
 PIFF_TENC = bytes.fromhex("8974dbce7be74c5184f97148f9882554")
 PIFF_TFXD = bytes.fromhex("6d1d9b0542d544e680e2141daff757b2")
+PIFF_SENC = bytes.fromhex("a2394f525a9b4f14a2446c427c648df4")
 TENC = {b"tenc", b"uuid" + PIFF_TENC}
+ENCRYPTED_ENTRY = (b"enc", b"drm")
+SENC = {b"senc", b"uuid" + PIFF_SENC}
 ENTRY_FIELDS = {b"encv": (78,), b"enca": (28, 44, 64)}
 
 Seig = tuple[bool, UUID]
@@ -120,9 +128,141 @@ def entry_kid(data: bytes, kind: bytes, entry: int, end: int) -> Optional[UUID]:
     return None
 
 
-def sample_entries(data: bytes, body: int, end: int) -> list[Optional[UUID]]:
-    """Parse an ``stsd`` box. Returns the default KID of each sample entry, None for a clear one."""
-    return [entry_kid(data, kind, entry, entry_end) for kind, entry, entry_end in children(data, body + 8, end)]
+def sample_entries(data: bytes, body: int, end: int) -> tuple[list[Optional[UUID]], bool]:
+    """Parse an ``stsd`` box. Returns the default KID of each sample entry (None for a clear one), and
+    whether any entry is encrypted."""
+    found = list(children(data, body + 8, end))
+    kids = [entry_kid(data, kind, entry, entry_end) for kind, entry, entry_end in found]
+    return kids, any(kind[:3] in ENCRYPTED_ENTRY for kind, _, _ in found)
+
+
+def has_encrypted_entry(moov: bytes) -> bool:
+    """True if a moov box holds a sample entry of an encrypted type (``enc*`` or ``drm*``)."""
+    return any(
+        kind == b"stsd" and any(entry[:3] in ENCRYPTED_ENTRY for entry, _, _ in children(moov, body + 8, end))
+        for kind, body, end in walk(moov)
+    )
+
+
+def read_top_level_box(path: Path, box_type: bytes) -> Optional[bytes]:
+    """Read a single top-level box from an MP4 file.
+
+    This function walks only the box headers, so the wanted box is the only payload it reads into memory.
+    Returns None if the file has no such top-level box, or if a box header is truncated or declares an
+    impossible size.
+    """
+    file_size = path.stat().st_size
+    with path.open("rb") as f:
+        start = 0
+        while start + 8 <= file_size:
+            header = f.read(8)
+            if len(header) < 8:
+                return None
+            size = int.from_bytes(header[:4], "big")
+            if size == 1:
+                large = f.read(8)
+                if len(large) < 8:
+                    return None
+                size = int.from_bytes(large, "big")
+            elif size == 0:
+                size = file_size - start
+            if size < 8:
+                return None
+            if header[4:8] == box_type:
+                f.seek(start)
+                return f.read(size)
+            start += size
+            f.seek(start)
+    return None
+
+
+def has_encrypted_sample_entry(path: Path) -> bool:
+    """True if the MP4's moov still carries an encrypted sample entry (``enc*`` or ``drm*``).
+
+    A faithful decrypt rewrites the entry back to the real codec 4CC through frma, so a
+    survivor means the decrypt tool skipped/failed the track. Only the moov is read, and its
+    stsd boxes are parsed, so byte runs in mdat or in metadata cannot match. Any read or
+    parse error -> False.
+    """
+    try:
+        moov = read_top_level_box(path, b"moov")
+        return moov is not None and has_encrypted_entry(moov)
+    except (OSError, struct.error, RecursionError):
+        return False
+
+
+def kidless_kid(data: bytes, kind: bytes, entry: int, end: int) -> Optional[UUID]:
+    """Return the KID of an encrypted sample entry whose first sinf holds no CENC tenc (a PIFF sinf, say)."""
+    for fields in ENTRY_FIELDS.get(kind, ()):
+        sinfs = [(body, box_end) for box, body, box_end in children(data, entry + fields, end) if box == b"sinf"]
+        if sinfs:
+            if any(box == b"tenc" for box, _, _ in walk(data, *sinfs[0])):
+                return None
+            return entry_kid(data, kind, entry, end)
+    return None
+
+
+def kidless_track_kids(data: bytes) -> dict[int, UUID]:
+    """Map each track of a moov or init segment whose first sinf has no tenc for mp4decrypt to read to its KID."""
+    kids: dict[int, UUID] = {}
+    track = 0
+    try:
+        for kind, body, end in walk(data):
+            if kind == b"tkhd":
+                track = struct.unpack_from(">I", data, body + (20 if data[body] == 1 else 12))[0]
+            elif kind == b"stsd" and track:
+                for entry in children(data, body + 8, end):
+                    kid = kidless_kid(data, *entry)
+                    if kid:
+                        kids[track] = kid
+    except (struct.error, IndexError, ValueError, RecursionError):
+        return {}
+    return kids
+
+
+def find_child_box(buf: bytes, box_type: bytes) -> Optional[bytes]:
+    """Return the first box of the given type nested anywhere in buf, header included."""
+    i = buf.find(box_type, 4)
+    while i != -1:
+        size = int.from_bytes(buf[i - 4 : i], "big")
+        if 8 <= size <= len(buf) - (i - 4):
+            return buf[i - 4 : i - 4 + size]
+        i = buf.find(box_type, i + 1)
+    return None
+
+
+def has_second_view(path: Path) -> bool:
+    """True if the MP4 holds a second video layer (an ``lhvC`` box, as stereoscopic MV-HEVC has)."""
+    try:
+        return find_child_box(read_top_level_box(path, b"moov") or b"", b"lhvC") is not None
+    except OSError:
+        return False
+
+
+def decrypter_for(path: Path) -> str:
+    """The configured decrypter, or mp4decrypt for a multi-layer (MV-HEVC) track.
+
+    shaka-packager refuses a version 3 dvvC (Dolby Vision profile 20) and, before v3.5.0, drops lhvC and vexu.
+    """
+    configured = str(getattr(config, "decryption", "")).lower()
+    if configured != "mp4decrypt" and has_second_view(path):
+        log.debug(f"Decrypting {path.name} with mp4decrypt: it holds a second video layer (lhvC)")
+        return "mp4decrypt"
+    return configured
+
+
+def senc_protects_samples(buf: bytes, body: int, end: int) -> bool:
+    """True if a senc/PIFF-uuid box describes protected samples.
+
+    An empty senc (sample_count 0) sits on a genuinely clear fragment, so treating it as
+    a skipped one would raise on a healthy file. Field order follows
+    read_per_sample_iv_size.
+    """
+    flags = int.from_bytes(buf[body + 1 : body + 4], "big")
+    pos = body + 4 + (20 if flags & 0x1 else 0)
+    if pos + 4 > end:
+        return False
+    return int.from_bytes(buf[pos : pos + 4], "big") > 0
 
 
 def read_top_boxes(f: BinaryIO) -> Iterator[tuple[bytes, Optional[bytes]]]:
@@ -161,8 +301,10 @@ def kid_windows(path: Path) -> Optional[KidMap]:
     the result holds up to three (start, end) windows from ``pick_windows``, relative to
     the first fragment of the track. A fragment ends where the next fragment of the track
     starts. The last fragment ends after its sample durations, or after 3 seconds when
-    they are not known. Returns None when the file has no encrypted fragment this reader
-    can place in time, so the caller must use another check.
+    they are not known. Returns an empty map for a clear MP4: no track with fragments (or,
+    without fragments, no track) has an encrypted sample entry or a senc. Returns None when
+    the file has no encrypted fragment this reader can place in time, so the caller must
+    use another check; that includes an encrypted sample entry whose fragments are all clear.
     """
     timescales: dict[int, int] = {}
     handlers: dict[int, bytes] = {}
@@ -171,6 +313,7 @@ def kid_windows(path: Path) -> Optional[KidMap]:
     moov_groups: dict[int, list[Seig]] = {}
     fragments: list[Fragment] = []
     clock: dict[int, int] = {}
+    protected: set[int] = set()
     try:
         with path.open("rb") as f:
             for kind, box in read_top_boxes(f):
@@ -193,13 +336,15 @@ def kid_windows(path: Path) -> Optional[KidMap]:
                             elif kind_ == b"hdlr":
                                 handlers.setdefault(track, box[body + 8 : body + 12])
                             elif kind_ == b"stsd":
-                                entries[track] = sample_entries(box, body, box_end)
+                                entries[track], encrypted = sample_entries(box, body, box_end)
+                                if encrypted:
+                                    protected.add(track)
                             elif kind_ == b"sgpd":
                                 groups = seig_entries(box, body)
                                 if groups is not None:
                                     moov_groups[track] = groups
                 elif kind == b"moof" and box:
-                    fragments.extend(read_fragment(box, entries, defaults, moov_groups, clock))
+                    fragments.extend(read_fragment(box, entries, defaults, moov_groups, clock, protected))
     except (OSError, struct.error, IndexError, ValueError, MemoryError, OverflowError, RecursionError):
         return None
 
@@ -226,7 +371,7 @@ def kid_windows(path: Path) -> Optional[KidMap]:
             for kid in kids:
                 spans.setdefault(kid, []).append((start, end))
     if not spans:
-        return None
+        return KidMap({}, False) if entries and protected.isdisjoint(tracks or entries) else None
     return KidMap({kid: pick_windows(fragment_spans) for kid, fragment_spans in spans.items()}, video)
 
 
@@ -236,8 +381,8 @@ def pick_windows(spans: list[tuple[float, float]], longest: float = 4.0) -> list
     A window starts at a fragment and runs on through the next fragments of the same KID, up
     to ``longest`` seconds, but never into a fragment of another KID or a clear one. A short
     window can decode noise without an error: the decoder often needs several frames to find it.
-    A wrong key fails on the first inter frame in every measured case, so ``longest`` buys
-    decoder frames, not certainty; every second of it is decoded in full for a right key.
+    ``longest`` buys decoder frames, not certainty; every second of it is decoded in full for
+    a right key.
     The last window ends where the KID's last run of fragments ends.
     """
     spans = sorted(span for span in spans if span[1] > span[0])
@@ -280,11 +425,13 @@ def read_fragment(
     defaults: dict[int, tuple[int, int]],
     moov_groups: dict[int, list[Seig]],
     clock: dict[int, int],
+    protected: set[int],
 ) -> Iterator[Fragment]:
     """Yield (track, decode time, duration, KIDs that encrypt samples) for each track fragment in a moof.
 
     A fragment without a tfdt or tfxd starts where the track's previous fragment ended, by
-    the running sum of sample durations in ``clock``.
+    the running sum of sample durations in ``clock``. A track with a senc that protects
+    samples goes into ``protected``.
     """
     for kind, traf, traf_end in children(moof):
         if kind != b"traf":
@@ -293,7 +440,7 @@ def read_fragment(
         groups: list[Seig] = []
         runs: Optional[list[tuple[int, int]]] = None
         truns: list[int] = []
-        for kind_, body, _ in children(moof, traf, traf_end):
+        for kind_, body, box_end in children(moof, traf, traf_end):
             if kind_ == b"tfhd":
                 flags = int.from_bytes(moof[body + 1 : body + 4], "big")
                 track = struct.unpack_from(">I", moof, body + 4)[0]
@@ -313,6 +460,8 @@ def read_fragment(
                 groups = seig_entries(moof, body) or groups
             elif kind_ == b"sbgp":
                 runs = sbgp_runs(moof, body) or runs
+            elif kind_ in SENC and senc_protects_samples(moof, body, box_end):
+                protected.add(track)
         if track not in entries:
             continue
         default_entry, trex_duration = defaults.get(track, (1, 0))

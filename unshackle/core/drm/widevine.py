@@ -1,10 +1,6 @@
 from __future__ import annotations
 
 import base64
-import shutil
-import subprocess
-import textwrap
-import time
 from pathlib import Path
 from typing import Any, Callable, Optional, Union
 from uuid import UUID
@@ -14,16 +10,14 @@ from construct import Container
 from pymp4.parser import Box
 from pywidevine.cdm import Cdm as WidevineCdm
 from pywidevine.pssh import PSSH
-from requests import Session
-from rich.text import Text
 
-from unshackle.core import binaries
 from unshackle.core.config import config
-from unshackle.core.console import console
 from unshackle.core.constants import AnyTrack
 from unshackle.core.drm import key_args as drm_key_args
-from unshackle.core.session import utf8_text
-from unshackle.core.utilities import get_boxes, log_event
+from unshackle.core.drm.decrypters import decrypt_cenc, mp4decrypt, shaka_decrypt
+from unshackle.core.session import AnySession, utf8_text
+from unshackle.core.utilities import call_licence, get_boxes, log_event
+from unshackle.core.utils import run_proxy
 from unshackle.core.utils.subprocess import ffprobe
 
 
@@ -36,14 +30,14 @@ class Widevine:
         UUID("00010203-0405-0607-0809-101112131415"),
     }
 
-    def __init__(self, pssh: PSSH, kid: Union[UUID, str, bytes, None] = None, **kwargs: Any):
+    def __init__(self, pssh: PSSH, kid: Union[UUID, str, bytes, None] = None, **kwargs: Any) -> None:
         if not pssh:
             raise ValueError("Provided PSSH is empty.")
         if not isinstance(pssh, PSSH):
             raise TypeError(f"Expected pssh to be a {PSSH}, not {pssh!r}")
 
         if pssh.system_id == PSSH.SystemId.PlayReady:
-            pssh.to_widevine()
+            pssh = self.from_playready(pssh)
 
         self._kid: Optional[UUID] = None
         if kid:
@@ -67,8 +61,29 @@ class Widevine:
         self.content_keys: dict[UUID, str] = {}
         self.data: dict = kwargs or {}
 
+    @staticmethod
+    def from_playready(pssh: PSSH) -> PSSH:
+        """A Widevine PSSH naming a v1 box's own KIDs, then the KIDs the PlayReady class reads from it.
+
+        pywidevine's own conversion fails on a bare WRMHEADER and byte-swaps PlayReady KIDs.
+        """
+        from pyplayready.misc.exceptions import InvalidPssh
+
+        from unshackle.core.drm.playready import PlayReady
+
+        box = pssh.dump()
+        kids: list[UUID] = list(Box.parse(box).key_IDs or [])
+        try:
+            kids += PlayReady.from_pssh_b64(base64.b64encode(box).decode()).kids
+        except PlayReady.Exceptions.KIDNotFound:
+            pass
+        except InvalidPssh:
+            if not kids:
+                raise
+        return PSSH.new(system_id=PSSH.SystemId.Widevine, key_ids=list(dict.fromkeys(kids)))
+
     @classmethod
-    def from_track(cls, track: AnyTrack, session: Optional[Session] = None) -> Widevine:
+    def from_track(cls, track: AnyTrack, session: Optional[AnySession] = None) -> Widevine:
         """
         Get PSSH and KID from within the Initiation Segment of the Track Data.
         It also tries to get PSSH and KID from other track data like M3U8 data
@@ -86,7 +101,7 @@ class Widevine:
             KIDNotFound: If the KID was not found within the data or PSSH.
         """
         if not session:
-            session = Session()
+            session = run_proxy.fallback_session()
             session.headers.update(config.headers)
 
         kid: Optional[UUID] = None
@@ -95,6 +110,7 @@ class Widevine:
 
         if track.descriptor == track.Descriptor.HLS:
             m3u_url = track.url
+            assert isinstance(m3u_url, str)
             master = m3u8.loads(utf8_text(session.get(m3u_url)), uri=m3u_url)
             pssh_boxes.extend(
                 Box.parse(base64.b64decode(x.uri.split(",")[-1]))
@@ -234,10 +250,7 @@ class Widevine:
                         challenge_size=len(challenge),
                         kid_count=len(self.kids),
                     )
-                    try:
-                        license_res = licence(challenge=challenge, pssh=self.pssh, session_id=session_id)
-                    except TypeError:
-                        license_res = licence(challenge=challenge)
+                    license_res = call_licence(licence, challenge, pssh=self.pssh, session_id=session_id)
                     cdm.parse_license(session_id, license_res)
                     log_event(
                         "drm_license_response",
@@ -270,50 +283,8 @@ class Widevine:
                 cdm.close(session_id)
 
     def decrypt(self, path: Path) -> None:
-        """
-        Decrypt a Track with Widevine DRM.
-        Args:
-            path: Path to the encrypted file to decrypt
-        Raises:
-            EnvironmentError if the required decryption executable could not be found.
-            ValueError if unshackle has not yet downloaded the track.
-            SubprocessError if the decryption process returned a non-zero exit code.
-        """
-        if not self.content_keys:
-            raise ValueError("Cannot decrypt a Track without any Content Keys...")
-
-        if not path or not path.exists():
-            raise ValueError("Tried to decrypt a file that does not exist.")
-
-        decrypter = str(getattr(config, "decryption", "")).lower()
-        tool = "mp4decrypt" if decrypter == "mp4decrypt" else "shaka-packager"
-
-        log_event(
-            "drm_decrypt",
-            level="DEBUG",
-            message=f"Decrypting {path.name} with {tool}",
-            drm_type="Widevine",
-            tool=tool,
-            file=path.name,
-            key_count=len(self.content_keys),
-        )
-
-        decrypt_start = time.monotonic()
-        if decrypter == "mp4decrypt":
-            self.decrypt_with_mp4decrypt(path)
-        else:
-            self.decrypt_with_shaka_packager(path)
-
-        log_event(
-            "drm_decrypt_complete",
-            level="DEBUG",
-            message=f"Decrypted {path.name} with {tool}",
-            drm_type="Widevine",
-            tool=tool,
-            file=path.name,
-            duration_ms=round((time.monotonic() - decrypt_start) * 1000, 1),
-            output_size=path.stat().st_size if path.exists() else 0,
-        )
+        """Decrypt the file at ``path`` in place with this track's Widevine content keys."""
+        decrypt_cenc(self, path, "Widevine")
 
     def own_kids(self) -> list[UUID]:
         """Return the KIDs that identify this track's own content key.
@@ -325,114 +296,17 @@ class Widevine:
             return [self._kid]
         return self.kids
 
-    def mp4decrypt_key_args(self) -> list[str]:
-        """Build the mp4decrypt --key arguments for every content key and the zero-KID fallback."""
-        return drm_key_args.mp4decrypt_key_args(self.content_keys, self.own_kids())
+    def mp4decrypt_key_args(self, track_kids: Optional[dict[int, UUID]] = None) -> list[str]:
+        """Build the mp4decrypt --key arguments for every content key, the zero-KID and the track ID fallbacks."""
+        return drm_key_args.mp4decrypt_key_args(self.content_keys, self.own_kids(), track_kids)
 
     def decrypt_with_mp4decrypt(self, path: Path) -> None:
-        """Decrypt using mp4decrypt"""
-        if not binaries.Mp4decrypt:
-            raise EnvironmentError("mp4decrypt executable not found but is required.")
-
-        output_path = path.with_stem(f"{path.stem}_decrypted")
-
-        key_args = self.mp4decrypt_key_args()
-
-        cmd = [
-            str(binaries.Mp4decrypt),
-            "--show-progress",
-            *key_args,
-            str(path),
-            str(output_path),
-        ]
-
-        try:
-            subprocess.run(
-                cmd,
-                check=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-            )
-        except subprocess.CalledProcessError as e:
-            error_msg = e.stderr if e.stderr else f"mp4decrypt failed with exit code {e.returncode}"
-            raise subprocess.CalledProcessError(e.returncode, cmd, output=e.stdout, stderr=error_msg)
-
-        if not output_path.exists():
-            raise RuntimeError(f"mp4decrypt failed: output file {output_path} was not created")
-        if output_path.stat().st_size == 0:
-            raise RuntimeError(f"mp4decrypt failed: output file {output_path} is empty")
-
-        path.unlink()
-        shutil.move(output_path, path)
+        """Decrypt with mp4decrypt."""
+        mp4decrypt(path, self.mp4decrypt_key_args)
 
     def decrypt_with_shaka_packager(self, path: Path) -> None:
-        """Decrypt with shaka-packager (original method)"""
-        if not binaries.ShakaPackager:
-            raise EnvironmentError("Shaka Packager executable not found but is required.")
-
-        output_path = path.with_stem(f"{path.stem}_decrypted")
-        config.directories.temp.mkdir(parents=True, exist_ok=True)
-
-        try:
-            arguments = [
-                f"input={path},stream=0,output={output_path},output_format=MP4",
-                "--enable_raw_key_decryption",
-                "--keys",
-                drm_key_args.shaka_keys(self.content_keys, self.own_kids()),
-                "--temp_dir",
-                config.directories.temp,
-            ]
-
-            p = subprocess.Popen(
-                [binaries.ShakaPackager, *arguments],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.PIPE,
-                universal_newlines=True,
-                encoding="utf-8",
-                errors="replace",
-            )
-
-            stream_skipped = False
-            had_error = False
-
-            shaka_log_buffer = ""
-            for line in iter(p.stderr.readline, ""):
-                line = line.strip()
-                if not line:
-                    continue
-                if "Skip stream" in line:
-                    stream_skipped = True
-                if ":INFO:" in line:
-                    continue
-                if "I0" in line or "W0" in line:
-                    continue
-                if ":ERROR:" in line:
-                    had_error = True
-                if "Insufficient bits in bitstream for given AVC profile" in line:
-                    continue
-                shaka_log_buffer += f"{line.strip()}\n"
-
-            if shaka_log_buffer:
-                shaka_log_buffer = "\n            ".join(
-                    textwrap.wrap(shaka_log_buffer.rstrip(), width=console.width - 22, initial_indent="")
-                )
-                console.log(Text.from_ansi("\n[Widevine]: " + shaka_log_buffer))
-
-            p.wait()
-
-            if p.returncode != 0 or had_error:
-                raise subprocess.CalledProcessError(p.returncode, [binaries.ShakaPackager, *arguments])
-
-            path.unlink()
-            if not stream_skipped:
-                shutil.move(output_path, path)
-        except subprocess.CalledProcessError as e:
-            if e.returncode == 0xC000013A:
-                raise KeyboardInterrupt()
-            raise
+        """Decrypt with shaka-packager."""
+        shaka_decrypt(path, drm_key_args.shaka_keys(self.content_keys, self.own_kids()), "Widevine")
 
     class Exceptions:
         class PSSHNotFound(Exception):

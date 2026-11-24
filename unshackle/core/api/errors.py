@@ -7,6 +7,7 @@ and optional debug information for the unshackle REST API.
 
 from __future__ import annotations
 
+import secrets
 import traceback
 from datetime import datetime, timezone
 from enum import Enum
@@ -46,6 +47,7 @@ class APIErrorCode(str, Enum):
     DRM_ERROR = "DRM_ERROR"
     DOWNLOAD_ERROR = "DOWNLOAD_ERROR"
     SERVICE_UNAVAILABLE = "SERVICE_UNAVAILABLE"
+    SERVER_DRAINING = "SERVER_DRAINING"
     WORKER_ERROR = "WORKER_ERROR"
 
 
@@ -68,7 +70,7 @@ class APIError(Exception):
         details: dict[str, Any] | None = None,
         retryable: bool = False,
         http_status: int | None = None,
-    ):
+    ) -> None:
         super().__init__(message)
         self.error_code = error_code
         self.message = message
@@ -78,7 +80,11 @@ class APIError(Exception):
 
     @staticmethod
     def default_http_status(error_code: APIErrorCode) -> int:
-        """Map error codes to default HTTP status codes."""
+        """Map error codes to default HTTP status codes.
+
+        No code maps to a 5xx: a CDN in front of the server can replace a 5xx body with its own page.
+        Server-side failures are 422, and the ones worth a retry are 424, which the client retries.
+        """
         status_map = {
             APIErrorCode.INVALID_INPUT: 400,
             APIErrorCode.INVALID_SERVICE: 400,
@@ -94,16 +100,17 @@ class APIError(Exception):
             APIErrorCode.SESSION_NOT_FOUND: 404,
             APIErrorCode.TRACK_NOT_FOUND: 404,
             APIErrorCode.CONFLICT: 409,
+            APIErrorCode.SERVER_DRAINING: 409,
+            APIErrorCode.SERVICE_ERROR: 422,
+            APIErrorCode.DRM_ERROR: 422,
+            APIErrorCode.INTERNAL_ERROR: 422,
+            APIErrorCode.DOWNLOAD_ERROR: 422,
+            APIErrorCode.WORKER_ERROR: 422,
+            APIErrorCode.NETWORK_ERROR: 424,
+            APIErrorCode.SERVICE_UNAVAILABLE: 424,
             APIErrorCode.RATE_LIMITED: 429,
-            APIErrorCode.INTERNAL_ERROR: 500,
-            APIErrorCode.SERVICE_ERROR: 502,
-            APIErrorCode.DRM_ERROR: 502,
-            APIErrorCode.NETWORK_ERROR: 503,
-            APIErrorCode.SERVICE_UNAVAILABLE: 503,
-            APIErrorCode.DOWNLOAD_ERROR: 500,
-            APIErrorCode.WORKER_ERROR: 500,
         }
-        return status_map.get(error_code, 500)
+        return status_map.get(error_code, 422)
 
 
 def build_error_response(
@@ -113,6 +120,9 @@ def build_error_response(
 ) -> web.Response:
     """
     Assemble a structured JSON error response.
+
+    Each error gets a short ``ref``, also appended to ``message`` so that every client prints it.
+    The stats middleware logs the ref with the request, so a reported ref finds the server-side record.
 
     Args:
         error: APIError or generic Exception to convert to response
@@ -132,13 +142,15 @@ def build_error_response(
         error_code = APIErrorCode.INTERNAL_ERROR.value
         message = str(error) or "An unexpected error occurred"
         details = {}
-        http_status = 500
+        http_status = APIError.default_http_status(APIErrorCode.INTERNAL_ERROR)
         retryable = False
 
+    ref = secrets.token_hex(3)
     response_data: dict[str, Any] = {
         "status": "error",
         "error_code": error_code,
-        "message": message,
+        "message": f"{message} (ref {ref})",
+        "ref": ref,
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
@@ -161,15 +173,17 @@ def build_error_response(
 
         response_data["debug_info"] = debug_info
 
-    return web.json_response(response_data, status=http_status)
+    response = web.json_response(response_data, status=http_status)
+    response["error"] = {"code": error_code, "ref": ref, "message": message}
+    return response
 
 
 def categorize_exception(
-    exc: Exception,
+    exc: BaseException,
     context: dict[str, Any] | None = None,
 ) -> APIError:
     """
-    Categorize a generic exception into a structured APIError.
+    Categorize a generic exception into a structured APIError; an APIError is returned as it is.
 
     This function attempts to identify the type of error based on the exception
     type, message patterns, and optional context information.
@@ -181,12 +195,25 @@ def categorize_exception(
     Returns:
         APIError with appropriate error code and details
     """
+    if isinstance(exc, APIError):
+        return exc
     context = context or {}
+    if isinstance(exc, SystemExit):
+        exited = f"Service {context['service']} exited" if context.get("service") else "Service exited"
+        return APIError(
+            error_code=APIErrorCode.SERVICE_ERROR,
+            message=redact_secrets(getattr(exc, "message", None)) or exited,
+            details={**context, "reason": "service_exit"},
+            retryable=False,
+        )
     root = exc.__cause__ or exc
     exc_str = f"{exc} {root}".lower()
     exc_type = type(root).__name__
 
-    if any(keyword in exc_str for keyword in ["geofence", "geoblock", "region", "not available in", "territory"]):
+    if any(
+        keyword in exc_str
+        for keyword in ["geofence", "geoblock", "geo-block", "geolocation", "region", "not available in", "territory"]
+    ):
         return APIError(
             error_code=APIErrorCode.GEOFENCE,
             message=f"Content not available in your region: {redact_secrets(str(exc))}",
@@ -227,7 +254,6 @@ def categorize_exception(
             message=f"Network error occurred: {redact_secrets(str(exc))}",
             details={**context, "reason": "network_connectivity"},
             retryable=True,
-            http_status=503,
         )
 
     if any(keyword in exc_str for keyword in ["not found", "404", "does not exist", "invalid id"]):
@@ -261,7 +287,6 @@ def categorize_exception(
             message=f"Service temporarily unavailable: {redact_secrets(str(exc))}",
             details={**context, "reason": "service_unavailable"},
             retryable=True,
-            http_status=503,
         )
 
     if any(keyword in exc_str for keyword in ["invalid", "malformed", "validation"]) or exc_type in [
@@ -278,13 +303,13 @@ def categorize_exception(
     return APIError(
         error_code=APIErrorCode.INTERNAL_ERROR,
         message=f"An unexpected error occurred: {redact_secrets(str(exc))}",
-        details={**context, "exception_type": exc_type},
+        details=context,
         retryable=False,
     )
 
 
 def handle_api_exception(
-    exc: Exception,
+    exc: BaseException,
     context: dict[str, Any] | None = None,
     debug_mode: bool = False,
     extra_debug_info: dict[str, Any] | None = None,
@@ -301,9 +326,4 @@ def handle_api_exception(
     Returns:
         Structured JSON error response
     """
-    if isinstance(exc, APIError):
-        api_error = exc
-    else:
-        api_error = categorize_exception(exc, context)
-
-    return build_error_response(api_error, debug_mode, extra_debug_info)
+    return build_error_response(categorize_exception(exc, context), debug_mode, extra_debug_info)

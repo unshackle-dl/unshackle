@@ -4,10 +4,13 @@ import logging
 import math
 import shutil
 import sys
+import unicodedata
 from datetime import datetime
+from functools import lru_cache
 from types import ModuleType
-from typing import IO, Any, Callable, Iterable, List, Literal, Mapping, Optional, TextIO, Union
+from typing import IO, Any, Callable, Iterable, List, Literal, Mapping, Optional, Sized, TextIO, Union, cast
 
+import rich.cells
 from rich import box
 from rich._log_render import FormatTimeCallable, LogRender
 from rich.color import Color, blend_rgb
@@ -210,7 +213,7 @@ class ComfyConsole(Console):
         get_time: Optional[Callable[[], float]] = None,
         _environ: Optional[Mapping[str, str]] = None,
         log_renderer: Optional[LogRender] = None,
-    ):
+    ) -> None:
         super().__init__(
             color_system=color_system,
             force_terminal=force_terminal,
@@ -244,12 +247,12 @@ class ComfyConsole(Console):
         if log_renderer:
             self._log_render = log_renderer
 
-    def status(
+    def status(  # type: ignore[override]
         self,
         status: RenderableType,
         *,
         spinner: str = "dots",
-        spinner_style: str = "status.spinner",
+        spinner_style: StyleType = "status.spinner",
         speed: float = 1.0,
         refresh_per_second: float = 12.5,
         pad: PaddingDimensions = (0, 5),
@@ -279,8 +282,8 @@ class ComfyConsole(Console):
         if pad:
             top, right, bottom, left = Padding.unpack(pad)
 
-            renderable_width = len(status_renderable.status)
-            spinner_width = len(status_renderable.renderable.text)
+            renderable_width = len(cast(Sized, status_renderable.status))
+            spinner_width = len(cast(Sized, status_renderable.renderable.text))
             status_width = spinner_width + renderable_width
 
             available_width = self.width - status_width
@@ -321,8 +324,8 @@ class ComfyConsole(Console):
                 live.start()
 
 
-primary_scheme = resolve_palette(config.theme)
-if primary_scheme is None:
+primary_scheme: dict[str, str] = resolve_palette(config.theme) or {}
+if not primary_scheme:
     logging.getLogger("console").warning(
         "Unknown theme %r, falling back to %s (available: %s)",
         config.theme,
@@ -411,6 +414,33 @@ def force_utf8_streams() -> None:
 
 force_utf8_streams()
 
+_rich_cell_size = rich.cells.get_character_cell_size
+
+
+@lru_cache(maxsize=4096)
+def _cell_size(character: str, *args: str) -> int:
+    """Count a spacing combining mark (Mc, e.g. Devanagari ि) as one cell, as terminals draw it; Rich's table says 0."""
+    return 1 if unicodedata.category(character) == "Mc" else _rich_cell_size(character, *args)
+
+
+_JOINING_VIRAMAS = frozenset("्্્୍్്")
+_rich_cell_len = rich.cells._cell_len
+
+
+def _cell_len(text: str, unicode_version: str) -> int:
+    """Count a consonant joined by a virama (the न्द in हिन्दी) as no cell: terminals draw the conjunct in one."""
+    width = _rich_cell_len(text, unicode_version)
+    if _JOINING_VIRAMAS.isdisjoint(text):
+        return width
+    return width - sum(
+        prev in _JOINING_VIRAMAS and unicodedata.category(char) == "Lo" for prev, char in zip(text, text[1:])
+    )
+
+
+rich.cells.get_character_cell_size = _cell_size
+rich.cells._cell_len = _cell_len
+rich.cells.cached_cell_len.cache_clear()
+
 console = ComfyConsole(
     log_time=False,
     log_path=False,
@@ -458,14 +488,23 @@ def print_wide(renderable: RenderableType, pad: PaddingDimensions = (1, 3)) -> N
     """Print a listing at the terminal width, indented like the rich-click help panels.
 
     The shared console holds 80 columns to keep logs and progress compact. Long values such as paths
-    and URLs fold badly at that width, so this widens the console for one print and restores it after.
+    and URLs fold badly at that width, so this widens the console for one print and restores it after. It
+    restores ``_width``, because on a legacy Windows console the ``width`` property reads one column less.
     """
-    fixed_width = console.width
-    console.width = max(fixed_width, shutil.get_terminal_size().columns)
+    fixed_width = console._width
+    console.width = max(console.width, shutil.get_terminal_size().columns - console.legacy_windows)
     try:
         console.print(Padding(renderable, pad))
     finally:
-        console.width = fixed_width
+        console._width = fixed_width
+
+
+def print_listing(renderable: RenderableType) -> None:
+    """Print a listing at the terminal width when ``wide_output`` is on, else at the shared console width."""
+    if config.wide_output:
+        print_wide(renderable, (0, 5))
+    else:
+        console.print(Padding(renderable, (0, 5)))
 
 
 _prompt_handler: Optional[Callable[[str], str]] = None
@@ -511,6 +550,7 @@ __all__ = (
     "console",
     "listing_panel",
     "listing_table",
+    "print_listing",
     "print_wide",
     "prompt_user",
     "set_notice_handler",

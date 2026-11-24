@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<MPD xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="urn:mpeg:dash:schema:mpd:2011"
+  xsi:schemaLocation="urn:mpeg:dash:schema:mpd:2011 DASH-MPD.xsd"
+  profiles="urn:mpeg:dash:profile:advanced-linear:2025" type="dynamic" id="42"
+  minBufferTime="PT2.000S" maxSegmentDuration="PT0H0M2.016S" minimumUpdatePeriod="PT0H0M2.002S"
+  timeShiftBufferDepth="PT0H0M30.000S" publishTime="2021-11-10T20:44:07.025Z"
+  availabilityStartTime="1977-05-25T18:00:00.000Z">
+  <Period id="817467999" start="PT389761H2M15.535S">
+    <AdaptationSet id="1" contentType="audio" mimeType="audio/mp4" segmentAlignment="true"
+      startWithSAP="1" audioSamplingRate="48000">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"/>
+      <SegmentTemplate initialization="$RepresentationID$/init.mp4"
+        media="$RepresentationID$/segment_$Time$.mp4" timescale="90000" startNumber="817472154"
+        presentationTimeOffset="135158">
+        <SegmentTimeline>
+          <Pattern id="1">
+            <P d="176640"/>
+            <P d="180480" r="10"/>
+            <P d="176640" r="1"/>
+            <P d="180480" r="10"/>
+            <P d="176640" r="1"/>
+            <P d="180480" r="4"/>
+          </Pattern>
+          <S t="546975158" r="164" p="1" pE="3"/>
+        </SegmentTimeline>
+      </SegmentTemplate>
+      <Representation id="eng_2ch" bandwidth="112000" codecs="mp4a.40.5"/>
+    </AdaptationSet>
+  </Period>
+</MPD>

@@ -146,6 +146,7 @@ calls.
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `theme` | str | `catppuccin-mocha` | Named colour theme for all CLI output: banner, logs, progress bars, and help screens. One of `catppuccin-mocha` (aliases `default`, `catppuccin`, `mocha`), `dracula`, `nord`, `gruvbox`, `one-dark` (alias `onedark`), `tokyo-night` (alias `tokyonight`), `monokai`, `flexoki`, `solarized-dark` (alias `solarized`). Case-insensitive; underscores work in place of hyphens. Unknown names fall back to the default with a warning. Preview them all with `unshackle env theme`. |
+| `wide_output` | bool | `false` | Print the `dl` title and track listings at the terminal width. When `false`, they fold at 80 columns, the width that logs and progress bars always use. |
 
 ---
 

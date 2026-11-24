@@ -1,0 +1,39 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<!-- MPD file Generated with GPAC version 0.5.1-DEV-rev4736M  on 2013-09-11T11:34:45Z-->
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011" minBufferTime="PT1.500000S" type="static" mediaPresentationDuration="PT0H9M54.00S" profiles="urn:mpeg:dash:profile:isoff-live:2011,http://dashif.org/guidelines/dash264">
+  <Period id="" duration="PT0H9M54.00S">
+    <AdaptationSet segmentAlignment="true" maxWidth="1280" maxHeight="720" maxFrameRate="24" par="16:9">
+      <Representation id="1" mimeType="video/mp4" codecs="avc1.42c01f" width="1280" height="720" frameRate="24" sar="1:1" startWithSAP="1" bandwidth="1541383">
+        <SegmentTemplate timescale="12288" media="BBB_720_1M_video_$Time$.mp4" initialization="BBB_720_1M_video_init.mp4">
+          <SegmentTimeline>
+            <S d="24576" r="-1" />
+          </SegmentTimeline>
+        </SegmentTemplate>
+      </Representation>
+      <Representation id="2" mimeType="video/mp4" codecs="avc1.42c01f" width="1280" height="720" frameRate="24" sar="1:1" startWithSAP="1" bandwidth="2517761">
+        <SegmentTemplate timescale="12288" media="BBB_720_2M_video_$Time$.mp4" initialization="BBB_720_2M_video_init.mp4">
+          <SegmentTimeline>
+            <S d="24576" r="-1" />
+          </SegmentTimeline>
+        </SegmentTemplate>
+      </Representation>
+      <Representation id="3" mimeType="video/mp4" codecs="avc1.42c01f" width="1280" height="720" frameRate="24" sar="1:1" startWithSAP="1" bandwidth="4399711">
+        <SegmentTemplate timescale="12288" media="BBB_720_4M_video_$Time$.mp4" initialization="BBB_720_4M_video_init.mp4">
+          <SegmentTimeline>
+            <S d="24576" r="-1" />
+          </SegmentTimeline>
+        </SegmentTemplate>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet segmentAlignment="true">
+      <Representation id="4" mimeType="audio/mp4" codecs="mp4a.40.29" audioSamplingRate="48000" startWithSAP="1" bandwidth="33434">
+        <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2" />
+        <SegmentTemplate timescale="48000" media="BBB_32k_$Time$.mp4" initialization="BBB_32k_init.mp4">
+          <SegmentTimeline>
+            <S d="94208" r="-1" />
+          </SegmentTimeline>
+        </SegmentTemplate>
+      </Representation>
+    </AdaptationSet>
+  </Period>
+</MPD>

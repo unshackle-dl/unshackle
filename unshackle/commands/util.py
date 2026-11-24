@@ -134,7 +134,7 @@ def crop(path: Path, aspect: str, letter: bool, offset: int, preview: bool) -> N
 
         ffmpeg_call = subprocess.Popen(
             [
-                binaries.FFMPEG,
+                str(binaries.FFMPEG),
                 "-nostdin",
                 "-y",
                 "-i",
@@ -224,7 +224,7 @@ def range_(path: Path, full: bool, preview: bool) -> None:
 
         ffmpeg_call = subprocess.Popen(
             [
-                binaries.FFMPEG,
+                str(binaries.FFMPEG),
                 "-nostdin",
                 "-y",
                 "-i",
@@ -296,6 +296,7 @@ def test(path: Path, map_: str) -> None:
             encoding="utf-8",
             errors="replace",
         )
+        assert p.stderr is not None
         reached_output = False
         errors = 0
         for line in p.stderr:

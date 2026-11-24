@@ -97,7 +97,7 @@ class EXAMPLE(Service):
     def cli(ctx: click.Context, **kwargs: Any) -> EXAMPLE:
         return EXAMPLE(ctx, **kwargs)
 
-    def __init__(self, ctx: click.Context, title: str, movie: bool, device: str):
+    def __init__(self, ctx: click.Context, title: str, movie: bool, device: str) -> None:
         self.title = title
         self.movie = movie
         self.device = device
@@ -284,24 +284,19 @@ class EXAMPLE(Service):
         for video in tracks.videos:
             video.range = range_
 
-            if range_ == Video.Range.HDR10P:
-                video.range = Video.Range.HDR10P
-
             if range_ == Video.Range.DV and vcodec == "H265":
                 video.dv_compatible_bitstream = True
 
 
         tracks.audio = [a for a in tracks.audio if "clear" not in (a.data["dash"]["representation"].get("id") or "")]
         for audio in tracks.audio:
-            if audio.channels == 6.0:
-                audio.channels = 5.1
             label = audio.data["dash"]["adaptation_set"].get("label") or ""
             if "Audio Description" in label or "description" in label.lower():
                 audio.descriptive = True
             if audio.data.get("isAtmos"):
                 audio.joc = 16
-            if audio.is_original_lang:
-                audio.name = "Original"
+            if "commentary" in label.lower():
+                audio.name = "Commentary"
 
         tracks.subtitles.clear()
         for sub in streams.get("captions", []):
@@ -341,14 +336,17 @@ class EXAMPLE(Service):
         return tracks
 
     def get_chapters(self, title: Title_T) -> Chapters:
-        chapters = Chapters()
+        chapters = []
         for chapter in title.data.get("chapters", []):
             if chapter["name"] == "Intro":
-                chapters.add(Chapter(timestamp=chapter["start"], name="Opening"))
-                chapters.add(Chapter(timestamp=chapter["end"]))
+                chapters.append(Chapter(timestamp=chapter["start"], name="Opening"))
+                chapters.append(Chapter(timestamp=chapter["end"]))
             elif chapter["name"] == "Credits":
-                chapters.add(Chapter(timestamp=chapter["start"], name="Credits"))
-        return chapters
+                chapters.append(Chapter(timestamp=chapter["start"], name="Credits"))
+        unique: dict[str, Chapter] = {}
+        for chapter in sorted(chapters, key=lambda c: not c.named):
+            unique.setdefault(chapter.timestamp, chapter)
+        return Chapters(sorted(unique.values(), key=lambda c: c.timestamp))
 
     def get_widevine_service_certificate(self, **_: Any) -> Optional[str]:
         return self.config.get("certificate")

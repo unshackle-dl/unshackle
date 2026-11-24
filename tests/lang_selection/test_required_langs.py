@@ -5,8 +5,7 @@ import inspect
 import pytest
 
 from unshackle.commands.dl import dl
-from unshackle.core.api import download_manager
-from unshackle.core.api.handlers import DEFAULT_DOWNLOAD_PARAMS
+from unshackle.core.api.handlers import DEFAULT_DOWNLOAD_PARAMS, cast_dl_params
 from unshackle.core.utilities import missing_required_langs
 
 
@@ -40,10 +39,11 @@ def test_orig_resolves_to_the_title_language():
     assert missing_required_langs(["orig"], ["en"], None) == []
 
 
-def test_exact_lang_separates_a_regional_variant_from_its_base():
+def test_a_regional_tag_never_matches_another_region():
     assert missing_required_langs(["en-US"], ["en-US"], exact=True) == []
     assert missing_required_langs(["en-US"], ["en-GB"], exact=True) == ["en-US"]
-    assert missing_required_langs(["en-US"], ["en-GB"]) == []
+    assert missing_required_langs(["en-US"], ["en-GB"]) == ["en-US"]
+    assert missing_required_langs(["orig"], ["en-GB"], "en-US") == []
 
 
 def test_all_and_best_tokens_require_nothing():
@@ -101,7 +101,7 @@ def test_api_accepts_the_require_flags():
 def test_api_reaches_dl_result(key, default):
     assert DEFAULT_DOWNLOAD_PARAMS[key] == default
     assert key in inspect.signature(dl.result).parameters
-    assert f'{key}=params.get("{key}", {default!r})' in inspect.getsource(download_manager)
+    assert cast_dl_params(dl.cli, {})[key] == default
 
 
 @pytest.mark.parametrize(
@@ -137,3 +137,8 @@ def test_all_three_require_flags_share_one_gate():
     for kind in ("audio", "video", "subtitle"):
         assert f'"{kind}",' in source
     assert "missing_required_langs(required, available, title.language, exact=exact_lang)" in source
+
+
+def test_exact_lang_turns_off_the_bare_tag_fallback():
+    assert missing_required_langs(["en"], ["en-GB"]) == []
+    assert missing_required_langs(["en"], ["en-GB"], exact=True) == ["en"]

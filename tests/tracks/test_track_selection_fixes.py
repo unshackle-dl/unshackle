@@ -97,6 +97,20 @@ def test_sort_videos_resolution_outranks_bitrate() -> None:
     assert [t.id for t in tracks.videos] == ["lo-bitrate-2160", "hi-bitrate-720"]
 
 
+def test_sort_videos_orders_crops_of_one_resolution_by_bitrate() -> None:
+    tracks = Tracks()
+    tracks.videos = [
+        make_video("1610-lo", height=1610, bitrate=4_000_000, width=3840),
+        make_video("1606-hi", height=1606, bitrate=15_000_000, width=3840),
+        make_video("1610-hi", height=1610, bitrate=16_000_000, width=3840),
+        make_video("804", height=804, bitrate=20_000_000, width=1920),
+    ]
+
+    tracks.sort_videos()
+
+    assert [t.id for t in tracks.videos] == ["1610-hi", "1606-hi", "1610-lo", "804"]
+
+
 def test_sort_videos_unknown_bitrate_still_wins_on_resolution() -> None:
     tracks = Tracks()
     tracks.videos = [
@@ -136,3 +150,25 @@ def test_sort_audio_codec_priority_beats_bitrate() -> None:
 
     best = Tracks.by_language(tracks.audio, ["en"])[0]
     assert best.id == "ec3-320"
+
+
+def test_dedupe_keeps_the_first_copy_and_every_track_that_differs() -> None:
+    tracks = Tracks()
+    tracks.audio = [
+        make_audio("ec3-a", codec=Audio.Codec.EC3, bitrate=128_000),
+        make_audio("ec3-b", codec=Audio.Codec.EC3, bitrate=128_000),
+        make_audio("aac", codec=Audio.Codec.AAC, bitrate=128_000),
+        make_audio("ec3-desc", codec=Audio.Codec.EC3, bitrate=128_000, descriptive=True),
+        make_audio("ec3-atmos", codec=Audio.Codec.EC3, bitrate=128_000, joc=16),
+        make_audio("ec3-de", codec=Audio.Codec.EC3, bitrate=128_000, language="de"),
+    ]
+    tracks.videos = [
+        make_video("hevc-a", height=1080, bitrate=5_000_000, width=1920),
+        make_video("hevc-b", height=1080, bitrate=5_000_000, width=1920),
+        make_video("hevc-hi", height=1080, bitrate=8_000_000, width=1920),
+    ]
+
+    tracks.dedupe()
+
+    assert [a.id for a in tracks.audio] == ["ec3-a", "aac", "ec3-desc", "ec3-atmos", "ec3-de"]
+    assert [v.id for v in tracks.videos] == ["hevc-a", "hevc-hi"]

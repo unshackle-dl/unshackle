@@ -5,7 +5,7 @@ from sqlite3 import Connection
 from typing import Iterator, Optional, Union
 from uuid import UUID
 
-from unshackle.core.vault import Vault
+from unshackle.core.vault import Vault, is_null_key
 
 
 class SQLite(Vault):
@@ -13,7 +13,7 @@ class SQLite(Vault):
 
     local = True
 
-    def __init__(self, name: str, path: Union[str, Path], no_push: bool = False):
+    def __init__(self, name: str, path: Union[str, Path], no_push: bool = False) -> None:
         super().__init__(name, no_push)
         self.path = Path(path).expanduser()
         self.conn_factory = ConnectionFactory(self.path)
@@ -57,7 +57,7 @@ class SQLite(Vault):
             cursor.close()
 
     def add_key(self, service: str, kid: Union[UUID, str], key: str) -> bool:
-        if not key or key.count("0") == len(key):
+        if is_null_key(key):
             raise ValueError("You cannot add a NULL Content Key to a Vault.")
 
         service = self.resolve_table(service) or service
@@ -92,7 +92,7 @@ class SQLite(Vault):
 
     def add_keys(self, service: str, kid_keys: dict[Union[UUID, str], str]) -> int:
         for kid, key in kid_keys.items():
-            if not key or key.count("0") == len(key):
+            if is_null_key(key):
                 raise ValueError("You cannot add a NULL Content Key to a Vault.")
 
         service = self.resolve_table(service) or service
@@ -110,7 +110,7 @@ class SQLite(Vault):
         self.create_bad_keys_table()
         bad = set(self.conn_factory.get().execute("SELECT lower(`kid`), lower(`key_`) FROM `bad_keys`").fetchall())
         kid_keys = {
-            kid: key_ for kid, key_ in kid_keys.items() if (kid.replace("-", "").lower(), key_.lower()) not in bad
+            kid: key_ for kid, key_ in kid_keys.items() if (str(kid).replace("-", "").lower(), key_.lower()) not in bad
         }
 
         if not kid_keys:
@@ -252,7 +252,7 @@ class SQLite(Vault):
         finally:
             cursor.close()
 
-    def create_table(self, name: str):
+    def create_table(self, name: str) -> None:
         """Make a Table with the specified name if it does not exist yet."""
         if self.has_table(name):
             return
@@ -278,7 +278,7 @@ class SQLite(Vault):
 
 
 class ConnectionFactory:
-    def __init__(self, path: Union[str, Path]):
+    def __init__(self, path: Union[str, Path]) -> None:
         self._path = path
         self._store = threading.local()
 

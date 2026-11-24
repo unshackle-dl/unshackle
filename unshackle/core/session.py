@@ -6,19 +6,24 @@ import http
 import logging
 import math
 import random
+import re
+import sys
 import time
 from collections.abc import Iterator, MutableMapping
+from copy import copy
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
-from http.cookiejar import CookieJar
-from typing import Any, Optional
+from http.cookiejar import Cookie, CookieJar
+from typing import Any, Optional, Union
 from urllib.parse import urlencode, urlparse, urlunparse
 
 import rnet
-from requests import HTTPError, Request, Response
+from requests import HTTPError, Request, Response, Session
+from requests.cookies import create_cookie
 from requests.structures import CaseInsensitiveDict
 
 from unshackle.core.config import config
+from unshackle.core.utils import run_proxy
 
 MAX_RETRIES = 5
 BACKOFF_FACTOR = 0.2
@@ -42,11 +47,7 @@ def resolve_impersonate(browser: str) -> rnet.Impersonate:
     preset = getattr(rnet.Impersonate, browser, None)
     if preset is not None:
         return preset
-    raise ValueError(
-        f"Unknown impersonate preset: {browser!r}. "
-        f"Use exact rnet preset names like 'Chrome131', 'OkHttp4_12', 'Edge101'. "
-        f"See rnet.Impersonate for all available presets."
-    )
+    raise ValueError(f"Unknown impersonate preset {browser!r}, expected an rnet.Impersonate name such as 'Chrome131'")
 
 
 METHOD_MAP: dict[str, rnet.Method] = {
@@ -96,13 +97,13 @@ class RnetResponseHeaders(MutableMapping):
     def __len__(self) -> int:
         return self._map.keys_len()
 
-    def get(self, key: str, default: Optional[str] = None) -> Optional[str]:
+    def get(self, key: str, default: Optional[str] = None) -> Optional[str]:  # type: ignore[override]
         val = self._map.get(key)
         if val is None:
             return default
         return self.decode(val)
 
-    def items(self) -> list[tuple[str, str]]:
+    def items(self) -> list[tuple[str, str]]:  # type: ignore[override]
         return [(self.decode(k), self.decode(v)) for k, v in self._map.items()]
 
 
@@ -190,7 +191,7 @@ class RnetResponse:
         if not self.ok:
             raise HTTPError(
                 f"{self.status_code} {self.reason}: {self.url}",
-                response=self,
+                response=self,  # type: ignore[arg-type]
             )
 
     def iter_content(self, chunk_size: Optional[int] = None) -> Iterator[bytes]:
@@ -282,209 +283,230 @@ class RnetSessionHeaders(CaseInsensitiveDict):
 
 
 class RnetCookieAdapter(MutableMapping):
-    """Cookie adapter that bridges requests-style cookie access to rnet."""
+    """Cookie adapter that bridges requests-style cookie access to rnet.
+
+    One store keyed by (domain, path, name) holds every cookie set through this class, in write
+    order. Same-name cookies on different paths stay apart on the wire, and the latest write
+    answers a lookup by name.
+    """
 
     def __init__(self, client: Any, session: Optional[RnetSession] = None) -> None:
         self._client = client
         self._session = session
-        self._cookies: dict[str, dict[str, str]] = {}
-        self._flat: dict[str, str] = {}
-        self._original_cookies: list[Any] = []
+        self._store: dict[tuple[str, str, str], Cookie] = {}
+        self._from_jar: set[tuple[str, str, str]] = set()
 
-    def set_cookie_on_client(self, url: str, name: str, value: str) -> None:
-        """Set a cookie on the rnet client, or buffer locally if the client is not yet created."""
+    @staticmethod
+    def client_url(cookie: Cookie) -> str:
+        """The URL rnet stores *cookie* under; a domain-less cookie goes to localhost."""
+        host = (cookie.domain or "").lstrip(".")
+        return f"https://{host}" if host else "https://localhost"
+
+    @staticmethod
+    def to_rnet(cookie: Cookie) -> rnet.Cookie:
+        """The rnet form of *cookie*.
+
+        A leading dot marks a cookie for subdomains too, as in a Netscape cookie file; without
+        one the cookie stays on its own host. Expiry stays out, so no layer drops a cookie the
+        cookie loader deliberately kept.
+        """
+        domain = cookie.domain or ""
+        return rnet.Cookie(
+            cookie.name,
+            cookie.value or "",
+            domain=domain if domain.startswith(".") else None,
+            path=cookie.path or "/",
+            secure=bool(cookie.secure),
+        )
+
+    def push(self, cookie: Cookie) -> None:
+        """Set *cookie* on the rnet client; before the client exists the store buffers it."""
         if self._client is not None:
             try:
-                self._client.set_cookie(url, rnet.Cookie(name, value))
+                self._client.set_cookie(self.client_url(cookie), self.to_rnet(cookie))
             except Exception:
                 pass
 
+    def add(self, cookie: Cookie, from_jar: bool = False) -> None:
+        """Store *cookie* as the latest write for its (domain, path, name) and send it to the client."""
+        key = (cookie.domain or "", cookie.path or "/", cookie.name)
+        self._store.pop(key, None)
+        self._store[key] = cookie
+        if from_jar:
+            self._from_jar.add(key)
+        self.push(cookie)
+
+    def snapshot(self) -> list[Cookie]:
+        """Every stored cookie, oldest write first. Download threads write the store, so read a copy."""
+        return list(self._store.values())
+
     def flush_to_client(self) -> None:
         """Push all buffered cookies to the rnet client after unshackle makes it."""
-        if self._client is None:
-            return
-        for domain, cookies in self._cookies.items():
-            url = f"https://{domain.lstrip('.')}" if domain else "https://localhost"
-            for name, value in cookies.items():
-                try:
-                    self._client.set_cookie(url, rnet.Cookie(name, value))
-                except Exception:
-                    pass
+        for cookie in self.snapshot():
+            self.push(cookie)
 
-    def client_urls(self, domain: Optional[str] = None) -> list[str]:
+    def client_urls(self, domain: Optional[str] = None, name: Optional[str] = None) -> list[str]:
         """URLs the rnet cookie jar could hold a cookie under.
 
-        rnet keys its jar by URL and cannot list the jar whole, so a removal has to name every
-        URL this class has set a cookie on and every origin the HTTP session has requested.
+        rnet keys its jar by URL, removes a cookie only at its exact path, and cannot list the
+        jar. So a removal names every host this class has set a cookie on, every origin the
+        HTTP session has requested, and every stored path of the cookie *name*.
         """
-        urls = {f"https://{d.lstrip('.')}" for d in self._cookies if d}
-        urls.add("https://localhost")
+        cookies = self.snapshot()
+        hosts = {self.client_url(c) for c in cookies} | {"https://localhost"}
         if self._session is not None:
-            urls |= set(self._session._origins)
+            hosts |= set(self._session._origins)
         if domain is not None:
             host = domain.lstrip(".")
-            urls = {url for url in urls if (urlparse(url).hostname or "") == host}
-            urls.add(f"https://{host}")
-        return sorted(urls)
+            hosts = {url for url in hosts if (urlparse(url).hostname or "") == host} | {f"https://{host}"}
+        paths = {c.path for c in cookies if c.path and c.path != "/" and (name is None or c.name == name)}
+        return sorted(hosts | {url + path for url in hosts for path in paths})
 
     def remove_cookie_on_client(self, name: str, domain: Optional[str] = None) -> None:
-        """Drop a cookie from the rnet cookie jar.
+        """Drop a cookie from the rnet cookie jar; call it before the store forgets the cookie's paths.
 
         The client is built with cookie_store=True, so a cookie the server set lives in that
-        jar alone. Dropping it from the local dicts leaves it going out on the wire.
+        jar alone. Dropping it from the store leaves it going out on the wire.
         """
         if self._client is None:
             return
-        for url in self.client_urls(domain):
+        for url in self.client_urls(domain, name):
             try:
                 self._client.remove_cookie(url, name)
             except Exception:
                 pass
 
+    def absorb(self, response: Any) -> None:
+        """Take a value the server set for a stored cookie, so a client rebuild or a cookie save keeps it.
+
+        A server cookie replaces each stored cookie of the same name and path that covers the
+        response host, and an expired one drops it.
+        """
+        server_cookies = response.cookies if self._store else None
+        if not server_cookies:
+            return
+        parsed = urlparse(response.url)
+        host = parsed.hostname or ""
+        default_path = (parsed.path[: parsed.path.rfind("/")] or "/") if parsed.path.startswith("/") else "/"
+        now = datetime.now(timezone.utc)
+        for server_cookie in server_cookies:
+            path = server_cookie.path if (server_cookie.path or "").startswith("/") else default_path
+            expires, max_age = server_cookie.expires, server_cookie.max_age
+            if expires is not None and expires.tzinfo is None:
+                expires = expires.replace(tzinfo=timezone.utc)
+            expired = (max_age is not None and max_age.total_seconds() <= 0) or (expires is not None and expires <= now)
+            for cookie in self.snapshot():
+                domain = cookie.domain or ""
+                if cookie.name != server_cookie.name or cookie.path != path or not domain:
+                    continue
+                if host != domain.lstrip(".") and not (domain.startswith(".") and host.endswith(domain)):
+                    continue
+                if expired:
+                    self.clear(domain=domain, path=path, name=cookie.name)
+                elif cookie.value != server_cookie.value:
+                    fresh = copy(cookie)
+                    fresh.value = server_cookie.value
+                    self.add(fresh)
+
     @property
     def jar(self) -> CookieJar:
-        """Return a CookieJar with original Cookie objects (requests compat).
+        """Return a CookieJar of the cookies that arrived as a CookieJar (requests compat).
 
-        ``save_cookies`` in dl.py uses this to write cookies back to disk.
+        ``save_cookies`` in dl.py uses this to write cookies back to disk, so it carries a value
+        the server rotated for one of those cookies but not the cookies set by name.
         """
         jar = CookieJar()
-        for cookie in self._original_cookies:
-            jar.set_cookie(cookie)
+        for key, cookie in list(self._store.items()):
+            if key in self._from_jar:
+                jar.set_cookie(cookie)
         return jar
 
-    def update(self, other: Any = None, **kwargs: Any) -> None:
+    def update(self, other: Any = None, /, **kwargs: Any) -> None:
         if other is None:
             other = {}
-        if isinstance(other, CookieJar):
+        if isinstance(other, (CookieJar, list)):
             for cookie in other:
-                domain = cookie.domain or ""
-                name = cookie.name
-                value = cookie.value or ""
-                self._flat[name] = value
-                self._cookies.setdefault(domain, {})[name] = value
-                self._original_cookies.append(cookie)
-                url = f"https://{domain.lstrip('.')}" if domain else "https://localhost"
-                self.set_cookie_on_client(url, name, value)
-        elif isinstance(other, dict):
-            for name, value in other.items():
-                self._flat[name] = value
-                self.set_cookie_on_client("https://localhost", name, str(value))
-            self._flat.update(other)
+                self.add(cookie, from_jar=True)
         elif hasattr(other, "items"):
             for name, value in other.items():
-                self._flat[name] = str(value)
-                self.set_cookie_on_client("https://localhost", name, str(value))
-
+                self.add(create_cookie(name, str(value)))
         for name, value in kwargs.items():
-            self._flat[name] = value
-            self.set_cookie_on_client("https://localhost", name, value)
+            self.add(create_cookie(name, str(value)))
 
-    def get(
+    def get(  # type: ignore[override]
         self, name: str, default: Optional[str] = None, domain: Optional[str] = None, path: Optional[str] = None
     ) -> Optional[str]:
-        if domain and domain in self._cookies:
-            return self._cookies[domain].get(name, default)
-        return self._flat.get(name, default)
+        """The latest value of *name*."""
+        for cookie in reversed(self.snapshot()):
+            if cookie.name == name and domain in (None, cookie.domain) and path in (None, cookie.path):
+                return cookie.value
+        return default
 
-    def set(self, name: str, value: str, domain: str = "localhost") -> None:
-        self._flat[name] = value
-        self._cookies.setdefault(domain, {})[name] = value
-        url = f"https://{domain.lstrip('.')}"
-        self.set_cookie_on_client(url, name, value)
+    def set(self, name: str, value: str, domain: str = "localhost", path: str = "/", **kwargs: Any) -> None:
+        self.add(create_cookie(name, value, domain=domain, path=path, **kwargs))
+
+    def flat(self) -> dict[str, str]:
+        """Each cookie name with its latest value."""
+        return {cookie.name: cookie.value or "" for cookie in self.snapshot()}
 
     def __getitem__(self, name: str) -> str:
-        return self._flat[name]
+        return self.flat()[name]
 
     def __setitem__(self, name: str, value: str) -> None:
         self.set(name, value)
 
     def __delitem__(self, name: str) -> None:
-        self._flat.pop(name, None)
-        for domain_cookies in self._cookies.values():
-            domain_cookies.pop(name, None)
-        self._original_cookies = [cookie for cookie in self._original_cookies if cookie.name != name]
-        self.remove_cookie_on_client(name)
+        self.clear(name=name)
 
     def __contains__(self, name: object) -> bool:
-        return name in self._flat
+        return any(cookie.name == name for cookie in self.snapshot())
 
     def __iter__(self) -> Iterator:
-        return iter(self._flat)
+        return iter(self.flat())
 
     def __len__(self) -> int:
-        return len(self._flat)
+        return len(self.flat())
 
     def __bool__(self) -> bool:
-        return bool(self._flat)
+        return bool(self._store)
 
     def get_dict(self, domain: Optional[str] = None, path: Optional[str] = None) -> dict[str, str]:
-        """Return cookies as a plain dict (requests RequestsCookieJar compat).
-
-        With a *domain*, this method returns only the cookies for that domain.
-        It accepts *path* for API compatibility but ignores it (flat storage).
-        """
-        if domain is not None:
-            return dict(self._cookies.get(domain, {}))
-        return dict(self._flat)
-
-    def get_dict_by_domain(self) -> dict[str, dict[str, str]]:
-        """Return cookies grouped by domain, domain-less ones under ``""``.
-
-        rnet scopes each cookie to the host of the URL it was set on, so a copy made with
-        ``get_dict`` can only ever replay against one host. This class records cookies that
-        arrived as a plain dict flat only, and reports them under the empty domain, to match
-        the localhost fallback in :meth:`flush_to_client`.
-        """
-        grouped = {domain: dict(cookies) for domain, cookies in self._cookies.items() if cookies}
-        scoped = {name for cookies in grouped.values() for name in cookies}
-        leftovers = {name: value for name, value in self._flat.items() if name not in scoped}
-        if leftovers:
-            grouped[""] = {**grouped.get("", {}), **leftovers}
-        return grouped
+        """Return cookies as a plain dict (requests RequestsCookieJar compat), filtered by exact domain and path."""
+        return {c.name: c.value or "" for c in self.snapshot() if domain in (None, c.domain) and path in (None, c.path)}
 
     def clear(self, domain: Optional[str] = None, path: Optional[str] = None, name: Optional[str] = None) -> None:
         """Remove cookies (requests RequestsCookieJar compat).
 
         - ``clear()`` removes all cookies.
-        - ``clear(domain=..., path=..., name=...)`` removes a specific cookie.
+        - ``clear(domain=..., path=..., name=...)`` removes the cookies that match every given filter.
         """
-        if name is not None:
-            self._flat.pop(name, None)
-            if domain is not None and domain in self._cookies:
-                self._cookies[domain].pop(name, None)
-            else:
-                for domain_cookies in self._cookies.values():
-                    domain_cookies.pop(name, None)
-            self._original_cookies = [
-                cookie
-                for cookie in self._original_cookies
-                if cookie.name != name or (domain is not None and cookie.domain != domain)
-            ]
-            self.remove_cookie_on_client(name, domain)
-        elif domain is not None:
-            removed = self._cookies.pop(domain, {})
-            for k in removed:
-                still_exists = any(k in dc for dc in self._cookies.values())
-                if not still_exists:
-                    self._flat.pop(k, None)
-            self._original_cookies = [cookie for cookie in self._original_cookies if cookie.domain != domain]
-            for k in removed:
-                self.remove_cookie_on_client(k, domain)
-        else:
-            self._flat.clear()
-            self._cookies.clear()
-            self._original_cookies.clear()
+        if domain is None and path is None and name is None:
+            self._store.clear()
+            self._from_jar.clear()
             if self._client is not None:
                 self._client.clear_cookies()
+            return
 
-    def items(self) -> list[tuple[str, str]]:
-        return list(self._flat.items())
+        def hit(cookie: Cookie) -> bool:
+            return domain in (None, cookie.domain) and path in (None, cookie.path) and name in (None, cookie.name)
 
-    def keys(self) -> list[str]:
-        return list(self._flat.keys())
+        names = {name} if name is not None else {c.name for c in self.snapshot() if hit(c)}
+        for each in names:
+            self.remove_cookie_on_client(each, domain)
+        self._store = {key: c for key, c in list(self._store.items()) if not hit(c)}
+        self._from_jar &= self._store.keys()
+        for cookie in self.snapshot():
+            if cookie.name in names:
+                self.push(cookie)
 
-    def values(self) -> list[str]:
-        return list(self._flat.values())
+    def items(self) -> list[tuple[str, str]]:  # type: ignore[override]
+        return list(self.flat().items())
+
+    def keys(self) -> list[str]:  # type: ignore[override]
+        return list(self.flat().keys())
+
+    def values(self) -> list[str]:  # type: ignore[override]
+        return list(self.flat().values())
 
 
 class RnetProxyDict(dict):
@@ -519,6 +541,33 @@ class MaxRetriesError(Exception):
     def __init__(self, message: str, cause: Optional[Exception] = None) -> None:
         super().__init__(message)
         self.__cause__ = cause
+
+
+RNET_ERROR_TEXT_RE = re.compile(r'error: "([^"]+)"')
+
+
+def failure_response(exc: BaseException) -> Any:
+    """The HTTP response of a status failure, or None.
+
+    RnetSession wraps a forcelist HTTPError in MaxRetriesError as ``__cause__``, so this unwraps one level.
+    """
+    response = getattr(exc, "response", None)
+    return response if response is not None else getattr(exc.__cause__, "response", None)
+
+
+def failure_reason(exc: BaseException) -> str:
+    """Name a request failure without its URL, which can carry signed tokens.
+
+    Gives the HTTP status of a status failure, else the exception class and, for an rnet error,
+    its innermost error text.
+    """
+    inner = exc.__cause__ or exc
+    response = failure_response(exc)
+    status = getattr(response, "status_code", None)
+    if isinstance(status, int):
+        return f"{status} {getattr(response, 'reason', '') or ''}".strip()
+    texts = RNET_ERROR_TEXT_RE.findall(str(inner))
+    return f"{type(inner).__name__} ({texts[-1]})" if texts else type(inner).__name__
 
 
 class RnetSession:
@@ -577,10 +626,7 @@ class RnetSession:
         ):
             if key in session_kwargs:
                 client_kwargs[key] = session_kwargs.pop(key)
-        if "proxy" in session_kwargs:
-            proxy_url = session_kwargs.pop("proxy")
-            if proxy_url:
-                client_kwargs["proxies"] = [rnet.Proxy.all(proxy_url)]
+        proxy_url = session_kwargs.pop("proxy", None)
 
         client_kwargs["cookie_store"] = True
 
@@ -595,6 +641,7 @@ class RnetSession:
         self.headers = RnetSessionHeaders(self)
         self.cookies = RnetCookieAdapter(None, self)
         self.proxies = RnetProxyDict(self)
+        self.proxy_exempt = False
 
         if "headers" in session_kwargs:
             self.headers.update(session_kwargs.pop("headers"))
@@ -602,6 +649,8 @@ class RnetSession:
             self.cookies.update(session_kwargs.pop("cookies"))
         if "proxies" in session_kwargs:
             self.proxies.update(session_kwargs.pop("proxies"))
+        if proxy_url:
+            self.proxies.update({"all": proxy_url})
 
     @property
     def impersonate_name(self) -> Optional[str]:
@@ -636,9 +685,10 @@ class RnetSession:
         that replaces the impersonate header set instead of overlaying it, which breaks the
         fingerprint.
 
-        A new client also starts with an empty cookie jar. This method replays the cookies
-        unshackle set itself, then the cookies of every origin this HTTP session has used.
-        That order lets a value the server rotated win over the buffered one. The new client
+        A new client also starts with an empty cookie jar. This method replays the stored
+        cookies, which hold any value the server rotated for them, then the root-path cookies
+        of every origin this HTTP session has used. A cookie the server set on a deeper path
+        that the store never held is lost, because rnet cannot list its jar. The new client
         goes on the HTTP session last, so a request from another thread keeps the old client
         until the new one holds the headers and the cookies.
         """
@@ -655,14 +705,19 @@ class RnetSession:
         self._client = client
 
     @staticmethod
-    def set_cookie_header(client: rnet.BlockingClient, origin: str, header: str) -> None:
-        """Set every cookie in a ``name=value; ...`` header string on one origin of *client*."""
+    def parse_cookie_header(header: str) -> Iterator[tuple[str, str]]:
+        """The ``(name, value)`` pairs of a ``name=value; ...`` header string."""
         for pair in header.split(";"):
             name, separator, value = pair.partition("=")
-            if not separator:
-                continue
+            if separator:
+                yield name.strip(), value.strip()
+
+    @staticmethod
+    def set_cookie_header(client: rnet.BlockingClient, origin: str, header: str) -> None:
+        """Set every cookie in a ``name=value; ...`` header string on one origin of *client*."""
+        for name, value in RnetSession.parse_cookie_header(header):
             try:
-                client.set_cookie(origin, rnet.Cookie(name.strip(), value.strip()))
+                client.set_cookie(origin, rnet.Cookie(name, value))
             except Exception:
                 pass
 
@@ -695,6 +750,26 @@ class RnetSession:
             if raw:
                 exported[origin] = raw.decode("utf-8", errors="replace")
         return exported
+
+    def scoped_cookies(self) -> CookieJar:
+        """Every cookie this HTTP session sends, each scoped to its domain.
+
+        The live client's root-path cookies of each requested origin come first, then the
+        cookies stored in :attr:`cookies` with their own paths.
+        """
+        jar = CookieJar()
+        hosts: dict[str, set[str]] = {}
+        for origin, header in self.export_origin_cookies().items():
+            host = urlparse(origin).hostname or ""
+            for name, value in self.parse_cookie_header(header):
+                jar.set_cookie(create_cookie(name, value, domain=host))
+                hosts.setdefault(name, set()).add(host)
+        for cookie in self.cookies.snapshot():
+            bare = (cookie.domain or "").lstrip(".")
+            live = any(h == bare or h.endswith("." + bare) for h in hosts.get(cookie.name, ()))
+            if not (live and cookie.path in ("", "/")):
+                jar.set_cookie(cookie)
+        return jar
 
     def import_origin_cookies(self, exported: dict[str, str]) -> None:
         """Load cookie headers from :meth:`export_origin_cookies` into this HTTP session's client."""
@@ -750,6 +825,14 @@ class RnetSession:
         sleep_time = backoff_value + random.uniform(-jitter, jitter)
         return min(sleep_time, self.max_backoff)
 
+    def absorb_cookies(self, response: RnetResponse) -> RnetResponse:
+        """Record a value the server set for a stored cookie; a cookie fault must never fail the request."""
+        try:
+            self.cookies.absorb(response)
+        except Exception:  # nosec B110 - the store keeps its old value, the rnet jar still has the new one
+            pass
+        return response
+
     def request(self, method: str, url: str, **kwargs: Any) -> RnetResponse:
         """Send a request, retrying on the status forcelist and on the caught exception types.
 
@@ -768,6 +851,11 @@ class RnetSession:
         url = self.build_url(url, kwargs.pop("params", None))
 
         parsed_origin = urlparse(url)
+        if run_proxy.watched and not self.proxy_exempt and not self._client_kwargs.get("proxies"):
+            try:
+                run_proxy.check(parsed_origin.hostname, sys._getframe(1))
+            except Exception:  # nosec B110 - the proxy check only warns, it must never fail a request
+                pass
         if parsed_origin.scheme and parsed_origin.netloc:
             self._origins.add(f"{parsed_origin.scheme}://{parsed_origin.netloc}")
 
@@ -795,16 +883,14 @@ class RnetSession:
             kwargs["headers"] = dict(kwargs["headers"])
 
         if method_upper not in self.allowed_methods:
-            raw_resp = client.request(rnet_method, url, **kwargs)
-            return RnetResponse(raw_resp)
+            return self.absorb_cookies(RnetResponse(client.request(rnet_method, url, **kwargs)))
 
         last_exception: Optional[Exception] = None
         response: Optional[RnetResponse] = None
 
         for attempt in range(max_retries + 1):
             try:
-                raw_resp = client.request(rnet_method, url, **kwargs)
-                response = RnetResponse(raw_resp)
+                response = self.absorb_cookies(RnetResponse(client.request(rnet_method, url, **kwargs)))
 
                 if config.debug_requests:
                     parsed_url = urlparse(url)
@@ -822,27 +908,29 @@ class RnetSession:
 
                 if response.status_code not in self.status_forcelist:
                     return response
-                last_exception = HTTPError(f"Received status code: {response.status_code}", response=response)
-                self.log.warning(
-                    f"{response.status_code} {response.reason}({urlparse(url).path}). Retrying... "
-                    f"({attempt + 1}/{max_retries})"
+                last_exception = HTTPError(
+                    f"Received status code: {response.status_code}",
+                    response=response,  # type: ignore[arg-type]
                 )
+                failure = failure_reason(last_exception)
 
             except self.catch_exceptions as e:
                 last_exception = e
                 response = None
-                self.log.warning(
-                    f"{e.__class__.__name__}({urlparse(url).path}). Retrying... ({attempt + 1}/{max_retries})"
-                )
+                failure = failure_reason(e)
 
             if attempt < max_retries:
+                self.log.warning(f"{failure}({urlparse(url).path}). Retrying... ({attempt + 1}/{max_retries})")
                 if sleep_duration := self.get_sleep_time(response, attempt + 1):
                     if sleep_duration > 0:
                         time.sleep(sleep_duration)
             else:
                 break
 
-        raise MaxRetriesError(f"Max retries exceeded for {method} {url}", cause=last_exception)
+        attempts = f" after {max_retries + 1} attempts" if max_retries else ""
+        raise MaxRetriesError(
+            f"{method_upper} {parsed_origin.hostname} failed{attempts}: {failure}", cause=last_exception
+        )
 
     def get(self, url: str, **kwargs: Any) -> RnetResponse:
         return self.request("GET", url, **kwargs)
@@ -883,8 +971,8 @@ class RnetSession:
         send_kwargs: dict[str, Any] = {}
         if req.headers:
             send_kwargs["headers"] = dict(req.headers)
-        if req.body:
-            send_kwargs["data"] = req.body
+        if req.data:
+            send_kwargs["data"] = req.data
         if req.json:
             send_kwargs["json"] = req.json
 
@@ -898,6 +986,9 @@ class RnetSession:
     def close(self) -> None:
         """No-op. rnet manages its own resources."""
         pass
+
+
+AnySession = Union[Session, RnetSession]
 
 
 def session(

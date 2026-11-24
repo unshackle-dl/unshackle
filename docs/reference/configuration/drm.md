@@ -17,8 +17,12 @@ Over `--remote`, an override also makes your device license the remote session, 
 CDM. A per-service entry does the same when it names a device without a quality: a device name,
 a `widevine` or `playready` sub-entry, or a profile or `default` sub-entry. A per-service entry
 that selects only by quality, or only for a different profile, loads no device when the run
-starts. unshackle then shows a warning, and the server decides who licenses the remote session.
-With only the top-level `default` entry, the server CDM licenses when the API key has it. See
+starts. When `server_cdm` is unset, unshackle then shows a warning, and the server decides who
+licenses the remote session.
+On a server, an API key can replace the entry for a service with its own (see
+[`serve`](services.md#serve)).
+With only the top-level `default` entry, the server CDM licenses when the API key has it. Set
+`server_cdm: true` on the server entry to keep a per-service entry for local runs only. See
 [`remote_services`](services.md#remote_services).
 
 ```yaml
@@ -48,7 +52,12 @@ height is known. If the value is still a dict after that, unshackle uses
 When an entry holds `widevine` and `playready`, their order sets which device unshackle loads
 first. A track that offers the two DRM systems licenses with that system. A track that offers
 only the other system uses the other device. A `widevine` / `playready` dict in a quality key
-does not set the order. The server CDM of a remote session follows the same order.
+does not set the order.
+
+On a server, an entry that holds `widevine` and `playready` gives a remote session the server CDM
+of the DRM system of the client's local CDM. The service then makes its manifest for that system,
+so the client's vault keys and its own device apply to the tracks. A client with no local CDM gets
+the device that the entry lists first.
 
 A quality key can also hold a dict of `widevine` / `playready` devices, and so can the
 top-level `default` entry:
@@ -180,6 +189,16 @@ service tag case-insensitively and uses the `default` entry as the fallback.
 
 unshackle decrypts HLS AES-128 ClearKey in-process and ignores this setting.
 
+unshackle decrypts a stereoscopic 3D (MV-HEVC) track with mp4decrypt whatever this setting says.
+shaka-packager refuses its Dolby Vision configuration (version 3), and before v3.5.0 it also drops
+the boxes of the second view.
+
+mp4decrypt finds a content key by the KID in the first `sinf` box of the track. When that box
+has no CENC `tenc` (for example, a PIFF `sinf` before the CENC one), unshackle also gives
+mp4decrypt the content key of that KID by track ID. When mp4decrypt copies a track through
+still encrypted, unshackle decrypts it again with shaka-packager and logs a warning. This
+retry needs shaka-packager installed.
+
 === "Global"
 
     ```yaml
@@ -206,7 +225,8 @@ This works with `mp4decrypt` only. Set [`decryption`](#decryption) to `mp4decryp
 service (or as the default); with `shaka` the option has no effect, because shaka-packager
 cannot decrypt a segment without its init segment. It applies to DASH tracks and to HLS
 tracks that use one init segment, one `EXT-X-KEY` and no `EXT-X-DISCONTINUITY`. Every other
-track keeps the whole-file decryption.
+track keeps the whole-file decryption, and so does a track whose init segment mp4decrypt
+cannot key by KID when no content key has that KID.
 
 !!! note "No resume"
 

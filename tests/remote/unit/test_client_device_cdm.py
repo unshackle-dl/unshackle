@@ -238,7 +238,7 @@ def test_a_lent_device_session_never_licenses_live() -> None:
 
 
 def test_a_vault_only_miss_raises_the_refusal(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(handlers, "check_vaults", lambda kids, service: None)
+    monkeypatch.setattr(handlers, "check_vaults", lambda kids, service, **_: None)
     monkeypatch.setattr(handlers, "ensure_track_drm", lambda *a, **k: None)
     refusal = handlers.live_licence_refusal(SimpleNamespace(server_device=True), object())
     with pytest.raises(APIError) as caught:
@@ -257,7 +257,7 @@ def test_a_vault_only_miss_raises_the_refusal(monkeypatch: pytest.MonkeyPatch) -
 
 def test_a_vault_only_hit_needs_no_server_device(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        handlers, "check_vaults", lambda kids, service: ({SESSION_KID.hex: "k"}, {SESSION_KID.hex: "v"})
+        handlers, "check_vaults", lambda kids, service, **_: ({SESSION_KID.hex: "k"}, {SESSION_KID.hex: "v"})
     )
     monkeypatch.setattr(handlers, "ensure_track_drm", lambda *a, **k: None)
     monkeypatch.setattr(
@@ -376,7 +376,7 @@ def test_a_lent_device_session_returns_no_cache_at_the_end(monkeypatch: pytest.M
 
     monkeypatch.setattr(handlers, "get_validated_session", validated)
     monkeypatch.setattr(session_store, "get_session_store", lambda: Store())
-    monkeypatch.setattr(handlers, "collect_cache_files", lambda tag: {"MSL/server-esn": "tokens"})
+    monkeypatch.setattr(handlers, "collect_cache_files", lambda tag, withhold=(): {"MSL/server-esn": "tokens"})
 
     response = asyncio.run(handlers.session_delete_handler("sid", None))
 
@@ -389,7 +389,7 @@ def test_a_lent_device_session_keeps_its_auth_headers_and_track_secrets() -> Non
     headers, cookies = handlers.client_session_auth(session)
 
     assert headers == {"User-Agent": "ua"}
-    assert cookies == {"account": "client"}
+    assert handlers.cookie_values(cookies) == {"account": "client"}
     assert handlers.scrub_track_data({"token": "server", "id": 1}, session) == {"id": 1}
 
 
@@ -405,6 +405,7 @@ def test_a_lent_device_without_the_vault_grant_asks_the_server_for_no_key() -> N
     svc._server_device = True
     svc._local_vaults_only = True
     svc.client_licensed = set()
+    svc.deferred_refusals = {}
     svc.client = SimpleNamespace(post=lambda *a, **k: pytest.fail("the server refuses every key request"))
     track = SimpleNamespace(id="vid", drm=None)
 

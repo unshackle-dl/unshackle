@@ -34,7 +34,7 @@ def patch_server_region(monkeypatch, region):
 def patch_providers(monkeypatch, proxy):
     """Give the server one provider that answers every country code with ``proxy``."""
     provider = SimpleNamespace(get_proxy=lambda query: proxy)
-    monkeypatch.setattr(handlers, "initialize_proxy_providers", lambda: [provider])
+    monkeypatch.setattr(handlers, "initialize_proxy_providers", lambda **_: [provider])
     return provider
 
 
@@ -47,6 +47,7 @@ def test_region_mismatch_raises(monkeypatch):
     assert exc_info.value.details == {"service": "EXAMPLE"}
 
 
+@pytest.mark.usefixtures("example_service")
 def test_geoblocked_client_region_raises(monkeypatch):
     patch_server_region(monkeypatch, "CA")
     service_class = handlers.Services.load("EXAMPLE")
@@ -60,6 +61,11 @@ def test_geoblocked_client_region_raises(monkeypatch):
 def test_region_match_no_proxy(monkeypatch):
     patch_server_region(monkeypatch, "CA")
     assert handlers.resolve_handler_proxy({"client_region": "ca"}, "EXAMPLE", request("plainkey")) == (None, [])
+
+
+def test_relayed_tag_not_installed_here_skips_the_local_geoblock(monkeypatch):
+    patch_server_region(monkeypatch, "CA")
+    assert handlers.resolve_handler_proxy({"client_region": "ca"}, "NOTHERE", request("plainkey")) == (None, [])
 
 
 def test_region_unknown_no_error(monkeypatch):
@@ -95,7 +101,7 @@ def test_provider_country_rejected(monkeypatch):
 
 def test_no_proxy_short_circuits(monkeypatch):
     """no_proxy skips resolution and never loads providers, even with a proxy param set."""
-    monkeypatch.setattr(handlers, "initialize_proxy_providers", lambda: pytest.fail("providers loaded"))
+    monkeypatch.setattr(handlers, "initialize_proxy_providers", lambda **_: pytest.fail("providers loaded"))
     _, providers = handlers.resolve_handler_proxy(
         {"proxy": "us", "no_proxy": True, "client_region": "ca"}, "EXAMPLE", request("proxykey")
     )
@@ -145,7 +151,7 @@ def test_user_without_server_proxy_denied(monkeypatch):
 def test_no_region_sent_proceeds(monkeypatch):
     """An out-of-date client that reports no region is unknown and never blocked."""
     patch_server_region(monkeypatch, "IN")
-    monkeypatch.setattr(handlers, "initialize_proxy_providers", lambda: [])
+    monkeypatch.setattr(handlers, "initialize_proxy_providers", lambda **_: [])
     assert handlers.resolve_handler_proxy({}, "EXAMPLE", request("plainkey")) == (None, [])
     assert handlers.resolve_handler_proxy({}, "EXAMPLE", request("proxykey")) == (None, [])
 
@@ -230,7 +236,7 @@ class TestDownloadGates:
         handlers.enforce_download_gates({"service": "EXAMPLE"}, request("plainkey"))
 
     def test_country_code_passes_when_opted_in(self, monkeypatch):
-        monkeypatch.setattr(handlers, "initialize_proxy_providers", lambda: pytest.fail("providers loaded"))
+        monkeypatch.setattr(handlers, "initialize_proxy_providers", lambda **_: pytest.fail("providers loaded"))
         handlers.enforce_download_gates({"service": "EXAMPLE", "proxy": "us"}, request("proxykey"))
 
     def test_region_mismatch_rejected_at_submit(self, monkeypatch):
@@ -238,6 +244,13 @@ class TestDownloadGates:
         patch_server_region(monkeypatch, "IN")
         with pytest.raises(APIError) as exc_info:
             handlers.enforce_download_gates({"service": "EXAMPLE", "client_region": "gb"}, request("plainkey"))
+        assert exc_info.value.error_code == APIErrorCode.INVALID_PROXY
+
+    def test_download_proxy_on_local_network_refused(self):
+        with pytest.raises(APIError) as exc_info:
+            handlers.enforce_download_gates(
+                {"service": "EXAMPLE", "proxy_download": "http://127.0.0.1:9"}, request("plainkey")
+            )
         assert exc_info.value.error_code == APIErrorCode.INVALID_PROXY
 
 
@@ -287,7 +300,6 @@ class TestDownloadEnforcement:
     @pytest.mark.parametrize(("params", "expected"), [({}, []), ({"server_proxy": True}, None)])
     def test_perform_download_maps_stamp_to_dl_providers(self, monkeypatch, tmp_path, params, expected):
         """An unstamped or denied job hands dl an empty provider list; a stamped one loads config."""
-        import click
 
         from unshackle.commands import dl as dl_module
         from unshackle.core.api import download_manager as dm
@@ -298,7 +310,7 @@ class TestDownloadEnforcement:
             pass
 
         class FakeDl:
-            cli = click.Group("dl")
+            cli = dl_module.dl.cli
 
             def __init__(self, **kwargs):
                 seen.update(kwargs)
@@ -343,3 +355,57 @@ def test_session_create_builds_service_off_the_event_loop(monkeypatch):
     assert seen["thread"] != threading.get_ident()
     assert [r["message"] for r in seen["buffer"].since(0)] == ["checking proxy"]
     assert json.loads(response.body)["error_code"] == "INVALID_PROXY"
+
+
+@pytest.mark.parametrize(
+    "proxy",
+    [
+        "http://127.0.0.1:8080",
+        "http://localhost:3128",
+        "socks5://user:pass@10.0.0.5:1080",
+        "https://[::1]:8443",
+        "http://169.254.169.254",
+        "socks5h://192.168.1.1:1080",
+        "http://198.18.0.1:8080",
+        "http://[2002:7f00:1::]:8080",
+        "http://foo.localhost:8080",
+        "http://127.0.0.1:8080\\@example.com",
+        "http://%31%32%37.0.0.1:8080",
+    ],
+)
+def test_local_proxy_uri_refused_without_server_proxy(proxy):
+    with pytest.raises(APIError) as exc_info:
+        handlers.resolve_handler_proxy({"proxy": proxy}, "EXAMPLE", request("plainkey"))
+    assert exc_info.value.error_code == APIErrorCode.INVALID_PROXY
+    assert "pass" not in exc_info.value.message
+
+
+@pytest.mark.parametrize("key", ["proxykey", "adminkey"])
+def test_local_proxy_uri_allowed_with_server_proxy_or_admin(monkeypatch, key):
+    monkeypatch.setattr(handlers, "initialize_proxy_providers", lambda **_: [])
+    proxy, _ = handlers.resolve_handler_proxy({"proxy": "http://127.0.0.1:8080"}, "EXAMPLE", request(key))
+    assert proxy == "http://127.0.0.1:8080"
+
+
+def test_hostname_resolving_to_a_private_address_refused(monkeypatch):
+    monkeypatch.setattr(handlers.socket, "getaddrinfo", lambda host, port: [(2, 1, 6, "", ("10.0.0.7", 0))])
+    with pytest.raises(APIError) as exc_info:
+        handlers.resolve_handler_proxy({"proxy": "http://proxy.lan:3128"}, "EXAMPLE", request("plainkey"))
+    assert exc_info.value.error_code == APIErrorCode.INVALID_PROXY
+
+
+def test_local_proxy_uri_ignored_under_no_proxy():
+    handlers.resolve_handler_proxy({"proxy": "http://127.0.0.1:8080", "no_proxy": True}, "EXAMPLE", request("plainkey"))
+
+
+def test_server_built_loopback_proxies_pass_without_server_proxy(monkeypatch):
+    """The check reads the client's value, so the loopback URIs the server builds for tunnel: and controld:// pass."""
+    monkeypatch.setattr(handlers, "tunnel_proxy", lambda tunnel_id, key: "http://u:p@127.0.0.1:5000")
+    proxy, _ = handlers.resolve_handler_proxy({"proxy": "tunnel:abc"}, "EXAMPLE", request("plainkey"))
+    assert proxy == "http://u:p@127.0.0.1:5000"
+
+    monkeypatch.setattr(handlers, "resolve_proxy", lambda proxy, providers: "http://127.0.0.1:5001")
+    proxy, _ = handlers.resolve_handler_proxy(
+        {"proxy": "controld://abc@dns.controld.com"}, "EXAMPLE", request("plainkey")
+    )
+    assert proxy == "http://127.0.0.1:5001"

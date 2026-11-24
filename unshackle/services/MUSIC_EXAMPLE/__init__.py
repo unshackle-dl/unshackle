@@ -9,7 +9,6 @@ from typing import Any, Optional
 import click
 
 from unshackle.core.console import console
-from unshackle.core.constants import AnyTrack
 from unshackle.core.credential import Credential
 from unshackle.core.music import (
     build_music_from_songs,
@@ -62,7 +61,6 @@ class MUSIC_EXAMPLE(Service):
         build_song            the full Song field set, and what `data` feeds
         get_tracks            ONE Audio track per codec+bitrate the source offers
         get_chapters          empty, because a song has no chapters
-        on_track_downloaded   restore the real container suffix before tagging
 
     There is no music-specific Service API. A `Song` is an ordinary `Title` on the
     one generic download path, so everything else a music service needs (auth,
@@ -94,7 +92,7 @@ class MUSIC_EXAMPLE(Service):
     def cli(ctx: click.Context, **kwargs: Any) -> MUSIC_EXAMPLE:
         return MUSIC_EXAMPLE(ctx, **kwargs)
 
-    def __init__(self, ctx: click.Context, title: str, device: str, lyrics: bool):
+    def __init__(self, ctx: click.Context, title: str, device: str, lyrics: bool) -> None:
         self.title = title
         self.device = device
         self.lyrics = lyrics
@@ -345,14 +343,4 @@ class MUSIC_EXAMPLE(Service):
 
     def get_chapters(self, title: Title_T) -> Chapters:
         return Chapters()
-
-    def on_track_downloaded(self, track: AnyTrack) -> None:
-        if not isinstance(track, Audio) or not track.path or not track.codec:
-            return
-        if track.drm:
-            return
-        suffix = self.config["containers"].get(track.codec.name)
-        if not suffix or track.path.suffix == suffix:
-            return
-        track.path = track.path.rename(track.path.with_suffix(suffix))
 

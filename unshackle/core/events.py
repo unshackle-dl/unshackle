@@ -14,12 +14,12 @@ class Events:
         TRACK_REPACKED = 4
         TRACK_MULTIPLEX = 5
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.__subscriptions: dict[Events.Types, list[Callable]] = {}
         self.__ephemeral: dict[Events.Types, list[Callable]] = {}
         self.reset()
 
-    def reset(self):
+    def reset(self) -> None:
         """Reset Event Observer clearing all Subscriptions."""
         self.__subscriptions = {k: [] for k in Events.Types.__members__.values()}
         self.__ephemeral = deepcopy(self.__subscriptions)

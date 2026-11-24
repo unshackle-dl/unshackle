@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="urn:mpeg:dash:schema:mpd:2011 DASH-MPD.xsd" id="live-stream" type="dynamic" minimumUpdatePeriod="PT3.0S" publishTime="2020-05-13T05:34:06+00:00" availabilityStartTime="2017-05-01T07:00:00+00:00" minBufferTime="PT1.0S" profiles="urn:mpeg:dash:profile:isoff-live:2011">
+  <PatchLocation ttl="60">example_G21_patch.mpp?publishTime=2020-05-13T05%3A34%3A06%2B00%3A00</PatchLocation>
+  <Period id="1588435200" start="PT95725984.571S">
+    <AdaptationSet id="1" contentType="video" mimeType="video/mp4" maxFrameRate="60" maxHeight="1080" maxWidth="1920" bitstreamSwitching="true" segmentAlignment="true">
+      <Accessibility schemeIdUri="urn:scte:dash:cc:cea-608:2015" value="CC1=eng"/>
+      <SegmentTemplate timescale="90000" presentationTimeOffset="5491773166" initialization="live-stream/$RepresentationID$/init.mp4" media="live-stream/$RepresentationID$/$Time$.m4s">
+        <SegmentTimeline>
+          <S d="360360" r="8" t="5491776169"/>
+        </SegmentTimeline>
+      </SegmentTemplate>
+      <Representation id="video-0" codecs="avc1.4d4015" bandwidth="1070676" frameRate="30" height="270" width="480" startWithSAP="1"/>
+      <Representation id="video-1" codecs="avc1.4d401e" bandwidth="2035716" frameRate="30" height="432" width="768" startWithSAP="1"/>
+      <Representation id="video-2" codecs="avc1.64001f" bandwidth="3169038" frameRate="30" height="576" width="1024" startWithSAP="1"/>
+      <Representation id="video-3" codecs="avc1.64001f" bandwidth="4532135" frameRate="30" height="720" width="1280" startWithSAP="1"/>
+      <Representation id="video-4" codecs="avc1.640020" bandwidth="6728694" frameRate="60" height="720" width="1280" startWithSAP="1"/>
+      <Representation id="video-5" codecs="avc1.64002a" bandwidth="10923530" frameRate="60" height="1080" width="1920" startWithSAP="1"/>
+    </AdaptationSet>
+    <AdaptationSet id="2" contentType="audio" mimeType="audio/mp4" bitstreamSwitching="true" segmentAlignment="true">
+      <SegmentTemplate timescale="90000" presentationTimeOffset="5491773166" initialization="live-stream/$RepresentationID$/init.mp4" media="live-stream/$RepresentationID$/$Time$.m4s">
+        <SegmentTimeline>
+          <S d="360960" r="1" t="5491776448"/>
+          <S d="359040"/>
+          <S d="360960" r="1"/>
+          <S d="359040"/>
+          <S d="360960" r="2"/>
+        </SegmentTimeline>
+      </SegmentTemplate>
+      <Representation id="audio-0" codecs="mp4a.40.2" bandwidth="96000" audioSamplingRate="48000" startWithSAP="1">
+        <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2"/>
+      </Representation>
+    </AdaptationSet>
+  </Period>
+</MPD>

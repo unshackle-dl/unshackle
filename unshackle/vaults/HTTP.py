@@ -3,10 +3,7 @@ from enum import Enum
 from typing import Iterator, Optional, Union
 from uuid import UUID
 
-from requests import Session
-
-from unshackle.core import __version__
-from unshackle.core.vault import Vault
+from unshackle.core.vault import RateLimited, Vault, is_null_key, vault_session
 
 
 class InsertResult(Enum):
@@ -35,7 +32,7 @@ class HTTP(Vault):
         api_mode: str = "query",
         no_push: bool = False,
         timeout: float = 10.0,
-    ):
+    ) -> None:
         """
         Initialise HTTP Vault.
 
@@ -58,9 +55,8 @@ class HTTP(Vault):
         self.username = username
         self.api_mode = api_mode.lower()
         self.batch_insert = True
-        self.current_title = None
-        self.session = Session()
-        self.session.headers.update({"User-Agent": f"unshackle v{__version__}"})
+        self.current_title: Optional[str] = None
+        self.session = vault_session(timeout)
         self.api_session_id = None
 
         if self.api_mode == "decrypt_labs":
@@ -72,7 +68,7 @@ class HTTP(Vault):
         elif self.api_mode not in ["query", "json", "decrypt_labs"]:
             raise ValueError("api_mode must be either 'query', 'json', or 'decrypt_labs'")
 
-    def request(self, method: str, params: dict = None) -> dict:
+    def request(self, method: str, params: Optional[dict] = None) -> dict:
         """Make a request to the JSON API vault."""
         if self.api_mode != "json":
             raise ValueError("request method is only available in json mode")
@@ -90,6 +86,9 @@ class HTTP(Vault):
 
         if r.status_code == 404:
             return {"status": "not_found"}
+
+        if r.status_code == 429:
+            raise RateLimited()
 
         if not r.ok:
             try:
@@ -118,11 +117,8 @@ class HTTP(Vault):
             kid = kid.hex
 
         if self.api_mode == "decrypt_labs":
+            response = self.session.post(self.url, json={"service": service.lower(), "kid": kid}, timeout=self.timeout)
             try:
-                request_payload = {"service": service.lower(), "kid": kid}
-
-                response = self.session.post(self.url, json=request_payload, timeout=self.timeout)
-
                 if not response.ok:
                     return None
 
@@ -168,10 +164,10 @@ class HTTP(Vault):
                     "service": service.lower(),
                 }
 
-                response = self.request("GetKey", params)
-                if response.get("status") == "not_found":
+                res = self.request("GetKey", params)
+                if res.get("status") == "not_found":
                     return None
-                keys = response.get("keys", [])
+                keys = res.get("keys", [])
                 for key_entry in keys:
                     if isinstance(key_entry, str) and ":" in key_entry:
                         entry_kid, entry_key = key_entry.split(":", 1)
@@ -180,7 +176,7 @@ class HTTP(Vault):
                     elif isinstance(key_entry, dict):
                         if key_entry.get("kid") == kid:
                             return key_entry.get("key")
-            except Exception as e:
+            except ValueError as e:
                 print(f"Failed to get key ({e.__class__.__name__}: {e})")
                 return None
             return None
@@ -200,9 +196,9 @@ class HTTP(Vault):
 
     def get_keys(self, service: str) -> Iterator[tuple[str, str]]:
         if self.api_mode == "decrypt_labs":
-            return iter([])
+            return
         elif self.api_mode == "json":
-            return iter([])
+            return
         else:
             response = self.session.get(
                 self.url,
@@ -219,7 +215,7 @@ class HTTP(Vault):
                 yield key_entry["kid"], key_entry["key"]
 
     def add_key(self, service: str, kid: Union[UUID, str], key: str) -> bool:
-        if not key or key.count("0") == len(key):
+        if is_null_key(key):
             raise ValueError("You cannot add a NULL Content Key to a Vault.")
 
         if self.api_mode == "decrypt_labs":
@@ -232,7 +228,7 @@ class HTTP(Vault):
 
         if self.api_mode == "json":
             try:
-                response = self.request(
+                res = self.request(
                     "InsertKey",
                     {
                         "kid": kid,
@@ -241,9 +237,9 @@ class HTTP(Vault):
                         "title": title,
                     },
                 )
-                if response.get("status") == "not_found":
+                if res.get("status") == "not_found":
                     return False
-                return response.get("inserted", False)
+                return res.get("inserted", False)
             except Exception:
                 return False
         else:
@@ -269,7 +265,7 @@ class HTTP(Vault):
             return 0
 
         for kid, key in kid_keys.items():
-            if not key or key.count("0") == len(key):
+            if is_null_key(key):
                 raise ValueError("You cannot add a NULL Content Key to a Vault.")
 
         processed_kid_keys = {
@@ -283,20 +279,18 @@ class HTTP(Vault):
         if self.api_mode == "json":
             if self.batch_insert:
                 try:
-                    response = self.request(
+                    res = self.request(
                         "InsertKeys", {"keys": processed_kid_keys, "service": service.lower(), "title": title}
                     )
-                    if response.get("status") != "not_found":
-                        return int(response.get("inserted", 0))
+                    if res.get("status") != "not_found":
+                        return int(res.get("inserted", 0))
                     self.batch_insert = False
                 except ValueError as e:
                     if "unknown" in str(e).lower() and "method" in str(e).lower():
                         self.batch_insert = False
-                except Exception:
-                    pass
             for kid, key in processed_kid_keys.items():
                 try:
-                    response = self.request(
+                    res = self.request(
                         "InsertKey",
                         {
                             "kid": kid,
@@ -305,11 +299,11 @@ class HTTP(Vault):
                             "title": title,
                         },
                     )
-                    if response.get("status") == "not_found":
+                    if res.get("status") == "not_found":
                         continue
-                    if response.get("inserted", False):
+                    if res.get("inserted", False):
                         inserted_count += 1
-                except Exception as e:
+                except ValueError as e:
                     failures.append(e)
             if failures and len(failures) == len(processed_kid_keys):
                 raise failures[-1]
@@ -337,15 +331,15 @@ class HTTP(Vault):
 
     def get_services(self) -> Iterator[str]:
         if self.api_mode == "decrypt_labs":
-            return iter([])
+            return
         elif self.api_mode == "json":
             try:
-                response = self.request("GetServices")
-                services = response.get("services", [])
+                res = self.request("GetServices")
+                services = res.get("services", [])
                 for service in services:
                     yield service
             except Exception:
-                return iter([])
+                return
         else:
             response = self.session.get(
                 self.url,
@@ -362,7 +356,7 @@ class HTTP(Vault):
             for service in services:
                 yield service
 
-    def set_title(self, title: str):
+    def set_title(self, title: str) -> None:
         """
         Set a title for the next content key insertions.
         This is optional and will be sent with add_key requests if available.
@@ -377,7 +371,7 @@ class HTTP(Vault):
         This method provides more granular feedback than the standard add_key method.
         Available in both API modes.
         """
-        if not key or key.count("0") == len(key):
+        if is_null_key(key):
             raise ValueError("You cannot add a NULL Content Key to a Vault.")
 
         if self.api_mode == "decrypt_labs":
@@ -391,7 +385,7 @@ class HTTP(Vault):
 
         if self.api_mode == "json":
             try:
-                response = self.request(
+                res = self.request(
                     "InsertKey",
                     {
                         "kid": kid,
@@ -401,10 +395,10 @@ class HTTP(Vault):
                     },
                 )
 
-                if response.get("status") == "not_found":
+                if res.get("status") == "not_found":
                     return InsertResult.FAILURE
 
-                if response.get("inserted", False):
+                if res.get("inserted", False):
                     return InsertResult.SUCCESS
                 else:
                     return InsertResult.ALREADY_EXISTS

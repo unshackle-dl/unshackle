@@ -9,13 +9,15 @@ import socket
 import socketserver
 import threading
 import time
+from functools import cached_property
 from typing import Optional
 from urllib.parse import urlsplit
 
 import requests
 from requests.adapters import HTTPAdapter
 
-from unshackle.core.proxies.proxy import Proxy
+from unshackle.core.proxies.proxy import Proxy, cached_catalogue
+from unshackle.core.utils.redact import REDACTED
 
 log = logging.getLogger("ControlD")
 
@@ -89,7 +91,7 @@ class IPv4Adapter(HTTPAdapter):
 
 
 class Resolver:
-    def __init__(self, url: str):
+    def __init__(self, url: str) -> None:
         """Resolve hostnames through one Control D DoH endpoint, caching answers for their TTL."""
         self.url = url
         self.session = requests.Session()
@@ -99,6 +101,7 @@ class Resolver:
         self.lock = threading.Lock()
 
     def resolve(self, host: str) -> str:
+        """Get the IPv4 address Control D gives `host`. A failure raises `ConnectionError` without the resolver ID."""
         host = host.lower()
         with self.lock:
             cached = self.cache.get(host)
@@ -106,13 +109,20 @@ class Resolver:
             return cached[0]
 
         query = base64.urlsafe_b64encode(build_query(host)).rstrip(b"=").decode()
-        response = self.session.get(
-            self.url,
-            params={"dns": query},
-            headers={"accept": "application/dns-message"},
-            timeout=DOH_TIMEOUT,
-        )
-        response.raise_for_status()
+        try:
+            response = self.session.get(
+                self.url,
+                params={"dns": query},
+                headers={"accept": "application/dns-message"},
+                timeout=DOH_TIMEOUT,
+            )
+            response.raise_for_status()
+        except requests.HTTPError as e:
+            raise ConnectionError(f"Control D DNS answered HTTP {e.response.status_code}") from None
+        except requests.Timeout:
+            raise ConnectionError("Control D DNS timed out") from None
+        except requests.RequestException as e:
+            raise ConnectionError(f"Control D DNS could not be reached ({type(e).__name__})") from None
 
         records = parse_a_records(response.content)
         if not records:
@@ -154,6 +164,17 @@ class Handler(socketserver.StreamRequestHandler):
             self.connection.sendall(b"HTTP/1.1 " + status + b"\r\n\r\n")
         except OSError:
             pass
+
+    def refuse(self, host: str, port: int, reason: str) -> None:
+        """Answer 502 with the reason in the status line, which a client shows as `Tunnel connection failed: ...`.
+
+        Some HTTP clients drop the reason phrase, so this also logs each new reason once as a warning.
+        """
+        reason = " ".join(reason.split())
+        if (host, reason) not in self.server.refused:
+            self.server.refused.add((host, reason))
+            log.warning(f"Could not reach {host}:{port}: {reason}")
+        self.reply(f"502 Bad Gateway ({reason})".encode("latin-1", "replace"))
 
     def forward_response_head(self, upstream: socket.socket) -> None:
         """Send the response head on with `Connection: close`, so the client never reuses this connection."""
@@ -209,15 +230,16 @@ class Handler(socketserver.StreamRequestHandler):
         except ValueError:
             pass
         else:
-            log.debug(f"Refused {host}:{port}, an address that Control D cannot redirect")
-            return self.reply(b"502 Bad Gateway")
+            return self.refuse(host, port, "an IP address skips Control D's DNS and would expose this machine's IP")
 
         try:
             ip = self.server.resolver.resolve(host)
-            upstream = socket.create_connection((ip, port), timeout=HEAD_TIMEOUT)
         except Exception as e:
-            log.debug(f"Could not reach {host}:{port}: {e}")
-            return self.reply(b"502 Bad Gateway")
+            return self.refuse(host, port, str(e) or type(e).__name__)
+        try:
+            upstream = socket.create_connection((ip, port), timeout=HEAD_TIMEOUT)
+        except OSError as e:
+            return self.refuse(host, port, f"Control D sent {host} to {ip}, which did not answer: {e.strerror or e}")
 
         self.connection.settimeout(IDLE_TIMEOUT)
         upstream.settimeout(IDLE_TIMEOUT)
@@ -244,10 +266,11 @@ class Handler(socketserver.StreamRequestHandler):
 class LocalProxy(socketserver.ThreadingTCPServer):
     daemon_threads = True
 
-    def __init__(self, resolver: Resolver):
+    def __init__(self, resolver: Resolver) -> None:
         """An HTTP forward proxy on loopback that resolves every host through `resolver`."""
         super().__init__(("127.0.0.1", 0), Handler)
         self.resolver = resolver
+        self.refused: set[tuple[str, str]] = set()
 
     @property
     def uri(self) -> str:
@@ -256,6 +279,7 @@ class LocalProxy(socketserver.ThreadingTCPServer):
 
 FORWARDERS: dict[str, LocalProxy] = {}
 REGIONS: dict[str, str] = {}
+LOCATIONS: dict[str, str] = {}
 STATE = threading.Lock()
 
 
@@ -304,7 +328,7 @@ class ControlD(Proxy):
         resolver: Optional[str] = None,
         profiles: Optional[list[dict]] = None,
         max_profiles: int = 4,
-    ):
+    ) -> None:
         """
         Proxy provider that uses Control D's transparent proxies.
 
@@ -332,8 +356,12 @@ class ControlD(Proxy):
         self.configured = {x["profile"]: resolver_id(x["resolver"]) for x in pairs}
         self.max_profiles = max_profiles
         self.resolvers = dict(self.configured)
+        self.last_profile: Optional[str] = None
 
-        self.catalogue = self.get_locations()
+    @cached_property
+    def catalogue(self) -> list[dict]:
+        """Fetched on first use, so a run that wants no proxy makes no request."""
+        return self.get_locations()
 
     def __repr__(self) -> str:
         countries = len({x["country"] for x in self.catalogue})
@@ -341,6 +369,7 @@ class ControlD(Proxy):
 
         return f"{countries} Countr{['ies', 'y'][countries == 1]} ({servers} Server{['s', ''][servers == 1]})"
 
+    @cached_catalogue
     def get_locations(self) -> list[dict]:
         """Get Control D's proxy locations. Public data, so no token is needed."""
         try:
@@ -449,8 +478,11 @@ class ControlD(Proxy):
             if server:
                 with server.resolver.lock:
                     server.resolver.cache.clear()
+                server.refused.clear()
             REGIONS.pop(profile, None)
             REGIONS[profile] = query
+            LOCATIONS[profile] = location
+        self.last_profile = profile
         return resolver
 
     def get_proxy(self, query: str) -> Optional[str]:
@@ -458,6 +490,15 @@ class ControlD(Proxy):
         with STATE:
             resolver = self.claim(query.lower())
             return forwarder(resolver).uri if resolver else None
+
+    def last_connection_display(self) -> Optional[str]:
+        """Name the location of the last claim, with the resolver ID masked, in place of the loopback URI."""
+        location = LOCATIONS.get(self.last_profile or "")
+        if not location:
+            return None
+        city = next((x.get("city") for x in self.catalogue if x["PK"] == location), None)
+        label = f"{location} - {city}" if city else location
+        return f"({label}): {self.resolvers[self.last_profile][:4]}{REDACTED}@dns.controld.com"
 
     def get_remote_proxy(self, query: str) -> Optional[str]:
         """Get the `controld://` proxy URI for this region, for a server on another machine."""

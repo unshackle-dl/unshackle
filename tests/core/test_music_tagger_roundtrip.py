@@ -16,10 +16,12 @@ import pytest
 from mutagen.flac import FLAC
 from mutagen.mp3 import MP3
 from mutagen.mp4 import MP4
+from mutagen.oggopus import OggOpus
 from mutagen.oggvorbis import OggVorbis
 
 from unshackle.core.music.tagger import write_music_metadata
 from unshackle.core.titles.music import Song
+from unshackle.core.tracks import Attachment
 
 pytestmark = pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="requires ffmpeg")
 
@@ -196,3 +198,80 @@ def test_a_nested_metadata_dict_reaches_the_tags(flac_path: Path) -> None:
     assert audio["COMPOSER"] == ["Example Composer"]
     assert audio["RELEASEDATE"] == ["2020-01-02"]
     assert audio["DATE"] == ["2020-01-02"], "a full release date must beat the bare year"
+
+
+def test_an_image_attachment_is_the_cover_when_the_song_gives_no_artwork_url(flac_path: Path, tmp_path: Path) -> None:
+    image = tmp_path / "thumbnail.png"
+    image.write_bytes(PNG_STUB)
+    song = make_song()
+    song.artwork_url = None
+    song.tracks.attachments.append(Attachment(path=image, name="thumbnail", mime_type="image/png"))
+
+    assert write_music_metadata(flac_path, song).artwork_embedded
+    assert FLAC(flac_path).pictures[0].data == PNG_STUB
+
+
+def test_a_webp_cover_is_embedded_as_jpeg(tmp_path: Path) -> None:
+    webp = tmp_path / "cover.webp"
+    subprocess.run(
+        ["ffmpeg", "-nostdin", "-v", "error", "-f", "lavfi", "-i", "color=red:s=16x16", "-frames:v", "1", str(webp)],
+        check=True,
+    )
+    m4a = tmp_path / "track.m4a"
+    subprocess.run(
+        ["ffmpeg", "-nostdin", "-v", "error", "-f", "lavfi", "-i", "anullsrc", "-t", "0.2", "-c:a", "aac", str(m4a)],
+        check=True,
+    )
+
+    write_music_metadata(m4a, make_song(), session=FakeSession(webp.read_bytes()))
+
+    cover = MP4(m4a)["covr"][0]
+    assert bytes(cover).startswith(b"\xff\xd8\xff")
+
+
+def test_a_cover_over_16_mib_is_skipped(flac_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    result = write_music_metadata(flac_path, make_song(), session=FakeSession(PNG_STUB + b"\x00" * 2**24))
+
+    assert not result.artwork_embedded
+    assert not FLAC(flac_path).pictures
+    assert "16 MiB" in caplog.text
+
+
+def test_artists_and_replaygain_read_back(flac_path: Path) -> None:
+    song = make_song()
+    song.data = {"artists": ["Example Artist", "Guest Artist"], "replaygain_track_gain": -7.25, "quality": "Hi-Res"}
+
+    write_music_metadata(flac_path, song)
+
+    audio = FLAC(flac_path)
+    assert audio["ARTISTS"] == ["Example Artist", "Guest Artist"]
+    assert audio["REPLAYGAIN_TRACK_GAIN"] == ["-7.25 dB"]
+    assert "COMMENT" not in audio, "a quality label is display text, not a comment"
+
+
+def test_a_replaygain_value_that_is_not_a_number_is_skipped(flac_path: Path) -> None:
+    song = make_song()
+    song.data = {"replaygain_track_gain": "nan", "replaygain_track_peak": "inf", "replaygain_album_gain": -3}
+
+    write_music_metadata(flac_path, song)
+
+    audio = FLAC(flac_path)
+    assert "REPLAYGAIN_TRACK_GAIN" not in audio and "REPLAYGAIN_TRACK_PEAK" not in audio
+    assert audio["REPLAYGAIN_ALBUM_GAIN"] == ["-3.00 dB"]
+
+
+def test_opus_gets_no_replaygain(tmp_path: Path) -> None:
+    """RFC 7845 section 5.2.1: an Opus file should not carry REPLAYGAIN_* tags."""
+    path = tmp_path / "04. Example Track.opus"
+    subprocess.run(
+        ["ffmpeg", "-nostdin", "-v", "error", "-f", "lavfi", "-i", "anullsrc=r=48000:cl=mono", "-t", "0.2", str(path)],
+        check=True,
+    )
+    song = make_song()
+    song.data = {"replaygain_track_gain": -7.25}
+
+    write_music_metadata(path, song)
+
+    audio = OggOpus(path)
+    assert audio["TITLE"] == ["Example Track"]
+    assert not [key for key in audio.keys() if key.upper().startswith("REPLAYGAIN_")]

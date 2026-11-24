@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import asyncio
 import gzip
 import zlib
+from typing import Any
 
 from aiohttp import web
 
 MAX_INFLATE_BYTES = 64 * 1024 * 1024
+GZIP_THREAD_SIZE = 1024 * 1024
 
 
 def safe_inflate(data: bytes, max_size: int = MAX_INFLATE_BYTES) -> bytes:
@@ -23,7 +26,7 @@ def safe_inflate(data: bytes, max_size: int = MAX_INFLATE_BYTES) -> bytes:
 
 
 @web.middleware
-async def compression_middleware(request: web.Request, handler) -> web.StreamResponse:
+async def compression_middleware(request: web.Request, handler: Any) -> web.StreamResponse:
     """Compress JSON responses with gzip when the client supports it."""
     response = await handler(request)
 
@@ -47,12 +50,9 @@ async def compression_middleware(request: web.Request, handler) -> web.StreamRes
     if not level:
         return response
 
-    compressed = gzip.compress(body, compresslevel=level)
-    headers = dict(response.headers)
-    headers["Content-Encoding"] = "gzip"
-    headers["Content-Length"] = str(len(compressed))
-    return web.Response(
-        body=compressed,
-        status=response.status,
-        headers=headers,
-    )
+    if len(body) > GZIP_THREAD_SIZE:
+        response.body = await asyncio.to_thread(gzip.compress, body, compresslevel=level)
+    else:
+        response.body = gzip.compress(body, compresslevel=level)
+    response.headers["Content-Encoding"] = "gzip"
+    return response

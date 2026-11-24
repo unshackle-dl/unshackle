@@ -7,14 +7,18 @@ from collections.abc import Mapping as MappingABC
 from typing import Any, Mapping, Optional, Sequence
 
 from langcodes import Language
-from langcodes.tag_parser import LanguageTagError
 
-from unshackle.core.utilities import is_close_match
+from unshackle.core.utilities import matching_languages, valid_language
 
 log = logging.getLogger(__name__)
 
 STATE_CONDITIONS = ("dual", "multi", "dubbed")
-LANGUAGE_CONDITIONS = ("audio", "subs_contain", "subs_contain_all")
+LANGUAGE_CONDITIONS = {
+    "audio": (False, any),
+    "audio_contain_all": (False, all),
+    "subs_contain": (True, any),
+    "subs_contain_all": (True, all),
+}
 
 
 def evaluate_language_tag(
@@ -73,23 +77,13 @@ def rule_matches(
 
     has_condition = False
 
-    audio_lang = rule.get("audio")
-    if audio_lang is not None:
-        has_condition = True
-        if not any(_matches(lang, audio_languages) for lang in _as_list(audio_lang)):
-            return False
-
-    subs_contain = rule.get("subs_contain")
-    if subs_contain is not None:
-        has_condition = True
-        if not any(_matches(lang, subtitle_languages) for lang in _as_list(subs_contain)):
-            return False
-
-    subs_contain_all = rule.get("subs_contain_all")
-    if subs_contain_all is not None:
-        has_condition = True
-        for lang in _as_list(subs_contain_all):
-            if not _matches(lang, subtitle_languages):
+    for name, (subs, quantifier) in LANGUAGE_CONDITIONS.items():
+        wanted = rule.get(name)
+        if wanted is not None:
+            has_condition = True
+            wanted_langs = _as_list(wanted)
+            languages = subtitle_languages if subs else audio_languages
+            if not wanted_langs or not quantifier(_matches(lang, languages) for lang in wanted_langs):
                 return False
 
     for name in STATE_CONDITIONS:
@@ -115,13 +109,9 @@ def _as_list(value: Any) -> list[Any]:
 
 
 def _matches(lang: Any, languages: Sequence[Language]) -> bool:
-    """Return True when the rule language closely matches one of the track languages.
+    """Return True when the rule language matches one of the track languages, as a -l token would.
 
     A rule value that is not a valid language tag counts as no match. The filename is built
     after the mux, so a typo in the config must not discard a finished download.
     """
-    try:
-        return is_close_match(lang, list(languages))
-    except LanguageTagError as e:
-        log.warning("Language tag rule value %r is not a valid language tag, treating as no match: %s", lang, e)
-        return False
+    return bool(valid_language(lang) and matching_languages(lang, languages))

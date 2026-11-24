@@ -43,8 +43,7 @@ def sent_timeout(adapter: HTTPAdapter) -> Any:
 def test_subclass_adapter_keeps_its_class_and_tls_context() -> None:
     """A service-mounted SSLCiphers must survive the growth with its TLS context.
 
-    CBS, friDay, iP, MY5 and PMTP all mount SSLCiphers on the service session and none
-    override get_session(). Replacing it with a plain adapter drops DEFAULT:@SECLEVEL=2 and
+    Services mount SSLCiphers on the service session without overriding get_session(). Replacing it with a plain adapter drops DEFAULT:@SECLEVEL=2 and
     check_hostname=False, so metadata succeeds and every segment then fails at TLS or 403.
     """
     session = requests.Session()
@@ -75,13 +74,13 @@ def test_a_distinct_http_adapter_is_grown_not_overwritten() -> None:
     narrow = SSLCiphers(security_level=2)
     plain = TimeoutHTTPAdapter(pool_connections=10, pool_maxsize=10)
     session.mount("https://", secure)
-    session.mount("https://cbs.example/", narrow)
+    session.mount("https://svc.example/", narrow)
     session.mount("http://", plain)
 
     grow_session_pool(session, 64)
 
     assert session.get_adapter("https://x") is secure
-    assert session.get_adapter("https://cbs.example/a") is narrow
+    assert session.get_adapter("https://svc.example/a") is narrow
     assert session.get_adapter("http://x") is plain
     assert session.get_adapter("http://x") is not session.get_adapter("https://x")
     for adapter in (secure, narrow, plain):

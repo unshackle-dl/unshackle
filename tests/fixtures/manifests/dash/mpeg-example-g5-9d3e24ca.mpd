@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<MPD xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="urn:mpeg:dash:schema:mpd:2011" xsi:schemaLocation="urn:mpeg:dash:schema:mpd:2011 DASH-MPD.xsd" type="static" mediaPresentationDuration="PT3256S" minBufferTime="PT1.2S" profiles="urn:mpeg:dash:profile:isoff-on-demand:2011">
+  <BaseURL>http://cdn1.example.com/</BaseURL>
+  <BaseURL>http://cdn2.example.com/</BaseURL>
+  <!-- In this Period the SVC stream is split into three representations -->
+  <Period>
+    <AdaptationSet subsegmentAlignment="true" subsegmentStartsWithSAP="2" minBandwidth="512000" maxBandwidth="1024000" width="640" height="480" frameRate="30" lang="en">
+      <!-- Independent Representation -->
+      <Representation mimeType="video/mp4" codecs="avc1.4D401E,mp4a.40" id="tag5" bandwidth="512000">
+        <BaseURL>video-512k.mp4</BaseURL>
+        <SegmentBase indexRange="0-4332"/>
+      </Representation>
+      <!-- Representation dependent on above -->
+      <Representation mimeType="video/mp4" codecs="avc2.56401E" id="tag6" dependencyId="tag5" bandwidth="768000">
+        <BaseURL>video-768k.mp4</BaseURL>
+        <SegmentBase indexRange="0-3752"/>
+      </Representation>
+      <!-- Representation dependent on both above -->
+      <Representation mimeType="video/mp4" codecs="avc2.56401E" id="tag7" dependencyId="tag5 tag6" bandwidth="1024000">
+        <BaseURL>video-1024k.mp4</BaseURL>
+        <SegmentBase indexRange="0-3752"/>
+      </Representation>
+    </AdaptationSet>
+  </Period>
+</MPD>

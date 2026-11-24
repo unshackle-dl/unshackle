@@ -4,23 +4,25 @@ import base64
 import html
 import logging
 import math
+import mmap
+import os
 import re
 import shutil
-import sys
+from bisect import bisect_right
 from concurrent.futures import Future
-from contextlib import ExitStack, closing
+from contextlib import ExitStack, closing, suppress
 from copy import deepcopy
 from functools import lru_cache, partial
 from pathlib import Path
-from typing import Any, BinaryIO, Callable, Optional, Union
+from typing import Any, BinaryIO, Callable, Collection, Optional, Union, cast
 from urllib.parse import urljoin, urlparse
 from uuid import UUID
 from zlib import crc32
 
+import click
 import requests
 from langcodes import Language, tag_is_valid
 from lxml.etree import Element, ElementTree, XMLSyntaxError
-from pyplayready.system.pssh import PSSH as PR_PSSH
 from pywidevine.cdm import Cdm as WidevineCdm
 from pywidevine.pssh import PSSH
 from requests import Session
@@ -28,20 +30,78 @@ from requests import Session
 from unshackle.core import binaries
 from unshackle.core.config import config
 from unshackle.core.constants import DOWNLOAD_ALL_DRM, DOWNLOAD_CANCELLED, DOWNLOAD_LICENCE_ONLY, AnyTrack
+from unshackle.core.downloaders.requests import parse_content_range
 from unshackle.core.drm import DRM_T, ClearKeyCENC, PlayReady, Widevine
-from unshackle.core.drm.segment_decrypt import SegmentDecrypter, can_use
-from unshackle.core.drm.verify import decrypt_track
+from unshackle.core.drm.segment_decrypt import SEGMENT_DRM_T, SegmentDecrypter, can_use
+from unshackle.core.drm.verify import decrypt_track, walk
 from unshackle.core.events import events
 from unshackle.core.session import RnetSession
 from unshackle.core.tracks import Audio, DownloadContext, Subtitle, Tracks, Video, resume
 from unshackle.core.tracks.track import (
     DRM_PREFERENCE_TYPES,
+    Track,
     assert_fragments_decrypted,
     parse_sidx,
 )
 from unshackle.core.utilities import is_close_match, log_event, try_ensure_utf8
+from unshackle.core.utils import run_proxy
+from unshackle.core.utils.bitrate import ranged_get
 from unshackle.core.utils.redact import safe_display_url
+from unshackle.core.utils.webvtt import shift_webvtt, webvtt_block_offsets
 from unshackle.core.utils.xml import load_xml
+
+DOLBY_CHANNEL_SCHEMES = (
+    "tag:dolby.com,2014:dash:audio_channel_configuration:2011",
+    "urn:dolby:dash:audio_channel_configuration:2011",
+)
+COUNT_CHANNEL_SCHEMES = (
+    "urn:mpeg:dash:23003:3:audio_channel_configuration:2011",
+    "urn:dts:dash:audio_channel_configuration:2012",
+)
+CICP_CHANNEL_SCHEME = "urn:mpeg:mpegB:cicp:ChannelConfiguration"
+CICP_CHANNEL_LAYOUTS: dict[int, Union[float, str]] = {
+    1: 1.0,
+    2: 2.0,
+    3: 3.0,
+    4: 4.0,
+    5: 5.0,
+    6: 5.1,
+    7: 7.1,
+    8: 7.1,
+    9: 3.0,
+    10: 4.0,
+    11: 6.1,
+    12: 7.1,
+    14: "5.1.2",
+    16: "5.1.4",
+    17: "5.1.6",
+    18: "7.1.6",
+    19: "7.1.4",
+    20: "9.1.4",
+}
+
+
+class MissingLanguageError(ValueError):
+    """A manifest track has no language, and the fallback language is missing or invalid."""
+
+
+def missing_language(where: str, fallback: Any) -> MissingLanguageError:
+    """The MissingLanguageError for a track at ``where``, naming why the fallback did not apply."""
+    if fallback is None:
+        return MissingLanguageError(f"No language for {where}, and no fallback language was given")
+    if not tag_is_valid(str(fallback).strip()) or str(fallback).startswith("und"):
+        return MissingLanguageError(f"No language for {where}, and the fallback language {fallback} is invalid")
+    return MissingLanguageError(f"No language for {where}")
+
+
+def rebase_webvtt_files(groups: list[list[Path]], bounds_ms: list[int]) -> None:
+    """Rewrite the WebVTT segment files of each period or discontinuity block, shifted by webvtt_block_offsets."""
+    texts = [[try_ensure_utf8(path.read_bytes()).decode("utf8") for path in group] for group in groups]
+    for group, parts, offset in zip(groups, texts, webvtt_block_offsets(["\n\n".join(t) for t in texts], bounds_ms)):
+        if not offset:
+            continue
+        for path, text in zip(group, parts):
+            path.write_bytes(shift_webvtt(text, offset).encode("utf8"))
 
 
 def append_segment(dst: BinaryIO, segment_file: Path, is_text_subtitle: bool) -> None:
@@ -96,8 +156,114 @@ class RollingMerge:
         return self.cursor
 
 
+def mdhd_timescale(init_data: bytes) -> Optional[int]:
+    """The media timescale of the first track in an init segment, or None when it has no mdhd."""
+    for kind, body, box_end in walk(init_data):
+        if kind == b"mdhd":
+            at = body + (20 if body < box_end and init_data[body] == 1 else 12)
+            return int.from_bytes(init_data[at : at + 4], "big") if at + 4 <= box_end else None
+    return None
+
+
+def tfdt_fields(data: bytes) -> list[tuple[int, int, int]]:
+    """(offset, width, value) of each tfdt baseMediaDecodeTime in a fragment; a tfdt too short for its field is skipped."""
+    fields = []
+    for kind, body, box_end in walk(data):
+        if kind != b"tfdt" or box_end - body < 8:
+            continue
+        width = 8 if data[body] == 1 else 4
+        if body + 4 + width <= box_end:
+            fields.append((body + 4, width, int.from_bytes(data[body + 4 : body + 4 + width], "big")))
+    return fields
+
+
+class PeriodRebase:
+    """Appends segments and moves the tfdt of each period whose timeline restarts to its place in the output.
+
+    A stitched manifest can package each content period on its own, so every period starts at tfdt 0
+    again. A period whose first tfdt falls before the middle of the previous period restarted: its
+    presentationTimeOffset moves to the period's output start, or to the previous period's end when
+    that is later. Any other period keeps the shift before it, or drops it when its own timeline is
+    nearer its output start, so a continuous timeline keeps its decode times and gaps. A track whose
+    first period starts later in the output but whose timeline starts near 0 is placed at that start.
+    Only tfdt moves; sidx, emsg and prft stay as they are.
+    """
+
+    def __init__(self, periods: dict[int, tuple[float, float, float]], timescale: int) -> None:
+        self.periods = periods
+        self.timescale = timescale
+        self.offset = 0
+        self.base: Optional[int] = None
+        self.previous: Optional[tuple[int, int, int]] = None
+
+    def append(self, dst: BinaryIO, segment_file: Path) -> None:
+        period = self.periods.get(int(segment_file.stem))
+        if period is None and not self.offset:
+            append_segment(dst, segment_file, is_text_subtitle=False)
+            return
+        with open(segment_file, "rb") as src:
+            fields: list[tuple[int, int, int]] = []
+            if os.fstat(src.fileno()).st_size:
+                with mmap.mmap(src.fileno(), 0, access=mmap.ACCESS_READ) as data:
+                    fields = tfdt_fields(cast(bytes, data))
+            if period and fields:
+                self.start_period(fields[0][2], *period)
+            start = dst.tell()
+            shutil.copyfileobj(src, dst, 1024 * 1024)
+        if self.offset and fields:
+            end = dst.tell()
+            for at, width, value in fields:
+                shifted = value + self.offset
+                if not 0 <= shifted < 1 << (width * 8):
+                    raise ValueError(f"Shifted tfdt {shifted} does not fit its {width * 8}-bit field: {segment_file}")
+                dst.seek(start + at)
+                dst.write(shifted.to_bytes(width, "big"))
+            dst.seek(end)
+
+    def start_period(self, first: int, out_start: float, duration: float, pto: float) -> None:
+        """Set the shift for a period from its first tfdt and its manifest timing.
+
+        A period's media start is its presentationTimeOffset, or its first tfdt when it declares none.
+        """
+        media_start = round(pto * self.timescale) if pto else first
+        placed = round(out_start * self.timescale)
+        length = round(duration * self.timescale)
+        if self.base is None:
+            if placed and media_start < placed // 2:
+                self.base, self.offset = 0, placed - media_start
+            else:
+                self.base = media_start - placed
+        elif self.previous:
+            previous_first, previous_length, previous_end = self.previous
+            target = self.base + placed
+            if first + self.offset < previous_first + previous_length // 2:
+                self.offset = max(target, previous_end) - media_start
+            elif self.offset and abs(media_start - target) < abs(media_start + self.offset - target):
+                self.offset = max(0, previous_end - media_start)
+        self.previous = (first + self.offset, length, media_start + self.offset + length)
+
+
+def rep_shape(adaptation_set: Element, rep: Element) -> tuple[Optional[str], ...]:
+    """The attributes a Representation must keep to continue a track into another Period."""
+    return tuple(DASH.get_attr(a, adaptation_set, rep) for a in ("codecs", "width", "height", "audioSamplingRate"))
+
+
+def rep_bandwidth(rep: Element) -> float:
+    try:
+        return float(rep.get("bandwidth") or 0)
+    except ValueError:
+        return 0.0
+
+
+def kind_and_lang(adaptation_set: Element) -> tuple[Optional[str], str]:
+    """Content type and language subtag, without the region, of an AdaptationSet."""
+    mime = DASH.get_attr("mimeType", adaptation_set, adaptation_set.find("Representation")) or ""
+    kind = adaptation_set.get("contentType") or mime.split("/")[0] or None
+    return kind, (adaptation_set.get("lang") or "").split("-")[0].lower()
+
+
 class DASH:
-    def __init__(self, manifest, url: str):
+    def __init__(self, manifest: Element, url: str) -> None:
         if manifest is None:
             raise ValueError("DASH manifest must be provided.")
         if manifest.tag != "MPD":
@@ -120,7 +286,7 @@ class DASH:
             raise TypeError(f"Expected url to be a {str}, not {url!r}")
 
         if not session:
-            session = Session()
+            session = run_proxy.fallback_session()
         elif not isinstance(session, (Session, RnetSession)):
             raise TypeError(f"Expected session to be a {Session} or {RnetSession}, not {session!r}")
 
@@ -129,7 +295,7 @@ class DASH:
             url = res.url
 
         if not res.ok:
-            raise requests.ConnectionError("Failed to request the MPD document.", response=res)
+            raise requests.ConnectionError("Failed to request the MPD document.", response=res)  # type: ignore[arg-type]
 
         log_event(
             "manifest_dash_fetch",
@@ -168,7 +334,9 @@ class DASH:
         Parameters:
             language: The Title's Original Recorded Language. unshackle also uses it as a
                 fallback track language value when the manifest gives no language information.
-            period_filter: Filter out period's within the manifest.
+            period_filter: Filter out period's within the manifest. A filtered period without an
+                id, or with the id of a kept period, gets its own, so filtered_period_ids names
+                every filtered period and no kept one.
 
         Only the first main-content period becomes tracks. Later periods do not add tracks of their
         own, but download_track stitches the segments of every content period into each returned
@@ -180,14 +348,19 @@ class DASH:
 
         filtered_period_ids: list[str] = []
 
-        for period in self.manifest.findall("Period"):
-            if callable(period_filter) and period_filter(period):
-                if period_id := period.get("id"):
-                    filtered_period_ids.append(period_id)
-                continue
-            if not DASH.is_content_period(period, []):
-                if period_id := period.get("id"):
-                    filtered_period_ids.append(period_id)
+        periods = self.manifest.findall("Period")
+        filtered = {
+            p for p in periods if (callable(period_filter) and period_filter(p)) or not DASH.is_content_period(p, [])
+        }
+        kept_ids = {p.get("id") for p in periods if p not in filtered}
+        for index, period in enumerate(periods):
+            if period in filtered:
+                if not period.get("id") or period.get("id") in kept_ids:
+                    period.set("id", f"unshackle-period-{index}")
+                filtered_period_ids.append(period.get("id"))
+
+        for period in periods:
+            if period in filtered:
                 continue
 
             for adaptation_set in period.findall("AdaptationSet"):
@@ -208,9 +381,12 @@ class DASH:
                     if not content_type and not mime_type:
                         raise ValueError("Unable to determine the format of a Representation, cannot continue...")
 
+                    if content_type == "application" and mime_type and "/mp4" not in mime_type:
+                        content_type = "text"
+
                     if mime_type == "application/mp4" or content_type == "application":
                         try:
-                            real_codec = Subtitle.Codec.from_mime(codecs)
+                            real_codec = Subtitle.Codec.from_mime(codecs or "")
                             content_type = "text"
                             mime_type = f"application/mp4; codecs='{real_codec.value.lower()}'"
                         except ValueError:
@@ -219,9 +395,13 @@ class DASH:
                     if content_type == "text" and mime_type and "/mp4" not in mime_type:
                         codecs = mime_type.split("/")[1]
 
+                    video_args: dict[str, Any] = {}
+                    track_type: type[Video] | type[Audio] | type[Subtitle]
+                    track_codec: Any
+                    track_args: dict[str, Any]
                     if content_type == "video":
                         track_type = Video
-                        track_codec = Video.Codec.from_codecs(codecs)
+                        track_codec = Video.Codec.from_codecs(codecs or "")
                         track_fps = get("frameRate")
                         if not track_fps and segment_base is not None:
                             track_fps = segment_base.get("timescale")
@@ -233,7 +413,7 @@ class DASH:
 
                         track_args = dict(
                             range_=self.get_video_range(
-                                codecs, findall("SupplementalProperty"), findall("EssentialProperty")
+                                codecs or "", findall("SupplementalProperty"), findall("EssentialProperty")
                             ),
                             bitrate=get("bandwidth") or None,
                             width=get("width") or 0,
@@ -241,18 +421,16 @@ class DASH:
                             fps=track_fps or None,
                             scan_type=scan_type,
                         )
+                        video_args["dv_compatible_bitstream"] = Video.is_dv_composite(
+                            track_codec, codecs, get("supplementalCodecs")
+                        )
+                        video_args["stereo"] = Video.is_stereo(codecs, get("supplementalCodecs"))
                     elif content_type == "audio":
                         track_type = Audio
-                        track_codec = Audio.Codec.from_codecs(codecs)
+                        track_codec = Audio.Codec.from_codecs(codecs or "")
                         track_args = dict(
                             bitrate=get("bandwidth") or None,
-                            channels=next(
-                                iter(
-                                    rep.xpath("AudioChannelConfiguration/@value")
-                                    or adaptation_set.xpath("AudioChannelConfiguration/@value")
-                                ),
-                                None,
-                            ),
+                            channels=self.get_audio_channels(adaptation_set, rep),
                             joc=self.get_ddp_complexity_index(adaptation_set, rep),
                             descriptive=self.is_descriptive(adaptation_set),
                         )
@@ -271,12 +449,7 @@ class DASH:
 
                     track_lang = self.get_language(adaptation_set, rep, fallback=language)
                     if not track_lang:
-                        msg = "Language information could not be derived from a Representation."
-                        if language is None:
-                            msg += " No fallback language was provided when calling DASH.to_tracks()."
-                        elif not tag_is_valid((str(language) or "").strip()) or str(language).startswith("und"):
-                            msg += f" The fallback language provided is also invalid: {language}"
-                        raise ValueError(msg)
+                        raise missing_language("a DASH Representation", language)
 
                     track_id = hex(
                         crc32(
@@ -310,6 +483,7 @@ class DASH:
                                 }
                             },
                             **track_args,
+                            **video_args,
                         )
                     )
 
@@ -351,12 +525,13 @@ class DASH:
             session.proxies.update({"all": proxy})
 
         log = logging.getLogger("DASH")
+        assert isinstance(track.url, str)
 
         manifest: ElementTree = track.data["dash"]["manifest"]
         adaptation_set: Element = track.data["dash"]["adaptation_set"]
         representation: Element = track.data["dash"]["representation"]
         rep_id: Optional[str] = track.data["dash"].get("representation_id") or representation.get("id")
-        filtered_period_ids: list[str] = track.data["dash"].get("filtered_period_ids", [])
+        filtered_period_ids = set(track.data["dash"].get("filtered_period_ids", []))
 
         existing_drm = track.drm
         manifest_drm = DASH.get_drm(
@@ -370,10 +545,10 @@ class DASH:
                 and manifest_drm
                 and any(isinstance(existing, type(manifest)) for existing in existing_drm for manifest in manifest_drm)
             )
-            or (existing_drm and not any(isinstance(drm, Widevine) for drm in existing_drm))
+            or (existing_drm and manifest_drm and not any(isinstance(drm, Widevine) for drm in existing_drm))
         )
 
-        pre_existing_keys = {}
+        pre_existing_keys: dict[UUID, str] = {}
         if existing_drm:
             for drm_obj in existing_drm:
                 if hasattr(drm_obj, "content_keys") and drm_obj.content_keys:
@@ -382,6 +557,7 @@ class DASH:
         if should_override_drm:
             track.drm = manifest_drm
         else:
+            assert existing_drm is not None
             track.drm = existing_drm
             if DOWNLOAD_ALL_DRM.is_set():
                 track.drm = [
@@ -414,9 +590,18 @@ class DASH:
         segment_timescale: float = 0
         init_data: Optional[bytes] = None
         track_kid: Optional[UUID] = None
+        period_starts: dict[int, tuple[float, float, float]] = {}
+        timed = True
 
         content_periods = [p for p in all_periods if DASH.is_content_period(p, filtered_period_ids)]
         period_count = len(content_periods)
+        durations = dict(zip(map(id, all_periods), DASH.period_durations(manifest)))
+        content_timing: list[tuple[Optional[float], Optional[float]]] = []
+        elapsed: Optional[float] = 0.0
+        for content_period in content_periods:
+            duration = durations[id(content_period)]
+            content_timing.append((elapsed, duration))
+            elapsed = elapsed + duration if elapsed is not None and duration is not None else None
 
         if period_count > 1:
             log.debug(f"Multi-period manifest detected with {period_count} content periods")
@@ -434,7 +619,7 @@ class DASH:
 
             if matched_rep is None or matched_as is None:
                 period_id = content_period.get("id", period_idx)
-                log.warning(f"Representation '{rep_id}' not found in period '{period_id}', skipping")
+                log.debug(f"Representation '{rep_id}' not found in period '{period_id}', skipping")
                 continue
 
             p_init, p_segments, p_timescale, p_durations, p_kid = DASH.get_period_segments(
@@ -447,6 +632,7 @@ class DASH:
                 session=session,
                 probe_kid=period_idx == 0,
                 window=config.sample,
+                duration=content_timing[period_idx][1],
             )
 
             if period_idx == 0:
@@ -454,22 +640,28 @@ class DASH:
                 track_kid = p_kid
                 segment_timescale = p_timescale
 
+            first_segment = len(segments)
             for seg in p_segments:
                 if seg not in seen_segments:
                     seen_segments.add(seg)
                     segments.append(seg)
+            if len(segments) > first_segment:
+                out_start, duration = content_timing[period_idx]
+                if out_start is None or duration is None:
+                    timed = False
+                else:
+                    pto = DASH.presentation_time_offset(matched_as, matched_rep)
+                    period_starts[first_segment] = (out_start, duration, pto)
             segment_durations.extend(p_durations)
             if config.sample and segments:
                 break
 
         if not segments:
-            log.error("Could not find a way to get segments from this MPD manifest.")
             log.debug(track.url)
-            sys.exit(1)
+            raise click.ClickException("Could not find a way to get segments from this MPD manifest.")
 
         if config.sample and not segment_durations and not isinstance(track, Subtitle):
-            log.error("--sample cannot cut this track: the manifest gives it as one file with no segment index.")
-            sys.exit(1)
+            raise click.ClickException("--sample cannot cut this track: the server sent no segment index for it.")
 
         track.data["dash"]["timescale"] = int(segment_timescale)
         track.data["dash"]["segment_durations"] = segment_durations
@@ -522,13 +714,17 @@ class DASH:
 
         downloader = track.downloader
 
-        collapse_single_url = not config.sample and DASH.collapsible_single_url(
-            isinstance(track, Subtitle),
-            segments,
-            len(init_data) if init_data is not None else None,
+        collapse_span = (
+            DASH.collapsible_single_url(isinstance(track, Subtitle), segments, len(init_data))
+            if init_data is not None and not config.sample
+            else None
         )
+        if collapse_span and init_data:
+            if not DASH.single_url_prefix_matches(session, segments[0][0], collapse_span, init_data):
+                collapse_span = None
+        collapse_single_url = collapse_span is not None
 
-        use_segment_decrypt = not collapse_single_url and bool(init_data) and can_use(drm, config.decryption)
+        use_segment_decrypt = not collapse_single_url and bool(init_data) and can_use(drm, config.decryption, init_data)
         use_rolling_merge = not collapse_single_url and config.merge_segments and not isinstance(track, Subtitle)
 
         if not collapse_single_url:
@@ -540,6 +736,7 @@ class DASH:
             if can_resume:
                 resume.write_sidecar(save_dir, digest)
 
+        downloader_args: dict[str, Any]
         if collapse_single_url:
             downloader_args = dict(
                 urls=[{"url": segments[0][0]}],
@@ -591,7 +788,14 @@ class DASH:
 
         decrypter: Optional[SegmentDecrypter] = None
         if use_segment_decrypt and init_data:
-            decrypter = SegmentDecrypter(drm, init_data, save_dir.parent, max_workers)
+            decrypter = SegmentDecrypter(cast(SEGMENT_DRM_T, drm), init_data, save_dir.parent, max_workers)
+
+        rebase: Optional[PeriodRebase] = None
+        known = timed and len(period_starts) > 1
+        timescale = mdhd_timescale(init_data) if known and init_data and not is_text_subtitle else None
+        if timescale:
+            rebase = PeriodRebase(period_starts, timescale)
+        append = rebase.append if rebase else partial(append_segment, is_text_subtitle=is_text_subtitle)
 
         merger: Optional[RollingMerge] = None
         try:
@@ -601,7 +805,7 @@ class DASH:
                     head = decrypter.init_bytes() if decrypter else init_data
                     if head:
                         output.write(head)
-                    merger = RollingMerge(output)
+                    merger = RollingMerge(output, append)
 
                 stream = stack.enter_context(closing(downloader(**downloader_args)))
                 for status_update in stream:
@@ -626,9 +830,9 @@ class DASH:
                 save_path.unlink(missing_ok=True)
             raise
 
-        if collapse_single_url:
+        if collapse_span:
             with open(save_path, "r+b") as collapsed:
-                collapsed.truncate(int(segments[-1][1].split("-")[1]) + 1)
+                collapsed.truncate(collapse_span[1] + 1)
         elif merger:
             for control_file in save_dir.glob("*.!dev"):
                 control_file.unlink(missing_ok=True)
@@ -702,14 +906,24 @@ class DASH:
                 )
                 raise FileNotFoundError(error_msg)
 
+            if known and is_text_subtitle and track.codec == Subtitle.Codec.WebVTT:
+                firsts = sorted(period_starts)
+                groups: list[list[Path]] = [[] for _ in firsts]
+                for segment_file in segments_to_merge:
+                    groups[bisect_right(firsts, int(segment_file.stem)) - 1].append(segment_file)
+                last_start, last_duration, _ = period_starts[firsts[-1]]
+                bounds = [*(period_starts[i][0] for i in firsts), last_start + last_duration]
+                rebase_webvtt_files(groups, [round(t * 1000) for t in bounds])
+
             with open(save_path, "wb") as f:
                 if init_data:
                     f.write(init_data)
                 if len(segments_to_merge) > 1:
                     progress(downloaded="Merging", completed=0, total=len(segments_to_merge))
                 for segment_file in segments_to_merge:
-                    append_segment(f, segment_file, is_text_subtitle)
-                    segment_file.unlink()
+                    append(f, segment_file)
+                    with suppress(OSError):
+                        segment_file.unlink()
                     progress(advance=1)
 
         track.path = save_path
@@ -739,7 +953,7 @@ class DASH:
         return element if element is not None else adaptation_set.find(name)
 
     @staticmethod
-    def has_segment_timing(track: AnyTrack) -> bool:
+    def has_segment_timing(track: Track) -> bool:
         """Return False when the manifest gives the track as one file with no index, so a sample cannot cut it."""
         dash = track.data.get("dash") or {}
         representation, adaptation_set = dash.get("representation"), dash.get("adaptation_set")
@@ -756,45 +970,70 @@ class DASH:
     def collapsible_single_url(
         is_subtitle: bool,
         segments: list[tuple[str, Optional[str]]],
-        init_len: Optional[int],
-    ) -> bool:
+        init_len: int,
+    ) -> Optional[tuple[int, int]]:
         """
-        Whether every segment is a byte range of one parent resource whose [0, init_len)
-        prefix is the init segment, so unshackle can download the whole resource in one pass.
+        Get the first and last byte of the segments when every segment is a byte range of one
+        parent resource that follows an init of init_len bytes, so unshackle can download the
+        whole resource in one pass.
 
-        Returns False for subtitle tracks, an unknown init length, mixed URLs, malformed
-        ranges, and anything but one gapless run in document order starting at the init
-        prefix. A gap would pull bytes the segmented merge path excludes (a period the
-        manifest filters out) into the collapsed file, so it fails closed.
+        Returns None for subtitle tracks, mixed URLs, malformed ranges, and anything but one
+        gapless run in document order. A gap between segments would pull bytes the segmented
+        merge path excludes (a period the manifest filters out) into the collapsed file, so it
+        fails closed. A gap before the first segment passes here, and single_url_prefix_matches
+        must then prove that it is the index.
         """
-        if is_subtitle or init_len is None or not segments:
-            return False
+        if is_subtitle or not segments:
+            return None
 
         first_url = segments[0][0]
         ranges: list[tuple[int, int]] = []
         for url, bytes_range in segments:
             if url != first_url or not bytes_range:
-                return False
+                return None
             parts = bytes_range.split("-")
             if len(parts) != 2 or not parts[0] or not parts[1]:
-                return False
+                return None
             try:
                 start, end = int(parts[0]), int(parts[1])
             except ValueError:
-                return False
+                return None
             if end < start:
-                return False
+                return None
             ranges.append((start, end))
 
-        prev_end = init_len - 1
+        if ranges[0][0] < init_len:
+            return None
+        prev_end = ranges[0][0] - 1
         for start, end in ranges:
             if start != prev_end + 1:
-                return False
+                return None
             prev_end = end
-        return True
+        return ranges[0][0], prev_end
 
     @staticmethod
-    def is_content_period(period: Element, filtered_period_ids: list[str]) -> bool:
+    def single_url_prefix_matches(
+        session: Union[Session, RnetSession],
+        url: str,
+        span: tuple[int, int],
+        init_data: bytes,
+    ) -> bool:
+        """
+        Whether the resource at url starts with init_data and, when bytes sit between the init
+        and the first byte of span, whether they are one sidx that indexes exactly span.
+        Fetches the resource up to the start of span.
+        """
+        first_start, last_end = span
+        head = ranged_get(url, session, f"bytes=0-{first_start - 1}")
+        if not head or len(head) != first_start or not head.startswith(init_data):
+            return False
+        if first_start == len(init_data):
+            return True
+        _, subsegments = parse_sidx(head[len(init_data) :], len(init_data))
+        return bool(subsegments) and subsegments[0][1] == first_start and subsegments[-1][2] == last_end
+
+    @staticmethod
+    def is_content_period(period: Element, filtered_period_ids: Collection[str]) -> bool:
         """Whether a period is a valid content period (not an ad, not filtered, not trick mode)."""
         period_id = period.get("id")
         if period_id and period_id in filtered_period_ids:
@@ -806,6 +1045,59 @@ class DASH:
         ]:
             return False
         return True
+
+    @staticmethod
+    def period_durations(manifest: ElementTree) -> list[Optional[float]]:
+        """The duration in seconds of every Period, None where the manifest does not give it.
+
+        A Period without @start starts at 0 when it is the first, else where the previous Period
+        ends (ISO/IEC 23009-1 5.3.2.1). A Period without @duration lasts to the next Period's start,
+        or to the end of the presentation. A duration that is not positive counts as unknown.
+        """
+        periods = manifest.findall("Period")
+        starts: list[Optional[float]] = []
+        for i, period in enumerate(periods):
+            previous = periods[i - 1] if i else None
+            if period.get("start"):
+                starts.append(DASH.pt_to_sec(period.get("start")))
+            elif previous is None:
+                starts.append(0.0)
+            elif starts[-1] is not None and previous.get("duration"):
+                starts.append(cast(float, starts[-1]) + DASH.pt_to_sec(previous.get("duration")))
+            else:
+                starts.append(None)
+        total = manifest.get("mediaPresentationDuration")
+        durations: list[Optional[float]] = []
+        for i, (period, start) in enumerate(zip(periods, starts)):
+            duration: Optional[float] = None
+            if period.get("duration"):
+                duration = DASH.pt_to_sec(period.get("duration"))
+            elif start is not None and i + 1 < len(periods):
+                following = starts[i + 1]
+                duration = following - start if following is not None else None
+            elif start is not None and total:
+                duration = DASH.pt_to_sec(total) - start
+            durations.append(duration if duration is not None and duration > 0 else None)
+        return durations
+
+    @staticmethod
+    def period_duration(manifest: ElementTree, period: Element) -> Optional[float]:
+        """The duration in seconds of one Period, by DASH.period_durations."""
+        index = next((i for i, p in enumerate(manifest.findall("Period")) if p is period), None)
+        if index is None:
+            return DASH.pt_to_sec(period.get("duration")) if period.get("duration") else None
+        return DASH.period_durations(manifest)[index]
+
+    @staticmethod
+    def presentation_time_offset(adaptation_set: Element, representation: Element) -> float:
+        """The presentationTimeOffset of a Representation's segment element in seconds, 0 when it has none."""
+        element = DASH.merge_segment_templates(adaptation_set, representation)
+        for name in ("SegmentList", "SegmentBase"):
+            if element is None:
+                element = DASH.find_segment_element(name, adaptation_set, representation)
+        if element is None:
+            return 0.0
+        return int(element.get("presentationTimeOffset") or 0) / (float(element.get("timescale") or 1) or 1.0)
 
     @staticmethod
     def merge_segment_templates(adaptation_set: Element, representation: Element) -> Optional[Element]:
@@ -839,11 +1131,12 @@ class DASH:
         adaptation_set: Element,
         representation: Element,
         manifest: ElementTree,
-        track: AnyTrack,
+        track: Track,
         track_url: str,
         session: Union[Session, RnetSession],
         probe_kid: bool = True,
         window: Optional[tuple[int, int]] = None,
+        duration: Optional[float] = None,
     ) -> tuple[
         Optional[bytes],
         list[tuple[str, Optional[str]]],
@@ -859,6 +1152,7 @@ class DASH:
                 the caller needs neither the init data nor the Key ID of this period. False
                 drops the FFprobe call, and also the init request where the rest of the parse
                 does not need those bytes.
+            duration: The Period's duration in seconds, when the caller already has it.
 
         Returns:
             A tuple of (init_data, segments, segment_timescale, segment_durations, track_kid).
@@ -872,7 +1166,10 @@ class DASH:
         adaptation_set_base_url = urljoin(period_base_url, adaptation_set.findtext("BaseURL") or "")
         rep_base_url = urljoin(adaptation_set_base_url, representation.findtext("BaseURL") or "")
 
-        period_duration = period.get("duration") or manifest.get("mediaPresentationDuration")
+        total = manifest.get("mediaPresentationDuration")
+        period_duration = (
+            duration or DASH.period_duration(manifest, period) or (DASH.pt_to_sec(total) if total else None)
+        )
         init_data: Optional[bytes] = None
 
         segment_template = DASH.merge_segment_templates(adaptation_set, representation)
@@ -918,13 +1215,34 @@ class DASH:
                 track_kid = track.get_key_id(init_data)
 
             if segment_timeline is not None:
+                patterns = {
+                    pattern.get("id"): [
+                        int(p.get("d")) for p in pattern.findall("P") for _ in range(1 + int(p.get("r") or 0))
+                    ]
+                    for pattern in segment_timeline.findall("Pattern")
+                }
+                timeline = segment_timeline.findall("S")
                 current_time = 0
-                for s in segment_timeline.findall("S"):
+                timeline_start = int(timeline[0].get("t") or 0) if timeline else 0
+                for index, s in enumerate(timeline):
                     if s.get("t"):
                         current_time = int(s.get("t"))
-                    for _ in range(1 + (int(s.get("r") or 0))):
+                    durations = patterns[s.get("p")] if s.get("p") else [int(s.get("d"))]
+                    offset = int(s.get("pE") or 0)
+                    count = 1 + int(s.get("r") or 0)
+                    if count <= 0:
+                        next_time = timeline[index + 1].get("t") if index + 1 < len(timeline) else None
+                        end_time: float
+                        if next_time:
+                            end_time = int(next_time)
+                        elif period_duration:
+                            end_time = timeline_start + period_duration * segment_timescale
+                        else:
+                            raise ValueError("Duration of the Period was unable to be determined.")
+                        count = math.ceil(round((end_time - current_time) / (sum(durations) / len(durations)), 6))
+                    for i in range(count):
                         segment_durations.append(current_time)
-                        current_time += int(s.get("d"))
+                        current_time += durations[(offset + i) % len(durations)]
 
                 keep = track.sample_slice(segment_durations, segment_timescale, window) if window else slice(None)
                 start_number += keep.start or 0
@@ -949,7 +1267,6 @@ class DASH:
             else:
                 if not period_duration:
                     raise ValueError("Duration of the Period was unable to be determined.")
-                period_duration = DASH.pt_to_sec(period_duration)
                 segment_duration = float(segment_template.get("duration")) or 1
 
                 if not end_number:
@@ -1025,9 +1342,10 @@ class DASH:
                 init_data = res.content
                 if probe_kid:
                     track_kid = track.get_key_id(init_data)
-                total_size = res.headers.get("Content-Range", "").split("/")[-1]
-                if total_size:
-                    media_range = f"{len(init_data)}-{total_size}"
+                content_range = parse_content_range(res.headers.get("Content-Range"))
+                if content_range:
+                    _, init_end, total = content_range
+                    media_range = f"{init_end + 1}-{'' if total is None else total - 1}"
 
             subsegments: list[tuple[int, int, int]] = []
             index_range = segment_base.get("indexRange")
@@ -1115,12 +1433,13 @@ class DASH:
             if not tag_is_valid(option) or option.startswith("und"):
                 continue
             return Language.get(option)
+        return None
 
     @staticmethod
     def get_video_range(
         codecs: str, all_supplemental_props: list[Element], all_essential_props: list[Element]
     ) -> Video.Range:
-        if codecs.startswith(("dva1", "dvav", "dvhe", "dvh1")):
+        if Video.has_dv_codec(codecs):
             return Video.Range.DV
 
         return Video.Range.from_cicp(
@@ -1174,40 +1493,48 @@ class DASH:
         period: Element, rep_id: Optional[str], adaptation_set: Element
     ) -> Optional[tuple[Element, Element]]:
         """
-        Find the (AdaptationSet, Representation) in another Period matching rep_id.
+        Find the (AdaptationSet, Representation) in another Period that continues rep_id.
 
-        Representation ids are only unique within an AdaptationSet, so the set matching
-        `adaptation_set`'s identity wins over an earlier sibling that reuses the same id
-        for a different track (for example, audio description vs dialog).
+        Ids are not trusted alone, because some packagers renumber them per Period. A match never
+        crosses codec, size or language; within the set, bandwidth rank decides.
         """
-        as_key = DASH.adaptation_set_key(adaptation_set)
+        source = next((r for r in adaptation_set.findall("Representation") if r.get("id") == rep_id), None)
+        if source is None:
+            return None
+        want = rep_shape(adaptation_set, source)
 
-        def candidates(within: Element) -> list[tuple[Element, Element]]:
-            found = []
-            for as_ in within.findall("AdaptationSet"):
-                if DASH.is_trick_mode(as_) or DASH.adaptation_set_key(as_) != as_key:
-                    continue
-                for rep in as_.findall("Representation"):
-                    if rep.get("id") == rep_id:
-                        found.append((as_, rep))
-                        break
-            return found
+        def same_shape(as_: Element) -> list[Element]:
+            return sorted((r for r in as_.findall("Representation") if rep_shape(as_, r) == want), key=rep_bandwidth)
 
-        matches = candidates(period)
-        if matches:
-            parent = adaptation_set.getparent()
-            siblings = [as_ for as_, _ in candidates(parent)] if parent is not None else []
+        def sets(within: Optional[Element], key: Callable[[Element], Any]) -> list[Element]:
+            found = within.findall("AdaptationSet") if within is not None else []
+            target = key(adaptation_set)
+            return [a for a in found if key(a) == target and not DASH.is_trick_mode(a) and same_shape(a)]
+
+        keys: tuple[Callable[[Element], Any], ...] = (
+            DASH.adaptation_set_key,
+            lambda as_: DASH.adaptation_set_key(as_)[:-1],
+            kind_and_lang,
+        )
+        for key in keys:
+            if matches := sets(period, key):
+                break
+        else:
+            return None
+        with_id = [a for a in matches if any(r.get("id") == rep_id for r in same_shape(a))]
+        if len(with_id) == 1:
+            matched_as = with_id[0]
+        else:
+            siblings = sets(adaptation_set.getparent(), key)
             ordinal = siblings.index(adaptation_set) if adaptation_set in siblings else 0
-            return matches[min(ordinal, len(matches) - 1)]
+            matched_as = matches[min(ordinal, len(matches) - 1)]
 
-        for as_ in period.findall("AdaptationSet"):
-            if DASH.is_trick_mode(as_):
-                continue
-            for rep in as_.findall("Representation"):
-                if rep.get("id") == rep_id:
-                    return as_, rep
-
-        return None
+        group, source_group = same_shape(matched_as), same_shape(adaptation_set)
+        if len(group) == len(source_group):
+            return matched_as, group[source_group.index(source)]
+        return matched_as, min(
+            group, key=lambda r: (abs(rep_bandwidth(r) - rep_bandwidth(source)), r.get("id") != rep_id)
+        )
 
     @staticmethod
     def is_descriptive(adaptation_set: Element) -> bool:
@@ -1241,11 +1568,32 @@ class DASH:
 
     @staticmethod
     def is_closed_caption(adaptation_set: Element) -> bool:
-        """Whether the Adaptation Set is a Closed Caption Subtitle."""
-        return any(
+        """Whether the Adaptation Set is a Closed Caption Subtitle. A caption that is also marked SDH counts as SDH."""
+        return not DASH.is_sdh(adaptation_set) and any(
             (x.get("schemeIdUri"), x.get("value")) == ("urn:mpeg:dash:role:2011", "caption")
             for x in adaptation_set.findall("Role")
         )
+
+    @staticmethod
+    def get_audio_channels(adaptation_set: Element, representation: Optional[Element]) -> Union[float, str, None]:
+        """
+        Channel layout from the first AudioChannelConfiguration whose scheme is known, decoded by that scheme.
+
+        The 23003:3 value is a 23003-3 index by the DASH-IF registry, but packagers write the number of channels
+        and players read it so; both readings agree up to 6 channels.
+        """
+        for descriptor in DASH.find_elements("AudioChannelConfiguration", adaptation_set, representation):
+            scheme, value = descriptor.get("schemeIdUri"), (descriptor.get("value") or "").strip()
+            try:
+                if scheme in DOLBY_CHANNEL_SCHEMES:
+                    return Audio.dolby_channel_layout(int(value, 16))
+                if scheme == CICP_CHANNEL_SCHEME and (layout := CICP_CHANNEL_LAYOUTS.get(int(value))):
+                    return layout
+                if scheme in COUNT_CHANNEL_SCHEMES and value.isdigit():
+                    return Audio.channels_from_count(value)
+            except ValueError:
+                continue
+        return None
 
     @staticmethod
     def get_ddp_complexity_index(adaptation_set: Element, representation: Optional[Element]) -> Optional[int]:
@@ -1309,7 +1657,6 @@ class DASH:
                 )
                 if not pr_pssh_b64:
                     continue
-                pr_pssh = PR_PSSH(pr_pssh_b64)
                 kid_b64 = protection.findtext("kid")
                 kid = None
                 if kid_b64:
@@ -1318,7 +1665,10 @@ class DASH:
                     except ValueError:
                         kid = None
 
-                drm.append(PlayReady(pssh=pr_pssh, kid=kid, pssh_b64=pr_pssh_b64))
+                try:
+                    drm.append(PlayReady.from_pssh_b64(pr_pssh_b64, kid=kid))
+                except Exception as e:
+                    logging.getLogger("DASH").warning(f"Skipping unparseable PlayReady ContentProtection: {e!r}")
 
             elif urn == ClearKeyCENC.urn:
                 kid_attr = protection.get("default_KID") or protection.get("{urn:mpeg:cenc:2013}default_KID")

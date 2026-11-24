@@ -104,7 +104,6 @@ def test_a_quality_rule_matches_the_built_context(monkeypatch: pytest.MonkeyPatc
         height=2160,
         format="HEVC",
         scan_type="Progressive",
-        other_display_aspect_ratio=["16:9"],
         hdr_format_commercial=None,
         hdr_format=None,
         transfer_characteristics=None,

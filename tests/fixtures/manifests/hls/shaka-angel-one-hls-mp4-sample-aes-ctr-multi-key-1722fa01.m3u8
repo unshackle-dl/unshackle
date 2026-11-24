@@ -1,0 +1,9 @@
+#EXTM3U
+## Generated with https://github.com/shaka-project/shaka-packager version v3.0.4-ceeb378a85-release
+
+#EXT-X-INDEPENDENT-SEGMENTS
+
+#EXT-X-MEDIA:TYPE=AUDIO,URI="audio.m3u8",GROUP-ID="default-audio-group",LANGUAGE="en",NAME="stream_0",DEFAULT=NO,AUTOSELECT=YES,CHANNELS="2"
+
+#EXT-X-STREAM-INF:BANDWIDTH=2824057,AVERAGE-BANDWIDTH=1639209,CODECS="avc1.4d401e,mp4a.40.2",RESOLUTION=720x576,FRAME-RATE=25.000,AUDIO="default-audio-group",CLOSED-CAPTIONS=NONE
+video.m3u8

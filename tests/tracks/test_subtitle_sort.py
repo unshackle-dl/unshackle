@@ -3,11 +3,19 @@ import pytest
 from unshackle.core.tracks import Subtitle, Tracks
 
 
-def sub(lang: str, forced: bool = False, sdh: bool = False, cc: bool = False, orig: bool = False) -> Subtitle:
+def sub(
+    lang: str,
+    forced: bool = False,
+    sdh: bool = False,
+    cc: bool = False,
+    orig: bool = False,
+    codec: Subtitle.Codec = Subtitle.Codec.SubRip,
+    tag: str = "",
+) -> Subtitle:
     track = Subtitle(
-        url=f"https://example.test/{lang}-{forced}-{sdh}-{cc}",
+        url=f"https://example.test/{lang}-{forced}-{sdh}-{cc}-{codec.value}{tag}",
         language=lang,
-        codec=Subtitle.Codec.SubRip,
+        codec=codec,
         forced=forced,
         sdh=sdh,
         cc=cc,
@@ -126,11 +134,11 @@ def test_language_grouping_keeps_regional_variants_adjacent_through_sections() -
     )
     t.sort_subtitles(by_language=["en"], group_by="language")
     assert shape(t) == [
+        ("en-US", "normal"),
+        ("en-US", "sdh"),
         ("en-GB", "forced"),
         ("en-GB", "normal"),
         ("en-GB", "sdh"),
-        ("en-US", "normal"),
-        ("en-US", "sdh"),
         ("fi", "normal"),
         ("fi", "sdh"),
     ]
@@ -168,7 +176,15 @@ def test_priority_overlapping_entries_are_harmless() -> None:
     t = Tracks()
     t.add([sub("ar"), sub("en-GB"), sub("en-US"), sub("es"), sub("ja")])
     t.sort_subtitles(by_language=["en", "en-US", "es"], group_by="language")
-    assert langs(t) == ["en-GB", "en-US", "es", "ar", "ja"]
+    assert langs(t) == ["en-US", "en-GB", "es", "ar", "ja"]
+
+
+@pytest.mark.parametrize("group_by", ["language", "type"])
+def test_a_regional_priority_outranks_its_sibling(group_by: str) -> None:
+    t = Tracks()
+    t.add([sub("en-GB"), sub("en-US"), sub("fr")])
+    t.sort_subtitles(by_language=["en-US"], group_by=group_by)
+    assert langs(t) == ["en-US", "en-GB", "fr"]
 
 
 def test_no_priority_leaves_order_unchanged(many: Tracks) -> None:
@@ -216,3 +232,55 @@ def test_exact_priority_still_falls_back_when_no_tag_is_string_equal() -> None:
 def test_unparseable_priority_entry_is_ignored(many: Tracks, exact: bool) -> None:
     many.sort_subtitles(by_language=["en", "engrish", "f", ""], group_by="language", exact_match=exact)
     assert langs(many) == ["en", "ar", "bg", "es", "fr", "ja"]
+
+
+def test_a_bare_audio_priority_sorts_the_meant_variant_then_its_other_forms() -> None:
+    from unshackle.core.tracks import Audio
+
+    t = Tracks()
+    t.add(
+        [
+            Audio(id_=lang, url=f"https://x/{lang}", language=lang, codec=Audio.Codec.AAC, bitrate=bitrate)
+            for lang, bitrate in (("en", 3), ("es-419", 2), ("es-ES", 1))
+        ]
+    )
+    t.sort_audio(by_language=["es"])
+    assert [str(a.language) for a in t.audio] == ["es-ES", "es-419", "en"]
+
+
+def test_all_sorts_the_original_track_then_its_other_regional_forms() -> None:
+    from unshackle.core.tracks import Audio
+
+    t = Tracks()
+    t.add(
+        [
+            Audio(
+                id_=lang,
+                url=f"https://x/{lang}",
+                language=lang,
+                codec=Audio.Codec.AAC,
+                bitrate=bitrate,
+                is_original_lang=orig,
+            )
+            for lang, bitrate, orig in (("en", 3, False), ("fr-FR", 2, False), ("fr-CA", 1, True))
+        ]
+    )
+    t.sort_audio(by_language=["all"])
+    assert [str(a.language) for a in t.audio] == ["fr-CA", "fr-FR", "en"]
+
+
+def test_dedupe_subtitle_codecs_keeps_the_first_listed_codec_of_each_variant() -> None:
+    codec = Subtitle.Codec
+    vtt = sub("en", codec=codec.WebVTT)
+    wvtt = sub("en", codec=codec.fVTT)
+    stpp = sub("en", codec=codec.fTTML)
+    stpp_cc = sub("en", cc=True, codec=codec.fTTML)
+    srt = sub("en")
+    de_wvtt = sub("de", codec=codec.fVTT)
+    vtt_second = sub("en", codec=codec.WebVTT, tag="-second")
+    tracks = Tracks()
+    tracks.subtitles = [wvtt, stpp, vtt, stpp_cc, srt, de_wvtt, vtt_second]
+
+    tracks.dedupe_subtitle_codecs([codec.WebVTT, codec.fTTML, codec.fVTT])
+
+    assert tracks.subtitles == [vtt, stpp_cc, srt, de_wvtt, vtt_second]

@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--Generated with https://github.com/google/shaka-packager version v2.4.3-dd98700-release-->
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="urn:mpeg:dash:schema:mpd:2011 DASH-MPD.xsd" profiles="urn:mpeg:dash:profile:isoff-live:2011" minBufferTime="PT2S" type="static" mediaPresentationDuration="PT160.10000610351562S">
+<Period id="0">
+<AdaptationSet id="0" contentType="video" maxWidth="1920" maxHeight="1080" frameRate="15360/512">
+<Representation id="0" bandwidth="614400" codecs="hev1.1.6.L63.90" mimeType="video/mp4" sar="2:1" width="856" height="480">
+<BaseURL>lcevc_vnCTVqNpUs9400xP_5.mp4</BaseURL>
+<SegmentBase indexRange="948-1171" timescale="15360">
+<Initialization range="0-947"/>
+</SegmentBase>
+</Representation>
+<Representation id="2" bandwidth="1536000" codecs="hev1.1.6.L63.90" mimeType="video/mp4" sar="1:1" width="1280" height="720">
+<BaseURL>lcevc_vnCTVqNpUs9400xP_4.mp4</BaseURL>
+<SegmentBase indexRange="925-1148" timescale="15360">
+<Initialization range="0-924"/>
+</SegmentBase>
+</Representation>
+<Representation id="4" bandwidth="2457600" codecs="hev1.1.6.L90.90" mimeType="video/mp4" sar="1:1" width="1920" height="1080">
+<BaseURL>lcevc_vnCTVqNpUs9400xP_3.mp4</BaseURL>
+<SegmentBase indexRange="926-1149" timescale="15360">
+<Initialization range="0-925"/>
+</SegmentBase>
+</Representation>
+<Representation id="6" bandwidth="4096000" codecs="hev1.1.6.L90.90" mimeType="video/mp4" sar="1:1" width="1920" height="1080">
+<BaseURL>lcevc_vnCTVqNpUs9400xP_2.mp4</BaseURL>
+<SegmentBase indexRange="926-1149" timescale="15360">
+<Initialization range="0-925"/>
+</SegmentBase>
+</Representation>
+</AdaptationSet>
+<AdaptationSet id="1" contentType="audio" lang="en" subsegmentAlignment="true">
+<Representation id="1" bandwidth="132062" codecs="mp4a.40.2" mimeType="audio/mp4" audioSamplingRate="44100">
+<AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2"/>
+<BaseURL>lcevc_audio_vnCTVqNpUs9400xP_5.mp4</BaseURL>
+<SegmentBase indexRange="822-1057" timescale="44100">
+<Initialization range="0-821"/>
+</SegmentBase>
+</Representation>
+<Representation id="3" bandwidth="132062" codecs="mp4a.40.2" mimeType="audio/mp4" audioSamplingRate="44100">
+<AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2"/>
+<BaseURL>lcevc_audio_vnCTVqNpUs9400xP_4.mp4</BaseURL>
+<SegmentBase indexRange="822-1057" timescale="44100">
+<Initialization range="0-821"/>
+</SegmentBase>
+</Representation>
+<Representation id="5" bandwidth="132062" codecs="mp4a.40.2" mimeType="audio/mp4" audioSamplingRate="44100">
+<AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2"/>
+<BaseURL>lcevc_audio_vnCTVqNpUs9400xP_3.mp4</BaseURL>
+<SegmentBase indexRange="822-1057" timescale="44100">
+<Initialization range="0-821"/>
+</SegmentBase>
+</Representation>
+<Representation id="7" bandwidth="132062" codecs="mp4a.40.2" mimeType="audio/mp4" audioSamplingRate="44100">
+<AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2"/>
+<BaseURL>lcevc_audio_vnCTVqNpUs9400xP_2.mp4</BaseURL>
+<SegmentBase indexRange="822-1057" timescale="44100">
+<Initialization range="0-821"/>
+</SegmentBase>
+</Representation>
+</AdaptationSet>
+</Period>
+</MPD>

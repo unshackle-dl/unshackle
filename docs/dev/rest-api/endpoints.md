@@ -8,15 +8,16 @@ Start the server with [`unshackle serve`](../../guide/cli-reference.md). By defa
     All examples below assume a base URL of `http://127.0.0.1:8786`. Replace the host and port so that they match your own `unshackle serve -h <host> -p <port>` invocation.
 
 !!! tip "Interactive docs"
-    The server mounts a live Swagger UI at **`/api/docs/`** whenever it does not operate in `--remote-only` mode. Its title is "Unshackle REST API" and its version tracks the installed package version. In API-only mode with an API key configured, the Swagger UI itself sits behind `X-Secret-Key`. Only `/api/health` is exempt.
+    The server mounts a live Swagger UI at **`/api/docs/`** whenever it does not operate in `--remote-only` mode. Its title is "Unshackle REST API" and its version tracks the installed package version. In API-only mode with an API key configured, the Swagger UI itself sits behind `X-Secret-Key`, like every other route.
 
 ## Conventions
 
-- **Authentication.** Every request except `GET /api/health` requires the `X-Secret-Key` header when you configure an API key. `--no-key` disables the check entirely. See [Authentication](authentication.md).
+- **Authentication.** Every request, `GET /api/health` included, requires the `X-Secret-Key` header when you configure an API key. `--no-key` disables the check entirely. See [Authentication](authentication.md).
 - **Content type.** Request bodies are JSON (`Content-Type: application/json`). All success responses are JSON unless this page documents a `204 No Content`.
 - **CORS.** Every response carries permissive CORS headers, and the server answers `OPTIONS` preflight requests automatically.
 - **Compression.** JSON responses of 256 bytes or more are gzip-compressed when the client sends `Accept-Encoding: gzip`. A [slow response](#slow-responses) is not compressed.
 - **Service allowlist.** The effective allowlist for your API key filters the service-facing endpoints (the intersection of the global `serve.services` list and your per-key list). The server treats services you cannot use as unknown.
+- **Remote services.** A full-mode server can run a service through one of its own `remote_services` servers (see [Remote sessions](remote-sessions.md)). `GET /api/config` lists their names in `remote_services`, and `GET /api/services?remote=<name>` lists that server's services, each with `remote` set to the name. Add `"remote": "<name>"` to `POST /api/search`, `/api/list-titles`, `/api/list-tracks` or `/api/download`, and the server opens a remote session with its own key for that server: the remote logs in and resolves titles, tracks and licences, and a download still runs, decrypts and muxes here. The tag may be any case or an alias, and your allowlist applies to it. An unknown name is `400 INVALID_PARAMETERS`, a server that does not answer is `SERVICE_UNAVAILABLE`, and a tag it does not offer is `INVALID_SERVICE`. List calls from the same API key for the same title, profile, proxy, client region and service options share one remote session, which closes after 120 seconds unused. An optional `client_name` names your client on the remote server's dashboard as `serve (<client_name>)`. A relayed search opens no remote session. The server sends its own credentials, cookies and cache for the `profile` with the search. A service that searches with no login gets none of them. A `--remote-only` server does not relay. A remote login that waits on you (a pair code or URL to approve on another device) cannot answer through a list call, so poll `GET /api/remote/logins` alongside it: each entry carries the login's `notice`, and its `prompt` when it asks a question (an OTP), which you answer with `POST /api/remote/logins/{id}/input` and `{"response": "..."}`. A remote download job shows the same text as its own `notice`, and asks a question (an OTP) through `input_prompt` as a local job does.
 
 !!! warning "Error responses have two shapes"
     Structured application errors (raised inside a handler) return `{"status": "error", "error_code": "...", "message": "...", "timestamp": "..."}`. The authentication middleware, however, returns a **different** shape: `{"status": 401, "message": "..."}` with an integer `status` and no `error_code`. The same middleware answers `429` in that shape when an API key goes over its rate limit. Clients must accept both shapes. The [Error responses](#error-responses) section at the bottom of this page gives the full error model.
@@ -29,12 +30,12 @@ These endpoints report server state and enumerate what is available. `GET /api/h
 
 ### `GET /api/health`
 
-Health check. **This is the only route exempt from authentication**: you can call it without an `X-Secret-Key` header. It reports the running version and a best-effort update check.
+Health check. It reports the running version and commit and a best-effort update check, so it needs the `X-Secret-Key` header like every other route. A request without an API key gets a `401`, which still shows the server is up.
 
 === "Request"
 
     ```bash
-    curl http://127.0.0.1:8786/api/health
+    curl -H "X-Secret-Key: $SECRET" http://127.0.0.1:8786/api/health
     ```
 
 === "Response `200`"
@@ -44,6 +45,7 @@ Health check. **This is the only route exempt from authentication**: you can cal
       "status": "ok",
       "version": "5.3.0",
       "code_hash": "1d22a1e",
+      "draining": false,
       "update_check": {
         "update_available": false,
         "current_version": "5.3.0",
@@ -54,6 +56,10 @@ Health check. **This is the only route exempt from authentication**: you can cal
 
 `code_hash` fingerprints the framework source the server operates, so it names the code itself rather than the release. It is the same value for a git checkout and for an installed package built from that checkout. It changes when you edit anything under `unshackle/core`, `unshackle/commands`, `unshackle/utils`, or `unshackle/vaults`. Service modules are not included. unshackle sets the value to `null` only when it cannot read the source files.
 
+`draining` is `true` while the server refuses new remote sessions and jobs before a restart.
+
+The server asks GitHub for the latest release at most once per [`update_check_interval`](../../reference/configuration/misc.md#caching-updates) hours and answers from its cache between checks.
+
 If the update check fails (for example, no network), `update_available` and `latest_version` are `null` while `current_version` still reports the installed version.
 
 | Status | Meaning |
@@ -62,7 +68,7 @@ If the update check fails (for example, no network), `update_available` and `lat
 
 ### `GET /api/services`
 
-Show the streaming services available on this server, filtered by your allowlist. Each entry gives the service's tag, matching rules, capability flags, and its CLI parameters (useful when you make a UI that accepts service-specific options). `load_errors` lists the services the server skipped because they failed to import, at startup or after a service repository refresh; the server also writes each one to its log. An entry marked `pending_update` has newer code staged: it keeps its current code until its running or queued jobs and its live remote sessions finish.
+Show the streaming services available on this server, filtered by your allowlist. Each entry gives the service's tag, matching rules, capability flags, and its CLI parameters (useful when you make a UI that accepts service-specific options). For the admin key, `load_errors` lists the services the server skipped because they failed to import, at startup or after a service repository refresh; the server also writes each one to its log. Any other key gets an empty list; with `--no-key` every caller is the admin. An entry marked `pending_update` has newer code staged: it keeps its current code until its running or queued jobs and its live remote sessions finish.
 
 === "Request"
 
@@ -130,7 +136,7 @@ Field notes:
 | Status | Meaning |
 | --- | --- |
 | `200` | Service list returned. |
-| `500` | Unexpected server error (`INTERNAL_ERROR`). |
+| `422` | Unexpected server error (`INTERNAL_ERROR`). |
 
 ### `POST /api/search`
 
@@ -145,7 +151,7 @@ For a service with `anonymous_search`, the server does not log in and ignores `c
 | `service` | string | yes | - | Service tag. |
 | `query` | string | yes | - | Search query. |
 | `profile` | string | no | `null` | Credential/cookie profile to use. |
-| `proxy` | string | no | `null` | Full proxy URI, a Control D resolver as `controld://<resolver>@dns.controld.com`, or a country code when the API key has `server_proxy`. |
+| `proxy` | string | no | `null` | Full proxy URI on a public host, a Control D resolver as `controld://<resolver>@dns.controld.com`, or a country code when the API key has `server_proxy`. |
 | `no_proxy` | boolean | no | `false` | Force-disable all proxy use. |
 | `credentials`, `cookies`, `cache` | - | no | `null` | Your own login material, on a `--remote-only` server only. See [Client cache on a remote-only server](#client-cache-on-a-remote-only-server). |
 
@@ -181,7 +187,7 @@ For a service with `anonymous_search`, the server does not log in and ignores `c
 | `400` | `INVALID_PARAMETERS` | Missing `query`. |
 | `400` | `INVALID_SERVICE` | Unknown or disallowed service. |
 | `400` | `INVALID_PROXY` | Proxy could not be resolved. |
-| `502` | `SERVICE_ERROR` | Service failed to initialise, or does not support search. |
+| `422` | `SERVICE_ERROR` | Service failed to initialise, or does not support search. |
 
 ### `POST /api/list-titles`
 
@@ -194,12 +200,13 @@ Get the list of titles behind a title ID, for example episodes or a movie, witho
 | `service` | string | yes | Service tag. |
 | `title_id` | string | yes | Title identifier. |
 | `profile` | string | no | Credential/cookie profile. |
-| `proxy` | string | no | Full proxy URI, a Control D resolver as `controld://<resolver>@dns.controld.com`, or a country code when the API key has `server_proxy`. |
+| `proxy` | string | no | Full proxy URI on a public host, a Control D resolver as `controld://<resolver>@dns.controld.com`, or a country code when the API key has `server_proxy`. |
 | `no_proxy` | boolean | no | Force-disable proxy. |
 | `cdm_type` | string | no | Preferred CDM type. |
 | `credentials`, `cookies`, `cache` | - | no | Your own login material, on a `--remote-only` server only. See [Client cache on a remote-only server](#client-cache-on-a-remote-only-server). |
 
-You can also pass service-specific CLI options as additional keys.
+You can also pass a service's own CLI options, in a nested `service_params` object or as
+additional keys. When the body has `service_params`, the server reads service options only from it.
 
 #### Logins that need the user
 
@@ -276,10 +283,12 @@ These keys are sent only when the title carries them, so a title without them se
 
 | Key | Type | On | Meaning |
 | --- | --- | --- | --- |
+| `availability` | object | all | Optional account-scoped metadata: `paid` is a boolean describing the catalogue offer; `access` is `"granted"`, `"denied"`, or `"unknown"`. Both fields are optional; missing or unknown access is not denial. Only these allowlisted fields are forwarded, including through remote services. |
 | `part` | integer | episode | Part index of a [split episode](../creating-a-service.md#split-episodes), counting from 1. |
 | `air_date` | string | episode | ISO air date of [daily and date-based content](../../guide/downloading.md#daily-and-date-based-content). unshackle names the episode by date instead of `SxxExx`. |
 | `absolute` | integer | episode | Absolute episode number across all seasons. |
 | `daily` | boolean | episode | The episode is daily/date-based. Set from the title, or from the service's `DAILY` class attribute. |
+| `sport` | boolean | episode | The episode is a sports event, so it uses the `sports` output template when one is set. Sent only when true. |
 | `anime` | boolean | episode, movie | The title is anime, so metadata lookups prefer AniList. Set from the title, or from the service's `ANIME` class attribute. |
 
 !!! info "`part` on a split episode"
@@ -295,7 +304,7 @@ These keys are sent only when the title carries them, so a title without them se
 | `400` | `INVALID_SERVICE` | Unknown or disallowed service. |
 | `401` | `AUTH_FAILED` | Authentication with the service failed. |
 | `404` | `NOT_FOUND` | Title not found. |
-| `500` | `INTERNAL_ERROR` | Unexpected error. |
+| `422` | `INTERNAL_ERROR` | Unexpected error. |
 
 ### `POST /api/list-tracks`
 
@@ -316,7 +325,7 @@ Show the video, audio, and subtitle tracks for a title. For series, you can scop
 | `part` | int/string | no | Part index of a split episode (combined with `season` and `episode`). |
 | `profile`, `proxy`, `no_proxy`, `cdm_type` | - | no | As on `list-titles`. |
 | `credentials`, `cookies`, `cache` | - | no | As on `list-titles`. |
-| `dl_params` | object | no | The `dl` track selection that the service reads from `ctx.parent.params`: `lang`, `v_lang`, `a_lang`, `acodec`, `forced_subs` and `exact_lang`, as on [`POST /api/session/create`](#post-apisessioncreate). Some services select the manifests they fetch from these values. |
+| `dl_params` | object | no | The `dl` track selection that the service reads from `ctx.parent.params`: `lang`, `v_lang`, `a_lang`, `s_lang`, `acodec`, `forced_subs` and `exact_lang`, as on [`POST /api/session/create`](#post-apisessioncreate). Some services select the manifests they fetch from these values. |
 
 When you give both `season` and `episode`, the server combines them into a `"{season}x{episode}"` selector. `part` narrows that to `"{season}x{episode}.{part}"`, one part of a [split episode](../creating-a-service.md#split-episodes). Without `part` you get every part of the episode. The server reads `part` only when you give both `season` and `episode`, and `wanted` takes precedence over all three. To scope a part by range, put it in `wanted` instead (`"S01E01.2"`).
 
@@ -327,28 +336,29 @@ When you give both `season` and `episode`, the server combines them into a `"{se
       "title": { "type": "movie", "name": "Example Movie", "id": "12345", "year": 2021 },
       "video": [
         {
-          "id": "v-1", "codec": "H265", "codec_display": "HEVC",
+          "id": "v-1", "codec": "HEVC", "codec_display": "H.265",
           "bitrate": 8000, "bitrate_bps": 8000000, "width": 3840, "height": 2160,
           "resolution": "2160p", "fps": "24", "range": "HDR10",
-          "range_display": "HDR10", "scan_type": null, "closed_captions": [],
-          "dv_compatible_bitstream": false, "language": "en", "is_original_lang": true,
-          "name": null, "needs_repack": false, "edition": [], "data": null,
+          "range_display": "HDR", "scan_type": null, "closed_captions": [],
+          "dv_compatible_bitstream": false, "hdr10plus": false, "hdr10_base": false, "stereo": false, "language": "en",
+          "is_original_lang": true,
+          "name": null, "track_name": "English", "needs_repack": false, "edition": [], "note": null, "data": null,
           "drm": [], "descriptor": "DASH"
         }
       ],
       "audio": [
         {
-          "id": "a-1", "codec": "EC3", "codec_display": "DD+",
+          "id": "a-1", "codec": "EC3", "codec_display": "DDP",
           "bitrate": 640, "bitrate_bps": 640000, "channels": "5.1", "language": "en",
           "is_original": true, "is_original_lang": true, "atmos": false, "joc": 0,
-          "descriptive": false, "name": null, "needs_repack": false, "edition": [],
-          "data": null, "drm": [], "descriptor": "DASH"
+          "descriptive": false, "name": null, "track_name": "English", "needs_repack": false, "edition": [],
+          "note": null, "data": null, "drm": [], "descriptor": "DASH"
         }
       ],
       "subtitles": [
         { "id": "s-1", "codec": "vtt", "language": "en",
           "forced": false, "sdh": false, "cc": false, "is_original_lang": false,
-          "name": null, "needs_repack": false, "edition": [], "data": null,
+          "name": null, "track_name": "English", "needs_repack": false, "edition": [], "note": null, "data": null,
           "drm": [], "descriptor": "DASH" }
       ]
     }
@@ -376,7 +386,7 @@ The server sorts tracks by bitrate, descending. Episodes the server cannot get g
 
 The `drm` array on a track is a list of `{type, pssh?, kids?, content_keys?, license_url?}` objects.
 
-Every track carries the same fields as a local track: `is_original_lang`, `name`, `needs_repack`, `edition`, and `data`. `bitrate` is in kb/s, and `bitrate_bps` gives the exact bits/s. `data` holds the part of the service-set `track.data` that fits in JSON, without the `hls`, `dash`, and `ism` parser keys. Audio keeps `is_original` and `atmos` for clients that read them, and adds the exact `joc` object count.
+Every track carries the same fields as a local track: `is_original_lang`, `name`, `needs_repack`, `edition`, `note`, and `data`. `name` is the name the service set, or null. `note` is display text the service set, such as an encoding profile, or null: `--list` shows it, but the filename and the mux do not use it. `track_name` is the name `--list` shows and the mux writes to an audio or subtitle track: `name` when the service set one, else the name of the language (English, or in the language itself when the server sets `muxing.track_names: native`, or no name when it sets `none`), then the server's `muxing.original_label` on an original-language track, then the SDH, CC, Forced or Descriptive label. `bitrate` is in kb/s, and `bitrate_bps` gives the exact bits/s. `data` holds the part of the service-set `track.data` that fits in JSON, without the `hls`, `dash`, and `ism` parser keys. Audio keeps `is_original` and `atmos` for clients that read them, and adds the exact `joc` object count.
 
 | Status | Error code | Meaning |
 | --- | --- | --- |
@@ -430,9 +440,9 @@ Make a download job. It requires `service` and `title_id`. Every other field is 
 | Field | Type | Default | Notes |
 | --- | --- | --- | --- |
 | `profile` | string | `null` | Credential/cookie profile. |
-| `quality` | int[] | `[]` | Target resolution(s); best available if empty. |
-| `vcodec` | string/string[] | `null` | Video codec filter. |
-| `acodec` | string/string[] | `null` | Audio codec filter. |
+| `quality` | int[] | `[]` | Target resolution(s); best available if empty, or the lowest with `worst`. |
+| `vcodec` | string/string[] | `[]` | Video codec filter. |
+| `acodec` | string/string[] | `[]` | Audio codec filter. |
 | `vbitrate` / `abitrate` | int | `null` | Video / audio bitrate in kbps (positive). |
 | `vbitrate_range` / `abitrate_range` | string | `null` | `"MIN-MAX"` bitrate window. |
 | `range` | string[] | `["SDR"]` | Dynamic range(s). |
@@ -441,17 +451,20 @@ Make a download job. It requires `service` and `title_id`. Every other field is 
 | `wanted` | string / string[] | `[]` | Episode/season selectors, as a list or as one comma-separated string. Accepts the part form, `"S01E01.2"`, and the air-date form, `"2026-08-11"` or `"2026-08-01:2026-08-31"`. For a music release, a selector is a track number, `"1-5"` or `"1,3,7"`, or `"{disc}x{track}"` such as `"2x3"`. |
 | `latest_episode` | boolean | `false` | Only the newest episode. |
 | `latest_episodes` | integer | `null` | Only the N newest episodes. A positive integer. When set, it overrides `latest_episode`. |
-| `lang` / `v_lang` / `a_lang` / `s_lang` | string[] | `["orig"]` / `[]` / `[]` / `["all"]` | Language filters. |
-| `require_audio` | string[] | `[]` | Audio languages that must exist. The job fails if one is missing, even with `best_available`. |
-| `require_video` | string[] | `[]` | Video languages that must exist. The job fails if one is missing, even with `best_available`. |
-| `require_subs` | string[] | `[]` | Subtitle languages that must exist. The job fails if one is missing. `s_lang` still decides what to keep. |
+| `lang` / `v_lang` / `a_lang` / `s_lang` | string[] | `["orig"]` / `[]` / `[]` / `["all"]` | Language filters. A missing `s_lang` language gives a warning and the job continues. |
+| `require_audio` | string[] | `[]` | Audio languages that must exist. The job fails if one is missing, even with `best_available`, or skips the title with `skip_missing`. |
+| `require_video` | string[] | `[]` | Video languages that must exist. The job fails if one is missing, even with `best_available`, or skips the title with `skip_missing`. |
+| `require_subs` | string[] | `[]` | Subtitle languages that must exist. The job fails if one is missing, or skips the title with `skip_missing`. `s_lang` still decides what to keep. |
+| `skip_missing` | boolean | `false` | Skip a title that misses a required language or track, and continue with the next title. The job's `skipped_titles` lists each skip. The job fails when it has one title or skips every title. |
 | `forced_subs` | boolean | `false` | Include forced subtitles. |
 | `forced_subs_only` | boolean | `false` | Download forced subtitles and no other subtitle; implies `forced_subs`. Not valid with `no_subs`, `video_only`, `audio_only` or `chapters_only`. |
 | `forced_s_lang` | string[] | `[]` | Forced subtitle language(s); implies `forced_subs`. |
-| `exact_lang` | boolean | `false` | Exact language matching. |
+| `exact_lang` | boolean | `false` | A language tag without a region never falls back to another variant. A tag with a region is always exact. |
 | `sub_format` | string | `null` | Output subtitle format. |
+| `sub_font` | string | `null` | Font for subtitles converted to ASS; implies `sub_format` ASS. With another `sub_format` the request returns `400`. |
 | `video_only` / `audio_only` / `subs_only` / `chapters_only` | boolean | `false` | Track-type restriction (at most one). |
 | `no_subs` / `no_audio` / `no_chapters` / `no_video` / `no_attachments` | boolean | `false` | Skip a track type. |
+| `skip_subtitle_errors` | boolean | `false` | Skip a subtitle that fails to download and keep the other tracks. |
 | `audio_description` | boolean | `false` | Download audio description. |
 | `audio_description_only` | boolean | `false` | Download audio description and no standard audio. Not valid with `no_audio`, `video_only`, `subs_only` or `chapters_only`. |
 | `slow` | boolean/string | `null` | Randomized delay between downloads. |
@@ -460,7 +473,7 @@ Make a download job. It requires `service` and `title_id`. Every other field is 
 | `all_drm` | boolean | `false` | License each track with both Widevine and PlayReady. Needs a CDM for each DRM system. Key vaults are read first; `cdm_only: true` sends a challenge for each system. The server refuses it with `cdm`, which selects one device. |
 | `export` | boolean | `false` | Export manifest/keys/subs to JSON. |
 | `cdm_only` | boolean | `null` | Force CDM-only (`true`) or vault-only (`false`) key retrieval. |
-| `proxy` / `no_proxy` / `no_proxy_download` / `proxy_download` | string / bool / bool / string | `null` / `false` / `false` / `null` | Proxy controls. `proxy` and `proxy_download` must be full proxy URIs unless the API key has `server_proxy`. A Control D resolver, `controld://<resolver>@dns.controld.com`, counts as a full proxy URI: the server runs a forwarder for it. |
+| `proxy` / `no_proxy` / `no_proxy_download` / `proxy_download` | string / bool / bool / string | `null` / `false` / `false` / `null` | Proxy controls. `proxy` and `proxy_download` must be full proxy URIs on a public host unless the API key has `server_proxy`. A Control D resolver, `controld://<resolver>@dns.controld.com`, counts as a full proxy URI: the server runs a forwarder for it. |
 | `no_folder` / `no_source` / `no_mux` | boolean | `false` | Output/mux controls. |
 | `sample` | boolean/string | `null` | Download a short sample and write it with a `SAMPLE` tag on the filename in a `Sample` folder inside the output folder. `true` is 60 seconds from 2 minutes in; `"0-60"` is a window in seconds. |
 | `include_sample` | boolean | `false` | Download the full title, then also cut a 60 second sample from each muxed file into a `Sample` folder next to it. |
@@ -468,23 +481,28 @@ Make a download job. It requires `service` and `title_id`. Every other field is 
 | `adaptive_workers` | boolean | `false` | Scale segment workers to measured CDN throughput, up to the `workers` cap. |
 | `download_processes` | int | `1` | Split a track's segments across this many processes. Only engages for large batches. |
 | `downloads` | int | `1` | Concurrent tracks. |
-| `worst` | boolean | `false` | Lowest bitrate within quality. |
+| `worst` | boolean | `false` | Pick the lowest-bitrate video at each resolution in `quality`, or at the lowest resolution if `quality` is empty. |
 | `best_available` | boolean | `false` | Fall back to best available. With `all_drm`, a DRM system that does not license is a warning. |
+| `generate_dv` | boolean | `false` | With `HYBRID` in `range`, make Dolby Vision from the HDR10+ metadata or the decoded video when a title has no DV track. With `HDR10` or `HDR10P` in `range` and no `HYBRID`, make it for that base and ignore a DV track. With none of the three in `range`, the field has no effect. |
 | `repack` | boolean | `false` | Add REPACK tag. |
 | `tag` | string | `null` | Release group tag. |
 | `tmdb_id` / `imdb_id` / `tvdb_id` / `anilist_id` | - | `null` | External ID overrides. Each resolves its metadata directly instead of by a title search, and is used for tagging. Set `enrich` to also take the title, year and original language. Give at most one of `tmdb_id`, `imdb_id` and `tvdb_id`, since unshackle resolves the others from it. Sending two returns `400`. `anilist_id` still combines with one of them. `tmdb_id` and `tvdb_id` must be positive integers, `imdb_id` must look like `tt1375666`, and `anilist_id` must be a positive integer or a string like `mal:12345`, or the request returns `400`. An ID whose provider is unconfigured, such as `tmdb_id` with no `tmdb_api_key`, fails the job rather than returning `400`. `anilist_id` needs no API key. |
 | `tvdb_order` | `official`, `dvd`, `absolute`, `alternate`, `regional` | `null` | Renumber episodes to a TVDB season order. Falls back to the `tvdb_order` config option. |
+| `continuous_episodes` | boolean | `false` | Number each season on from the season before it, so season two starts at episode 5 after four episodes. Season 0 and episode 0 keep their numbers. `wanted` selects by the new numbers, but the list endpoints show the numbers of the service. |
 | `enrich` | boolean | `false` | Overwrite title, year and original language with the external source's. Needs one of `tmdb_id`, `imdb_id`, `tvdb_id` or `anilist_id`. Without one the job fails instead of returning `400`. |
 | `daily` | boolean | `false` | Treat the title as daily/date-based content and fill missing episode air dates from TVDB. The fill needs `enrich` and a TVDB ID. An air date the service already set is kept. |
 | `output_dir` | string | `null` | Output directory, relative to the server's downloads directory. The server rejects a path that resolves outside it with `400`. |
 | `no_cache` / `reset_cache` | boolean | `false` | Title cache controls. |
 
-**Validation.** Invalid values return `400 INVALID_PARAMETERS`. `vcodec`, `acodec` and `sub_format` take the same spellings as the CLI options of the same name (`unshackle dl --help` prints each list). The API and the CLI read one list, so they cannot disagree. `range` must be one of SDR/HDR10/HDR10P/DV/HLG/HYBRID, and `HDR10+` is also valid. The bitrate, download worker, and download counts must be positive integers. You may set at most one of the `*_only` flags. You cannot combine `no_subs` with `subs_only`, or `no_audio` with `audio_only`.
+**Validation.** Invalid values return `400 INVALID_PARAMETERS`. `vcodec`, `acodec` and `sub_format` take the same spellings as the CLI options of the same name (`unshackle dl --help` prints each list). The API and the CLI read one list, so they cannot disagree. `range` must be one of SDR/HDR10/HDR10P/VIVID/DV/HLG/HYBRID, and `HDR10+` and `HDR Vivid` are also valid. The bitrate, download worker, and download counts must be positive integers. You may set at most one of the `*_only` flags. You cannot combine `no_subs` with `subs_only`, or `no_audio` with `audio_only`. The language fields (`lang`, `v_lang`, `a_lang`, `s_lang`, `forced_s_lang` and the `require_*` fields) must be arrays of strings: a single string such as `"en"` returns `400`. The server checks every other field with the type of its `dl` option. A `null` or an empty string gets the default from the table.
 
 **Service options.** A service's own CLI options travel in the same body. Send them in a nested
-`service_params` object, or as flat top-level keys. `service_params` wins over a flat key of the
-same name. An option you leave out takes the default declared on the service's `cli` command, so
-the job matches the equivalent `dl` run. `profile` at the top level always means the credential
+`service_params` object, or as flat top-level keys. When the body has `service_params`, the server
+reads service options only from it, and every flat key is a `dl` value. Without it, a flat key that
+is also a `dl` option, such as `quality` or `lang`, stays a `dl` value. An option you leave out
+takes the default declared on the service's `cli` command, so the job matches the equivalent `dl`
+run. The server checks each service option against that option's type, and a value it refuses gets
+`400 INVALID_PARAMETERS`. `profile` at the top level always means the credential
 profile, never a service's own `--profile` option.
 
 === "Request"
@@ -569,6 +587,7 @@ Show download jobs, with optional filtering and sorting.
           "segments_total": 300,
           "speed": "5.2 MB/s",
           "skipped_subtitles": [],
+          "skipped_titles": [],
           "input_prompt": null,
           "notice": null
         }
@@ -837,6 +856,7 @@ Read the persisted history of jobs that reached a terminal state, newest first. 
           "created_time": "2026-07-03T12:00:00+00:00",
           "completed_time": "2026-07-03T12:08:00+00:00",
           "output_files": ["/downloads/Example.S01E01.mkv"],
+          "skipped_titles": [],
           "error_message": null,
           "parameters": { "...": "redacted" }
         }
@@ -933,6 +953,7 @@ GET  /api/session/{id}/titles   → list titles
 POST /api/session/{id}/tracks   → tracks + chapters (with URLs) for one title
 POST /api/session/{id}/segments → resolve segment URLs / DRM / headers per track
 POST /api/session/{id}/segment_filter → HLS segments the service drops (ads, bumpers)
+POST /api/session/{id}/samples  → decrypt cbcs samples of a track on the server
 POST /api/session/{id}/license  → proxy or server-CDM DRM licensing
 POST /api/session/{id}/keys/bad → report a server-vault content key that did not decrypt
 DELETE /api/session/{id}        → tear down, harvest updated cache
@@ -958,11 +979,11 @@ the newlines must go out at once.
 
 Make a remote session for a service and title. Authentication runs asynchronously in the background. This call returns immediately with `status: "authenticating"`, and you then poll the prompt endpoint. The body accepts `service` and `title_id` (both required). It also accepts a broad set of optional keys, because the body allows `additionalProperties`. These are `credentials` (`{username, password, extra?}`), `cookies` (base64 of zlib-compressed Netscape cookie file), `proxy`, `no_proxy`, `profile`, `cache` (map of forwarded cache files, keyed by the file path relative to the service cache directory with `/` separators and no `.json` suffix, so a nested key such as `session_web/<sha1>` lands in a subdirectory), `client_region`, `proxy_region`, `cdm_type`, `range_`, `vcodec`, `quality`, `best_available`, `dl_params`, `client`, and any service CLI options. `proxy_region` is the country code the client resolved `proxy` from; the server matches it against its own accounts. `client` is a freeform object the dashboard shows as sent (the CLI puts `version`, `code_hash`, `platform` and a redacted `argv` in it); the server ignores it above 4096 bytes of JSON.
 
-`dl_params` is an object with the `dl` track selection: `lang`, `v_lang` and `a_lang` (arrays of language strings), `acodec` (an array of audio codec names or `dl -a` aliases such as `ddp`), and `forced_subs` and `exact_lang` (booleans). The service reads these values from `ctx.parent.params`. The server uses the `dl` default for each absent or malformed value, and drops an unknown codec name.
+`dl_params` is an object with the `dl` track selection: `lang`, `v_lang`, `a_lang` and `s_lang` (arrays of language strings), `acodec` (an array of audio codec names or `dl -a` aliases such as `ddp`), and `forced_subs` and `exact_lang` (booleans). The service reads these values from `ctx.parent.params`. The server uses the `dl` default for each absent or malformed value, and drops an unknown codec name.
 
-Service CLI options also travel in a nested `service_params` object, which wins over a flat key with the same name. `profile` at the top level always means the credentials profile, never a service's own `--profile` option.
+Service CLI options also travel in a nested `service_params` object. When the body has `service_params`, the server reads service options only from it, and a flat key with the same name stays a `dl` value. `profile` at the top level always means the credentials profile, never a service's own `--profile` option.
 
-The `proxy` value must be a full proxy URI, unless the operator gives your API key `server_proxy` in the `serve.users` config. Without `server_proxy`, the server does not resolve country codes with its own proxy providers. It rejects the request with `INVALID_PROXY` when no `proxy` is set and the reported `client_region` differs from the server's region. A request that reports no `client_region` is not blocked. Pass `proxy` with your own proxy, or `no_proxy` to accept the server's own connection. With `server_proxy`, the server resolves a country code and picks a proxy for your `client_region` itself. A Control D resolver, `controld://<resolver>@dns.controld.com`, counts as a full proxy URI: the server runs a forwarder for it and needs no Control D configuration of its own.
+The `proxy` value must be a full proxy URI, unless the operator gives your API key `server_proxy` in the `serve.users` config. Without `server_proxy`, a proxy URI gets `INVALID_PROXY` when its host is not a public address or is not a plain host name or IP address. Without `server_proxy`, the server does not resolve country codes with its own proxy providers. It rejects the request with `INVALID_PROXY` when no `proxy` is set and the reported `client_region` differs from the server's region. A request that reports no `client_region` is not blocked. Pass `proxy` with your own proxy, or `no_proxy` to accept the server's own connection. With `server_proxy`, the server resolves a country code and picks a proxy for your `client_region` itself. A Control D resolver, `controld://<resolver>@dns.controld.com`, counts as a full proxy URI: the server runs a forwarder for it and needs no Control D configuration of its own.
 
 === "Response `200`"
 
@@ -1077,7 +1098,7 @@ Requires an authenticated remote session. Otherwise it returns `404 SESSION_NOT_
 
 Get tracks and chapters for a specific title within the remote session. Body: `{ "title_id": "..." }` (required). Unlike `list-tracks`, track objects here **include** download URLs, along with session headers/cookies and manifest data the client needs to download directly. A slow answer arrives as a [slow response](#slow-responses).
 
-`manifests` holds each served DASH/ISM manifest once. A service can build an AdaptationSet of its own that the served manifest does not contain. `track_manifests` holds a one-AdaptationSet MPD for each such track, and the client re-parses that in place of the whole manifest.
+`manifests` holds each served DASH/ISM manifest once. For DASH, `filtered_period_ids` names the periods that the download skips, such as ad periods. A service can build an AdaptationSet of its own that the served manifest does not contain. `track_manifests` holds a one-track MPD for each such track, and the client re-parses that in place of the whole manifest. That MPD starts at the period of the track and keeps the content periods after it.
 
 === "Response `200`"
 
@@ -1089,10 +1110,11 @@ Get tracks and chapters for a specific title within the remote session. Body: `{
       "subtitles": [ { "id": "s-1", "url": "https://..." } ],
       "chapters": [ { "timestamp": "00:00:00.000", "name": "Intro" } ],
       "attachments": [ { "url": "https://...", "name": "font.ttf", "mime_type": "font/ttf", "description": "" } ],
-      "manifests": [ { "type": "dash", "url": "https://...", "data": "<base64 zlib xml>" } ],
+      "manifests": [ { "type": "dash", "url": "https://...", "data": "<base64 zlib xml>", "filtered_period_ids": [ "ad-1" ] } ],
       "track_manifests": [ { "track_id": "s-1", "type": "dash", "url": "https://...", "data": "<base64 zlib xml>" } ],
       "session_headers": { "User-Agent": "..." },
       "session_cookies": { "sid": "..." },
+      "session_cookie_jar": [ { "name": "sid", "value": "...", "domain": ".example.com", "path": "/", "secure": true } ],
       "server_cdm_type": "widevine"
     }
     ```
@@ -1112,10 +1134,12 @@ Get the download URL, DRM info, headers, cookies, and raw track data for the sel
     ```json
     {
       "tracks": {
-        "v-1": { "descriptor": "DASH", "url": "https://...", "drm": [ ... ], "headers": { ... }, "cookies": { ... }, "data": { ... } }
+        "v-1": { "descriptor": "DASH", "url": "https://...", "drm": [ ... ], "headers": { ... }, "cookies": { ... }, "cookie_jar": [ ... ], "data": { ... } }
       }
     }
     ```
+
+`cookies` gives names and values only. `cookie_jar` gives the same cookies with their domain, path and `secure` flag, in the `session_cookie_jar` form of the tracks response.
 
 | Status | Error code | Meaning |
 | --- | --- | --- |
@@ -1138,7 +1162,25 @@ Get the HLS segments a service drops (ads, bumpers, dub cards). The server runs 
 | `200` | - | Unwanted segment URIs, or `null`. |
 | `400` | `INVALID_INPUT` | Missing `track_id`. |
 | `404` | `TRACK_NOT_FOUND` | An unknown track ID was requested. |
-| `500` | `SERVICE_ERROR` | The playlist request or the filter failed. |
+| `422` | `SERVICE_ERROR` | The playlist request or the filter failed. |
+
+### `POST /api/session/{session_id}/samples`
+
+Decrypt the samples of a track that the service decrypts itself after the download. The tracks response lists those track IDs in `sample_decrypt_tracks`. The client downloads the file, then sends each `stsd` sample entry's samples here, and writes the plaintexts back in place. The query string names the track and the 1-based entry: `?track_id=a-1&entry=2`.
+
+- An empty body asks how the entry decrypts. The JSON response is `{ "key": "<hex>" }`, which the client then uses itself, or `{ "decrypter": true }`.
+- An `application/octet-stream` body is a sample frame: a big-endian `uint32` count, one `uint32` length per sample, then the samples. Each sample is a ciphertext cut to whole AES blocks. The response is a frame of the same shape with the plaintexts in the same order.
+
+The client sends at most 8 MiB of samples per request, and the route accepts a body of up to 16 MiB. Binary frames keep the upload the size of the samples, and the server does not compress them. The route needs the `server_cdm` grant for the service, because the decrypter can use a process or an account of the server.
+
+| Status | Error code | Meaning |
+| --- | --- | --- |
+| `200` | - | The content key, `decrypter`, or the plaintext frame. |
+| `400` | `INVALID_INPUT` | Missing `track_id`, a bad `entry`, a malformed frame, or a track the service does not decrypt. |
+| `413` | - | The body is larger than 16 MiB. |
+| `403` | `FORBIDDEN` | The API key has no `server_cdm` grant for the service. |
+| `404` | `TRACK_NOT_FOUND` | An unknown track ID was requested. |
+| `422` | `SERVICE_ERROR` | The service's decrypter failed. |
 
 ### `POST /api/session/{session_id}/license`
 
@@ -1190,11 +1232,11 @@ A slow answer arrives as a [slow response](#slow-responses).
 | `400` | `INVALID_PARAMETERS` | Unsupported `drm_type`. |
 | `404` | `TRACK_NOT_FOUND` | Unknown track ID. |
 | `404` | `NO_CONTENT` | Server CDM produced no keys. |
-| `502` | `SERVICE_ERROR` | The service aborted during licensing. |
+| `422` | `SERVICE_ERROR` | The service aborted during licensing. |
 
 ### `POST /api/session/{session_id}/keys/bad`
 
-Report a content key from `vault_keys` that did not decrypt the track. The server flags the pair in its local vaults and reports it to the vault that served it, and the next licence for that KID reaches the CDM. The client never learns the server vault names.
+Report a content key from `vault_keys` that did not decrypt the track. The server flags the pair in its local vaults and reports it to the vault that served it, and the next licence for that KID reaches the CDM. When the CDM returns the same pair, the server removes the flag. The client never learns the server vault names.
 
 ```json
 { "kid": "<kid_hex>", "key": "<key_hex>" }
@@ -1202,7 +1244,7 @@ Report a content key from `vault_keys` that did not decrypt the track. The serve
 
 | Status | Error code | Meaning |
 | --- | --- | --- |
-| `200` | - | The pair is flagged. |
+| `200` | - | `{"flagged": true}`: the pair is flagged. `{"flagged": false}`: the CDM licensed the pair, so it is not flagged. |
 | `400` | `INVALID_INPUT` | This remote session was not served that pair. |
 | `404` | `SESSION_NOT_FOUND` | Unknown remote session. |
 
@@ -1218,6 +1260,7 @@ Return remote session metadata and validity.
       "service": "EXAMPLE",
       "valid": true,
       "expires_in": 300,
+      "draining": false,
       "track_count": 4,
       "title_count": 10
     }
@@ -1267,32 +1310,9 @@ The server serialises every structured error raised inside a handler to the same
 
 ### Error codes and default status
 
-| Error code | HTTP status |
-| --- | --- |
-| `INVALID_INPUT` | 400 |
-| `INVALID_SERVICE` | 400 |
-| `INVALID_PROXY` | 400 |
-| `INVALID_PARAMETERS` | 400 |
-| `AUTH_FAILED` | 401 |
-| `FORBIDDEN` | 403 |
-| `SERVER_CDM_CAPPED` | 403 |
-| `GEOFENCE` | 403 |
-| `NOT_FOUND` | 404 |
-| `NO_CONTENT` | 404 |
-| `JOB_NOT_FOUND` | 404 |
-| `SESSION_NOT_FOUND` | 404 |
-| `TRACK_NOT_FOUND` | 404 |
-| `CONFLICT` | 409 |
-| `RATE_LIMITED` | 429 |
-| `INTERNAL_ERROR` | 500 |
-| `DOWNLOAD_ERROR` | 500 |
-| `WORKER_ERROR` | 500 |
-| `SERVICE_ERROR` | 502 |
-| `DRM_ERROR` | 502 |
-| `NETWORK_ERROR` | 503 |
-| `SERVICE_UNAVAILABLE` | 503 |
+The [error code catalogue](errors.md#error-code-catalogue) gives the default HTTP status of each error code.
 
-When a generic (uncategorized) exception reaches a handler, unshackle inspects its message and type to pick a code. For example, messages mentioning "connection" or "timeout" become `NETWORK_ERROR` (503, retryable), "rate limit" or "429" become `RATE_LIMITED` (429, retryable), and anything unrecognized collapses to `INTERNAL_ERROR` (500).
+When a generic (uncategorized) exception reaches a handler, unshackle inspects its message and type to pick a code. For example, messages mentioning "connection" or "timeout" become `NETWORK_ERROR` (424, retryable), "rate limit" or "429" become `RATE_LIMITED` (429, retryable), and anything unrecognized collapses to `INTERNAL_ERROR` (422).
 
 ---
 

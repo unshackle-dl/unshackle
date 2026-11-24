@@ -14,7 +14,7 @@ from typing import Any, Optional
 import requests
 
 from unshackle.core.config import config
-from unshackle.core.proxies.proxy import Proxy
+from unshackle.core.proxies.proxy import Proxy, cached_catalogue
 
 log = logging.getLogger("proxies.expressvpn")
 
@@ -54,7 +54,7 @@ class ExpressVPN(Proxy):
         cache_path: Optional[str] = None,
         timeout: float = 10.0,
         enable: bool = False,
-    ):
+    ) -> None:
         """
         Proxy provider that uses ExpressVPN app proxy credentials.
 
@@ -246,14 +246,18 @@ class ExpressVPN(Proxy):
 
     def get_locations(self) -> list[dict]:
         if self.locations is None:
-            srt = self.get_srt()
-            if not srt:
-                return []
-            response = self.request(
-                "GET", f"{self.API_BASE}/ids2/locations", headers=self.api_headers(srt), params={"protocols": "proxy"}
-            )
-            self.locations = response.json().get("locations", [])
+            self.locations = self.fetch_locations()
         return self.locations
+
+    @cached_catalogue
+    def fetch_locations(self) -> list[dict]:
+        srt = self.get_srt()
+        if not srt:
+            return []
+        response = self.request(
+            "GET", f"{self.API_BASE}/ids2/locations", headers=self.api_headers(srt), params={"protocols": "proxy"}
+        )
+        return response.json().get("locations", [])
 
     def get_endpoints(self, location: dict) -> list[dict]:
         srt = self.get_srt()

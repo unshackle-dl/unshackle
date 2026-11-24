@@ -1,18 +1,24 @@
 import logging
+import threading
 import time
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Optional, Union
 from uuid import UUID
 
 import pytest
 
+from tests.remote.key_source import remote_keys
 from unshackle.commands import dl as dl_module
 from unshackle.commands.dl import dl
+from unshackle.core.vault import RateLimited, vault_session
 from unshackle.core.vaults import Vaults
-from unshackle.vaults.API import API
+from unshackle.vaults.API import API, Exceptions
+from unshackle.vaults.HTTP import HTTP
 from unshackle.vaults.SQLite import SQLite
 
 KID = UUID("11111111-2222-3333-4444-555555555555")
+SIBLING = UUID("99999999-2222-3333-4444-555555555555")
 BAD = "aa" * 16
 GOOD = "bb" * 16
 
@@ -225,20 +231,38 @@ def test_kv_copy_never_moves_the_flag_table(tmp_path: Path) -> None:
 def test_retry_takes_the_next_parallel_answer_without_a_new_request(tmp_path: Path) -> None:
     from tests.core.test_vaults_lookup import FakeVault
 
+    started, release = threading.Event(), threading.Event()
+
+    class Fast(FakeVault):
+        def get_key(self, kid: Union[UUID, str], service: str) -> Optional[str]:
+            started.wait(5)
+            return super().get_key(kid, service)
+
+    class Slow(FakeVault):
+        def get_key(self, kid: Union[UUID, str], service: str) -> Optional[str]:
+            started.set()
+            release.wait(5)
+            return super().get_key(kid, service)
+
     local = SQLite("local", tmp_path / "local.db")
-    fast = FakeVault("fast", BAD, delay=0.1)
-    slow = FakeVault("slow", GOOD, delay=0.3)
+    fast, slow = Fast("fast", BAD), Slow("slow", GOOD)
     vaults = Vaults("SVC")
     vaults.vaults = [local, fast, slow]
 
     assert vaults.get_key(KID) == (BAD, fast)
     vaults.flag_bad_key(KID, BAD)
-    time.sleep(0.5)
+    release.set()
+    deadline = time.monotonic() + 5
+    while len(vaults.candidates.get(KID, [])) < 2 and time.monotonic() < deadline:
+        time.sleep(0.01)
     assert vaults.get_key(KID) == (GOOD, slow)
     assert fast.calls == 1 and slow.calls == 1
 
 
-def test_cdm_returning_the_flagged_key_clears_the_flag(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize("replace", [False, True])
+def test_cdm_returning_the_flagged_key_clears_the_flag(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, replace: bool
+) -> None:
     """A decode failure on a key the CDM then confirms is a false positive: unflag, keep the file."""
     local = SQLite("local", tmp_path / "local.db")
     poisoned = Remote("poisoned", tmp_path / "poisoned.db")
@@ -253,11 +277,85 @@ def test_cdm_returning_the_flagged_key_clears_the_flag(tmp_path: Path, monkeypat
 
     def licence(drm: FakeDRM, track_kid: UUID) -> None:
         assert vaults.get_key(KID) == (None, None)
-        drm.content_keys[KID] = BAD
+        if replace:
+            drm.content_keys = {KID: BAD}
+        else:
+            drm.content_keys[KID] = BAD
 
     cmd.decrypt_verified(drm, path, licence, KID)
     assert path.read_bytes() == b"plain:" + BAD.encode()
     assert not local.is_bad_key(KID, BAD)
+
+
+def test_a_replacement_key_in_a_new_dict_is_checked_and_stored(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    local = SQLite("local", tmp_path / "local.db")
+    poisoned = Remote("poisoned", tmp_path / "poisoned.db")
+    poisoned.add_key("SVC", KID, BAD)
+    vaults = Vaults("SVC")
+    vaults.vaults = [local, poisoned]
+    assert vaults.get_key(KID) == (BAD, poisoned)
+    cmd = make_cmd(monkeypatch, vaults)
+    path = tmp_path / "video.mp4"
+    path.write_bytes(b"cipher")
+    drm = FakeDRM({KID: BAD})
+    other = Remote("other", tmp_path / "other.db")
+    other.add_key("SVC", KID, GOOD)
+
+    def licence(drm: FakeDRM, track_kid: UUID) -> None:
+        vaults.vaults.append(other)
+        drm.content_keys = {KID: vaults.get_key(KID)[0]}
+
+    cmd.decrypt_verified(drm, path, licence, KID)
+    cmd.wait_vault_writes()
+    assert path.read_bytes() == b"plain:" + GOOD.encode()
+    assert local.get_key(KID, "SVC") == GOOD
+
+
+@pytest.mark.parametrize("replace", [True, False])
+def test_a_cdm_that_confirms_a_key_flagged_on_entry_clears_the_flag(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, replace: bool
+) -> None:
+    """Another track flagged the pair, then this track's CDM licence answers with the same key."""
+    local = SQLite("local", tmp_path / "local.db")
+    vaults = Vaults("SVC")
+    vaults.vaults = [local]
+    cmd = make_cmd(monkeypatch, vaults)
+    vaults.flag_bad_key(KID, BAD)
+    path = tmp_path / "video.mp4"
+    path.write_bytes(b"cipher")
+    drm = FakeDRM({KID: BAD})
+
+    def licence(drm: FakeDRM, track_kid: UUID) -> None:
+        if replace:
+            drm.content_keys = {KID: BAD}
+        else:
+            drm.content_keys[KID] = BAD
+
+    cmd.decrypt_verified(drm, path, licence, KID)
+    cmd.wait_vault_writes()
+    assert path.read_bytes() == b"plain:" + BAD.encode()
+    assert not local.is_bad_key(KID, BAD)
+    assert local.get_key(KID, "SVC") == BAD
+
+
+def test_a_licence_key_that_replaces_a_bad_local_pair_is_stored(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The local vault held the bad pair when the licence key arrived, so it skipped the KID; store it now."""
+    local = SQLite("local", tmp_path / "local.db")
+    local.add_key("SVC", KID, BAD)
+    vaults = Vaults("SVC")
+    vaults.vaults = [local]
+    cmd = make_cmd(monkeypatch, vaults)
+    drm = FakeDRM({KID: vaults.get_key(KID)[0]})
+    path = tmp_path / "video.mp4"
+    path.write_bytes(b"cipher")
+    assert local.add_keys("SVC", {KID: GOOD}) == 0
+
+    cmd.decrypt_verified(drm, path, lambda drm, track_kid: drm.content_keys.update({KID: GOOD}), KID)
+    cmd.wait_vault_writes()
+    assert local.is_bad_key(KID, BAD)
+    assert local.get_key(KID, "SVC") == GOOD
 
 
 def test_stale_backup_from_a_killed_run_is_not_restored(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -277,6 +375,32 @@ def test_stale_backup_from_a_killed_run_is_not_restored(tmp_path: Path, monkeypa
     with pytest.raises(ValueError, match="no other source"):
         cmd.decrypt_verified(FakeDRM({KID: BAD}), path, licence, KID)
     assert path.read_bytes() == b"cipher"
+
+
+@pytest.mark.parametrize(
+    ("windows", "licensed"),
+    [({KID: [(0.0, 2.0)], SIBLING: [(2.0, 4.0)]}, [SIBLING]), ({KID: [(0.0, 2.0)]}, []), (None, [SIBLING])],
+    ids=["file-uses-it", "file-does-not", "unmapped"],
+)
+def test_an_unkeyed_kid_the_file_uses_is_licensed_before_the_decrypt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, windows: Optional[dict], licensed: list[UUID]
+) -> None:
+    cmd = make_cmd(monkeypatch, Vaults("SVC"))
+    drm = FakeDRM({KID: GOOD})
+    drm.kids = [KID, SIBLING]
+    monkeypatch.setattr(
+        dl_module.verify,
+        "kid_windows",
+        lambda path: None if windows is None else dl_module.verify.KidMap(windows, True),
+    )
+    path = tmp_path / "video.mp4"
+    path.write_bytes(b"cipher")
+    licences: list[UUID] = []
+
+    cmd.decrypt_verified(drm, path, lambda drm, track_kid: licences.append(track_kid), KID)
+
+    assert licences == licensed
+    assert drm.decrypted_with == [{KID: GOOD}]
 
 
 def test_drm_without_content_keys_still_decrypts(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -399,7 +523,7 @@ def test_only_the_kid_whose_window_fails_is_flagged(tmp_path: Path, monkeypatch:
 
 
 def test_a_kid_absent_from_the_map_is_judged_by_the_fallback(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """A KID the map does not know (a zero-KID tenc, a licence KID the file does not carry)
+    """A map that holds an all-zero tenc KID is not complete, so a KID it does not know
     shares the whole-file verdict, and a wrong key there is flagged."""
     lead = UUID(int=7)
     local = SQLite("local", tmp_path / "local.db")
@@ -419,7 +543,9 @@ def test_a_kid_absent_from_the_map_is_judged_by_the_fallback(tmp_path: Path, mon
         return drm.decrypted_with[-1][lead if start is not None else KID] == GOOD
 
     monkeypatch.setattr(
-        dl_module.verify, "kid_windows", lambda path: dl_module.verify.KidMap({lead: [(4.0, 6.0)]}, True)
+        dl_module.verify,
+        "kid_windows",
+        lambda path: dl_module.verify.KidMap({lead: [(4.0, 6.0)], UUID(int=0): [(8.0, 10.0)]}, True),
     )
     monkeypatch.setattr(dl_module, "ffmpeg_decodes", decodes)
     path = tmp_path / "video.mp4"
@@ -474,11 +600,93 @@ def test_a_wrong_mapped_key_does_not_flag_a_kid_the_file_does_not_carry(
     assert drm.content_keys == {audio: GOOD, KID: GOOD}
     assert local.is_bad_key(KID, BAD)
     assert not local.is_bad_key(audio, GOOD)
-    assert local.get_key(audio, "SVC") == GOOD
+    assert local.get_key(audio, "SVC") is None
+
+
+def test_a_kid_the_file_does_not_carry_is_not_judged_by_it(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The CDM licensed the video KID and a vault served the audio KID. An FFmpeg that fails
+    every decode of the video file must not flag the audio KID, nor copy it to another vault."""
+    audio = UUID(int=7)
+    local = SQLite("local", tmp_path / "local.db")
+    remote = Remote("remote", tmp_path / "remote.db")
+    remote.add_key("SVC", audio, GOOD)
+    vaults = Vaults("SVC")
+    vaults.vaults = [local, remote]
+    cmd = make_cmd(monkeypatch, vaults)
+    drm = FakeDRM({audio: vaults.get_key(audio)[0], KID: GOOD})
+    monkeypatch.setattr(
+        dl_module.verify, "kid_windows", lambda path: dl_module.verify.KidMap({KID: [(4.0, 6.0)]}, True)
+    )
+    monkeypatch.setattr(dl_module, "ffmpeg_decodes", lambda path, start=None, seconds=3, video=None: False)
+    path = tmp_path / "video.mp4"
+    path.write_bytes(b"cipher")
+    licences: list[UUID] = []
+
+    cmd.decrypt_verified(drm, path, lambda drm, track_kid: licences.append(track_kid), KID)
+    cmd.wait_vault_writes()
+    assert drm.content_keys == {audio: GOOD, KID: GOOD}
+    assert not licences
+    assert not local.is_bad_key(audio, GOOD)
+    assert local.get_key(audio, "SVC") is None
+
+
+@pytest.mark.parametrize(
+    ("served", "decodes", "told"),
+    [
+        (GOOD, False, False),
+        (BAD, True, True),
+    ],
+)
+def test_a_remote_vault_is_told_only_when_another_key_replaces_its_pair(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, served: str, decodes: bool, told: bool
+) -> None:
+    remote = Remote("remote", tmp_path / "remote.db")
+    remote.add_key("SVC", KID, served)
+    vaults = Vaults("SVC")
+    vaults.vaults = [SQLite("local", tmp_path / "local.db"), remote]
+    cmd = make_cmd(monkeypatch, vaults)
+    if not decodes:
+        monkeypatch.setattr(dl_module, "ffmpeg_decodes", lambda path, start=None, seconds=3, video=None: False)
+    drm = FakeDRM({KID: vaults.get_key(KID)[0]})
+    path = tmp_path / "video.mp4"
+    path.write_bytes(b"cipher")
+
+    def licence(drm: FakeDRM, track_kid: UUID) -> None:
+        assert not remote.is_bad_key(KID, served)
+        drm.content_keys[KID] = GOOD
+
+    cmd.decrypt_verified(drm, path, licence, KID)
+    assert drm.content_keys == {KID: GOOD}
+    assert remote.is_bad_key(KID, served) is told
+
+
+def test_the_server_vault_is_told_at_once(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Over --remote the report is what makes the server skip the pair on the next licence."""
+    reports: list[tuple[UUID, str]] = []
+    server = SimpleNamespace(
+        name="server_cdm",
+        local=False,
+        report_now=True,
+        flag_bad_key=lambda service, kid, key, source: reports.append((kid, key)),
+    )
+    vaults = Vaults("SVC")
+    vaults.vaults = [SQLite("local", tmp_path / "local.db")]
+    vaults.sources[KID] = (BAD, server)
+    cmd = make_cmd(monkeypatch, vaults)
+    drm = FakeDRM({KID: BAD})
+    path = tmp_path / "video.mp4"
+    path.write_bytes(b"cipher")
+
+    def licence(drm: FakeDRM, track_kid: UUID) -> None:
+        assert reports == [(KID, BAD)]
+        drm.content_keys[KID] = GOOD
+
+    cmd.decrypt_verified(drm, path, licence, KID)
+    assert drm.content_keys == {KID: GOOD}
 
 
 def test_only_checked_kids_are_copied_to_other_vaults(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Both the mapped KID and the absent one are proven before they reach another vault."""
+    """Only the mapped KID is proven and copied; the KID this file does not carry waits for its own file."""
     lead = UUID(int=7)
     local = SQLite("local", tmp_path / "local.db")
     remote = Remote("remote", tmp_path / "remote.db")
@@ -503,9 +711,35 @@ def test_only_checked_kids_are_copied_to_other_vaults(tmp_path: Path, monkeypatc
 
     cmd.decrypt_verified(drm, path, None, KID)
     cmd.wait_vault_writes()
-    assert starts.count(None) == 1
+    assert None not in starts
     assert local.get_key(lead, "SVC") == GOOD
-    assert local.get_key(KID, "SVC") == GOOD
+    assert local.get_key(KID, "SVC") is None
+
+
+def test_a_clear_file_judges_and_copies_no_vault_key(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    local = SQLite("local", tmp_path / "local.db")
+    remote = Remote("remote", tmp_path / "remote.db")
+    remote.add_key("SVC", KID, BAD)
+    vaults = Vaults("SVC")
+    vaults.vaults = [local, remote]
+    cmd = make_cmd(monkeypatch, vaults)
+    drm = FakeDRM({KID: vaults.get_key(KID)[0]})
+    checks: list = []
+
+    def decodes(path: Path, start: object = None, seconds: float = 3, video: object = None) -> bool:
+        checks.append(start)
+        return True
+
+    monkeypatch.setattr(dl_module.verify, "kid_windows", lambda path: dl_module.verify.KidMap({}, False))
+    monkeypatch.setattr(dl_module, "ffmpeg_decodes", decodes)
+    path = tmp_path / "audio.mp4"
+    path.write_bytes(b"clear")
+
+    cmd.decrypt_verified(drm, path, None, KID)
+    cmd.wait_vault_writes()
+    assert checks == []
+    assert local.get_key(KID, "SVC") is None
+    assert not local.is_bad_key(KID, BAD)
 
 
 def test_flagged_pair_warns_once_per_vault(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
@@ -575,6 +809,8 @@ def test_api_vault_reports_the_pair_upstream(monkeypatch: pytest.MonkeyPatch, ca
     vaults.vaults = [api]
     vaults.sources[KID] = (BAD, api)
     vaults.flag_bad_key(KID, BAD)
+    assert not calls
+    vaults.report_replaced({KID: GOOD})
     vaults.unflag_bad_key(KID, BAD)
 
     assert calls == [
@@ -582,27 +818,127 @@ def test_api_vault_reports_the_pair_upstream(monkeypatch: pytest.MonkeyPatch, ca
         ("DELETE", f"https://vault.example/bad-keys/{KID.hex}/{BAD}", None),
     ]
 
+    def flag_and_replace(source: object) -> None:
+        vaults.sources[KID] = (BAD, source)
+        vaults.flag_bad_key(KID, BAD)
+        vaults.report_replaced({KID: GOOD})
+
     calls.clear()
-    vaults.sources[KID] = (BAD, SimpleNamespace(name="other"))
-    vaults.flag_bad_key(KID, BAD)
+    flag_and_replace(SimpleNamespace(name="other", local=False, report_now=False))
     assert calls == []
-    vaults.sources[KID] = (BAD, api)
 
     monkeypatch.setattr(api.session, "post", lambda url, **kw: (_ for _ in ()).throw(ConnectionError("down")))
     caplog.clear()
     with caplog.at_level(logging.DEBUG, logger="unshackle.core.vaults"):
-        vaults.flag_bad_key(KID, BAD)
+        flag_and_replace(api)
     assert [r.levelname for r in caplog.records] == ["DEBUG"]
 
     gone = SimpleNamespace(status_code=404, raise_for_status=lambda: (_ for _ in ()).throw(RuntimeError("404")))
     monkeypatch.setattr(api.session, "post", lambda url, **kw: gone)
     caplog.clear()
-    vaults.flag_bad_key(KID, BAD)
+    flag_and_replace(api)
     assert not caplog.records
 
     denied = SimpleNamespace(status_code=200, raise_for_status=lambda: None, json=lambda: {"code": 1, "message": "no"})
     monkeypatch.setattr(api.session, "post", lambda url, **kw: denied)
     monkeypatch.setattr(api.session, "delete", lambda url, **kw: denied)
-    vaults.flag_bad_key(KID, BAD)
+    flag_and_replace(api)
     vaults.unflag_bad_key(KID, BAD)
     assert not caplog.records
+
+
+def test_prefer_vault_keys_queries_each_named_kid_once() -> None:
+    asked: list[UUID] = []
+    cmd = dl.__new__(dl)
+    cmd.vaults = SimpleNamespace(get_key=lambda kid: asked.append(kid) or (None, None))
+    video, audio = (SimpleNamespace(kids=[KID], content_keys={KID: GOOD, SIBLING: BAD}) for _ in range(2))
+
+    cmd.prefer_vault_keys(
+        remote_keys(), SimpleNamespace(tracks=[SimpleNamespace(drm=[video]), SimpleNamespace(drm=[audio])])
+    )
+
+    assert asked == [KID]
+
+
+def test_cache_resolved_keys_skips_a_key_a_local_vault_holds(tmp_path: Path) -> None:
+    local = SQLite("local", tmp_path / "local.db")
+    local.add_key("SVC", SIBLING, BAD)
+    cmd = dl.__new__(dl)
+    cmd.vaults = Vaults("SVC")
+    cmd.vaults.vaults = [local]
+    pushed: list[dict] = []
+    cmd.flush_vault_writes = lambda writes: pushed.extend(w.args[0] for w in writes)
+    dl.LICENSE_KEY_CACHE.clear()
+    drm = SimpleNamespace(kids=[KID], content_keys={KID: GOOD, SIBLING: BAD})
+
+    cmd.cache_resolved_keys(remote_keys(), SimpleNamespace(tracks=[SimpleNamespace(drm=[drm])]))
+
+    assert pushed == [{KID: GOOD}]
+
+
+def test_api_vault_does_not_shrink_the_batch_on_429(monkeypatch: pytest.MonkeyPatch) -> None:
+    api = API("vault", "https://vault.example/", "tok")
+    posts: list[str] = []
+    limited = SimpleNamespace(status_code=429)
+    monkeypatch.setattr(api.session, "post", lambda url, **kw: posts.append(url) or limited)
+
+    with pytest.raises(Exceptions.TooManyRequests):
+        api.add_keys("SVC", {KID: GOOD})
+
+    assert len(posts) == 1
+
+
+def test_http_vault_does_not_fall_back_to_single_inserts_on_429(monkeypatch: pytest.MonkeyPatch) -> None:
+    vault = HTTP("vault", "https://vault.example/", password="tok", api_mode="json")
+    posts: list[str] = []
+    limited = SimpleNamespace(status_code=429, ok=False)
+    monkeypatch.setattr(vault.session, "post", lambda url, **kw: posts.append(url) or limited)
+
+    with pytest.raises(RateLimited):
+        vault.add_keys("SVC", {KID: GOOD, SIBLING: BAD})
+
+    assert len(posts) == 1
+
+
+def test_vault_session_retries_429_but_not_a_dead_vault() -> None:
+    retry = vault_session(10).get_adapter("https://vault.example").max_retries
+    assert retry.status_forcelist == [429]
+    assert (retry.connect, retry.read, retry.other) == (0, 0, 0)
+
+
+def test_an_unreachable_vault_costs_one_attempt_per_run(monkeypatch: pytest.MonkeyPatch) -> None:
+    import requests
+
+    def down(url: str, **kw: object) -> None:
+        calls.append(url)
+        raise requests.ConnectTimeout("no answer")
+
+    calls: list[str] = []
+    api = API("api", "https://api.example/", "tok")
+    http = HTTP("http", "https://http.example/", password="tok", api_mode="json")
+    for vault in (api, http):
+        monkeypatch.setattr(vault.session, "get", down)
+        monkeypatch.setattr(vault.session, "post", down)
+        with pytest.raises(requests.ConnectTimeout):
+            vault.add_keys("SVC", {KID: GOOD, SIBLING: BAD})
+    assert len(calls) == 2
+
+    calls.clear()
+    vaults = Vaults("SVC")
+    vaults.vaults = [api]
+    assert vaults.get_key(KID) == (None, None)
+    assert vaults.get_key(SIBLING) == (None, None)
+    assert vaults.add_keys({KID: GOOD}) == 0
+    assert calls == ["https://api.example/svc/" + KID.hex]
+
+
+def test_a_vault_still_rate_limited_is_not_used_again(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[str] = []
+    api = API("api", "https://api.example/", "tok")
+    monkeypatch.setattr(api.session, "get", lambda url, **kw: calls.append(url) or SimpleNamespace(status_code=429))
+    vaults = Vaults("SVC")
+    vaults.vaults = [api]
+
+    assert vaults.get_key(KID) == (None, None)
+    assert vaults.get_key(SIBLING) == (None, None)
+    assert calls == ["https://api.example/svc/" + KID.hex]

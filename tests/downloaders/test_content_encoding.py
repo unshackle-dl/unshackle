@@ -104,7 +104,8 @@ def test_encoded_body_is_decoded_on_disk(tmp_path, encoding_server):
     assert save_path.read_bytes() == PLAIN
 
 
-def test_encoded_body_discards_a_partial_instead_of_range_resuming(tmp_path, encoding_server):
+def test_encoded_body_discards_a_partial_instead_of_range_resuming(tmp_path, encoding_server, monkeypatch):
+    monkeypatch.setattr(importlib.import_module("unshackle.core.downloaders.requests"), "RETRY_WAIT", 0)
     save_path = tmp_path / "sub.vtt"
     save_path.with_name("sub.vtt.!dev").write_bytes(PLAIN[:5000])
     list(download(url=encoding_server.url, save_path=save_path, session=rq.Session()))
@@ -147,6 +148,7 @@ class _FakeRnetSession:
 def test_rnet_encoded_body_discards_a_partial_instead_of_range_resuming(tmp_path, monkeypatch):
     dl = importlib.import_module("unshackle.core.downloaders.requests")
     monkeypatch.setattr(dl, "is_rnet_session", lambda s: isinstance(s, _FakeRnetSession))
+    monkeypatch.setattr(dl, "RETRY_WAIT", 0)
     session = _FakeRnetSession(PLAIN)
     save_path = tmp_path / "sub.vtt"
     save_path.with_name("sub.vtt.!dev").write_bytes(PLAIN[:5000])

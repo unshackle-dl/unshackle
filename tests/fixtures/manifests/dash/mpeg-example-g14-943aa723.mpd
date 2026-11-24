@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" type="dynamic" xsi:schemaLocation="urn:mpeg:dash:schema:mpd:2011 DASH-MPD.xsd" profiles="urn:mpeg:dash:profile:isoff-ext-live:2014" minBufferTime="PT1.143S" maxSegmentDuration="PT3.84S" minimumUpdatePeriod="PT1H" timeShiftBufferDepth="PT2M" availabilityStartTime="2019-03-24T21:20:00Z" publishTime="2019-03-24T20:44:33.540Z">
+  <Period id="first" start="PT0S">
+    <AdaptationSet startWithSAP="2" segmentAlignment="true" par="16:9" id="1" contentType="video" mimeType="video/mp4">
+      <InbandEventStream schemeIdUri="urn:mpeg:dash:event:2012" value="1"/>
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"/>
+      <SegmentTemplate startNumber="404547501" presentationTimeOffset="310692480000" timescale="200" duration="768" media="$RepresentationID$/$Number%06d$.m4s" initialization="$RepresentationID$/IS.mp4"/>
+      <Representation id="1280x720p50" codecs="avc3.640020" height="720" width="1280" frameRate="50" bandwidth="5447392" scanType="progressive"/>
+    </AdaptationSet>
+    <AdaptationSet startWithSAP="2" segmentAlignment="true" id="6" codecs="mp4a.40.2" audioSamplingRate="48000" contentType="audio" lang="eng" mimeType="audio/mp4">
+      <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="6"/>
+      <InbandEventStream schemeIdUri="urn:mpeg:dash:event:2012" value="1"/>
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"/>
+      <SegmentTemplate startNumber="404547501" presentationTimeOffset="74566195200000" timescale="48000" duration="184320" media="$RepresentationID$/$Number%06d$.m4s" initialization="$RepresentationID$/IS.mp4"/>
+      <Representation id="320kbps-5_1" bandwidth="319520"/>
+    </AdaptationSet>
+  </Period>
+  <UTCTiming schemeIdUri="urn:mpeg:dash:utc:http-xsdate:2014" value="https://example.com/iso"/>
+  <LeapSecondInformation availabilityStartLeapOffset="0" nextAvailabilityStartLeapOffset="1" nextLeapChangeTime="2020-01-01T00:00:00Z"/>
+</MPD>

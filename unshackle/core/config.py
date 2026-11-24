@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import re
 import warnings
 from pathlib import Path
@@ -26,6 +27,7 @@ LANGUAGE_KEYS = frozenset(
         "default_language",
         "video",
         "audio",
+        "audio_contain_all",
         "subtitle",
         "subs_contain",
         "subs_contain_all",
@@ -84,7 +86,7 @@ class Config:
         core_dir = Path(__file__).resolve().parent
         namespace_dir = core_dir.parent
         commands = namespace_dir / "commands"
-        services = [namespace_dir / "services"]
+        services: list[Path | str] = [namespace_dir / "services"]
         vaults = namespace_dir / "vaults"
         fonts = namespace_dir / "fonts"
         user_configs = core_dir.parent
@@ -107,7 +109,9 @@ class Config:
         chapters = "Chapters_{title}_{random}.txt"
         subtitle = "Subtitle_{id}_{language}.srt"
 
-    def __init__(self, **kwargs: Any):
+    repack: bool = False
+
+    def __init__(self, **kwargs: Any) -> None:
         self.dl: dict = kwargs.get("dl") or {}
         self.cdm: dict = kwargs.get("cdm") or {}
         self.chapter_fallback_name: str = kwargs.get("chapter_fallback_name") or ""
@@ -136,7 +140,7 @@ class Config:
         downloader_cfg = kwargs.get("downloader")
         if downloader_cfg and downloader_cfg != "requests":
             warnings.warn(
-                f"downloader '{downloader_cfg}' is deprecated. The unified requests downloader is now used.",
+                f"downloader '{downloader_cfg}' is deprecated, using the requests downloader",
                 DeprecationWarning,
                 stacklevel=2,
             )
@@ -165,6 +169,7 @@ class Config:
         self.merge_segments: bool = bool(kwargs.get("merge_segments", False))
 
         self.theme: str = kwargs.get("theme") or "default"
+        self.wide_output: bool = kwargs.get("wide_output", False)
         self.set_terminal_bg: bool = kwargs.get("set_terminal_bg", False)
         self.tag: str = kwargs.get("tag") or ""
         self.tag_group_name: bool = kwargs.get("tag_group_name", True)
@@ -190,7 +195,14 @@ class Config:
 
         self.language_tags: dict = kwargs.get("language_tags") or {}
         self.tag_rules: list = kwargs.get("tag_rules") or []
+        self.codec_names: dict = kwargs.get("codec_names") or {}
+        if not isinstance(self.codec_names, dict):
+            raise SystemExit(f"ERROR: codec_names must be a mapping, not {self.codec_names!r}")
         self.dual_multi_mode: str = (kwargs.get("dual_multi_mode") or "strict").lower()
+        self.generate_dv_mode: str = str(kwargs.get("generate_dv_mode") or "v29").lower()
+        self.hdr10plus_probe: bool = kwargs.get("hdr10plus_probe", True)
+        if not isinstance(self.hdr10plus_probe, bool):
+            raise SystemExit(f"ERROR: hdr10plus_probe must be true or false, not {self.hdr10plus_probe!r}")
         self.output_template: dict = kwargs.get("output_template") or {}
         folder_cfg = self.output_template.pop("folder", "")
         self.folder_template: str = ""
@@ -202,9 +214,7 @@ class Config:
 
         if kwargs.get("scene_naming") is not None:
             raise SystemExit(
-                "ERROR: The 'scene_naming' option has been removed.\n"
-                "Please configure 'output_template' in your unshackle.yaml instead.\n"
-                "See unshackle-example.yaml for examples."
+                "ERROR: The 'scene_naming' option was removed, use 'output_template' in your unshackle.yaml"
             )
 
         if self.output_template:
@@ -262,6 +272,7 @@ class Config:
             "video",
             "hdr",
             "hfr",
+            "3d",
             "edition",
             "repack",
             "lang_tag",
@@ -286,6 +297,7 @@ class Config:
                 "label",
             },
         }
+        type_only["sports"] = type_only["series"]
         type_only["albums"] = type_only["songs"]
         shared = valid_variables - set().union(*type_only.values())
 
@@ -295,8 +307,8 @@ class Config:
         if self.folder_template:
             all_templates["folder"] = self.folder_template
         for kind, tmpl in self.folder_templates.items():
-            if kind not in {"movies", "series", "songs", "albums"}:
-                warnings.warn(f"Unknown folder template kind '{kind}' (expected movies/series/songs/albums)")
+            if kind not in {"movies", "series", "sports", "songs", "albums"}:
+                warnings.warn(f"Unknown folder template kind '{kind}' (expected movies/series/sports/songs/albums)")
                 continue
             all_templates[f"folder.{kind}"] = tmpl
 
@@ -330,7 +342,7 @@ class Config:
     def get_folder_template(self, kind: str) -> str:
         """Find the folder template for the given title kind.
 
-        kind: one of "movies", "series", "songs", "albums".
+        kind: one of "movies", "series", "sports", "songs", "albums".
         Falls back to the legacy single-string folder template, then "".
         """
         if self.folder_templates:
@@ -346,7 +358,7 @@ class Config:
         between variables. Falls back to dot separator (scene-style) by default.
 
         Args:
-            template_type: One of "movies", "series", or "songs".
+            template_type: One of "movies", "series", "sports", or "songs".
         """
         template = self.output_template.get(template_type) or ""
         between_vars = re.findall(r"\}([^{]*)\{", template)
@@ -362,7 +374,56 @@ class Config:
             raise FileNotFoundError(f"Config file path ({path}) was not found")
         if not path.is_file():
             raise FileNotFoundError(f"Config file path ({path}) is not to a file.")
-        return cls(**restore_bool_languages(yaml.safe_load(path.read_text(encoding="utf8")) or {}))
+        return cls(**restore_bool_languages(load_yaml(path) or {}))
+
+
+def duplicate_key_lines(root: Any) -> list[tuple[int, int]]:
+    """
+    Return (first line, repeat line), counted from 1, for each repeated scalar key in a PyYAML or ruamel node tree.
+
+    Keys compare as written, so two spellings that load as the same key (yes and true, 1 and 0x1) are not found.
+    """
+    pairs, stack, visited = [], [root], set()
+    while stack:
+        node = stack.pop()
+        if node in visited:
+            continue
+        visited.add(node)
+        if node.id == "mapping":
+            first: dict[tuple[str, str], int] = {}
+            for key_node, value_node in node.value:
+                if key_node.id == "scalar" and key_node.tag != "tag:yaml.org,2002:merge":
+                    key = (key_node.tag, key_node.value)
+                    line = key_node.start_mark.line + 1
+                    if key in first:
+                        pairs.append((first[key], line))
+                    else:
+                        first[key] = line
+                stack += [key_node, value_node]
+        elif node.id == "sequence":
+            stack += node.value
+    return sorted(pairs)
+
+
+_warned: set[str] = set()
+
+
+def load_yaml(path: Path) -> Any:
+    """yaml.safe_load a file, and warn with the lines of each duplicate key, which PyYAML takes silently."""
+    loader = yaml.SafeLoader(path.read_text(encoding="utf8"))
+    try:
+        node = loader.get_single_node()
+        if node is None:
+            return None
+        if pairs := duplicate_key_lines(node):
+            where = ", ".join(f"lines {first} and {repeat}" for first, repeat in pairs)
+            message = f"{path}: duplicate key on {where}. Unshackle uses the later one."
+            if message not in _warned:
+                _warned.add(message)
+                logging.getLogger("config").warning(message)
+        return loader.construct_document(node)
+    finally:
+        loader.dispose()
 
 
 PACKAGE_CONFIG_PATH = Config._Directories.namespace_dir / Config._Filenames.root_config

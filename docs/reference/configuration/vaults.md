@@ -36,8 +36,8 @@ key_vaults:
     - A vault of `type: API` whose `name` contains `decrypt_labs` auto-fills its `token` from
       [`decrypt_labs_api_key`](misc.md#external-api-keys) when not set inline. Vault `type` values are
       case-sensitive module names.
-    - unshackle treats an all-zero content key (32 zeros) as "no key" everywhere and never
-      stores it.
+    - unshackle treats an empty or all-zero content key, of any length, as "no key" everywhere
+      and never stores it.
 
 !!! note "Bad content keys"
     A content key from a vault is proven by short FFmpeg decodes of the decrypted output,
@@ -56,3 +56,9 @@ key_vaults:
 Timeout in seconds for vault operations. Injected automatically into any backend whose
 constructor accepts a `timeout` parameter (a per-vault `timeout` still wins). The `MySQL` backend
 uses it as the default `connect_timeout`.
+
+The `API` and `HTTP` backends send a request again up to 3 times when the vault answers
+`429 Too Many Requests`. They wait the `Retry-After` time, but never longer than this timeout.
+A connection failure or a timeout is not tried again. The run does not use a vault again after a
+connection failure, a timeout, or a `429` that continues after the retries, so a vault that is
+down costs one timeout per run.

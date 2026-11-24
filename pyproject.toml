@@ -37,7 +37,7 @@ dependencies = [
     "langcodes>=3.4.0,<4",
     "lxml>=5.2.1,<7",
     "protobuf>=4.25.3,<7",
-    "pycaption>=2.2.6,<2.2.27",
+    "pycaption>=2.2.24,<2.2.27",
     "pycryptodomex>=3.20.0,<4",
     "pyjwt>=2.12.0,<3",
     "pymediainfo>=6.1.0,<8",
@@ -65,7 +65,6 @@ dependencies = [
     "language-data>=1.4.0",
     "wasmtime>=41.0.0",
     "rnet>=2.4.2",
-    "bandit>=1.9.4",
     "jsonpath-ng>=1.8.0",
     "mutagen>=1.47.0,<2",
     "defusedxml>=0.7.1",
@@ -94,11 +93,14 @@ dev = [
     "types-requests>=2.31.0.20240406,<3",
     "isort>=5.13.2,<8",
     "ruff>=0.15.12,<0.16",
+    "types-pyyaml>=6.0,<7",
+    "bandit>=1.9.4,<2",
 ]
 test = [
     "pytest>=8.3.0,<9",
     "pytest-asyncio>=0.24.0,<1",
     "pytest-aiohttp>=1.0.5,<2",
+    "pytest-xdist>=3.6.0,<4",
     "responses>=0.25.0,<1",
     "PyYAML>=6.0.1,<7",
 ]
@@ -121,6 +123,8 @@ filterwarnings = [
     "ignore::bs4.XMLParsedAsHTMLWarning",
 ]
 addopts = "-ra --strict-markers"
+# dumps every thread's stack for a test that hangs; the CI job timeout alone leaves no trace
+faulthandler_timeout = 120
 
 [tool.hatch.metadata]
 allow-direct-references = true
@@ -130,11 +134,12 @@ packages = ["unshackle"]
 
 [tool.hatch.build.targets.sdist]
 include = [
-    "unshackle",
-    "CHANGELOG.md",
-    "README.md",
-    "LICENSE",
+    "/unshackle",
+    "/CHANGELOG.md",
+    "/README.md",
+    "/LICENSE",
 ]
+exclude = [".*/"]
 
 [tool.ruff]
 force-exclude = true
@@ -156,6 +161,7 @@ line_length = 118
 check_untyped_defs = true
 disallow_incomplete_defs = true
 explicit_package_bases = true
+exclude = ["^unshackle/services/_repos/"]
 disallow_untyped_defs = true
 follow_imports = "silent"
 ignore_missing_imports = true

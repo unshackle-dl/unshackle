@@ -2,21 +2,17 @@ from __future__ import annotations
 
 import base64
 import json
-import shutil
-import subprocess
-import textwrap
-import time
 from pathlib import Path
 from typing import Any, Callable, Iterable, Optional, Union
 from uuid import UUID
 
 from requests import Session
-from rich.text import Text
 
-from unshackle.core import binaries
 from unshackle.core.config import config
-from unshackle.core.console import console
+from unshackle.core.drm import key_args as drm_key_args
+from unshackle.core.drm.decrypters import decrypt_cenc, mp4decrypt, shaka_decrypt
 from unshackle.core.utilities import log_event
+from unshackle.core.utils import run_proxy
 
 
 def b64url_encode_nopad(data: bytes) -> str:
@@ -43,7 +39,7 @@ class ClearKeyCENC:
         laurl: Optional[str] = None,
         content_keys: Optional[dict[UUID, str]] = None,
         **kwargs: Any,
-    ):
+    ) -> None:
         kid_list: list[UUID] = []
         for kid in kids or []:
             if isinstance(kid, str):
@@ -113,7 +109,7 @@ class ClearKeyCENC:
 
         if response is None and self.laurl:
             if not session:
-                session = Session()
+                session = run_proxy.fallback_session()
                 session.headers.update(config.headers)
             r = session.post(self.laurl, data=challenge, headers={"Content-Type": "application/json"})
             r.raise_for_status()
@@ -175,165 +171,27 @@ class ClearKeyCENC:
         )
 
     def decrypt(self, path: Path) -> None:
-        """
-        Decrypt a Track with ClearKey DRM (standard CENC).
-        Args:
-            path: Path to the encrypted file to decrypt
-        Raises:
-            EnvironmentError if the required decryption executable could not be found.
-            ValueError if unshackle has not yet downloaded the track.
-            SubprocessError if the decryption process returned a non-zero exit code.
-        """
-        if not self.content_keys:
-            raise ValueError("Cannot decrypt a Track without any Content Keys...")
+        """Decrypt the file at ``path`` in place with this track's ClearKey (standard CENC) content keys."""
+        decrypt_cenc(self, path, "ClearKeyCENC")
 
-        if not path or not path.exists():
-            raise ValueError("Tried to decrypt a file that does not exist.")
-
-        decrypter = str(getattr(config, "decryption", "")).lower()
-        tool = "mp4decrypt" if decrypter == "mp4decrypt" else "shaka-packager"
-
-        log_event(
-            "drm_decrypt",
-            level="DEBUG",
-            message=f"Decrypting {path.name} with {tool}",
-            drm_type="ClearKeyCENC",
-            tool=tool,
-            file=path.name,
-            key_count=len(self.content_keys),
-        )
-
-        decrypt_start = time.monotonic()
-        if decrypter == "mp4decrypt":
-            self.decrypt_with_mp4decrypt(path)
-        else:
-            self.decrypt_with_shaka_packager(path)
-
-        log_event(
-            "drm_decrypt_complete",
-            level="DEBUG",
-            message=f"Decrypted {path.name} with {tool}",
-            drm_type="ClearKeyCENC",
-            tool=tool,
-            file=path.name,
-            duration_ms=round((time.monotonic() - decrypt_start) * 1000, 1),
-            output_size=path.stat().st_size if path.exists() else 0,
-        )
-
-    def mp4decrypt_key_args(self) -> list[str]:
-        """Build the mp4decrypt --key arguments for every content key."""
+    def mp4decrypt_key_args(self, track_kids: Optional[dict[int, UUID]] = None) -> list[str]:
+        """Build the mp4decrypt --key arguments for every content key, and by track ID for each ``track_kids`` KID."""
         key_args = []
         for kid, key in self.content_keys.items():
             key_args.extend(["--key", f"{kid.hex}:{key}"])
-        return key_args
+        return key_args + drm_key_args.track_key_args(self.content_keys, track_kids)
 
     def decrypt_with_mp4decrypt(self, path: Path) -> None:
-        """Decrypt using mp4decrypt"""
-        if not binaries.Mp4decrypt:
-            raise EnvironmentError("mp4decrypt executable not found but is required.")
-
-        output_path = path.with_stem(f"{path.stem}_decrypted")
-
-        key_args = self.mp4decrypt_key_args()
-
-        cmd = [
-            str(binaries.Mp4decrypt),
-            "--show-progress",
-            *key_args,
-            str(path),
-            str(output_path),
-        ]
-
-        try:
-            subprocess.run(
-                cmd,
-                check=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-            )
-        except subprocess.CalledProcessError as e:
-            error_msg = e.stderr if e.stderr else f"mp4decrypt failed with exit code {e.returncode}"
-            raise subprocess.CalledProcessError(e.returncode, cmd, output=e.stdout, stderr=error_msg)
-
-        if not output_path.exists():
-            raise RuntimeError(f"mp4decrypt failed: output file {output_path} was not created")
-        if output_path.stat().st_size == 0:
-            raise RuntimeError(f"mp4decrypt failed: output file {output_path} is empty")
-
-        path.unlink()
-        shutil.move(output_path, path)
+        """Decrypt with mp4decrypt."""
+        mp4decrypt(path, self.mp4decrypt_key_args)
 
     def decrypt_with_shaka_packager(self, path: Path) -> None:
-        """Decrypt with shaka-packager"""
-        if not binaries.ShakaPackager:
-            raise EnvironmentError("Shaka Packager executable not found but is required.")
-
-        output_path = path.with_stem(f"{path.stem}_decrypted")
-        config.directories.temp.mkdir(parents=True, exist_ok=True)
-
-        try:
-            arguments = [
-                f"input={path},stream=0,output={output_path},output_format=MP4",
-                "--enable_raw_key_decryption",
-                "--keys",
-                ",".join(
-                    "label={}:key_id={}:key={}".format(i, kid.hex, key.lower())
-                    for i, (kid, key) in enumerate(self.content_keys.items())
-                ),
-                "--temp_dir",
-                config.directories.temp,
-            ]
-
-            p = subprocess.Popen(
-                [binaries.ShakaPackager, *arguments],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.PIPE,
-                universal_newlines=True,
-                encoding="utf-8",
-                errors="replace",
-            )
-
-            stream_skipped = False
-            had_error = False
-
-            shaka_log_buffer = ""
-            for line in iter(p.stderr.readline, ""):
-                line = line.strip()
-                if not line:
-                    continue
-                if "Skip stream" in line:
-                    stream_skipped = True
-                if ":INFO:" in line:
-                    continue
-                if "I0" in line or "W0" in line:
-                    continue
-                if ":ERROR:" in line:
-                    had_error = True
-                if "Insufficient bits in bitstream for given AVC profile" in line:
-                    continue
-                shaka_log_buffer += f"{line.strip()}\n"
-
-            if shaka_log_buffer:
-                shaka_log_buffer = "\n            ".join(
-                    textwrap.wrap(shaka_log_buffer.rstrip(), width=console.width - 22, initial_indent="")
-                )
-                console.log(Text.from_ansi("\n[ClearKey]: " + shaka_log_buffer))
-
-            p.wait()
-
-            if p.returncode != 0 or had_error:
-                raise subprocess.CalledProcessError(p.returncode, [binaries.ShakaPackager, *arguments])
-
-            path.unlink()
-            if not stream_skipped:
-                shutil.move(output_path, path)
-        except subprocess.CalledProcessError as e:
-            if e.returncode == 0xC000013A:
-                raise KeyboardInterrupt()
-            raise
+        """Decrypt with shaka-packager."""
+        keys = ",".join(
+            "label={}:key_id={}:key={}".format(i, kid.hex, key.lower())
+            for i, (kid, key) in enumerate(self.content_keys.items())
+        )
+        shaka_decrypt(path, keys, "ClearKey")
 
     class Exceptions:
         class KIDNotFound(Exception):

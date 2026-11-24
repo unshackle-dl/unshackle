@@ -16,7 +16,7 @@ You start the API with the [`unshackle serve`](../../guide/cli-reference.md) com
 
 1. Add an `api_secret` to the `serve` section of your `unshackle.yaml`.
 2. Start the server with `unshackle serve`.
-3. Send that secret in the `X-Secret-Key` header on every request except `GET /api/health`.
+3. Send that secret in the `X-Secret-Key` header on every request, `GET /api/health` included.
 
 ```bash title="A minimal authenticated request"
 curl -H "X-Secret-Key: your-secret-key-here" \
@@ -42,7 +42,7 @@ This value becomes the one and only API key that the server accepts. The server 
     If you start `unshackle serve` with no `api_secret` configured, and you have *not* passed `--no-key`, the command fails immediately with:
 
     ```
-    API secret key is not configured. Please add 'api_secret' to the 'serve' section in your config.
+    No 'api_secret' in the 'serve' section of your config
     ```
 
     Choose a long, unpredictable value. The API key is the only thing standing between the internet and your CDM and download endpoints.
@@ -152,12 +152,12 @@ The value must match one of the configured API keys exactly (`api_secret`, or on
 !!! tip "The reference client sets it for you"
     unshackle's own [remote download](../../guide/downloading.md) client (`RemoteService`) sends `X-Secret-Key` automatically, reading the API key from your `remote_services` config. It also sends a `User-Agent` of `unshackle/<version>`. You only deal with the header directly when writing your own client.
 
-### The health check is always open
+### The health check needs an API key too
 
-One endpoint is exempt from authentication: `GET /api/health`. It never requires an API key, so you can use it for liveness and version probes without embedding a secret in your monitoring:
+`GET /api/health` reports the running version and commit, so it sits behind the same `X-Secret-Key` check as every other route. A monitor that probes it sends an API key; a request without one gets the usual `401` body, which still proves the server is up:
 
-```bash title="No key needed"
-curl http://127.0.0.1:8786/api/health
+```bash title="Liveness probe"
+curl -H "X-Secret-Key: your-secret-key-here" http://127.0.0.1:8786/api/health
 ```
 
 ```json title="Response"
@@ -223,6 +223,19 @@ A limit comes from `serve.tiers.<name>.rate_limit` or from the API key's own
 `GET /api/health` is never limited. See
 [dashboard rate limits](dashboard.md#rate-limits) for the config and the counters, and
 [services configuration](../../reference/configuration/services.md) for the keys themselves.
+
+Every response to an API key that has a limit carries these headers, the `429` too. A
+WebSocket or event stream response sends its headers before the handler returns, so it has none.
+The CORS headers expose these headers and `Retry-After` to a browser client.
+
+| Header | Value |
+|---|---|
+| `X-RateLimit-Limit` | Requests per hour that the API key may make. |
+| `X-RateLimit-Remaining` | Requests left in the current window. |
+| `X-RateLimit-Reset` | Seconds until the window resets. |
+
+A `--remote` client that gets a `429` with `Retry-After` shows a countdown, waits that time
+(one hour at most), and then sends the request again. It stops after 3 waits for one request.
 
 !!! warning "`429` is not the `RATE_LIMITED` error body"
     `RATE_LIMITED` in [Errors](errors.md) is a *service* rate limit that a handler raises, and it
@@ -307,11 +320,11 @@ With `--caddy`, unshackle also starts `caddy run` using the `Caddyfile` located 
 | Auth header | `X-Secret-Key` |
 | Query-parameter alternative | `?secret_key=` on `GET /api/download/jobs/{job_id}/events` only |
 | Default bind address | `127.0.0.1:8786` |
-| Exempt endpoint | `GET /api/health` |
 | Failure status | `401 Unauthorized`, or `429 Too Many Requests` for a key over its rate limit |
 | Missing-header body | `{"status": 401, "message": "Secret Key is Empty."}` |
 | Invalid-key body | `{"status": 401, "message": "Secret Key is Invalid."}` |
 | Over-limit body | `{"status": 429, "message": "Rate limit exceeded."}`, plus a `Retry-After` header |
+| Rate limit headers | `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset` on each response to a limited API key |
 | Rate limit config | `serve.tiers.<name>.rate_limit`, overridden by `serve.users.<key>.rate_limit` |
 | Disable auth | `--no-key` (all requests allowed) |
 | Config location | `serve.api_secret` and `serve.users` in `unshackle.yaml` |
@@ -326,7 +339,7 @@ With `--caddy`, unshackle also starts `caddy run` using the `Caddyfile` located 
 
 The header and config are identical between modes, but the code that enforces them differs:
 
-- **API-only server** (`--api-only`, or `--remote-only` which forces API-only). An `api_key_authentication` middleware runs on every request. It lets `GET /api/health` through unconditionally, then reads `X-Secret-Key`. An empty header returns the *"Secret Key is Empty."* body. A header that is not a configured user returns *"Secret Key is Invalid."*. In this mode the accepted-keys map holds your `api_secret` (labelled `api_user`, with no devices) plus every key under `serve.users`. A per-user key therefore authenticates here exactly as it does on the integrated server, and that user's `services` allowlist applies as usual. With `--no-key`, this middleware is not installed and the users map is empty.
+- **API-only server** (`--api-only`, or `--remote-only` which forces API-only). An `api_key_authentication` middleware runs on every request. It reads `X-Secret-Key` on every request, `GET /api/health` included. An empty header returns the *"Secret Key is Empty."* body. A header that is not a configured user returns *"Secret Key is Invalid."*. In this mode the accepted-keys map holds your `api_secret` (labelled `api_user`, with no devices) plus every key under `serve.users`. A per-user key therefore authenticates here exactly as it does on the integrated server, and that user's `services` allowlist applies as usual. With `--no-key`, this middleware is not installed and the users map is empty.
 
 - **Integrated server** (default). A `serve_authentication` middleware wraps pywidevine's authentication (and pyplayready's for `/playready*` paths), and the REST routes live in the same application, guarded by the same check. Here the accepted-keys map is your full `serve` config: `api_secret` (auto-added with access to all loaded devices) plus every entry under `users`, each with its declared `devices` / `playready_devices`.
 
@@ -349,4 +362,4 @@ The REST API authenticates with `X-Secret-Key`. The middleware advertises `Autho
 
 ### Where device access is read
 
-The map of accepted API keys lives at `request.app["config"]["users"]`. For DRM operations, an API key's permitted Widevine devices come from its `devices` list, and PlayReady devices from `playready_devices`. The server uses the first configured device when a request does not (or may not) override it. A server-wide `config.cdm[<service>]` mapping, if present, takes precedence over the API key's device list when the server chooses which device to use.
+The map of accepted API keys lives at `request.app["config"]["users"]`. For DRM operations, an API key's permitted Widevine devices come from its `devices` list, and PlayReady devices from `playready_devices`. The server uses the first configured device when a request does not (or may not) override it. A `cdm` entry for the service takes precedence over the API key's device list when the server chooses which device to use: the API key's own `serve.users.<key>.cdm` entry, else the server-wide `config.cdm[<service>]` mapping.

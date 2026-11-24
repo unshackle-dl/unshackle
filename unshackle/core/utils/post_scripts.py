@@ -229,8 +229,7 @@ def dispatch(event: str, mode: str, context: dict[str, str], overrides: Sequence
         injected = _data_injected_flag(tokens, argv)
         if injected is not None:
             log.warning(
-                "Skipping post-script: a substituted value expands to the option-like token %r; "
-                "prefix the variable (--opt={var}) so service metadata cannot forge a flag",
+                "Skipping post-script: a substituted value expands to the option-like token %r",
                 redact_text(redact_path(injected)),
             )
             continue

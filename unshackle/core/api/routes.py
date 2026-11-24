@@ -2,16 +2,24 @@ import asyncio
 import functools
 import logging
 import re
+import time
 from collections.abc import Awaitable, Callable
-from typing import Any
+from typing import Any, Optional
 
 import click
 from aiohttp import web
+from aiohttp.http import SERVER_SOFTWARE
 from aiohttp_swagger3 import SwaggerDocs, SwaggerInfo, SwaggerUiSettings
 
 from unshackle.core import __code_hash__, __version__
 from unshackle.core import services as services_module
-from unshackle.core.api.errors import APIError, APIErrorCode, build_error_response, handle_api_exception
+from unshackle.core.api.errors import (
+    APIError,
+    APIErrorCode,
+    build_error_response,
+    categorize_exception,
+    handle_api_exception,
+)
 from unshackle.core.api.handlers import (
     CORS_HEADERS,
     DASHBOARD_EVENTS_ROUTE,
@@ -22,6 +30,8 @@ from unshackle.core.api.handlers import (
     clear_finished_download_jobs_handler,
     clear_temp_handler,
     dashboard_cdm_logs_handler,
+    dashboard_drain_start_handler,
+    dashboard_drain_stop_handler,
     dashboard_events_handler,
     dashboard_health_handler,
     dashboard_jobs_handler,
@@ -36,15 +46,20 @@ from unshackle.core.api.handlers import (
     download_history_handler,
     download_job_events_handler,
     download_job_input_handler,
+    enum_name,
     env_check_handler,
     get_allowed_services,
     get_download_job_handler,
+    is_admin,
     list_download_jobs_handler,
     list_titles_handler,
     list_tracks_handler,
     prioritize_download_job_handler,
     profiles_handler,
     refresh_services_handler,
+    remote_login_input_handler,
+    remote_logins_handler,
+    remote_services_info,
     retry_download_job_handler,
     search_handler,
     server_account_regions,
@@ -58,12 +73,20 @@ from unshackle.core.api.handlers import (
     session_logs_handler,
     session_prompt_get_handler,
     session_prompt_post_handler,
+    session_samples_handler,
     session_segment_filter_handler,
     session_segments_handler,
     session_titles_handler,
     session_tracks_handler,
+    tunnel_check_handler,
+    tunnel_handler,
 )
+from unshackle.core.api.sanitize import sanitize_log
+from unshackle.core.drm import cbcs
 from unshackle.core.services import Services
+from unshackle.core.tunnel import CHECK_ROUTE as TUNNEL_CHECK_ROUTE
+from unshackle.core.tunnel import ROUTE as TUNNEL_ROUTE
+from unshackle.core.tunnel import close_tunnels
 from unshackle.core.update_checker import UpdateChecker
 from unshackle.core.utils.redact import redact_path
 
@@ -81,6 +104,24 @@ async def cors_middleware(
 
     response.headers.update(CORS_HEADERS)
 
+    return response
+
+
+@web.middleware
+async def no_5xx_middleware(
+    request: web.Request, handler: Callable[[web.Request], Awaitable[web.StreamResponse]]
+) -> web.StreamResponse:
+    """Answer an uncaught exception or any unsent 5xx (a CDM subapplication's own) as a 422; see errors.py."""
+    try:
+        response = await handler(request)
+    except (Exception, SystemExit) as e:
+        if isinstance(e, web.HTTPException) and e.status < 500:
+            raise
+        log.exception(f"Unhandled error in {sanitize_log(request.path)}")
+        error = categorize_exception(e) if isinstance(e, SystemExit) else None
+        response = build_error_response(error or APIError(APIErrorCode.INTERNAL_ERROR, "Internal server error"))
+    if response.status >= 500 and not response.prepared:
+        response.set_status(APIError.default_http_status(APIErrorCode.INTERNAL_ERROR))
     return response
 
 
@@ -102,6 +143,14 @@ def api_handler(handler: Handler) -> Handler:
     return wrapper
 
 
+async def json_body(request: web.Request) -> Any:
+    """The request's JSON body; raises INVALID_INPUT when it does not parse."""
+    try:
+        return await request.json()
+    except Exception as e:
+        raise APIError(APIErrorCode.INVALID_INPUT, "Invalid JSON request body", details={"error": str(e)}) from e
+
+
 HEARTBEAT_INTERVAL = 30.0
 
 
@@ -115,9 +164,16 @@ def heartbeat(handler: Handler) -> Handler:
     work continues if the client disconnects, so the remote session state stays complete.
     """
 
+    async def guarded(request: web.Request) -> web.StreamResponse:
+        try:
+            return await handler(request)
+        except SystemExit as e:
+            log.exception(f"Service exited in {sanitize_log(request.path)}")
+            raise categorize_exception(e) from e
+
     @functools.wraps(handler)
     async def wrapper(request: web.Request) -> web.StreamResponse:
-        task = asyncio.ensure_future(handler(request))
+        task = asyncio.ensure_future(guarded(request))
         done, _ = await asyncio.wait({task}, timeout=HEARTBEAT_INTERVAL)
         if done:
             return task.result()
@@ -141,12 +197,26 @@ def heartbeat(handler: Handler) -> Handler:
             log.exception(f"Error in {request.path}")
             result = handle_api_exception(e, debug_mode=debug_mode)
         response["late_status"] = result.status
+        response["error"] = result.get("error")
         body = result.body if isinstance(result, web.Response) else None
         await response.write(bytes(body) if isinstance(body, (bytes, bytearray)) else b"{}")
         await response.write_eof()
         return response
 
     return wrapper
+
+
+UPDATE_CHECK_TTL = 300.0
+UPDATE_CHECK: list[tuple[float, Optional[str]]] = []
+
+
+async def latest_release() -> Optional[str]:
+    """The newer release the update check reports, kept for ``UPDATE_CHECK_TTL`` seconds: clients poll health."""
+    if UPDATE_CHECK and time.monotonic() - UPDATE_CHECK[0][0] < UPDATE_CHECK_TTL:
+        return UPDATE_CHECK[0][1]
+    latest = await asyncio.to_thread(UpdateChecker.check_for_updates_sync, __version__)
+    UPDATE_CHECK[:] = [(time.monotonic(), latest)]
+    return latest
 
 
 @api_handler
@@ -174,6 +244,9 @@ async def health(request: web.Request) -> web.Response:
                   type: string
                   nullable: true
                   example: "1d22a1e"
+                draining:
+                  type: boolean
+                  description: True while the server refuses new sessions before a restart
                 update_check:
                   type: object
                   properties:
@@ -187,7 +260,7 @@ async def health(request: web.Request) -> web.Response:
                       nullable: true
     """
     try:
-        latest_version = await UpdateChecker.check_for_updates(__version__)
+        latest_version = await latest_release()
         update_info = {
             "update_available": latest_version is not None,
             "current_version": __version__,
@@ -197,9 +270,146 @@ async def health(request: web.Request) -> web.Response:
         log.warning(f"Failed to check for updates: {e}")
         update_info = {"update_available": None, "current_version": __version__, "latest_version": None}
 
+    from unshackle.core.api.session_store import get_session_store
+
     return web.json_response(
-        {"status": "ok", "version": __version__, "code_hash": __code_hash__ or None, "update_check": update_info}
+        {
+            "status": "ok",
+            "version": __version__,
+            "code_hash": __code_hash__ or None,
+            "draining": get_session_store().draining,
+            "update_check": update_info,
+        }
     )
+
+
+SERVICE_DEFAULTS: dict[str, Any] = {
+    "aliases": [],
+    "geofence": [],
+    "geoblock": [],
+    "title_regex": None,
+    "url": None,
+    "help": None,
+}
+SERVICE_DETAILS: dict[str, tuple[Any, dict[str, Any]]] = {}
+
+
+def json_value(value: Any) -> Any:
+    """A click default or choice as JSON: a named object such as an enum member by its name, else text."""
+    if value is None or (isinstance(value, (str, int, float, bool)) and not hasattr(value, "name")):
+        return value
+    return enum_name(value)
+
+
+def service_catalogue(tags: list[str]) -> dict[str, dict[str, Any]]:
+    """The catalogue entry of each tag, or the defaults for one that fails; slow on the first call after a reload."""
+    entries: dict[str, dict[str, Any]] = {}
+    for tag in tags:
+        try:
+            entries[tag] = service_details(tag)
+        except Exception as e:
+            log.warning(f"Could not load details for service {tag}: {e}")
+            entries[tag] = {**SERVICE_DEFAULTS, "tag": tag}
+    return entries
+
+
+def service_details(tag: str) -> dict[str, Any]:
+    """The catalogue entry of one service, built again only when its service module reloads."""
+    service_module = Services.load(tag)
+    hit = SERVICE_DETAILS.get(tag)
+    if hit and hit[0] is service_module:
+        return hit[1]
+    service_data: dict[str, Any] = {**SERVICE_DEFAULTS, "tag": tag}
+
+    service_data["aliases"] = list(getattr(service_module, "ALIASES", ()) or ())
+    service_data["geofence"] = list(getattr(service_module, "GEOFENCE", ()) or ())
+    service_data["geoblock"] = list(getattr(service_module, "GEOBLOCK", ()) or ())
+
+    if hasattr(service_module, "TITLE_RE"):
+        title_re = service_module.TITLE_RE
+        if isinstance(title_re, re.Pattern):
+            service_data["title_regex"] = title_re.pattern
+        elif isinstance(title_re, str):
+            service_data["title_regex"] = title_re
+        elif isinstance(title_re, (list, tuple)):
+            patterns = []
+            for item in title_re:
+                if isinstance(item, re.Pattern):
+                    patterns.append(item.pattern)
+                elif isinstance(item, str):
+                    patterns.append(item)
+            service_data["title_regex"] = patterns if patterns else None
+
+    if hasattr(service_module, "cli") and hasattr(service_module.cli, "short_help"):
+        service_data["url"] = service_module.cli.short_help
+
+    if hasattr(service_module, "cli") and hasattr(service_module.cli, "params"):
+        cli_params = []
+        for param in service_module.cli.params:
+            param_info: dict = {"name": getattr(param, "name", None)}
+            if param.param_type_name == "argument":
+                param_info["kind"] = "argument"
+                param_info["required"] = param.required
+            else:
+                param_info["kind"] = "option"
+                param_info["opts"] = list(param.opts) if hasattr(param, "opts") else []
+                param_info["is_flag"] = getattr(param, "is_flag", False)
+                default = param.default
+                if callable(default) or type(default).__name__ == "Sentinel":
+                    default = None
+                elif isinstance(default, list):
+                    default = [json_value(item) for item in default]
+                else:
+                    default = json_value(default)
+                param_info["default"] = default
+                param_info["help"] = getattr(param, "help", None)
+                param_info["type"] = param.type.name if hasattr(param.type, "name") else str(param.type)
+                if isinstance(param.type, click.Choice):
+                    param_info["choices"] = [json_value(choice) for choice in param.type.choices]
+                param_info["multiple"] = getattr(param, "multiple", False)
+            cli_params.append(param_info)
+        service_data["cli_params"] = cli_params
+
+    if service_module.__doc__:
+        service_data["help"] = service_module.__doc__.strip()
+
+    from unshackle.core.service import Service as _BaseService
+
+    service_data["needs_auth"] = getattr(service_module, "authenticate", None) is not _BaseService.authenticate
+    client_config = getattr(service_module, "CLIENT_CONFIG", ())
+    if client_config:
+        service_data["client_config"] = list(client_config)
+    service_data["has_search"] = getattr(service_module, "search", None) is not _BaseService.search
+    service_data["anonymous_search"] = bool(getattr(service_module, "ANONYMOUS_SEARCH", False))
+    service_data["has_drm"] = (
+        getattr(service_module, "get_widevine_license", None) is not _BaseService.get_widevine_license
+        or getattr(service_module, "get_playready_license", None) is not _BaseService.get_playready_license
+    )
+
+    methods = []
+    if service_data["needs_auth"]:
+        declared = getattr(service_module, "AUTH_METHODS", None)
+        if declared:
+            methods = list(declared)
+        else:
+            try:
+                import inspect as _inspect
+
+                src_lines = _inspect.getsource(service_module.authenticate).splitlines()
+                start = next((i + 1 for i, ln in enumerate(src_lines) if ln.rstrip().endswith(":")), 1)
+                body = "\n".join(src_lines[start:])
+                if "cookies" in body:
+                    methods.append("cookies")
+                if "credential" in body:
+                    methods.append("credentials")
+            except (OSError, TypeError):
+                pass
+            if not methods:
+                methods = ["cookies"]
+    service_data["auth_methods"] = methods
+
+    SERVICE_DETAILS[tag] = (service_module, service_data)
+    return service_data
 
 
 @api_handler
@@ -209,6 +419,16 @@ async def services(request: web.Request) -> web.Response:
     ---
     summary: Show services
     description: Get all available streaming services with their details
+    parameters:
+      - name: remote
+        in: query
+        required: false
+        schema:
+          type: string
+        description: >
+          A remote_services server name. Lists that server's services instead of this server's, each
+          with `remote` set to the name. Pass the name as `remote` to search, list-titles, list-tracks and
+          download to run the service through that server; the download itself still runs here.
     responses:
       '200':
         description: List of services
@@ -219,7 +439,7 @@ async def services(request: web.Request) -> web.Response:
               properties:
                 load_errors:
                   type: array
-                  description: Services skipped because they failed to import (startup or repo refresh)
+                  description: Services skipped because they failed to import (startup or repo refresh); admin key only
                   items:
                     type: string
                 services:
@@ -269,7 +489,7 @@ async def services(request: web.Request) -> web.Response:
                         type: string
                         nullable: true
                         description: Full service documentation
-      '500':
+      '422':
         description: Server error
         content:
           application/json:
@@ -299,126 +519,26 @@ async def services(request: web.Request) -> web.Response:
         allowed = get_allowed_services(request)
         if allowed is not None:
             service_tags = [t for t in service_tags if t in allowed]
+        if remote := request.query.get("remote"):
+            remote_info = await asyncio.to_thread(remote_services_info, remote, allowed)
+            return web.json_response({"services": remote_info, "load_errors": []})
         services_info = []
+        catalogue = await asyncio.to_thread(service_catalogue, service_tags)
 
         for tag in service_tags:
-            service_data: dict[str, Any] = {
-                "tag": tag,
-                "aliases": [],
-                "geofence": [],
-                "geoblock": [],
-                "title_regex": None,
-                "url": None,
-                "help": None,
-            }
+            service_data: dict[str, Any] = {**catalogue[tag]}
             if tag in services_module.PENDING:
                 service_data["pending_update"] = True
             if server_accounts_allowed(request, tag) and (server_accounts := server_account_regions(tag)) is not None:
                 service_data["server_accounts"] = server_accounts
 
-            try:
-                service_module = Services.load(tag)
-
-                if hasattr(service_module, "ALIASES"):
-                    service_data["aliases"] = list(service_module.ALIASES)
-
-                if hasattr(service_module, "GEOFENCE"):
-                    service_data["geofence"] = list(service_module.GEOFENCE)
-                service_data["geoblock"] = list(getattr(service_module, "GEOBLOCK", ()) or ())
-
-                if hasattr(service_module, "TITLE_RE"):
-                    title_re = service_module.TITLE_RE
-                    if isinstance(title_re, re.Pattern):
-                        service_data["title_regex"] = title_re.pattern
-                    elif isinstance(title_re, str):
-                        service_data["title_regex"] = title_re
-                    elif isinstance(title_re, (list, tuple)):
-                        patterns = []
-                        for item in title_re:
-                            if isinstance(item, re.Pattern):
-                                patterns.append(item.pattern)
-                            elif isinstance(item, str):
-                                patterns.append(item)
-                        service_data["title_regex"] = patterns if patterns else None
-
-                if hasattr(service_module, "cli") and hasattr(service_module.cli, "short_help"):
-                    service_data["url"] = service_module.cli.short_help
-
-                if hasattr(service_module, "cli") and hasattr(service_module.cli, "params"):
-                    cli_params = []
-                    for param in service_module.cli.params:
-                        param_info: dict = {"name": getattr(param, "name", None)}
-                        if param.param_type_name == "argument":
-                            param_info["kind"] = "argument"
-                            param_info["required"] = param.required
-                        else:
-                            param_info["kind"] = "option"
-                            param_info["opts"] = list(param.opts) if hasattr(param, "opts") else []
-                            param_info["is_flag"] = getattr(param, "is_flag", False)
-                            default = param.default
-                            if default is None:
-                                pass
-                            elif callable(default) or type(default).__name__ == "Sentinel":
-                                default = None
-                            elif hasattr(default, "name"):
-                                default = default.name
-                            elif not isinstance(default, (str, int, float, bool, list)):
-                                default = str(default)
-                            param_info["default"] = default
-                            param_info["help"] = getattr(param, "help", None)
-                            param_info["type"] = param.type.name if hasattr(param.type, "name") else str(param.type)
-                            if isinstance(param.type, click.Choice):
-                                param_info["choices"] = list(param.type.choices)
-                            param_info["multiple"] = getattr(param, "multiple", False)
-                        cli_params.append(param_info)
-                    service_data["cli_params"] = cli_params
-
-                if service_module.__doc__:
-                    service_data["help"] = service_module.__doc__.strip()
-
-                from unshackle.core.service import Service as _BaseService
-
-                service_data["needs_auth"] = (
-                    getattr(service_module, "authenticate", None) is not _BaseService.authenticate
-                )
-                client_config = getattr(service_module, "CLIENT_CONFIG", ())
-                if client_config:
-                    service_data["client_config"] = list(client_config)
-                service_data["has_search"] = getattr(service_module, "search", None) is not _BaseService.search
-                service_data["anonymous_search"] = bool(getattr(service_module, "ANONYMOUS_SEARCH", False))
-                service_data["has_drm"] = (
-                    getattr(service_module, "get_widevine_license", None) is not _BaseService.get_widevine_license
-                    or getattr(service_module, "get_playready_license", None) is not _BaseService.get_playready_license
-                )
-
-                methods = []
-                if service_data["needs_auth"]:
-                    declared = getattr(service_module, "AUTH_METHODS", None)
-                    if declared:
-                        methods = list(declared)
-                    else:
-                        try:
-                            import inspect as _inspect
-
-                            src_lines = _inspect.getsource(service_module.authenticate).splitlines()
-                            start = next((i + 1 for i, ln in enumerate(src_lines) if ln.rstrip().endswith(":")), 1)
-                            body = "\n".join(src_lines[start:])
-                            if "cookies" in body:
-                                methods.append("cookies")
-                            if "credential" in body:
-                                methods.append("credentials")
-                        except (OSError, TypeError):
-                            pass
-                        if not methods:
-                            methods = ["cookies"]
-                service_data["auth_methods"] = methods
-
-            except Exception as e:
-                log.warning(f"Could not load details for service {tag}: {e}")
-
             services_info.append(service_data)
 
-        load_errors = [redact_path(re.sub(r" \([^()]*\)$", "", err)) for err in services_module.LOAD_ERRORS]
+        load_errors = (
+            [redact_path(re.sub(r" \([^()]*\)$", "", err)) for err in services_module.LOAD_ERRORS]
+            if is_admin(request)
+            else []
+        )
         return web.json_response({"services": services_info, "load_errors": load_errors})
     except Exception as e:
         log.exception("Error listing services")
@@ -443,6 +563,14 @@ async def search(request: web.Request) -> web.Response:
               - service
               - query
             properties:
+              remote:
+                type: string
+                description: >
+                  A remote_services server name from GET /api/config. The service runs through that
+                  server (login, titles, tracks, licences); a download still runs on this server.
+              client_name:
+                type: string
+                description: Names this client on the remote server's dashboard, as serve (client_name)
               service:
                 type: string
                 description: Service tag
@@ -454,7 +582,7 @@ async def search(request: web.Request) -> web.Response:
                 description: Profile to use for credentials and cookies (default - None)
               proxy:
                 type: string
-                description: Full proxy URI, a Control D resolver as controld://<resolver>@dns.controld.com, or a country code when the API key has server_proxy (default - None)
+                description: Full proxy URI on a public host, a Control D resolver as controld://<resolver>@dns.controld.com, or a country code when the API key has server_proxy, or tunnel:<id> for a tunnel the same API key opened on /api/tunnel (default - None)
               no_proxy:
                 type: boolean
                 description: Force disable all proxy use (default - false)
@@ -515,17 +643,7 @@ async def search(request: web.Request) -> web.Response:
       '400':
         description: Invalid request
     """
-    try:
-        data = await request.json()
-    except Exception as e:
-        return build_error_response(
-            APIError(
-                APIErrorCode.INVALID_INPUT,
-                "Invalid JSON request body",
-                details={"error": str(e)},
-            ),
-            request.app.get("debug_api", False),
-        )
+    data = await json_body(request)
 
     try:
         return await search_handler(data, request)
@@ -552,6 +670,14 @@ async def list_titles(request: web.Request) -> web.Response:
               - service
               - title_id
             properties:
+              remote:
+                type: string
+                description: >
+                  A remote_services server name from GET /api/config. The service runs through that
+                  server (login, titles, tracks, licences); a download still runs on this server.
+              client_name:
+                type: string
+                description: Names this client on the remote server's dashboard, as serve (client_name)
               service:
                 type: string
                 description: Service tag
@@ -654,7 +780,7 @@ async def list_titles(request: web.Request) -> web.Response:
                 timestamp:
                   type: string
                   format: date-time
-      '500':
+      '422':
         description: Server error
         content:
           application/json:
@@ -675,17 +801,7 @@ async def list_titles(request: web.Request) -> web.Response:
                   type: string
                   format: date-time
     """
-    try:
-        data = await request.json()
-    except Exception as e:
-        return build_error_response(
-            APIError(
-                APIErrorCode.INVALID_INPUT,
-                "Invalid JSON request body",
-                details={"error": str(e)},
-            ),
-            request.app.get("debug_api", False),
-        )
+    data = await json_body(request)
 
     return await list_titles_handler(data, request)
 
@@ -707,6 +823,14 @@ async def list_tracks(request: web.Request) -> web.Response:
               - service
               - title_id
             properties:
+              remote:
+                type: string
+                description: >
+                  A remote_services server name from GET /api/config. The service runs through that
+                  server (login, titles, tracks, licences); a download still runs on this server.
+              client_name:
+                type: string
+                description: Names this client on the remote server's dashboard, as serve (client_name)
               service:
                 type: string
                 description: Service tag
@@ -718,11 +842,11 @@ async def list_tracks(request: web.Request) -> web.Response:
                 description: Specific episode/season, or song ("1-5", "2x3" for disc 2 track 3) (optional)
               proxy:
                 type: string
-                description: Full proxy URI, a Control D resolver as controld://<resolver>@dns.controld.com, or a country code when the API key has server_proxy (default - None)
+                description: Full proxy URI on a public host, a Control D resolver as controld://<resolver>@dns.controld.com, or a country code when the API key has server_proxy (default - None)
               dl_params:
                 type: object
                 description: |
-                  The dl track selection (lang, v_lang, a_lang, acodec, forced_subs, exact_lang), in the same
+                  The dl track selection (lang, v_lang, a_lang, s_lang, acodec, forced_subs, exact_lang), in the same
                   form as on `/api/session/create`. The service reads it from `ctx.parent.params`.
               credentials:
                 type: object
@@ -759,17 +883,7 @@ async def list_tracks(request: web.Request) -> web.Response:
       '400':
         description: Invalid request
     """
-    try:
-        data = await request.json()
-    except Exception as e:
-        return build_error_response(
-            APIError(
-                APIErrorCode.INVALID_INPUT,
-                "Invalid JSON request body",
-                details={"error": str(e)},
-            ),
-            request.app.get("debug_api", False),
-        )
+    data = await json_body(request)
 
     return await list_tracks_handler(data, request)
 
@@ -794,6 +908,14 @@ async def download(request: web.Request) -> web.Response:
               - service
               - title_id
             properties:
+              remote:
+                type: string
+                description: >
+                  A remote_services server name from GET /api/config. The service runs through that
+                  server (login, titles, tracks, licences); a download still runs on this server.
+              client_name:
+                type: string
+                description: Names this client on the remote server's dashboard, as serve (client_name)
               service:
                 type: string
                 description: Service tag
@@ -808,7 +930,7 @@ async def download(request: web.Request) -> web.Response:
                 items:
                   type: integer
                 description: >-
-                  Download resolution(s) (default - best available). An API key with a
+                  Download resolution(s) (default - best available; lowest with worst). An API key with a
                   server_cdm_max_height for the service must pass a quality at or under that height.
               vcodec:
                 oneOf:
@@ -816,14 +938,14 @@ async def download(request: web.Request) -> web.Response:
                   - type: array
                     items:
                       type: string
-                description: Video codec(s) to download (e.g., "HEVC" or ["AVC", "HEVC"]) - accepts AVC, H.264, H264, HEVC, H.265, H265, VC1, VC-1, VP8, VP9, AV1 (default - None)
+                description: Video codec(s) to download (e.g., "HEVC" or ["AVC", "HEVC"]) - accepts AVC, H.264, H264, HEVC, H.265, H265, VVC, H.266, H266, VC1, VC-1, VP8, VP9, AV1, LCEVC (default - [])
               acodec:
                 oneOf:
                   - type: string
                   - type: array
                     items:
                       type: string
-                description: Audio codec(s) to download (e.g., "AAC" or ["AAC", "EC3"]) - accepts AAC, AC3, DD, EC3, DD+, EAC3, DDP, AC4, AC-4, OPUS, OGG, VORB, VORBIS, DTS, DTSX, DTS-X, ALAC, FLAC (default - None)
+                description: Audio codec(s) to download (e.g., "AAC" or ["AAC", "EC3"]) - accepts AAC, AC3, DD, EC3, DD+, EAC3, DDP, AC4, AC-4, OPUS, OGG, VORB, VORBIS, DTS, DTSX, DTS-X, DTSHD, DTS-HD, MPEGH, MPEG-H, AV3A, Audio Vivid, ALAC, FLAC, MP3 (default - [])
               vbitrate:
                 type: integer
                 description: Video bitrate in kbps (default - None)
@@ -835,7 +957,7 @@ async def download(request: web.Request) -> web.Response:
                 items:
                   type: string
                 description: >-
-                  Video colour range (SDR, HDR10, HDR10+, HLG, DV, HYBRID) (default - ["SDR"]).
+                  Video colour range (SDR, HDR10, HDR10+, VIVID, HLG, DV, HYBRID) (default - ["SDR"]).
                   An API key with a server_cdm_max_height for the service cannot set HYBRID.
               channels:
                 type: number
@@ -874,22 +996,25 @@ async def download(request: web.Request) -> web.Response:
                 type: array
                 items:
                   type: string
-                description: Language for subtitle tracks (a '-' prefix excludes, e.g. ["all", "-es"]) (default - ["all"])
+                description: Language for subtitle tracks (a '-' prefix excludes, e.g. ["all", "-es"]); a missing one is skipped with a warning (default - ["all"])
               require_audio:
                 type: array
                 items:
                   type: string
-                description: Audio languages that must exist, else the job fails (default - [])
+                description: Audio languages that must exist, else the job fails or, with skip_missing, skips the title (default - [])
               require_video:
                 type: array
                 items:
                   type: string
-                description: Video languages that must exist, else the job fails (default - [])
+                description: Video languages that must exist, else the job fails or, with skip_missing, skips the title (default - [])
               require_subs:
                 type: array
                 items:
                   type: string
-                description: Required subtitle languages (default - [])
+                description: Subtitle languages that must exist, else the job fails or, with skip_missing, skips the title (default - [])
+              skip_missing:
+                type: boolean
+                description: Skip a title that misses a required language or track and continue with the next title; the job fails when it skips every title (default - false)
               forced_subs:
                 type: boolean
                 description: Include forced subtitle tracks (default - false)
@@ -903,10 +1028,13 @@ async def download(request: web.Request) -> web.Response:
                 description: Languages wanted for forced subtitles, implies forced_subs (a '-' prefix excludes) (default - [])
               exact_lang:
                 type: boolean
-                description: Use exact language matching (no variants) (default - false)
+                description: A language tag without a region never falls back to another variant; a tag with a region is always exact (default - false)
               sub_format:
                 type: string
                 description: Output subtitle format such as SRT or VTT, or "original" to keep the source format (default - None)
+              sub_font:
+                type: string
+                description: Font for subtitles converted to ASS, implies sub_format ASS (default - None)
               video_only:
                 type: boolean
                 description: Only download video tracks (default - false)
@@ -922,6 +1050,9 @@ async def download(request: web.Request) -> web.Response:
               no_subs:
                 type: boolean
                 description: Do not download subtitle tracks (default - false)
+              skip_subtitle_errors:
+                type: boolean
+                description: Skip a subtitle that fails to download and keep the other tracks (default - false)
               no_audio:
                 type: boolean
                 description: Do not download audio tracks (default - false)
@@ -965,7 +1096,7 @@ async def download(request: web.Request) -> web.Response:
                 description: CDM device name on the server to license with, overriding the cdm config mapping. Requires serve.cdm_overrides to allow it (default - None)
               proxy:
                 type: string
-                description: Full proxy URI, a Control D resolver as controld://<resolver>@dns.controld.com, or a country code when the API key has server_proxy (default - None)
+                description: Full proxy URI on a public host, a Control D resolver as controld://<resolver>@dns.controld.com, or a country code when the API key has server_proxy (default - None)
               no_proxy:
                 type: boolean
                 description: Force disable all proxy use (default - false)
@@ -1029,9 +1160,18 @@ async def download(request: web.Request) -> web.Response:
                 description: >-
                   Continue with best available if requested quality unavailable (default - false).
                   An API key with a server_cdm_max_height for the service cannot set it.
+              generate_dv:
+                type: boolean
+                description: >-
+                  With HYBRID in range, make Dolby Vision from the HDR10+ metadata or the decoded video
+                  when a title has no Dolby Vision track (default - false). With HDR10 or HDR10P in range
+                  and no HYBRID, make it for that base and ignore a Dolby Vision track. With none of the
+                  three in range, the field has no effect.
               worst:
                 type: boolean
-                description: Select the lowest bitrate track within the specified quality. Requires `quality` (default - false)
+                description: >-
+                  Select the lowest bitrate track within the specified quality, or at the lowest resolution if no
+                  quality is set (default - false)
               repack:
                 type: boolean
                 description: Add REPACK tag to the output filename (default - false)
@@ -1045,6 +1185,9 @@ async def download(request: web.Request) -> web.Response:
                 type: string
                 enum: [official, dvd, absolute, alternate, regional]
                 description: Renumber episodes to a TVDB season order (default - the tvdb_order config option)
+              continuous_episodes:
+                type: boolean
+                description: Number each season on from the season before it, e.g. S02E05 after a four-episode season one (default - false)
               output_dir:
                 type: string
                 description: >
@@ -1074,20 +1217,11 @@ async def download(request: web.Request) -> web.Response:
         description: Invalid request
       '403':
         description: >-
-          A gated parameter is not permitted (FORBIDDEN), or the job goes above the
+          A gated parameter is not permitted, or the API key has its own cdm or
+          service_config entry for the service (FORBIDDEN), or the job goes above the
           server_cdm_max_height of the API key (SERVER_CDM_CAPPED)
     """
-    try:
-        data = await request.json()
-    except Exception as e:
-        return build_error_response(
-            APIError(
-                APIErrorCode.INVALID_INPUT,
-                "Invalid JSON request body",
-                details={"error": str(e)},
-            ),
-            request.app.get("debug_api", False),
-        )
+    data = await json_body(request)
 
     return await download_handler(data, request)
 
@@ -1164,7 +1298,7 @@ async def download_jobs(request: web.Request) -> web.Response:
                         type: number
       '400':
         description: Invalid query parameters
-      '500':
+      '422':
         description: Server error
     """
     query_params = {
@@ -1195,7 +1329,7 @@ async def download_job_detail(request: web.Request) -> web.Response:
         description: Download job details
       '404':
         description: Job not found
-      '500':
+      '422':
         description: Server error
     """
     job_id = request.match_info["job_id"]
@@ -1235,7 +1369,7 @@ async def download_job_events(request: web.Request) -> web.StreamResponse:
               type: string
       '404':
         description: Job not found
-      '500':
+      '422':
         description: Server error
     """
     job_id = request.match_info["job_id"]
@@ -1264,7 +1398,7 @@ async def cancel_download_job(request: web.Request) -> web.Response:
         description: The server cannot cancel the job
       '404':
         description: Job not found
-      '500':
+      '422':
         description: Server error
     """
     job_id = request.match_info["job_id"]
@@ -1289,7 +1423,7 @@ async def clear_finished_download_jobs(request: web.Request) -> web.Response:
                 removed:
                   type: integer
                   description: Number of jobs removed
-      '500':
+      '422':
         description: Server error
     """
     return await clear_finished_download_jobs_handler(request)
@@ -1326,7 +1460,7 @@ async def retry_download_job(request: web.Request) -> web.Response:
         description: Job not found
       '409':
         description: Job is not in a terminal state
-      '500':
+      '422':
         description: Server error
     """
     job_id = request.match_info["job_id"]
@@ -1363,7 +1497,7 @@ async def prioritize_download_job(request: web.Request) -> web.Response:
         description: Job not found
       '409':
         description: Job is not queued
-      '500':
+      '422':
         description: Server error
     """
     job_id = request.match_info["job_id"]
@@ -1418,10 +1552,7 @@ async def download_job_input(request: web.Request) -> web.Response:
         description: No prompt pending for this job
     """
     job_id = request.match_info["job_id"]
-    try:
-        data = await request.json()
-    except Exception as e:
-        raise APIError(APIErrorCode.INVALID_INPUT, "Invalid JSON request body", details={"error": str(e)}) from e
+    data = await json_body(request)
     return await download_job_input_handler(data, job_id, request)
 
 
@@ -1451,7 +1582,7 @@ async def profiles(request: web.Request) -> web.Response:
                     type: array
                     items:
                       type: string
-      '500':
+      '422':
         description: Server error
     """
     return await profiles_handler(request)
@@ -1500,6 +1631,11 @@ async def server_config(request: web.Request) -> web.Response:
                           description: List of permitted CDM device names, true, or null
                         allow_job_credentials:
                           type: boolean
+                    remote_services:
+                      type: array
+                      items:
+                        type: string
+                      description: remote_services server names; their url and api_key stay on the server
                     directories:
                       type: object
                       properties:
@@ -1514,7 +1650,7 @@ async def server_config(request: web.Request) -> web.Response:
                       items:
                         type: string
                       description: Available service tags (allowlist-filtered)
-      '500':
+      '422':
         description: Server error
     """
     return await server_config_handler(request)
@@ -1585,7 +1721,7 @@ async def download_history(request: web.Request) -> web.Response:
                   type: integer
       '400':
         description: Invalid query parameters
-      '500':
+      '422':
         description: Server error
     """
     query_params = {"limit": request.query.get("limit"), "service": request.query.get("service")}
@@ -1610,7 +1746,7 @@ async def delete_history(request: web.Request) -> web.Response:
         description: History entry removed
       '404':
         description: History entry not found
-      '500':
+      '422':
         description: Server error
     """
     return await delete_history_handler(request.match_info["job_id"], request)
@@ -1635,7 +1771,7 @@ async def maintenance_clear_cache(request: web.Request) -> web.Response:
                   type: boolean
                 freed_bytes:
                   type: integer
-      '500':
+      '422':
         description: Server error
     """
     return await clear_cache_handler(request)
@@ -1660,7 +1796,7 @@ async def maintenance_clear_temp(request: web.Request) -> web.Response:
                   type: boolean
                 freed_bytes:
                   type: integer
-      '500':
+      '422':
         description: Server error
     """
     return await clear_temp_handler(request)
@@ -1712,7 +1848,7 @@ async def maintenance_refresh_services(request: web.Request) -> web.Response:
                         description: Services whose new code failed to import
                         items:
                           type: string
-      '500':
+      '422':
         description: Server error
     """
     return await refresh_services_handler(request)
@@ -1747,7 +1883,7 @@ async def env_check(request: web.Request) -> web.Response:
                         nullable: true
                       required:
                         type: boolean
-      '500':
+      '422':
         description: Server error
     """
     return await env_check_handler(request)
@@ -1782,6 +1918,7 @@ async def session_create(request: web.Request) -> web.Response:
                 type: string
               proxy:
                 type: string
+                description: As on /api/search, including tunnel:<id> for a --local-proxy client
               no_proxy:
                 type: boolean
               profile:
@@ -1823,6 +1960,11 @@ async def session_create(request: web.Request) -> web.Response:
                     items:
                       type: string
                     default: []
+                  s_lang:
+                    type: array
+                    items:
+                      type: string
+                    default: ["all"]
                   forced_subs:
                     type: boolean
                     default: false
@@ -1834,12 +1976,16 @@ async def session_create(request: web.Request) -> web.Response:
                 description: |
                   False when the user picked the local CDM. With `cdm_type`, the server then builds
                   the service on the client's device, also for an API key with the server CDM.
-                  A request that sets one of the service's `SERVER_DEVICE_OPTIONS`, in
-                  `service_params` or at the top level, keeps the server CDM
+                  A request that sets one of the service's `SERVER_DEVICE_OPTIONS` keeps the server
+                  CDM. The server reads it from `service_params`, or from the top level when
+                  the request has no `service_params`
               cdm_type:
                 type: string
                 enum: [widevine, playready]
-                description: DRM system of the client's local CDM; absent when the client has none
+                description: |
+                  DRM system of the client's local CDM; absent when the client has none.
+                  A server CDM session loads the device of this system when the server's
+                  cdm entry for the service names both systems
               cdm_security_level:
                 type: integer
                 description: |
@@ -1915,13 +2061,7 @@ async def session_create(request: web.Request) -> web.Response:
       '401':
         description: Authentication failed
     """
-    try:
-        data = await request.json()
-    except Exception as e:
-        return build_error_response(
-            APIError(APIErrorCode.INVALID_INPUT, "Invalid JSON request body", details={"error": str(e)}),
-            request.app.get("debug_api", False),
-        )
+    data = await json_body(request)
     try:
         return await session_create_handler(data, request)
     except Exception as e:
@@ -1929,6 +2069,61 @@ async def session_create(request: web.Request) -> web.Response:
         return handle_api_exception(
             e, context={"operation": "session_create"}, debug_mode=request.app.get("debug_api", False)
         )
+
+
+@api_handler
+async def tunnel(request: web.Request) -> web.StreamResponse:
+    """
+    Open a --local-proxy tunnel.
+    ---
+    summary: Open tunnel
+    description: >-
+      A WebSocket that a --remote client holds open. The server sends the requests of a remote session
+      created with proxy tunnel:<id> through it, and the client makes them from its own connection.
+      The first message is {"id": <tunnel id>}. A client that has finished closes with code 1000,
+      which frees the tunnel at once; after any other close the tunnel waits 60 seconds for a reconnect.
+      An API key with shared: true counts its tunnels for each X-Client-Id value, which its gateway sets.
+    parameters:
+      - name: id
+        in: query
+        required: false
+        description: Reattach to this tunnel after a drop
+        schema:
+          type: string
+    responses:
+      '101':
+        description: WebSocket open
+      '404':
+        description: No open tunnel with this id for this API key
+      '429':
+        description: >-
+          The API key has the maximum number of tunnels open, or, with a Retry-After header,
+          the API key is over its hourly request limit
+    """
+    return await tunnel_handler(request)
+
+
+@api_handler
+async def tunnel_check(request: web.Request) -> web.Response:
+    """
+    Look up the exit IP through a tunnel.
+    ---
+    summary: Check tunnel
+    parameters:
+      - name: id
+        in: query
+        required: true
+        schema:
+          type: string
+    responses:
+      '200':
+        description: The exit IP and country through the tunnel, and the lookup time in ms
+      '404':
+        description: No open tunnel with this id for this API key
+      '424':
+        description: No IP lookup got through the tunnel, or the requests left from the server itself
+    """
+    return await tunnel_check_handler(request)
 
 
 @api_handler
@@ -2000,13 +2195,7 @@ async def session_tracks(request: web.Request) -> web.Response:
         description: Remote session or title not found
     """
     session_id = request.match_info["session_id"]
-    try:
-        data = await request.json()
-    except Exception as e:
-        return build_error_response(
-            APIError(APIErrorCode.INVALID_INPUT, "Invalid JSON request body", details={"error": str(e)}),
-            request.app.get("debug_api", False),
-        )
+    data = await json_body(request)
     try:
         return await session_tracks_handler(data, session_id, request)
     except Exception as e:
@@ -2050,13 +2239,7 @@ async def session_segments(request: web.Request) -> web.Response:
         description: Remote session or track not found
     """
     session_id = request.match_info["session_id"]
-    try:
-        data = await request.json()
-    except Exception as e:
-        return build_error_response(
-            APIError(APIErrorCode.INVALID_INPUT, "Invalid JSON request body", details={"error": str(e)}),
-            request.app.get("debug_api", False),
-        )
+    data = await json_body(request)
     try:
         return await session_segments_handler(data, session_id, request)
     except Exception as e:
@@ -2101,13 +2284,7 @@ async def session_segment_filter(request: web.Request) -> web.Response:
         description: Remote session or track not found
     """
     session_id = request.match_info["session_id"]
-    try:
-        data = await request.json()
-    except Exception as e:
-        return build_error_response(
-            APIError(APIErrorCode.INVALID_INPUT, "Invalid JSON request body", details={"error": str(e)}),
-            request.app.get("debug_api", False),
-        )
+    data = await json_body(request)
     try:
         return await session_segment_filter_handler(data, session_id, request)
     except Exception as e:
@@ -2115,6 +2292,54 @@ async def session_segment_filter(request: web.Request) -> web.Response:
         return handle_api_exception(
             e, context={"operation": "session_segment_filter"}, debug_mode=request.app.get("debug_api", False)
         )
+
+
+@api_handler
+async def session_samples(request: web.Request) -> web.Response:
+    """
+    Decrypt the samples of a track on the server.
+    ---
+    summary: Decrypt samples
+    description: >-
+      For a track the tracks response lists in sample_decrypt_tracks. An empty body asks how the
+      stsd entry decrypts: the JSON answer is its content key (hex) in key, or decrypter true. A
+      body of samples gets their plaintexts back in the same frame: a big-endian uint32 count,
+      one uint32 length per sample, then the samples, each ciphertext cut to whole AES blocks. The
+      body is application/octet-stream and is not in this schema, so the docs page cannot send it.
+      Needs the server_cdm grant for the service.
+    parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: track_id
+        in: query
+        required: true
+        schema:
+          type: string
+      - name: entry
+        in: query
+        required: true
+        description: "1-based stsd sample entry index"
+        schema:
+          type: integer
+    responses:
+      '200':
+        description: "JSON key (hex) or decrypter: true, or a sample frame of plaintexts in order"
+      '403':
+        description: The API key has no server_cdm grant for the service
+      '404':
+        description: Remote session or track not found
+    """
+    frame = await request.clone(client_max_size=2 * cbcs.SAMPLE_BATCH_BYTES).read()
+    return await session_samples_handler(
+        request.match_info["session_id"],
+        request.query.get("track_id", ""),
+        request.query.get("entry", ""),
+        frame,
+        request,
+    )
 
 
 @api_handler
@@ -2175,13 +2400,7 @@ async def session_license(request: web.Request) -> web.Response:
         description: Remote session or track not found
     """
     session_id = request.match_info["session_id"]
-    try:
-        data = await request.json()
-    except Exception as e:
-        return build_error_response(
-            APIError(APIErrorCode.INVALID_INPUT, "Invalid JSON request body", details={"error": str(e)}),
-            request.app.get("debug_api", False),
-        )
+    data = await json_body(request)
     try:
         return await session_license_handler(data, session_id, request)
     except Exception as e:
@@ -2229,20 +2448,14 @@ async def session_bad_key(request: web.Request) -> web.Response:
                 description: Content key as hex
     responses:
       '200':
-        description: The pair is flagged
+        description: "flagged true when the pair is flagged; false when the CDM licensed it"
       '400':
         description: The remote session was not served that pair
       '404':
         description: Remote session not found
     """
     session_id = request.match_info["session_id"]
-    try:
-        data = await request.json()
-    except Exception as e:
-        return build_error_response(
-            APIError(APIErrorCode.INVALID_INPUT, "Invalid JSON request body", details={"error": str(e)}),
-            request.app.get("debug_api", False),
-        )
+    data = await json_body(request)
     return await session_bad_key_handler(data, session_id, request)
 
 
@@ -2445,13 +2658,7 @@ async def session_prompt_submit(request: web.Request) -> web.Response:
         description: Remote session not found
     """
     session_id = request.match_info["session_id"]
-    try:
-        data = await request.json()
-    except Exception as e:
-        return build_error_response(
-            APIError(APIErrorCode.INVALID_INPUT, "Invalid JSON request body", details={"error": str(e)}),
-            request.app.get("debug_api", False),
-        )
+    data = await json_body(request)
     try:
         return await session_prompt_post_handler(data, session_id, request)
     except Exception as e:
@@ -2468,8 +2675,8 @@ async def dashboard_status(request: web.Request) -> web.Response:
     ---
     summary: Dashboard server status
     description: >
-      Version, uptime, bind address, mode, request counters per API key, and counts of
-      services, remote sessions and jobs. Every /api/dashboard/ route needs
+      Version, uptime, bind address, mode, request counters per API key, error counts by
+      service and error code, and counts of services, remote sessions and jobs. Every /api/dashboard/ route needs
       `serve.dashboard.key` in X-Secret-Key; a user key never passes, and the routes do not
       exist without a dashboard key.
     tags: [Dashboard]
@@ -2480,6 +2687,44 @@ async def dashboard_status(request: web.Request) -> web.Response:
         description: Dashboard key missing or invalid
     """
     return await dashboard_status_handler(request)
+
+
+@api_handler
+async def dashboard_drain_start(request: web.Request) -> web.Response:
+    """
+    Dashboard: start a drain before a restart.
+    ---
+    summary: Dashboard drain start
+    description: >
+      Refuses every new remote session, download job and job retry with `SERVER_DRAINING` (409)
+      until the server restarts or the operator cancels the drain. Open remote sessions continue, and
+      each one gets a warning in its service log. Poll `/api/dashboard/status` until `sessions`
+      and the active jobs reach 0, then restart. A second call changes nothing.
+    tags: [Dashboard]
+    responses:
+      '200':
+        description: The status body, with `draining` true
+      '401':
+        description: Dashboard key missing or invalid
+    """
+    return await dashboard_drain_start_handler(request)
+
+
+@api_handler
+async def dashboard_drain_stop(request: web.Request) -> web.Response:
+    """
+    Dashboard: cancel a drain.
+    ---
+    summary: Dashboard drain cancel
+    description: The server accepts new remote sessions and download jobs again.
+    tags: [Dashboard]
+    responses:
+      '200':
+        description: The status body, with `draining` false
+      '401':
+        description: Dashboard key missing or invalid
+    """
+    return await dashboard_drain_stop_handler(request)
 
 
 @api_handler
@@ -2879,7 +3124,7 @@ async def dashboard_keys(request: web.Request) -> web.Response:
 @api_handler
 async def dashboard_services(request: web.Request) -> web.Response:
     """
-    Dashboard: every configured service and its load state.
+    Dashboard: every configured service, its load state and its catalogue entry.
     ---
     summary: Dashboard services
     description: >
@@ -2946,6 +3191,24 @@ async def dashboard_services(request: web.Request) -> web.Response:
                     type: array
                     items:
                       type: string
+                  server_accounts:
+                    type: object
+                    description: >
+                      Regions the server's own accounts cover. Only when `serve.server_accounts` names
+                      the service. No API key grant applies here, unlike `/api/services`.
+                    properties:
+                      regions:
+                        type: array
+                        items:
+                          type: string
+                      global:
+                        type: boolean
+                additionalProperties:
+                  description: >
+                    The `/api/services` catalogue fields (help, url, title_regex, cli_params,
+                    needs_auth, auth_methods, has_search, anonymous_search, has_drm, client_config).
+                    A service with no loaded module, or whose catalogue entry fails, gets only
+                    help, url and title_regex, all null.
       '401':
         description: Dashboard key missing or invalid
     """
@@ -3035,6 +3298,85 @@ async def dashboard_events(request: web.Request) -> web.StreamResponse:
     return await dashboard_events_handler(request)
 
 
+@api_handler
+async def remote_logins(request: web.Request) -> web.Response:
+    """
+    Remote logins in progress.
+    ---
+    summary: Remote logins in progress
+    description: >
+      The caller's list calls that wait on a remote_services server's login, each with the remote
+      server, service and title, and `notice`: what the login shows the user while it waits on them,
+      such as a URL and pair code to enter on another device, or null. Poll it alongside a remote
+      list-titles, list-tracks or search call; a download job carries the same text as its `notice`.
+    responses:
+      '200':
+        description: Logins in progress
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                logins:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      remote:
+                        type: string
+                      service:
+                        type: string
+                      id:
+                        type: string
+                        description: Answer its prompt at POST /api/remote/logins/{id}/input
+                      title_id:
+                        type: string
+                      prompt:
+                        type: string
+                        nullable: true
+                        description: What the login asks the user (an OTP, a PIN), or null
+                      notice:
+                        type: string
+                        nullable: true
+    """
+    return await remote_logins_handler(request)
+
+
+@api_handler
+async def remote_login_input(request: web.Request) -> web.Response:
+    """
+    Answer a remote login's prompt.
+    ---
+    summary: Answer a remote login's prompt
+    description: Send the answer to the prompt (an OTP, a PIN) a remote login a list call waits on is asking.
+    parameters:
+      - name: login_id
+        in: path
+        required: true
+        schema:
+          type: string
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [response]
+            properties:
+              response:
+                type: string
+    responses:
+      '200':
+        description: Answer accepted
+      '404':
+        description: No such remote login for this API key
+      '409':
+        description: The login is not asking anything
+    """
+    data = await json_body(request)
+    return await remote_login_input_handler(request.match_info["login_id"], data, request)
+
+
 ROUTES: list[tuple[str, str, Handler, bool]] = [
     ("GET", "/api/health", health, True),
     ("GET", "/api/services", services, True),
@@ -3058,11 +3400,16 @@ ROUTES: list[tuple[str, str, Handler, bool]] = [
     ("POST", "/api/maintenance/clear-temp", maintenance_clear_temp, False),
     ("POST", "/api/maintenance/refresh-services", maintenance_refresh_services, False),
     ("GET", "/api/env/check", env_check, False),
+    ("GET", "/api/remote/logins", remote_logins, False),
+    ("POST", "/api/remote/logins/{login_id}/input", remote_login_input, False),
     ("POST", "/api/session/create", session_create, True),
+    ("GET", TUNNEL_ROUTE, tunnel, True),
+    ("GET", TUNNEL_CHECK_ROUTE, tunnel_check, True),
     ("GET", "/api/session/{session_id}/titles", session_titles, True),
     ("POST", "/api/session/{session_id}/tracks", session_tracks, True),
     ("POST", "/api/session/{session_id}/segments", session_segments, True),
     ("POST", "/api/session/{session_id}/segment_filter", session_segment_filter, True),
+    ("POST", "/api/session/{session_id}/samples", session_samples, True),
     ("POST", "/api/session/{session_id}/license", session_license, True),
     ("POST", "/api/session/{session_id}/keys/bad", session_bad_key, True),
     ("GET", "/api/session/{session_id}/logs", session_logs, True),
@@ -3074,6 +3421,8 @@ ROUTES: list[tuple[str, str, Handler, bool]] = [
 
 DASHBOARD_ROUTES: list[tuple[str, str, Handler, bool]] = [
     ("GET", DASHBOARD_PREFIX + "status", dashboard_status, True),
+    ("POST", DASHBOARD_PREFIX + "drain", dashboard_drain_start, True),
+    ("DELETE", DASHBOARD_PREFIX + "drain", dashboard_drain_stop, True),
     ("GET", DASHBOARD_PREFIX + "sessions", dashboard_sessions, True),
     ("GET", DASHBOARD_PREFIX + "jobs", dashboard_jobs, True),
     ("GET", DASHBOARD_PREFIX + "logs", dashboard_logs, True),
@@ -3087,36 +3436,50 @@ DASHBOARD_ROUTES: list[tuple[str, str, Handler, bool]] = [
 
 
 def setup_routes(
-    app: web.Application, remote_only: bool = False, dashboard: bool = False, cdm_only: bool = False
+    app: web.Application,
+    remote_only: bool = False,
+    dashboard: bool = False,
+    cdm_only: bool = False,
+    docs: bool = False,
 ) -> None:
     """Setup API routes. When remote_only=True, only the remote session endpoints operate.
     When cdm_only=True, only /api/health operates. When dashboard=True, this also registers
-    the /api/dashboard/ routes."""
+    the /api/dashboard/ routes. When docs=True, each route goes through Swagger so it is
+    documented at /api/docs/; Swagger request validation stays off."""
+    router: Any = swagger_docs(app) if docs else app.router
     add: dict[str, Callable[..., Any]] = {
-        "GET": app.router.add_get,
-        "POST": app.router.add_post,
-        "DELETE": app.router.add_delete,
+        "GET": router.add_get,
+        "POST": router.add_post,
+        "DELETE": router.add_delete,
     }
     api_routes = [r for r in ROUTES if r[1] == "/api/health"] if cdm_only else ROUTES
     for method, path, handler, remote in api_routes + (DASHBOARD_ROUTES if dashboard else []):
         if remote_only and not remote:
             continue
         add[method](path, handler)
+    app.on_response_prepare.append(generic_server_header)
+    app.on_shutdown.append(close_tunnels)
 
 
-def setup_swagger(app: web.Application, dashboard: bool = False) -> None:
-    """Setup Swagger UI documentation."""
-    swagger = SwaggerDocs(
+async def generic_server_header(request: web.Request, response: web.StreamResponse) -> None:
+    """Replace aiohttp's default Server header, which names the Python and aiohttp versions.
+
+    A prepare signal also reaches raised and streamed responses, which a middleware never sees.
+    API routes drop the CDM middleware's stamp too; the CDM routes keep it for their clients.
+    """
+    if request.path.startswith("/api/") or response.headers.get("Server") == SERVER_SOFTWARE:
+        response.headers["Server"] = "unshackle"
+
+
+def swagger_docs(app: web.Application) -> SwaggerDocs:
+    """The Swagger UI at /api/docs/, which registers the routes added through it."""
+    return SwaggerDocs(
         app,
+        validate=False,
         swagger_ui_settings=SwaggerUiSettings(path="/api/docs/"),
         info=SwaggerInfo(
             title="Unshackle REST API",
             version=__version__,
             description="REST API for Unshackle - Modular Movie, TV, and Music Archival Software",
         ),
-    )
-
-    route: dict[str, Callable[..., Any]] = {"GET": web.get, "POST": web.post, "DELETE": web.delete}
-    swagger.add_routes(
-        [route[method](path, handler) for method, path, handler, _ in ROUTES + (DASHBOARD_ROUTES if dashboard else [])]
     )

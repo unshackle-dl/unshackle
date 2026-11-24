@@ -1,0 +1,54 @@
+<?xml version="1.0"?>
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="urn:mpeg:dash:schema:mpd:2011 DASH-MPD.xsd" type="static" mediaPresentationDuration="PT10S" minBufferTime="PT1S" profiles="urn:mpeg:dash:profile:isoff-on-demand:2011">
+  <ProgramInformation>
+    <Title>Example of a DASH Media Presentation Description using Spatial Relationship Description to indicate tiles of a video</Title>
+  </ProgramInformation>
+  <Period>
+    <!-- Main Video -->
+    <AdaptationSet segmentAlignment="true" subsegmentAlignment="true" subsegmentStartsWithSAP="1">
+      <SupplementalProperty schemeIdUri="urn:mpeg:dash:srd:2014" value="0,0,0,2,2,2,2"/>
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"/>
+      <Representation id="1" mimeType="video/mp4" codecs="avc1.42c01e" width="640" height="360" bandwidth="226597" startWithSAP="1">
+        <BaseURL> full_video_small.mp4</BaseURL>
+        <SegmentBase indexRangeExact="true" indexRange="837-988"/>
+      </Representation>
+      <Representation id="2" mimeType="video/mp4" codecs="avc1.42c01f" width="1280" height="720" bandwidth="553833" startWithSAP="1">
+        <BaseURL> full_video_hd.mp4</BaseURL>
+        <SegmentBase indexRangeExact="true" indexRange="838-989"/>
+      </Representation>
+      <Representation id="3" mimeType="video/mp4" codecs="avc1.42c033" width="3840" height="2160" bandwidth="1055223" startWithSAP="1">
+        <BaseURL> full_video_4k.mp4</BaseURL>
+        <SegmentBase indexRangeExact="true" indexRange="839-990"/>
+      </Representation>
+    </AdaptationSet>
+    <!-- Tile 1 -->
+    <AdaptationSet segmentAlignment="true" subsegmentAlignment="true" subsegmentStartsWithSAP="1">
+      <SupplementalProperty schemeIdUri="urn:mpeg:dash:srd:2014" value="0,0,0,1,1,2,2"/>
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="supplementary"/>
+      <Representation id="4" mimeType="video/mp4" codecs="avc1.42c00d" width="640" height="360" bandwidth="218284" startWithSAP="1">
+        <BaseURL> tile1_video_small.mp4</BaseURL>
+        <SegmentBase indexRangeExact="true" indexRange="837-988"/>
+      </Representation>
+      <Representation id="5" mimeType="video/mp4" codecs="avc1.42c01f" width="1280" height="720" bandwidth="525609" startWithSAP="1">
+        <BaseURL> tile1_video_hd.mp4</BaseURL>
+        <SegmentBase indexRangeExact="true" indexRange="838-989"/>
+      </Representation>
+      <Representation id="6" mimeType="video/mp4" codecs="avc1.42c028" width="1920" height="1080" bandwidth="769514" startWithSAP="1">
+        <BaseURL> tile1_video_fullhd.mp4</BaseURL>
+        <SegmentBase indexRangeExact="true" indexRange="839-990"/>
+      </Representation>
+    </AdaptationSet>
+    <!-- Tile 2 -->
+    <AdaptationSet segmentAlignment="true" subsegmentAlignment="true" subsegmentStartsWithSAP="1">
+      <SupplementalProperty schemeIdUri="urn:mpeg:dash:srd:2014" value="0,1,0,1,1,2,2"/>
+    </AdaptationSet>
+    <!-- Tile 3 -->
+    <AdaptationSet segmentAlignment="true" subsegmentAlignment="true" subsegmentStartsWithSAP="1">
+      <SupplementalProperty schemeIdUri="urn:mpeg:dash:srd:2014" value="0,1,1,1,1,2,2"/>
+    </AdaptationSet>
+    <!-- Tile 4 -->
+    <AdaptationSet segmentAlignment="true" subsegmentAlignment="true" subsegmentStartsWithSAP="1">
+      <SupplementalProperty schemeIdUri="urn:mpeg:dash:srd:2014" value="0,0,1,1,1,2,2"/>
+    </AdaptationSet>
+  </Period>
+</MPD>

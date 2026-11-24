@@ -1,13 +1,20 @@
 from __future__ import annotations
 
 import logging
+import math
+import subprocess
+import time
 from base64 import b64encode
 from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, Union
 
+from unshackle.core import binaries
 from unshackle.core.config import config
+from unshackle.core.titles.music import song_metadata
+from unshackle.core.utils.collections import as_list
+from unshackle.core.utils.subprocess import log_tool_run
 
 try:
     from PIL import Image
@@ -38,15 +45,19 @@ try:
     from mutagen.mp4 import MP4, MP4Cover
     from mutagen.oggopus import OggOpus
     from mutagen.oggvorbis import OggVorbis
+    from mutagen.wave import WAVE
 except ImportError:  # pragma: no cover - optional tagging dependency
-    FLAC = Picture = None
-    MP3 = MP4 = MP4Cover = OggOpus = OggVorbis = None  # type: ignore[assignment]
-    ID3NoHeaderError = Exception
-    APIC = COMM = TALB = TCOM = TCON = TCOP = TDRC = TIT2 = TPE1 = TPE2 = TPOS = TRCK = TSRC = TXXX = None
-    USLT = None
+    FLAC = Picture = None  # type: ignore[assignment, misc]
+    MP3 = MP4 = MP4Cover = OggOpus = OggVorbis = WAVE = None  # type: ignore[assignment, misc]
+    ID3NoHeaderError = Exception  # type: ignore[assignment, misc]
+    APIC = COMM = TALB = TCOM = TCON = TCOP = TDRC = TIT2 = TPE1 = TPE2 = TPOS = TRCK = TSRC = TXXX = None  # type: ignore[assignment, misc]
+    USLT = None  # type: ignore[assignment, misc]
 
 
 log = logging.getLogger("MUSIC_TAGGER")
+
+TagValues = dict[str, Union[str, list[str]]]
+MAX_COVER_BYTES = 2**24 - 1
 
 
 @dataclass
@@ -66,15 +77,18 @@ class MusicMetadataResult:
 
 
 def write_music_metadata(path: Path, song: Any, *, session: Any = None, source_md5: str = "") -> MusicMetadataResult:
-    """Write normalized music metadata for FLAC, Ogg, Opus, MP3, and M4A/MP4 audio files."""
+    """Write normalized music metadata for FLAC, Ogg, Opus, MP3, WAV, and M4A/MP4 audio files.
+
+    Opus files get no ``REPLAYGAIN_*`` tags, because RFC 7845 section 5.2.1 says an Opus file should not carry them.
+    """
     path = Path(path)
     extension = path.suffix.lower()
-    if extension not in {".flac", ".mp3", ".m4a", ".mp4", ".ogg", ".opus"}:
+    if extension not in {".flac", ".mp3", ".wav", ".m4a", ".mp4", ".ogg", ".opus"}:
         return MusicMetadataResult(skipped=True, reason=f"Unsupported music metadata container: {extension}")
 
     if extension == ".flac" and FLAC is None:
         return MusicMetadataResult(skipped=True, reason="install mutagen to write FLAC tags")
-    if extension == ".mp3" and MP3 is None:
+    if extension in {".mp3", ".wav"} and MP3 is None:
         return MusicMetadataResult(skipped=True, reason="install mutagen to write MP3 tags")
     if extension in {".m4a", ".mp4"} and MP4 is None:
         return MusicMetadataResult(skipped=True, reason="install mutagen to write MP4/M4A tags")
@@ -82,30 +96,35 @@ def write_music_metadata(path: Path, song: Any, *, session: Any = None, source_m
         return MusicMetadataResult(skipped=True, reason="install mutagen to write Ogg tags")
 
     tags = build_tag_values(song, source_md5=source_md5)
-    artwork_url = first_text(getattr(song, "artwork_url", None), _metadata(song).get("artwork_url"))
+    artwork_url = first_text(getattr(song, "artwork_url", None), song_metadata(song).get("artwork_url"))
     cover_data, mime_type = download_cover(session, artwork_url)
+    if not cover_data:
+        cover_data, mime_type = attachment_cover(song)
+    cover_data, mime_type = usable_cover(cover_data, mime_type, path.name)
 
     if extension == ".flac":
         write_flac_tags(path, tags, cover_data, mime_type)
     elif extension in {".ogg", ".opus"}:
+        if extension == ".opus":
+            tags = {key: value for key, value in tags.items() if not key.startswith("REPLAYGAIN_")}
         write_ogg_tags(path, tags, cover_data, mime_type, OggOpus if extension == ".opus" else OggVorbis)
-    elif extension == ".mp3":
-        write_mp3_tags(path, tags, cover_data, mime_type)
+    elif extension in {".mp3", ".wav"}:
+        write_mp3_tags(path, tags, cover_data, mime_type, WAVE if extension == ".wav" else MP3)
     else:
         write_mp4_tags(path, tags, cover_data, mime_type)
 
     return MusicMetadataResult(written=True, artwork_embedded=bool(cover_data))
 
 
-def build_tag_values(song: Any, *, source_md5: str = "") -> dict[str, str]:
-    metadata = _metadata(song)
+def build_tag_values(song: Any, *, source_md5: str = "") -> TagValues:
+    metadata = song_metadata(song)
     track_number = string_tag(getattr(song, "track", None) or metadata.get("track_number"))
     track_total = string_tag(getattr(song, "total_tracks", None) or metadata.get("total_tracks"))
     disc_number = string_tag(getattr(song, "disc", None) or metadata.get("disc_number"))
     disc_total = string_tag(getattr(song, "total_discs", None) or metadata.get("total_discs"))
     explicit = as_bool(getattr(song, "explicit", None), metadata.get("explicit"), metadata.get("parental_warning"))
 
-    tags = {
+    tags: TagValues = {
         "TITLE": first_text(getattr(song, "name", None), metadata.get("title")),
         "ARTIST": first_text(getattr(song, "artist", None), metadata.get("artist"), metadata.get("performer")),
         "ALBUM": first_text(getattr(song, "album", None), metadata.get("album")),
@@ -124,12 +143,27 @@ def build_tag_values(song: Any, *, source_md5: str = "") -> dict[str, str]:
         "UPC": string_tag(getattr(song, "upc", None) or metadata.get("upc") or metadata.get("barcode")),
         "COPYRIGHT": string_tag(getattr(song, "copyright", None) or metadata.get("copyright")),
         "LABEL": first_text(getattr(song, "label", None), metadata.get("label")),
-        "COMMENT": first_text(metadata.get("comment"), metadata.get("quality")),
+        "COMMENT": first_text(metadata.get("comment")),
         "LYRICS": first_text(getattr(song, "lyrics", None), metadata.get("lyrics")),
         "SOURCE": first_text(metadata.get("source"), metadata.get("service")),
         "ENCODEDBY": "Unshackle",
         "UNSHACKLE_SOURCE_MD5": source_md5,
     }
+    artists = metadata.get("artists")
+    if isinstance(artists, list) and len(artists) > 1:
+        tags["ARTISTS"] = [text for text in map(first_text, artists) if text]
+    for key, fmt in (
+        ("track_gain", "{:.2f} dB"),
+        ("track_peak", "{:.6f}"),
+        ("album_gain", "{:.2f} dB"),
+        ("album_peak", "{:.6f}"),
+    ):
+        try:
+            value = float(metadata[f"replaygain_{key}"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if math.isfinite(value):
+            tags[f"REPLAYGAIN_{key.upper()}"] = fmt.format(value)
     if explicit:
         tags["EXPLICIT"] = "1"
         tags["ITUNESADVISORY"] = "1"
@@ -151,10 +185,10 @@ def build_tag_values(song: Any, *, source_md5: str = "") -> dict[str, str]:
     return {key: value for key, value in tags.items() if value}
 
 
-def write_flac_tags(path: Path, tags: dict[str, str], cover_data: Optional[bytes], mime_type: str) -> None:
+def write_flac_tags(path: Path, tags: TagValues, cover_data: Optional[bytes], mime_type: str) -> None:
     audio = FLAC(path)
     for key, value in tags.items():
-        audio[key] = [value]
+        audio[key] = as_list(value)
     picture = build_picture(cover_data, mime_type)
     if picture is not None:
         audio.clear_pictures()
@@ -182,25 +216,27 @@ def build_picture(cover_data: Optional[bytes], mime_type: str) -> Optional[Any]:
 
 
 def write_ogg_tags(
-    path: Path, tags: dict[str, str], cover_data: Optional[bytes], mime_type: str, reader: Any = None
+    path: Path, tags: TagValues, cover_data: Optional[bytes], mime_type: str, reader: Any = None
 ) -> None:
     audio = (reader or OggVorbis)(path)
     for key, value in tags.items():
-        audio[key] = [value]
+        audio[key] = as_list(value)
     picture = build_picture(cover_data, mime_type)
     if picture is not None:
         audio["METADATA_BLOCK_PICTURE"] = [b64encode(picture.write()).decode("ascii")]
     audio.save()
 
 
-def write_mp3_tags(path: Path, tags: dict[str, str], cover_data: Optional[bytes], mime_type: str) -> None:
+def write_mp3_tags(path: Path, tags: TagValues, cover_data: Optional[bytes], mime_type: str, reader: Any) -> None:
+    """Write ID3 frames; ``reader`` is mutagen's MP3 or WAVE, both of which carry ID3."""
     try:
-        audio = MP3(path)
+        audio = reader(path)
     except ID3NoHeaderError:
-        audio = MP3(path)
+        audio = reader(path)
         audio.add_tags()
     if audio.tags is None:
         audio.add_tags()
+    assert audio.tags is not None
 
     frame_map = {
         "TITLE": ("TIT2", TIT2),
@@ -218,7 +254,7 @@ def write_mp3_tags(path: Path, tags: dict[str, str], cover_data: Optional[bytes]
     for key, (frame_id, frame_class) in frame_map.items():
         value = tags.get(key)
         if value and frame_class is not None:
-            audio.tags.setall(frame_id, [frame_class(encoding=3, text=[value])])
+            audio.tags.setall(frame_id, [frame_class(encoding=3, text=as_list(value))])
     if tags.get("COMMENT") and COMM is not None:
         audio.tags.setall("COMM", [COMM(encoding=3, lang="eng", desc="", text=[tags["COMMENT"]])])
     if tags.get("LYRICS") and USLT is not None:
@@ -231,11 +267,11 @@ def write_mp3_tags(path: Path, tags: dict[str, str], cover_data: Optional[bytes]
     for key in sorted(custom_keys):
         if TXXX is not None and tags[key]:
             audio.tags.delall(f"TXXX:{key}")
-            audio.tags.add(TXXX(encoding=3, desc=key, text=[tags[key]]))
+            audio.tags.add(TXXX(encoding=3, desc=key, text=as_list(tags[key])))
     audio.save()
 
 
-def write_mp4_tags(path: Path, tags: dict[str, str], cover_data: Optional[bytes], mime_type: str) -> None:
+def write_mp4_tags(path: Path, tags: TagValues, cover_data: Optional[bytes], mime_type: str) -> None:
     audio = MP4(path)
     if tags.get("TITLE"):
         audio["\xa9nam"] = [tags["TITLE"]]
@@ -258,10 +294,10 @@ def write_mp4_tags(path: Path, tags: dict[str, str], cover_data: Optional[bytes]
     if tags.get("LYRICS"):
         audio["\xa9lyr"] = [tags["LYRICS"]]
 
-    track_number, track_total = split_number_pair(tags.get("TRACKNUMBER", ""))
+    track_number, track_total = split_number_pair(str(tags.get("TRACKNUMBER", "")))
     if track_number:
         audio["trkn"] = [(track_number, track_total or 0)]
-    disc_number, disc_total = split_number_pair(tags.get("DISCNUMBER", ""))
+    disc_number, disc_total = split_number_pair(str(tags.get("DISCNUMBER", "")))
     if disc_number:
         audio["disk"] = [(disc_number, disc_total or 0)]
 
@@ -285,7 +321,7 @@ def write_mp4_tags(path: Path, tags: dict[str, str], cover_data: Optional[bytes]
     for key in sorted(set(tags) - mapped_keys):
         value = tags.get(key)
         if value:
-            audio[f"----:com.apple.iTunes:{key}"] = [str(value).encode("utf-8")]
+            audio[f"----:com.apple.iTunes:{key}"] = [str(item).encode("utf-8") for item in as_list(value)]
     audio.save()
 
 
@@ -305,12 +341,57 @@ def download_cover(session: Any, artwork_url: str) -> tuple[Optional[bytes], str
         return None, ""
 
 
-def _metadata(song: Any) -> dict[str, Any]:
-    data = getattr(song, "data", None)
-    if not isinstance(data, dict):
-        return {}
-    nested = data.get("metadata")
-    return {**data, **nested} if isinstance(nested, dict) else data
+def attachment_cover(song: Any) -> tuple[Optional[bytes], str]:
+    """Return the first downloaded image attachment of the Song, for a service that gives no artwork_url."""
+    tracks = getattr(song, "tracks", None)
+    for attachment in getattr(tracks, "attachments", None) or []:
+        path = getattr(attachment, "path", None)
+        if path and Path(path).exists() and str(getattr(attachment, "mime_type", "")).startswith("image/"):
+            data = Path(path).read_bytes()
+            return data, mime_from_image(data, attachment.mime_type)
+    return None, ""
+
+
+def usable_cover(cover_data: Optional[bytes], mime_type: str, name: str) -> tuple[Optional[bytes], str]:
+    """Convert a WebP cover to JPEG, which every container takes, and drop one too large to embed."""
+    if cover_data and mime_type == "image/webp":
+        try:
+            if not binaries.FFMPEG:
+                raise OSError("FFmpeg not found")
+            convert_start = time.monotonic()
+            converted = subprocess.run(
+                [
+                    binaries.FFMPEG,
+                    "-v",
+                    "error",
+                    "-i",
+                    "pipe:",
+                    "-frames:v",
+                    "1",
+                    "-f",
+                    "image2pipe",
+                    "-c:v",
+                    "mjpeg",
+                    "pipe:",
+                ],
+                input=cover_data,
+                capture_output=True,
+            )
+            log_tool_run(
+                "cover webp to jpeg",
+                "ffmpeg",
+                converted.returncode,
+                duration_ms=round((time.monotonic() - convert_start) * 1000, 1),
+            )
+            converted.check_returncode()
+            cover_data, mime_type = converted.stdout, "image/jpeg"
+        except (OSError, subprocess.CalledProcessError):
+            log.warning(f"Skipped cover art for {name}: the WebP image could not be converted to JPEG")
+            return None, ""
+    if cover_data and len(cover_data) > MAX_COVER_BYTES:
+        log.warning(f"Skipped cover art for {name}: {len(cover_data)} bytes is over the 16 MiB limit")
+        return None, ""
+    return cover_data, mime_type
 
 
 def first_text(*values: Any) -> str:

@@ -137,9 +137,9 @@ will use throughout the service:
 
 | Attribute | What it is |
 |---|---|
-| `self.config` | This service's `config.yaml` contents (a dict), or `None` if absent. |
+| `self.config` | A dict: this service's `config.yaml`, with the user's `services.<TAG>` block from `unshackle.yaml` merged over it. Without a `config.yaml`, it holds only the user's block. See [Services & authentication](../reference/configuration/services.md) for the override keys. |
 | `self.log` | A `logging.Logger` named after your class. |
-| `self.session` | A prepared `requests.Session` with config headers and a retry adapter (5 retries, backoff 0.2, retries on 429/500/502/503/504). |
+| `self.session` | A prepared `requests.Session` with config headers and a retry adapter (5 retries, backoff 0.2, retries on 429/500/502/503/504). Send every request through it: with a proxy active, a request from service code that does not go through the proxy logs a warning. A separate HTTP session that goes direct on purpose sets `proxy_exempt = True`. |
 | `self.cache` | A `Cacher` for arbitrary key/value data, for example authentication tokens. |
 | `self.title_cache` | A region/account-aware `TitleCacher` used by `get_titles_cached`. |
 | `self.cache_dir` | `config.directories.cache / <ClassName>`. |
@@ -156,7 +156,14 @@ class TrackRequest:
     codecs: list[Video.Codec] = []            # empty == accept any codec
     ranges: list[Video.Range] = [Video.Range.SDR]
     best_available: bool = False
+    generate_dv: bool = False                 # --generate-dv: make Dolby Vision when a title has no DV track
 ```
+
+!!! note "`generate_dv` and a hand-made HYBRID"
+    A service that fetches the HYBRID variants itself (HDR10 and DV) must also fetch
+    HDR10P when `track_request.generate_dv` is set and the title has no DV track.
+    unshackle prefers an HEVC HDR10+ track as the base, and measures an HDR10 base from the decoded video.
+    `get_tracks_for_variants` does this for you.
 
 !!! note "Read the request, don't second-guess the user"
     Services may narrow `track_request` for hard technical constraints (e.g.
@@ -328,6 +335,19 @@ def get_titles(self) -> Titles_T:
     ])
 ```
 
+### Optional availability metadata
+
+A service may set `title.data["availability"]` to a dict with two optional fields:
+
+- `paid`: a boolean describing the catalogue offer, not the account's entitlement.
+- `access`: `"granted"`, `"denied"`, or `"unknown"` for the authenticated account.
+  Report `"denied"` only when the platform explicitly confirms lack of access.
+  Missing or unverified access is not denial.
+
+Only these allowlisted fields reach the REST API as `availability`, including
+through remote title reconstruction. The CLI's `--list-titles` does not display
+them, and nothing in core reads them to select or authorize downloads.
+
 Common constructor fields:
 
 === "Movie"
@@ -363,9 +383,9 @@ Common constructor fields:
 
     From `get_tracks()`, give one `Audio` track for each codec and bitrate you offer
     for the song. The framework then selects one with its usual audio options.
-    A `Song` skips the muxer, so restore the real container suffix on the track path
-    in `on_track_downloaded`. The **MUSIC_EXAMPLE** service shows the full music
-    surface.
+    A `Song` skips the muxer: the framework reads the codec from the downloaded file
+    and gives the file its container, so a service does not rename the track path.
+    The **MUSIC_EXAMPLE** service shows the full music surface.
 
 !!! note "The ID must be unique and stable"
     `id_` must be truthy and, if it has a length, at least 4 characters, to
@@ -484,19 +504,41 @@ def get_tracks(self, title: Title_T) -> Tracks:
     return self.get_tracks_for_variants(title, fetch_variant)
 ```
 
+!!! note "What the helper merges"
+    The helper adds the video, audio and subtitle tracks of every manifest.
+    From a later manifest, it skips a track that has the ID of a held track. It
+    also skips a track whose `Tracks.signature` matches a held track, because
+    the same track can have a different ID in each manifest. Chapters and
+    attachments come from the first manifest only.
+
+    - `signature` holds the attributes that the track list and selection
+      read: codec, range, resolution, frame rate, bitrate and name for video;
+      language, codec, channels, JOC, descriptive, bitrate and name for audio;
+      language, codec, flags and name for subtitles.
+    - The helper does not remove copies inside one manifest. To remove them,
+      call `tracks.dedupe()`. Two tracks that differ only in a value outside
+      the signature, such as a dialogue-boost mix, become one track, so remove the
+      track you do not want before you call it.
+    - The audio that `dl` selects can come from a different manifest than the
+      video. Keep licence data on each track (`track.data`), not in one value
+      per title that the next fetch overwrites.
+
 After parsing, you may **correct** track metadata the manifest gets wrong:
 stamp the real `video.range`, fix odd audio channel counts, mark descriptive
 audio, add hand-built subtitles or an `Attachment` (e.g. cover art). Do *not*
 filter for resolution/bitrate. See `fetch_dash_manifest` in the EXAMPLE service
 for a thorough demonstration.
 
-!!! note "Flip HDR10 → HDR10+ by hand when you know the platform embeds it"
-    HDR10+ is a **bitstream (SEI)** feature. The HLS parser intentionally does
-    not sniff it from the bitstream, so a manifest that embeds HDR10+ SEI but labels
-    the variant plain HDR10 will parse as HDR10. The label is the only signal
-    the parser has, and it is wrong. Only the service author knows the platform
-    embeds HDR10+, so it is on you to correct `video.range` to HDR10+ here for
-    those services.
+!!! note "HDR10+ in tracks labelled HDR10"
+    HDR10+ is a **bitstream (SEI)** feature, and many manifests label an HDR10+
+    variant as plain HDR10. Before unshackle lists or selects tracks, the
+    [`hdr10plus_probe`](../reference/configuration/download.md#hdr10plus_probe)
+    reads the first fragment of each HEVC HDR10 track and changes `video.range` to
+    HDR10+ when the fragment carries HDR10+ metadata. Set `video.range` yourself
+    only when the probe cannot read the fragment, for example an ISM track whose
+    SEI is encrypted, or when the platform gives a reliable signal of its own.
+    If the playback API has no HDR10+ value, request HDR10 for an HDR10+ request
+    and let the probe relabel the tracks.
 
 !!! warning "`get_tracks` is your only chance to capture license inputs"
     The license callbacks (`get_widevine_license` and the others) fire **much later**, in
@@ -521,7 +563,10 @@ exists. Timestamps take `"HH:MM:SS[.mmm]"`, int milliseconds, or float seconds.
 ```python
 def get_chapters(self, title: Title_T) -> Chapters:
     chapters = [Chapter(name=c.get("name"), timestamp=c["start"]) for c in title.data.get("chapters", [])]
-    return Chapters(sorted(chapters, key=lambda c: c.timestamp))
+    unique: dict[str, Chapter] = {}
+    for chapter in sorted(chapters, key=lambda c: not c.named):
+        unique.setdefault(chapter.timestamp, chapter)
+    return Chapters(sorted(unique.values(), key=lambda c: c.timestamp))
 ```
 
 !!! warning "Sort by timestamp before you build the `Chapters`"
@@ -530,7 +575,7 @@ def get_chapters(self, title: Title_T) -> Chapters:
     lands before it.
 
     You never need to add `Chapter(0)`. An API chapter at `0` keeps its name. Drop
-    duplicate timestamps.
+    duplicate timestamps and keep the named chapter, as the example does.
 
 !!! note "Close a named range with an unnamed chapter"
     An unnamed `Chapter` ends the range before it: `Chapter(name="Intro")` at the
@@ -556,6 +601,8 @@ current `title` and `track`:
 | `get_widevine_license` | Widevine | The raw license response (bytes or base64 str), **unmodified**. |
 | `get_playready_license` | PlayReady | The license response. Defaults to delegating to `get_widevine_license`. |
 | `get_clearkey_license` | DASH `org.w3.clearkey` | The JWK Set (dict/JSON/bytes), or `None` to let the framework POST the challenge to the manifest's Laurl. |
+
+A license callback can also declare optional keyword arguments. `get_widevine_license` can ask for `pssh` and `session_id`. `get_playready_license` can ask for `pssh_b64` and `session_id`. `session_id` is the open CDM session. A callback gets only the arguments that its signature declares.
 
 ```python
 def get_widevine_license(self, *, challenge: bytes, title, track):
@@ -585,7 +632,7 @@ def get_widevine_license(self, *, challenge: bytes, title, track):
        `get_clearkey_license` to do the POST yourself.
     3. **Keys arrive obfuscated or through a bespoke channel**: fetch and unwrap
        the content key in `get_tracks` and pre-populate
-       `drm.content_keys[kid] = key_hex` on the track's `ClearKeyCENC`. The
+       `drm.signatures[kid] = key_hex` on the track's `ClearKeyCENC`. The
        non-obvious payoff: when every KID is already keyed, the framework skips
        the license round-trip entirely.
 

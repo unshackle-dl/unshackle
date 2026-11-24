@@ -131,6 +131,15 @@ def test_hand_built_ctx_client_value_wins():
     assert ctx.params["repack"] is False
 
 
+def test_hand_built_ctx_skips_routing_params(caplog):
+    """An API job routes from its request, so the server's service config must not flip it, or warn."""
+    ctx = hand_built_ctx({})
+    with caplog.at_level(logging.WARNING, logger=log.name):
+        apply_service_dl_overrides(ctx, {"remote": True, "server": "box"}, log)
+    assert ctx.params == {"repack": False}
+    assert not caplog.records
+
+
 def test_hand_built_ctx_missing_param_is_skipped():
     """Known dl option absent from a hand-built context must not raise or be injected."""
     ctx = hand_built_ctx({})

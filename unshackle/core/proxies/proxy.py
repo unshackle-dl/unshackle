@@ -1,14 +1,42 @@
+import functools
+import time
 from abc import abstractmethod
-from typing import Optional
+from typing import Any, Callable, Optional, TypeVar
+
+CATALOGUE_TTL = 600.0
+CATALOGUES: dict[str, tuple[float, Any]] = {}
+
+F = TypeVar("F", bound=Callable[..., Any])
+
+
+def cached_catalogue(fetch: F) -> F:
+    """Keep a proxy provider's catalogue for ``CATALOGUE_TTL`` seconds; a failed (empty) answer is fetched again.
+
+    A server builds its proxy providers on every request, and the first query on each one reads the catalogue.
+    One config builds every provider, so a config reload clears the cache.
+    """
+
+    @functools.wraps(fetch)
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
+        hit = CATALOGUES.get(fetch.__qualname__)
+        if hit and time.monotonic() - hit[0] < CATALOGUE_TTL:
+            return hit[1]
+        value = fetch(*args, **kwargs)
+        if value:
+            CATALOGUES[fetch.__qualname__] = (time.monotonic(), value)
+        return value
+
+    return wrapper  # type: ignore[return-value]
 
 
 class Proxy:
     @abstractmethod
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs: Any) -> None:
         """
-        The constructor initializes the Service using passed configuration data.
+        The constructor initialises the proxy provider from its configuration data.
 
-        Any authorization or pre-fetching of data should be done here.
+        Check the configuration here, but make no request: every run builds every configured proxy provider,
+        even a run with no proxy. Fetch a catalogue on first use, through a ``functools.cached_property``.
         """
 
     @abstractmethod

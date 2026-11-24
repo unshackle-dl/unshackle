@@ -9,12 +9,13 @@ import sys
 import time
 from pathlib import Path
 from typing import Optional
+from urllib.parse import quote
 
 import requests
 
 from unshackle.core.config import config
 from unshackle.core.console import prompt_user
-from unshackle.core.proxies.proxy import Proxy
+from unshackle.core.proxies.proxy import Proxy, cached_catalogue
 
 log = logging.getLogger("proxies.proton")
 
@@ -25,13 +26,14 @@ class ProtonVPN(Proxy):
 
     Authenticates through TV login (a self-sustaining login session cached at <cache>/vpn/protonvpn.json, the
     only refreshable kind) or an exported account.proton.me cookie session (AUTH-<UID>, access only,
-    re-export on expiry). Resolves a server by country/city, mints short-lived proxy credentials, and
+    re-export on expiry). Resolves a server by country/city/node, mints short-lived proxy credentials, and
     returns an authenticated HTTPS proxy URL (https://user:pass@server:4443).
 
     Query format (after the proxy provider prefix, for example "protonvpn:us"):
-        us             random server in the country (paid preferred over free)
-        us12           Proton server #12 (the number shown in the connection log)
-        us:ny          city, NordVPN-style
+        us                       random server in the country (paid preferred over free)
+        us12 / us-12 / us#12     Proton server #12 (the number shown in the connection log)
+        us:ny                    city, NordVPN-style
+        node-pl-24               specific physical server node by domain
 
     Free Proton accounts work, limited to the free-tier exit countries.
     """
@@ -61,7 +63,7 @@ class ProtonVPN(Proxy):
         cache_path: Optional[str] = None,
         timeout: float = 10.0,
         enable: bool = False,
-    ):
+    ) -> None:
         self.server_map = {str(k).lower().strip(): str(v).lower().strip() for k, v in (server_map or {}).items()}
         self.timeout = timeout
         self.enable = enable
@@ -106,7 +108,7 @@ class ProtonVPN(Proxy):
 
         self.last_host = host = str(server.get("Domain") or "")
         port = self.SECURE_CORE_PORT if int(server.get("Features") or 0) & self.SECURE_CORE_FEATURE else self.PROXY_PORT
-        user, pwd = (requests.utils.quote(c, safe="") for c in creds)
+        user, pwd = (quote(c, safe="") for c in creds)
         return f"https://{user}:{pwd}@{host}:{port}"
 
     def last_connection_display(self) -> Optional[str]:
@@ -120,19 +122,25 @@ class ProtonVPN(Proxy):
         query = self.server_map.get(query, query)
         country, city, server_num = self.parse_query(query)
 
+        max_tier = self.get_max_tier()
+        eligible = [
+            s
+            for s in self.get_logicals()
+            if s.get("Status") == 1
+            and int(s.get("Tier") or 0) <= max_tier
+            and not int(s.get("Features") or 0) & self.EXCLUDE_FEATURES
+        ]
+
         pool = []
         if country:
-            max_tier = self.get_max_tier()
-            pool = [
-                s
-                for s in self.get_logicals()
-                if str(s.get("ExitCountry") or "").lower() == country
-                and s.get("Status") == 1
-                and int(s.get("Tier") or 0) <= max_tier
-                and not int(s.get("Features") or 0) & self.EXCLUDE_FEATURES
-            ]
+            pool = [s for s in eligible if str(s.get("ExitCountry") or "").lower() == country]
             if city:
                 pool = self.match_city(pool, city)
+        else:
+            domain_query = query.removesuffix(".protonvpn.net")
+            pool = [
+                s for s in eligible if str(s.get("Domain") or "").lower().removesuffix(".protonvpn.net") == domain_query
+            ]
 
         if not pool:
             log.warning("Proton: no server matched query '%s'", query)
@@ -140,13 +148,13 @@ class ProtonVPN(Proxy):
         return self.select(pool, server_num)
 
     def parse_query(self, query: str) -> tuple[Optional[str], Optional[str], Optional[int]]:
-        """Parse "us", "us12"/"us-12" (server #12), and "us:ny" (city)."""
+        """Parse "us", "us12"/"us-12"/"us#12" (server #12), and "us:ny" (city)."""
         city = None
         if ":" in query:
             query, city = query.split(":", 1)
             city = city.strip() or None
 
-        match = re.match(r"^([a-z]{2})-?(\d+)?$", query.strip())
+        match = re.match(r"^([a-z]{2})[-#]?(\d+)?$", query.strip())
         if not match:
             return None, None, None
         country = self.COUNTRY_ALIASES.get(match.group(1), match.group(1))
@@ -185,21 +193,28 @@ class ProtonVPN(Proxy):
         return chosen
 
     def get_logicals(self) -> list[dict]:
-        """Get Proton's server list. Only a list that loaded is cached, so a later session can still fetch it."""
-        if self.logicals is None:
-            response = self.api("GET", "/vpn/v1/logicals")
-            if response is None:
-                return []
-            self.logicals = response.json().get("LogicalServers") or []
+        """Get Proton's server list. Only a list that loaded is kept, so a later call can still fetch it."""
+        if not self.logicals:
+            self.logicals = self.fetch_logicals()
         return self.logicals
+
+    @cached_catalogue
+    def fetch_logicals(self) -> list[dict]:
+        response = self.api("GET", "/vpn/v1/logicals")
+        return (response.json().get("LogicalServers") or []) if response is not None else []
 
     def get_max_tier(self) -> int:
         """The account's plan tier (0=free, 2=plus). Caps which servers it can connect to."""
         if self.max_tier is None:
-            response = self.api("GET", "/vpn")
-            vpn = (response.json().get("VPN") or {}) if response is not None else {}
-            self.max_tier = int(vpn.get("MaxTier") or 0)
+            self.max_tier = int(self.fetch_vpn().get("MaxTier") or 0)
         return self.max_tier
+
+    @cached_catalogue
+    def fetch_vpn(self) -> dict:
+        """The account's VPN section, kept only when it names the plan tier."""
+        response = self.api("GET", "/vpn")
+        vpn = (response.json().get("VPN") or {}) if response is not None else {}
+        return vpn if "MaxTier" in vpn else {}
 
     def get_browser_token(self) -> Optional[tuple[str, str]]:
         response = self.api("GET", f"/vpn/v1/browser/token?Duration={self.TOKEN_DURATION}")
@@ -217,8 +232,7 @@ class ProtonVPN(Proxy):
             self.load_session()
         if not self.access_token:
             log.error(
-                "Proton: no session available; export account.proton.me cookies to %s "
-                "or set proxy_providers.protonvpn.enable: true for the one-time TV login",
+                "Proton: no access token, export account.proton.me cookies to %s or set proxy_providers.protonvpn.enable",
                 self.cookie_path,
             )
             return None

@@ -118,3 +118,24 @@ def test_a_movie_or_episode_still_takes_the_mkv_path(calls: Calls, title: Any) -
 
     assert calls.music == [], "write_music_metadata must not see a Matroska file"
     assert [call[0] for call in calls.mkv] == [path]
+
+
+def test_a_dts_song_in_matroska_takes_mkvpropedit(calls: Calls) -> None:
+    path = Path("04. Example Track.mka")
+
+    tags_module.tag_file(path, make_song(), session=SESSION)
+
+    assert calls.music == []
+    assert calls.mkv and calls.mkv[0][1]["TITLE"] == "Example Track"
+
+
+def test_a_matroska_tagger_fault_warns_and_never_raises(
+    calls: Calls, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    def broken_apply_tags(path: Path, tags: dict[str, str]) -> None:
+        raise OSError("mkvpropedit not found")
+
+    monkeypatch.setattr(tags_module, "apply_tags", broken_apply_tags)
+    with caplog.at_level("WARNING", logger="TAGS"):
+        tags_module.tag_file(Path("04. Example Track.mka"), make_song(), session=SESSION)
+    assert "mkvpropedit not found" in caplog.text

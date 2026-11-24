@@ -7,6 +7,7 @@ from typing import Any, Callable, Optional
 import requests
 
 from unshackle.core.cacher import Cacher
+from unshackle.core.utils import run_proxy
 
 CACHE_KEY = "ip_info_v4"
 CACHE_TTL = 86400
@@ -35,6 +36,7 @@ def normalize(
     asn: str = "",
     as_name: str = "",
     continent_code: str = "",
+    timezone: str = "",
 ) -> Optional[dict]:
     """Assemble the canonical IP-info dict, or None if no country code is present."""
     code = country_code.strip()
@@ -50,6 +52,7 @@ def normalize(
         "asn": asn,
         "as_name": as_name,
         "continent_code": continent_code.upper(),
+        "timezone": timezone,
     }
 
 
@@ -73,6 +76,7 @@ def parse_ipinfo(data: dict) -> Optional[dict]:
         region=data.get("region") or "",
         city=data.get("city") or "",
         org=data.get("org") or "",
+        timezone=data.get("timezone") or "",
     )
 
 
@@ -88,6 +92,7 @@ def parse_ip_api_in(data: dict) -> Optional[dict]:
         asn=asn,
         as_name=org_name,
         continent_code=data.get("continent_code") or "",
+        timezone=data.get("timezone") or "",
     )
 
 
@@ -107,7 +112,7 @@ def lookup_session(source: Optional[requests.Session]) -> requests.Session:
     if proxies:
         proxy = proxies.get("all") or proxies.get("https") or proxies.get("http")
         if proxy:
-            sess.trust_env = False
+            run_proxy.pin(sess)
             sess.proxies.update({"http": proxy, "https": proxy})
     return sess
 
@@ -185,14 +190,16 @@ def get_ip_info(
     *,
     cached: bool = False,
     errors: Optional[list[Exception]] = None,
+    require: tuple[str, ...] = (),
 ) -> Optional[dict]:
     """
     Look up IP/geolocation info through ipinfo.io (Lite when `ipinfo_api_key` configured)
     with fallback to ip-api.in.
 
     Live lookups return a dict with `ip`, `country` (lowercase ISO2), `country_code`
-    (uppercase ISO2), `region`, `city`, `org`, `asn`, `as_name`, `continent_code` and
-    `_provider`. Cached lookups return only `ip`/`country`/`country_code` (see GEO_CACHE_KEYS).
+    (uppercase ISO2), `region`, `city`, `org`, `asn`, `as_name`, `continent_code`,
+    `timezone` (IANA name, empty from ipinfo Lite) and `_provider`. Cached lookups return
+    only `ip`/`country`/`country_code` (see GEO_CACHE_KEYS).
     Returns None if every geolocation API fails.
 
     Args:
@@ -204,6 +211,8 @@ def get_ip_info(
             local IP lookups, never with a proxied HTTP session.
         errors: When given, each geolocation API that raised an exception adds it to
             this list. A 429 or an unusable response adds nothing.
+        require: Fields a live result must have. A geolocation API whose result has
+            an empty required field is skipped, and the next API is tried.
     """
     cache = None
     if cached:
@@ -240,7 +249,7 @@ def get_ip_info(
                 errors.append(e)
             continue
 
-        if not normalized:
+        if not normalized or not all(normalized.get(k) for k in require):
             log.debug(f"Provider {name} returned no usable data")
             continue
 
@@ -277,10 +286,7 @@ def verify_proxy_exit(session: requests.Session) -> dict:
         if len(errors) < len(build_providers()):
             log.warning("No geolocation API returned the proxy exit IP, so the exit IP check does not occur")
             return {}
-        raise ConnectionError(
-            f"Proxy check failed: no IP lookup got through the proxy ({type(errors[-1]).__name__}). "
-            "The proxy is down or refused the connection."
-        )
+        raise ConnectionError(f"Proxy check failed: no IP lookup got through the proxy ({type(errors[-1]).__name__})")
     exit_ip = info.get("ip")
     server_ip = (get_ip_info(cached=True) or {}).get("ip")
     if exit_ip and server_ip == exit_ip and (get_ip_info() or {}).get("ip") == exit_ip:

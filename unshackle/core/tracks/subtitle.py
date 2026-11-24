@@ -9,12 +9,12 @@ from enum import Enum
 from functools import partial
 from io import BytesIO
 from pathlib import Path
-from typing import Any, Callable, Iterable, Optional, Sequence, Union
+from typing import TYPE_CHECKING, Any, Callable, Iterable, Optional, Sequence, Union
 
 import click
 import pycaption
-import requests
 from construct import Container
+from langcodes import Language
 from pycaption import Caption, CaptionList, CaptionNode, WebVTTReader
 from pycaption.geometry import Layout
 from pymp4.parser import MP4
@@ -23,10 +23,14 @@ from subtitle_filter import Subtitles
 
 from unshackle.core import binaries
 from unshackle.core.config import config
+from unshackle.core.session import AnySession
 from unshackle.core.tracks.track import Track
-from unshackle.core.utilities import try_ensure_utf8
+from unshackle.core.utilities import PYMP4_LOCK, try_ensure_utf8, with_script
 from unshackle.core.utils.subprocess import log_tool_run
-from unshackle.core.utils.webvtt import merge_segmented_webvtt
+from unshackle.core.utils.webvtt import merge_segmented_webvtt, rebase_webvtt
+
+if TYPE_CHECKING:
+    import pysubs2
 
 logging.getLogger("srt").setLevel(logging.ERROR)
 
@@ -42,6 +46,7 @@ class Subtitle(Track):
         MicroDVD = "SUB"
         MPL2 = "MPL2"
         TMP = "TMP"
+        SCC = "SCC"
         fTTML = "STPP"
         fVTT = "WVTT"
 
@@ -58,7 +63,7 @@ class Subtitle(Track):
                 return Subtitle.Codec.SubStationAlpha
             elif mime == "ass":
                 return Subtitle.Codec.SubStationAlphav4
-            elif mime == "ttml":
+            elif mime in ("ttml", "ttml+xml"):
                 return Subtitle.Codec.TimedTextMarkupLang
             elif mime == "vtt":
                 return Subtitle.Codec.WebVTT
@@ -74,6 +79,8 @@ class Subtitle(Track):
                 return Subtitle.Codec.fTTML
             elif mime == "wvtt":
                 return Subtitle.Codec.fVTT
+            elif mime in ("scc", "x-scc"):
+                return Subtitle.Codec.SCC
             raise ValueError(f"The MIME '{mime}' is not a supported Subtitle Codec")
 
         @staticmethod
@@ -85,15 +92,6 @@ class Subtitle(Track):
                 except ValueError:
                     pass
             raise ValueError(f"No MIME types matched any supported Subtitle Codecs in '{codecs}'")
-
-        @staticmethod
-        def from_netflix_profile(profile: str) -> Subtitle.Codec:
-            profile = profile.lower().strip()
-            if profile.startswith("webvtt"):
-                return Subtitle.Codec.WebVTT
-            if profile.startswith("dfxp"):
-                return Subtitle.Codec.TimedTextMarkupLang
-            raise ValueError(f"The Content Profile '{profile}' is not a supported Subtitle Codec")
 
     CUE_ID_PATTERN = re.compile(r"^[A-Za-z]+\d+$")
     TIMING_START_PATTERN = re.compile(r"^\d+:\d+[:\.]")
@@ -108,7 +106,7 @@ class Subtitle(Track):
         sdh: bool = False,
         forced: bool = False,
         **kwargs: Any,
-    ):
+    ) -> None:
         """
         Make a new Subtitle track object.
 
@@ -191,6 +189,9 @@ class Subtitle(Track):
         if self.forced and (self.cc or self.sdh):
             raise ValueError("A text track cannot be CC/SDH as well as Forced.")
 
+        self.ass_style: Optional[pysubs2.SSAStyle] = None
+        self.ass_video_size: Optional[tuple[int, int]] = None
+
         self.OnConverted: Optional[Callable[[Subtitle.Codec], None]] = None
 
     def to_dict(self) -> dict[str, Any]:
@@ -216,13 +217,29 @@ class Subtitle(Track):
             forced=data.get("forced", False),
         )
 
+    @property
+    def mux_language(self) -> Language:
+        """The language tag written to the output file, with the script its region implies."""
+        return with_script(self.language)
+
     def __str__(self) -> str:
         return " | ".join(
             filter(
-                bool,
-                ["SUB", f"[{self.codec.value}]" if self.codec else None, str(self.language), self.get_track_name()],
+                None,
+                [
+                    "SUB",
+                    f"[{self.codec.value}]" if self.codec else None,
+                    str(self.language),
+                    self.get_track_name(),
+                    self.note,
+                ],
             )
         )
+
+    @property
+    def kind(self) -> str:
+        """The subtitle type that the config names: "forced", "sdh" (CC counts as SDH) or "normal"."""
+        return "forced" if self.forced else "sdh" if (self.sdh or self.cc) else "normal"
 
     def get_track_name(self) -> Optional[str]:
         """Return the base Track Name."""
@@ -236,7 +253,7 @@ class Subtitle(Track):
 
     def download(
         self,
-        session: requests.Session,
+        session: AnySession,
         prepare_drm: partial,
         max_workers: Optional[int] = None,
         progress: Optional[partial] = None,
@@ -246,7 +263,7 @@ class Subtitle(Track):
         proxy_download: Optional[str] = None,
         adaptive_workers: bool = False,
         download_processes: int = 1,
-    ):
+    ) -> None:
         super().download(
             session,
             prepare_drm,
@@ -261,14 +278,19 @@ class Subtitle(Track):
         if not self.path:
             return
 
-        if self.codec == Subtitle.Codec.fTTML:
+        if self.codec == Subtitle.Codec.fTTML and self.descriptor == Track.Descriptor.ISM:
+            self.unwrap_ism_ttml()
+        elif self.codec == Subtitle.Codec.fTTML:
             self.convert(Subtitle.Codec.TimedTextMarkupLang)
+            self.rebase_ttml(*self.dash_offset_ms())
         elif self.codec == Subtitle.Codec.fVTT:
             self.convert(Subtitle.Codec.WebVTT)
+            self.path.write_text(rebase_webvtt(self.path.read_text("utf8"), *self.dash_offset_ms()), encoding="utf8")
         elif self.codec == Subtitle.Codec.WebVTT:
             text = self.path.read_text("utf8")
             text = Subtitle.strip_webvtt_timestamp_map(text)
             if self.descriptor == Track.Descriptor.DASH:
+                text = rebase_webvtt(text, *self.dash_offset_ms())
                 if len(self.data["dash"]["segment_durations"]) > 1:
                     text = merge_segmented_webvtt(
                         text,
@@ -311,6 +333,111 @@ class Subtitle(Track):
                         self.path.write_text(subtitle_text, encoding="utf8")
                     except Exception:
                         self.path.write_text(text, encoding="utf8")
+
+    def dash_offset_ms(self) -> tuple[int, int]:
+        """
+        The DASH presentationTimeOffset and one segment's length, in ms, from the merged SegmentTemplate.
+        Returns (0, 0) for a track that is not DASH or has no SegmentTemplate.
+        """
+        if self.descriptor != Track.Descriptor.DASH:
+            return 0, 0
+        from unshackle.core.manifests import DASH
+
+        dash = self.data["dash"]
+        template = DASH.merge_segment_templates(dash["adaptation_set"], dash["representation"])
+        if template is None:
+            return 0, 0
+        timescale = int(template.get("timescale", "1"))
+        first = template.find("SegmentTimeline/S")
+        duration = template.get("duration") or (first is not None and first.get("d")) or "0"
+        return int(template.get("presentationTimeOffset", "0")) * 1000 // timescale, int(duration) * 1000 // timescale
+
+    def rebase_ttml(self, offset_ms: int, segment_ms: int) -> None:
+        """
+        Move the TTML cues back by offset_ms, under the same first-cue guard as rebase_webvtt.
+        A cue carried in from before the offset starts at 0; this method drops a cue that ends by then.
+        """
+        if offset_ms <= 0 or not self.path:
+            return
+        caption_set = Subtitle.parse(self.path.read_bytes(), Subtitle.Codec.TimedTextMarkupLang)
+        offset_us = offset_ms * 1000
+        first = Subtitle.first_cue_start(caption_set)
+        if first is None or first < offset_us - segment_ms * 1000:
+            return
+        for language in caption_set.get_languages():
+            kept = CaptionList()
+            for caption in caption_set.get_captions(language):
+                caption.start = max(caption.start - offset_us, 0)
+                caption.end -= offset_us
+                if caption.end > 0:
+                    kept.append(caption)
+            caption_set.set_captions(language, kept)
+        self.path.write_text(pycaption.DFXPWriter().write(caption_set), encoding="utf8")
+
+    @staticmethod
+    def mdat_payloads(data: bytes) -> list[bytes]:
+        """The payload of every mdat box in a fragmented MP4 file, in file order."""
+        with PYMP4_LOCK:
+            boxes = MP4.parse_stream(BytesIO(data))
+        return [box.data for box in boxes if box.type == b"mdat"]
+
+    @staticmethod
+    def append_cue(kept: CaptionList, caption: Caption) -> None:
+        """Append caption to kept, or extend the last cue that a segment boundary cut and caption carries on."""
+        if kept and kept[-1].end == caption.start and kept[-1].get_text() == caption.get_text():
+            kept[-1].end = caption.end
+        else:
+            kept.append(caption)
+
+    @staticmethod
+    def first_cue_start(caption_set: pycaption.CaptionSet) -> Optional[int]:
+        """The start of the first cue, in microseconds, looking past empty languages; None with no cues."""
+        return next(
+            (c.start for language in caption_set.get_languages() for c in caption_set.get_captions(language)[:1]),
+            None,
+        )
+
+    def unwrap_ism_ttml(self) -> None:
+        """
+        Convert ISM fTTML to TTML with every cue on the stream timeline, counted from its first fragment.
+        Smooth Streaming packagers often time the cues of a fragment from that fragment's start. A cue
+        that starts before the previous fragment does marks the stream as timed that way.
+        """
+        from unshackle.core.tracks.subtitle_convert import finalize
+
+        if not self.path:
+            return
+        ism = self.data["ism"]
+        times = ism.get("fragment_times") or []
+        payloads = Subtitle.mdat_payloads(self.path.read_bytes()) if times else []
+        captions: dict[str, CaptionList] = defaultdict(CaptionList)
+        if times and len(payloads) == len(times):
+            fragments = [Subtitle.parse(payload, Subtitle.Codec.TimedTextMarkupLang) for payload in payloads]
+            starts = [t * 1_000_000 // ism["timescale"] for t in times]
+            origin = ism["segment_times"][0] * 1_000_000 // ism["timescale"]
+            relative = any(
+                (first := Subtitle.first_cue_start(fragment)) is not None and first < previous
+                for previous, fragment in zip(starts, fragments[1:])
+            )
+            for start, fragment in zip(starts, fragments):
+                shift = (start if relative else 0) - origin
+                for language in fragment.get_languages():
+                    kept = captions[language]
+                    for caption in fragment.get_captions(language):
+                        caption.start = max(caption.start + shift, 0)
+                        caption.end += shift
+                        if caption.end > 0:
+                            Subtitle.append_cue(kept, caption)
+        if not any(captions.values()):
+            logging.getLogger("Subtitle").debug(f"ISM text: {len(payloads)} fragments, {len(times)} fragment times")
+            self.convert(Subtitle.Codec.TimedTextMarkupLang)
+            return
+
+        caption_set = pycaption.CaptionSet(captions)
+        Subtitle.merge_same_cues(caption_set)
+        out = self.path.with_suffix(f".{Subtitle.Codec.TimedTextMarkupLang.value.lower()}")
+        out.write_text(pycaption.DFXPWriter().write(caption_set), encoding="utf8")
+        finalize(self, Subtitle.Codec.TimedTextMarkupLang, out)
 
     @staticmethod
     def strip_webvtt_cue_classes(text: str) -> str:
@@ -489,7 +616,7 @@ class Subtitle(Track):
             return text
 
         lines = text.split("\n")
-        cues = []
+        cues: list[dict[str, Any]] = []
         header_lines = []
         in_header = True
         i = 0
@@ -711,25 +838,30 @@ class Subtitle(Track):
                 text = try_ensure_utf8(data).decode("utf8")
                 caption_set = pycaption.SRTReader().read(text)
             elif codec == Subtitle.Codec.fTTML:
-                caption_lists: dict[str, pycaption.CaptionList] = defaultdict(pycaption.CaptionList)
+                caption_lists: dict[Optional[str], pycaption.CaptionList] = defaultdict(pycaption.CaptionList)
                 for segment in (
-                    Subtitle.parse(box.data, Subtitle.Codec.TimedTextMarkupLang)
-                    for box in MP4.parse_stream(BytesIO(data))
-                    if box.type == b"mdat"
+                    Subtitle.parse(payload, Subtitle.Codec.TimedTextMarkupLang)
+                    for payload in Subtitle.mdat_payloads(data)
                 ):
                     for lang in segment.get_languages():
-                        caption_lists[lang].extend(segment.get_captions(lang))
-                caption_set: pycaption.CaptionSet = pycaption.CaptionSet(caption_lists)
+                        for caption in segment.get_captions(lang):
+                            Subtitle.append_cue(caption_lists[lang], caption)
+                caption_set = pycaption.CaptionSet(caption_lists)
             elif codec == Subtitle.Codec.TimedTextMarkupLang:
                 text = try_ensure_utf8(data).decode("utf8")
                 text = text.replace("tt:", "")
+                text = re.sub(
+                    r"tts:(?:extent|origin|padding)=(\"[^\"]*\"|'[^']*')",
+                    lambda m: re.sub(r"(?<=\d)[vr][wh]\b", "%", m[0]),
+                    text,
+                )
                 text = re.sub(r"-(\d+(?:\.\d+)?)(px|em|%|c|pt)", r"0\2", text)
                 caption_set = pycaption.DFXPReader().read(text)
             elif codec == Subtitle.Codec.fVTT:
-                caption_lists: dict[str, pycaption.CaptionList] = defaultdict(pycaption.CaptionList)
+                caption_lists = defaultdict(pycaption.CaptionList)
                 caption_list, language = Subtitle.merge_segmented_wvtt(data)
                 caption_lists[language] = caption_list
-                caption_set: pycaption.CaptionSet = pycaption.CaptionSet(caption_lists)
+                caption_set = pycaption.CaptionSet(caption_lists)
             elif codec == Subtitle.Codec.WebVTT:
                 text = try_ensure_utf8(data).decode("utf8")
                 text = Subtitle.sanitize_broken_webvtt(text)
@@ -740,6 +872,11 @@ class Subtitle(Track):
                 srt_subtitles = converter.from_bytes(data)
                 srt_text = str(srt_subtitles).encode("utf8")
                 caption_set = Subtitle.parse(srt_text, Subtitle.Codec.SubRip)
+            elif codec == Subtitle.Codec.SCC:
+                try:
+                    caption_set = pycaption.SCCReader().read(try_ensure_utf8(data).decode("utf8"))
+                except ValueError as e:
+                    raise pycaption.exceptions.CaptionReadSyntaxError(e) from e
             else:
                 raise ValueError(f'Unknown Subtitle format "{codec}"...')
         except pycaption.exceptions.CaptionReadSyntaxError as e:
@@ -792,7 +929,7 @@ class Subtitle(Track):
         return "\n".join(sanitized_lines)
 
     @staticmethod
-    def space_webvtt_headers(data: Union[str, bytes]):
+    def space_webvtt_headers(data: Union[str, bytes]) -> str:
         """
         Space out the WEBVTT Headers from Captions.
 
@@ -812,7 +949,7 @@ class Subtitle(Track):
         return text
 
     @staticmethod
-    def merge_same_cues(caption_set: pycaption.CaptionSet):
+    def merge_same_cues(caption_set: pycaption.CaptionSet) -> None:
         """Merge captions with the same timecodes and text as one in-place."""
         for lang in caption_set.get_languages():
             captions = caption_set.get_captions(lang)
@@ -837,7 +974,7 @@ class Subtitle(Track):
                 caption_set.set_captions(lang, merged_captions)
 
     @staticmethod
-    def filter_unwanted_cues(caption_set: pycaption.CaptionSet):
+    def filter_unwanted_cues(caption_set: pycaption.CaptionSet) -> None:
         """
         Filter out subtitle cues containing only &nbsp; or whitespace.
         """
@@ -874,7 +1011,7 @@ class Subtitle(Track):
         saw_tfdt_box = False
         base_time = 0
         saw_trun_box = False
-        samples = []
+        samples: list[Any] = []
 
         def flatten_boxes(box: Container) -> Iterable[Container]:
             for child in box:
@@ -887,7 +1024,9 @@ class Subtitle(Track):
                 child["type"] = child.get("type") or child.get("format")
                 yield child
 
-        for box in flatten_boxes(MP4.parse_stream(BytesIO(data))):
+        with PYMP4_LOCK:
+            boxes = MP4.parse_stream(BytesIO(data))
+        for box in flatten_boxes(boxes):
             if box.type == b"mdhd":
                 timescale = box.timescale
                 language = box.language
@@ -924,7 +1063,8 @@ class Subtitle(Track):
                 if not saw_trun_box:
                     raise ValueError("The TRUN box was not found in the Segmented WebVTT.")
 
-                vttc_boxes = MP4.parse_stream(BytesIO(box.data))
+                with PYMP4_LOCK:
+                    vttc_boxes = MP4.parse_stream(BytesIO(box.data))
                 current_time = base_time + period_start
 
                 for sample, vttc_box in zip(samples, vttc_boxes):
@@ -962,16 +1102,12 @@ class Subtitle(Track):
 
                     if nodes:
                         caption = Caption(
-                            start=start_time * timescale,
-                            end=end_time * timescale,
+                            start=start_time * 1_000_000 / timescale,
+                            end=end_time * 1_000_000 / timescale,
                             nodes=nodes,
                             layout_info=layout,
                         )
-                        p_caption = captions[-1] if captions else None
-                        if p_caption and caption.start == p_caption.end and str(caption.nodes) == str(p_caption.nodes):
-                            p_caption.end = caption.end
-                            continue
-                        captions.append(caption)
+                        Subtitle.append_cue(captions, caption)
 
         return captions, language
 
@@ -1058,6 +1194,7 @@ class Subtitle(Track):
         if binaries.SubtitleEdit and use_subtitleedit:
             from unshackle.core.tracks.subtitle_convert import SUBTITLE_EDIT_FORMATS, subtitleedit_args
 
+            assert self.codec is not None
             output_format = SUBTITLE_EDIT_FORMATS.get(self.codec, self.codec.name.lower())
             se_start = time.monotonic()
             subprocess.run(
@@ -1076,6 +1213,7 @@ class Subtitle(Track):
                 format=output_format,
             )
         else:
+            styled_codec = self.codec if self.ass_style else None
             if config.subtitle.get("convert_before_strip", True) and self.codec != Subtitle.Codec.SubRip:
                 self.convert(Subtitle.Codec.SubRip, forced=True)
 
@@ -1097,10 +1235,11 @@ class Subtitle(Track):
             except (IOError, OSError) as e:
                 if "is not valid subtitle file" in str(e):
                     log = logging.getLogger("Subtitle")
-                    log.warning(f"Failed to strip SDH from {self.path.name}: {e}")
-                    log.warning("Continuing without SDH stripping for this subtitle")
+                    log.warning(f"Failed to strip SDH from {self.path.name}, keeping it as is: {e}")
                 else:
                     raise
+            if styled_codec and self.codec != styled_codec and self.path.read_text("utf-8", errors="replace").strip():
+                self.convert(styled_codec)
 
     def reverse_rtl(self) -> None:
         """
@@ -1115,6 +1254,7 @@ class Subtitle(Track):
 
         from unshackle.core.tracks.subtitle_convert import SUBTITLE_EDIT_FORMATS, subtitleedit_args
 
+        assert self.codec is not None
         output_format = SUBTITLE_EDIT_FORMATS.get(self.codec, self.codec.name.lower())
 
         se_start = time.monotonic()

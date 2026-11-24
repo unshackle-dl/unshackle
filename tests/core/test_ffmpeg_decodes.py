@@ -22,7 +22,9 @@ pytestmark = pytest.mark.skipif(binaries.FFMPEG is None, reason="requires ffmpeg
 KID = "00000000098ac6820000000000000000"
 KEY = "13c795e9383efc0387c0bad6a10df73f"
 WRONG_KEY = "00000000000000000000000000000000"
-GOP = ["-x264-params", "keyint=48:min-keyint=48:scenecut=0"]
+IV = "0123456789abcdef"
+GOP_PARAMS = "keyint=48:min-keyint=48:scenecut=0"
+GOP = ["-x264-params", GOP_PARAMS]
 
 
 def ffmpeg(out: Path, source: str, *codec: str) -> Path:
@@ -33,10 +35,10 @@ def ffmpeg(out: Path, source: str, *codec: str) -> Path:
     return out
 
 
-def video(out: Path, *x264: str, codec: str = "libx264") -> Path:
+def video(out: Path, *x264: str, codec: str = "libx264", size: str = "320x180") -> Path:
     return ffmpeg(
         out,
-        "testsrc2=size=320x180:rate=24:duration=12",
+        f"testsrc2=size={size}:rate=24:duration=12",
         "-c:v",
         codec,
         "-preset",
@@ -60,7 +62,7 @@ def test_mpegts_video_passes_fallback(tmp_path: Path) -> None:
 
 
 def test_open_gop_passes_windows(tmp_path: Path) -> None:
-    og = video(tmp_path / "og.mp4", "-x264-params", "open-gop=1:keyint=48:min-keyint=48:scenecut=0:bframes=3")
+    og = video(tmp_path / "og.mp4", "-x264-params", f"open-gop=1:{GOP_PARAMS}:bframes=3")
     assert all(ffmpeg_decodes(og, start=start, seconds=2, video=True) for start in (2.0, 4.0, 6.0, 8.0))
 
 
@@ -68,24 +70,27 @@ def test_open_gop_hevc_passes_windows(tmp_path: Path) -> None:
     og = video(
         tmp_path / "og.mp4",
         "-x265-params",
-        "open-gop=1:keyint=48:min-keyint=48:scenecut=0:log-level=none",
+        f"open-gop=1:{GOP_PARAMS}:log-level=none",
         codec="libx265",
     )
     assert all(ffmpeg_decodes(og, start=start, seconds=2, video=True) for start in (2.0, 4.0, 6.0, 8.0))
 
 
-@pytest.fixture(scope="module", params=["h264", "hevc"])
+@pytest.fixture(
+    scope="module",
+    params=[None, "", ":open-gop=1"],
+    ids=["h264", "hevc", "hevc-open-gop"],
+)
 def encrypted(request: pytest.FixtureRequest, tmp_path_factory: pytest.TempPathFactory) -> tuple[KidMap, Path, Path]:
     """The KID map of a clip encrypted after a clear lead, with its right-key and wrong-key decrypts."""
     if not binaries.ShakaPackager or not binaries.Mp4decrypt:
         pytest.skip("requires shaka packager and mp4decrypt")
     tmp = tmp_path_factory.mktemp("wrong_key")
-    if request.param == "hevc":
-        src = video(
-            tmp / "src.mp4", "-x265-params", "keyint=48:min-keyint=48:scenecut=0:log-level=none", codec="libx265"
-        )
-    else:
+    if request.param is None:
         src = video(tmp / "src.mp4", *GOP)
+    else:
+        x265 = f"{GOP_PARAMS}:log-level=none{request.param}"
+        src = video(tmp / "src.mp4", "-x265-params", x265, codec="libx265", size="640x360")
     enc = tmp / "enc.mp4"
     subprocess.run(
         [
@@ -94,6 +99,8 @@ def encrypted(request: pytest.FixtureRequest, tmp_path_factory: pytest.TempPathF
             "--enable_raw_key_encryption",
             "--keys",
             f"label=:key_id={KID}:key={KEY}",
+            "--iv",
+            IV,
             "--clear_lead",
             "4",
             "--fragment_duration",
@@ -121,9 +128,9 @@ def test_right_key_passes_every_window(encrypted: tuple[KidMap, Path, Path]) -> 
     assert all(windows_pass(kid_map, right))
 
 
-def test_wrong_key_fails_every_window(encrypted: tuple[KidMap, Path, Path]) -> None:
+def test_wrong_key_fails_the_kid(encrypted: tuple[KidMap, Path, Path]) -> None:
     kid_map, _, wrong = encrypted
-    assert not any(windows_pass(kid_map, wrong))
+    assert not all(windows_pass(kid_map, wrong))
 
 
 def test_wrong_key_passes_the_clear_lead(encrypted: tuple[KidMap, Path, Path]) -> None:

@@ -24,7 +24,7 @@ SLOW_INDEX = 4
 FAST_BODY = b"F" * 4096
 SLOW_BODY = b"S" * 40960
 TRICKLE_CHUNK = 2048
-TRICKLE_DELAY = 0.05
+TRICKLE_DELAY = 0.5
 
 
 class _Handler(BaseHTTPRequestHandler):

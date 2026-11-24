@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<MPD xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="urn:mpeg:dash:schema:mpd:2011" xsi:schemaLocation="urn:mpeg:dash:schema:mpd:2011 DASH-MPD.xsd" type="static" mediaPresentationDuration="PT6158S" availabilityStartTime="2011-05-10T06:16:42" minBufferTime="PT1.4S" profiles="urn:mpeg:dash:profile:mp2t-simple:2011" maxSegmentDuration="PT4S">
+  <BaseURL>http://cdn1.example.com/</BaseURL>
+  <BaseURL>http://cdn2.example.com/</BaseURL>
+  <Period id="42" duration="PT6158S">
+    <AdaptationSet mimeType="video/mp2t" codecs="avc1.4D401F,mp4a" frameRate="24000/1001" segmentAlignment="true" subsegmentAlignment="true" bitstreamSwitching="true" startWithSAP="2" subsegmentStartsWithSAP="2">
+      <ContentComponent contentType="video" id="481"/>
+      <ContentComponent contentType="audio" id="482" lang="en"/>
+      <ContentComponent contentType="audio" id="483" lang="es"/>
+      <BaseURL>SomeMovie/</BaseURL>
+      <SegmentTemplate media="$RepresentationID$_$Number%05d$.ts" index="$RepresentationID$.sidx" initialization="$RepresentationID$-init.ts" bitstreamSwitching="$RepresentationID$-bssw.ts" duration="4"/>
+      <Representation id="720kbps" bandwidth="792000" width="640" height="368"/>
+      <Representation id="1130kbps" bandwidth="1243000" width="704" height="400"/>
+      <Representation id="1400kbps" bandwidth="1540000" width="960" height="544"/>
+      <Representation id="2100kbps" bandwidth="2310000" width="1120" height="640"/>
+      <Representation id="2700kbps" bandwidth="2970000" width="1280" height="720"/>
+      <Representation id="3400kbps" bandwidth="3740000" width="1280" height="720"/>
+    </AdaptationSet>
+  </Period>
+</MPD>

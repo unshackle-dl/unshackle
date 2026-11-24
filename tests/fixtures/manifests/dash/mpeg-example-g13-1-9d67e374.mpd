@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="urn:mpeg:dash:schema:mpd:2011 DASH-MPD.xsd" mediaPresentationDuration="PT3256S" minBufferTime="PT1.500000S" profiles="urn:mpeg:dash:profile:isoff-ext-live:2014">
+  <Period>
+    <AdaptationSet startWithSAP="2" segmentAlignment="true" id="1" sar="1:1" mimeType="video/mp4">
+      <InbandEventStream schemeIdUri="tag:rdmedia.bbc.co.uk,2014:events/ballposition" value="1"/>
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"/>
+      <BaseURL>avc3-events/</BaseURL>
+      <SegmentTemplate startNumber="1" timescale="1000" duration="3840" media="$RepresentationID$/$Number%06d$.m4s" initialization="$RepresentationID$/IS.mp4"/>
+      <Representation id="960x540p50" codecs="avc3.64001f" height="540" width="960" frameRate="50" scanType="progressive" bandwidth="2814440"/>
+      <Representation id="192x108p6_25" codecs="avc3.42c015" height="108" width="192" frameRate="25/4" scanType="progressive" bandwidth="31368"/>
+    </AdaptationSet>
+  </Period>
+</MPD>

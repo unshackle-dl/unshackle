@@ -2,7 +2,7 @@ import logging
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import Optional, Union, cast
+from typing import Iterable, Optional, Union, cast
 from uuid import UUID
 
 import click
@@ -23,17 +23,20 @@ from unshackle.core.config import config
 from unshackle.core.console import GradientPulseBarColumn, console
 from unshackle.core.constants import context_settings
 from unshackle.core.services import Services
-from unshackle.core.vault import Vault
+from unshackle.core.vault import Vault, is_null_key
 from unshackle.core.vaults import Vaults
 
 
 def load_vaults(vault_names: list[str]) -> Vaults:
-    """Load and validate vaults by name."""
+    """Load and validate vaults by config name, or by the path of an SQLite vault file."""
     vaults = Vaults()
     for vault_name in vault_names:
         vault_config = next((x for x in config.key_vaults if x["name"] == vault_name), None)
         if not vault_config:
-            raise click.ClickException(f"Vault ({vault_name}) is not defined in the config.")
+            path = Path(vault_name).expanduser()
+            if not path.is_file():
+                raise click.ClickException(f"Vault ({vault_name}) is not defined in the config or an existing file.")
+            vault_config = {"type": "SQLite", "name": path.stem, "path": path}
 
         vault_type = vault_config["type"]
         vault_args = vault_config.copy()
@@ -45,15 +48,20 @@ def load_vaults(vault_names: list[str]) -> Vaults:
     return vaults
 
 
+def without_null_keys(pairs: Iterable[tuple[str, str]], log: logging.Logger) -> dict[str, str]:
+    """Return the (kid, key) pairs that are not null as a dict, with a warning for each one dropped."""
+    kid_keys: dict[str, str] = {}
+    for kid, key in pairs:
+        if is_null_key(key):
+            log.warning(f"Skipping NULL key: {kid}:{key}")
+        else:
+            kid_keys[kid] = key
+    return kid_keys
+
+
 def process_service_keys(from_vault: Vault, service: str, log: logging.Logger) -> dict[str, str]:
     """Get and validate keys from a vault for a specific service."""
-    content_keys = list(from_vault.get_keys(service))
-
-    bad_keys = {kid: key for kid, key in content_keys if not key or key.count("0") == len(key)}
-    for kid, key in bad_keys.items():
-        log.warning(f"Skipping NULL key: {kid}:{key}")
-
-    return {kid: key for kid, key in content_keys if kid not in bad_keys}
+    return without_null_keys(from_vault.get_keys(service), log)
 
 
 class _PaddedProgress(Progress):
@@ -98,8 +106,10 @@ def add_keys_with_progress(vault: Vault, service: str, kid_keys: dict[str, str],
     return added
 
 
-def copy_service_data(to_vault: Vault, from_vault: Vault, service: str, log: logging.Logger) -> int:
-    """Copy data for a single service between vaults."""
+def copy_service_data(
+    to_vault: Vault, from_vault: Vault, service: str, log: logging.Logger, to_service: Optional[str] = None
+) -> int:
+    """Copy data for a single service between vaults, into the `to_service` table when given."""
     if service.lower() == "bad_keys":
         return 0
     try:
@@ -116,7 +126,7 @@ def copy_service_data(to_vault: Vault, from_vault: Vault, service: str, log: log
         return 0
 
     try:
-        added = add_keys_with_progress(to_vault, service, content_keys, log)
+        added = add_keys_with_progress(to_vault, to_service or service, content_keys, log)
     except PermissionError:
         log.warning(f"{service}: No permission to create table in {to_vault}, skipped")
         return 0
@@ -164,7 +174,8 @@ def copy(
     It should be the name of a Key Vault defined in the config.
 
     The `from_vault_names` argument is the key vault(s) you wish to take
-    data from. You may supply multiple key vaults.
+    data from. You may supply multiple key vaults. Each one is a vault name
+    from the config, or the path to an SQLite vault file.
     """
     if not from_vault_names:
         raise click.ClickException("No Vaults were specified to copy data from.")
@@ -183,8 +194,10 @@ def copy(
     if service and local_only:
         raise click.UsageError("--service and --local-only are mutually exclusive.")
 
+    source_tables: Optional[list[str]] = None
     if service:
-        service = Services.get_vault_tag(service)
+        tag, service = Services.get_tag(service), Services.get_vault_tag(service)
+        source_tables = [service] if tag.lower() == service.lower() else [service, tag]
         log.info(f"Filtering by service: {service}")
 
     installed: Optional[set[str]] = None
@@ -194,8 +207,8 @@ def copy(
 
     total_added = 0
     for from_vault in from_vaults:
-        if service:
-            services_to_copy = [service]
+        if source_tables:
+            services_to_copy = source_tables
         else:
             try:
                 services_to_copy = list(from_vault.get_services())
@@ -211,7 +224,7 @@ def copy(
                 log.info(f"{from_vault.name}: skipping {skipped} service(s) not installed locally")
 
         for service_tag in services_to_copy:
-            added = copy_service_data(to_vault, from_vault, service_tag, log)
+            added = copy_service_data(to_vault, from_vault, service_tag, log, to_service=service)
             total_added += added
 
     if total_added > 0:
@@ -246,6 +259,7 @@ def sync(
     if not len(vaults) > 1:
         raise click.ClickException("You must provide more than one Vault to sync.")
 
+    assert copy.callback is not None
     ctx.invoke(
         copy.callback,
         to_vault_name=vaults[0],
@@ -290,15 +304,10 @@ def add(file: Path, service: str, vaults: list[str]) -> None:
     vaults_ = load_vaults(list(vaults))
 
     data = file.read_text(encoding="utf8")
-    kid_keys: dict[str, str] = {}
-    for line in data.splitlines(keepends=False):
-        line = line.strip()
-        match = re.search(r"^(?P<kid>[0-9a-fA-F]{32}):(?P<key>[0-9a-fA-F]{32})$", line)
-        if not match:
-            continue
-        kid = match.group("kid").lower()
-        key = match.group("key").lower()
-        kid_keys[kid] = key
+    matches = (
+        re.search(r"^(?P<kid>[0-9a-fA-F]{32}):(?P<key>[0-9a-fA-F]{32})$", line.strip()) for line in data.splitlines()
+    )
+    kid_keys = without_null_keys(((m["kid"].lower(), m["key"].lower()) for m in matches if m), log)
 
     total_count = len(kid_keys)
 
@@ -320,7 +329,7 @@ def search_vault(vault: Vault, kid: str, services: list[str], log: logging.Logge
         except Exception as e:
             log.debug(f"{vault} [{svc}]: lookup error ({e})")
             return None
-        if key and key.count("0") != len(key):
+        if key and not is_null_key(key):
             return svc, key
         return None
 

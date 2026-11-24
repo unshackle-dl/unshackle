@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011" availabilityStartTime="2023-01-01T00:00:01.865Z" id="1" maxSegmentDuration="PT2S" minBufferTime="PT2S" minimumUpdatePeriod="P100Y" type="dynamic" profiles="urn:mpeg:dash:profile:full:2011" publishTime="2026-10-26T15:56:06Z" timeShiftBufferDepth="PT30S">
+<ServiceDescription id="0"><Scope schemeIdUri="urn:dvb:dash:lowlatency:scope:2019" value="true" /><Latency max="4000" min="1500" referenceId="0" target="2000" /><PlaybackRate max="1.04" min="0.96" /></ServiceDescription>
+  <Period id="p0" start="PT0S">
+    <BaseURL>dash/</BaseURL>
+    <AdaptationSet id="1" contentType="audio" mimeType="audio/mp4" segmentAlignment="true" lang="eng">
+      <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2"/>
+      <SegmentTemplate duration="20000000" initialization="$RepresentationID$_init.mp4" media="$RepresentationID$-$Number$.m4s" startNumber="1" timescale="10000000" availabilityTimeComplete="false" availabilityTimeOffset="1.800"/>
+      <Representation bandwidth="147200" codecs="mp4a.40.2" audioSamplingRate="48000" id="147200_mp4a_40_2_2ch_48000Hz_16bits_eng"/>
+    </AdaptationSet>
+    <AdaptationSet id="2" contentType="video" mimeType="video/mp4" segmentAlignment="true">
+      <SegmentTemplate duration="20000000" initialization="$RepresentationID$_init.mp4" media="$RepresentationID$-$Number$.m4s" startNumber="1" timescale="10000000" availabilityTimeComplete="false" availabilityTimeOffset="1.800"/>
+      <Representation bandwidth="5720800" codecs="avc1.640028" frameRate="25/2" width="1920" height="1080" sar="1:1" id="5720800_avc1_640028_1920x1080_25_2" startWithSAP="1"/>
+      <Representation bandwidth="3677200" codecs="avc1.4D4029" frameRate="25/2" width="1280" height="720" sar="1:1" id="3677200_avc1_4d0029_1280x720_25_2" startWithSAP="1"/>
+      <Representation bandwidth="676800" codecs="avc1.4D4028" frameRate="25/2" width="640" height="360" sar="1:1" id="676800_avc1_4d0028_640x360_25_2" startWithSAP="1"/>
+    </AdaptationSet>
+  </Period>
+  <UTCTiming schemeIdUri="urn:mpeg:dash:utc:direct:2014" value="2026-10-26T15:56:06.946000Z"/>
+</MPD>

@@ -1,0 +1,118 @@
+"""Suite-wide test setup."""
+
+from __future__ import annotations
+
+import importlib
+import socket
+import socketserver
+from pathlib import Path
+from typing import Any, Callable, Optional
+
+import pytest
+
+from unshackle.core import binaries
+from unshackle.core.config import config
+from unshackle.core.proxies.proxy import CATALOGUES
+from unshackle.core.update_checker import UpdateChecker
+
+requests_downloader = importlib.import_module("unshackle.core.downloaders.requests")
+
+socketserver.BaseServer.serve_forever.__defaults__ = (0.01,)
+
+
+@pytest.fixture(autouse=True)
+def loopback_only(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Fail a name lookup for any host but loopback, so a stray request cannot hang a unit test."""
+    if request.node.get_closest_marker("live") or request.node.get_closest_marker("slow"):
+        return
+    resolve = socket.getaddrinfo
+
+    def offline(host: Any, *args: Any, **kwargs: Any) -> Any:
+        if host not in (None, "", "localhost", "127.0.0.1", "::1"):
+            raise socket.gaierror(socket.EAI_NONAME, f"unit tests are offline: {host!r} is not loopback")
+        return resolve(host, *args, **kwargs)
+
+    monkeypatch.setattr(socket, "getaddrinfo", offline)
+
+
+@pytest.fixture(autouse=True)
+def no_update_check(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep the release lookup of the health route off the network."""
+
+    monkeypatch.setattr(UpdateChecker, "check_for_updates_sync", lambda *args, **kwargs: None)
+
+
+@pytest.fixture(autouse=True)
+def fresh_proxy_catalogues() -> None:
+    """Fetch each proxy provider catalogue again, so one test's stub never answers another test."""
+    CATALOGUES.clear()
+
+
+@pytest.fixture(autouse=True)
+def default_muxing(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Mux with the default options, whatever the muxing block of the local unshackle.yaml sets."""
+    monkeypatch.setattr(config, "muxing", {})
+
+
+@pytest.fixture(autouse=True)
+def default_codec_names(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Name codecs with the built-in labels, whatever codec_names the local unshackle.yaml sets."""
+    monkeypatch.setattr(config, "codec_names", {})
+
+
+@pytest.fixture(autouse=True)
+def no_speed_limit(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Start with no speed limit, so a limit that an earlier test locked cannot block a later one."""
+    monkeypatch.setattr(requests_downloader, "speed_limiter", None)
+    monkeypatch.setattr(requests_downloader, "speed_limit_locked", False)
+
+
+@pytest.fixture
+def example_service(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Make the in-repo EXAMPLE the only installed service, whatever the local unshackle.yaml lists."""
+    from unshackle.core import services
+
+    path = config.directories.namespace_dir / "services" / "EXAMPLE" / "__init__.py"
+    monkeypatch.setattr(services, "SERVICES", [path])
+    monkeypatch.setattr(services, "MODULES", {})
+    monkeypatch.setattr(services, "LOAD_ERRORS", [])
+
+
+@pytest.fixture
+def mux_args(monkeypatch: pytest.MonkeyPatch) -> Callable[..., list[str]]:
+    """Run Tracks.mux up to mkvmerge and return its arguments; ``ids`` is what the track ID probe reports."""
+
+    class Stop(Exception):
+        pass
+
+    def run(tracks: Any, ids: Optional[dict[str, int]] = None, **kwargs: Any) -> list[str]:
+        captured: list[list[str]] = []
+
+        def fake_popen(args: list[str], **_: object) -> None:
+            captured.append(args)
+            raise Stop
+
+        monkeypatch.setattr("unshackle.core.tracks.tracks.subprocess.Popen", fake_popen)
+        monkeypatch.setattr("unshackle.core.tracks.tracks.file_track_ids", lambda path: ids or {"video": 0})
+        monkeypatch.setattr(binaries, "MKVToolNix", Path("mkvmerge"))
+        with pytest.raises(Stop):
+            tracks.mux("Title", delete=False, **kwargs)
+        return captured[0]
+
+    return run
+
+
+@pytest.fixture
+def stub_mp4decrypt(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """An mp4decrypt that copies its input to its output and records its argv."""
+    argv_log = tmp_path / "argv.jsonl"
+    script = tmp_path / "mp4decrypt"
+    script.write_text(
+        "#!/usr/bin/env python3\n"
+        "import json, shutil, sys\n"
+        f"open({str(argv_log)!r}, 'a').write(json.dumps(sys.argv[1:]) + '\\n')\n"
+        "shutil.copyfile(sys.argv[-2], sys.argv[-1])\n"
+    )
+    script.chmod(0o755)
+    monkeypatch.setattr(binaries, "Mp4decrypt", script)
+    return argv_log

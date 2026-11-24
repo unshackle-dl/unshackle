@@ -221,15 +221,15 @@ def new(
     try:
         name = unidecode(name.strip().lower().replace(" ", "_"))
     except UnidecodeError as e:
-        raise click.UsageError(f"name: Failed to sanitize name, {e}", ctx)
+        raise click.UsageError(f"name: Failed to sanitise name, {e}", ctx)
     if not name:
-        raise click.UsageError("name: Empty after sanitizing, please make sure the name is valid.", ctx)
+        raise click.UsageError("name: Empty after sanitising", ctx)
     if not private_key.is_file():
-        raise click.UsageError("private_key: Not a path to a file, or it doesn't exist.", ctx)
+        raise click.UsageError("private_key: Not a path to a file, or it does not exist.", ctx)
     if not client_id.is_file():
-        raise click.UsageError("client_id: Not a path to a file, or it doesn't exist.", ctx)
+        raise click.UsageError("client_id: Not a path to a file, or it does not exist.", ctx)
     if file_hashes and not file_hashes.is_file():
-        raise click.UsageError("file_hashes: Not a path to a file, or it doesn't exist.", ctx)
+        raise click.UsageError("file_hashes: Not a path to a file, or it does not exist.", ctx)
 
     device = Device(
         type_=DeviceTypes[type_.upper()],
@@ -263,8 +263,8 @@ def new(
 
     log.info("VMP:")
     if device.client_id.vmp_data:
-        file_hashes = FileHashes()
-        file_hashes.ParseFromString(device.client_id.vmp_data)
-        log.info(str(file_hashes))
+        vmp = FileHashes()
+        vmp.ParseFromString(device.client_id.vmp_data)
+        log.info(str(vmp))
     else:
         log.info("None")

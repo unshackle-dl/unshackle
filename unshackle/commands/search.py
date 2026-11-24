@@ -6,22 +6,28 @@ import sys
 from typing import Any, Optional
 
 import click
-import yaml
 from rich.padding import Padding
 from rich.rule import Rule
 from rich.tree import Tree
 
 from unshackle.commands.dl import dl
-from unshackle.core.config import config
+from unshackle.core.config import config, load_yaml
 from unshackle.core.console import console
 from unshackle.core.constants import context_settings
 from unshackle.core.proxies.proxy import Proxy
-from unshackle.core.proxies.resolve import REGION, describe_proxy, load_proxy_providers, pick_proxy, split_proxy_query
+from unshackle.core.proxies.resolve import (
+    REGION,
+    describe_explicit_proxy,
+    describe_proxy,
+    load_proxy_providers,
+    pick_proxy,
+    require_alone_local_proxy,
+    split_proxy_query,
+)
 from unshackle.core.service import Service
 from unshackle.core.services import Services
 from unshackle.core.utils.click_types import ContextData
-from unshackle.core.utils.collections import merge_dict
-from unshackle.core.utils.redact import mask_proxy
+from unshackle.core.utils.collections import ci_get, merge_dict
 
 
 @click.command(
@@ -38,9 +44,36 @@ from unshackle.core.utils.redact import mask_proxy
     default=None,
     help="Proxy URI to use. If a 2-letter country is provided, it will try get a proxy from the config.",
 )
+@click.option(
+    "--local-proxy",
+    is_flag=True,
+    default=False,
+    help="With --remote, the server sends its service requests out through this machine's own connection (and any VPN on it), or through a --proxy dialled from this machine.",
+)
 @click.option("--no-proxy", is_flag=True, default=False, help="Force disable all proxy use.")
+@click.option(
+    "--remote/--local",
+    default=False,
+    is_eager=True,
+    help="Search on a remote unshackle server instead of with local service code. --local overrides a remote: true config.",
+)
+@click.option(
+    "--server",
+    type=str,
+    default=None,
+    is_eager=True,
+    help="Name of the remote server from remote_services config (if multiple configured).",
+)
 @click.pass_context
-def search(ctx: click.Context, no_proxy: bool, profile: Optional[str] = None, proxy: Optional[str] = None):
+def search(
+    ctx: click.Context,
+    no_proxy: bool,
+    profile: Optional[str] = None,
+    proxy: Optional[str] = None,
+    local_proxy: bool = False,
+    remote: bool = False,
+    server: Optional[str] = None,
+) -> None:
     if not ctx.invoked_subcommand:
         raise ValueError("A subcommand to invoke was not specified, the main code cannot continue.")
 
@@ -52,14 +85,18 @@ def search(ctx: click.Context, no_proxy: bool, profile: Optional[str] = None, pr
     if profile:
         log.info(f"Using profile: '{profile}'")
 
-    with console.status("Loading Service Config...", spinner="dots"):
-        service_config_path = Services.get_path(service) / config.filenames.config
-        if service_config_path.exists():
-            service_config = yaml.safe_load(service_config_path.read_text(encoding="utf8"))
-            log.info("Service Config loaded")
-        else:
-            service_config = {}
-        merge_dict(config.services.get(service), service_config)
+    service_config: dict = {}
+    if not remote:
+        with console.status("Loading Service Config...", spinner="dots"):
+            service_config_path = Services.get_path(service) / config.filenames.config
+            if service_config_path.exists():
+                service_config = load_yaml(service_config_path)
+                log.info("Service Config loaded")
+    merge_dict(ci_get(config.services, service), service_config)
+
+    if ctx.params.get("local_proxy"):
+        require_alone_local_proxy(ctx)
+        proxy, no_proxy = ctx.params.get("proxy"), bool(ctx.params.get("no_proxy"))
 
     proxy_providers: list[Proxy] = []
     if no_proxy:
@@ -68,6 +105,7 @@ def search(ctx: click.Context, no_proxy: bool, profile: Optional[str] = None, pr
         with console.status("Loading Proxy Providers...", spinner="dots"):
             proxy_providers = load_proxy_providers()
 
+        ctx.params["proxy_arg"] = proxy
         if proxy:
             try:
                 requested_provider, query = split_proxy_query(proxy, proxy_providers)
@@ -85,18 +123,18 @@ def search(ctx: click.Context, no_proxy: bool, profile: Optional[str] = None, pr
                     ctx.params["proxy"] = proxy_uri
                     log.info(describe_proxy(proxy_provider, proxy_uri, query))
             else:
-                log.info(f"Using explicit Proxy: {mask_proxy(ctx.params['proxy'])}")
+                log.info(describe_explicit_proxy(ctx.params["proxy"]))
 
     ctx.obj = ContextData(config=service_config, cdm=None, proxy_providers=proxy_providers, profile=profile)
 
 
 @search.result_callback()
-def result(service: Service, profile: Optional[str] = None, **_: Any) -> None:
+def result(service: Service, profile: Optional[str] = None, remote: bool = False, **_: Any) -> None:
     log = logging.getLogger("search")
 
     service_tag = service.__class__.__name__
 
-    if not service.ANONYMOUS_SEARCH:
+    if not remote and not service.ANONYMOUS_SEARCH:
         with console.status("Authenticating with Service...", spinner="dots"):
             cookies = dl.get_cookie_jar(service_tag, profile)
             credential = dl.get_credentials(service_tag, profile)
@@ -117,7 +155,7 @@ def result(service: Service, profile: Optional[str] = None, **_: Any) -> None:
             result_text += f"\n[bright_black]id: {result.id}[/]"
             search_results.add(result_text + "\n")
 
-    cookie_file = None if service.ANONYMOUS_SEARCH else dl.get_cookie_path(service_tag, profile)
+    cookie_file = None if remote or service.ANONYMOUS_SEARCH else dl.get_cookie_path(service_tag, profile)
     if cookie_file:
         dl.save_cookies(cookie_file, service.session.cookies)
 
@@ -126,6 +164,4 @@ def result(service: Service, profile: Optional[str] = None, **_: Any) -> None:
     if search_results.children:
         console.print(Padding(search_results, (0, 5)))
     else:
-        console.print(
-            Padding("[bold text]No matches[/]\n[bright_black]Please check spelling and search again....[/]", (0, 5))
-        )
+        console.print(Padding("[bold text]No matches[/]", (0, 5)))

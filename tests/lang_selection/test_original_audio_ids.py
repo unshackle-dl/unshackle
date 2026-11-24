@@ -27,6 +27,8 @@ class FakeTitle:
         (["es"], ["es-ES", "es-419"], ["es-ES"]),
         (["es"], ["es-419"], ["es-419"]),
         (["fr"], ["fr-CA"], ["fr-CA"]),
+        (["en-US"], ["en-GB"], ["en-GB"]),
+        (["zh-HK"], ["zh-Hant", "zh-Hans"], ["zh-Hant"]),
         (["zh"], ["cmn"], ["cmn"]),
         (["en"], ["ja", "de"], []),
         ([None], ["en"], []),

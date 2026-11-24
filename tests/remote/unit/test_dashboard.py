@@ -6,7 +6,6 @@ import asyncio
 import logging
 import sys
 import threading
-import time
 from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
 
@@ -136,12 +135,12 @@ def test_ring_masks_host_paths_and_secrets_in_records() -> None:
     logger = logging.getLogger("test.ring.redact")
     logger.setLevel(logging.INFO)
     logger.addHandler(ring)
-    logger.error(f'File "{root}/unshackle/services/HMAX/__init__.py" 404: https://api.x/y?token=abc')
+    logger.error(f'File "{root}/unshackle/services/EXAMPLE/__init__.py" 404: https://api.x/y?token=abc')
     logger.removeHandler(ring)
 
     msg = ring.records[-1]["msg"]
     assert root not in msg
-    assert "<unshackle>/unshackle/services/HMAX" in msg
+    assert "<unshackle>/unshackle/services/EXAMPLE" in msg
     assert "token=abc" not in msg
     assert "https://api.x/y" in msg
     assert ring.since(0, logger="test") and not ring.since(0, logger="other")
@@ -183,7 +182,9 @@ async def test_session_action_log() -> None:
         store.record_action(entry.session_id, {"action": "titles", "status": 200})
         store.record_action("missing", {"action": "titles", "status": 200})
         assert entry.summary()["actions"] == [{"action": "titles", "status": 200}]
-        assert queue.get_nowait()["data"]["action"] == "update" and queue.empty()
+        event = queue.get_nowait()["data"]
+        assert event["action"] == "update" and queue.empty()
+        assert event["action_entry"] == {"action": "titles", "status": 200} and "actions" not in event
     finally:
         bus.unsubscribe(queue)
 
@@ -247,9 +248,15 @@ async def test_rate_limited_request_returns_429(aiohttp_client, monkeypatch) -> 
     setup_routes(app, remote_only=True, dashboard=True)
     client = await aiohttp_client(app)
 
-    assert (await client.get("/api/services", headers={"X-Secret-Key": "tier-key"})).status == 200
+    resp = await client.get("/api/services", headers={"X-Secret-Key": "tier-key"})
+    assert resp.status == 200
+    assert (resp.headers["X-RateLimit-Limit"], resp.headers["X-RateLimit-Remaining"]) == ("1", "0")
+    assert 0 < int(resp.headers["X-RateLimit-Reset"]) <= 3600
     resp = await client.get("/api/services", headers={"X-Secret-Key": "tier-key"})
     assert resp.status == 429 and int(resp.headers["Retry-After"]) > 0
+    assert resp.headers["X-RateLimit-Remaining"] == "0"
+    assert (await client.get("/api/health", headers={"X-Secret-Key": "tier-key"})).status == 200
+    assert (await client.get("/api/health")).status == 401
     assert (await client.get("/api/dashboard/status", headers={"X-Secret-Key": "dash-secret"})).status == 200
 
 
@@ -274,6 +281,37 @@ async def test_dashboard_session_logs(aiohttp_client, dashboard_cfg) -> None:
 
     assert (await client.get("/api/dashboard/sessions/nope/logs", headers=headers)).status == 404
     await store.delete(entry.session_id)
+
+
+async def test_drain_refuses_new_work_and_warns_open_sessions(aiohttp_client, dashboard_cfg) -> None:
+    from unshackle.core.api.download_manager import get_download_manager
+    from unshackle.core.api.errors import APIError
+    from unshackle.core.api.session_log import SessionLogBuffer
+    from unshackle.core.api.session_store import get_session_store
+
+    store = get_session_store()
+    entry = await store.create("EXAMPLE", object())
+    entry.log_buffer = SessionLogBuffer()
+    client = await aiohttp_client(make_app())
+    headers = {"X-Secret-Key": "dash-secret"}
+    try:
+        body = await (await client.post("/api/dashboard/drain", headers=headers)).json()
+        assert body["draining"] is True and body["sessions"] == 1
+        await client.post("/api/dashboard/drain", headers=headers)
+        assert [r["level"] for r in entry.log_buffer.since(0)] == ["WARNING"]
+
+        refused = await client.post("/api/session/create", json={})
+        assert refused.status == 409
+        assert (await refused.json())["error_code"] == "SERVER_DRAINING"
+        with pytest.raises(APIError, match="restarts for an update"):
+            get_download_manager().create_job("EXAMPLE", "t")
+
+        body = await (await client.delete("/api/dashboard/drain", headers=headers)).json()
+        assert body["draining"] is False
+        assert (await client.post("/api/session/create", json={})).status == 400
+    finally:
+        store.stop_drain()
+        await store.delete(entry.session_id)
 
 
 async def test_dashboard_log_read_does_not_touch_the_session() -> None:
@@ -347,9 +385,11 @@ async def test_status_reports_no_session_limit(aiohttp_client, dashboard_cfg, mo
     assert body["max_sessions"] is None
 
 
-async def test_dashboard_health(aiohttp_client, dashboard_cfg) -> None:
+async def test_dashboard_health(aiohttp_client, dashboard_cfg, monkeypatch) -> None:
     from unshackle.core.api import handlers
 
+    monkeypatch.setattr(config, "key_vaults", [])
+    monkeypatch.setattr(config, "proxy_providers", {})
     handlers._health_cache.clear()
     client = await aiohttp_client(make_app())
     body = await (await client.get("/api/dashboard/health", headers={"X-Secret-Key": "dash-secret"})).json()
@@ -359,7 +399,7 @@ async def test_dashboard_health(aiohttp_client, dashboard_cfg) -> None:
 
 
 async def test_unknown_key_on_open_route_does_not_grow_key_stats(aiohttp_client, monkeypatch) -> None:
-    """/api/health answers 200 to any header, so counters keyed by the raw header are a memory leak."""
+    """Counters keyed by the raw header of an unknown key would grow without bound."""
     monkeypatch.setitem(config.serve, "users", {"real": {}})
     stats.keys.clear()
     client = await aiohttp_client(make_app())
@@ -603,10 +643,12 @@ async def test_health_probe_timeout_reports_what_finished(aiohttp_client, dashbo
     """A vault that accepts the connection then stalls must not hang the panel forever."""
     from unshackle.core.api import handlers
 
+    released = threading.Event()
+
     def stalling_probe(checks=None):
         checks = [] if checks is None else checks
         checks.append({"id": "ffmpeg", "label": "ffmpeg", "status": "ok", "detail": "7.1", "ms": 1.0})
-        time.sleep(6)
+        released.wait(6)
         checks.append({"id": "never", "label": "never", "status": "ok", "detail": "", "ms": 0.0})
         return checks
 
@@ -615,7 +657,10 @@ async def test_health_probe_timeout_reports_what_finished(aiohttp_client, dashbo
     monkeypatch.setattr(handlers, "HEALTH_PROBE_TIMEOUT", 1.0)
 
     client = await aiohttp_client(make_app())
-    body = await (await client.get("/api/dashboard/health", headers={"X-Secret-Key": "dash-secret"})).json()
+    try:
+        body = await (await client.get("/api/dashboard/health", headers={"X-Secret-Key": "dash-secret"})).json()
+    finally:
+        released.set()
 
     ids = [c["id"] for c in body["checks"]]
     assert "ffmpeg" in ids, "the probe that finished before the deadline must survive"
@@ -626,3 +671,68 @@ async def test_health_probe_timeout_reports_what_finished(aiohttp_client, dashbo
 
     assert (await client.get("/api/dashboard/health", headers={"X-Secret-Key": "dash-secret"})).status == 200
     assert handlers._health_cache["payload"]["status"] == "failing"
+
+
+async def test_dashboard_services_carry_the_catalogue(aiohttp_client, dashboard_cfg, monkeypatch) -> None:
+    import enum
+    from pathlib import Path
+
+    import click
+
+    from unshackle.core import services as services_module
+    from unshackle.core.api import routes
+    from unshackle.core.service import Service
+
+    class Mode(enum.Enum):
+        FAST = 1
+
+    class Loaded(Service):
+        """How to use AAA."""
+
+        cli = click.Command(
+            "AAA",
+            params=[
+                click.Argument(["title"]),
+                click.Option(["--mode"], type=click.Choice(Mode)),
+                click.Option(["--dir"], multiple=True, default=[Path("/x")]),
+            ],
+            short_help="https://aaa.example",
+        )
+
+    class NoGeofence(Service):
+        """How to use DDD."""
+
+        GEOFENCE = None
+
+    real_details = routes.service_details
+
+    def details(tag: str) -> dict:
+        if tag == "CCC":
+            raise RuntimeError("bad module")
+        return real_details(tag)
+
+    tags = ("AAA", "BBB", "CCC", "DDD")
+    monkeypatch.setattr(services_module, "SERVICES", [Path(f"/svc/{t}/__init__.py") for t in tags])
+    monkeypatch.setattr(services_module, "MODULES", {"AAA": Loaded, "CCC": Loaded, "DDD": NoGeofence})
+    monkeypatch.setattr(services_module, "LOAD_ERRORS", ["BBB: failed to import - ImportError: boom"])
+    monkeypatch.setattr(services_module, "PENDING", {"DDD"})
+    monkeypatch.setattr(routes, "SERVICE_DETAILS", {})
+    monkeypatch.setattr(routes, "service_details", details)
+    monkeypatch.setitem(config.serve, "server_accounts", {"aaa": {"default": ["us", "gb"]}})
+
+    client = await aiohttp_client(make_app())
+    resp = await client.get("/api/dashboard/services", headers={"X-Secret-Key": "dash-secret"})
+    assert resp.status == 200
+    rows = {r["tag"]: r for r in await resp.json()}
+
+    assert rows["AAA"]["help"] == "How to use AAA." and rows["AAA"]["url"] == "https://aaa.example"
+    title, mode, folder = rows["AAA"]["cli_params"]
+    assert title == {"name": "title", "kind": "argument", "required": True}
+    assert mode["choices"] == ["FAST"] and folder["default"] == ["x"]
+    assert rows["AAA"]["state"] == "loaded"
+    assert rows["AAA"]["server_accounts"] == {"regions": ["gb", "us"], "global": False}
+    for tag in ("BBB", "CCC"):
+        assert rows[tag]["help"] is None and "cli_params" not in rows[tag] and "server_accounts" not in rows[tag]
+    assert rows["BBB"]["state"] == "failed"
+    assert rows["DDD"]["state"] == "staged" and rows["DDD"]["help"] == "How to use DDD."
+    assert rows["DDD"]["geofence"] == []

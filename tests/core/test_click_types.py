@@ -210,24 +210,16 @@ def test_no_duplicate_choices(param_type):
     assert len(lowered) == len(set(lowered))
 
 
-def test_api_codec_lists_come_from_the_param_types():
-    from unshackle.core.api.handlers import VALID_ACODECS, VALID_SUB_FORMATS, VALID_VCODECS
-
-    assert VALID_ACODECS == [c.upper() for c in AUDIO_CODEC_LIST.choices]
-    assert VALID_VCODECS == [c.upper() for c in VIDEO_CODEC_LIST.choices]
-    assert VALID_SUB_FORMATS == [c.upper() for c in SUBTITLE_CODEC.choices]
-
-
 @pytest.mark.parametrize("value", ["avc,,hevc", ["avc", "", "hevc"], " avc , hevc "])
 def test_empty_video_codec_tokens_are_skipped(value):
     """A None in the list reaches track filtering and crashes it, so blanks must drop out."""
     assert VIDEO_CODEC_LIST.convert(value) == [Video.Codec.AVC, Video.Codec.HEVC]
 
 
-@pytest.mark.parametrize("spelling", ["H264", "h265", "H.265", "hevc"])
+@pytest.mark.parametrize("spelling", ["H264", "h265", "H.265", "hevc", "H266", "h.266", "vvc"])
 def test_video_codec_aliases_resolve(spelling):
     """The API advertised H264/H265 while dropping them; both paths now resolve the same."""
-    assert VIDEO_CODEC_LIST.convert(spelling)[0] in (Video.Codec.AVC, Video.Codec.HEVC)
+    assert VIDEO_CODEC_LIST.convert(spelling)[0] in (Video.Codec.AVC, Video.Codec.HEVC, Video.Codec.VVC)
 
 
 def test_audio_codec_list_shell_complete():

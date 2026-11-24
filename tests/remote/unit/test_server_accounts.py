@@ -126,7 +126,7 @@ def test_server_cdm_ignores_client_cdm_type(monkeypatch):
     not swap it for a stub of the other DRM system."""
     seen = []
     monkeypatch.setattr(handlers, "load_service_yaml", lambda s: {})
-    monkeypatch.setattr(handlers, "load_full_cdm", lambda s, p, t=None: seen.append(t))
+    monkeypatch.setattr(handlers, "load_full_cdm", lambda s, p, t=None, app_config=None: seen.append(t))
     monkeypatch.setattr(handlers.Services, "load", staticmethod(lambda s: object()))
     monkeypatch.setattr(handlers, "instantiate_service", lambda *a: "svc")
     data = {"cdm_type": "playready"}
@@ -162,7 +162,15 @@ def _create_with_real_ctx(monkeypatch, data):
     return svc
 
 
-DL_DEFAULTS = {"lang": ["orig"], "v_lang": [], "a_lang": [], "acodec": [], "forced_subs": False, "exact_lang": False}
+DL_DEFAULTS = {
+    "lang": ["orig"],
+    "v_lang": [],
+    "a_lang": [],
+    "s_lang": ["all"],
+    "acodec": [],
+    "forced_subs": False,
+    "exact_lang": False,
+}
 
 
 def test_nested_dl_params_reach_the_parent_ctx(monkeypatch):
@@ -173,6 +181,7 @@ def test_nested_dl_params_reach_the_parent_ctx(monkeypatch):
             "lang": ["es-419", "en"],
             "v_lang": ["ja"],
             "a_lang": ["es-419"],
+            "s_lang": ["ko"],
             "acodec": ["EC3", "NOPE", "AAC"],
             "forced_subs": True,
             "exact_lang": True,
@@ -182,6 +191,7 @@ def test_nested_dl_params_reach_the_parent_ctx(monkeypatch):
     assert svc.parent_params["lang"] == ["es-419", "en"]
     assert svc.parent_params["v_lang"] == ["ja"]
     assert svc.parent_params["a_lang"] == ["es-419"]
+    assert svc.parent_params["s_lang"] == ["ko"]
     assert svc.parent_params["acodec"] == [Audio.Codec.EC3, Audio.Codec.AAC]
     assert svc.parent_params["forced_subs"] is True
     assert svc.parent_params["exact_lang"] is True
