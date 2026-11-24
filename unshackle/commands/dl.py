@@ -3726,40 +3726,9 @@ class dl:
     @staticmethod
     def title_to_meta(title: Title_T) -> dict[str, Any]:
         """Capture the title fields needed to rebuild a Title for output naming on import."""
-        from datetime import date
+        from unshackle.core import wire
 
-        from unshackle.core.titles import Episode, Movie
-
-        meta: dict[str, Any] = {
-            "id": str(title.id),
-            "language": str(title.language) if getattr(title, "language", None) else None,
-        }
-        if isinstance(title, Episode):
-            meta.update(
-                type="episode",
-                series_title=title.title,
-                season=title.season,
-                number=title.number,
-                name=title.name,
-                year=title.year,
-                air_date=title.air_date.isoformat() if isinstance(title.air_date, date) else title.air_date,
-            )
-            # conditional, so meta for a title without them is unchanged
-            if title.part is not None:
-                meta["part"] = title.part
-            if title.absolute is not None:
-                meta["absolute"] = title.absolute
-            if getattr(title, "daily", None) is not None:
-                meta["daily"] = title.daily
-            if title.sport:
-                meta["sport"] = True
-        elif isinstance(title, Movie):
-            meta.update(type="movie", name=title.name, year=title.year)
-        else:
-            meta.update(type="movie", name=str(title))
-        if getattr(title, "anime", None) is not None:
-            meta["anime"] = title.anime
-        return meta
+        return wire.title_to_meta(title)
 
     def write_export(self, export: Path, title: Title_T, track: AnyTrack, drm: Any = None) -> None:
         """Write a shareable mediaexport file usable by ``unshackle import`` and unidl.

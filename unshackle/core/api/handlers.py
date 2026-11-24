@@ -14,7 +14,6 @@ import zlib
 from collections import Counter
 from contextlib import suppress
 from dataclasses import dataclass, field
-from datetime import date as date_
 from functools import partial
 from http.cookiejar import CookieJar
 from pathlib import Path
@@ -35,18 +34,15 @@ from unshackle.core.binaries import binary_version
 from unshackle.core.cacher import Cacher
 from unshackle.core.cdm.detect import cdm_type_stub, is_playready_cdm
 from unshackle.core.config import config, load_yaml
-from unshackle.core.constants import AUDIO_CODEC_MAP, DYNAMIC_RANGE_MAP, VIDEO_CODEC_MAP, AnyTrack
+from unshackle.core.constants import AnyTrack
 from unshackle.core.drm import BlowfishStripe, cbcs, is_null_key
 from unshackle.core.manifests.snapshot import capture
 from unshackle.core.providers.anilist import parse_anilist_ref
 from unshackle.core.proxies.resolve import initialize_proxy_providers, is_loopback, resolve_proxy
 from unshackle.core.services import Services
 from unshackle.core.session import RnetSession, utf8_text
-from unshackle.core.titles import Episode, Movie, Song, Title_T
-from unshackle.core.titles.availability import availability_metadata
-from unshackle.core.titles.music import MUSIC_DATA_KEYS, SONG_FIELDS, song_metadata
-from unshackle.core.titles.title import rename
-from unshackle.core.tracks import Audio, Subtitle, Tracks, Video
+from unshackle.core.titles import Episode, Song
+from unshackle.core.tracks import Video
 from unshackle.core.tunnel import (
     HEARTBEAT,
     MAX_MESSAGE,
@@ -57,12 +53,19 @@ from unshackle.core.tunnel import (
     is_public_ip,
     tunnel_proxy,
 )
-from unshackle.core.utilities import declared_kwargs, kind_only_conflict, original_tag
+from unshackle.core.utilities import declared_kwargs, kind_only_conflict
 from unshackle.core.utils.click_types import AUDIO_CODEC_LIST, QUALITY_LIST, VIDEO_CODEC_LIST
 from unshackle.core.utils.collections import ci_get, merge_dict
 from unshackle.core.utils.hdr10plus import probed_tracks
 from unshackle.core.utils.redact import REDACTED, URL_USERINFO_RE, redact_all, redact_secrets, redact_text
 from unshackle.core.utils.service_params import FLAT_DL_KEYS, cast_service_options, service_options
+from unshackle.core.wire import (
+    descriptor_name,
+    serialize_attachment,
+    serialize_drm,
+    serialize_title,
+    serialize_tracks,
+)
 
 log = logging.getLogger("api")
 
@@ -1679,70 +1682,6 @@ def listed_titles(titles: Any) -> list[Any]:
     return list(titles) if hasattr(titles, "__iter__") and not isinstance(titles, str) else [titles]
 
 
-def serialize_title(title: Title_T) -> Dict[str, Any]:
-    """Convert a title object to JSON-serializable dict."""
-    title_language = str(title.language) if hasattr(title, "language") and title.language else None
-    # Optional display metadata a service may provide: a synopsis (title.description) and a
-    # release/air date or poster image URL stashed in title.data. Surfaced so a client can show
-    # a richer listing without re-fetching the page.
-    description = getattr(title, "description", None) or None
-    _data = getattr(title, "data", None)
-    availability = availability_metadata(_data.get("availability")) if isinstance(_data, dict) else None
-    date = _data.get("date") if isinstance(_data, dict) else None
-    cover_url = _data.get("cover_url") if isinstance(_data, dict) else None
-
-    is_episode = isinstance(title, Episode)
-    is_song = isinstance(title, Song)
-    episode_part = title.part if isinstance(title, Episode) else None
-    if isinstance(title, Episode):
-        # no part suffix here: remote_service.build_title rebuilds the Episode from this dict, so a
-        # suffixed name plus the structural `part` below would render the part twice in the filename
-        name = title.name if title.name else f"Episode {title.number:02d}"
-    else:
-        name = str(title.name) if hasattr(title, "name") else str(title)
-
-    result = {
-        "type": "episode" if is_episode else "movie" if isinstance(title, Movie) else "song" if is_song else "other",
-        "name": name,
-        "id": str(title.id) if hasattr(title, "id") else None,
-        "language": title_language,
-        "description": description,
-        "date": date,
-        "cover_url": cover_url,
-    }
-    # "other" titles carry no year; only Episode/Movie/Song do.
-    if isinstance(title, (Episode, Movie, Song)):
-        result["year"] = title.year
-    if isinstance(title, Episode):
-        result["series_title"] = str(title.title)
-        result["season"] = title.season
-        result["number"] = title.number
-        # every key below is conditional, so JSON for a title without them is unchanged
-        if episode_part is not None:
-            result["part"] = episode_part
-        if title.air_date is not None:
-            result["air_date"] = (
-                title.air_date.isoformat() if isinstance(title.air_date, date_) else str(title.air_date)
-            )
-        if title.absolute is not None:
-            result["absolute"] = title.absolute
-        if getattr(title, "daily", None) is not None:
-            result["daily"] = title.daily
-        if title.sport:
-            result["sport"] = True
-    if is_song:
-        for field in SONG_FIELDS:
-            result[field] = getattr(title, field, None)
-        metadata = song_metadata(title)
-        result["music_data"] = {key: metadata[key] for key in MUSIC_DATA_KEYS if metadata.get(key) not in (None, "")}
-    if isinstance(title, (Episode, Movie)) and getattr(title, "anime", None) is not None:
-        result["anime"] = title.anime
-
-    if availability is not None:
-        result["availability"] = availability
-    return result
-
-
 def stamp_service_flags(serialized: Dict[str, Any], service_instance: Any) -> Dict[str, Any]:
     """Fill anime/daily from the service class for titles that set neither.
 
@@ -1757,255 +1696,12 @@ def stamp_service_flags(serialized: Dict[str, Any], service_instance: Any) -> Di
     return serialized
 
 
-def serialize_drm(drm_list: Any) -> Optional[List[Dict[str, Any]]]:
-    """Serialise DRM objects to JSON-serializable list."""
-    if not drm_list:
-        return None
-
-    if not isinstance(drm_list, list):
-        drm_list = [drm_list]
-
-    result = []
-    for drm in drm_list:
-        drm_info = {}
-        drm_class = drm.__class__.__name__
-        drm_info["type"] = drm_class.lower()
-        if isinstance(drm, BlowfishStripe):
-            drm_info["key"] = drm.key.hex()
-
-        # pywidevine exposes dumps(); pyplayready's PSSH does not, so PlayReady falls back
-        # to the base64 it was built from. Without it the client drops every PlayReady
-        # entry and licenses the title with the wrong CDM.
-        pssh_obj = getattr(drm, "_pssh", None)
-        pssh_b64 = (getattr(drm, "data", None) or {}).get("pssh_b64")
-        if pssh_obj is not None and hasattr(pssh_obj, "dumps"):
-            try:
-                drm_info["pssh"] = pssh_obj.dumps()
-            except (ValueError, TypeError, KeyError):
-                log.warning(
-                    "Failed to serialize PSSH for DRM type=%s pssh_type=%s",
-                    drm_class,
-                    type(pssh_obj).__name__,
-                    exc_info=True,
-                )
-        if not drm_info.get("pssh") and pssh_b64:
-            drm_info["pssh"] = pssh_b64
-
-        if hasattr(drm, "kids") and drm.kids:
-            drm_info["kids"] = [str(kid) for kid in drm.kids]
-
-        if hasattr(drm, "content_keys") and drm.content_keys:
-            drm_info["content_keys"] = {str(k): v for k, v in drm.content_keys.items()}
-
-        # Get license URL - essential for remote licensing
-        if hasattr(drm, "license_url") and drm.license_url:
-            drm_info["license_url"] = str(drm.license_url)
-        elif hasattr(drm, "_license_url") and drm._license_url:
-            drm_info["license_url"] = str(drm._license_url)
-
-        result.append(drm_info)
-
-    return result if result else None
-
-
-def enum_name(value: Any) -> str:
-    """Return an enum-like value's .name, falling back to str()."""
-    return value.name if hasattr(value, "name") else str(value)
-
-
-def descriptor_name(track: Any) -> Optional[str]:
-    """Manifest descriptor (HLS/DASH/URL) name for a track, or None."""
-    descriptor = getattr(track, "descriptor", None)
-    return enum_name(descriptor) if descriptor else None
-
-
 def drm_preference_name(track: Any) -> Optional[str]:
     """The track's drm_preference as a full DRM system name, "widevine" or "playready"; None when unset."""
     preference = getattr(track, "drm_preference", None)
     if not preference:
         return None
     return {"wv": "widevine", "pr": "playready"}.get(preference, preference)
-
-
-MANIFEST_DATA_KEYS = ("hls", "dash", "ism")
-
-
-def serialize_track_data(track: Any) -> Optional[Dict[str, Any]]:
-    """The JSON-safe part of a service-set ``track.data``.
-
-    This drops the manifest parsers' own keys: the client rebuilds those from the
-    ``manifests`` payload, and they hold live lxml and m3u8 objects that JSON cannot carry.
-    """
-    data = getattr(track, "data", None)
-    if not isinstance(data, dict):
-        return None
-    safe: Dict[str, Any] = {}
-    for key, value in data.items():
-        if key in MANIFEST_DATA_KEYS:
-            continue
-        try:
-            json.dumps(value)
-        except (TypeError, ValueError):
-            continue
-        safe[key] = value
-    return safe or None
-
-
-def serialize_track_common(track: Any) -> Dict[str, Any]:
-    """The Track fields every track type shares, a superset of ``Track.to_dict()``."""
-    return {
-        "id": str(track.id),
-        "language": str(track.language) if track.language else None,
-        "is_original_lang": bool(getattr(track, "is_original_lang", False)),
-        "name": getattr(track, "name", None),
-        "track_name": track.get_track_name(),
-        "needs_repack": bool(getattr(track, "needs_repack", False)),
-        "edition": list(getattr(track, "edition", None) or []),
-        "note": getattr(track, "note", None),
-        "descriptor": descriptor_name(track),
-        "drm": serialize_drm(track.drm) if getattr(track, "drm", None) else None,
-        "drm_preference": getattr(track, "drm_preference", None),
-        "data": serialize_track_data(track),
-    }
-
-
-def serialize_tracks(tracks: Tracks, title: Any, include_url: bool = False) -> Dict[str, List[Dict[str, Any]]]:
-    """The ``video``, ``audio`` and ``subtitles`` lists of a title's tracks, video and audio highest bitrate first."""
-    video_tracks = sorted(tracks.videos, key=lambda t: t.bitrate or 0, reverse=True)
-    audio_tracks = sorted(tracks.audio, key=lambda t: t.bitrate or 0, reverse=True)
-    original_ids = original_audio_ids(audio_tracks, title)
-    return {
-        "video": [serialize_video_track(t, include_url=include_url) for t in video_tracks],
-        "audio": [
-            serialize_audio_track(t, include_url=include_url, is_original=t.id in original_ids) for t in audio_tracks
-        ],
-        "subtitles": [serialize_subtitle_track(t, include_url=include_url) for t in tracks.subtitles],
-    }
-
-
-def serialize_video_track(track: Video, include_url: bool = False) -> Dict[str, Any]:
-    """Convert video track to JSON-serializable dict."""
-    codec_name = enum_name(track.codec)
-    codec_value = track.codec.value if track.codec else codec_name
-    range_name = enum_name(track.range)
-
-    result = {
-        "id": str(track.id),
-        "codec": codec_name,
-        "codec_display": rename(VIDEO_CODEC_MAP.get(codec_name, codec_value)),
-        "bitrate": int(track.bitrate / 1000) if track.bitrate else None,
-        "bitrate_bps": track.bitrate or None,
-        "width": track.width,
-        "height": track.height,
-        "resolution": f"{track.width}x{track.height}" if track.width and track.height else None,
-        "fps": track.fps if track.fps else None,
-        "range": range_name,
-        "range_display": "+".join(rename(DYNAMIC_RANGE_MAP.get(p, p)) for p in track.range_label.split("+")),
-        "scan_type": enum_name(track.scan_type) if track.scan_type else None,
-        "closed_captions": list(getattr(track, "closed_captions", None) or []),
-        "dv_compatible_bitstream": bool(getattr(track, "dv_compatible_bitstream", False)),
-        "hdr10plus": bool(getattr(track, "hdr10plus", False)),
-        "hdr10_base": bool(getattr(track, "hdr10_base", False)),
-        "stereo": bool(getattr(track, "stereo", False)),
-    }
-    result.update(serialize_track_common(track))
-    if include_url and hasattr(track, "url") and track.url:
-        result["url"] = str(track.url)
-    return result
-
-
-def original_audio_ids(tracks: List[Audio], title: Title_T) -> set:
-    """Return the ids of the audio tracks 'orig' resolves to, empty when the title has no language.
-
-    This defers to Tracks.by_language through original_tag, as 'orig' does, so the flag agrees
-    with the downloader: the title's own variant first, else its close regional forms.
-    """
-    language = getattr(title, "language", None)
-    if not language:
-        return set()
-    return {t.id for t in Tracks.by_language(tracks, [original_tag(language)])}
-
-
-def serialize_audio_track(track: Audio, include_url: bool = False, is_original: bool = False) -> Dict[str, Any]:
-    """Convert audio track to JSON-serializable dict.
-
-    Get is_original from original_audio_ids so the flag always agrees with the
-    track 'orig' would download.
-    """
-    codec_name = enum_name(track.codec)
-    codec_value = track.codec.value if track.codec else codec_name
-
-    result = {
-        "id": str(track.id),
-        "codec": codec_name,
-        "codec_display": rename(AUDIO_CODEC_MAP.get(codec_value, codec_value)),
-        "bitrate": int(track.bitrate / 1000) if track.bitrate else None,
-        "bitrate_bps": track.bitrate or None,
-        "channels": track.channels if track.channels else None,
-        "is_original": is_original,
-        "atmos": track.atmos if hasattr(track, "atmos") else False,
-        "joc": getattr(track, "joc", 0),
-        "descriptive": track.descriptive if hasattr(track, "descriptive") else False,
-    }
-    result.update(serialize_track_common(track))
-    if include_url and hasattr(track, "url") and track.url:
-        result["url"] = str(track.url)
-    return result
-
-
-def serialize_subtitle_track(track: Subtitle, include_url: bool = False) -> Dict[str, Any]:
-    """Convert subtitle track to JSON-serializable dict."""
-    result = {
-        "id": str(track.id),
-        "codec": enum_name(track.codec),
-        "forced": track.forced if hasattr(track, "forced") else False,
-        "sdh": track.sdh if hasattr(track, "sdh") else False,
-        "cc": track.cc if hasattr(track, "cc") else False,
-    }
-    result.update(serialize_track_common(track))
-    if include_url and hasattr(track, "url") and track.url:
-        result["url"] = str(track.url)
-    return result
-
-
-ATTACHMENT_INLINE_LIMIT = 20 * 1024 * 1024
-
-
-def serialize_attachment(attachment: Any) -> Optional[Dict[str, Any]]:
-    """One attachment as JSON, with a path-only attachment carried as base64 file bytes.
-
-    A service can attach a file it already wrote to disk (a font, a poster). The client
-    has no access to the server's filesystem, so those bytes travel inline.
-    """
-    result: Dict[str, Any] = {
-        "url": attachment.url,
-        "name": attachment.name,
-        "mime_type": attachment.mime_type,
-        "description": attachment.description,
-    }
-    if attachment.url:
-        return result
-
-    path = getattr(attachment, "path", None)
-    if not path:
-        return None
-    path = Path(path)
-    try:
-        size = path.stat().st_size
-        if size > ATTACHMENT_INLINE_LIMIT:
-            log.warning(
-                "Skipping attachment %s: %d bytes is over the %d byte inline limit",
-                sanitize_log(path.name),
-                size,
-                ATTACHMENT_INLINE_LIMIT,
-            )
-            return None
-        result["content"] = base64.b64encode(path.read_bytes()).decode("ascii")
-    except OSError as e:
-        log.warning("Skipping attachment %s: %s", sanitize_log(path.name), e)
-        return None
-    result["file_name"] = path.name
-    return result
 
 
 async def search_handler(data: Dict[str, Any], request: Optional[web.Request] = None) -> web.Response:

@@ -46,7 +46,6 @@ from unshackle.core.api.handlers import (
     download_history_handler,
     download_job_events_handler,
     download_job_input_handler,
-    enum_name,
     env_check_handler,
     get_allowed_services,
     get_download_job_handler,
@@ -89,6 +88,7 @@ from unshackle.core.tunnel import ROUTE as TUNNEL_ROUTE
 from unshackle.core.tunnel import close_tunnels
 from unshackle.core.update_checker import UpdateChecker
 from unshackle.core.utils.redact import redact_path
+from unshackle.core.wire import enum_name
 
 
 @web.middleware

@@ -20,6 +20,7 @@ from unshackle.core.titles.movie import Movie
 from unshackle.core.tracks import Audio, Chapter, Chapters, Track, Tracks, Video
 from unshackle.core.tracks import tracks as tracks_module
 from unshackle.core.tracks.tracks import pick_video
+from unshackle.core.wire import track_from_dict, track_to_dict
 
 VIDEO_IDS = itertools.count()
 
@@ -59,7 +60,7 @@ def test_hls_marks_stereo_tracks_from_the_layout_or_the_codec() -> None:
 def test_a_stereo_track_lists_as_3d_and_keeps_the_flag_through_to_dict() -> None:
     video = Video(url="https://x/v.mp4", language="en", codec=Video.Codec.HEVC, range_=Video.Range.DV, stereo=True)
     assert str(video).startswith("VID | [H.265, DV, 3D] |")
-    assert Video.from_dict(video.to_dict()).stereo
+    assert track_from_dict(track_to_dict(video)).stereo
 
 
 def stereo_video(tmp_path: Path, stereo: bool = True, **kwargs: Any) -> Video:

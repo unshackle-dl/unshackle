@@ -3,9 +3,9 @@ from types import SimpleNamespace
 from langcodes import Language
 
 from unshackle.commands.dl import apply_enrich, load_tracks
-from unshackle.core.remote_service import apply_title_fields
 from unshackle.core.titles import Episode, Movie, Song
 from unshackle.core.tracks import Chapters, Tracks
+from unshackle.core.wire import apply_title_fields
 
 SERVICE = type("SVC", (), {})
 

@@ -16,21 +16,16 @@ from langcodes import tag_is_valid
 from unshackle.core.config import config
 from unshackle.core.constants import AnyTrack
 from unshackle.core.credential import Credential
-from unshackle.core.drm import ClearKey, MonaLisa, drm_from_dict, real_kids
+from unshackle.core.drm import ClearKey, MonaLisa, real_kids
 from unshackle.core.manifests import DASH, HLS, ISM, MissingLanguageError, snapshot
-from unshackle.core.remote_service import (
-    RemoteService,
-    ServerKeySource,
-    build_title,
-    resolve_proxy_arg,
-    segment_uri_filter,
-)
+from unshackle.core.remote_service import RemoteService, ServerKeySource, resolve_proxy_arg, segment_uri_filter
 from unshackle.core.session import utf8_text
 from unshackle.core.titles import Episode, Movies, Series, Title_T, Titles_T, remap_titles
 from unshackle.core.tracks import Audio, Chapter, Chapters, Subtitle, Tracks, Video
 from unshackle.core.tracks.attachment import Attachment
 from unshackle.core.tracks.track import Track
 from unshackle.core.utils import run_proxy
+from unshackle.core.wire import build_title, drm_from_dict, track_from_dict
 
 log = logging.getLogger("import")
 E = TypeVar("E", bound=Enum)
@@ -465,7 +460,7 @@ class ImportService:
 
         for track_dict in track_dicts:
             try:
-                track = Track.from_dict(track_dict)
+                track = track_from_dict(track_dict)
             except Exception as e:
                 self.log.warning(f"Skipping exported track {track_dict.get('id')!r}: {e}")
                 continue

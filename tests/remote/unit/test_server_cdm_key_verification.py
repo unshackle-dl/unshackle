@@ -299,7 +299,7 @@ def test_reconstruct_drm_keeps_the_default_kid_of_a_pssh_without_kids():
     from pywidevine.pssh import PSSH
 
     from unshackle.core.drm import real_kids
-    from unshackle.core.remote_service import reconstruct_drm
+    from unshackle.core.wire import reconstruct_drm
 
     content_id_only = PSSH.new(system_id=PSSH.SystemId.Widevine, init_data=b"\x22\x03abc")
     (drm,) = reconstruct_drm([{"type": "widevine", "pssh": content_id_only.dumps(), "kids": [str(KID)]}])

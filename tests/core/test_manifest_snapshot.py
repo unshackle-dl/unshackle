@@ -16,6 +16,7 @@ from unshackle.core.manifests import snapshot as snapshot_module
 from unshackle.core.manifests.snapshot import capture, parse, restore
 from unshackle.core.tracks import Tracks
 from unshackle.core.tracks.track import Track
+from unshackle.core.wire import track_from_dict, track_to_dict
 
 URL = "https://cdn.example/title/manifest.mpd"
 
@@ -116,7 +117,7 @@ def round_trip(tracks: Tracks, level: int = -1) -> Tracks:
     assert {"manifests", "track_manifests"} <= set(snapshot)
     client = Tracks()
     for track in tracks:
-        client.add(Track.from_dict(track.to_dict()))
+        client.add(track_from_dict(track_to_dict(track)))
     restore(client, snapshot)
     return client
 
@@ -174,7 +175,7 @@ def test_a_filtered_period_that_reuses_a_kept_id_keeps_the_content():
 @pytest.mark.parametrize("snapshot", ["garbage", {"manifests": "x"}, {"manifests": [1]}, {"track_manifests": {"a": 1}}])
 def test_a_malformed_snapshot_restores_nothing(snapshot):
     client = Tracks()
-    client.add(Track.from_dict(service_tracks().videos[0].to_dict()))
+    client.add(track_from_dict(track_to_dict(service_tracks().videos[0])))
     restore(client, snapshot)
     assert not client.videos[0].data.get("dash")
     assert parse(snapshot, URL, "en") is None
@@ -193,7 +194,7 @@ def test_the_inflate_budget_covers_every_entry_of_one_restore(monkeypatch, caplo
     assert parse(saved, URL, "en") is not None
 
     client = Tracks()
-    client.add(Track.from_dict(service_tracks().videos[0].to_dict()))
+    client.add(track_from_dict(track_to_dict(service_tracks().videos[0])))
     with caplog.at_level(logging.WARNING, logger="snapshot"):
         restore(client, saved)
     assert client.videos[0].data.get("dash")

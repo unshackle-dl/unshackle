@@ -13,6 +13,7 @@ from unshackle.core.remote_service import RemoteService
 from unshackle.core.tracks import Audio, Video
 from unshackle.core.utils import hdr10plus
 from unshackle.core.utils.hdr10plus import HDR10PLUS_T35, TS_PACKET, fragment_has_t35
+from unshackle.core.wire import track_from_dict, track_to_dict
 
 
 def box(kind: bytes, body: bytes) -> bytes:
@@ -127,7 +128,7 @@ def test_a_dv_track_with_hdr10plus_lists_as_dv_plus_hdr10p() -> None:
     assert "[H.265, DV]" in str(video)
     video.hdr10plus = True
     assert "[H.265, DV+HDR10P]" in str(video)
-    assert Video.from_dict(video.to_dict()).hdr10plus
+    assert track_from_dict(track_to_dict(video)).hdr10plus
 
 
 def test_on_start_runs_only_when_there_is_a_track_to_probe(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -229,7 +230,7 @@ def test_a_quoted_dl_workers_value_works_like_the_cli(monkeypatch: pytest.Monkey
 def test_a_dv_track_with_an_hdr10_base_lists_as_dv_plus_hdr10() -> None:
     video = Video(url="https://x/v.mp4", language="en", codec=Video.Codec.HEVC, range_=Video.Range.DV, hdr10_base=True)
     assert "[H.265, DV+HDR10]" in str(video)
-    assert Video.from_dict(video.to_dict()).hdr10_base
+    assert track_from_dict(track_to_dict(video)).hdr10_base
 
 
 def ts_packet(pid: int, section: bytes) -> bytes:

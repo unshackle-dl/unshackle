@@ -12,13 +12,12 @@ import pytest
 import requests
 from Cryptodome.Cipher import Blowfish
 
-from unshackle.core.api.handlers import serialize_audio_track, serialize_drm
 from unshackle.core.config import config
 from unshackle.core.constants import DOWNLOAD_CANCELLED
 from unshackle.core.drm import BlowfishStripe
-from unshackle.core.remote_service import build_tracks, reconstruct_drm
 from unshackle.core.tracks import Audio, Track
 from unshackle.core.tracks import track as track_module
+from unshackle.core.wire import build_tracks, reconstruct_drm, serialize_audio_track, serialize_drm
 
 KEY = bytes.fromhex("00112233445566778899aabbccddeeff")
 CHUNK = BlowfishStripe.CHUNK

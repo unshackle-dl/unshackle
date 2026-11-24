@@ -200,16 +200,10 @@ class Widevine:
         return []
 
     def to_dict(self) -> dict[str, Any]:
-        """Serialise this DRM instance for export/import (PSSH + KIDs).
+        """This DRM in the export form; see ``wire.drm_to_dict``."""
+        from unshackle.core.wire import drm_to_dict
 
-        unshackle stores the content keys once at the export's track level, and does not
-        duplicate them here.
-        """
-        return {
-            "system": "Widevine",
-            "pssh_b64": self.pssh.dumps(),
-            "kids": [kid.hex for kid in self.kids],
-        }
+        return drm_to_dict(self)
 
     def get_content_keys(self, cdm: WidevineCdm, certificate: Callable, licence: Callable) -> None:
         """

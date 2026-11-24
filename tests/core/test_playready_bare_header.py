@@ -16,10 +16,11 @@ from pyplayready.system.wrmheader import WRMHeader
 from pywidevine.pssh import PSSH as WV_PSSH
 
 from unshackle.core.api.handlers import pssh_kids
-from unshackle.core.drm import PlayReady, Widevine, drm_from_dict
+from unshackle.core.drm import PlayReady, Widevine
 from unshackle.core.manifests.dash import DASH
 from unshackle.core.manifests.hls import HLS
 from unshackle.core.manifests.ism import ISM
+from unshackle.core.wire import drm_from_dict
 
 KID = UUID("00112233-4455-6677-8899-aabbccddeeff")
 KID_B64 = base64.b64encode(KID.bytes_le).decode()

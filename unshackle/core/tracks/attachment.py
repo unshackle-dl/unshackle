@@ -136,8 +136,10 @@ class Attachment:
         return " | ".join(filter(None, ["ATT", self.name, self.mime_type, self.description]))
 
     def to_dict(self) -> dict[str, Optional[str]]:
-        """Serialise a URL-backed attachment for export/import."""
-        return {"url": self.url, "name": self.name, "mime_type": self.mime_type, "description": self.description}
+        """The attachment in the export form; see ``wire.attachment_to_dict``."""
+        from unshackle.core.wire import attachment_to_dict
+
+        return attachment_to_dict(self)
 
     @property
     def id(self) -> str:

@@ -8,8 +8,9 @@ import pytest
 from pyplayready.system.pssh import PSSH as PlayReadyPSSH
 from pywidevine.pssh import PSSH as WidevinePSSH
 
-from unshackle.core.drm import PlayReady, Widevine, drm_from_dict, key_args
+from unshackle.core.drm import PlayReady, Widevine, key_args
 from unshackle.core.drm.key_args import ZERO_KID
+from unshackle.core.wire import drm_from_dict
 
 VIDEO_KID = UUID("00112233-4455-6677-8899-aabbccddeeff")
 AUDIO_KID = UUID("ffeeddcc-bbaa-9988-7766-554433221100")

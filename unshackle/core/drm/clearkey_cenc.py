@@ -64,18 +64,10 @@ class ClearKeyCENC:
         return next(iter(self.kids), None)
 
     def to_dict(self) -> dict[str, Any]:
-        """Serialise this DRM instance for export/import (KIDs + license URL).
+        """This DRM in the export form; see ``wire.drm_to_dict``."""
+        from unshackle.core.wire import drm_to_dict
 
-        unshackle stores the content keys once at the export's track level, and does not
-        duplicate them here.
-        """
-        data: dict[str, Any] = {
-            "system": "ClearKeyCENC",
-            "kids": [kid.hex for kid in self.kids],
-        }
-        if self.laurl:
-            data["laurl"] = self.laurl
-        return data
+        return drm_to_dict(self)
 
     def get_license_challenge(self) -> bytes:
         """Assemble the W3C EME ClearKey JSON license request for the unkeyed KIDs."""

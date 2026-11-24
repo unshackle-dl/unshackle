@@ -307,43 +307,6 @@ class Video(Track):
         self.hybrid_ingredient = False
         self.native_hybrid = False
 
-    def to_dict(self) -> dict[str, Any]:
-        data = super().to_dict()
-        data.update(
-            {
-                "codec": self.codec.name if self.codec else None,
-                "range": self.range.name if self.range else None,
-                "bitrate": self.bitrate,
-                "width": self.width,
-                "height": self.height,
-                "fps": str(self.fps) if self.fps else None,
-                "scan_type": self.scan_type.name if self.scan_type else None,
-                "dv_compatible_bitstream": self.dv_compatible_bitstream,
-                "hdr10plus": self.hdr10plus,
-                "hdr10_base": self.hdr10_base,
-                "stereo": self.stereo,
-            }
-        )
-        return data
-
-    @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> Video:
-        kwargs = Track.base_kwargs_from_dict(data)
-        return cls(
-            **kwargs,
-            codec=Video.Codec[data["codec"]] if data.get("codec") else None,
-            range_=Video.Range[data["range"]] if data.get("range") else None,
-            bitrate=data.get("bitrate"),
-            width=data.get("width"),
-            height=data.get("height"),
-            fps=data.get("fps"),
-            scan_type=Video.ScanType[data["scan_type"]] if data.get("scan_type") else None,
-            dv_compatible_bitstream=data.get("dv_compatible_bitstream", False),
-            hdr10plus=data.get("hdr10plus", False),
-            hdr10_base=data.get("hdr10_base", False),
-            stereo=data.get("stereo", False),
-        )
-
     @staticmethod
     def dv_fourccs(codecs: Optional[str]) -> set[str]:
         """The Dolby Vision fourccs in a codecs list (comma or space separated, ``/brand`` suffixes allowed)."""

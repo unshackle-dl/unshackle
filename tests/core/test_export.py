@@ -19,12 +19,12 @@ import click
 import pytest
 
 from unshackle.commands.dl import dl
-from unshackle.core.drm import drm_from_dict
 from unshackle.core.drm.clearkey import ClearKey
 from unshackle.core.drm.clearkey_cenc import ClearKeyCENC
 from unshackle.core.import_service import ImportService
 from unshackle.core.titles import Movie
 from unshackle.core.tracks import Audio, Chapter, Subtitle, Video
+from unshackle.core.wire import drm_from_dict
 
 KID = UUID(hex="00000000000000000000000000000001")
 

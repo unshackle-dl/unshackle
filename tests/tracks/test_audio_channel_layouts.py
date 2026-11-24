@@ -10,6 +10,7 @@ from __future__ import annotations
 import pytest
 
 from unshackle.core.tracks import Audio
+from unshackle.core.wire import track_from_dict, track_to_dict
 
 
 @pytest.mark.parametrize("layout", ["5.1.4", "7.1.2", "9.1.6"])
@@ -48,7 +49,7 @@ def test_a_value_that_is_no_layout_still_raises(value: str) -> None:
 def test_an_immersive_layout_round_trips_as_a_dict() -> None:
     """A remote download rebuilds every track from the dict the server sent."""
     track = Audio(id_="a1", url="https://example.test/a", language="en", channels="5.1.4", bitrate=448000)
-    assert Audio.from_dict(track.to_dict()).channels == "5.1.4"
+    assert track_from_dict(track_to_dict(track)).channels == "5.1.4"
 
 
 @pytest.mark.parametrize(

@@ -14,11 +14,6 @@ from unshackle.core.api.handlers import (
     listed_titles,
     sanitize_log,
     search_handler,
-    serialize_audio_track,
-    serialize_drm,
-    serialize_subtitle_track,
-    serialize_title,
-    serialize_video_track,
     validate_download_parameters,
     validate_service,
 )
@@ -27,6 +22,13 @@ from unshackle.core.titles.episode import Episode
 from unshackle.core.titles.movie import Movie
 from unshackle.core.tracks import Audio, Subtitle, Video
 from unshackle.core.tracks.track import Track
+from unshackle.core.wire import (
+    serialize_audio_track,
+    serialize_drm,
+    serialize_subtitle_track,
+    serialize_title,
+    serialize_video_track,
+)
 
 pytestmark = pytest.mark.unit
 

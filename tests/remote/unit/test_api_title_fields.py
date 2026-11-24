@@ -1,7 +1,7 @@
 """The title fields that cross the remote wire: air_date, absolute, anime and daily.
 
 Covers serialize_title's conditional keys, the service-class ANIME/DAILY stamp, and the
-serialize_title / title_to_meta round trips through remote_service.build_title.
+serialize_title / title_to_meta round trips through wire.build_title.
 """
 
 from __future__ import annotations
@@ -16,11 +16,11 @@ from langcodes import Language
 
 from unshackle.commands.dl import dl
 from unshackle.core.api import handlers
-from unshackle.core.api.handlers import serialize_title, stamp_service_flags
-from unshackle.core.remote_service import build_title
+from unshackle.core.api.handlers import stamp_service_flags
 from unshackle.core.titles.episode import Episode
 from unshackle.core.titles.movie import Movie
 from unshackle.core.titles.music import Song
+from unshackle.core.wire import build_title, serialize_title
 
 pytestmark = pytest.mark.unit
 

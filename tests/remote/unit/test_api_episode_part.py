@@ -16,8 +16,8 @@ import pytest
 
 from unshackle.core.api import handlers
 from unshackle.core.api.errors import APIError
-from unshackle.core.api.handlers import serialize_title
 from unshackle.core.titles.episode import Episode
+from unshackle.core.wire import build_title, serialize_title
 
 pytestmark = pytest.mark.unit
 
@@ -116,8 +116,6 @@ def test_part_stays_out_of_the_name_field() -> None:
 
 
 def test_remote_build_title_round_trip() -> None:
-    from unshackle.core.remote_service import build_title
-
     rebuilt = build_title(serialize_title(ep(1, 4, 2)), "FAKE", "fallback-id")
     assert (rebuilt.season, rebuilt.number, rebuilt.part, rebuilt.name) == (1, 4, 2, "Pilot")
 

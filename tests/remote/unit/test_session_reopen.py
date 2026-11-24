@@ -11,9 +11,10 @@ import requests
 import responses
 from langcodes import Language
 
-from unshackle.core.remote_service import RemoteClient, RemoteError, RemoteService, build_title, quiet
+from unshackle.core.remote_service import RemoteClient, RemoteError, RemoteService, quiet
 from unshackle.core.tracks import Audio
 from unshackle.core.tracks.track import Track
+from unshackle.core.wire import build_title
 
 pytestmark = pytest.mark.unit
 

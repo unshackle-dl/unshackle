@@ -6,10 +6,12 @@ from enum import Enum
 
 import pytest
 
-from unshackle.core.api.handlers import serialize_audio_track, serialize_subtitle_track, serialize_video_track
 from unshackle.core.manifests.snapshot import match_track
-from unshackle.core.remote_service import (
-    RemoteService,
+from unshackle.core.remote_service import RemoteService
+from unshackle.core.titles.episode import Episode
+from unshackle.core.titles.movie import Movie
+from unshackle.core.tracks import Audio, Subtitle, Video
+from unshackle.core.wire import (
     build_title,
     build_tracks,
     deserialize_audio,
@@ -17,10 +19,12 @@ from unshackle.core.remote_service import (
     deserialize_video,
     enum_get,
     reconstruct_drm,
+    serialize_audio_track,
+    serialize_subtitle_track,
+    serialize_video_track,
+    track_from_dict,
+    track_to_dict,
 )
-from unshackle.core.titles.episode import Episode
-from unshackle.core.titles.movie import Movie
-from unshackle.core.tracks import Audio, Subtitle, Video
 
 pytestmark = pytest.mark.unit
 
@@ -64,14 +68,12 @@ def test_a_stereo_track_stays_3d_over_remote() -> None:
 
 
 def test_a_track_note_shows_over_remote_and_export_and_is_not_an_edition() -> None:
-    from unshackle.core.tracks.track import Track
-
     v = Video(url="https://x/v.mp4", language="ja", codec=Video.Codec.AVC, note="h264mpl40-dash")
     a = Audio(url="https://x/a.mp4", language="ja", codec=Audio.Codec.AAC, note="heaac-2-dash")
     s = Subtitle(url="https://x/s.vtt", language="en", codec=Subtitle.Codec.WebVTT, note="webvtt-lssdh")
     copies = [deserialize_video(serialize_video_track(v)), deserialize_audio(serialize_audio_track(a))]
     copies += [deserialize_subtitle(serialize_subtitle_track(s))]
-    copies += [Track.from_dict(t.to_dict()) for t in (v, a, s)]
+    copies += [track_from_dict(track_to_dict(t)) for t in (v, a, s)]
     for copy in copies:
         assert copy.note and str(copy).endswith(f"| {copy.note}")
         assert copy.edition == []

@@ -5,8 +5,8 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 from unshackle.commands.dl import dl
-from unshackle.core.remote_service import apply_title_fields
 from unshackle.core.titles.episode import Episode, Series
+from unshackle.core.wire import apply_title_fields
 
 
 class DummyService:

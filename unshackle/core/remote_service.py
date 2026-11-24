@@ -20,10 +20,7 @@ import shlex
 import sys
 import time
 from collections import deque
-from datetime import date as date_
-from enum import Enum
 from http.cookiejar import CookieJar
-from pathlib import Path
 from threading import Event, Lock, Thread, local
 from typing import Any, Callable, Dict, Iterable, Iterator, Optional, Protocol, TypeVar, Union
 from urllib.parse import urlencode, urlsplit
@@ -32,7 +29,6 @@ from uuid import UUID
 import click
 import requests
 import urllib3
-from langcodes import Language
 from requests.adapters import HTTPAdapter, Retry
 from rich.padding import Padding
 from rich.rule import Rule
@@ -42,18 +38,16 @@ from unshackle.core.config import config
 from unshackle.core.console import SyncLive, console, prompt_user, show_notice
 from unshackle.core.constants import AnyTrack
 from unshackle.core.credential import Credential
-from unshackle.core.drm import BlowfishStripe, cbcs, real_kids
+from unshackle.core.drm import cbcs, real_kids
 from unshackle.core.manifests.snapshot import match_track, restore
 from unshackle.core.proxies.resolve import is_loopback
 from unshackle.core.search_result import SearchResult
 from unshackle.core.session import MAX_BACKOFF
 from unshackle.core.titles import Title_T, Titles_T, remap_titles
-from unshackle.core.titles.availability import availability_metadata
 from unshackle.core.titles.episode import Episode, Series
-from unshackle.core.titles.movie import Movie, Movies
-from unshackle.core.titles.music import MUSIC_DATA_KEYS, SONG_FIELDS, Album, Song
-from unshackle.core.tracks import Audio, Chapter, Chapters, Subtitle, Tracks, Video
-from unshackle.core.tracks.attachment import Attachment
+from unshackle.core.titles.movie import Movies
+from unshackle.core.titles.music import Album, Song
+from unshackle.core.tracks import Chapter, Chapters, Tracks
 from unshackle.core.tracks.track import Track
 from unshackle.core.tunnel import PROXY_PORTS, TunnelClient, parse_retry_after
 from unshackle.core.utils import run_proxy
@@ -61,6 +55,7 @@ from unshackle.core.utils.collections import ci_get
 from unshackle.core.utils.redact import redact_path, redact_text, safe_display_url
 from unshackle.core.utils.service_params import service_options
 from unshackle.core.vault import Vault
+from unshackle.core.wire import apply_title_fields, build_title, build_tracks
 
 log = logging.getLogger("remote_service")
 
@@ -306,16 +301,6 @@ class RemoteClient:
         return self.request("delete", endpoint)
 
 
-def enum_get(enum_cls: type[Enum], name: Optional[str], default: Any = None) -> Any:
-    """Safely get an enum value by name."""
-    if not name:
-        return default
-    try:
-        return enum_cls[name]
-    except KeyError:
-        return default
-
-
 def sample_batches(samples: list[bytes]) -> Iterator[list[bytes]]:
     """Split samples into consecutive batches of at most cbcs.SAMPLE_BATCH_BYTES (a larger sample goes alone)."""
     batch: list[bytes] = []
@@ -330,74 +315,6 @@ def sample_batches(samples: list[bytes]) -> Iterator[list[bytes]]:
         yield batch
 
 
-def base_track_kwargs(data: Dict[str, Any]) -> Dict[str, Any]:
-    """The shared Track constructor kwargs a serialized track carries.
-
-    An older server omits the newer keys, so each one falls back to the value a
-    locally-built track would have had.
-    """
-    return {
-        "url": data.get("url") or "https://placeholder",
-        "language": Language.get(data.get("language") or "und"),
-        "is_original_lang": bool(data.get("is_original_lang", data.get("is_original", False))),
-        "descriptor": enum_get(Track.Descriptor, data.get("descriptor"), Track.Descriptor.URL),
-        "needs_repack": bool(data.get("needs_repack", False)),
-        "name": data.get("name"),
-        "edition": data.get("edition") or None,
-        "note": data["note"] if isinstance(data.get("note"), str) else None,
-        "id_": data.get("id"),
-    }
-
-
-def deserialize_bitrate(data: Dict[str, Any]) -> int:
-    """Exact bits/s when the server sent it, otherwise the kb/s figure scaled back up."""
-    exact = data.get("bitrate_bps")
-    if exact:
-        return int(exact)
-    return data["bitrate"] * 1000 if data.get("bitrate") else 0
-
-
-def deserialize_video(data: Dict[str, Any]) -> Video:
-    return Video(
-        **base_track_kwargs(data),
-        codec=enum_get(Video.Codec, data.get("codec")),
-        range_=enum_get(Video.Range, data.get("range"), Video.Range.SDR),
-        bitrate=deserialize_bitrate(data),
-        width=data.get("width") or 0,
-        height=data.get("height") or 0,
-        fps=data.get("fps"),
-        scan_type=enum_get(Video.ScanType, data.get("scan_type")),
-        closed_captions=data.get("closed_captions") or None,
-        dv_compatible_bitstream=bool(data.get("dv_compatible_bitstream", False)),
-        hdr10plus=bool(data.get("hdr10plus", False)),
-        hdr10_base=bool(data.get("hdr10_base", False)),
-        stereo=bool(data.get("stereo", False)),
-    )
-
-
-def deserialize_audio(data: Dict[str, Any]) -> Audio:
-    joc = data.get("joc")
-    return Audio(
-        **base_track_kwargs(data),
-        codec=enum_get(Audio.Codec, data.get("codec")),
-        bitrate=deserialize_bitrate(data),
-        channels=data.get("channels"),
-        joc=joc,
-        extra={"atmos": True} if joc is None and data.get("atmos") else None,
-        descriptive=data.get("descriptive", False),
-    )
-
-
-def deserialize_subtitle(data: Dict[str, Any]) -> Subtitle:
-    return Subtitle(
-        **base_track_kwargs(data),
-        codec=enum_get(Subtitle.Codec, data.get("codec")),
-        cc=data.get("cc", False),
-        sdh=data.get("sdh", False),
-        forced=data.get("forced", False),
-    )
-
-
 def track_pssh(track: Any, drm_type: str) -> Optional[str]:
     """The base64 PSSH of the track's header for one DRM system; None when the track has none of it."""
     for drm_obj in track.drm or []:
@@ -407,91 +324,6 @@ def track_pssh(track: Any, drm_type: str) -> Optional[str]:
         if drm_type == "widevine" and drm_class == "Widevine":
             return drm_obj.pssh.dumps()
     return None
-
-
-def reconstruct_drm(drm_list: Optional[list]) -> list:
-    """Reconstruct DRM objects from serialized API data."""
-    if not drm_list:
-        return []
-    result: list[Any] = []
-    for drm_info in drm_list:
-        drm_type = drm_info.get("type", "")
-        pssh_str = drm_info.get("pssh")
-        if not pssh_str and drm_type != "blowfishstripe":
-            continue
-        try:
-            if drm_type == "blowfishstripe":
-                result.append(BlowfishStripe(drm_info["key"]))
-            elif drm_type == "widevine":
-                from pywidevine.pssh import PSSH as WidevinePSSH
-
-                from unshackle.core.drm import Widevine
-
-                wv_pssh = WidevinePSSH(pssh_str)
-                kids = drm_info.get("kids")
-                result.append(Widevine(pssh=wv_pssh, kid=kids[0] if kids and not wv_pssh.key_ids else None))
-            elif drm_type == "playready":
-                import base64 as b64
-
-                from pyplayready.system.pssh import PSSH as PlayReadyPSSH
-
-                from unshackle.core.drm import PlayReady
-
-                pr_pssh = PlayReadyPSSH(b64.b64decode(pssh_str))
-                result.append(PlayReady(pssh=pr_pssh, pssh_b64=pssh_str))
-        # a dropped entry can leave the track with no DRM, so never skip silently
-        except Exception as e:
-            log.warning(f"Skipping unparseable {drm_type} DRM entry from server: {e!r}")
-            continue
-    return result
-
-
-def build_attachment(data: Dict[str, Any]) -> Optional[Attachment]:
-    """Rebuild one attachment. A path-only attachment arrives as base64, which this writes to temp."""
-    kwargs = {
-        "name": data.get("name"),
-        "mime_type": data.get("mime_type"),
-        "description": data.get("description"),
-    }
-    if data.get("url"):
-        return Attachment(url=data["url"], **kwargs)
-
-    content = data.get("content")
-    if not content:
-        return None
-    try:
-        file_name = Path(str(data.get("file_name") or data.get("name") or "attachment")).name
-        target = config.directories.temp / "remote_attachments" / file_name
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_bytes(base64.b64decode(content))
-        return Attachment(path=target, **kwargs)
-    except (OSError, ValueError) as e:
-        log.warning(f"Skipping attachment {data.get('name')!r} sent by the server: {e}")
-        return None
-
-
-def build_tracks(data: Dict[str, Any]) -> Tracks:
-    tracks = Tracks()
-    tracks.videos = [deserialize_video(v) for v in data.get("video", [])]
-    tracks.audio = [deserialize_audio(a) for a in data.get("audio", [])]
-    tracks.subtitles = [deserialize_subtitle(s) for s in data.get("subtitles", [])]
-
-    for track_data, track_obj in [
-        *zip(data.get("video", []), tracks.videos),
-        *zip(data.get("audio", []), tracks.audio),
-        *zip(data.get("subtitles", []), tracks.subtitles),
-    ]:
-        drm_objs = reconstruct_drm(track_data.get("drm"))
-        if drm_objs:
-            track_obj.drm = drm_objs
-        preference = track_data.get("drm_preference")
-        if preference:
-            try:
-                track_obj.drm_preference = preference
-            except ValueError:
-                log.warning(f"Ignoring unknown drm_preference {preference!r} from the server for track {track_obj.id}")
-    tracks.attachments = [a for a in map(build_attachment, data.get("attachments", [])) if a]
-    return tracks
 
 
 def apply_service_track_data(tracks: Tracks, data: Dict[str, Any]) -> None:
@@ -544,135 +376,6 @@ def segment_uri_filter(uris: Iterable[Any]) -> Callable[[Any], bool]:
         return bool(exact) and (uri in exact or uri.split("?")[0] in paths)
 
     return segment_filter
-
-
-EPISODE_PLACEHOLDER_NAME = re.compile(r"Episode ?#?\d+", re.IGNORECASE)
-
-
-def episode_name(name: Optional[str], series_title: Optional[str]) -> Optional[str]:
-    """Drop a placeholder episode name the way ``Episode.__init__`` does.
-
-    The server sends "Episode 04" for an unnamed episode, so the same filter has to run
-    again here, or the placeholder reaches the output file name.
-    """
-    if not name:
-        return None
-    name = name.strip()
-    if EPISODE_PLACEHOLDER_NAME.match(name):
-        return None
-    if series_title and name.lower() == series_title.lower():
-        return None
-    return name
-
-
-def parse_air_date(value: Any) -> Any:
-    """ISO date string back to a date, as ``Episode.__init__`` does; anything else passes through."""
-    if isinstance(value, str):
-        try:
-            return date_.fromisoformat(value[:10])
-        except ValueError:
-            return value
-    return value
-
-
-def apply_title_fields(title: Title_T, info: Dict[str, Any]) -> None:
-    """Copy the serialized metadata fields onto a local title.
-
-    A service can change its title inside ``get_tracks`` (a corrected original language,
-    a real episode name, an air date), so the client re-applies the server's view of the
-    title after every call that returns one. Season, number and part are set only by
-    ``build_title``, as dl can renumber them after the listing.
-    """
-    if info.get("language"):
-        title.language = Language.get(info["language"])
-    if info.get("description") is not None and isinstance(title, (Episode, Movie)):
-        title.description = info["description"]
-    if info.get("year") is not None:
-        title.year = info["year"]
-
-    if isinstance(title, Episode):
-        if info.get("series_title"):
-            title.title = info["series_title"]
-        if "name" in info:
-            title.name = episode_name(info["name"], title.title)
-        if info.get("absolute") is not None:
-            title.absolute = info["absolute"]
-        if info.get("air_date") is not None:
-            title.air_date = parse_air_date(info["air_date"])
-    elif info.get("name"):
-        title.name = info["name"]
-
-    for key in ("anime", "daily", "sport", *(SONG_FIELDS if isinstance(title, Song) else ())):
-        if info.get(key) is not None:
-            setattr(title, key, info[key])
-
-    extra = {k: info[k] for k in ("date", "cover_url") if info.get(k) is not None}
-    availability = availability_metadata(info.get("availability"))
-    if availability is not None:
-        extra["availability"] = availability
-    music_data = info.get("music_data")
-    if isinstance(music_data, dict):
-        extra.update({key: music_data[key] for key in MUSIC_DATA_KEYS if key in music_data})
-    if extra:
-        if isinstance(title.data, dict):
-            title.data.update(extra)
-        else:
-            title.data = extra
-
-
-def build_title(info: Dict[str, Any], service_tag: str, fallback_id: str) -> Title_T:
-    svc_class = type(service_tag, (), {})
-    lang = Language.get(info["language"]) if info.get("language") else None
-    title_type = info.get("type")
-    title: Title_T
-    if title_type == "episode":
-        title = Episode(
-            id_=info.get("id", fallback_id),
-            service=svc_class,
-            title=info.get("series_title", "Unknown"),
-            season=info.get("season", 0),
-            number=info.get("number", 0),
-            part=info.get("part"),
-            language=lang,
-        )
-    elif title_type == "movie":
-        title = Movie(
-            id_=info.get("id", fallback_id),
-            service=svc_class,
-            name=info.get("name") or "Unknown",
-            language=lang,
-        )
-    elif title_type == "song":
-        title = Song(
-            id_=info.get("id", fallback_id),
-            service=svc_class,
-            name=info.get("name") or "Unknown",
-            artist=info.get("artist") or "Unknown",
-            album=info.get("album") or "Unknown",
-            track=info.get("track") or 1,
-            disc=info.get("disc") or 1,
-            language=lang,
-            album_artist=info.get("album_artist"),
-            release_type=info.get("release_type") or "album",
-            total_tracks=info.get("total_tracks"),
-            total_discs=info.get("total_discs"),
-            genre=info.get("genre"),
-            explicit=info.get("explicit"),
-            isrc=info.get("isrc"),
-            upc=info.get("upc"),
-            copyright=info.get("copyright"),
-            label=info.get("label"),
-            lyrics=info.get("lyrics"),
-            artwork_url=info.get("artwork_url"),
-            synced_lyrics=info.get("synced_lyrics"),
-            lyrics_suffix=info.get("lyrics_suffix"),
-        )
-    else:
-        raise click.ClickException(
-            f"The remote server sent an unknown title type {title_type!r}; unshackle versions differ"
-        )
-    apply_title_fields(title, info)
-    return title
 
 
 def title_key(title: Title_T) -> tuple:

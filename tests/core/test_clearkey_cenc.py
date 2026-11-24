@@ -20,9 +20,9 @@ import pytest
 # lxml.etree: XML parser used to build ContentProtection fixtures for DASH.get_drm
 from lxml import etree
 
-from unshackle.core.drm import drm_from_dict
 from unshackle.core.drm.clearkey_cenc import ClearKeyCENC
 from unshackle.core.manifests.dash import DASH
+from unshackle.core.wire import drm_from_dict
 
 KID = UUID("9eb4050d-e44b-4802-932e-27d75083e266")
 KEY = bytes.fromhex("ccd0064c43f7e9fcbaa9b12af3fd1f40")

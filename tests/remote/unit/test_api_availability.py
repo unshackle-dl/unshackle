@@ -2,10 +2,9 @@
 
 import pytest
 
-from unshackle.core.api.handlers import serialize_title
-from unshackle.core.remote_service import build_title
 from unshackle.core.titles.availability import availability_metadata
 from unshackle.core.titles.episode import Episode
+from unshackle.core.wire import build_title, serialize_title
 
 pytestmark = pytest.mark.unit
 

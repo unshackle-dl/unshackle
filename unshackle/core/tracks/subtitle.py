@@ -199,29 +199,6 @@ class Subtitle(Track):
         # Called after Track has been converted to another format
         self.OnConverted: Optional[Callable[[Subtitle.Codec], None]] = None
 
-    def to_dict(self) -> dict[str, Any]:
-        data = super().to_dict()
-        data.update(
-            {
-                "codec": self.codec.name if self.codec else None,
-                "cc": self.cc,
-                "sdh": self.sdh,
-                "forced": self.forced,
-            }
-        )
-        return data
-
-    @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> Subtitle:
-        kwargs = Track.base_kwargs_from_dict(data)
-        return cls(
-            **kwargs,
-            codec=Subtitle.Codec[data["codec"]] if data.get("codec") else None,
-            cc=data.get("cc", False),
-            sdh=data.get("sdh", False),
-            forced=data.get("forced", False),
-        )
-
     @property
     def mux_language(self) -> Language:
         """The language tag written to the output file, with the script its region implies."""

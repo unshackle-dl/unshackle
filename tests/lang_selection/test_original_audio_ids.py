@@ -4,7 +4,7 @@ from typing import Optional
 
 import pytest
 
-from unshackle.core.api.handlers import original_audio_ids
+from unshackle.core.wire import original_audio_ids
 
 
 class FakeTrack:
