@@ -168,9 +168,18 @@ def fragments(tracks: Tracks, level: int, counts: dict[int, int]) -> list[dict[s
                 root.append(deepcopy(child))
         period = dash.get("period")
         representation = dash.get("representation")
-        root.append(one_track_period(period, adaptation_set, representation))
-
         periods = manifest.findall("Period")
+        durations = dict(zip(map(id, periods), DASH.period_durations(manifest)))
+
+        def kept(source: Any, new_period: Any) -> None:
+            """Append a fragment period with its duration written out, as the periods dropped beside it are gone."""
+            duration = durations.get(id(source))
+            if duration is not None and not new_period.get("duration"):
+                new_period.set("duration", f"PT{duration:.6f}".rstrip("0").rstrip(".") + "S")
+            root.append(new_period)
+
+        kept(period, one_track_period(period, adaptation_set, representation))
+
         if period is not None and period in periods:
             filtered = set(dash.get("filtered_period_ids") or [])
             rep_id = dash.get("representation_id") or (representation.get("id") if representation is not None else None)
@@ -179,7 +188,7 @@ def fragments(tracks: Tracks, level: int, counts: dict[int, int]) -> list[dict[s
                     continue
                 found = DASH.resolve_representation(later, rep_id, adaptation_set)
                 if found is not None:
-                    root.append(one_track_period(later, *found))
+                    kept(later, one_track_period(later, *found))
 
         out.append(
             {

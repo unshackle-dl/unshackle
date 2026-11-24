@@ -156,11 +156,12 @@ the next segment it needs and appends every segment that is ready in order, then
 segment file. With [`decrypt_segments`](drm.md#decrypt_segments) also on, each segment is
 appended after its decryption completes, never before.
 
-This option is off by default because it disables resume, and because its cost during the
-download is not measured. The append reads each segment straight after a worker wrote it, so
-the read usually comes from the page cache. On a hard disk, the append to one file while the
-workers write many segment files can still make the head seek. If a download gets slower with
-the option on, turn it off.
+This option is off by default because it disables resume. In a measurement of a 3 GiB track in
+1500 segments with 16 workers, on an SSD and a loopback server, the merge during the download took
+0.9 s more than the merge after it on Linux and 1.1 s less on Windows. With each connection limited
+to 8 MiB/s, it took 2.2 s less on Linux and 8.0 s less on Windows. On a hard disk, the append to one
+file while the workers write many segment files can make the head seek. If a download gets slower
+with the option on, turn it off.
 
 This applies to video and audio tracks from DASH, ISM, and HLS. An HLS track qualifies
 only when every segment shares one init segment and one `EXT-X-KEY`, with no

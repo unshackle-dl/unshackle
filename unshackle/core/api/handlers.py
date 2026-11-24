@@ -4294,7 +4294,8 @@ async def session_tracks_handler(
             try:
                 chapters = await asyncio.to_thread(service_instance.get_chapters, title)
                 session.chapters_by_title[str(title_id)] = chapters if chapters else []
-            except (Exception, SystemExit):
+            except (Exception, SystemExit) as e:
+                log.debug("get_chapters failed for title %s: %s", title_id, e)
                 session.chapters_by_title[str(title_id)] = []
 
             snapshot = await asyncio.to_thread(capture, tracks, config.serve.get("compression_level", 1))

@@ -4,10 +4,13 @@ import base64
 import html
 import logging
 import math
+import mmap
+import os
 import re
 import shutil
+from bisect import bisect_right
 from concurrent.futures import Future
-from contextlib import ExitStack, closing
+from contextlib import ExitStack, closing, suppress
 from copy import deepcopy
 from functools import lru_cache, partial
 from pathlib import Path
@@ -30,7 +33,7 @@ from unshackle.core.constants import DOWNLOAD_ALL_DRM, DOWNLOAD_CANCELLED, DOWNL
 from unshackle.core.downloaders.requests import parse_content_range
 from unshackle.core.drm import DRM_T, ClearKeyCENC, PlayReady, Widevine
 from unshackle.core.drm.segment_decrypt import SEGMENT_DRM_T, SegmentDecrypter, can_use
-from unshackle.core.drm.verify import decrypt_track
+from unshackle.core.drm.verify import decrypt_track, walk
 from unshackle.core.events import events
 from unshackle.core.session import RnetSession
 from unshackle.core.tracks import Audio, DownloadContext, Subtitle, Tracks, Video, resume
@@ -44,6 +47,7 @@ from unshackle.core.utilities import is_close_match, log_event, try_ensure_utf8
 from unshackle.core.utils import run_proxy
 from unshackle.core.utils.bitrate import ranged_get
 from unshackle.core.utils.redact import safe_display_url
+from unshackle.core.utils.webvtt import shift_webvtt, webvtt_block_offsets
 from unshackle.core.utils.xml import load_xml
 
 DOLBY_CHANNEL_SCHEMES = (
@@ -88,6 +92,16 @@ def missing_language(where: str, fallback: Any) -> MissingLanguageError:
     if not tag_is_valid(str(fallback).strip()) or str(fallback).startswith("und"):
         return MissingLanguageError(f"No language for {where}, and the fallback language {fallback} is invalid")
     return MissingLanguageError(f"No language for {where}")
+
+
+def rebase_webvtt_files(groups: list[list[Path]], bounds_ms: list[int]) -> None:
+    """Rewrite the WebVTT segment files of each period or discontinuity block, shifted by webvtt_block_offsets."""
+    texts = [[try_ensure_utf8(path.read_bytes()).decode("utf8") for path in group] for group in groups]
+    for group, parts, offset in zip(groups, texts, webvtt_block_offsets(["\n\n".join(t) for t in texts], bounds_ms)):
+        if not offset:
+            continue
+        for path, text in zip(group, parts):
+            path.write_bytes(shift_webvtt(text, offset).encode("utf8"))
 
 
 def append_segment(dst: BinaryIO, segment_file: Path, is_text_subtitle: bool) -> None:
@@ -145,6 +159,93 @@ class RollingMerge:
     @property
     def merged(self) -> int:
         return self.cursor
+
+
+def mdhd_timescale(init_data: bytes) -> Optional[int]:
+    """The media timescale of the first track in an init segment, or None when it has no mdhd."""
+    for kind, body, box_end in walk(init_data):
+        if kind == b"mdhd":
+            at = body + (20 if body < box_end and init_data[body] == 1 else 12)
+            return int.from_bytes(init_data[at : at + 4], "big") if at + 4 <= box_end else None
+    return None
+
+
+def tfdt_fields(data: bytes) -> list[tuple[int, int, int]]:
+    """(offset, width, value) of each tfdt baseMediaDecodeTime in a fragment; a tfdt too short for its field is skipped."""
+    fields = []
+    for kind, body, box_end in walk(data):
+        if kind != b"tfdt" or box_end - body < 8:
+            continue
+        width = 8 if data[body] == 1 else 4
+        if body + 4 + width <= box_end:
+            fields.append((body + 4, width, int.from_bytes(data[body + 4 : body + 4 + width], "big")))
+    return fields
+
+
+class PeriodRebase:
+    """Appends segments and moves the tfdt of each period whose timeline restarts to its place in the output.
+
+    A stitched manifest can package each content period on its own, so every period starts at tfdt 0
+    again. A period whose first tfdt falls before the middle of the previous period restarted: its
+    presentationTimeOffset moves to the period's output start, or to the previous period's end when
+    that is later. Any other period keeps the shift before it, or drops it when its own timeline is
+    nearer its output start, so a continuous timeline keeps its decode times and gaps. A track whose
+    first period starts later in the output but whose timeline starts near 0 is placed at that start.
+    Only tfdt moves; sidx, emsg and prft stay as they are.
+    """
+
+    def __init__(self, periods: dict[int, tuple[float, float, float]], timescale: int) -> None:
+        self.periods = periods
+        self.timescale = timescale
+        self.offset = 0
+        self.base: Optional[int] = None
+        self.previous: Optional[tuple[int, int, int]] = None
+
+    def append(self, dst: BinaryIO, segment_file: Path) -> None:
+        period = self.periods.get(int(segment_file.stem))
+        if period is None and not self.offset:
+            append_segment(dst, segment_file, is_text_subtitle=False)
+            return
+        with open(segment_file, "rb") as src:
+            fields: list[tuple[int, int, int]] = []
+            if os.fstat(src.fileno()).st_size:
+                with mmap.mmap(src.fileno(), 0, access=mmap.ACCESS_READ) as data:
+                    fields = tfdt_fields(cast(bytes, data))
+            if period and fields:
+                self.start_period(fields[0][2], *period)
+            start = dst.tell()
+            shutil.copyfileobj(src, dst, 1024 * 1024)
+        if self.offset and fields:
+            end = dst.tell()
+            for at, width, value in fields:
+                shifted = value + self.offset
+                if not 0 <= shifted < 1 << (width * 8):
+                    raise ValueError(f"Shifted tfdt {shifted} does not fit its {width * 8}-bit field: {segment_file}")
+                dst.seek(start + at)
+                dst.write(shifted.to_bytes(width, "big"))
+            dst.seek(end)
+
+    def start_period(self, first: int, out_start: float, duration: float, pto: float) -> None:
+        """Set the shift for a period from its first tfdt and its manifest timing.
+
+        A period's media start is its presentationTimeOffset, or its first tfdt when it declares none.
+        """
+        media_start = round(pto * self.timescale) if pto else first
+        placed = round(out_start * self.timescale)
+        length = round(duration * self.timescale)
+        if self.base is None:
+            if placed and media_start < placed // 2:
+                self.base, self.offset = 0, placed - media_start
+            else:
+                self.base = media_start - placed
+        elif self.previous:
+            previous_first, previous_length, previous_end = self.previous
+            target = self.base + placed
+            if first + self.offset < previous_first + previous_length // 2:
+                self.offset = max(target, previous_end) - media_start
+            elif self.offset and abs(media_start - target) < abs(media_start + self.offset - target):
+                self.offset = max(0, previous_end - media_start)
+        self.previous = (first + self.offset, length, media_start + self.offset + length)
 
 
 def rep_shape(adaptation_set: Element, rep: Element) -> tuple[Optional[str], ...]:
@@ -510,9 +611,18 @@ class DASH:
         segment_timescale: float = 0
         init_data: Optional[bytes] = None
         track_kid: Optional[UUID] = None
+        period_starts: dict[int, tuple[float, float, float]] = {}
+        timed = True
 
         content_periods = [p for p in all_periods if DASH.is_content_period(p, filtered_period_ids)]
         period_count = len(content_periods)
+        durations = dict(zip(map(id, all_periods), DASH.period_durations(manifest)))
+        content_timing: list[tuple[Optional[float], Optional[float]]] = []
+        elapsed: Optional[float] = 0.0
+        for content_period in content_periods:
+            duration = durations[id(content_period)]
+            content_timing.append((elapsed, duration))
+            elapsed = elapsed + duration if elapsed is not None and duration is not None else None
 
         if period_count > 1:
             log.debug(f"Multi-period manifest detected with {period_count} content periods")
@@ -543,6 +653,7 @@ class DASH:
                 session=session,
                 probe_kid=period_idx == 0,
                 window=config.sample,
+                duration=content_timing[period_idx][1],
             )
 
             if period_idx == 0:
@@ -551,10 +662,18 @@ class DASH:
                 track_kid = p_kid
                 segment_timescale = p_timescale
 
+            first_segment = len(segments)
             for seg in p_segments:
                 if seg not in seen_segments:
                     seen_segments.add(seg)
                     segments.append(seg)
+            if len(segments) > first_segment:
+                out_start, duration = content_timing[period_idx]
+                if out_start is None or duration is None:
+                    timed = False
+                else:
+                    pto = DASH.presentation_time_offset(matched_as, matched_rep)
+                    period_starts[first_segment] = (out_start, duration, pto)
             segment_durations.extend(p_durations)
             if config.sample and segments:
                 break
@@ -704,6 +823,13 @@ class DASH:
         if use_segment_decrypt and init_data:
             decrypter = SegmentDecrypter(cast(SEGMENT_DRM_T, drm), init_data, save_dir.parent, max_workers)
 
+        rebase: Optional[PeriodRebase] = None
+        known = timed and len(period_starts) > 1
+        timescale = mdhd_timescale(init_data) if known and init_data and not is_text_subtitle else None
+        if timescale:
+            rebase = PeriodRebase(period_starts, timescale)
+        append = rebase.append if rebase else partial(append_segment, is_text_subtitle=is_text_subtitle)
+
         merger: Optional[RollingMerge] = None
         try:
             with ExitStack() as stack:
@@ -712,7 +838,7 @@ class DASH:
                     head = decrypter.init_bytes() if decrypter else init_data
                     if head:
                         output.write(head)
-                    merger = RollingMerge(output)
+                    merger = RollingMerge(output, append)
 
                 # an exception raised in this body (a decrypt failure re-raised by the merge)
                 # must close the generator now, so its finally aborts the workers
@@ -816,14 +942,24 @@ class DASH:
                 )
                 raise FileNotFoundError(error_msg)
 
+            if known and is_text_subtitle and track.codec == Subtitle.Codec.WebVTT:
+                firsts = sorted(period_starts)
+                groups: list[list[Path]] = [[] for _ in firsts]
+                for segment_file in segments_to_merge:
+                    groups[bisect_right(firsts, int(segment_file.stem)) - 1].append(segment_file)
+                last_start, last_duration, _ = period_starts[firsts[-1]]
+                bounds = [*(period_starts[i][0] for i in firsts), last_start + last_duration]
+                rebase_webvtt_files(groups, [round(t * 1000) for t in bounds])
+
             with open(save_path, "wb") as f:
                 if init_data:
                     f.write(init_data)
                 if len(segments_to_merge) > 1:
                     progress(downloaded="Merging", completed=0, total=len(segments_to_merge))
                 for segment_file in segments_to_merge:
-                    append_segment(f, segment_file, is_text_subtitle)
-                    segment_file.unlink()
+                    append(f, segment_file)
+                    with suppress(OSError):
+                        segment_file.unlink()
                     progress(advance=1)
 
         track.path = save_path
@@ -948,6 +1084,59 @@ class DASH:
         return True
 
     @staticmethod
+    def period_durations(manifest: ElementTree) -> list[Optional[float]]:
+        """The duration in seconds of every Period, None where the manifest does not give it.
+
+        A Period without @start starts at 0 when it is the first, else where the previous Period
+        ends (ISO/IEC 23009-1 5.3.2.1). A Period without @duration lasts to the next Period's start,
+        or to the end of the presentation. A duration that is not positive counts as unknown.
+        """
+        periods = manifest.findall("Period")
+        starts: list[Optional[float]] = []
+        for i, period in enumerate(periods):
+            previous = periods[i - 1] if i else None
+            if period.get("start"):
+                starts.append(DASH.pt_to_sec(period.get("start")))
+            elif previous is None:
+                starts.append(0.0)
+            elif starts[-1] is not None and previous.get("duration"):
+                starts.append(cast(float, starts[-1]) + DASH.pt_to_sec(previous.get("duration")))
+            else:
+                starts.append(None)
+        total = manifest.get("mediaPresentationDuration")
+        durations: list[Optional[float]] = []
+        for i, (period, start) in enumerate(zip(periods, starts)):
+            duration: Optional[float] = None
+            if period.get("duration"):
+                duration = DASH.pt_to_sec(period.get("duration"))
+            elif start is not None and i + 1 < len(periods):
+                following = starts[i + 1]
+                duration = following - start if following is not None else None
+            elif start is not None and total:
+                duration = DASH.pt_to_sec(total) - start
+            durations.append(duration if duration is not None and duration > 0 else None)
+        return durations
+
+    @staticmethod
+    def period_duration(manifest: ElementTree, period: Element) -> Optional[float]:
+        """The duration in seconds of one Period, by DASH.period_durations."""
+        index = next((i for i, p in enumerate(manifest.findall("Period")) if p is period), None)
+        if index is None:
+            return DASH.pt_to_sec(period.get("duration")) if period.get("duration") else None
+        return DASH.period_durations(manifest)[index]
+
+    @staticmethod
+    def presentation_time_offset(adaptation_set: Element, representation: Element) -> float:
+        """The presentationTimeOffset of a Representation's segment element in seconds, 0 when it has none."""
+        element = DASH.merge_segment_templates(adaptation_set, representation)
+        for name in ("SegmentList", "SegmentBase"):
+            if element is None:
+                element = DASH.find_segment_element(name, adaptation_set, representation)
+        if element is None:
+            return 0.0
+        return int(element.get("presentationTimeOffset") or 0) / (float(element.get("timescale") or 1) or 1.0)
+
+    @staticmethod
     def merge_segment_templates(adaptation_set: Element, representation: Element) -> Optional[Element]:
         """
         Assemble the effective SegmentTemplate for a Representation by cascading the
@@ -984,6 +1173,7 @@ class DASH:
         session: Union[Session, RnetSession],
         probe_kid: bool = True,
         window: Optional[tuple[int, int]] = None,
+        duration: Optional[float] = None,
     ) -> tuple[
         Optional[bytes],
         list[tuple[str, Optional[str]]],
@@ -999,6 +1189,7 @@ class DASH:
                 the caller needs neither the init data nor the Key ID of this period. False
                 drops the FFprobe call, and also the init request where the rest of the parse
                 does not need those bytes.
+            duration: The Period's duration in seconds, when the caller already has it.
 
         Returns:
             A tuple of (init_data, segments, segment_timescale, segment_durations, track_kid).
@@ -1012,7 +1203,10 @@ class DASH:
         adaptation_set_base_url = urljoin(period_base_url, adaptation_set.findtext("BaseURL") or "")
         rep_base_url = urljoin(adaptation_set_base_url, representation.findtext("BaseURL") or "")
 
-        period_duration = period.get("duration") or manifest.get("mediaPresentationDuration")
+        total = manifest.get("mediaPresentationDuration")
+        period_duration = (
+            duration or DASH.period_duration(manifest, period) or (DASH.pt_to_sec(total) if total else None)
+        )
         init_data: Optional[bytes] = None
 
         segment_template = DASH.merge_segment_templates(adaptation_set, representation)
@@ -1081,7 +1275,7 @@ class DASH:
                         if next_time:
                             end_time = int(next_time)
                         elif period_duration:
-                            end_time = timeline_start + DASH.pt_to_sec(period_duration) * segment_timescale
+                            end_time = timeline_start + period_duration * segment_timescale
                         else:
                             raise ValueError("Duration of the Period was unable to be determined.")
                         # round off float noise from the duration so it cannot add a segment
@@ -1113,7 +1307,6 @@ class DASH:
             else:
                 if not period_duration:
                     raise ValueError("Duration of the Period was unable to be determined.")
-                period_duration = DASH.pt_to_sec(period_duration)
                 segment_duration = float(segment_template.get("duration")) or 1
 
                 if not end_number:

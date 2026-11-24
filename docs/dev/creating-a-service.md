@@ -563,7 +563,10 @@ exists. Timestamps take `"HH:MM:SS[.mmm]"`, int milliseconds, or float seconds.
 ```python
 def get_chapters(self, title: Title_T) -> Chapters:
     chapters = [Chapter(name=c.get("name"), timestamp=c["start"]) for c in title.data.get("chapters", [])]
-    return Chapters(sorted(chapters, key=lambda c: c.timestamp))
+    unique: dict[str, Chapter] = {}
+    for chapter in sorted(chapters, key=lambda c: not c.named):
+        unique.setdefault(chapter.timestamp, chapter)
+    return Chapters(sorted(unique.values(), key=lambda c: c.timestamp))
 ```
 
 !!! warning "Sort by timestamp before you build the `Chapters`"
@@ -572,7 +575,7 @@ def get_chapters(self, title: Title_T) -> Chapters:
     lands before it.
 
     You never need to add `Chapter(0)`. An API chapter at `0` keeps its name. Drop
-    duplicate timestamps.
+    duplicate timestamps and keep the named chapter, as the example does.
 
 !!! note "Close a named range with an unnamed chapter"
     An unnamed `Chapter` ends the range before it: `Chapter(name="Intro")` at the
