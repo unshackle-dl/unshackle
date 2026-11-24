@@ -283,6 +283,7 @@ These keys are sent only when the title carries them, so a title without them se
 
 | Key | Type | On | Meaning |
 | --- | --- | --- | --- |
+| `availability` | object | all | Optional account-scoped metadata: `paid` is a boolean describing the catalogue offer; `access` is `"granted"`, `"denied"`, or `"unknown"`. Both fields are optional; missing or unknown access is not denial. Only these allowlisted fields are forwarded, including through remote services. |
 | `part` | integer | episode | Part index of a [split episode](../creating-a-service.md#split-episodes), counting from 1. |
 | `air_date` | string | episode | ISO air date of [daily and date-based content](../../guide/downloading.md#daily-and-date-based-content). unshackle names the episode by date instead of `SxxExx`. |
 | `absolute` | integer | episode | Absolute episode number across all seasons. |
