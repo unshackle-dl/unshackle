@@ -381,7 +381,7 @@ generally never touch this directly, but it explains behaviour you might observe
 | Behavior | Value | Notes |
 |---|---|---|
 | Idle session TTL | **300s** (5 min) default | Refreshed on every request to the session and when a `titles` or `tracks` request ends. A remote session does not expire while a request works on it |
-| Max concurrent sessions | **100** default | Oldest (least recently used) is evicted when full. A remote session that a request works on goes last |
+| Max concurrent sessions | **100** default | When full, the least recently used remote session of the API key that holds the most is evicted. A remote session that a request works on goes last |
 | Auth/input timeout | **600s** (10 min) | Sessions still authenticating or awaiting a prompt use this longer window instead of the TTL |
 | Cleanup sweep | every 60s | Expired sessions are removed and their input prompts cancelled |
 
@@ -568,7 +568,7 @@ Source: `unshackle/core/api/session_store.py`. A singleton you get from
 - **Config-driven limits.** `serve.session_ttl` (default `300`) and
   `serve.max_sessions` (default `100`) are read as properties, so config changes
   take effect without recreating the store.
-- **`create()`** evicts the least-recently-accessed remote session when at capacity,
+- **`create()`** evicts the least-recently-accessed remote session of the API key that holds the most when at capacity,
   then stores a new `SessionEntry`. It defaults `auth_status` to `AUTHENTICATED`, and
   the `create` handler overrides it to `AUTHENTICATING`.
 - **`get()`** refreshes `last_accessed` through `touch()`. It returns `None` (and

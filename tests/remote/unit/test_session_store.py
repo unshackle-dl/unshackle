@@ -145,6 +145,18 @@ async def test_max_sessions_evicts_oldest(store: SessionStore, monkeypatch: pyte
     assert (await store.get("c")) is c
 
 
+async def test_max_sessions_evicts_the_oldest_session_of_the_key_that_holds_the_most(
+    store: SessionStore, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(type(store), "max_sessions", property(lambda _: 3))
+    await store.create("EXAMPLE", _FakeService(), session_id="a-1", owner_key="KEY-A")
+    for n in (1, 2, 3):
+        await asyncio.sleep(0.01)
+        await store.create("EXAMPLE", _FakeService(), session_id=f"b-{n}", owner_key="KEY-B")
+
+    assert set(store._sessions) == {"a-1", "b-2", "b-3"}
+
+
 async def test_get_expiry_removes_cache_dir(store: SessionStore, monkeypatch: pytest.MonkeyPatch) -> None:
     from datetime import datetime, timedelta, timezone
 

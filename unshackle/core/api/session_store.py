@@ -11,7 +11,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import uuid
-from collections import deque
+from collections import Counter, deque
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Deque, Dict, List, Optional
@@ -170,8 +170,12 @@ class SessionStore:
             max_sessions = self.max_sessions
             if max_sessions is not None and len(self._sessions) >= max_sessions:
                 sessions = self._sessions
-                oldest_id = min(sessions, key=lambda k: (sessions[k].in_use, sessions[k].last_accessed))
-                log.warning(f"Max sessions reached ({max_sessions}), evicting oldest: {oldest_id}")
+                held = Counter(s.owner_key for s in sessions.values())
+                oldest_id = min(
+                    sessions,
+                    key=lambda k: (sessions[k].in_use, -held[sessions[k].owner_key], sessions[k].last_accessed),
+                )
+                log.warning(f"Max sessions reached ({max_sessions}), evicting oldest of the busiest key: {oldest_id}")
                 evicted = self._sessions.pop(oldest_id)
                 if evicted.input_bridge:
                     evicted.input_bridge.cancel()
