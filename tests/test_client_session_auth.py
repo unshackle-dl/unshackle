@@ -128,7 +128,7 @@ def test_remote_get_tracks_scopes_server_cookies():
         _session_id="s",
         service_tag="EXAMPLE",
         log=logging.getLogger("test"),
-        client=SimpleNamespace(post=lambda path, body: {"session_cookie_jar": jar}),
+        client=SimpleNamespace(post=lambda path, body: {"session_cookie_jar": jar}, probe=lambda endpoint: {}),
         drain_server_logs=lambda: None,
     )
     service.get_tracks(SimpleNamespace(id="t1"))

@@ -126,7 +126,8 @@ your choice, and with a service option that runs the remote session on the serve
 `auth_headers` lists extra header names to send the API key in, tried before the defaults
 `X-Secret-Key` and `X-Api-Key`, which unshackle always appends as fallbacks. It sends the
 first name. If the server answers `401`, it retries the same request with the next name, and
-keeps the one that works for the rest of the HTTP session. Names you give keep your spelling and
+keeps the one that works for the rest of the HTTP session. After a request succeeds, a `401`
+no longer moves the API key to another name. Names you give keep your spelling and
 are not repeated in the fallbacks, so unshackle tries
 `auth_headers: ["Authorization", "x-secret-key"]` as `Authorization`, `x-secret-key`, `X-Api-Key`.
 

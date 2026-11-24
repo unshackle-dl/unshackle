@@ -111,6 +111,8 @@ RETRY_AFTER_MAX = 3600
 RETRY_AFTER_LOCK = Lock()
 RATE_LIMIT_TRIES = 3
 TUNNEL_SLOT_POLL = 15
+PROBE_TIMEOUT = 30.0
+KEEPALIVE_MIN_INTERVAL = 5.0
 REOPEN_WAIT = 1800.0  # seconds a lost session waits for its server to come back; covers a deploy's whole drain
 
 
@@ -209,6 +211,8 @@ class RemoteClient:
         self.api_key = api_key
         self.auth_headers = list(auth_headers) if auth_headers else list(DEFAULT_AUTH_HEADERS)
         self._auth_header_index = 0
+        self._auth_header_lock = Lock()
+        self._auth_header_found = False
         self._session: Optional[requests.Session] = None
         self.tunnel: Optional[TunnelClient] = None
         # wraps every request, so the service's CDM calls get answered while the server runs its code
@@ -226,14 +230,18 @@ class RemoteClient:
         return self._session
 
     def next_auth_header(self) -> bool:
-        """Move the api key onto the next candidate header. False when no candidate header remains."""
-        if not self.api_key or self._auth_header_index + 1 >= len(self.auth_headers):
-            return False
+        """Move the API key onto the next candidate header. False when no candidate header remains.
+
+        Also False once a foreground call succeeded with the current header: a later 401 is about the API key itself.
+        """
         session = self.session
-        session.headers.pop(self.auth_headers[self._auth_header_index], None)
-        self._auth_header_index += 1
-        session.headers[self.auth_headers[self._auth_header_index]] = self.api_key
-        return True
+        with self._auth_header_lock:
+            if self._auth_header_found or not self.api_key or self._auth_header_index + 1 >= len(self.auth_headers):
+                return False
+            session.headers.pop(self.auth_headers[self._auth_header_index], None)
+            self._auth_header_index += 1
+            session.headers[self.auth_headers[self._auth_header_index]] = self.api_key
+            return True
 
     def request(
         self,
@@ -248,47 +256,18 @@ class RemoteClient:
 
         A raw ``body`` goes as ``application/octet-stream``, and a binary answer comes back under ``"body"``.
         """
-        url = f"{self.server_url}{endpoint}"
         payload: Dict[str, Any] = (
             {"json": data} if body is None else {"data": body, "headers": {"Content-Type": "application/octet-stream"}}
         )
-        gateway_retried = False
-        rate_waits = 0
-        while True:
-            try:
-                with self.in_flight(endpoint):
-                    resp = getattr(self.session, method)(url, timeout=self.timeout, **payload)
-            except requests.ConnectionError as e:
-                if isinstance(e.args[0] if e.args else None, urllib3.exceptions.ReadTimeoutError):
-                    raise self.timed_out(endpoint) from None
-                server_url = safe_display_url(self.server_url)
-                raise RemoteError(
-                    f"Could not connect to remote server at {server_url}", ClientErrorKind.CONNECT
-                ) from None
-            except requests.Timeout:
+        try:
+            resp = self.send(method, endpoint, self.timeout, **payload)
+        except requests.ConnectionError as e:
+            if isinstance(e.args[0] if e.args else None, urllib3.exceptions.ReadTimeoutError):
                 raise self.timed_out(endpoint) from None
-            # servers differ on which header carries the key, so retry the rest before giving up
-            if resp.status_code == 401 and self.next_auth_header():
-                continue
-            if (
-                resp.status_code == 429
-                and rate_waits < RATE_LIMIT_TRIES
-                and (retry_after := parse_retry_after(resp.headers.get("Retry-After")))
-            ):
-                rate_waits += 1
-                wait_retry_after(retry_after)
-                continue
-            # a proxy HTML page, not the server's JSON, means a dropped tunnel stream, which one retry gets past
-            if (
-                resp.status_code in (502, 503, 504)
-                and not gateway_retried
-                and "json" not in resp.headers.get("Content-Type", "")
-            ):
-                gateway_retried = True
-                log.debug(f"HTTP {resp.status_code} from the proxy in front of the server on {endpoint}, retrying once")
-                time.sleep(1)
-                continue
-            break
+            server_url = safe_display_url(self.server_url)
+            raise RemoteError(f"Could not connect to remote server at {server_url}", ClientErrorKind.CONNECT) from None
+        except requests.Timeout:
+            raise self.timed_out(endpoint) from None
         if resp.status_code < 400 and "octet-stream" in resp.headers.get("Content-Type", ""):
             return {"body": resp.content}
         try:
@@ -318,6 +297,56 @@ class RemoteClient:
                 )
             raise RemoteError(f"Server error [{error_code}]: {error_msg}", error_code)
         return detail
+
+    def send(
+        self, method: str, endpoint: str, timeout: float, background: bool = False, **kwargs: Any
+    ) -> requests.Response:
+        """Send one request through the ``in_flight`` hook and return the response; ``requests`` raises its own errors.
+
+        A 401 moves the API key to the next candidate header, a gateway's error page goes once more, and a 429 with
+        Retry-After waits on the console. A ``background`` call skips the hook and the 429 wait.
+        """
+        url = f"{self.server_url}{endpoint}"
+        gateway_retried = False
+        rate_waits = 0
+        while True:
+            with contextlib.nullcontext() if background else self.in_flight(endpoint):
+                resp = getattr(self.session, method)(url, timeout=timeout, **kwargs)
+            # servers differ on which header carries the key, so retry the rest before giving up
+            if resp.status_code == 401 and self.next_auth_header():
+                continue
+            if (
+                not background
+                and resp.status_code == 429
+                and rate_waits < RATE_LIMIT_TRIES
+                and (retry_after := parse_retry_after(resp.headers.get("Retry-After")))
+            ):
+                rate_waits += 1
+                wait_retry_after(retry_after)
+                continue
+            # a proxy HTML page, not the server's JSON, means a dropped tunnel stream, which one retry gets past
+            if (
+                resp.status_code in (502, 503, 504)
+                and not gateway_retried
+                and "json" not in resp.headers.get("Content-Type", "")
+            ):
+                gateway_retried = True
+                log.debug(f"HTTP {resp.status_code} from the proxy in front of the server on {endpoint}, retrying once")
+                time.sleep(1)
+                continue
+            if not background and resp.status_code < 400:
+                self._auth_header_found = True
+            return resp
+
+    def probe(self, endpoint: str, background: bool = True) -> Dict[str, Any]:
+        """GET a route with a short timeout: the JSON body, or an empty dict when the call fails. Never logs an error."""
+        try:
+            resp = self.send("get", endpoint, PROBE_TIMEOUT, background=background)
+            body = resp.json() if resp.ok else {}
+        except (requests.RequestException, ValueError) as e:
+            log.debug(f"Probe of {endpoint} failed: {e}")
+            return {}
+        return body if isinstance(body, dict) else {}
 
     def timed_out(self, endpoint: str) -> RemoteError:
         return RemoteError(
@@ -638,9 +667,14 @@ def resolve_remote_proxy_arg(proxy_arg: str, providers: Optional[list] = None) -
 
 def start_tunnel(client: RemoteClient, proxy: Optional[str] = None) -> TunnelClient:
     """Open a tunnel that sends the server's requests out through this machine's own connection, or through
-    ``proxy`` from this machine."""
+    ``proxy`` from this machine.
+
+    A health probe comes first, so the tunnel copies the auth header that the server reads.
+    """
     if proxy and (scheme := urlsplit(proxy).scheme.lower()) not in PROXY_PORTS:
         raise click.ClickException(f"--local-proxy cannot use a {scheme} proxy")
+    if not client._auth_header_found:
+        client.probe(HEALTH_ROUTE)
     headers = {k: str(v) for k, v in client.session.headers.items() if k.lower() != "connection"}
     slot_deadline = time.monotonic() + RETRY_AFTER_MAX
     rate_waits = 0
@@ -1212,16 +1246,13 @@ class RemoteService:
         that dies stops sending requests, so the server still expires an abandoned remote session.
         """
         info = cast(SessionInfo, self.client.get_optional(SESSION_ROUTE.format(session_id=self._session_id)))
-        interval = max(float(info.get("expires_in") or 300) / 3, 5.0)
-        url = self.client.server_url + SESSION_ROUTE.format(session_id=self._session_id)
+        interval = max(float(info.get("expires_in") or 300) / 3, KEEPALIVE_MIN_INTERVAL)
+        endpoint = SESSION_ROUTE.format(session_id=self._session_id)
         stop = self._keepalive_stop = Event()
 
         def ping() -> None:
             while not stop.wait(interval):
-                try:
-                    self.client.session.get(url, timeout=30)
-                except requests.RequestException:
-                    pass
+                self.client.probe(endpoint)
 
         Thread(target=ping, name=f"{self.service_tag}-keepalive", daemon=True).start()
 
@@ -1253,11 +1284,9 @@ class RemoteService:
                 return self._session_id is not None
             if session_id is None or not self.wait_for_server(accepting=False):
                 return False
-            url = self.client.server_url + SESSION_ROUTE.format(session_id=session_id)
-            try:
-                alive = kind != ClientErrorKind.TUNNEL_CLOSED and self.client.session.get(url, timeout=30).ok
-            except requests.RequestException:
-                alive = False
+            alive = kind != ClientErrorKind.TUNNEL_CLOSED and bool(
+                self.client.probe(SESSION_ROUTE.format(session_id=session_id), background=False)
+            )
             if alive:
                 return kind == ClientErrorKind.CONNECT
             self.log.warning("The remote session was lost, opening a new one")
@@ -1269,12 +1298,9 @@ class RemoteService:
         delay = 1.0
         warned = False
         while True:
-            try:
-                health = self.client.session.get(self.client.server_url + HEALTH_ROUTE, timeout=30).json()
-                if health.get("status") == "ok" and not (accepting and health.get("draining")):
-                    return True
-            except (requests.RequestException, ValueError, AttributeError):
-                pass
+            health = self.client.probe(HEALTH_ROUTE)
+            if health.get("status") == "ok" and not (accepting and health.get("draining")):
+                return True
             if time.monotonic() >= deadline:
                 return False
             if not warned:
@@ -1345,13 +1371,10 @@ class RemoteService:
 
     def server_draining(self) -> bool:
         """Whether the server announced a restart; asked once per title, as an episode can be shorter than the keepalive."""
-        try:
-            url = self.client.server_url + SESSION_ROUTE.format(session_id=self._session_id)
-            return bool(
-                self._session_id and cast(SessionInfo, self.client.session.get(url, timeout=30).json()).get("draining")
-            )
-        except (requests.RequestException, ValueError, AttributeError):
+        if not self._session_id:
             return False
+        info = cast(SessionInfo, self.client.probe(SESSION_ROUTE.format(session_id=self._session_id)))
+        return bool(info.get("draining"))
 
     def server_track_id(self, track_id: Any) -> str:
         """The id the current remote session knows the track with this client id by."""
@@ -1479,11 +1502,11 @@ class RemoteService:
                     self._cdm_stop.set()
 
     def poll_cdm_calls(self, stop: Event, interval: float = 0.5) -> None:
-        url = self.client.server_url + PROMPT_ROUTE.format(session_id=self._session_id)
+        endpoint = PROMPT_ROUTE.format(session_id=self._session_id)
         sessions: Dict[str, bytes] = {}
         while not stop.wait(interval):
             try:
-                call = cast(PromptReply, self.client.session.get(url, timeout=30).json()).get("cdm_call")
+                call = cast(PromptReply, self.client.probe(endpoint)).get("cdm_call")
                 if isinstance(call, dict):
                     with quiet():
                         self.answer_cdm_call(call, sessions)

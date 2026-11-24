@@ -236,6 +236,8 @@ The CORS headers expose these headers and `Retry-After` to a browser client.
 
 A `--remote` client that gets a `429` with `Retry-After` shows a countdown, waits that time
 (one hour at most), and then sends the request again. It stops after 3 waits for one request.
+The keep-alive, the poll for CDM calls, the health check and the drain check do not wait: each
+tries again at its next interval.
 
 !!! warning "`429` is not the `RATE_LIMITED` error body"
     `RATE_LIMITED` in [Errors](errors.md) is a *service* rate limit that a handler raises, and it

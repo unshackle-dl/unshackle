@@ -16,6 +16,7 @@ pytestmark = pytest.mark.unit
 
 class FakeClient:
     server_url = "https://server.example"
+    _auth_header_found = True
 
     def __init__(self) -> None:
         self.sent: dict[str, Any] = {}

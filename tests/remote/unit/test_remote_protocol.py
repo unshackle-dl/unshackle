@@ -16,7 +16,14 @@ from unshackle.core.api import routes
 from unshackle.core.api.handlers import SESSION_TRANSPORT_KEYS
 
 ROUTE_NAMES = {name for name in vars(protocol) if name.endswith("_ROUTE")}
-CLIENT_METHODS = {"get": "GET", "get_optional": "GET", "post": "POST", "post_optional": "POST", "delete": "DELETE"}
+CLIENT_METHODS = {
+    "get": "GET",
+    "get_optional": "GET",
+    "probe": "GET",
+    "post": "POST",
+    "post_optional": "POST",
+    "delete": "DELETE",
+}
 SERVED = {(method, path): handler for method, path, handler, _ in routes.ROUTES}
 
 

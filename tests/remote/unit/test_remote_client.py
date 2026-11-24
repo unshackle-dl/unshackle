@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import json
+import logging
 
 import click
 import pytest
+import requests
 import responses
 
 from unshackle.core.remote_service import RemoteClient
@@ -335,3 +337,47 @@ def test_the_429_wait_gives_up_after_its_tries(client: RemoteClient, monkeypatch
     with pytest.raises(SystemExit):
         client.get("/api/services")
     assert waits == [1] * remote_service.RATE_LIMIT_TRIES
+
+
+@responses.activate
+def test_a_401_after_a_header_worked_keeps_that_header(client: RemoteClient) -> None:
+    responses.add(responses.GET, "http://srv:8786/api/services", json={"services": []})
+    responses.add(responses.GET, "http://srv:8786/api/health", status=401, json={"message": "Secret Key is Invalid."})
+    responses.add(responses.GET, "http://srv:8786/api/health", json={"status": "ok"})
+
+    client.get("/api/services")
+    assert client.probe("/api/health") == {}
+    assert client.probe("/api/health") == {"status": "ok"}
+    assert client.session.headers.get("X-Secret-Key") == "secret-xyz"
+
+
+@responses.activate
+def test_a_probe_does_not_wait_out_a_429(client: RemoteClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    waits: list[int] = []
+    monkeypatch.setattr("unshackle.core.remote_service.wait_retry_after", waits.append)
+    responses.add(responses.GET, "http://srv:8786/api/session/s1", status=429, headers={"Retry-After": "5"}, json={})
+
+    assert client.probe("/api/session/s1") == {}
+    assert not waits
+
+
+@responses.activate
+def test_a_probe_reads_a_gateway_page_as_the_request_does(
+    client: RemoteClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("unshackle.core.remote_service.time.sleep", lambda _s: None)
+    url = "http://srv:8786/api/health"
+    responses.add(responses.GET, url, body=PROXY_502, status=502, content_type="text/html")
+    responses.add(responses.GET, url, json={"status": "ok"})
+
+    assert client.probe("/api/health") == {"status": "ok"}
+    responses.replace(responses.GET, url, body=PROXY_502, status=502, content_type="text/html")
+    assert client.probe("/api/health") == {}
+
+
+@responses.activate
+def test_a_probe_that_cannot_connect_logs_no_error(client: RemoteClient, caplog: pytest.LogCaptureFixture) -> None:
+    responses.add(responses.GET, "http://srv:8786/api/health", body=requests.ConnectionError("refused"))
+
+    assert client.probe("/api/health") == {}
+    assert not [r for r in caplog.records if r.levelno >= logging.WARNING]
