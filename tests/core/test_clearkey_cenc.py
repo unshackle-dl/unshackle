@@ -16,7 +16,6 @@ from typing import Any, Optional
 from uuid import UUID
 
 import pytest
-
 from lxml import etree
 
 from unshackle.core.drm import drm_from_dict

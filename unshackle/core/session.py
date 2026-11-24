@@ -20,7 +20,6 @@ from requests.structures import CaseInsensitiveDict
 
 from unshackle.core.config import config
 
-
 MAX_RETRIES = 5
 BACKOFF_FACTOR = 0.2
 MAX_BACKOFF = 60.0
