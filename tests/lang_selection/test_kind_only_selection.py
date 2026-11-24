@@ -1,8 +1,9 @@
-"""Run the kind-only filters through the real dl.result() selection loop.
+"""Run track selection through the real dl.result() loop, for what the run does with a skip.
 
 A fake service hands in-memory tracks to the loop, and the run stops at the first
-title that reaches ``Tracks.tree``, the step right after selection. A title with no
-track of the kind never gets there, so what the hook records is what the run kept.
+title that reaches ``Tracks.tree``, the step right after selection. What a selection keeps
+is tested through TrackSelection in test_track_selection; these tests cover the run:
+when a skip stops it, what it reports, and how it settles the post-script groups.
 """
 
 from __future__ import annotations
@@ -136,29 +137,6 @@ def run(
     return None
 
 
-def test_ado_keeps_the_descriptive_track_and_the_other_types(
-    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
-) -> None:
-    ids = run(monkeypatch, caplog, {1: {"ad": True, "forced": True}}, audio_description_only=True)
-    assert ids == {"video": ["v"], "audio": ["ad"], "subs": ["s"]}
-
-
-def test_fso_keeps_the_forced_track_and_the_other_types(
-    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
-) -> None:
-    ids = run(monkeypatch, caplog, {1: {"ad": True, "forced": True}}, forced_subs_only=True)
-    assert ids == {"video": ["v"], "audio": ["a"], "subs": ["sf"]}
-
-
-def test_only_flags_with_their_type_flags_give_a_single_kind(
-    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
-) -> None:
-    ids = run(monkeypatch, caplog, {1: {"ad": True, "forced": True}}, audio_description_only=True, audio_only=True)
-    assert ids == {"video": [], "audio": ["ad"], "subs": []}
-    ids = run(monkeypatch, caplog, {1: {"ad": True, "forced": True}}, forced_subs_only=True, subs_only=True)
-    assert ids == {"video": [], "audio": [], "subs": ["sf"]}
-
-
 @pytest.mark.parametrize("flag", ["audio_description_only", "forced_subs_only"])
 def test_a_single_title_with_no_such_track_exits(
     monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture, flag: str
@@ -216,20 +194,6 @@ def test_skip_missing_skips_the_title_and_reports_it(
     assert ids == {"video": ["v"], "audio": ["a"], "subs": ["s"]}
     assert "Skipping Show S01E01: Required audio language(s) not found: ko" in caplog.text
     assert {"skipped_titles": [{"title": "Show S01E01", "reason": "Required audio language(s) not found: ko"}]} in sink
-
-
-def test_require_audio_video_and_subs_work_together(
-    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
-) -> None:
-    ids = run(monkeypatch, caplog, {1: {}}, require_audio=["en"], require_video=["en"], require_subs=["en"])
-    assert ids == {"video": ["v"], "audio": ["a"], "subs": ["s"]}
-    assert run(monkeypatch, caplog, {1: {}}, require_audio=["ko"], require_video=["ko"], require_subs=["ko"]) == 1
-    assert (
-        "Required audio language(s) not found: ko; Required video language(s) not found: ko; "
-        "Required subtitle language(s) not found: ko"
-    ) in caplog.text
-    assert run(monkeypatch, caplog, {1: {}}, require_audio=["en"], require_video=["ko"], require_subs=["en"]) == 1
-    assert "Show S01E01: Required video language(s) not found: ko" in caplog.text
 
 
 def test_skip_missing_skips_a_filter_miss_and_continues(
@@ -336,19 +300,42 @@ def test_a_skipped_title_settles_its_post_script_group(
     assert seen.count("Show S01E01") == settled
 
 
-class LcevcService(FakeService):
-    """A 540p base video and the 1080p LCEVC enhancement layer that decodes on top of it."""
+class CaptionlessService(FakeService):
+    """A service that finds out in get_tracks that the title has no subtitles, and turns them off."""
 
     def get_tracks(self, title: Episode) -> Tracks:
         tracks = super().get_tracks(title)
-        tracks.videos[0].height = 540
-        tracks.add(Video(id_="lcevc", url="https://x/l", language="en", codec=Video.Codec.LCEVC, height=1080))
+        tracks.subtitles = []
+        self.NO_SUBTITLES = True
         return tracks
 
 
-def test_an_lcevc_layer_is_left_out_unless_asked_for(
+def test_no_subtitles_set_in_get_tracks_turns_the_subtitle_requirement_off(
     monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
-    assert run(monkeypatch, caplog, {1: {}}, service=LcevcService({1: {}}))["video"] == ["v"]
-    asked = run(monkeypatch, caplog, {1: {}}, service=LcevcService({1: {}}), vcodec=[Video.Codec.LCEVC])
-    assert asked["video"] == ["lcevc"]
+    ids = run(monkeypatch, caplog, {1: {}}, service=CaptionlessService({1: {}}), require_subs=["en"])
+    assert ids == {"video": ["v"], "audio": ["a"], "subs": []}
+
+
+class Muxed(BaseException):
+    """Stops the run at the first mux."""
+
+
+def test_a_failed_hybrid_muxes_the_ranges_it_falls_back_to(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The mux step must see the fallback ranges, or it runs the hybrid step on an SDR title."""
+
+    def hybrid_step(*args: Any, **kwargs: Any) -> None:
+        raise AssertionError("the hybrid step ran for a title that fell back to SDR")
+
+    def mux(*args: Any, **kwargs: Any) -> None:
+        raise Muxed()
+
+    stub_hybrid(monkeypatch)
+    monkeypatch.setattr("unshackle.commands.dl.hybrid_plan", hybrid_step)
+    monkeypatch.setattr(Tracks, "mux", mux)
+    ranges = [Video.Range.HYBRID, Video.Range.SDR]
+    with pytest.raises(Muxed):
+        run(monkeypatch, caplog, {1: {}}, to_end=True, video_only=True, range_=ranges, best_available=True)
+    assert "continuing with SDR" in caplog.text

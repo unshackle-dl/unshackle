@@ -1,18 +1,20 @@
-"""The dl.result call site of missing_required_langs, and inputs the unit tests skip.
+"""The required-language gate of the track selection, and inputs the unit tests skip.
 
-The gate in dl.result is not extractable without executing the whole download loop, so
-its wiring is pinned the same way test_required_langs pins download_manager: against the
-source. The value inputs cover what the helper's own tests leave out — real tracks carry
+The gate runs in TrackSelection.select, so its tests cross that interface with real tracks.
+The value inputs cover what the helper's own tests leave out: real tracks carry
 langcodes.Language objects, not strings.
 """
 
 from __future__ import annotations
 
-import inspect
+from typing import Any
 
+import pytest
 from langcodes import Language
 
-from unshackle.commands.dl import dl
+from tests.lang_selection import test_kind_only_selection as harness
+from tests.lang_selection.test_track_selection import audio, episode, selection, standard, video
+from unshackle.core.tracks.selection import Kept, Skip
 from unshackle.core.utilities import missing_required_langs
 
 
@@ -37,37 +39,76 @@ def test_requirement_checks_the_catalogue_not_the_selection():
     assert missing_required_langs(["fr"], ["en", "ko", "ja", "fr"]) == []
 
 
-class TestGateWiring:
-    """Pin the dl.result gate's shape; a silent rewire is otherwise invisible to tests."""
+def test_the_gate_is_disabled_with_the_track_kind() -> None:
+    # --no-audio / -V must not fail on a requirement the download cannot honour
+    assert isinstance(selection(require_audio=["ko"], no_audio=True).select(standard(), False), Kept)
+    assert isinstance(selection(require_video=["ko"], audio_only=True).select(standard(), False), Kept)
 
-    source = inspect.getsource(dl.result)
 
-    def test_gate_is_disabled_with_the_track_kind(self):
-        # --no-audio / -V must not fail on a require_audio the download cannot honour
-        assert "require_audio if keep_audio else []" in self.source
-        assert "require_video if keep_videos else []" in self.source
+def test_the_gate_counts_audio_embedded_in_a_kept_video() -> None:
+    def title() -> Any:
+        return episode(video(data={"audio_language": "ko"}), audio())
 
-    def test_gate_counts_audio_embedded_in_kept_video(self):
-        assert "embedded_audio_langs(title.tracks.videos, keep_videos and not audio_description_only)" in self.source
+    assert isinstance(selection(require_audio=["ko"]).select(title(), False), Kept)
+    missing = Skip("Required audio language(s) not found: ko")
+    assert selection(require_audio=["ko"], audio_only=True).select(title(), False) == missing
 
-    def test_gate_honours_exact_lang(self):
-        assert "missing_required_langs(required, available, title.language, exact=exact_lang)" in self.source
 
-    def test_gate_reads_tracks_before_the_keep_flags_empty_them(self):
-        # the availability lists must be built before `if not keep_videos:` clears
-        # title.tracks.videos, or embedded audio could never satisfy a requirement
-        gate = self.source.index("missing_required_langs(required")
-        reset = self.source.index("if not keep_videos:")
-        assert gate < reset
+def test_ado_does_not_count_audio_embedded_in_the_video_at_the_gate() -> None:
+    title = episode(video(data={"audio_language": "ko"}), audio("ad", bitrate=1, descriptive=True))
+    sel = selection(require_audio=["ko"], audio_description=True, audio_description_only=True)
+    assert sel.select(title, False) == Skip("Required audio language(s) not found: ko")
 
-    def test_require_and_exclude_clash_is_rejected_per_flag(self):
-        # --require-audio en with -l all,-en can never be satisfied as the user
-        # meant it, so it must die at parse time, against each flag's own
-        # exclusion list (-vl/-al cascade from -l only when unset)
-        assert "cannot be required and excluded at the same time" in self.source
-        for pair in (
-            '("--require-audio", require_audio, audio_excl)',
-            '("--require-video", require_video, video_excl)',
-            '("--require-subs", require_subs, s_lang_excl)',
-        ):
-            assert pair in self.source
+
+def test_a_run_with_every_required_language_present_keeps_the_title() -> None:
+    sel = selection(require_audio=["en"], require_video=["en"], require_subs=["en"])
+    assert isinstance(sel.select(standard(), False), Kept)
+
+
+def test_the_gate_honours_exact_lang() -> None:
+    def title() -> Any:
+        return episode(video(), audio(language="en-GB"))
+
+    assert isinstance(selection(require_audio=["en"]).select(title(), False), Kept)
+    missing = Skip("Required audio language(s) not found: en")
+    assert selection(require_audio=["en"], exact_lang=True).select(title(), False) == missing
+
+
+def test_the_gate_reads_the_tracks_before_any_filter() -> None:
+    title = episode(video(), audio("en", "en", bitrate=1), audio("ko", "ko", bitrate=1))
+    outcome = selection(a_lang=["en"], require_audio=["ko"]).select(title, False)
+    assert isinstance(outcome, Kept)
+    assert [a.id for a in outcome.tracks.audio] == ["en"]
+
+
+def test_every_kind_misses_in_one_reason() -> None:
+    sel = selection(require_audio=["ko"], require_video=["ko"], require_subs=["ko"])
+    assert sel.select(standard(), False) == Skip(
+        "Required audio language(s) not found: ko; Required video language(s) not found: ko; "
+        "Required subtitle language(s) not found: ko"
+    )
+
+
+@pytest.mark.parametrize(
+    ("flags", "clash"),
+    [
+        ({"require_audio": ["en"], "lang": ["all", "-en"]}, "--require-audio: en"),
+        ({"require_video": ["en"], "v_lang": ["all", "-en"]}, "--require-video: en"),
+        ({"require_subs": ["en"], "s_lang": ["all", "-en"]}, "--require-subs: en"),
+        ({"require_audio": ["-en"]}, "--require-audio: en"),
+    ],
+)
+def test_a_required_and_excluded_language_stops_the_run(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture, flags: dict[str, Any], clash: str
+) -> None:
+    assert harness.run(monkeypatch, caplog, {1: {}}, **flags) == 1
+    assert f"{clash} cannot be required and excluded at the same time." in caplog.text
+
+
+def test_a_language_override_does_not_inherit_the_lang_exclusions(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    # -al and -vl name languages, so they replace -l and its -en
+    flags: dict[str, Any] = {"require_audio": ["en"], "a_lang": ["en"], "v_lang": ["all"], "lang": ["all", "-en"]}
+    ids = harness.run(monkeypatch, caplog, {1: {}}, **flags)
+    assert ids["audio"] == ["a"]

@@ -20,13 +20,10 @@ import unshackle.commands.dl as dl_module
 from tests.remote.unit.test_remote_service_helpers import _sent_create_data
 from unshackle.commands.dl import (
     generated_dv_ranges,
-    hybrid_gate_failure,
     hybrid_plan,
     hybrid_source_tracks,
     hybrid_step_error,
-    keep_generated_dv_bases,
     missing_hybrid_error,
-    select_hybrid_bases,
 )
 from unshackle.core.api import download_manager, handlers
 from unshackle.core.api.handlers import validate_download_parameters
@@ -44,6 +41,7 @@ from unshackle.core.tracks.hybrid import (
     nits_to_pq,
     pq_to_nits,
 )
+from unshackle.core.tracks.selection import hybrid_gate_failure, keep_generated_dv_bases, select_hybrid_bases
 
 pytestmark = pytest.mark.unit
 

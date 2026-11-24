@@ -139,19 +139,6 @@ def test_require_subs_no_longer_conflicts_with_s_lang():
     )
 
 
-def test_all_three_require_flags_share_one_gate():
-    import inspect as _inspect
-
-    from unshackle.commands import dl as dl_module
-
-    source = _inspect.getsource(dl_module.dl.result)
-    # the sub gate must not short-circuit the s_lang branch any more
-    assert "downloading all available subtitles" not in source
-    for kind in ("audio", "video", "subtitle"):
-        assert f'"{kind}",' in source
-    assert "missing_required_langs(required, available, title.language, exact=exact_lang)" in source
-
-
 def test_exact_lang_turns_off_the_bare_tag_fallback():
     assert missing_required_langs(["en"], ["en-GB"]) == []
     assert missing_required_langs(["en"], ["en-GB"], exact=True) == ["en"]
