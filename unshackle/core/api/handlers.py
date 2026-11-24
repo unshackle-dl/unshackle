@@ -43,6 +43,7 @@ from unshackle.core.proxies.resolve import initialize_proxy_providers, is_loopba
 from unshackle.core.services import Services
 from unshackle.core.session import RnetSession, utf8_text
 from unshackle.core.titles import Episode, Movie, Song, Title_T
+from unshackle.core.titles.availability import availability_metadata
 from unshackle.core.titles.music import MUSIC_DATA_KEYS, SONG_FIELDS, song_metadata
 from unshackle.core.titles.title import rename
 from unshackle.core.tracks import Audio, Subtitle, Tracks, Video
@@ -1688,6 +1689,7 @@ def serialize_title(title: Title_T) -> Dict[str, Any]:
     # a richer listing without re-fetching the page.
     description = getattr(title, "description", None) or None
     _data = getattr(title, "data", None)
+    availability = availability_metadata(_data.get("availability")) if isinstance(_data, dict) else None
     date = _data.get("date") if isinstance(_data, dict) else None
     cover_url = _data.get("cover_url") if isinstance(_data, dict) else None
 
@@ -1738,6 +1740,8 @@ def serialize_title(title: Title_T) -> Dict[str, Any]:
     if isinstance(title, (Episode, Movie)) and getattr(title, "anime", None) is not None:
         result["anime"] = title.anime
 
+    if availability is not None:
+        result["availability"] = availability
     return result
 
 
@@ -4292,7 +4296,8 @@ async def session_tracks_handler(
             try:
                 chapters = await asyncio.to_thread(service_instance.get_chapters, title)
                 session.chapters_by_title[str(title_id)] = chapters if chapters else []
-            except (Exception, SystemExit):
+            except (Exception, SystemExit) as e:
+                log.debug("get_chapters failed for title %s: %s", title_id, e)
                 session.chapters_by_title[str(title_id)] = []
 
             snapshot = await asyncio.to_thread(capture, tracks, config.serve.get("compression_level", 1))

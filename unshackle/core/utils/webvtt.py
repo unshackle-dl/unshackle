@@ -5,6 +5,7 @@ TIMESTAMP = r"(?:\d+:)?\d{2}:\d{2}\.\d{3}"
 # Timing line: optional hours, verbatim settings tail.
 TIMING = re.compile(rf"^({TIMESTAMP})[ \t]+-->[ \t]+({TIMESTAMP})(.*)$")
 CUE_TIMES = re.compile(rf"(?m)^([ \t]*)({TIMESTAMP})([ \t]+-->[ \t]+)({TIMESTAMP})")
+TIMESTAMP_MAP_LOCAL = re.compile(rf"X-TIMESTAMP-MAP=[^\n]*LOCAL:({TIMESTAMP})", re.IGNORECASE)
 
 
 def timestamp_ms(ts: str) -> int:
@@ -91,9 +92,37 @@ def rebase_webvtt(text: str, offset_ms: int, segment_ms: int = 0) -> str:
     first = CUE_TIMES.search(text)
     if offset_ms <= 0 or not first or timestamp_ms(first[2]) < offset_ms - segment_ms:
         return text
+    return shift_webvtt(text, -offset_ms)
+
+
+def shift_webvtt(text: str, delta_ms: int) -> str:
+    """Add delta_ms to every cue time, clamped at 0."""
 
     def shift(ts: str) -> str:
-        ms = max(timestamp_ms(ts) - offset_ms, 0)
+        ms = max(timestamp_ms(ts) + delta_ms, 0)
         return f"{ms // 3_600_000:02}:{ms // 60_000 % 60:02}:{ms // 1000 % 60:02}.{ms % 1000:03}"
 
     return CUE_TIMES.sub(lambda m: f"{m[1]}{shift(m[2])}{m[3]}{shift(m[4])}", text)
+
+
+def webvtt_block_offsets(texts: list[str], bounds_ms: list[int]) -> list[int]:
+    """The cue shift in ms of each WebVTT discontinuity block or period, so cues that restart land in its window.
+
+    bounds_ms holds each block's playlist start and, last, the end of the final block. A block takes
+    whichever shift puts more of its cues inside its window: the shift of the block before it, or the
+    one that puts its X-TIMESTAMP-MAP LOCAL time on the block start; a tie keeps the shift before it.
+    This assumes each block's MPEGTS is the first video PTS of the same block.
+    """
+    offsets, offset = [], 0
+    for text, start, end in zip(texts, bounds_ms, bounds_ms[1:]):
+        cues = [(timestamp_ms(m[2]), timestamp_ms(m[4])) for m in CUE_TIMES.finditer(text)]
+        local = TIMESTAMP_MAP_LOCAL.search(text)
+        restart = start - (timestamp_ms(local[1]) if local else 0)
+
+        def inside(shift: int) -> int:
+            return sum(cue_start + shift < end and cue_end + shift > start for cue_start, cue_end in cues)
+
+        if inside(restart) > inside(offset):
+            offset = restart
+        offsets.append(offset)
+    return offsets

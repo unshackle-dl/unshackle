@@ -48,23 +48,27 @@ SAFE_PICKLE_TAGS = frozenset({"py/object", "py/type", "py/reduce", "py/tuple", "
 SAFE_PICKLE_TYPES = frozenset(
     {"datetime.datetime", "datetime.date", "datetime.time", "datetime.timedelta", "datetime.timezone"}
 )
+MAX_CACHE_PAYLOAD_DEPTH = 100
 
 
 def safe_cache_payload(text: str) -> bool:
     """True when a peer-supplied cache file is JSON that jsonpickle decodes to plain data and datetimes only.
 
     ``Cacher`` decodes cache files with jsonpickle, which imports and calls any type a file names,
-    so a file from another machine may name the datetime types and nothing else.
+    so a file from another machine may name the datetime types and nothing else. Nesting deeper than
+    ``MAX_CACHE_PAYLOAD_DEPTH`` is refused, because the jsonpickle decode is recursive.
     """
     try:
         root = json.loads(text)
     except (ValueError, RecursionError):
         return False
-    stack = [root]
+    stack = [(root, 0)]
     while stack:
-        node = stack.pop()
+        node, depth = stack.pop()
+        if depth > MAX_CACHE_PAYLOAD_DEPTH:
+            return False
         if isinstance(node, list):
-            stack.extend(node)
+            stack.extend((item, depth + 1) for item in node)
         elif isinstance(node, dict):
             for key, value in node.items():
                 if key.startswith("py/") and key not in SAFE_PICKLE_TAGS:
@@ -75,5 +79,5 @@ def safe_cache_payload(text: str) -> bool:
                     isinstance(value, list) and value and isinstance(value[0], dict) and value[0].keys() == {"py/type"}
                 ):
                     return False
-                stack.append(value)
+                stack.append((value, depth + 1))
     return True

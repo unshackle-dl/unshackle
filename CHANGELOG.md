@@ -6,6 +6,210 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 This changelog is automatically generated using [git-cliff](https://git-cliff.org).
 
+## [7.0.0] - 2026-11-23
+
+### Features
+
+- *drm*: Add in-process cbcs decrypter with an external sample decrypter hook
+- *remote*: Decrypt service-owned cbcs samples on the server
+- *music*: Save lyrics beside the audio and keep song fields over remote
+- *music*: Embed plain lyrics and save timed lyrics from Song.synced_lyrics
+- *ip-info*: Return timezone and add a required-field filter
+- *tracks*: [**breaking**] Match a language tag to the variant it means
+- *api*: Relay services from remote servers with pooled sessions and login prompts
+- *hybrid*: Generate dolby vision from hdr10+ with --generate-dv
+- *tracks*: Probe HDR10 tracks for HDR10+ SEI before selection
+- *tracks*: Probe dv tracks for hdr10+ and list them as DV+HDR10P
+- *hybrid*: Use a dv track that carries hdr10+ as the hybrid of its resolution
+- *search*: Add --remote to search through a remote server
+- *dash*: Flag dv profile 8 tracks from supplementalCodecs and use hdr10+dv as the hybrid
+- *dl*: Add --local to override a remote: true service config
+- *dl*: Keep failed track segments across runs in a resume stash
+- *api*: Apply services.<TAG>.dl as defaults for API download jobs
+- *api*: Tag each error with a ref and count errors by service
+- *remote*: Add --local-proxy to send server requests through the client
+- *api*: [**breaking**] Add a server drain and never answer with a 5xx
+- *proxy*: Select a vpn server by network or ip with @
+- *proxy*: Accept an @ selector as a server_map value
+- *config*: Warn with the lines of a duplicate key in any config load
+- *proxy*: Try bare --proxy providers in proxy_providers key order
+- *tracks*: Name unnamed tracks by language and tag subtitle scripts
+- *tracks*: Add native track names with muxing.track_names
+- *tracks*: Add muxing.track_names none to leave unnamed tracks unnamed
+- *tracks*: Add muxing.original_label to mark original-language tracks
+- *manifests*: Add dts-hd, mpeg-h and lcevc codecs and a manifest corpus
+- *drm*: Add blowfish stripe cipher and mp3 audio codec
+- *tracks*: Add Tracks.dedupe and match variant tracks by signature
+- *tracks*: Add Video.hdr10_base and forward s_lang over remote and REST
+- *remote*: Reopen a lost remote session and resume at the current title
+- *kv*: Accept an sqlite vault file path and read plain-tag tables on copy
+- *naming*: Add codec_names to rename codec and HDR labels in filenames
+- *remote*: [**breaking**] Let server_cdm outrank a service's cdm entry and set it per service
+- *naming*: Add audio_contain_all language tag condition
+- *tracks*: Add a display-only note shown in --list and over --remote
+- *tracks*: Add subtitle.dedupe_codecs to keep one codec per subtitle variant
+- *PR*: Add session ID return
+- *env*: Show tool versions in env check, paths with --verbose
+- *titles*: Add a sports output and folder template kind
+- *remote*: Match the server CDM to the client's DRM and read vaults first
+- *api*: Carry the service catalogue on /api/dashboard/services
+- *dl*: [**breaking**] Treat a missing -sl language as a warning
+- *tunnel*: Free finished tunnels at once and wait out 429s on --remote
+- *tunnel*: Route --local-proxy through a typed --proxy
+- *hybrid*: Generate Dolby Vision from the decoded video
+- *mux*: Add muxing.default_subtitle_type for the default subtitle
+- *dl*: Add -ce/--continuous-episodes to number seasons on
+- *subtitles*: Add --sub-font and subtitle.ass_style for converted ASS
+- *tracks*: Download and mux stereoscopic 3D (MV-HEVC) video to MP4
+- *drm*: License a track only when its own KID has no key
+- *subtitle*: Read scc closed captions and convert them before muxing
+- *dl*: Add --skip-missing to skip titles that miss a required language or track
+- *music*: Pick the song container from the codec in the downloaded file
+- *tracks*: Support HDR Vivid and Audio Vivid
+- *mux*: Keep Audio Vivid beside the output and add wide_output listings
+- *dl*: Let --worst run without -q and pick the lowest bitrate
+- *serve*: Per-api-key cdm and service config with server-side identity cache
+- *api*: Expose optional account-scoped title availability
+
+### Bug Fixes
+
+- *vaults*: Lengthen the whole-file key check and steady its HEVC test
+- *providers*: Stop metadata lookups sleeping on Retry-After
+- *cacher*: Resolve cache expiry by unix time
+- *session*: Cap Retry-After on the requests retry policies
+- *session*: Log "Retrying" only when a retry follows
+- *vaults*: Size the HTTP vault connection pool for parallel lookups
+- *subtitles*: Sort cues by start time when converting from SSA/ASS
+- *console*: Count spacing combining marks as one cell
+- *import*: Add decrypts_samples to ImportService
+- *vaults*: Stop querying sibling KIDs and skip unavailable vaults
+- *vaults*: Back off longer on 429 and shorten the skip messages
+- *proxy*: Keep service traffic on --proxy and warn about requests that bypass it
+- *proxy*: Do not warn about requests to a configured remote CDM
+- *remote*: Retry once on a proxy 502/503/504 page and keep server errors from ending a relicense
+- *tracks*: Annotate the hdr10+ probe plans list for strict mypy
+- *tracks*: Match probed hdr10p tracks on remote and hint dv+hdr10p on -r HDR10P
+- *proton*: Update query parsing and server selection logic for improved accuracy
+- *services*: Route a service remote from services.<TAG>.dl.remote
+- *api*: Parse client cookies with the dl cookie parser
+- *api*: Refuse peer cache files that name types other than datetime
+- *api*: Validate quality and bitrate params like dl and pass cdm_only to services
+- *api*: Split global speed limit across job workers
+- *hls*: Keep PlayReady session-data keys by matching the URN string
+- *import*: Take a missing title language from the exported tracks
+- *remote*: Send the typed --proxy to the server when it resolved to loopback
+- *api*: [**breaking**] Send service and DRM errors as 422, not 502
+- *tracks*: Keep a locked segment file from hiding the download error
+- *proxy*: Name the reason when the Control D forwarder answers 502
+- *cfg*: Give the lines of each duplicate config key instead of crashing
+- *cfg*: Show only the duplicate-key warning, once
+- *remote*: Keep each session cookie's domain, path and secure flag
+- *vaults*: Stop false bad-key flags from a failed decode check
+- *drm*: Load a bare PlayReady WRMHEADER from DASH, HLS and ISM manifests
+- *vaults*: Copy no vault key from a clear track
+- *tracks*: Flag every encrypted sample entry type after decrypt
+- *downloader*: Report spent segment retries in one line without the URL
+- *core*: Cut user-facing errors and warnings to one line
+- *mux*: Address embedded audio by the file's real mkvmerge track IDs
+- *sample*: Stop a malformed sidx from hanging the download
+- *console*: Count a virama conjunct as one cell
+- *dash*: Treat a caption subtitle also marked SDH as SDH
+- *services*: Ignore tracked bytecode in the service-repo dirty check
+- *services*: Clear service-repo bytecode with git pathspecs before a pull
+- *proxy*: Match a reloaded service class by name and dedup warnings per run
+- *cacher*: Treat an expiry within 1 µs of now as expired
+- *tunnel*: Accept fake-ip dns answers for --local-proxy host names
+- *subtitle*: Rebase live-clock dash webvtt cues by presentationTimeOffset
+- *tracks*: Read sidx boxes with struct so concurrent tracks parse correctly
+- *mp4*: Serialize pymp4 parses of bit-field boxes across threads
+- *dash*: End segmentbase media range at the last byte of the file
+- *tunnel*: Block local networks instead of allowing public ones for --local-proxy
+- *manifests*: Keep service drm, rebase carried vtt cues, ship single-track mpds
+- *api*: Cache the health update check and fix a remote-session test fixture
+- *tunnel*: Refuse 192.0.0.0/24 and 6to4 literals on python before 3.11.10
+- *api*: Show filename codec and range labels in codec_display and range_display
+- *api*: Stop a service's sys.exit from killing the serve process
+- *titles*: Compare dub languages under their macrolanguage
+- *subtitles*: Accept TTML2 rw/rh and vw/vh sizes in fTTML conversion
+- *tracks*: Keep HDR colour metadata when muxing VP9
+- *naming*: Tag HDR10+ from the track range when MediaInfo misses it
+- *manifests*: Decode audio channels by scheme in dash, hls and ism
+- *subtitle*: Remove the DASH presentationTimeOffset from stpp and wvtt cues
+- *subtitle*: Place fragment-relative ISM TTML cues on the track timeline
+- *tracks*: Retry ccextractor on the repackaged file
+- *dl*: Take turns on licence requests so one licence serves every track
+- *subtitle*: Join cues that a segment boundary splits in stpp and wvtt
+- *titles*: Name a PQ video track without HDR10 metadata HDR
+- *titles*: Name a dv profile 7 or 8 track with an unnamed pq base DV.HDR
+- *session*: Keep cookie paths so same-name cookies stay on their own path
+- *remote*: Send a service's filtered dash periods so the client skips them too
+- *music*: Stop reading a kb/s bitrate as a hi-res sample rate
+- *api*: Keep a pooled remote session to the api key that opened it
+- *api*: Refuse a non-public proxy host for a key without server_proxy
+- *api*: Skip the local geoblock for a relayed tag not installed here
+- *api*: Check and cast download job service options like a session does
+- *dl*: Read the drm's content keys again after a relicence replaces them
+- *subtitle*: Convert wvtt cue times by the media timescale
+- *drm*: Keep the monalisa ciphertext when the decrypt tool fails
+- *drm*: Retry a licence call only for an argument the service rejects
+- *binaries*: Kill the whole process tree when a version probe times out
+- *manifests*: Match dash representations across periods by shape, not id
+- *api*: Cast download job options with the dl click types
+- *manifests*: Skip filtered dash periods after the main content and keep them over export
+- *import*: Keep only exported dash content periods on a re-fetch
+- Drop null vault keys, cap snapshot restore size, isolate test globals
+- *api*: [**breaking**] Key the health route and keep server internals from user keys
+- *attachment*: Download through the track downloader with its retries
+- *binaries*: Report a version for git ffmpeg builds
+- *drm*: Key PIFF-first tracks by track ID and trust shaka's exit code
+- *install*: Check out batch files with CRLF line endings
+- *drm*: Read PlayReady KIDs through the PlayReady class when converting to Widevine
+- *fonts*: Find per-user Windows fonts by their family name
+- *mux*: Strip encoding dates from MP4Box and shaka-packager output
+- *remote*: Keep vault keys when a relayed licence is refused
+- *remote*: Report each handled remote error once, from the code that catches it
+- *mux*: Pass the exact frame rate to mkvmerge default duration
+- *mux*: Repoint sample entries with a missing data reference for MP4Box
+- *tracks*: Rank video picks by quality across regional tags and in hybrid
+- *mux*: Mux H.266 as VVC and leave Audio Vivid decoding to services
+- *api*: Convert quality to heights for remote sessions
+- *manifests*: Rebase restarting timelines across dash periods and hls discontinuities
+- *downloader*: Outlast network outages and harden segment merges
+- *chapters*: Drop duplicate timestamps in the EXAMPLE template and docs
+- *api*: Refuse deeply nested cache payloads by depth, not RecursionError
+
+### Documentation
+
+- *dev*: Align self.config description with the merge in dl
+
+### Performance Improvements
+
+- *proxy*: Test the remote CDM hosts only after the walk finds service code
+- *dash*: Collapse single-file tracks that have a sidx gap
+- *api*: Stop rebuilding proxy catalogues, vaults and cdms per request
+- *api*: [**breaking**] Cut per-request and per-tick event bus traffic
+- *api*: Move blocking file and hash work off the event loop
+- *proxies*: Cache expressvpn and proton catalogues across requests
+- Lazy-load services and proxy catalogues, faster namespace strip
+
+### Changes
+
+- *config*: Log the duplicate-key warning without the python warning prefix
+- *remote*: [**breaking**] Send service options only in service_params
+- *types*: Bring mypy to zero errors across unshackle
+- *dl*: Share the cache, vault and key-label steps in prepare_drm
+- *tracks*: Name and match resolutions by one standard-height rule
+- *api*: Register each route once and merge duplicated handler code
+- *api*: Tidy leftovers from the api perf pass
+- *api*: Simplify leftovers from the perf pass
+- *drm*: Resolve content keys in one licence path behind ServerKeySource
+- *drm*: Share one CENC decrypt path across Widevine, PlayReady and ClearKey
+- *tracks*: Simplify the dynamic HDR probe and read less for TS audio
+
+### Builds
+
+- Keep dot-folders out of the sdist
+
 ## [6.0.0] - 2026-10-13
 
 ### Features

@@ -1,3 +1,4 @@
+import errno
 import math
 import multiprocessing
 import os
@@ -24,8 +25,11 @@ from typing import Any, Callable, Generator, MutableMapping, Optional, Union, ca
 
 from requests import Session
 from requests.adapters import HTTPAdapter, Retry
+from requests.exceptions import ConnectionError as RequestsConnectionError
+from requests.exceptions import ProxyError, SSLError
 from rich import filesize
 
+from unshackle.core.config import config
 from unshackle.core.constants import DOWNLOAD_CANCELLED, DownloadCancelled
 from unshackle.core.utilities import get_debug_logger, get_extension, log_event
 from unshackle.core.utils import run_proxy
@@ -33,6 +37,10 @@ from unshackle.core.utils import run_proxy
 MAX_ATTEMPTS = 5
 RETRY_WAIT = 2
 GAVE_UP_NOTE = "gave up after"
+# a failure with no HTTP response (DNS, refused, unreachable) is the network, not the host: it
+# fails in milliseconds, so MAX_ATTEMPTS would spend its whole backoff in about 30 seconds
+OUTAGE_ATTEMPTS = 9
+LOCAL_DISK_ERRNOS = (errno.ENOSPC, errno.EDQUOT, errno.EROFS)
 # a cut that still delivered bytes is resumable and refreshes the attempt budget; bound it
 # so a server that sends a little and closes, over and over, still terminates
 MAX_RESUMES = 50
@@ -65,6 +73,8 @@ SPEED_ROLLING_WINDOW = 10  # seconds of history to keep for speed calculation
 
 RANGE_PARALLEL_MIN_SIZE = 64 * 1024 * 1024
 RANGE_PARALLEL_MIN_PART_SIZE = 4 * 1024 * 1024
+# the workers take parts from a shared queue, so a slow connection holds one part of this size
+RANGE_PARALLEL_PART_SIZE = 16 * 1024 * 1024
 
 # One CPython interpreter caps sustained segment throughput (GIL in the ssl read path);
 # fan a big segment batch across spawned children to reach line rate. Below this count the
@@ -182,6 +192,14 @@ def adaptive_chunk_size(content_length: int) -> int:
     if content_length <= 0:
         return DEFAULT_CHUNK
     return min(MAX_CHUNK, max(MIN_CHUNK, content_length // 4))
+
+
+def rnet_read_timeout() -> float:
+    """The stall timeout for a segment request on rnet: ``network.read_timeout`` when configured, else READ_TIMEOUT.
+
+    A per-request value overrides the rnet client's own, so this must give the configured one.
+    """
+    return config.network.get("read_timeout") or READ_TIMEOUT
 
 
 ADAPTIVE_TICK = 4.0
@@ -419,6 +437,21 @@ def is_rnet_session(session: Any) -> bool:
     return isinstance(session, RnetSession)
 
 
+def is_outage(exc: BaseException) -> bool:
+    """Whether a failure reached no server: a refused or unreachable connection, or a failed name lookup.
+
+    A TLS, proxy or URL error is not an outage, so it keeps the MAX_ATTEMPTS budget.
+    """
+    import rnet
+
+    for error in (exc, exc.__cause__):
+        if isinstance(error, (rnet.ConnectionError, rnet.ConnectionResetError, rnet.DNSResolverError)):
+            return True
+        if isinstance(error, RequestsConnectionError) and not isinstance(error, (ProxyError, SSLError)):
+            return True
+    return False
+
+
 def is_content_encoded(value: Optional[str]) -> bool:
     """
     Whether a Content-Encoding value names any coding other than absent or `identity`.
@@ -437,7 +470,7 @@ def probe_ranged(url: str, session: Any, **kwargs: Any) -> tuple[int, bool]:
         headers["Accept-Encoding"] = "identity"
     rest = {k: v for k, v in kwargs.items() if k != "headers"}
     if is_rnet_session(session):
-        rest.setdefault("read_timeout", READ_TIMEOUT)
+        rest.setdefault("read_timeout", rnet_read_timeout())
         # let download() own segment retries, with no nested session-level retry loop
         rest.setdefault("max_retries", 0)
     else:
@@ -559,12 +592,14 @@ def force_unblock_stream(stream: Any) -> None:
         pass
 
 
-def split_ranges(size: int, max_parts: int, part_target: int) -> list[tuple[int, int]]:
+def split_ranges(size: int, max_parts: Optional[int], part_target: int) -> list[tuple[int, int]]:
     """Split ``[0, size)`` into inclusive ``[start, end]`` byte ranges with no gaps or overlaps.
 
-    At most ``max_parts`` parts of ~``part_target`` bytes each. Pure, with no I/O, so testable.
+    Parts of ~``part_target`` bytes each, at most ``max_parts`` of them when given. Pure, with no I/O, so testable.
     """
-    n_parts = max(1, min(max_parts, math.ceil(size / part_target)))
+    n_parts = max(1, math.ceil(size / part_target))
+    if max_parts is not None:
+        n_parts = max(1, min(max_parts, n_parts))
     part_size = math.ceil(size / n_parts)
     return [
         (s, e) for i in range(n_parts) for s, e in [(i * part_size, min(size - 1, (i + 1) * part_size - 1))] if s <= e
@@ -619,8 +654,8 @@ def dispatch_parts(
     save_path.parent.mkdir(parents=True, exist_ok=True)
     control_file = save_path.with_name(f"{save_path.name}.!dev")
 
-    part_target = max(RANGE_PARALLEL_MIN_PART_SIZE, math.ceil(total_size / max_workers))
-    parts = split_ranges(total_size, max_workers, part_target)
+    part_target = min(RANGE_PARALLEL_PART_SIZE, max(RANGE_PARALLEL_MIN_PART_SIZE, math.ceil(total_size / max_workers)))
+    parts = split_ranges(total_size, None, part_target)
 
     control_file.write_bytes(b"")
     with open(save_path, "wb") as f:
@@ -643,7 +678,7 @@ def dispatch_parts(
         ):
             events.put(ev)
 
-    pool = ThreadPoolExecutor(max_workers=len(parts))
+    pool = ThreadPoolExecutor(max_workers=min(max_workers, len(parts)))
     futures = [pool.submit(worker, s, e) for s, e in parts]
     pending = set(futures)
 
@@ -814,6 +849,7 @@ def download(
     item_range = has_range_header(kwargs)
 
     attempts = 1
+    outages = 0
     # attempts resets on progress, so the give-up note counts failures on their own
     failures = 0
     started = _time()
@@ -834,12 +870,13 @@ def download(
         resume_start = resume_offset
         last_speed_refresh = _time()
 
+        stream: Any = None
         try:
             use_rnet = is_rnet_session(session)
 
             request_kwargs = dict(kwargs)
             if use_rnet:
-                request_kwargs.setdefault("read_timeout", READ_TIMEOUT)
+                request_kwargs.setdefault("read_timeout", rnet_read_timeout())
                 # own segment retries here, suppressing RnetSession's nested retry loop
                 request_kwargs.setdefault("max_retries", 0)
             else:
@@ -869,7 +906,7 @@ def download(
                     req_headers["Range"] = f"bytes={resume_offset}-"
             request_kwargs["headers"] = req_headers
 
-            stream: Any = session.get(url, stream=True, **request_kwargs)
+            stream = session.get(url, stream=True, **request_kwargs)
 
             if (not part_mode) and (not item_range) and resume_offset > 0 and stream.status_code == 416:
                 complete = parse_content_range_unsatisfied(
@@ -1110,6 +1147,7 @@ def download(
                     # this request's sub-range arrived whole; the rest of the part is the next
                     # request, not a retry, so the attempt budget starts over for it
                     attempts = 1
+                    outages = 0
                     continue
             elif content_length and written < content_length:
                 # applies to segments too: a connection FIN'd mid-body is a clean EOF, so the
@@ -1130,6 +1168,7 @@ def download(
                     if resume_offset > high_water:
                         high_water = resume_offset
                         attempts = 1
+                        outages = 0
                     continue
                 os.replace(tmp_file, save_path)
                 yield dict(file_downloaded=save_path, written=resume_offset + written)
@@ -1146,7 +1185,12 @@ def download(
                 return
             failures += 1
             cancelled = DOWNLOAD_CANCELLED.is_set() or (abort is not None and abort.is_set())
-            if cancelled or attempts == MAX_ATTEMPTS:
+            outage = stream is None and is_outage(exc)
+            if outage:
+                outages += 1
+            disk_error = getattr(exc, "errno", None) in LOCAL_DISK_ERRNOS
+            limit = OUTAGE_ATTEMPTS if outage else MAX_ATTEMPTS
+            if cancelled or disk_error or (outages if outage else attempts) >= limit:
                 # cancel/abort is not an error, but a genuine retry-exhaustion is, so surface it
                 # so the caller fails fast instead of hitting a missing segment at merge time
                 if not cancelled:
@@ -1173,12 +1217,13 @@ def download(
                     on_retry(exc)
                 except Exception:
                     pass
-            delay = retry_sleep(exc, max(1, attempts))
+            tries = outages if outage else max(1, attempts)
+            delay = retry_sleep(exc, tries)
             from unshackle.core.session import failure_reason
 
             log_event(
                 "segment_retry",
-                message=f"{failure_reason(exc)}, retry {max(1, attempts)}/{MAX_ATTEMPTS - 1} in {delay:.1f}s",
+                message=f"{failure_reason(exc)}, retry {tries}/{limit - 1} in {delay:.1f}s",
                 context={"file": save_path.name, "failures": failures, "resumes": resumes},
             )
             if abort is not None:
@@ -1192,7 +1237,8 @@ def download(
                 # parked worker rather than stall teardown for the full backoff
                 if DOWNLOAD_CANCELLED.wait(delay):
                     return
-            attempts += 1
+            if not outage:
+                attempts += 1
 
 
 def rebuildable_adapter(adapter: Any) -> bool:
@@ -1316,6 +1362,8 @@ def mp_worker(queue: Any, kwargs: dict[str, Any]) -> None:
                 # must not be able to rewrite arbitrary module globals in every child
                 if name in ("READ_TIMEOUT", "RETRY_WAIT", "HEDGE_MIN_WAIT"):
                     setattr(sys.modules[__name__], name, float(value))
+                if name == "READ_TIMEOUT":
+                    config.network = {**config.network, "read_timeout": float(value)}
         spec = kwargs.pop("_session_spec")
         kwargs["session"] = rebuild_session(spec, int(kwargs.get("max_workers") or 1))
         for event in requests(**kwargs):

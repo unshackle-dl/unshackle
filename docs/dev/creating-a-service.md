@@ -335,6 +335,19 @@ def get_titles(self) -> Titles_T:
     ])
 ```
 
+### Optional availability metadata
+
+A service may set `title.data["availability"]` to a dict with two optional fields:
+
+- `paid`: a boolean describing the catalogue offer, not the account's entitlement.
+- `access`: `"granted"`, `"denied"`, or `"unknown"` for the authenticated account.
+  Report `"denied"` only when the platform explicitly confirms lack of access.
+  Missing or unverified access is not denial.
+
+Only these allowlisted fields reach the REST API as `availability`, including
+through remote title reconstruction. The CLI's `--list-titles` does not display
+them, and nothing in core reads them to select or authorize downloads.
+
 Common constructor fields:
 
 === "Movie"
@@ -550,7 +563,10 @@ exists. Timestamps take `"HH:MM:SS[.mmm]"`, int milliseconds, or float seconds.
 ```python
 def get_chapters(self, title: Title_T) -> Chapters:
     chapters = [Chapter(name=c.get("name"), timestamp=c["start"]) for c in title.data.get("chapters", [])]
-    return Chapters(sorted(chapters, key=lambda c: c.timestamp))
+    unique: dict[str, Chapter] = {}
+    for chapter in sorted(chapters, key=lambda c: not c.named):
+        unique.setdefault(chapter.timestamp, chapter)
+    return Chapters(sorted(unique.values(), key=lambda c: c.timestamp))
 ```
 
 !!! warning "Sort by timestamp before you build the `Chapters`"
@@ -559,7 +575,7 @@ def get_chapters(self, title: Title_T) -> Chapters:
     lands before it.
 
     You never need to add `Chapter(0)`. An API chapter at `0` keeps its name. Drop
-    duplicate timestamps.
+    duplicate timestamps and keep the named chapter, as the example does.
 
 !!! note "Close a named range with an unnamed chapter"
     An unnamed `Chapter` ends the range before it: `Chapter(name="Intro")` at the

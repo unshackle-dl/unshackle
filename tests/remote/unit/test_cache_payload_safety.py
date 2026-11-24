@@ -38,6 +38,7 @@ def test_plain_json_is_safe(text) -> None:
         '{"py/object": "datetime.datetime", "__reduce__": [{"py/type": "collections.OrderedDict"}, []]}',
         '{"py/object": "datetime.datetime", "py/state": {}}',
         pytest.param("[" * 100000 + "]" * 100000, id="deep-nesting"),
+        pytest.param("[" * 200 + "]" * 200, id="over-depth-limit"),
     ],
 )
 def test_unsafe_payload_is_refused(text) -> None:

@@ -12,7 +12,7 @@ TLS-fingerprinting and HTTP client settings for the rnet-based HTTP session.
 | `http1_only` | bool | *(unset)* | Force HTTP/1.1. |
 | `http2_only` | bool | *(unset)* | Force HTTP/2. |
 | `connect_timeout` | int | `10` | Connect timeout in seconds. |
-| `read_timeout` | int | `30` | Read timeout in seconds (max gap between response chunks). |
+| `read_timeout` | int | `30` | Read timeout in seconds (max gap between response chunks). Applies to every request of an rnet session, segment downloads included. |
 | `timeout` | int | *(unset)* | Total request timeout in seconds. |
 | `allow_redirects` | bool | *(unset)* | Follow redirects automatically (rnet client default when unset). |
 | `pool_idle_timeout` | int | `55` | Seconds an idle pooled connection is kept (default stays under typical ~60s CDN idle kills). |
