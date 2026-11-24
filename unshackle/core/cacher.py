@@ -32,7 +32,6 @@ class Cacher:
         self.expiration = expiration
 
         if self.expiration and self.expired:
-            # if its expired, remove the data for safety and delete cache file
             self.data = None
             self.path.unlink()
 
@@ -50,7 +49,7 @@ class Cacher:
 
     def get(self, key: str, version: int = 1) -> Cacher:
         """
-        Get Cached data for the Service by Key.
+        Get the cached data of the service by cache key.
         :param key: the filename to save the data to, should be url-safe.
         :param version: the config data version you expect to use.
         :returns: Cache object containing the cached data or None if the file does not exist.
@@ -77,7 +76,7 @@ class Cacher:
 
     def set(self, data: Any, expiration: Optional[EXP_T] = None) -> Any:
         """
-        Set Cached data for the Service by Key.
+        Set the cached data of the service by cache key.
         :param data: absolutely anything including None.
         :param expiration: when the data expires, optional. Can be ISO 8601, seconds
             til expiration, unix timestamp, or a datetime object.
@@ -111,7 +110,7 @@ class Cacher:
     @staticmethod
     def resolve_datetime(timestamp: EXP_T) -> datetime:
         """
-        Resolve multiple formats of a Datetime or Timestamp to an absolute Datetime.
+        Change a Datetime or a Timestamp in one of several formats to an absolute Datetime.
 
         Examples:
             >>> now = datetime.now()
@@ -130,27 +129,24 @@ class Cacher:
             datetime.datetime(2022, 6, 27, 11, 59, 13, 770208)
 
         In the int/float examples you may notice that it did not return now + 3600 seconds
-        but rather something a bit more than that. This is because it did not resolve 3600
-        seconds from the `now` variable but from right now as the function was called.
+        but rather something a bit more than that. This is because the 3600 seconds start at
+        the moment the function operates, not at the `now` variable.
         """
         if isinstance(timestamp, datetime):
             return timestamp
         if isinstance(timestamp, str):
             if timestamp.endswith("Z"):
-                # fromisoformat doesn't accept the final Z
                 timestamp = timestamp.split("Z")[0]
             try:
                 return datetime.fromisoformat(timestamp)
             except ValueError:
                 timestamp = float(timestamp)
         try:
-            if len(str(int(timestamp))) == 13:  # JS-style timestamp
+            if len(str(int(timestamp))) == 13:
                 timestamp /= 1000
             timestamp = datetime.fromtimestamp(timestamp)
         except ValueError:
             raise ValueError(f"Unrecognized Timestamp value {timestamp!r}")
         if timestamp < datetime.now():
-            # timestamp is likely an amount of seconds til expiration
-            # or, it's an already expired timestamp which is unlikely
             timestamp = timestamp + timedelta(seconds=datetime.now().timestamp())
         return timestamp

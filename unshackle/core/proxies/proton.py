@@ -11,10 +11,9 @@ from pathlib import Path
 from typing import Optional
 
 import requests
-from rich.text import Text
 
 from unshackle.core.config import config
-from unshackle.core.console import console
+from unshackle.core.console import prompt_user
 from unshackle.core.proxies.proxy import Proxy
 
 log = logging.getLogger("proxies.proton")
@@ -24,12 +23,12 @@ class ProtonVPN(Proxy):
     """
     Proton VPN HTTPS proxy provider.
 
-    Authenticates via TV login (a self-sustaining session cached at <cache>/vpn/protonvpn.json, the
-    only refreshable kind) or an exported account.proton.me cookie session (AUTH-<UID>, access only —
+    Authenticates through TV login (a self-sustaining login session cached at <cache>/vpn/protonvpn.json, the
+    only refreshable kind) or an exported account.proton.me cookie session (AUTH-<UID>, access only,
     re-export on expiry). Resolves a server by country/city, mints short-lived proxy credentials, and
     returns an authenticated HTTPS proxy URL (https://user:pass@server:4443).
 
-    Query format (after the provider prefix, e.g. "protonvpn:us"):
+    Query format (after the proxy provider prefix, for example "protonvpn:us"):
         us             random server in the country (paid preferred over free)
         us12           Proton server #12 (the number shown in the connection log)
         us:ny          city, NordVPN-style
@@ -42,11 +41,11 @@ class ProtonVPN(Proxy):
     APP_VERSION = "browser-vpn@1.3.5"
     PROXY_PORT = 4443
     SECURE_CORE_PORT = 443
-    SECURE_CORE_FEATURE = 1  # Features bitmask: 1=SecureCore, 2=Tor, 4=P2P, 8=Streaming, 16=IPv6
+    SECURE_CORE_FEATURE = 1
     TOR_FEATURE = 2
-    EXCLUDE_FEATURES = SECURE_CORE_FEATURE | TOR_FEATURE  # skip Secure Core + Tor; both are slow for a plain proxy
-    TOKEN_DURATION = 1200  # free tier caps the granted lifetime lower
-    COUNTRY_ALIASES = {"gb": "uk"}  # Proton labels the United Kingdom "UK", not the ISO "GB"
+    EXCLUDE_FEATURES = SECURE_CORE_FEATURE | TOR_FEATURE
+    TOKEN_DURATION = 1200
+    COUNTRY_ALIASES = {"gb": "uk"}
 
     TV_API_BASE = "https://vpn-api.proton.me"
     TV_APP_VERSION = "android_tv-vpn@5.18.75.1+play"
@@ -82,7 +81,6 @@ class ProtonVPN(Proxy):
 
     def __repr__(self) -> str:
         try:
-            # only fetch the catalog if a session exists; never start TV login here (that belongs in get_proxy)
             if self.access_token or self.cookie_path.is_file() or self.cache_path.is_file():
                 servers = self.get_logicals()
             else:
@@ -108,7 +106,6 @@ class ProtonVPN(Proxy):
 
         self.last_host = host = str(server.get("Domain") or "")
         port = self.SECURE_CORE_PORT if int(server.get("Features") or 0) & self.SECURE_CORE_FEATURE else self.PROXY_PORT
-        # Username (a JWT) and Password are URL-safe, but quote so requests rebuilds Basic auth cleanly
         user, pwd = (requests.utils.quote(c, safe="") for c in creds)
         return f"https://{user}:{pwd}@{host}:{port}"
 
@@ -125,7 +122,7 @@ class ProtonVPN(Proxy):
 
         pool = []
         if country:
-            max_tier = self.get_max_tier()  # only servers the account can actually connect to
+            max_tier = self.get_max_tier()
             pool = [
                 s
                 for s in self.get_logicals()
@@ -188,9 +185,12 @@ class ProtonVPN(Proxy):
         return chosen
 
     def get_logicals(self) -> list[dict]:
+        """Get Proton's server list. Only a list that loaded is cached, so a later session can still fetch it."""
         if self.logicals is None:
             response = self.api("GET", "/vpn/v1/logicals")
-            self.logicals = (response.json().get("LogicalServers") or []) if response is not None else []
+            if response is None:
+                return []
+            self.logicals = response.json().get("LogicalServers") or []
         return self.logicals
 
     def get_max_tier(self) -> int:
@@ -212,7 +212,7 @@ class ProtonVPN(Proxy):
         return None
 
     def api(self, method: str, path: str) -> Optional[requests.Response]:
-        """Call the Proton API, refreshing the session once on a 401."""
+        """Call the Proton API, and refresh the login session one time on a 401."""
         if not self.access_token:
             self.load_session()
         if not self.access_token:
@@ -281,7 +281,6 @@ class ProtonVPN(Proxy):
             if name.startswith("AUTH-"):
                 cookie_uid, cookie_access, cookie_host = name[len("AUTH-") :], value, host
 
-        # The TV cache is the only refreshable session
         cookie_newer = (
             self.cookie_path.is_file()
             and self.cache_path.is_file()
@@ -294,7 +293,6 @@ class ProtonVPN(Proxy):
             self.api_base = cached.get("api_base") or self.api_base
             return
 
-        # Cookie session: access token only. Browser sessions can't refresh headlessly
         self.uid, self.access_token, self.refresh_token = cookie_uid, cookie_access, None
         if cookie_host:
             self.api_base = f"https://{cookie_host}/api"
@@ -306,7 +304,10 @@ class ProtonVPN(Proxy):
             self.tv_login()
 
     def tv_login(self) -> bool:
-        """Fork a TV session and have the user approve the code at proton.me/tv; tokens refresh like the cookie path."""
+        """Fork a TV login session and let the user approve the code at proton.me/tv.
+
+        Tokens refresh like the cookie path.
+        """
         headers = {
             "x-pm-appversion": self.TV_APP_VERSION,
             "x-pm-locale": "en",
@@ -326,13 +327,12 @@ class ProtonVPN(Proxy):
             log.error("Proton: unexpected TV login response")
             return False
 
-        indent = " " * 5
         prompt = (
             "Proton: open https://account.proton.me/vpn/tv/code\n"
             f"Enter code {user_code}, then press Enter to continue..."
         )
         try:
-            console.input(Text(indent + prompt.replace("\n", "\n" + indent), style="text"))
+            prompt_user(prompt)
         except EOFError:
             return False
 
@@ -340,7 +340,7 @@ class ProtonVPN(Proxy):
         deadline = time.monotonic() + self.POLL_TIMEOUT
         while time.monotonic() < deadline:
             response = requests.get(poll_url, headers=headers, timeout=self.timeout)
-            if response.status_code == 422:  # not approved yet
+            if response.status_code == 422:
                 time.sleep(self.POLL_INTERVAL)
                 continue
             if not response.ok:
@@ -376,8 +376,6 @@ class ProtonVPN(Proxy):
         try:
             data = json.loads(content)
         except json.JSONDecodeError:
-            # Netscape: domain \t flag \t path \t secure \t expiry \t name \t value
-            # Proton's AUTH-/REFRESH- cookies are HttpOnly, exported as "#HttpOnly_<domain>\t..."
             out = []
             for line in content.splitlines():
                 line = line.removeprefix("#HttpOnly_")
@@ -439,7 +437,7 @@ def server_no(server: dict) -> Optional[int]:
 
 
 def write_private(path: Path, content: str) -> None:
-    """Write content to path created with owner-only (0600) permissions."""
+    """Write text to path. The new file has owner-only (0600) permissions."""
     if hasattr(os, "fchmod"):
         fd = os.open(str(path), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
         try:

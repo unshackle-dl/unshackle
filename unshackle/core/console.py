@@ -1,9 +1,14 @@
+import codecs
+import io
 import logging
 import math
+import shutil
+import sys
 from datetime import datetime
 from types import ModuleType
 from typing import IO, Any, Callable, Iterable, List, Literal, Mapping, Optional, TextIO, Union
 
+from rich import box
 from rich._log_render import FormatTimeCallable, LogRender
 from rich.color import Color, blend_rgb
 from rich.console import Console, ConsoleOptions, ConsoleRenderable, HighlighterType, RenderableType, RenderResult
@@ -13,6 +18,7 @@ from rich.live import Live
 from rich.logging import RichHandler
 from rich.measure import Measurement
 from rich.padding import Padding, PaddingDimensions
+from rich.panel import Panel
 from rich.progress import BarColumn, Task
 from rich.status import Status
 from rich.style import Style, StyleType
@@ -135,7 +141,7 @@ class ComfyConsole(Console):
     """A comfy high level console interface.
 
     Args:
-        color_system (str, optional): The color system supported by your terminal,
+        color_system (str, optional): The colour system supported by your terminal,
             either ``"standard"``, ``"256"`` or ``"truecolor"``. Leave as ``"auto"`` to autodetect.
         force_terminal (Optional[bool], optional): Enable/disable terminal control codes, or None to auto-detect
             terminal. Defaults to None.
@@ -151,7 +157,7 @@ class ComfyConsole(Console):
         width (int, optional): The width of the terminal. Leave as default to auto-detect width.
         height (int, optional): The height of the terminal. Leave as default to auto-detect height.
         style (StyleType, optional): Style to apply to all output, or None for no style. Defaults to None.
-        no_color (Optional[bool], optional): Enabled no color mode, or None to auto-detect. Defaults to None.
+        no_color (Optional[bool], optional): Enabled no colour mode, or None to auto-detect. Defaults to None.
         tab_size (int, optional): Number of spaces used to replace a tab character. Defaults to 8.
         record (bool, optional): Boolean to enable recording of terminal output,
             required to call :meth:`export_html`, :meth:`export_svg`, and :meth:`export_text`. Defaults to False.
@@ -165,7 +171,7 @@ class ComfyConsole(Console):
             strftime or callable that formats the time. Defaults to "[%X] ".
         highlighter (HighlighterType, optional): Default highlighter.
         legacy_windows (bool, optional): Enable legacy Windows mode, or ``None`` to auto-detect. Defaults to ``None``.
-        safe_box (bool, optional): Restrict box options that don't render on legacy Windows.
+        safe_box (bool, optional): Restrict box options that do not render on legacy Windows.
         get_datetime (Callable[[], datetime], optional): Callable that gets the current time as a datetime.datetime
             object (used by Console.log), or None for datetime.now.
         get_time (Callable[[], time], optional): Callable that gets the current time in seconds, default uses
@@ -257,10 +263,10 @@ class ComfyConsole(Console):
             speed (float, optional): Speed factor for spinner animation. Defaults to 1.0.
             refresh_per_second (float, optional): Number of refreshes per second. Defaults to 12.5.
             pad (Union[int, Tuple[int]]): Padding for top, right, bottom, and left borders.
-                May be specified with 1, 2, or 4 integers (CSS style).
+                Give 1, 2, or 4 integers (CSS style).
 
         Returns:
-            Status: A Status object that may be used as a context manager.
+            Status: A Status object you can use as a context manager.
         """
         status_renderable = super().status(
             status=status,
@@ -279,7 +285,6 @@ class ComfyConsole(Console):
 
             available_width = self.width - status_width
             if available_width > right:
-                # fill up the available width with padding to apply bg color
                 right = available_width - right
 
             padding = Padding(status_renderable, (top, right, bottom, left))
@@ -298,8 +303,6 @@ class ComfyConsole(Console):
         stream: Optional[TextIO] = None,
     ) -> str:
         """Displays a prompt and waits for input from the user, temporarily pausing any active Live displays."""
-        # Find active Live displays to prevent overlap / disappearing prompt.
-        # We copy the list because stop() will modify console._live_stack.
         active_lives = list(self._live_stack)
 
         for live in active_lives:
@@ -361,7 +364,7 @@ class SyncLive(Live):
 
 
 class GradientPulseBarColumn(BarColumn):
-    _LUT_SIZE = 32
+    LUT_SIZE = 32
 
     def __init__(self, *args: Any, pulse_period: float = 40.0, pulse_speed: float = 15.0, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
@@ -371,7 +374,7 @@ class GradientPulseBarColumn(BarColumn):
         hi = Color.parse(primary_scheme["pink"]).triplet
         assert lo and hi
         self._lut = [
-            Style(color=Color.from_triplet(blend_rgb(lo, hi, i / (self._LUT_SIZE - 1)))) for i in range(self._LUT_SIZE)
+            Style(color=Color.from_triplet(blend_rgb(lo, hi, i / (self.LUT_SIZE - 1)))) for i in range(self.LUT_SIZE)
         ]
 
     def render(self, task: Task) -> RenderableType:  # type: ignore[override]
@@ -398,6 +401,15 @@ class _GradientPulse:
     def __rich_measure__(self, console: Console, options: ConsoleOptions) -> Measurement:
         return Measurement(4, self.width or options.max_width)
 
+
+def force_utf8_streams() -> None:
+    """Make stdout and stderr write UTF-8. A redirected stream on Windows uses a legacy code page that cannot encode the console output."""
+    for stream in (sys.stdout, sys.stderr):
+        if isinstance(stream, io.TextIOWrapper) and codecs.lookup(stream.encoding).name != "utf-8":
+            stream.reconfigure(encoding="utf-8", errors="replace")
+
+
+force_utf8_streams()
 
 console = ComfyConsole(
     log_time=False,
@@ -427,4 +439,81 @@ console = ComfyConsole(
 )
 
 
-__all__ = ("ComfyLogRenderer", "ComfyRichHandler", "ComfyConsole", "GradientPulseBarColumn", "SyncLive", "console")
+def listing_panel(renderable: RenderableType, title: str) -> Panel:
+    """Box a listing in the shared panel style, so every listing restyles from one place."""
+    return Panel(renderable, title=title, box=box.SQUARE, border_style="bright_black")
+
+
+def listing_table(title: Optional[str] = None, **kwargs: Any) -> Table:
+    """Assemble a table in the style of the rich-click help tables, so listings and help screens match."""
+    kwargs.setdefault("box", box.HORIZONTALS)
+    kwargs.setdefault("show_edge", False)
+    kwargs.setdefault("border_style", "dark_gray")
+    kwargs.setdefault("header_style", "text")
+    kwargs.setdefault("pad_edge", False)
+    return Table(title=title, title_style="rule.text", title_justify="left", **kwargs)
+
+
+def print_wide(renderable: RenderableType, pad: PaddingDimensions = (1, 3)) -> None:
+    """Print a listing at the terminal width, indented like the rich-click help panels.
+
+    The shared console holds 80 columns to keep logs and progress compact. Long values such as paths
+    and URLs fold badly at that width, so this widens the console for one print and restores it after.
+    """
+    fixed_width = console.width
+    console.width = max(fixed_width, shutil.get_terminal_size().columns)
+    try:
+        console.print(Padding(renderable, pad))
+    finally:
+        console.width = fixed_width
+
+
+_prompt_handler: Optional[Callable[[str], str]] = None
+
+
+def set_prompt_handler(handler: Optional[Callable[[str], str]]) -> None:
+    """Route every :func:`prompt_user` call to *handler*, for a process with no terminal to prompt on."""
+    global _prompt_handler
+    _prompt_handler = handler
+
+
+def prompt_user(prompt: str) -> str:
+    """Ask the user for input on the shared console, themed and indented like the rest of the output."""
+    if _prompt_handler is not None:
+        return _prompt_handler(prompt)
+    indent = " " * 5
+    body = Text(indent + prompt.rstrip("\n ").replace("\n", "\n" + indent), style="text")
+    body.append("\n" + indent + "> ", style="rule.text")
+    return console.input(body)
+
+
+_notice_handler: Optional[Callable[[Optional[str]], None]] = None
+
+
+def set_notice_handler(handler: Optional[Callable[[Optional[str]], None]]) -> None:
+    """Route every :func:`show_notice` call to *handler*, for a process whose log output no user reads."""
+    global _notice_handler
+    _notice_handler = handler
+
+
+def show_notice(message: Optional[str]) -> None:
+    """Give *message* to the notice handler, or None to clear it. Without a handler this does nothing."""
+    if _notice_handler is not None:
+        _notice_handler(message)
+
+
+__all__ = (
+    "ComfyLogRenderer",
+    "ComfyRichHandler",
+    "ComfyConsole",
+    "GradientPulseBarColumn",
+    "SyncLive",
+    "console",
+    "listing_panel",
+    "listing_table",
+    "print_wide",
+    "prompt_user",
+    "set_notice_handler",
+    "set_prompt_handler",
+    "show_notice",
+)

@@ -19,20 +19,17 @@ REGISTRY: dict[str, type[MetadataProvider]] = {
     cls.NAME: cls for cls in (AniListProvider, IMDBProvider, OMDBProvider, SimklProvider, TMDBProvider, TVDBProvider)
 }
 
-# legacy `metadata_providers` names, still accepted
 ALIASES: dict[str, str] = {"imdbapi": "imdb"}
 
-# used when `metadata_providers` is unset; anilist answers for anime only, so it costs
-# nothing at the end of the order
 DEFAULT_ORDER: tuple[str, ...] = ("imdb", "omdb", "simkl", "tmdb", "tvdb", "anilist")
 
 
 def provider_order(kind: Optional[str] = None, anime: bool = False) -> list[type[MetadataProvider]]:
-    """Provider classes in the order configured by `metadata_providers`.
+    """Metadata provider classes in the order configured by `metadata_providers`.
 
     `metadata_providers` is either a flat list applying to both kinds, or a mapping of
     kind ("tv"/"movie") to its own list. A kind the mapping omits uses `DEFAULT_ORDER`.
-    An `anime` title puts anilist first; the rest of the order stays behind it to
+    An `anime` title puts AniList first. The rest of the order stays behind it to
     fall back on.
     """
     from unshackle.core.config import config
@@ -50,20 +47,17 @@ def provider_order(kind: Optional[str] = None, anime: bool = False) -> list[type
 
 
 def get_available_providers() -> list[MetadataProvider]:
-    """Return instantiated providers that have valid credentials."""
+    """Return instantiated metadata providers that have valid credentials."""
     return [cls() for cls in provider_order() if cls().is_available()]
 
 
 def get_provider(name: str) -> Optional[MetadataProvider]:
-    """Get a specific provider by name."""
+    """Get one specific metadata provider by name."""
     cls = REGISTRY.get(name)
     if not cls:
         return None
     p = cls()
     return p if p.is_available() else None
-
-
-# -- Public API (replaces tags.py functions) --
 
 
 def search_metadata(
@@ -76,18 +70,15 @@ def search_metadata(
     cache_account_hash: Optional[str] = None,
     anime: bool = False,
 ) -> Optional[MetadataResult]:
-    """Search all available providers for metadata. Returns best match."""
+    """Find metadata in every available metadata provider. Returns the best result."""
     from unshackle.core.config import config
 
-    # the one gate for `disable_metadata`: every automatic lookup reaches a provider through
-    # here, while a user-supplied ID goes straight to `resolve_by_ids` and stays allowed
     if config.disable_metadata:
         log.debug("Metadata lookups are disabled by config; not searching for %r", title)
         return None
 
     ordered = provider_order(kind, anime)
 
-    # Check cache first
     if title_cacher and cache_title_id:
         for cls in ordered:
             p = cls()
@@ -95,12 +86,11 @@ def search_metadata(
                 continue
             cached = title_cacher.get_cached_provider(p.NAME, cache_title_id, kind, cache_region, cache_account_hash)
             if cached:
-                result = _cached_to_result(cached, p.NAME, kind)
+                result = cached_to_result(cached, p.NAME, kind)
                 if result and result.title and fuzzy_match(result.title, title):
                     log.debug("Using cached %s data for %r", p.NAME, title)
                     return result
 
-    # Search providers in priority order
     for cls in ordered:
         p = cls()
         if not p.is_available():
@@ -111,16 +101,14 @@ def search_metadata(
             log.debug("%s search failed: %s", p.NAME, exc)
             continue
         if result and result.title and fuzzy_match(result.title, title):
-            # Enrich with cross-referenced IDs if we have IMDB but missing TMDB/TVDB
             enrich_ids(result)
-            # Cache the result (include enriched IDs so they survive round-trip)
             if title_cacher and cache_title_id and result.raw:
                 try:
                     cache_data = result.raw
                     if result.external_ids.tmdb_id or result.external_ids.tvdb_id:
                         cache_data = {
                             **result.raw,
-                            "_enriched_ids": _external_ids_to_dict(result.external_ids),
+                            "_enriched_ids": external_ids_to_dict(result.external_ids),
                         }
                     title_cacher.cache_provider(
                         p.NAME, cache_title_id, cache_data, kind, cache_region, cache_account_hash
@@ -141,7 +129,6 @@ def get_title_by_id(
     cache_account_hash: Optional[str] = None,
 ) -> Optional[str]:
     """Get title name by TMDB ID."""
-    # Check cache first
     if title_cacher and cache_title_id:
         cached = title_cacher.get_cached_provider("tmdb", cache_title_id, kind, cache_region, cache_account_hash)
         if cached and cached.get("detail"):
@@ -158,14 +145,13 @@ def get_title_by_id(
     if not result:
         return None
 
-    # Cache if possible
     if title_cacher and cache_title_id and result.raw:
         try:
             ext_ids = tmdb.get_external_ids(tmdb_id, kind)
             title_cacher.cache_provider(
                 "tmdb",
                 cache_title_id,
-                {"detail": result.raw, "external_ids": _external_ids_to_dict(ext_ids)},
+                {"detail": result.raw, "external_ids": external_ids_to_dict(ext_ids)},
                 kind,
                 cache_region,
                 cache_account_hash,
@@ -185,7 +171,6 @@ def get_year_by_id(
     cache_account_hash: Optional[str] = None,
 ) -> Optional[int]:
     """Get release year by TMDB ID."""
-    # Check cache first
     if title_cacher and cache_title_id:
         cached = title_cacher.get_cached_provider("tmdb", cache_title_id, kind, cache_region, cache_account_hash)
         if cached and cached.get("detail"):
@@ -203,14 +188,13 @@ def get_year_by_id(
     if not result:
         return None
 
-    # Cache if possible
     if title_cacher and cache_title_id and result.raw:
         try:
             ext_ids = tmdb.get_external_ids(tmdb_id, kind)
             title_cacher.cache_provider(
                 "tmdb",
                 cache_title_id,
-                {"detail": result.raw, "external_ids": _external_ids_to_dict(ext_ids)},
+                {"detail": result.raw, "external_ids": external_ids_to_dict(ext_ids)},
                 kind,
                 cache_region,
                 cache_account_hash,
@@ -253,7 +237,6 @@ def fetch_external_ids(
     cache_account_hash: Optional[str] = None,
 ) -> ExternalIds:
     """Get external IDs by TMDB ID."""
-    # Check cache first
     if title_cacher and cache_title_id:
         cached = title_cacher.get_cached_provider("tmdb", cache_title_id, kind, cache_region, cache_account_hash)
         if cached and cached.get("external_ids"):
@@ -271,7 +254,6 @@ def fetch_external_ids(
         return ExternalIds()
     ext = tmdb.get_external_ids(tmdb_id, kind)
 
-    # Cache if possible
     if title_cacher and cache_title_id:
         try:
             detail = None
@@ -282,7 +264,7 @@ def fetch_external_ids(
                 title_cacher.cache_provider(
                     "tmdb",
                     cache_title_id,
-                    {"detail": detail, "external_ids": _external_ids_to_dict(ext)},
+                    {"detail": detail, "external_ids": external_ids_to_dict(ext)},
                     kind,
                     cache_region,
                     cache_account_hash,
@@ -308,12 +290,12 @@ def resolve_by_ids(
     cache_account_hash: Optional[str] = None,
     anime: bool = False,
 ) -> Optional[MetadataResult]:
-    """Resolve metadata from user-supplied external IDs, falling back to search only without them.
+    """Get metadata from user-supplied external IDs, and find the title by name only without them.
 
-    A supplied ID is authoritative. It is looked up directly through the providers that
-    consume its namespace, in `metadata_providers` order for `kind`, and it always survives
-    into `external_ids` whatever a provider answers. A fuzzy title search only runs when no
-    ID was supplied at all.
+    A supplied ID is authoritative. unshackle looks it up directly through the metadata
+    providers that consume its namespace, in `metadata_providers` order for `kind`, and it
+    always survives into `external_ids` whatever a metadata provider answers. Without any
+    supplied ID, unshackle finds the title by a fuzzy name comparison.
     """
     supplied: dict[str, Union[int, str]] = {}
     if tmdb_id is not None:
@@ -373,37 +355,31 @@ def resolve_by_ids(
     return result
 
 
-# -- Internal helpers --
+ENRICHMENT_AUTHORITY: tuple[str, ...] = ("tmdb", "simkl", "tvdb")
 
 
-# trust ranking for cross-validating enrichments; `metadata_providers` filters this
-# set but sets search order only, not the ranking
-_ENRICHMENT_AUTHORITY: tuple[str, ...] = ("tmdb", "simkl", "tvdb")
-
-
-def _enrichment_providers(kind: Optional[str] = None) -> list[str]:
-    """Names of configured providers that can resolve an IMDB ID, most trusted first."""
+def enrichment_providers(kind: Optional[str] = None) -> list[str]:
+    """Names of the configured metadata providers that can find a title by IMDB ID, most trusted first."""
     configured = {cls.NAME for cls in provider_order(kind) if hasattr(cls, "find_by_imdb_id")}
-    return [name for name in _ENRICHMENT_AUTHORITY if name in configured]
+    return [name for name in ENRICHMENT_AUTHORITY if name in configured]
 
 
 def enrich_ids(result: MetadataResult) -> None:
-    """Enrich a MetadataResult by cross-referencing IMDB ID with available providers.
+    """Enrich a MetadataResult by cross-referencing IMDB ID with the available metadata providers.
 
-    Queries all available providers, cross-validates tmdb_id as anchor.
-    If a provider returns a different tmdb_id than the authoritative source,
-    ALL of that provider's data is dropped (likely resolved to wrong title).
+    Queries all available metadata providers, cross-validates tmdb_id as anchor.
+    If a metadata provider returns a different tmdb_id than the authoritative source,
+    unshackle drops ALL of that metadata provider's data (it likely found the wrong title).
     """
     ids = result.external_ids
     if not ids.imdb_id:
         return
     if ids.tmdb_id and ids.tvdb_id:
-        return  # already have everything
+        return
 
     kind = result.kind or "movie"
 
-    # Step 1: Collect enrichment results from all available providers
-    authority = {name: i for i, name in enumerate(_enrichment_providers(kind))}
+    authority = {name: i for i, name in enumerate(enrichment_providers(kind))}
     enrichments: list[tuple[str, ExternalIds]] = []
     for provider_name in authority:
         p = get_provider(provider_name)
@@ -420,10 +396,8 @@ def enrich_ids(result: MetadataResult) -> None:
     if not enrichments:
         return
 
-    # Step 2: Cross-validate using tmdb_id as anchor — drop providers that disagree
-    validated = _validate_enrichments(enrichments, authority)
+    validated = validate_enrichments(enrichments, authority)
 
-    # Step 3: Merge validated data (fill gaps only)
     for _provider_name, ext in validated:
         if not ids.tmdb_id and ext.tmdb_id:
             ids.tmdb_id = ext.tmdb_id
@@ -432,42 +406,38 @@ def enrich_ids(result: MetadataResult) -> None:
             ids.tvdb_id = ext.tvdb_id
 
 
-def _validate_enrichments(
+def validate_enrichments(
     enrichments: list[tuple[str, ExternalIds]],
     authority: dict[str, int],
 ) -> list[tuple[str, ExternalIds]]:
-    """Drop providers whose tmdb_id conflicts with the authoritative value.
+    """Drop the metadata providers whose tmdb_id conflicts with the authoritative value.
 
-    If providers disagree on tmdb_id, the more authoritative source wins
-    and ALL data from disagreeing providers is discarded (different tmdb_id
-    means the provider likely resolved to a different title entirely).
+    If metadata providers disagree on tmdb_id, the more authoritative source wins.
+    unshackle discards ALL data from a metadata provider that disagrees, because a
+    different tmdb_id means that metadata provider likely found a different title.
     """
     from collections import Counter
 
-    # Collect tmdb_id votes
     tmdb_votes: dict[str, int] = {}
     for provider_name, ext in enrichments:
         if ext.tmdb_id is not None:
             tmdb_votes[provider_name] = ext.tmdb_id
 
     if len(set(tmdb_votes.values())) <= 1:
-        return enrichments  # all agree or only one voted — no conflict
+        return enrichments
 
-    # Find the authoritative tmdb_id
     value_counts = Counter(tmdb_votes.values())
     most_common_val, most_common_count = value_counts.most_common(1)[0]
 
     if most_common_count > 1:
         anchor_tmdb_id = most_common_val
     else:
-        # No majority — pick the most authoritative provider
         best_provider = min(
             tmdb_votes.keys(),
             key=lambda name: authority.get(name, 99),
         )
         anchor_tmdb_id = tmdb_votes[best_provider]
 
-    # Drop any provider that disagrees
     validated: list[tuple[str, ExternalIds]] = []
     for provider_name, ext in enrichments:
         if ext.tmdb_id is not None and ext.tmdb_id != anchor_tmdb_id:
@@ -484,7 +454,7 @@ def _validate_enrichments(
     return validated
 
 
-def _external_ids_to_dict(ext: ExternalIds) -> dict:
+def external_ids_to_dict(ext: ExternalIds) -> dict:
     """Convert ExternalIds to a dict for caching."""
     result: dict = {}
     if ext.imdb_id:
@@ -500,8 +470,8 @@ def _external_ids_to_dict(ext: ExternalIds) -> dict:
     return result
 
 
-def _cached_to_result(cached: dict, provider_name: str, kind: str) -> Optional[MetadataResult]:
-    """Convert a cached provider dict back to a MetadataResult."""
+def cached_to_result(cached: dict, provider_name: str, kind: str) -> Optional[MetadataResult]:
+    """Convert a cached metadata provider dict back to a MetadataResult."""
     if provider_name == "tmdb":
         detail = cached.get("detail", {})
         ext_raw = cached.get("external_ids", {})
@@ -566,11 +536,10 @@ def _cached_to_result(cached: dict, provider_name: str, kind: str) -> Optional[M
             raw=cached,
         )
     elif provider_name == "tvdb":
-        from unshackle.core.providers.tvdb import _ids_from_remote, _parse_int
+        from unshackle.core.providers.tvdb import ids_from_remote, parse_int
 
-        tvdb_id = _parse_int(cached.get("tvdb_id") or cached.get("id"))
-        ext = _ids_from_remote(cached.get("remote_ids") or cached.get("remoteIds"), tvdb_id)
-        # restore IDs that enrichment filled in beyond the raw remote_ids
+        tvdb_id = parse_int(cached.get("tvdb_id") or cached.get("id"))
+        ext = ids_from_remote(cached.get("remote_ids") or cached.get("remoteIds"), tvdb_id)
         enriched = cached.get("_enriched_ids", {})
         ext.imdb_id = ext.imdb_id or enriched.get("imdb_id")
         ext.tmdb_id = ext.tmdb_id or enriched.get("tmdb_id")
@@ -578,21 +547,20 @@ def _cached_to_result(cached: dict, provider_name: str, kind: str) -> Optional[M
             ext.tmdb_kind = kind
         return MetadataResult(
             title=cached.get("name"),
-            year=_parse_int(cached.get("year")),
+            year=parse_int(cached.get("year")),
             kind=kind,
             external_ids=ext,
             source="tvdb",
             raw=cached,
         )
     elif provider_name == "anilist":
-        return AniListProvider()._to_result(cached)
+        return AniListProvider().to_result(cached)
     elif provider_name == "imdb":
         from unshackle.core.providers.imdb import primary_language
 
         title = (cached.get("titleText") or {}).get("text") or (cached.get("originalTitleText") or {}).get("text")
         year = (cached.get("releaseYear") or {}).get("year")
         imdb_id = cached.get("id")
-        # Restore enriched IDs that were saved alongside the raw data
         enriched = cached.get("_enriched_ids", {})
         return MetadataResult(
             title=title,

@@ -3,11 +3,14 @@ from __future__ import annotations
 import base64
 import hashlib
 import html
+import logging
 import re
 import shutil
 import struct
 import urllib.parse
-from typing import Any, Optional, Union
+from contextlib import ExitStack, closing
+from pathlib import Path
+from typing import Any, BinaryIO, Optional, Union
 
 import requests
 from langcodes import Language, tag_is_valid
@@ -16,9 +19,12 @@ from pyplayready.system.pssh import PSSH as PR_PSSH
 from pywidevine.pssh import PSSH
 from requests import Session
 
+from unshackle.core.config import config
 from unshackle.core.constants import DOWNLOAD_CANCELLED, DOWNLOAD_LICENCE_ONLY, AnyTrack
 from unshackle.core.drm import DRM_T, PlayReady, Widevine
+from unshackle.core.drm.verify import decrypt_track
 from unshackle.core.events import events
+from unshackle.core.manifests.dash import RollingMerge, append_segment
 from unshackle.core.manifests.ism_init import (
     build_init_segment,
     parse_codec_private_data_vui,
@@ -27,16 +33,14 @@ from unshackle.core.manifests.ism_init import (
     read_track_id,
 )
 from unshackle.core.session import RnetSession
-from unshackle.core.tracks import Audio, DownloadContext, Subtitle, Track, Tracks, Video
+from unshackle.core.tracks import Audio, DownloadContext, Subtitle, Track, Tracks, Video, resume
 from unshackle.core.tracks.track import assert_fragments_decrypted
 from unshackle.core.utilities import log_event, try_ensure_utf8
 from unshackle.core.utils.redact import safe_display_url
 from unshackle.core.utils.xml import load_xml
 
-# MS-SSTR: FourCC may be absent; AudioTag carries the WAVE format tag instead.
 AUDIO_TAG_FOURCC = {"255": "AACL", "65534": "EC-3"}
 
-# Smooth FourCCs that Codec.from_mime (RFC 6381 names) doesn't know directly.
 FOURCC_MIME = {"H264": "avc1", "H265": "hvc1", "HEVC": "hvc1", "AACL": "mp4a", "AACH": "mp4a", "AACP": "mp4a"}
 
 
@@ -78,24 +82,26 @@ class ISM:
         return cls(load_xml(text), url)
 
     @staticmethod
-    def _get_drm(headers: list[Element]) -> list[DRM_T]:
+    def get_drm(headers: list[Element]) -> list[DRM_T]:
         drm: list[DRM_T] = []
         for header in headers:
-            system_id = (header.get("SystemID") or header.get("SystemId") or "").lower()
+            system_id = (header.get("SystemID") or header.get("SystemId") or "").strip().strip("{}").lower()
             data = "".join(header.itertext()).strip()
             if not data:
                 continue
             if system_id == "edef8ba9-79d6-4ace-a3c8-27dcd51d21ed":
                 try:
                     pssh = PSSH(base64.b64decode(data))
-                except Exception:
+                except Exception as e:
+                    logging.getLogger("ISM").warning(f"Skipping unparseable Widevine ProtectionHeader: {e!r}")
                     continue
                 kid = next(iter(pssh.key_ids), None)
                 drm.append(Widevine(pssh=pssh, kid=kid))
             elif system_id == "9a04f079-9840-4286-ab92-e65be0885f95":
                 try:
                     pr_pssh = PR_PSSH(data)
-                except Exception:
+                except Exception as e:
+                    logging.getLogger("ISM").warning(f"Skipping unparseable PlayReady ProtectionHeader: {e!r}")
                     continue
                 drm.append(PlayReady(pssh=pr_pssh, pssh_b64=data))
         return drm
@@ -104,7 +110,7 @@ class ISM:
     def get_video_range_and_fps(fourcc: str, codec_private_data: str) -> tuple[Video.Range, Optional[float]]:
         """Derive colour range and fps from the SPS VUI in CodecPrivateData,
         since Smooth manifests carry neither as attributes. Range soft-fails to
-        SDR; fps is None for non-HEVC codecs and VUIs without timing info."""
+        SDR. fps is None for non-HEVC codecs and VUIs without timing info."""
         fourcc = (fourcc or "").upper()
         try:
             cpd = bytes.fromhex(codec_private_data or "")
@@ -122,12 +128,9 @@ class ISM:
         return ISM.get_video_range_and_fps(fourcc, codec_private_data)[0]
 
     @staticmethod
-    def _init_segment(
+    def init_segment(
         track: AnyTrack, session_drm: Optional[DRM_T], first_segment: Optional[bytes] = None
     ) -> Optional[bytes]:
-        # Smooth fragments are moof+mdat only; rebuild the ftyp+moov init box from
-        # the manifest CodecPrivateData (and KID, when encrypted) so the merged file
-        # is a valid MP4 that shaka/mp4decrypt can parse.
         ism = track.data.get("ism") if isinstance(getattr(track, "data", None), dict) else None
         if not ism:
             return None
@@ -136,15 +139,12 @@ class ISM:
         manifest = ism.get("manifest")
         if stream_index is None or quality_level is None:
             return None
-        # CodecPrivateData may legitimately be empty (AAC config is synthesized,
-        # EC-3 decoders sync from the frames); the builder handles each case.
         cpd = quality_level.get("CodecPrivateData") or ""
         fourcc = quality_level.get("FourCC") or AUDIO_TAG_FOURCC.get(quality_level.get("AudioTag") or "") or ""
 
         root_timescale = manifest.get("TimeScale") if manifest is not None else None
         timescale = int(stream_index.get("TimeScale") or root_timescale or 10000000)
         duration = int((manifest.get("Duration") if manifest is not None else 0) or 0)
-        # mdhd needs a 3-letter ISO-639-2 code; manifests often carry 2-letter tags.
         lang_attr = (stream_index.get("Language") or "").strip()
         language = "und"
         if lang_attr and tag_is_valid(lang_attr):
@@ -159,17 +159,14 @@ class ISM:
             if kid_uuid is not None:
                 kid = bytes.fromhex(kid_uuid.hex)
 
-        # Match the moov track_ID to the fragment's tfhd, else the muxer drops samples.
         track_id = (read_track_id(first_segment) if first_segment else None) or 1
-        # NALUnitLengthField: bytes per NAL length prefix, default 4.
         nal_length_size = int(quality_level.get("NALUnitLengthField") or stream_index.get("NALUnitLengthField") or 4)
-        # Per-sample IV size derived from the fragment senc/saiz (PIFF default 8).
         iv_size = (read_per_sample_iv_size(first_segment) if first_segment and kid else None) or 8
 
         try:
             if isinstance(track, Subtitle):
                 if track.codec != Subtitle.Codec.fTTML:
-                    return None  # plain-text subtitle formats concatenate fine
+                    return None
                 return build_init_segment(
                     stream_type="text",
                     fourcc="TTML",
@@ -187,8 +184,10 @@ class ISM:
                     timescale=timescale,
                     duration=duration,
                     language=language,
-                    width=int(quality_level.get("MaxWidth") or stream_index.get("MaxWidth") or 0),
-                    height=int(quality_level.get("MaxHeight") or stream_index.get("MaxHeight") or 0),
+                    width=int(quality_level.get("MaxWidth") or quality_level.get("Width") or 0)
+                    or int(stream_index.get("MaxWidth") or stream_index.get("Width") or 0),
+                    height=int(quality_level.get("MaxHeight") or quality_level.get("Height") or 0)
+                    or int(stream_index.get("MaxHeight") or stream_index.get("Height") or 0),
                     track_id=track_id,
                     nal_length_size=nal_length_size,
                     kid=kid,
@@ -209,8 +208,6 @@ class ISM:
                 iv_size=iv_size,
             )
         except (NotImplementedError, ValueError, struct.error) as e:
-            # Unsupported codec, malformed CodecPrivateData or out-of-range field —
-            # fall back to raw concatenation rather than aborting the download.
             log_event(
                 "manifest_ism_init_unsupported",
                 level="WARNING",
@@ -225,7 +222,7 @@ class ISM:
         tracks = Tracks()
         base_url = self.url
         duration = int(self.manifest.get("Duration") or 0)
-        drm = self._get_drm(self.manifest.xpath(".//ProtectionHeader"))
+        drm = self.get_drm(self.manifest.xpath(".//ProtectionHeader"))
 
         for stream_index in self.manifest.findall("StreamIndex"):
             content_type = stream_index.get("Type")
@@ -240,30 +237,24 @@ class ISM:
                 if lang and tag_is_valid(lang) and not lang.startswith("und"):
                     track_lang = Language.get(lang)
                 if not track_lang and not language:
-                    # Language is optional in MS-SSTR; video streams commonly omit it.
                     raise ValueError(
                         "Language information could not be derived from the manifest and no fallback "
                         "language was provided when calling ISM.to_tracks()."
                     )
 
                 track_urls: list[str] = []
+                track_times: list[int] = []
                 fragment_time = 0
                 fragments = stream_index.findall("c")
-                # MS-SSTR UrlPattern; regex over str.format so {Bitrate}/{start_time}
-                # spellings work and unknown placeholders like {CustomAttributes}
-                # or stray braces in query strings don't raise.
                 url_template = urllib.parse.urljoin(
                     base_url,
                     re.sub(r"\{[Bb]itrate\}", str(ql.get("Bitrate") or 0), stream_index.get("Url") or ""),
                 )
-                # Some manifests omit the first fragment in the <c> list but
-                # still expect a request for start time 0 which contains the
-                # initialization segment. If the first declared fragment is not
-                # at time 0, prepend the missing initialization URL.
                 if fragments:
                     first_time = int(fragments[0].get("t") or 0)
                     if first_time != 0:
                         track_urls.append(re.sub(r"\{start[ _]time\}", "0", url_template))
+                        track_times.append(first_time)
 
                 for idx, frag in enumerate(fragments):
                     fragment_time = int(frag.get("t", fragment_time))
@@ -272,23 +263,23 @@ class ISM:
                     if not duration_frag:
                         try:
                             next_time = int(fragments[idx + 1].get("t"))
-                        except (IndexError, AttributeError):
+                        except (IndexError, TypeError):
                             next_time = duration
-                        # floor division: float times would corrupt segment URLs;
-                        # any drift is reset by the next fragment's explicit t.
                         duration_frag = (next_time - fragment_time) // repeat
                     for _ in range(repeat):
                         track_urls.append(re.sub(r"\{start[ _]time\}", str(fragment_time), url_template))
+                        track_times.append(fragment_time)
                         fragment_time += duration_frag
 
                 track_id = hashlib.md5(
-                    "{codec}-{lang}-{bitrate}-{index}-{name}-{url}".format(
+                    "{codec}-{lang}-{bitrate}-{index}-{name}-{url}-{manifest}".format(
                         codec=codec,
                         lang=track_lang,
                         bitrate=ql.get("Bitrate") or 0,
                         index=ql.get("Index") or 0,
                         name=stream_index.get("Name") or "",
                         url=stream_index.get("Url") or "",
+                        manifest=(self.url or "").split("?")[0],
                     ).encode()
                 ).hexdigest()
 
@@ -298,6 +289,8 @@ class ISM:
                         "stream_index": stream_index,
                         "quality_level": ql,
                         "segments": track_urls,
+                        "segment_times": track_times,
+                        "timescale": int(stream_index.get("TimeScale") or self.manifest.get("TimeScale") or 10000000),
                     }
                 }
 
@@ -317,7 +310,6 @@ class ISM:
                             language=track_lang or language,
                             is_original_lang=bool(language and track_lang and str(track_lang) == str(language)),
                             bitrate=ql.get("Bitrate"),
-                            # Width/Height are non-spec but common when Max* are absent
                             width=int(ql.get("MaxWidth") or ql.get("Width") or 0)
                             or int(stream_index.get("MaxWidth") or stream_index.get("Width") or 0),
                             height=int(ql.get("MaxHeight") or ql.get("Height") or 0)
@@ -341,6 +333,7 @@ class ISM:
                             is_original_lang=bool(language and track_lang and str(track_lang) == str(language)),
                             bitrate=ql.get("Bitrate"),
                             channels=ql.get("Channels"),
+                            extra={"atmos": True} if (ql.get("HasAtmos") or "").lower() == "true" else None,
                             descriptor=Track.Descriptor.ISM,
                             drm=drm,
                             data=data,
@@ -390,6 +383,8 @@ class ISM:
         progress = ctx.progress
         proxy = ctx.proxy
         max_workers = ctx.max_workers
+        adaptive = ctx.adaptive_workers
+        processes = ctx.download_processes
         license_widevine = ctx.license_widevine
         cdm = ctx.cdm
 
@@ -397,11 +392,12 @@ class ISM:
             session.proxies.update({"all": proxy})
 
         segments: list[str] = track.data["ism"]["segments"]
+        segment_times: list[int] = track.data["ism"].get("segment_times") or []
+        if segment_times:
+            segments = segments[track.sample_slice(segment_times, track.data["ism"]["timescale"], config.sample)]
 
         session_drm = None
         if track.drm:
-            # Mirror HLS.download_track: pick the DRM matching the provided CDM
-            # (or the first available) and license it if supported.
             session_drm = track.get_drm_for_cdm(cdm)
             if isinstance(session_drm, (Widevine, PlayReady)):
                 try:
@@ -422,6 +418,17 @@ class ISM:
         progress(total=len(segments))
 
         downloader = track.downloader
+
+        use_rolling_merge = config.merge_segments and not isinstance(track, Subtitle)
+        can_resume = config.continue_downloads and not use_rolling_merge
+
+        digest = resume.fingerprint(track.url, [(url, None) for url in segments])
+        if not (can_resume and resume.reusable(save_dir, digest)):
+            shutil.rmtree(save_dir, ignore_errors=True)
+        save_dir.mkdir(parents=True, exist_ok=True)
+        if can_resume:
+            resume.write_sidecar(save_dir, digest)
+
         downloader_args = dict(
             urls=[{"url": url} for url in segments],
             output_dir=save_dir,
@@ -431,6 +438,8 @@ class ISM:
             proxy=proxy,
             max_workers=max_workers,
             session=session,
+            adaptive=adaptive,
+            processes=processes,
         )
 
         log_event(
@@ -448,17 +457,46 @@ class ISM:
             },
         )
 
-        for status_update in downloader(**downloader_args):
-            file_downloaded = status_update.get("file_downloaded")
-            if file_downloaded:
-                events.emit(events.Types.SEGMENT_DOWNLOADED, track=track, segment=file_downloaded)
-            else:
-                downloaded = status_update.get("downloaded")
-                if downloaded and downloaded.endswith("/s"):
-                    status_update["downloaded"] = f"ISM {downloaded}"
-                progress(**status_update)
+        iv_size = 8
 
-        # Verify output directory exists and contains files
+        def append_ism(dst: BinaryIO, segment_file: Path) -> None:
+            """Write one fragment; segment 0 also synthesises the init box the fragments lack."""
+            nonlocal iv_size
+            if int(segment_file.stem) == 0:
+                segment_data = segment_file.read_bytes()
+                init_segment = ISM.init_segment(track, session_drm, segment_data)
+                if init_segment:
+                    dst.write(init_segment)
+                iv_size = (read_per_sample_iv_size(segment_data) if session_drm else None) or 8
+                dst.write(piff_senc_to_cenc(segment_data, iv_size) if session_drm else segment_data)
+            elif session_drm:
+                dst.write(piff_senc_to_cenc(segment_file.read_bytes(), iv_size))
+            else:
+                append_segment(dst, segment_file, is_text_subtitle=False)
+
+        merger: Optional[RollingMerge] = None
+        try:
+            with ExitStack() as stack:
+                if use_rolling_merge:
+                    output = stack.enter_context(open(save_path, "wb"))
+                    merger = RollingMerge(output, append_ism)
+                stream = stack.enter_context(closing(downloader(**downloader_args)))
+                for status_update in stream:
+                    file_downloaded = status_update.get("file_downloaded")
+                    if file_downloaded:
+                        events.emit(events.Types.SEGMENT_DOWNLOADED, track=track, segment=file_downloaded)
+                        if merger:
+                            merger.add(int(file_downloaded.stem), file_downloaded)
+                    else:
+                        downloaded = status_update.get("downloaded")
+                        if downloaded and downloaded.endswith("/s"):
+                            status_update["downloaded"] = f"ISM {downloaded}"
+                        progress(**status_update)
+        except BaseException:
+            if merger:
+                save_path.unlink(missing_ok=True)
+            raise
+
         if not save_dir.exists():
             error_msg = f"Output directory does not exist: {save_dir}"
             log_event(
@@ -478,7 +516,25 @@ class ISM:
         for control_file in save_dir.glob("*.!dev"):
             control_file.unlink(missing_ok=True)
 
-        segments_to_merge = [x for x in sorted(save_dir.iterdir()) if x.is_file()]
+        if merger and merger.merged != len(segments):
+            error_msg = f"Rolling merge appended {merger.merged} of {len(segments)} segments: {save_dir}"
+            log_event(
+                "manifest_ism_rolling_merge_incomplete",
+                level="ERROR",
+                message=error_msg,
+                context={
+                    "track_id": getattr(track, "id", None),
+                    "track_type": track.__class__.__name__,
+                    "save_dir": str(save_dir),
+                    "merged": merger.merged,
+                    "total_segments": len(segments),
+                    "downloader": "requests",
+                },
+            )
+            save_path.unlink(missing_ok=True)
+            raise FileNotFoundError(error_msg)
+
+        segments_to_merge = [] if merger else [x for x in sorted(save_dir.iterdir()) if x.is_file()]
 
         log_event(
             "manifest_ism_download_complete",
@@ -489,13 +545,14 @@ class ISM:
                 "track_type": track.__class__.__name__,
                 "save_dir": str(save_dir),
                 "save_dir_exists": save_dir.exists(),
-                "segments_found": len(segments_to_merge),
-                "segment_files": [f.name for f in segments_to_merge[:10]],  # Limit to first 10
+                "segments_found": merger.merged if merger else len(segments_to_merge),
+                "segment_files": [f.name for f in segments_to_merge[:10]],
+                "rolling_merge": merger is not None,
                 "downloader": "requests",
             },
         )
 
-        if not segments_to_merge:
+        if not segments_to_merge and not merger:
             error_msg = f"No segment files found in output directory: {save_dir}"
             all_contents = list(save_dir.iterdir()) if save_dir.exists() else []
             log_event(
@@ -512,47 +569,47 @@ class ISM:
             )
             raise FileNotFoundError(error_msg)
 
-        is_text_subtitle = (
-            not session_drm
-            and isinstance(track, Subtitle)
-            and track.codec not in (Subtitle.Codec.fVTT, Subtitle.Codec.fTTML)
-        )
-        progress(downloaded="Merging", completed=0, total=len(segments_to_merge))
-        with open(save_path, "wb") as f:
-            first_segment = segments_to_merge[0].read_bytes() if segments_to_merge else None
-            init_segment = ISM._init_segment(track, session_drm, first_segment)
-            if init_segment:
-                f.write(init_segment)
-            iv_size = (read_per_sample_iv_size(first_segment) if session_drm and first_segment else None) or 8
-            for index, segment_file in enumerate(segments_to_merge):
-                if is_text_subtitle:
-                    # first segment was already read for the init synthesis, reuse it
-                    segment_data = first_segment if index == 0 and first_segment else segment_file.read_bytes()
-                    segment_data = try_ensure_utf8(segment_data)
-                    segment_data = (
-                        segment_data.decode("utf8")
-                        .replace("&lrm;", html.unescape("&lrm;"))
-                        .replace("&rlm;", html.unescape("&rlm;"))
-                        .encode("utf8")
-                    )
-                    f.write(segment_data)
-                elif session_drm:
-                    segment_data = first_segment if index == 0 and first_segment else segment_file.read_bytes()
-                    f.write(piff_senc_to_cenc(segment_data, iv_size))
-                elif index == 0 and first_segment:
-                    f.write(first_segment)
-                else:
-                    with open(segment_file, "rb") as src:
-                        shutil.copyfileobj(src, f, 1024 * 1024)
-                segment_file.unlink()
-                progress(advance=1)
+        if not merger:
+            is_text_subtitle = (
+                not session_drm
+                and isinstance(track, Subtitle)
+                and track.codec not in (Subtitle.Codec.fVTT, Subtitle.Codec.fTTML)
+            )
+            progress(downloaded="Merging", completed=0, total=len(segments_to_merge))
+            with open(save_path, "wb") as f:
+                first_segment = segments_to_merge[0].read_bytes() if segments_to_merge else None
+                init_segment = ISM.init_segment(track, session_drm, first_segment)
+                if init_segment:
+                    f.write(init_segment)
+                iv_size = (read_per_sample_iv_size(first_segment) if session_drm and first_segment else None) or 8
+                for index, segment_file in enumerate(segments_to_merge):
+                    if is_text_subtitle:
+                        segment_data = first_segment if index == 0 and first_segment else segment_file.read_bytes()
+                        segment_data = try_ensure_utf8(segment_data)
+                        segment_data = (
+                            segment_data.decode("utf8")
+                            .replace("&lrm;", html.unescape("&lrm;"))
+                            .replace("&rlm;", html.unescape("&rlm;"))
+                            .encode("utf8")
+                        )
+                        f.write(segment_data)
+                    elif session_drm:
+                        segment_data = first_segment if index == 0 and first_segment else segment_file.read_bytes()
+                        f.write(piff_senc_to_cenc(segment_data, iv_size))
+                    elif index == 0 and first_segment:
+                        f.write(first_segment)
+                    else:
+                        with open(segment_file, "rb") as src:
+                            shutil.copyfileobj(src, f, 1024 * 1024)
+                    segment_file.unlink()
+                    progress(advance=1)
 
         track.path = save_path
         events.emit(events.Types.TRACK_DOWNLOADED, track=track)
 
         if session_drm:
             progress(downloaded="Decrypting", completed=0, total=None)
-            session_drm.decrypt(save_path)
+            decrypt_track(session_drm, save_path, license_widevine)
             assert_fragments_decrypted(save_path)
             track.drm = None
             events.emit(events.Types.TRACK_DECRYPTED, track=track, drm=session_drm, segment=None)
@@ -561,8 +618,8 @@ class ISM:
         try:
             save_dir.rmdir()
         except OSError:
-            # a superseded hedge download may still drop a .!dev file here
             shutil.rmtree(save_dir, ignore_errors=True)
+        resume.clear_sidecar(save_dir)
         progress(downloaded="Downloaded")
 
 

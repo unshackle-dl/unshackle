@@ -1,27 +1,43 @@
 import asyncio
+import base64
 import enum
+import json
 import logging
+import os
 import re
+import tempfile
+import time
+import zlib
+from collections import Counter
+from contextlib import suppress
 from datetime import date as date_
+from http.cookiejar import CookieJar, MozillaCookieJar
 from pathlib import Path
-from types import SimpleNamespace
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, Iterable, List, Optional, cast
 
+import click
 from aiohttp import web
 
 from unshackle.core.api.compression import safe_inflate
-from unshackle.core.api.errors import APIError, APIErrorCode, handle_api_exception
-from unshackle.core.api.input_bridge import AuthStatus, InputBridge
-from unshackle.core.api.sanitize import safe_cache_key, sanitize_log
+from unshackle.core.api.errors import APIError, APIErrorCode, categorize_exception, handle_api_exception
+from unshackle.core.api.input_bridge import AuthStatus, InputBridge, NoUserBridge
+from unshackle.core.api.sanitize import MAX_SESSION_CACHE_KEYS, safe_cache_key, sanitize_log
+from unshackle.core.api.session_log import SessionLogBuffer, SessionLogMirror, capture_service_logs
+from unshackle.core.api.session_store import SessionStore
+from unshackle.core.cacher import Cacher
+from unshackle.core.cdm.detect import cdm_type_stub
 from unshackle.core.config import config
 from unshackle.core.constants import AUDIO_CODEC_MAP, DYNAMIC_RANGE_MAP, VIDEO_CODEC_MAP
 from unshackle.core.providers.anilist import parse_anilist_ref
 from unshackle.core.proxies.resolve import initialize_proxy_providers, resolve_proxy
 from unshackle.core.services import Services
-from unshackle.core.titles import Episode, Movie, Title_T
+from unshackle.core.session import utf8_text
+from unshackle.core.titles import Episode, Movie, Song, Title_T
 from unshackle.core.tracks import Audio, Subtitle, Tracks, Video
+from unshackle.core.utilities import declared_kwargs, kind_only_conflict
+from unshackle.core.utils.click_types import AUDIO_CODEC_LIST, SUBTITLE_CODEC, VIDEO_CODEC_LIST
 from unshackle.core.utils.collections import ci_get
-from unshackle.core.utils.redact import REDACTED, URL_USERINFO_RE
+from unshackle.core.utils.redact import REDACTED, URL_USERINFO_RE, redact_all, redact_secrets, redact_text
 
 log = logging.getLogger("api")
 
@@ -40,12 +56,16 @@ DEFAULT_DOWNLOAD_PARAMS = {
     "no_atmos": False,
     "wanted": [],
     "latest_episode": False,
+    "latest_episodes": None,
     "lang": ["orig"],
     "v_lang": [],
     "a_lang": [],
     "s_lang": ["all"],
+    "require_audio": [],
+    "require_video": [],
     "require_subs": [],
     "forced_subs": False,
+    "forced_subs_only": False,
     "forced_s_lang": [],
     "exact_lang": False,
     "sub_format": None,
@@ -57,19 +77,28 @@ DEFAULT_DOWNLOAD_PARAMS = {
     "no_audio": False,
     "no_chapters": False,
     "no_video": False,
+    "no_attachments": False,
     "audio_description": False,
+    "audio_description_only": False,
     "slow": None,
     "split_audio": None,
     "skip_dl": False,
+    "all_drm": False,
     "export": False,
     "cdm_only": None,
     "proxy": None,
     "no_proxy": False,
     "no_proxy_download": False,
+    "proxy_download": None,
     "no_folder": False,
     "no_source": False,
     "no_mux": False,
+    "sample": None,
+    "include_sample": False,
     "workers": None,
+    "adaptive_workers": False,
+    "download_processes": 1,
+    "continue_downloads": False,
     "downloads": 1,
     "worst": False,
     "best_available": False,
@@ -88,8 +117,6 @@ DEFAULT_DOWNLOAD_PARAMS = {
 }
 
 
-# Keys that are part of the API transport envelope, not service.cli options.
-# Used by instantiate_service to avoid passing them as kwargs to a service.
 LIST_HANDLER_TRANSPORT_KEYS = {
     "service",
     "title_id",
@@ -101,6 +128,9 @@ LIST_HANDLER_TRANSPORT_KEYS = {
     "proxy",
     "no_proxy",
     "query",
+    "service_params",
+    "cache",
+    "dl_params",
 }
 
 
@@ -108,10 +138,10 @@ def load_full_cdm(service: str, profile: Optional[str], cdm_type: Optional[str] 
     """Load a real CDM object for the given service.
 
     Services often touch ``ctx.obj.cdm.security_level`` / ``.device_type`` / ``.system_id``
-    inside ``__init__``, so the lightweight ``_resolve_server_cdm`` stub is not enough
+    inside ``__init__``, so the lightweight ``resolve_server_cdm`` stub is not enough
     for list_titles / list_tracks / search. Mirrors ``dl.get_cdm`` selection logic but
     skips the quality-tier shortcuts (no track context yet) and falls back to the stub
-    if no device is configured or loading fails.
+    if the configuration has no device, or if loading fails.
     """
     from unshackle.core.cdm import load_cdm
     from unshackle.core.config import config as app_config
@@ -125,12 +155,20 @@ def load_full_cdm(service: str, profile: Optional[str], cdm_type: Optional[str] 
                 drm_key = {"wv": "widevine", "widevine": "widevine", "pr": "playready", "playready": "playready"}.get(
                     cdm_type.lower()
                 )
-            cdm_name = lower_keys.get(drm_key or "widevine") or lower_keys.get("playready")
+            first = next(key for key in lower_keys if key in ("widevine", "playready"))
+            cdm_name = lower_keys.get(drm_key or first) or lower_keys.get("playready")
         else:
             cdm_name = cdm_name.get(profile) or cdm_name.get("default") or ci_get(app_config.cdm, "default")
 
     if not cdm_name or not isinstance(cdm_name, str):
-        return _resolve_server_cdm(service, profile, cdm_type)
+        return resolve_server_cdm(service, profile, cdm_type)
+
+    if cdm_type:
+        wanted = {"wv": "widevine", "widevine": "widevine", "pr": "playready", "playready": "playready"}.get(
+            cdm_type.lower()
+        )
+        if wanted and detect_cdm_type(cdm_name, app_config) not in (None, wanted):
+            return cdm_type_stub(wanted)
 
     try:
         return load_cdm(cdm_name, service_name=service)
@@ -138,7 +176,7 @@ def load_full_cdm(service: str, profile: Optional[str], cdm_type: Optional[str] 
         log.warning(
             f"load_cdm({sanitize_log(cdm_name)!r}) failed for {sanitize_log(service)}: {exc}; using lightweight stub"
         )
-        return _resolve_server_cdm(service, profile, cdm_type)
+        return resolve_server_cdm(service, profile, cdm_type)
 
 
 def load_service_yaml(normalized_service: str) -> dict:
@@ -165,10 +203,15 @@ def build_parent_ctx(
     service_config: dict,
     extra_params: Optional[Dict[str, Any]] = None,
 ) -> Any:
-    """Build a parent click Context for invoking a service.cli via ctx.invoke().
+    """Assemble a parent click Context for invoking a service.cli through ctx.invoke().
 
-    The service's CLI callback uses ``ctx.parent.params`` (proxy, range_, vcodec, etc.)
-    and ``ctx.obj`` (ContextData). Both flow through Click's parent chain.
+    The service's CLI callback uses ``ctx.parent.params`` (proxy, range_, vcodec, and the
+    other dl options) and ``ctx.obj`` (ContextData). Both flow through Click's parent chain.
+
+    ``extra_params`` carries ``cookies_supplied``: True when a cookie jar goes to
+    ``authenticate()`` later in this request. A service that picks an authentication path in
+    ``__init__`` must read that flag, because a client-sent jar is in the request body, not in
+    the server's ``cookies/`` directory, so a file check answers False for it.
     """
     import click
 
@@ -181,9 +224,10 @@ def build_parent_ctx(
 
     parent = click.Context(dummy)
     parent.obj = ContextData(config=service_config, cdm=cdm, proxy_providers=proxy_providers, profile=profile)
-    params = {"proxy": proxy_param, "no_proxy": no_proxy}
+    params: Dict[str, Any] = {"proxy": proxy_param, "no_proxy": no_proxy, "served": True}
     if extra_params:
         params.update(extra_params)
+    params["quality"] = params.get("quality") or []
     parent.params = params
     return parent
 
@@ -197,10 +241,10 @@ def instantiate_service(
 ) -> Any:
     """Instantiate a service by invoking its click cli through Click.
 
-    Click fills option defaults via ``param.get_default()`` and runs type coercion,
-    so we no longer have to inspect ``__init__`` or stitch defaults by hand. Extra
-    kwargs are pulled from ``data`` when the key matches a cli option name and is
-    not in the transport-key blocklist.
+    Click fills option defaults through ``param.get_default()`` and runs type coercion,
+    so we no longer have to inspect ``__init__`` or stitch defaults by hand. This function
+    pulls extra kwargs from the ``data`` entries whose names match a cli option name
+    and are not in the transport-key blocklist.
     """
     cli_params = getattr(getattr(service_module, "cli", None), "params", []) or []
     cli_param_names = {p.name for p in cli_params if hasattr(p, "name") and p.name}
@@ -210,51 +254,291 @@ def instantiate_service(
         for k, v in data.items():
             if k in cli_param_names and k not in transport_keys and k != "title":
                 extras[k] = v
+        service_params = data.get("service_params")
+        if isinstance(service_params, dict):
+            for k, v in service_params.items():
+                if k in cli_param_names and k != "title":
+                    extras[k] = v
+        elif service_params is None:
+            for k in cli_param_names & transport_keys & set(data):
+                if k not in ("service", "title_id", "proxy", "no_proxy") and data.get(k) is not None:
+                    log.warning(
+                        f"Ignoring flat '{sanitize_log(k)}' as a service option (it names a transport field); "
+                        "update the client to send service options under 'service_params'"
+                    )
     return parent_ctx.invoke(service_module.cli, title=title, **extras)
 
 
-def setup_list_service(data: Dict[str, Any], normalized_service: str, profile: Optional[str], title_id: str) -> Any:
-    """Build and authenticate a service instance for list_titles / list_tracks.
+def server_login_material(
+    data: Dict[str, Any], normalized_service: str, account: Optional[str], profile: Optional[str]
+) -> tuple:
+    """(cookies, credential) for a list or search call.
 
-    Runs the shared preamble: load yaml → resolve proxy → load CDM → build ctx →
-    instantiate → authenticate. Raises APIError on proxy failure.
+    A lent account takes the server's files for that account. Otherwise the full-mode server,
+    which the operator's own UI drives, uses its own profiles; a ``--remote-only`` server uses only
+    what the client sent, the same rule as a remote session.
     """
     from unshackle.commands.dl import dl
+    from unshackle.core.api.stats import stats
+    from unshackle.core.credential import Credential
+
+    if account:
+        return server_account_cookies(normalized_service, profile), dl.get_credentials(normalized_service, profile)
+    if stats.mode != "remote_only":
+        return dl.get_cookie_jar(normalized_service, profile), dl.get_credentials(normalized_service, profile)
+    credential = None
+    cred_data = data.get("credentials")
+    if isinstance(cred_data, dict) and cred_data.get("username") is not None:
+        credential = Credential(
+            username=cred_data["username"], password=cred_data.get("password"), extra=cred_data.get("extra")
+        )
+    return load_client_cookies(data.get("cookies")), credential
+
+
+def api_key_namespace(request: Optional[web.Request]) -> str:
+    """Name of the caller's cache directories, derived from its API key so no caller can guess another's."""
+    import hashlib
+
+    api_key = request.headers.get("X-Secret-Key", "anonymous") if request else "anonymous"
+    return hashlib.pbkdf2_hmac("sha256", api_key.encode(), b"unshackle-session-ns", 100_000).hex()[:12]
+
+
+def write_client_cache(cache_data: Any, cache_tag: str) -> None:
+    """Write a client-sent ``cache`` map into the cache directory ``cache_tag``.
+
+    Each cache key is a file path relative to that directory, and each value is the file as
+    base64 of zlib-compressed bytes. The function skips an unsafe key or a file it cannot write,
+    and raises INVALID_INPUT for a map that is not an object, has too many entries, or holds a
+    value that is not a string.
+    """
+    if not isinstance(cache_data, dict) or len(cache_data) > MAX_SESSION_CACHE_KEYS:
+        raise APIError(APIErrorCode.INVALID_INPUT, f"cache must hold at most {MAX_SESSION_CACHE_KEYS} entries")
+    cache_dir = config.directories.cache / cache_tag
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    for key, content in cache_data.items():
+        safe_name = safe_cache_key(key)
+        if not safe_name:
+            log.warning(f"Rejecting unsafe session cache key: {sanitize_log(key)}")
+            continue
+        if not isinstance(content, str):
+            raise APIError(APIErrorCode.INVALID_INPUT, "cache values must be base64 strings")
+        decompressed = safe_inflate(base64.b64decode(content)).decode("utf-8")
+        target = cache_dir / f"{safe_name}.json"
+        try:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(decompressed, encoding="utf-8")
+        except OSError as e:
+            log.warning(f"Skipping session cache key {sanitize_log(key)}: {e}")
+
+
+def collect_cache_files(cache_tag: str) -> Dict[str, str]:
+    """Read the cache directory ``cache_tag`` back as a ``cache`` map for the client.
+
+    The map has the same form that :func:`write_client_cache` reads. It leaves out the
+    ``titles_`` files, because they hold no login state.
+    """
+    cache_data: Dict[str, str] = {}
+    cache_dir = config.directories.cache / cache_tag
+    if cache_dir.is_dir():
+        for f in sorted(cache_dir.rglob("*.json")):
+            key = f.relative_to(cache_dir).as_posix()[: -len(".json")]
+            if f.stem.startswith("titles_") or not safe_cache_key(key):
+                continue
+            try:
+                cache_data[key] = base64.b64encode(zlib.compress(f.read_bytes())).decode("ascii")
+            except OSError:
+                pass
+    return cache_data
+
+
+class RequestCache:
+    """The service cache of one list or search request on a ``--remote-only`` server.
+
+    Such a server keeps nothing that a client sends, so the request runs on a cache directory
+    of its own that the handler removes when the request ends, on success and on error. Before
+    that, a client that logged in with its own cookies, credentials or cache gets the updated
+    files back.
+    """
+
+    def __init__(self) -> None:
+        self.tag: Optional[str] = None
+        self.client_auth = False
+
+    def attach(
+        self,
+        service_instance: Any,
+        data: Dict[str, Any],
+        normalized_service: str,
+        request: Optional[web.Request],
+        client_login: bool,
+    ) -> None:
+        """Give the service a new cache directory, seeded from the client's ``cache``.
+
+        Does nothing on a full-mode server, where the operator's own cache stays in use.
+        """
+        import uuid
+
+        from unshackle.core.api.stats import stats
+
+        if stats.mode != "remote_only":
+            return
+        self.tag = f"_requests/{api_key_namespace(request)}/{uuid.uuid4()}/{normalized_service}"
+        service_instance.cache = Cacher(self.tag)
+        cache_data = data.get("cache")
+        if cache_data:
+            write_client_cache(cache_data, self.tag)
+        self.client_auth = client_login or bool(cache_data)
+
+    def json_response(self, payload: Dict[str, Any]) -> web.Response:
+        """Answer with ``payload``, plus the updated ``cache`` for a client that logged in itself."""
+        if self.tag and self.client_auth:
+            cache_data = collect_cache_files(self.tag)
+            if cache_data:
+                payload["cache"] = cache_data
+        return web.json_response(payload)
+
+    def cleanup(self) -> None:
+        SessionStore.cleanup_cache_dir(self.tag)
+
+
+def setup_list_service(
+    data: Dict[str, Any],
+    normalized_service: str,
+    profile: Optional[str],
+    title_id: str,
+    request: Optional[web.Request] = None,
+    request_cache: Optional[RequestCache] = None,
+) -> Any:
+    """Assemble and authenticate a service instance for list_titles / list_tracks.
+
+    Runs the shared preamble: load yaml → get proxy → load CDM → assemble ctx →
+    instantiate → authenticate. Raises APIError on proxy failure.
+    """
 
     service_config = load_service_yaml(normalized_service)
 
-    proxy_param = data.get("proxy")
     no_proxy = data.get("no_proxy", False)
-    proxy_providers = []
+    proxy_param, proxy_providers = resolve_handler_proxy(data, normalized_service, request)
 
-    if not no_proxy:
-        proxy_providers = initialize_proxy_providers()
-
-    if proxy_param and not no_proxy:
-        try:
-            proxy_param = resolve_proxy(proxy_param, proxy_providers)
-        except ValueError as e:
-            raise APIError(
-                APIErrorCode.INVALID_PROXY,
-                f"Proxy error: {e}",
-                details={"proxy": proxy_param, "service": normalized_service},
-            )
+    account = resolve_server_account(request, normalized_service, data.get("client_region"))
+    if account:
+        profile = None if account == "default" else account
 
     cdm = load_full_cdm(normalized_service, profile, data.get("cdm_type"))
-    parent_ctx = build_parent_ctx(profile, cdm, proxy_param, no_proxy, proxy_providers, service_config)
+    cookies, credential = server_login_material(data, normalized_service, account, profile)
+
+    parent_ctx = build_parent_ctx(
+        profile,
+        cdm,
+        proxy_param,
+        no_proxy,
+        proxy_providers,
+        service_config,
+        extra_params={"cookies_supplied": cookies is not None, **forwarded_dl_params(data)},
+    )
     service_module = Services.load(normalized_service)
     service_instance = instantiate_service(parent_ctx, service_module, title_id, data, LIST_HANDLER_TRANSPORT_KEYS)
 
-    cookies = dl.get_cookie_jar(normalized_service, profile)
-    credential = dl.get_credentials(normalized_service, profile)
+    if account:
+        service_instance.cache = Cacher(f"_accounts/{normalized_service}/{account}")
+    elif request_cache is not None:
+        client_login = cookies is not None or credential is not None
+        request_cache.attach(service_instance, data, normalized_service, request, client_login)
+    service_instance._input_bridge = NoUserBridge()
     service_instance.authenticate(cookies, credential)
     return service_instance
 
 
-def get_allowed_services(request: Optional[web.Request] = None) -> Optional[List[str]]:
-    """Get effective service allowlist considering global + per-key config.
+def run_service_search(
+    data: Dict[str, Any],
+    normalized_service: str,
+    query: str,
+    request: Optional[web.Request] = None,
+    request_cache: Optional[RequestCache] = None,
+) -> List[Dict[str, Any]]:
+    """Assemble and authenticate a service instance, then run its search.
 
-    Returns None if all services are allowed.
+    The same preamble as :func:`setup_list_service`, without the service option extras,
+    plus the search itself. Every step blocks on disk or network, so the caller runs the
+    whole function in one worker thread and keeps the event loop free for other clients.
+
+    The server account check and its cache directory apply to an ``ANONYMOUS_SEARCH`` service too.
+    """
+
+    profile = client_profile(data)
+    no_proxy = data.get("no_proxy", False)
+
+    service_config = load_service_yaml(normalized_service)
+    proxy_param, proxy_providers = resolve_handler_proxy(data, normalized_service, request)
+
+    account = resolve_server_account(request, normalized_service, data.get("client_region"))
+    if account:
+        profile = None if account == "default" else account
+
+    cdm = load_full_cdm(normalized_service, profile, data.get("cdm_type"))
+    service_module = Services.load(normalized_service)
+    anonymous = getattr(service_module, "ANONYMOUS_SEARCH", False)
+    cookies, credential = (
+        (None, None) if anonymous else server_login_material(data, normalized_service, account, profile)
+    )
+
+    parent_ctx = build_parent_ctx(
+        profile,
+        cdm,
+        proxy_param,
+        no_proxy,
+        proxy_providers,
+        service_config,
+        extra_params={"cookies_supplied": cookies is not None},
+    )
+
+    from click import ClickException
+
+    try:
+        service_instance = instantiate_service(parent_ctx, service_module, query)
+    except (ConnectionError, ClickException) as exc:
+        raise categorize_exception(exc, {"service": normalized_service}) from exc
+    except Exception as exc:
+        raise APIError(
+            APIErrorCode.SERVICE_ERROR,
+            f"Failed to initialize service: {exc}",
+            details={"service": normalized_service},
+        )
+
+    if account:
+        service_instance.cache = Cacher(f"_accounts/{normalized_service}/{account}")
+    elif request_cache is not None:
+        client_login = cookies is not None or credential is not None
+        request_cache.attach(service_instance, data, normalized_service, request, client_login)
+    service_instance._input_bridge = NoUserBridge()
+    if not anonymous:
+        service_instance.authenticate(cookies, credential)
+
+    results: List[Dict[str, Any]] = []
+    try:
+        for result in service_instance.search():
+            results.append(
+                {
+                    "id": result.id,
+                    "title": result.title,
+                    "description": result.description,
+                    "label": result.label,
+                    "url": result.url,
+                }
+            )
+    except NotImplementedError:
+        raise APIError(
+            APIErrorCode.SERVICE_ERROR,
+            f"Search is not supported by {normalized_service}",
+            details={"service": normalized_service},
+        )
+    return results
+
+
+def allowed_services_for_key(secret_key: Optional[str]) -> Optional[List[str]]:
+    """Effective service allowlist for an API key: the global list intersected with the key's.
+
+    Returns None when nothing restricts the services.
     """
     global_allowed = config.serve.get("services")
     global_set: Optional[set[str]] = None
@@ -262,14 +546,11 @@ def get_allowed_services(request: Optional[web.Request] = None) -> Optional[List
         global_set = {Services.get_tag(s) for s in global_allowed}
 
     key_set: Optional[set[str]] = None
-    if request:
-        secret_key = request_secret_key(request)
-        if secret_key:
-            users = config.serve.get("users", {})
-            user_config = users.get(secret_key, {})
-            user_services = user_config.get("services")
-            if user_services:
-                key_set = {Services.get_tag(s) for s in user_services}
+    if secret_key:
+        users = config.serve.get("users", {})
+        user_config = users.get(secret_key, {})
+        if isinstance(user_config, dict) and user_config.get("services"):
+            key_set = {Services.get_tag(s) for s in user_config["services"]}
 
     if global_set and key_set:
         result = global_set & key_set
@@ -283,11 +564,58 @@ def get_allowed_services(request: Optional[web.Request] = None) -> Optional[List
     return list(result)
 
 
-def server_cdm_allowed(request: Optional[web.Request] = None) -> bool:
-    """Whether the calling key may have the server run the CDM licensing.
+def get_allowed_services(request: Optional[web.Request] = None) -> Optional[List[str]]:
+    """The effective service allowlist for a request's API key, or None when unrestricted."""
+    return allowed_services_for_key(request_secret_key(request) if request else None)
 
-    Configured keys opt in with ``server_cdm: true``; keys absent from
-    ``serve.users`` (the admin secret) keep full access.
+
+def is_admin(request: Optional[web.Request]) -> bool:
+    """Whether the calling key is the admin secret (no ``users`` entry) or has ``admin: true``."""
+    if not request:
+        return True
+    user_config = (config.serve or {}).get("users", {}).get(request_secret_key(request))
+    return user_config is None or (isinstance(user_config, dict) and user_config.get("admin") is True)
+
+
+def require_admin(request: Optional[web.Request]) -> None:
+    """FORBIDDEN unless the calling key is the admin secret or has ``admin: true`` in ``serve.users``."""
+    if is_admin(request):
+        return
+    raise APIError(APIErrorCode.FORBIDDEN, "This API key may not run server maintenance.")
+
+
+def serve_user_config(api_key: str) -> Dict[str, Any]:
+    """The ``serve.users`` entry for an API key.
+
+    An API key absent from ``serve.users`` (the admin secret, or any caller in no-key mode) keeps
+    full access, so it gets every CDM device the server loaded.
+    """
+    user_config = ((config.serve or {}).get("users") or {}).get(api_key)
+    if isinstance(user_config, dict):
+        return user_config
+    serve_cfg = config.serve or {}
+    return {
+        kind: [d.stem if hasattr(d, "stem") else str(d) for d in (serve_cfg.get(kind) or [])]
+        for kind in ("devices", "playready_devices")
+    }
+
+
+def server_cdm_allowed(request: Optional[web.Request] = None, service: Optional[str] = None) -> bool:
+    """Whether the calling API key may have the server operate the CDM licensing for ``service``."""
+    return key_grant_allows(request, service, "server_cdm")
+
+
+def server_vault_allowed(request: Optional[web.Request] = None, service: Optional[str] = None) -> bool:
+    """Whether the calling API key may read the server vault in a remote session its own device licenses."""
+    return key_grant_allows(request, service, "server_vault") or server_cdm_allowed(request, service)
+
+
+def key_grant_allows(request: Optional[web.Request], service: Optional[str], name: str) -> bool:
+    """Whether the calling API key holds the ``name`` grant for ``service``.
+
+    Configured API keys opt in with ``<name>: true`` for every service, or with a list of
+    service tags for only those. An API key absent from ``serve.users`` (the admin secret) keeps
+    full access.
     """
     if not request:
         return True
@@ -295,10 +623,329 @@ def server_cdm_allowed(request: Optional[web.Request] = None) -> bool:
     user_config = config.serve.get("users", {}).get(secret_key)
     if user_config is None:
         return True
-    return bool(user_config.get("server_cdm", False))
+    allowed = user_config.get(name, False)
+    if isinstance(allowed, str):
+        allowed = [allowed]
+    if isinstance(allowed, (list, tuple, set)):
+        return service is not None and Services.get_tag(service).upper() in {
+            Services.get_tag(s).upper() for s in allowed
+        }
+    return bool(allowed)
+
+
+def is_whole_number(value: Any) -> bool:
+    """True for a non-negative int that is not a bool."""
+    return isinstance(value, int) and not isinstance(value, bool) and value >= 0
+
+
+def server_cdm_max_height_error(where: str, value: Any) -> Optional[str]:
+    """Why *value* cannot serve as ``server_cdm_max_height``, or None when it can (unset included)."""
+
+    def bad(height: Any) -> bool:
+        return height is not None and not is_whole_number(height)
+
+    if isinstance(value, dict):
+        if any(bad(height) for height in value.values()):
+            return f"{where}.server_cdm_max_height values must be whole numbers of pixels, not {value!r}"
+        return None
+    if bad(value):
+        return (
+            f"{where}.server_cdm_max_height must be a whole number of pixels or a map of service to one, not {value!r}"
+        )
+    return None
+
+
+def server_cdm_max_height(request: Optional[web.Request], service: Optional[str]) -> Optional[int]:
+    """The tallest video track the server CDM licenses live for this API key on ``service``; None for no cap.
+
+    The setting is one height, or a map of service tag to height where ``default`` covers a missing or null tag.
+    """
+    if not request:
+        return None
+    cap = serve_user_config(request_secret_key(request) or "").get("server_cdm_max_height")
+    if isinstance(cap, dict):
+        own = ci_get(cap, Services.get_tag(service)) if service else None
+        cap = own if own is not None else ci_get(cap, "default")
+    return cap if is_whole_number(cap) else None
+
+
+def capped_error(message: str, cap: Optional[int] = None) -> APIError:
+    """The SERVER_CDM_CAPPED refusal; a client reads ``details`` to license the track itself."""
+    details = {"reason": "server_cdm_max_height", "max_height": cap} if cap is not None else {"reason": "client_device"}
+    return APIError(APIErrorCode.SERVER_CDM_CAPPED, message, details=details)
+
+
+def requested_height(quality: Any) -> Optional[int]:
+    """The tallest height a client asked for with ``-q``; None when it asked for the best there is."""
+    from unshackle.core.utils.click_types import QUALITY_LIST
+
+    try:
+        heights = QUALITY_LIST.convert(quality)
+    except click.BadParameter as e:
+        raise APIError(APIErrorCode.INVALID_INPUT, f"quality: {e.message}")
+    if any(height <= 0 for height in heights):
+        raise APIError(APIErrorCode.INVALID_INPUT, f"quality: every height must be above 0, not {quality!r}")
+    return max(heights) if heights else None
+
+
+def choose_session_cdm(
+    request: Optional[web.Request], service: str, data: Dict[str, Any]
+) -> tuple[bool, Optional[int]]:
+    """``(server_cdm, max_height)`` for a new remote session.
+
+    The service picks its manifest from the CDM it sees, so it decides once, before any tracks.
+    A client that sends ``server_cdm: false`` with a device licenses with that device, unless it also set
+    one of the service's ``SERVER_DEVICE_OPTIONS``.
+    When ``-q`` asks for more than the cap, the client's own device licenses, and a client with no device gets a refusal.
+    """
+    if not server_cdm_allowed(request, service):
+        return False, None
+    if data.get("server_cdm") is False and data.get("cdm_type"):
+        server_device_options = getattr(Services.load(service), "SERVER_DEVICE_OPTIONS", ())
+        service_params = data.get("service_params")
+        options = {**data, **service_params} if isinstance(service_params, dict) else data
+        if not any(options.get(option) for option in server_device_options):
+            return False, None
+    cap = server_cdm_max_height(request, service)
+    wanted = requested_height(data.get("quality"))
+    if cap is None or wanted is None or wanted <= cap:
+        return True, cap
+    if data.get("cdm_type"):
+        return False, cap
+    raise capped_error(
+        f"The server CDM licenses {service} up to {cap}p for this API key. "
+        f"Set up a local CDM to license {wanted}p with your own device, or pass -q {cap}.",
+        cap,
+    )
+
+
+def live_licence_refusal(session: Any, track: Any) -> Optional[APIError]:
+    """Why the server CDM must not make a live licence for ``track`` in ``session``; None when it may.
+
+    Only a live licence spends the server's device, so a vault hit always passes. A track measures as the
+    smallest ``-q`` that selects it: the lower of its height and the 16:9 height of its width.
+    """
+    if getattr(session, "server_device", False):
+        return APIError(
+            APIErrorCode.SERVER_CDM_CAPPED,
+            "This session runs on the server's device, so its keys come only from a vault.",
+            details={"reason": "server_device"},
+        )
+    if getattr(session, "server_cdm", None) is False:
+        return capped_error("This session licenses with your own device, so the server CDM makes no licence for it.")
+    cap = getattr(session, "server_cdm_max_height", None)
+    height = getattr(track, "height", None) if isinstance(track, Video) else None
+    width = getattr(track, "width", None) if isinstance(track, Video) else None
+    measures = [m for m in (height, int(width * 9 / 16) if width else None) if m]
+    height = min(measures) if measures else None
+    if cap is None or not height or height <= cap:
+        return None
+    return capped_error(
+        f"The server CDM licenses up to {cap}p for this API key; license this {height}p track with your own device.",
+        cap,
+    )
+
+
+_account_counters: Dict[str, int] = {}
+
+
+def validate_server_accounts() -> Dict[str, Any]:
+    """Check ``serve.server_accounts`` at startup; raise ValueError on a bad shape or unknown profile."""
+    accounts = config.serve.get("server_accounts") or {}
+    if not isinstance(accounts, dict):
+        raise ValueError("serve.server_accounts must be a mapping of service tag to accounts")
+    for tag, spec in accounts.items():
+        if spec is True:
+            continue
+        if not isinstance(spec, dict) or not spec:
+            raise ValueError(f"serve.server_accounts.{tag}: expected true or a mapping of profile to regions")
+        creds = config.credentials.get(Services.get_tag(str(tag)))
+        for profile, regions in spec.items():
+            members = [regions] if isinstance(regions, str) else regions if isinstance(regions, list) else []
+            if not members or not all(
+                isinstance(m, str) and (m.lower() == "global" or re.fullmatch(r"[A-Za-z]{2}", m)) for m in members
+            ):
+                raise ValueError(
+                    f"serve.server_accounts.{tag}.{profile}: expected a two-letter country code, a list of them, "
+                    "or global (quote codes like 'no')"
+                )
+            cookie_file = config.directories.cookies / Services.get_tag(str(tag)) / f"{profile}.txt"
+            if not (isinstance(creds, dict) and profile in creds) and not cookie_file.exists():
+                raise ValueError(
+                    f"serve.server_accounts.{tag}.{profile}: no such profile under credentials.{tag} "
+                    f"and no cookie file at {cookie_file}"
+                )
+    return accounts
+
+
+def server_account_spec(service: str) -> Any:
+    """The ``serve.server_accounts`` entry for ``service`` (``True`` or a profile->regions map), else None."""
+    accounts = config.serve.get("server_accounts") or {}
+    tag = Services.get_tag(service).upper()
+    spec = next((v for k, v in accounts.items() if Services.get_tag(str(k)).upper() == tag), None)
+    return spec if spec is True or (isinstance(spec, dict) and spec) else None
+
+
+def _regions(value: Any) -> set[str]:
+    values = [value] if isinstance(value, str) else list(value) if isinstance(value, (list, tuple)) else []
+    return {str(v).lower() for v in values}
+
+
+def server_account_cookies(service: str, profile: Optional[str]) -> Any:
+    """Cookies for a server account: the profile's own file only, so a bare ``cookies/{service}.txt`` cannot shadow it."""
+    from unshackle.commands.dl import dl
+
+    if profile is None:
+        return dl.get_cookie_jar(service, None)
+    path = config.directories.cookies / service / f"{profile}.txt"
+    return dl.load_cookie_file(path) if path.exists() else None
+
+
+def load_client_cookies(cookie_text: Any) -> Optional[CookieJar]:
+    """Read the cookie jar a client sent with its request, or None when it sent none.
+
+    The client sends a Netscape cookie file compressed and base64 encoded, and
+    ``MozillaCookieJar`` reads from a path only, so the text goes through a temp file.
+    """
+    if not cookie_text or not isinstance(cookie_text, str):
+        return None
+
+    try:
+        cookie_str = safe_inflate(base64.b64decode(cookie_text)).decode("utf-8")
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False, encoding="utf-8") as f:
+            f.write(cookie_str)
+            tmp_path = f.name
+        try:
+            jar = MozillaCookieJar(tmp_path)
+            jar.load(ignore_discard=True, ignore_expires=True)
+            return jar
+        finally:
+            with suppress(OSError):
+                os.unlink(tmp_path)
+    except (ValueError, zlib.error, OSError) as e:
+        raise APIError(APIErrorCode.INVALID_INPUT, f"cookies is not a compressed Netscape cookie file: {e}")
+
+
+def server_account_regions(service: str) -> Optional[Dict[str, Any]]:
+    """What ``GET /api/services`` advertises: the union of regions the server's accounts cover."""
+    spec = server_account_spec(service)
+    if not spec:
+        return None
+    if spec is True:
+        return {"regions": [], "global": True}
+    union: set[str] = set()
+    for value in spec.values():
+        union |= _regions(value)
+    return {"regions": sorted(union - {"global"}), "global": "global" in union}
+
+
+def server_region() -> Optional[str]:
+    """The server's own country code, from the cached IP lookup; None when unknown."""
+    try:
+        from unshackle.core.utils.ip_info import get_ip_info
+
+        info = get_ip_info(None, cached=True)
+        return (info.get("country") or "").lower() or None if info else None
+    except Exception:
+        return None
+
+
+def server_account_pool(service: str, region: Optional[str]) -> Optional[list[Optional[str]]]:
+    """Profiles of the server's own accounts usable in ``region``; None when the service is client-managed."""
+    spec = server_account_spec(service)
+    if not spec:
+        return None
+    creds = config.credentials.get(service)
+    if spec is True:
+        return sorted(creds) if isinstance(creds, dict) else [None]
+    region = (region or "").lower()
+    return sorted(p for p, v in spec.items() if {"global", region} & _regions(v))
+
+
+def next_server_profile(service: str, region: Optional[str]) -> Optional[str]:
+    """Round-robin the next server account profile for ``region``."""
+    pool = server_account_pool(service, region) or []
+    if not pool:
+        covered = server_account_regions(service) or {}
+        regions = ", ".join(covered.get("regions") or []) or "none"
+        raise APIError(
+            APIErrorCode.INVALID_INPUT,
+            f"No server account for {service} in region '{region or 'unknown'}'. "
+            f"Its accounts cover: {regions}. Pass --proxy with one of those country codes.",
+            details={"service": service, "region": region, "regions": covered.get("regions") or []},
+        )
+    key = f"{service}:{','.join(p or '' for p in pool)}"
+    n = _account_counters.get(key, 0)
+    _account_counters[key] = n + 1
+    return pool[n % len(pool)]
+
+
+def server_accounts_allowed(request: Optional[web.Request] = None, service: Optional[str] = None) -> bool:
+    """Whether the calling API key may authenticate ``service`` with one of the server's own accounts.
+
+    Same shape as ``server_cdm``: ``server_accounts: true`` on the ``serve.users`` entry for every
+    service, or a list of service tags. Off unless set. The admin secret (no ``users`` entry) keeps
+    full access. Combine with ``server_account_spec``: the server treats an API key without the
+    opt-in as a client-managed remote session for that service.
+    """
+    if not request:
+        return True
+    user_config = config.serve.get("users", {}).get(request_secret_key(request))
+    if user_config is None:
+        return True
+    allowed = user_config.get("server_accounts", False)
+    if isinstance(allowed, str):
+        allowed = [allowed]
+    if isinstance(allowed, (list, tuple, set)):
+        return service is not None and Services.get_tag(service).upper() in {
+            Services.get_tag(s).upper() for s in allowed
+        }
+    return bool(allowed)
+
+
+def resolve_server_account(request: Optional[web.Request], service: str, region: Any) -> Optional[str]:
+    """Profile of the server account a search or list call runs on; None when the service is client-managed.
+
+    Raises FORBIDDEN for an API key without the ``server_accounts`` opt-in.
+    """
+    if server_account_spec(service) is None:
+        return None
+    if not server_accounts_allowed(request, service):
+        raise APIError(
+            APIErrorCode.FORBIDDEN,
+            f"Your API key may not use the server's accounts for {service}.",
+            details={"service": service},
+        )
+    return next_server_profile(service, region if isinstance(region, str) else None) or "default"
+
+
+def server_account_for(request: Optional[web.Request], service: str) -> bool:
+    """True when this request's remote session for ``service`` should run on a server account."""
+    return server_account_spec(service) is not None and server_accounts_allowed(request, service)
+
+
+def server_proxy_allowed(request: Optional[web.Request] = None) -> bool:
+    """Whether the calling API key may use the server's own configured proxy providers.
+
+    Configured API keys opt in with ``server_proxy: true``, a real yaml boolean, so a
+    quoted ``"true"`` or ``"no"`` does not count. It is a plain bool, not a per-service
+    list, because a proxy is not tied to a service. No API key has implicit access: an
+    API key absent from ``serve.users`` gets none, and neither does a call without a
+    request, so a handler that does not pass ``request`` through fails closed.
+    """
+    if not request:
+        return False
+    secret_key = request_secret_key(request)
+    user_config = (config.serve or {}).get("users", {}).get(secret_key)
+    if not isinstance(user_config, dict):
+        return False
+    return user_config.get("server_proxy") is True
 
 
 JOB_EVENTS_ROUTE = "/api/download/jobs/{job_id}/events"
+DASHBOARD_PREFIX = "/api/dashboard/"
+DASHBOARD_EVENTS_ROUTE = DASHBOARD_PREFIX + "events"
+SSE_QUERY_KEY_ROUTES = {JOB_EVENTS_ROUTE, DASHBOARD_EVENTS_ROUTE}
 
 CORS_HEADERS = {
     "Access-Control-Allow-Origin": "*",
@@ -309,28 +956,91 @@ CORS_HEADERS = {
 
 
 def request_secret_key(request: web.Request) -> Optional[str]:
-    """The caller's key: the X-Secret-Key header, or on the events route the secret_key
-    query param (EventSource cannot send headers)."""
+    """The caller's API key: the X-Secret-Key header, or on SSE routes the secret_key query param."""
     key = request.headers.get("X-Secret-Key")
     if not key:
         resource = request.match_info.route.resource
-        if resource is not None and resource.canonical == JOB_EVENTS_ROUTE:
+        if resource is not None and resource.canonical in SSE_QUERY_KEY_ROUTES:
             key = request.query.get("secret_key")
     return key
 
 
+def dashboard_key() -> Optional[str]:
+    """The developer dashboard key from serve.dashboard.key, or None when the dashboard is off."""
+    dashboard = (config.serve or {}).get("dashboard")
+    key = dashboard.get("key") if isinstance(dashboard, dict) else None
+    return str(key) if key else None
+
+
+@web.middleware
+async def dashboard_authentication(request: web.Request, handler: Any) -> web.StreamResponse:
+    """Gate /api/dashboard/ behind serve.dashboard.key only; user and tier keys never pass.
+
+    This middleware runs before the user-key middleware, so it answers the dashboard routes
+    first and no other route ever accepts the dashboard key.
+    """
+    import hmac
+
+    if not request.path.startswith(DASHBOARD_PREFIX):
+        return await handler(request)
+    expected = dashboard_key()
+    if not expected:
+        return await handler(request)
+    provided = request_secret_key(request)
+    if not provided or not hmac.compare_digest(provided, expected):
+        return web.json_response({"status": 401, "message": "Dashboard key is invalid."}, status=401)
+    return await handler(request)
+
+
+def rate_limit_response(secret_key: str) -> Optional[web.Response]:
+    """A 429 when *secret_key* is over its hourly limit, else None after counting the request.
+
+    Call only once the API key is known to be valid, so an invalid API key cannot burn someone else's
+    window. Both auth middlewares go through here: the limit has to hold in every server mode.
+    """
+    from unshackle.core.api.stats import stats
+
+    retry_after = stats.check_rate_limit(secret_key)
+    if retry_after is None:
+        return None
+    return web.json_response(
+        {"status": 429, "message": "Rate limit exceeded."},
+        status=429,
+        headers={"Retry-After": str(retry_after)},
+    )
+
+
+@web.middleware
+async def api_key_authentication(request: web.Request, handler: Any) -> web.StreamResponse:
+    """Gate every non-dashboard route behind an API key in ``app["config"]["users"]``, then rate limit it.
+
+    Runs after :func:`dashboard_authentication`, which has already answered the dashboard
+    routes, so the dashboard key never reaches the limiter.
+    """
+    import hmac
+
+    if request.path == "/api/health" or request.path.startswith(DASHBOARD_PREFIX):
+        return await handler(request)
+    secret_key = request_secret_key(request)
+    if not secret_key:
+        return web.json_response({"status": 401, "message": "Secret Key is Empty."}, status=401)
+    if not any(hmac.compare_digest(secret_key, k) for k in request.app["config"]["users"]):
+        return web.json_response({"status": 401, "message": "Secret Key is Invalid."}, status=401)
+    return rate_limit_response(secret_key) or await handler(request)
+
+
 def caller_key(request: Optional[web.Request] = None) -> str:
-    """The authenticating key for a request, or 'anonymous' when unauthenticated."""
+    """The authenticating API key for a request, or 'anonymous' when unauthenticated."""
     if not request:
         return "anonymous"
     return request_secret_key(request) or "anonymous"
 
 
 def owns_job(job: Any, request: Optional[web.Request] = None) -> bool:
-    """Whether the calling key owns this job.
+    """Whether the calling API key owns this job.
 
-    Jobs created without an owner (no-key mode / legacy) stay shared; otherwise a job is
-    only visible to the key that created it (constant-time compare).
+    Jobs created without an owner (no-key mode / legacy) stay shared. Otherwise, only the
+    API key that created the job can see it (constant-time compare).
     """
     import hmac
 
@@ -341,7 +1051,9 @@ def owns_job(job: Any, request: Optional[web.Request] = None) -> bool:
 
 
 def validate_service(service_tag: str, request: Optional[web.Request] = None) -> Optional[str]:
-    """Validate, normalize, and check allowlist for service tag."""
+    """Validate and normalise the service tag, and examine the allowlist."""
+    if not isinstance(service_tag, str):
+        return None
     try:
         normalized = Services.get_tag(service_tag)
         service_path = Services.get_path(normalized)
@@ -351,8 +1063,21 @@ def validate_service(service_tag: str, request: Optional[web.Request] = None) ->
         if allowed is not None and normalized not in allowed:
             return None
         return normalized
-    except Exception:
+    except KeyError:
         return None
+
+
+PROFILE_RE = re.compile(r"^[A-Za-z0-9_.-]{1,64}$")
+
+
+def client_profile(data: Dict[str, Any]) -> Optional[str]:
+    """The request's ``profile``, or an INVALID_INPUT error when it could name a path."""
+    profile = data.get("profile")
+    if profile is None or profile == "":
+        return None
+    if not isinstance(profile, str) or not PROFILE_RE.fullmatch(profile) or profile in (".", ".."):
+        raise APIError(APIErrorCode.INVALID_INPUT, "profile must be a plain name: letters, digits, '_', '-' or '.'.")
+    return profile
 
 
 def require_fields(data: Dict[str, Any], *names: str) -> None:
@@ -366,33 +1091,36 @@ def require_fields(data: Dict[str, Any], *names: str) -> None:
             )
 
 
-def _part_key_suffix(part: Optional[int]) -> str:
+def part_key_suffix(part: Optional[int]) -> str:
     """`.2` selection-syntax suffix for a part-ful episode, empty otherwise."""
     return f".{part}" if part is not None else ""
+
+
+def listed_titles(titles: Any) -> list[Any]:
+    """The result of a service's get_titles() as a list."""
+    if titles is None:
+        raise APIError(APIErrorCode.SERVICE_ERROR, "The service returned no titles.")
+    return list(titles) if hasattr(titles, "__iter__") and not isinstance(titles, str) else [titles]
 
 
 def serialize_title(title: Title_T) -> Dict[str, Any]:
     """Convert a title object to JSON-serializable dict."""
     title_language = str(title.language) if hasattr(title, "language") and title.language else None
-    # Optional display metadata a service may provide: a synopsis (title.description) and a
-    # release/air date or poster image URL stashed in title.data. Surfaced so a client can show
-    # a richer listing without re-fetching the page.
     description = getattr(title, "description", None) or None
     _data = getattr(title, "data", None)
     date = _data.get("date") if isinstance(_data, dict) else None
     cover_url = _data.get("cover_url") if isinstance(_data, dict) else None
 
     is_episode = isinstance(title, Episode)
+    is_song = isinstance(title, Song)
     episode_part = title.part if isinstance(title, Episode) else None
     if is_episode:
-        # no part suffix here: remote_service._build_title rebuilds the Episode from this dict, so a
-        # suffixed name plus the structural `part` below would render the part twice in the filename
         name = title.name if title.name else f"Episode {title.number:02d}"
     else:
         name = str(title.name) if hasattr(title, "name") else str(title)
 
     result = {
-        "type": "episode" if is_episode else "movie" if isinstance(title, Movie) else "other",
+        "type": "episode" if is_episode else "movie" if isinstance(title, Movie) else "song" if is_song else "other",
         "name": name,
         "id": str(title.id) if hasattr(title, "id") else None,
         "language": title_language,
@@ -400,14 +1128,12 @@ def serialize_title(title: Title_T) -> Dict[str, Any]:
         "date": date,
         "cover_url": cover_url,
     }
-    # "other" titles carry no year; only Episode/Movie do.
-    if isinstance(title, (Episode, Movie)):
+    if isinstance(title, (Episode, Movie, Song)):
         result["year"] = title.year
     if isinstance(title, Episode):
         result["series_title"] = str(title.title)
         result["season"] = title.season
         result["number"] = title.number
-        # every key below is conditional, so JSON for a title without them is unchanged
         if episode_part is not None:
             result["part"] = episode_part
         if title.air_date is not None:
@@ -418,13 +1144,33 @@ def serialize_title(title: Title_T) -> Dict[str, Any]:
             result["absolute"] = title.absolute
         if getattr(title, "daily", None) is not None:
             result["daily"] = title.daily
+    if is_song:
+        for field in (
+            "artist",
+            "album",
+            "track",
+            "disc",
+            "album_artist",
+            "release_type",
+            "total_tracks",
+            "total_discs",
+            "genre",
+            "explicit",
+            "isrc",
+            "upc",
+            "copyright",
+            "label",
+            "lyrics",
+            "artwork_url",
+        ):
+            result[field] = getattr(title, field, None)
     if isinstance(title, (Episode, Movie)) and getattr(title, "anime", None) is not None:
         result["anime"] = title.anime
 
     return result
 
 
-def _stamp_service_flags(serialized: Dict[str, Any], service_instance: Any) -> Dict[str, Any]:
+def stamp_service_flags(serialized: Dict[str, Any], service_instance: Any) -> Dict[str, Any]:
     """Fill anime/daily from the service class for titles that set neither.
 
     The client rebuilds titles from this JSON against a synthetic service class, so a
@@ -438,12 +1184,12 @@ def _stamp_service_flags(serialized: Dict[str, Any], service_instance: Any) -> D
     return serialized
 
 
-def _extract_manifests(tracks) -> List[Dict[str, Any]]:
+def extract_manifests(tracks) -> List[Dict[str, Any]]:
     """Extract manifest data from tracks for client-side re-parsing.
 
     Serializes DASH and ISM manifest XML as zlib-compressed base64 strings
     so the client can reconstruct track.data locally. HLS tracks download
-    directly from their URL so no manifest serialization is needed.
+    directly from their URL, so this function does not serialise their manifest.
     """
     import base64
     import zlib
@@ -462,7 +1208,7 @@ def _extract_manifests(tracks) -> List[Dict[str, Any]]:
         if not manifest_url or manifest_url in seen:
             continue
 
-        if track.data.get("dash") and track.data["dash"].get("manifest"):
+        if track.data.get("dash") and track.data["dash"].get("manifest") is not None:
             seen.add(manifest_url)
             xml_bytes = etree.tostring(track.data["dash"]["manifest"], xml_declaration=True, encoding="UTF-8")
             compressed = zlib.compress(xml_bytes, compression_level) if compression_level else xml_bytes
@@ -473,7 +1219,7 @@ def _extract_manifests(tracks) -> List[Dict[str, Any]]:
                     "data": base64.b64encode(compressed).decode("ascii"),
                 }
             )
-        elif track.data.get("ism") and track.data["ism"].get("manifest"):
+        elif track.data.get("ism") and track.data["ism"].get("manifest") is not None:
             seen.add(manifest_url)
             xml_bytes = etree.tostring(track.data["ism"]["manifest"], xml_declaration=True, encoding="UTF-8")
             compressed = zlib.compress(xml_bytes, compression_level) if compression_level else xml_bytes
@@ -488,8 +1234,68 @@ def _extract_manifests(tracks) -> List[Dict[str, Any]]:
     return manifests
 
 
+def extract_track_manifests(tracks) -> List[Dict[str, Any]]:
+    """Build a one-AdaptationSet MPD for each track whose AdaptationSet the served manifest does not contain.
+
+    A service can build an AdaptationSet of its own, out of merged segment timelines or
+    copied nodes, that never joins the manifest tree the server serialises. The client's
+    re-parse of that manifest cannot find it, so each of those tracks gets its own MPD.
+    """
+    import base64
+    import zlib
+    from copy import deepcopy
+
+    from lxml import etree
+
+    from unshackle.core.config import config as app_config
+
+    compression_level = app_config.serve.get("compression_level", 1)
+    fragments: List[Dict[str, Any]] = []
+
+    for track in list(tracks.videos) + list(tracks.audio) + list(tracks.subtitles):
+        dash = (getattr(track, "data", None) or {}).get("dash") or {}
+        manifest = dash.get("manifest")
+        adaptation_set = dash.get("adaptation_set")
+        if manifest is None or adaptation_set is None:
+            continue
+        if adaptation_set.getroottree().getroot() is manifest:
+            continue
+
+        root = etree.Element("MPD", dict(manifest.attrib))
+        for child in manifest:
+            if child.tag != "Period":
+                root.append(deepcopy(child))
+
+        period = dash.get("period")
+        new_period = etree.SubElement(root, "Period", dict(period.attrib) if period is not None else {})
+        for child in period if period is not None else []:
+            if child.tag != "AdaptationSet":
+                new_period.append(deepcopy(child))
+        new_adaptation_set = deepcopy(adaptation_set)
+        new_period.append(new_adaptation_set)
+
+        representation = dash.get("representation")
+        if representation is not None:
+            for sibling in new_adaptation_set.findall("Representation"):
+                new_adaptation_set.remove(sibling)
+            new_adaptation_set.append(deepcopy(representation))
+
+        xml_bytes = etree.tostring(root, xml_declaration=True, encoding="UTF-8")
+        compressed = zlib.compress(xml_bytes, compression_level) if compression_level else xml_bytes
+        fragments.append(
+            {
+                "track_id": str(track.id),
+                "type": "dash",
+                "url": str(track.url) if track.url else None,
+                "data": base64.b64encode(compressed).decode("ascii"),
+            }
+        )
+
+    return fragments
+
+
 def serialize_drm(drm_list) -> Optional[List[Dict[str, Any]]]:
-    """Serialize DRM objects to JSON-serializable list."""
+    """Serialise DRM objects to JSON-serializable list."""
     if not drm_list:
         return None
 
@@ -502,9 +1308,8 @@ def serialize_drm(drm_list) -> Optional[List[Dict[str, Any]]]:
         drm_class = drm.__class__.__name__
         drm_info["type"] = drm_class.lower()
 
-        # PSSH: pywidevine exposes dumps(); pyplayready's PSSH has no base64 method
-        # here, so PlayReady omits the field (unchanged from prior behaviour).
         pssh_obj = getattr(drm, "_pssh", None)
+        pssh_b64 = (getattr(drm, "data", None) or {}).get("pssh_b64")
         if pssh_obj is not None and hasattr(pssh_obj, "dumps"):
             try:
                 drm_info["pssh"] = pssh_obj.dumps()
@@ -515,16 +1320,15 @@ def serialize_drm(drm_list) -> Optional[List[Dict[str, Any]]]:
                     type(pssh_obj).__name__,
                     exc_info=True,
                 )
+        if not drm_info.get("pssh") and pssh_b64:
+            drm_info["pssh"] = pssh_b64
 
-        # Get KIDs
         if hasattr(drm, "kids") and drm.kids:
             drm_info["kids"] = [str(kid) for kid in drm.kids]
 
-        # Get content keys if available
         if hasattr(drm, "content_keys") and drm.content_keys:
             drm_info["content_keys"] = {str(k): v for k, v in drm.content_keys.items()}
 
-        # Get license URL - essential for remote licensing
         if hasattr(drm, "license_url") and drm.license_url:
             drm_info["license_url"] = str(drm.license_url)
         elif hasattr(drm, "_license_url") and drm._license_url:
@@ -546,6 +1350,54 @@ def descriptor_name(track: Any) -> Optional[str]:
     return enum_name(descriptor) if descriptor else None
 
 
+def drm_preference_name(track: Any) -> Optional[str]:
+    """The track's drm_preference as a full DRM system name, "widevine" or "playready"; None when unset."""
+    preference = getattr(track, "drm_preference", None)
+    if not preference:
+        return None
+    return {"wv": "widevine", "pr": "playready"}.get(preference, preference)
+
+
+MANIFEST_DATA_KEYS = ("hls", "dash", "ism")
+
+
+def serialize_track_data(track: Any) -> Optional[Dict[str, Any]]:
+    """The JSON-safe part of a service-set ``track.data``.
+
+    This drops the manifest parsers' own keys: the client rebuilds those from the
+    ``manifests`` payload, and they hold live lxml and m3u8 objects that JSON cannot carry.
+    """
+    data = getattr(track, "data", None)
+    if not isinstance(data, dict):
+        return None
+    safe: Dict[str, Any] = {}
+    for key, value in data.items():
+        if key in MANIFEST_DATA_KEYS:
+            continue
+        try:
+            json.dumps(value)
+        except (TypeError, ValueError):
+            continue
+        safe[key] = value
+    return safe or None
+
+
+def serialize_track_common(track: Any) -> Dict[str, Any]:
+    """The Track fields every track type shares, a superset of ``Track.to_dict()``."""
+    return {
+        "id": str(track.id),
+        "language": str(track.language) if track.language else None,
+        "is_original_lang": bool(getattr(track, "is_original_lang", False)),
+        "name": getattr(track, "name", None),
+        "needs_repack": bool(getattr(track, "needs_repack", False)),
+        "edition": list(getattr(track, "edition", None) or []),
+        "descriptor": descriptor_name(track),
+        "drm": serialize_drm(track.drm) if getattr(track, "drm", None) else None,
+        "drm_preference": getattr(track, "drm_preference", None),
+        "data": serialize_track_data(track),
+    }
+
+
 def serialize_video_track(track: Video, include_url: bool = False) -> Dict[str, Any]:
     """Convert video track to JSON-serializable dict."""
     codec_name = enum_name(track.codec)
@@ -556,16 +1408,18 @@ def serialize_video_track(track: Video, include_url: bool = False) -> Dict[str, 
         "codec": codec_name,
         "codec_display": VIDEO_CODEC_MAP.get(codec_name, codec_name),
         "bitrate": int(track.bitrate / 1000) if track.bitrate else None,
+        "bitrate_bps": track.bitrate or None,
         "width": track.width,
         "height": track.height,
         "resolution": f"{track.width}x{track.height}" if track.width and track.height else None,
         "fps": track.fps if track.fps else None,
         "range": range_name,
         "range_display": DYNAMIC_RANGE_MAP.get(range_name, range_name),
-        "language": str(track.language) if track.language else None,
-        "drm": serialize_drm(track.drm) if hasattr(track, "drm") and track.drm else None,
-        "descriptor": descriptor_name(track),
+        "scan_type": enum_name(track.scan_type) if track.scan_type else None,
+        "closed_captions": list(getattr(track, "closed_captions", None) or []),
+        "dv_compatible_bitstream": bool(getattr(track, "dv_compatible_bitstream", False)),
     }
+    result.update(serialize_track_common(track))
     if include_url and hasattr(track, "url") and track.url:
         result["url"] = str(track.url)
     return result
@@ -593,8 +1447,8 @@ def original_audio_ids(tracks: List[Audio], title: Title_T) -> set:
 def serialize_audio_track(track: Audio, include_url: bool = False, is_original: bool = False) -> Dict[str, Any]:
     """Convert audio track to JSON-serializable dict.
 
-    Resolve is_original with original_audio_ids so the flag always agrees with the
-    track 'orig' would actually download.
+    Get is_original from original_audio_ids so the flag always agrees with the
+    track 'orig' would download.
     """
     codec_name = enum_name(track.codec)
 
@@ -603,14 +1457,14 @@ def serialize_audio_track(track: Audio, include_url: bool = False, is_original: 
         "codec": codec_name,
         "codec_display": AUDIO_CODEC_MAP.get(codec_name, codec_name),
         "bitrate": int(track.bitrate / 1000) if track.bitrate else None,
+        "bitrate_bps": track.bitrate or None,
         "channels": track.channels if track.channels else None,
-        "language": str(track.language) if track.language else None,
         "is_original": is_original,
         "atmos": track.atmos if hasattr(track, "atmos") else False,
+        "joc": getattr(track, "joc", 0),
         "descriptive": track.descriptive if hasattr(track, "descriptive") else False,
-        "drm": serialize_drm(track.drm) if hasattr(track, "drm") and track.drm else None,
-        "descriptor": descriptor_name(track),
     }
+    result.update(serialize_track_common(track))
     if include_url and hasattr(track, "url") and track.url:
         result["url"] = str(track.url)
     return result
@@ -621,30 +1475,67 @@ def serialize_subtitle_track(track: Subtitle, include_url: bool = False) -> Dict
     result = {
         "id": str(track.id),
         "codec": enum_name(track.codec),
-        "language": str(track.language) if track.language else None,
         "forced": track.forced if hasattr(track, "forced") else False,
         "sdh": track.sdh if hasattr(track, "sdh") else False,
         "cc": track.cc if hasattr(track, "cc") else False,
-        "descriptor": descriptor_name(track),
     }
+    result.update(serialize_track_common(track))
     if include_url and hasattr(track, "url") and track.url:
         result["url"] = str(track.url)
     return result
 
 
-async def search_handler(data: Dict[str, Any], request: Optional[web.Request] = None) -> web.Response:
-    """Handle search request."""
-    from unshackle.commands.dl import dl
+ATTACHMENT_INLINE_LIMIT = 20 * 1024 * 1024
 
+
+def serialize_attachment(attachment: Any) -> Optional[Dict[str, Any]]:
+    """One attachment as JSON, with a path-only attachment carried as base64 file bytes.
+
+    A service can attach a file it already wrote to disk (a font, a poster). The client
+    has no access to the server's filesystem, so those bytes travel inline.
+    """
+    result: Dict[str, Any] = {
+        "url": attachment.url,
+        "name": attachment.name,
+        "mime_type": attachment.mime_type,
+        "description": attachment.description,
+    }
+    if attachment.url:
+        return result
+
+    path = getattr(attachment, "path", None)
+    if not path:
+        return None
+    path = Path(path)
+    try:
+        size = path.stat().st_size
+        if size > ATTACHMENT_INLINE_LIMIT:
+            log.warning(
+                "Skipping attachment %s: %d bytes is over the %d byte inline limit",
+                sanitize_log(path.name),
+                size,
+                ATTACHMENT_INLINE_LIMIT,
+            )
+            return None
+        result["content"] = base64.b64encode(path.read_bytes()).decode("ascii")
+    except OSError as e:
+        log.warning("Skipping attachment %s: %s", sanitize_log(path.name), e)
+        return None
+    result["file_name"] = path.name
+    return result
+
+
+async def search_handler(data: Dict[str, Any], request: Optional[web.Request] = None) -> web.Response:
+    """Answer the request to find titles."""
     service_tag = data.get("service")
     query = data.get("query")
 
     if not service_tag:
-        raise APIError(APIErrorCode.MISSING_SERVICE, "Missing required 'service' field")
+        raise APIError(APIErrorCode.INVALID_INPUT, "Missing required 'service' field")
     if not query:
         raise APIError(APIErrorCode.INVALID_PARAMETERS, "Missing required 'query' field")
 
-    normalized_service = Services.get_tag(service_tag)
+    normalized_service = validate_service(service_tag, request)
     if not normalized_service:
         raise APIError(
             APIErrorCode.INVALID_SERVICE,
@@ -652,82 +1543,20 @@ async def search_handler(data: Dict[str, Any], request: Optional[web.Request] = 
             details={"service": service_tag},
         )
 
-    allowed = get_allowed_services(request)
-    if allowed is not None and normalized_service not in allowed:
-        raise APIError(
-            APIErrorCode.INVALID_SERVICE,
-            f"Service '{service_tag}' not found",
-            details={"service": service_tag},
-        )
-
-    profile = data.get("profile")
-    proxy_param = data.get("proxy")
-    no_proxy = data.get("no_proxy", False)
-
-    service_config = load_service_yaml(normalized_service)
-
-    proxy_providers = []
-    if not no_proxy:
-        proxy_providers = initialize_proxy_providers()
-
-    if proxy_param and not no_proxy:
-        try:
-            resolved_proxy = resolve_proxy(proxy_param, proxy_providers)
-            proxy_param = resolved_proxy
-        except ValueError as e:
-            raise APIError(
-                APIErrorCode.INVALID_PROXY,
-                f"Proxy error: {e}",
-                details={"proxy": proxy_param, "service": normalized_service},
-            )
-
-    cdm = load_full_cdm(normalized_service, profile, data.get("cdm_type"))
-    parent_ctx = build_parent_ctx(profile, cdm, proxy_param, no_proxy, proxy_providers, service_config)
-    service_module = Services.load(normalized_service)
-
+    request_cache = RequestCache()
     try:
-        service_instance = instantiate_service(parent_ctx, service_module, query)
-    except Exception as exc:
-        raise APIError(
-            APIErrorCode.SERVICE_ERROR,
-            f"Failed to initialize service: {exc}",
-            details={"service": normalized_service},
-        )
-
-    # Authenticate
-    cookies = dl.get_cookie_jar(normalized_service, profile)
-    credential = dl.get_credentials(normalized_service, profile)
-    service_instance.authenticate(cookies, credential)
-
-    # Search
-    results = []
-    try:
-        for result in service_instance.search():
-            results.append(
-                {
-                    "id": result.id,
-                    "title": result.title,
-                    "description": result.description,
-                    "label": result.label,
-                    "url": result.url,
-                }
-            )
-    except NotImplementedError:
-        raise APIError(
-            APIErrorCode.SERVICE_ERROR,
-            f"Search is not supported by {normalized_service}",
-            details={"service": normalized_service},
-        )
-
-    return web.json_response({"results": results, "count": len(results)})
+        results = await asyncio.to_thread(run_service_search, data, normalized_service, query, request, request_cache)
+        return request_cache.json_response({"results": results, "count": len(results)})
+    finally:
+        request_cache.cleanup()
 
 
 async def list_titles_handler(data: Dict[str, Any], request: Optional[web.Request] = None) -> web.Response:
-    """Handle list-titles request."""
+    """Answer the list-titles request."""
     require_fields(data, "service", "title_id")
     service_tag = data.get("service")
     title_id = data.get("title_id")
-    profile = data.get("profile")
+    profile = client_profile(data)
 
     normalized_service = validate_service(service_tag, request)
     if not normalized_service:
@@ -737,16 +1566,16 @@ async def list_titles_handler(data: Dict[str, Any], request: Optional[web.Reques
             details={"service": service_tag},
         )
 
+    request_cache = RequestCache()
     try:
-        service_instance = setup_list_service(data, normalized_service, profile, title_id)
-        titles = service_instance.get_titles()
+        service_instance = await asyncio.to_thread(
+            setup_list_service, data, normalized_service, profile, title_id, request, request_cache
+        )
+        titles = await asyncio.to_thread(service_instance.get_titles)
 
-        if hasattr(titles, "__iter__") and not isinstance(titles, str):
-            title_list = [_stamp_service_flags(serialize_title(t), service_instance) for t in titles]
-        else:
-            title_list = [_stamp_service_flags(serialize_title(titles), service_instance)]
+        title_list = [stamp_service_flags(serialize_title(t), service_instance) for t in listed_titles(titles)]
 
-        return web.json_response({"titles": title_list})
+        return request_cache.json_response({"titles": title_list})
 
     except APIError:
         raise
@@ -758,14 +1587,16 @@ async def list_titles_handler(data: Dict[str, Any], request: Optional[web.Reques
             context={"operation": "list_titles", "service": normalized_service, "title_id": title_id},
             debug_mode=debug_mode,
         )
+    finally:
+        request_cache.cleanup()
 
 
 async def list_tracks_handler(data: Dict[str, Any], request: Optional[web.Request] = None) -> web.Response:
-    """Handle list-tracks request."""
+    """Answer the list-tracks request."""
     require_fields(data, "service", "title_id")
     service_tag = data.get("service")
     title_id = data.get("title_id")
-    profile = data.get("profile")
+    profile = client_profile(data)
 
     normalized_service = validate_service(service_tag, request)
     if not normalized_service:
@@ -775,9 +1606,12 @@ async def list_tracks_handler(data: Dict[str, Any], request: Optional[web.Reques
             details={"service": service_tag},
         )
 
+    request_cache = RequestCache()
     try:
-        service_instance = setup_list_service(data, normalized_service, profile, title_id)
-        titles = service_instance.get_titles()
+        service_instance = await asyncio.to_thread(
+            setup_list_service, data, normalized_service, profile, title_id, request, request_cache
+        )
+        titles = await asyncio.to_thread(service_instance.get_titles)
 
         wanted_param = data.get("wanted")
         season = data.get("season")
@@ -796,7 +1630,7 @@ async def list_tracks_handler(data: Dict[str, Any], request: Optional[web.Reques
                     if isinstance(wanted_param, list):
                         wanted = season_range.parse_tokens(*wanted_param)
                     else:
-                        wanted = season_range.parse_tokens(wanted_param)
+                        wanted = season_range.convert(wanted_param)
                     log.debug(
                         f"Parsed wanted '{sanitize_log(wanted_param)}' into {len(wanted)} episodes: {wanted[:10]}..."
                     )
@@ -807,20 +1641,26 @@ async def list_tracks_handler(data: Dict[str, Any], request: Optional[web.Reques
                         details={"wanted": wanted_param, "service": normalized_service},
                     )
             elif season is not None and episode is not None:
-                wanted = [f"{season}x{episode}{_part_key_suffix(part)}"]
+                wanted = [f"{season}x{episode}{part_key_suffix(part)}"]
 
             if wanted:
-                # Filter titles based on wanted episodes, similar to how dl.py does it
-                matching_titles = []
+                matching_titles: list[Any] = []
                 log.debug(f"Filtering {len(titles_list)} titles with {len(wanted)} wanted episodes")
                 for title in titles_list:
                     if isinstance(title, Episode):
-                        episode_key = f"{title.season}x{title.number}{_part_key_suffix(title.part)}"
+                        episode_key = f"{title.season}x{title.number}{part_key_suffix(title.part)}"
                         if title.matches_wanted(wanted):
                             log.debug(f"Episode {episode_key} matches wanted list")
                             matching_titles.append(title)
                         else:
                             log.debug(f"Episode {episode_key} not in wanted list")
+                    elif isinstance(title, Song):
+                        song_key = f"{title.disc}x{title.track}"
+                        if title.matches_wanted(wanted):
+                            log.debug(f"Song {song_key} matches wanted list")
+                            matching_titles.append(title)
+                        else:
+                            log.debug(f"Song {song_key} not in wanted list")
                     else:
                         matching_titles.append(title)
 
@@ -829,7 +1669,7 @@ async def list_tracks_handler(data: Dict[str, Any], request: Optional[web.Reques
                 if not matching_titles:
                     raise APIError(
                         APIErrorCode.NO_CONTENT,
-                        "No episodes found matching wanted criteria",
+                        "No titles found matching wanted criteria",
                         details={
                             "service": normalized_service,
                             "title_id": title_id,
@@ -837,17 +1677,15 @@ async def list_tracks_handler(data: Dict[str, Any], request: Optional[web.Reques
                         },
                     )
 
-                # If multiple episodes match, return tracks for all episodes
                 if len(matching_titles) > 1 and all(isinstance(t, Episode) for t in matching_titles):
                     episodes_data = []
                     failed_episodes = []
 
-                    # Sort matching titles by season and episode number for consistent ordering
                     sorted_titles = sorted(matching_titles, key=lambda t: (t.season, t.number, t.part or 0))
 
                     for title in sorted_titles:
                         try:
-                            tracks = service_instance.get_tracks(title)
+                            tracks = await asyncio.to_thread(service_instance.get_tracks, title)
                             video_tracks = sorted(tracks.videos, key=lambda t: t.bitrate or 0, reverse=True)
                             audio_tracks = sorted(tracks.audio, key=lambda t: t.bitrate or 0, reverse=True)
 
@@ -863,13 +1701,11 @@ async def list_tracks_handler(data: Dict[str, Any], request: Optional[web.Reques
                             episodes_data.append(episode_data)
                             log.debug(f"Successfully got tracks for {title.season}x{title.number}")
                         except SystemExit:
-                            # Service calls sys.exit() for unavailable episodes - catch and skip
-                            failed_episodes.append(f"S{title.season}E{title.number:02d}{_part_key_suffix(title.part)}")
+                            failed_episodes.append(f"S{title.season}E{title.number:02d}{part_key_suffix(title.part)}")
                             log.debug(f"Episode {title.season}x{title.number} not available, skipping")
                             continue
                         except (Exception, SystemExit) as e:
-                            # Handle other errors gracefully
-                            failed_episodes.append(f"S{title.season}E{title.number:02d}{_part_key_suffix(title.part)}")
+                            failed_episodes.append(f"S{title.season}E{title.number:02d}{part_key_suffix(title.part)}")
                             log.debug(f"Error getting tracks for {title.season}x{title.number}: {e}")
                             continue
 
@@ -877,7 +1713,7 @@ async def list_tracks_handler(data: Dict[str, Any], request: Optional[web.Reques
                         response = {"episodes": episodes_data}
                         if failed_episodes:
                             response["unavailable_episodes"] = failed_episodes
-                        return web.json_response(response)
+                        return request_cache.json_response(response)
                     else:
                         raise APIError(
                             APIErrorCode.NO_CONTENT,
@@ -889,14 +1725,13 @@ async def list_tracks_handler(data: Dict[str, Any], request: Optional[web.Reques
                             },
                         )
                 else:
-                    # Single episode or movie
                     first_title = matching_titles[0]
             else:
                 first_title = titles_list[0]
         else:
             first_title = titles
 
-        tracks = service_instance.get_tracks(first_title)
+        tracks = await asyncio.to_thread(service_instance.get_tracks, first_title)
 
         video_tracks = sorted(tracks.videos, key=lambda t: t.bitrate or 0, reverse=True)
         audio_tracks = sorted(tracks.audio, key=lambda t: t.bitrate or 0, reverse=True)
@@ -909,7 +1744,7 @@ async def list_tracks_handler(data: Dict[str, Any], request: Optional[web.Reques
             "subtitles": [serialize_subtitle_track(t) for t in tracks.subtitles],
         }
 
-        return web.json_response(response)
+        return request_cache.json_response(response)
 
     except APIError:
         raise
@@ -921,10 +1756,27 @@ async def list_tracks_handler(data: Dict[str, Any], request: Optional[web.Reques
             context={"operation": "list_tracks", "service": normalized_service, "title_id": title_id},
             debug_mode=debug_mode,
         )
+    finally:
+        request_cache.cleanup()
 
 
-VALID_VCODECS = ["H264", "H265", "H.264", "H.265", "AVC", "HEVC", "VC1", "VC-1", "VP8", "VP9", "AV1"]
-VALID_ACODECS = ["AAC", "AC3", "EC3", "EAC3", "DD", "DD+", "AC4", "OPUS", "FLAC", "ALAC", "VORBIS", "OGG", "DTS"]
+VALID_VCODECS = [choice.upper() for choice in VIDEO_CODEC_LIST.choices]
+VALID_ACODECS = [choice.upper() for choice in AUDIO_CODEC_LIST.choices]
+VALID_SUB_FORMATS = [choice.upper() for choice in SUBTITLE_CODEC.choices]
+
+
+def resolve_vcodec(value: Any) -> Optional[list]:
+    """Map a client's vcodec field to codec enums.
+
+    Session routes do not run validate_download_parameters, so this must answer junk with a 400
+    instead of letting click's UsageError surface as a 500.
+    """
+    if not value:
+        return None
+    try:
+        return VIDEO_CODEC_LIST.convert(value) or None
+    except click.UsageError as e:
+        raise APIError(APIErrorCode.INVALID_INPUT, f"Invalid vcodec: {e.format_message()}")
 
 
 def check_codec(value: Any, allowed: List[str], name: str) -> Optional[str]:
@@ -949,6 +1801,41 @@ def validate_download_parameters(data: Dict[str, Any]) -> Optional[str]:
     Returns:
         None if valid, error message string if invalid
     """
+    for banned in ("postscript", "post_script", "post_scripts"):
+        if data.get(banned):
+            return f"'{banned}' is not accepted over the API. Define post_scripts in unshackle.yaml."
+
+    try:
+        client_profile(data)
+    except APIError as e:
+        return e.message
+
+    if data.get("sample") is not None:
+        from unshackle.core.utils.click_types import SAMPLE_RANGE
+
+        try:
+            SAMPLE_RANGE.convert(data["sample"], None, None)
+        except click.BadParameter:
+            return "sample must be true or a 'START-END' window in seconds, such as '60-120'."
+    if data.get("sample") and data.get("include_sample"):
+        return "sample and include_sample cannot be used together."
+
+    if data.get("output_dir"):
+        root = config.directories.downloads.resolve()
+        raw = str(data["output_dir"])
+        if "\x00" in raw:
+            return "output_dir is not a usable path."
+        try:
+            target = (root / raw).resolve()
+        except (OSError, ValueError):
+            return "output_dir is not a usable path."
+        if not target.is_relative_to(root):
+            return "output_dir must be a path under the server's downloads directory."
+        data["output_dir"] = str(target)
+
+    if data.get("all_drm") and data.get("cdm"):
+        return "all_drm needs a CDM for each DRM system, so it cannot be used with cdm, which selects one device."
+
     if "vcodec" in data and data["vcodec"]:
         err = check_codec(data["vcodec"], VALID_VCODECS, "vcodec")
         if err:
@@ -960,9 +1847,8 @@ def validate_download_parameters(data: Dict[str, Any]) -> Optional[str]:
             return err
 
     if "sub_format" in data and data["sub_format"]:
-        valid_sub_formats = ["SRT", "VTT", "ASS", "SSA", "TTML", "STPP", "WVTT", "SMI", "SUB", "MPL2", "TMP"]
-        if data["sub_format"].upper() not in valid_sub_formats:
-            return f"Invalid sub_format: {data['sub_format']}. Must be one of: {', '.join(valid_sub_formats)}"
+        if str(data["sub_format"]).upper() not in VALID_SUB_FORMATS:
+            return f"Invalid sub_format: {data['sub_format']}. Must be one of: {', '.join(VALID_SUB_FORMATS)}"
 
     if "vbitrate" in data and data["vbitrate"] is not None:
         if not isinstance(data["vbitrate"], int) or data["vbitrate"] <= 0:
@@ -988,11 +1874,15 @@ def validate_download_parameters(data: Dict[str, Any]) -> Optional[str]:
         if not isinstance(data["workers"], int) or data["workers"] <= 0:
             return "workers must be a positive integer"
 
+    if "download_processes" in data and data["download_processes"] is not None:
+        if not isinstance(data["download_processes"], int) or data["download_processes"] <= 0:
+            return "download_processes must be a positive integer"
+
     if "downloads" in data and data["downloads"] is not None:
         if not isinstance(data["downloads"], int) or data["downloads"] <= 0:
             return "downloads must be a positive integer"
 
-    for name in ("tmdb_id", "tvdb_id"):
+    for name in ("tmdb_id", "tvdb_id", "latest_episodes"):
         if data.get(name) is not None:
             value = data[name]
             if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
@@ -1004,7 +1894,6 @@ def validate_download_parameters(data: Dict[str, Any]) -> Optional[str]:
 
     if data.get("anilist_id") is not None:
         value = data["anilist_id"]
-        # same parser as --anilist so both surfaces accept and reject the same inputs
         valid = not isinstance(value, bool) and isinstance(value, (int, str)) and parse_anilist_ref(value)
         if not valid:
             return "anilist_id must be a positive integer, or a MyAnimeList ID like 'mal:21'"
@@ -1033,12 +1922,20 @@ def validate_download_parameters(data: Dict[str, Any]) -> Optional[str]:
         return "Cannot use both no_subs and subs_only"
     if data.get("no_audio") and data.get("audio_only"):
         return "Cannot use both no_audio and audio_only"
+    conflict = kind_only_conflict(data)
+    if conflict:
+        return f"Cannot use both {conflict[0]} and {conflict[1]}"
 
-    if data.get("s_lang") and data.get("require_subs"):
-        return "Cannot use both s_lang and require_subs"
+    for key, default in DEFAULT_DOWNLOAD_PARAMS.items():
+        if isinstance(default, bool) and data.get(key) is not None and not isinstance(data[key], bool):
+            return f"{key} must be a boolean"
+
+    for key in ("require_audio", "require_video", "require_subs"):
+        value = data.get(key)
+        if value is not None and (not isinstance(value, list) or not all(isinstance(v, str) for v in value)):
+            return f"{key} must be an array of language strings"
 
     if "range" in data and data["range"]:
-        # "HDR10P" is the canonical range value ("+" is awkward in scripts); "HDR10+" stays valid.
         valid_ranges = ["SDR", "HDR10", "HDR10P", "DV", "HLG", "HYBRID"]
         accepted = {*valid_ranges, "HDR10+"}
         values = data["range"] if isinstance(data["range"], list) else [data["range"]]
@@ -1052,20 +1949,66 @@ def validate_download_parameters(data: Dict[str, Any]) -> Optional[str]:
 def enforce_download_gates(params: Dict[str, Any], request: Optional[web.Request] = None) -> None:
     """Enforce serve-config gates on per-job cdm overrides and client-supplied credentials.
 
-    A per-request `cdm` selects a server-side device, so it is gated here rather than honoured
-    blindly. `serve.cdm_overrides` opts in: a list permits only those device names, or `true`
+    A per-request `cdm` selects a server-side device, so this function gates it here rather than
+    honour it blindly. `serve.cdm_overrides` opts in: a list permits only those device names, or `true`
     permits any (for a single trusted client). Unset/false rejects every override.
     A per-request `credential` (or `credentials` map) authenticates the job with client-supplied
     secrets instead of the server-side credentials. Gate it behind `serve.allow_job_credentials`
-    (default off) so a default deployment stays locked to its own credentials; mirrors the CDM gate.
-    A download job licenses DRM in-process with the server's own CDM, so a key without
-    ``server_cdm`` cannot submit or retry jobs.
+    (default off) so a default deployment stays locked to its own credentials. This mirrors the
+    CDM gate. A download job licenses DRM in-process with the server's own CDM, so an API key without
+    ``server_cdm`` cannot submit or retry jobs. A job can also spend the server's proxy providers,
+    through an explicit ``proxy`` country code or through the geofence auto-proxy, so the
+    ``server_proxy`` policy from :func:`resolve_handler_proxy` applies here too: without the opt-in
+    the job must carry a full proxy URI or no proxy at all. Under a ``server_cdm_max_height`` the job
+    must set a quality at or under it, no ``best_available`` and no HYBRID range, as a job has no client device
+    to fall back to. Pass the job's merged parameters, so the gate sees the values the job runs with.
     """
-    if not server_cdm_allowed(request):
+    if not server_cdm_allowed(request, params.get("service")):
         raise APIError(
             APIErrorCode.FORBIDDEN,
-            "Download jobs license with the server CDM, which is not enabled for this key.",
+            "Download jobs license with the server CDM, which is not enabled for this key on this service.",
         )
+    cap = server_cdm_max_height(request, params.get("service"))
+    if cap is not None:
+        serve_defaults = config.serve or {}
+
+        def effective(key: str) -> Any:
+            """The job's own value for this parameter, or the ``serve:`` dl default that the job falls back to."""
+            return params[key] if key in params else serve_defaults.get(key)
+
+        wanted = requested_height(effective("quality"))
+        if wanted is None or wanted > cap:
+            raise capped_error(
+                f"Download jobs license with the server CDM, which covers up to {cap}p for this API key. "
+                f"Pass a quality of {cap} or lower.",
+                cap,
+            )
+        if effective("best_available"):
+            raise capped_error(
+                f"Download jobs license with the server CDM, which covers up to {cap}p for this API key. "
+                "Turn off best_available, because it can fall back to a track above that height.",
+                cap,
+            )
+        ranges = effective("range") or []
+        ranges = [ranges] if isinstance(ranges, str) else ranges
+        if any(str(getattr(r, "value", r)).upper() == "HYBRID" for r in ranges):
+            raise capped_error(
+                f"Download jobs license with the server CDM, which covers up to {cap}p for this API key. "
+                "Remove HYBRID from range, because it always keeps the lowest DV track, whatever the quality.",
+                cap,
+            )
+
+    if params.get("proxy_download") is not None and not isinstance(params["proxy_download"], str):
+        raise APIError(APIErrorCode.INVALID_INPUT, "proxy_download must be a string.")
+
+    if not server_proxy_allowed(request):
+        resolve_handler_proxy(params, params.get("service") or "", request)
+        if params.get("proxy_download"):
+            resolve_handler_proxy(
+                {**params, "proxy": params["proxy_download"], "client_region": None},
+                params.get("service") or "",
+                request,
+            )
 
     requested_cdm = params.get("cdm")
     if requested_cdm:
@@ -1087,7 +2030,7 @@ def enforce_download_gates(params: Dict[str, Any], request: Optional[web.Request
 
 
 async def download_handler(data: Dict[str, Any], request: Optional[web.Request] = None) -> web.Response:
-    """Handle download request - create and queue a download job."""
+    """Answer the download request: make a download job and add it to the queue."""
     from unshackle.core.api.download_manager import get_download_manager
 
     require_fields(data, "service", "title_id")
@@ -1110,31 +2053,16 @@ async def download_handler(data: Dict[str, Any], request: Optional[web.Request] 
             details={"service": normalized_service, "title_id": title_id},
         )
 
-    enforce_download_gates(data, request)
-
     try:
-        # Load service module to extract service-specific parameter defaults
         service_module = Services.load(normalized_service)
         service_specific_defaults = {}
 
-        # Extract default values from the service's click command.
-        # Skip None defaults here: this dict overlays into job params; injecting
-        # None for keys like `profile` would clobber serve-config overrides.
-        # Missing required __init__ params are handled in download_manager._perform_download.
         if hasattr(service_module, "cli") and hasattr(service_module.cli, "params"):
             for param in service_module.cli.params:
                 if hasattr(param, "name") and param.default is not None and not isinstance(param.default, enum.Enum):
-                    # Store service-specific defaults (e.g. drm_system, hydrate_track, profile)
                     service_specific_defaults[param.name] = param.default
 
-        # Get download manager and start workers if needed
-        manager = get_download_manager()
-        await manager.start_workers()
-
-        # Create download job with filtered parameters (exclude service and title_id as they're already passed)
         filtered_params = {k: v for k, v in data.items() if k not in ["service", "title_id"]}
-        # Overlay any dl-relevant keys from `serve:` config (e.g. downloads, workers) so the API
-        # respects server-side defaults without each client having to send them.
         serve_overrides = {
             k: v for k, v in (config.serve or {}).items() if k in DEFAULT_DOWNLOAD_PARAMS and v is not None
         }
@@ -1144,6 +2072,11 @@ async def download_handler(data: Dict[str, Any], request: Optional[web.Request] 
             **service_specific_defaults,
             **filtered_params,
         }
+        await asyncio.to_thread(enforce_download_gates, {**params_with_defaults, "service": service_tag}, request)
+
+        manager = get_download_manager()
+        await manager.start_workers()
+        params_with_defaults["server_proxy"] = server_proxy_allowed(request)
         job = manager.create_job(normalized_service, title_id, owner_key=caller_key(request), **params_with_defaults)
 
         return web.json_response(
@@ -1163,7 +2096,7 @@ async def download_handler(data: Dict[str, Any], request: Optional[web.Request] 
 
 
 async def list_download_jobs_handler(data: Dict[str, Any], request: Optional[web.Request] = None) -> web.Response:
-    """Handle list download jobs request with optional filtering and sorting."""
+    """Answer the request to show download jobs, with optional filtering and sorting."""
     from unshackle.core.api.download_manager import get_download_manager
 
     try:
@@ -1199,7 +2132,7 @@ async def list_download_jobs_handler(data: Dict[str, Any], request: Optional[web
         reverse = sort_order == "desc"
 
         def get_sort_key(job):
-            """Get the sorting key value, handling None values."""
+            """Get the value to sort on, and give a None value a default."""
             value = getattr(job, sort_by, None)
             if value is None:
                 if sort_by in ["created_time", "started_time", "completed_time"]:
@@ -1215,7 +2148,7 @@ async def list_download_jobs_handler(data: Dict[str, Any], request: Optional[web
         jobs = sorted(jobs, key=get_sort_key, reverse=reverse)
 
         include_full = str(data.get("full") or "").lower() == "true"
-        job_list = [job.to_dict(include_full_details=include_full) for job in jobs]
+        job_list = [client_job_view(job.to_dict(include_full_details=include_full), request) for job in jobs]
 
         return web.json_response({"jobs": job_list})
 
@@ -1231,8 +2164,18 @@ async def list_download_jobs_handler(data: Dict[str, Any], request: Optional[web
         )
 
 
+def client_job_view(job: Dict[str, Any], request: Optional[web.Request]) -> Dict[str, Any]:
+    """Drop a job's traceback and stderr for API clients unless the server runs with ``--debug-api``.
+
+    Redaction masks only the job's own secrets, so these fields can still carry server-side values.
+    """
+    if request is not None and request.app.get("debug_api", False):
+        return job
+    return {k: v for k, v in job.items() if k not in ("error_traceback", "worker_stderr")}
+
+
 async def get_download_job_handler(job_id: str, request: Optional[web.Request] = None) -> web.Response:
-    """Handle get specific download job request."""
+    """Answer the request for one specific download job."""
     from unshackle.core.api.download_manager import get_download_manager
 
     try:
@@ -1246,7 +2189,7 @@ async def get_download_job_handler(job_id: str, request: Optional[web.Request] =
                 details={"job_id": job_id},
             )
 
-        return web.json_response(job.to_dict(include_full_details=True))
+        return web.json_response(client_job_view(job.to_dict(include_full_details=True), request))
 
     except APIError:
         raise
@@ -1279,8 +2222,7 @@ async def download_job_events_handler(job_id: str, request: web.Request) -> web.
     response = web.StreamResponse(
         headers={
             "Content-Type": "text/event-stream",
-            "Cache-Control": "no-cache",
-            # Stops nginx from buffering the stream.
+            "Cache-Control": "no-cache, no-transform",
             "X-Accel-Buffering": "no",
             **CORS_HEADERS,
         }
@@ -1288,7 +2230,7 @@ async def download_job_events_handler(job_id: str, request: web.Request) -> web.
     await response.prepare(request)
 
     async def send(event: str, data: Dict[str, Any]) -> None:
-        payload = json.dumps(data, separators=(",", ":"), default=str)
+        payload = json.dumps(client_job_view(data, request), separators=(",", ":"), default=str)
         await response.write(f"event: {event}\ndata: {payload}\n\n".encode())
 
     queue: Optional[asyncio.Queue] = None
@@ -1325,8 +2267,464 @@ async def download_job_events_handler(job_id: str, request: web.Request) -> web.
     return response
 
 
+def configured_service_tags() -> List[str]:
+    """The installed services this server names in its config, for the dashboard.
+
+    The global ``serve.services`` list, else the union of every ``serve.users`` key's ``services``, else every
+    installed service. An API key with no ``services`` list does not widen the union, and a malformed entry is skipped.
+    """
+    tags = Services.get_tags()
+    allowed = allowed_services_for_key(None)
+    if allowed is None:
+        users = config.serve.get("users")
+        lists = [u.get("services") for u in users.values() if isinstance(u, dict)] if isinstance(users, dict) else []
+        allowed = [Services.get_tag(s) for lst in lists if isinstance(lst, list) for s in lst if isinstance(s, str)]
+    if not allowed:
+        return tags
+    named = set(allowed)
+    return [tag for tag in tags if tag in named]
+
+
+async def dashboard_status_handler(request: web.Request) -> web.Response:
+    """Server-wide stats for the developer dashboard."""
+    from unshackle.core.api.download_manager import get_download_manager
+    from unshackle.core.api.session_store import get_session_store
+    from unshackle.core.api.stats import stats
+
+    store = get_session_store()
+    jobs = Counter(job.status.value for job in get_download_manager().list_jobs())
+    return web.json_response(
+        {
+            **stats.to_dict(),
+            "services": len(configured_service_tags()),
+            "sessions": store.session_count,
+            "max_sessions": store.max_sessions,
+            "session_ttl": store.ttl,
+            "jobs": dict(jobs),
+        }
+    )
+
+
+async def dashboard_sessions_handler(request: web.Request) -> web.Response:
+    """Every live remote session, not owner-scoped."""
+    from unshackle.core.api.session_store import get_session_store
+
+    return web.json_response([entry.summary() for entry in get_session_store().list()])
+
+
+async def dashboard_jobs_handler(request: web.Request) -> web.Response:
+    """Every download job, not owner-scoped."""
+    from unshackle.core.api.download_manager import get_download_manager
+
+    return web.json_response([job.to_dict(include_full_details=True) for job in get_download_manager().list_jobs()])
+
+
+def _poll_cursor(before: int, items: List[Dict[str, Any]]) -> int:
+    """Cursor for the next poll, from the buffer's seq read *before* its ``since()`` call.
+
+    This poll or the next one returns a record added between the two reads; no poll skips it.
+    """
+    return max(before, items[-1]["seq"]) if items else before
+
+
+def _since(request: web.Request) -> int:
+    """The ``since`` cursor of a poll; 0 (everything) when it is missing or not a number."""
+    try:
+        return int(request.query.get("since", 0))
+    except ValueError:
+        return 0
+
+
+async def dashboard_logs_handler(request: web.Request) -> web.Response:
+    """Recent log records; `since` (seq) and `level` filter the ring buffer."""
+    from unshackle.core.api.stats import ring
+
+    since = _since(request)
+    before = ring.seq
+    records = ring.since(since, request.query.get("level"), request.query.get("logger"))
+    return web.json_response({"seq": _poll_cursor(before, records), "records": records})
+
+
+async def dashboard_cdm_logs_handler(request: web.Request) -> web.Response:
+    """CDM calls after `since` (seq), plus a snapshot of the open sessions of each live Cdm."""
+    from unshackle.core.api.stats import cdm_calls, cdm_sessions
+
+    since = _since(request)
+    before = cdm_calls.seq
+    records = cdm_calls.since(since)
+    return web.json_response(
+        {"seq": _poll_cursor(before, records), "records": records, "sessions": cdm_sessions(request.app)}
+    )
+
+
+async def dashboard_session_logs_handler(request: web.Request) -> web.Response:
+    """One remote session's mirrored service log, for an operator watching a failing auth.
+
+    Reads through ``peek``: a dashboard poll must not refresh the session's idle timer, and
+    ``SessionLogBuffer.since`` is a cursor read, so this never takes records from the client
+    draining the same buffer through ``/api/session/{id}/logs``.
+    """
+    from unshackle.core.api.session_store import get_session_store
+
+    session_id = request.match_info["session_id"]
+    session = get_session_store().peek(session_id)
+    if session is None:
+        raise APIError(APIErrorCode.SESSION_NOT_FOUND, f"Remote session not found: {session_id}")
+    since = _since(request)
+    buffer = session.log_buffer
+    before = buffer.last_seq if buffer else 0
+    records = buffer.since(since) if buffer else []
+    return web.json_response({"session_id": session_id, "records": records, "last_seq": _poll_cursor(before, records)})
+
+
+async def dashboard_keys_handler(request: web.Request) -> web.Response:
+    """Every configured API key: which key it is, what it may do, and what it has done.
+
+    Every API key that ``configured_key`` counts gets a row here, so each ``requests_by_key``
+    bucket except ``anonymous`` has a row to attribute it to. Without the dashboard key's own
+    row, a dashboard would render its own polling as traffic from an unknown caller.
+    """
+    from unshackle.core.api.stats import key_id, key_rate_limit, key_tier, mask_key, stats
+
+    users = config.serve.get("users") or {}
+    api_secret = str(config.serve.get("api_secret") or "")
+    dashboard = dashboard_key() or ""
+
+    def row(secret_key: str, role: str) -> Dict[str, Any]:
+        entry = stats.keys.get(key_id(secret_key))
+        api_access = role != "dashboard" or secret_key in users
+        return {
+            "id": key_id(secret_key),
+            "role": role,
+            "label": mask_key(secret_key),
+            "services": allowed_services_for_key(secret_key) if api_access else [],
+            "server_cdm": user_grant(secret_key, "server_cdm") if api_access else False,
+            "server_cdm_max_height": serve_user_config(secret_key).get("server_cdm_max_height") if api_access else None,
+            "server_accounts": user_grant(secret_key, "server_accounts") if api_access else False,
+            "server_proxy": user_grant(secret_key, "server_proxy") is True if api_access else False,
+            "tier": key_tier(secret_key),
+            "rate_limit": key_rate_limit(secret_key),
+            "window_used": entry.window_used if entry else 0,
+            "requests": entry.requests if entry else 0,
+            "rejected": entry.rejected if entry else 0,
+            "bytes_out": entry.bytes_out if entry else 0,
+            "last_seen": entry.last_seen if entry else None,
+        }
+
+    def role_of(secret_key: str) -> str:
+        """Which key this is. Identity, not capability: the grant fields carry that."""
+        if dashboard and secret_key == dashboard:
+            return "dashboard"
+        return "admin" if secret_key == api_secret else "user"
+
+    keys = [str(k) for k in users]
+    for extra in (api_secret, dashboard):
+        if extra and extra not in keys:
+            keys.append(extra)
+    return web.json_response([row(k, role_of(k)) for k in keys])
+
+
+def user_grant(secret_key: str, name: str) -> Any:
+    """A per-key grant as configured: False, True, or the list of service tags it covers.
+
+    An API key with no ``serve.users`` entry keeps implicit access, matching the resolvers.
+    """
+    user_config = (config.serve.get("users") or {}).get(secret_key)
+    if not isinstance(user_config, dict):
+        return name != "server_proxy"
+    return user_config.get(name, False)
+
+
+async def dashboard_services_handler(request: web.Request) -> web.Response:
+    """Every service configured on this server, or every installed one with ``?all=1``, and its load state."""
+    from unshackle.core import services as services_module
+    from unshackle.core.api.download_manager import TERMINAL_STATUSES, get_download_manager
+    from unshackle.core.api.session_store import get_session_store
+    from unshackle.core.service_repo import head
+
+    sessions = Counter(entry.service_tag for entry in get_session_store().list())
+    jobs = Counter(job.service for job in get_download_manager().list_jobs() if job.status not in TERMINAL_STATUSES)
+    errors = {err.split(":", 1)[0]: err for err in services_module.LOAD_ERRORS if ":" in err}
+    staged_commits: Dict[Any, Optional[str]] = {}
+
+    tags = Services.get_tags() if request.query.get("all") == "1" else configured_service_tags()
+    rows = []
+    for tag in tags:
+        error = errors.get(tag)
+        staged = tag in services_module.PENDING
+        row: Dict[str, Any] = {
+            "tag": tag,
+            "state": "failed" if error else "staged" if staged else "loaded",
+            "error": error,
+            "commit": services_module.LOADED_COMMITS.get(tag),
+            "staged_commit": None,
+            "staged_since": services_module.PENDING_SINCE.get(tag),
+            "sessions": sessions.get(tag, 0),
+            "jobs": jobs.get(tag, 0),
+            "aliases": list(services_module.ALIASES.get(tag, ())),
+            "geofence": [],
+            "geoblock": [],
+        }
+        if staged:
+            source = services_module.service_source_dir(tag)
+            if source is not None and source not in staged_commits:
+                staged_commits[source] = head(source) if (source / ".git").exists() else None
+            row["staged_commit"] = staged_commits.get(source)
+        module = services_module.MODULES.get(tag)
+        if module is not None:
+            row["geofence"] = list(getattr(module, "GEOFENCE", ()) or ())
+            row["geoblock"] = list(getattr(module, "GEOBLOCK", ()) or ())
+        rows.append(row)
+    return web.json_response(rows)
+
+
+HEALTH_CACHE_TTL = 30.0
+HEALTH_PROBE_KID = "00000000000000000000000000000000"
+HEALTH_DETAIL_MAX = 256
+HEALTH_PROBE_TIMEOUT = 15.0
+HEALTH_SECRET_MIN = 4
+SECRET_KEYS = ("password", "passwd", "pwd", "token", "api_key", "apikey", "secret", "auth", "ssl_key_password")
+_health_cache: Dict[str, Any] = {}
+_health_lock: Optional[asyncio.Lock] = None
+
+
+async def dashboard_health_handler(request: web.Request) -> web.Response:
+    """Preflight: can this instance finish a download?
+
+    A panel, not a liveness probe - the result is cached for 30 s and every probe is shallow,
+    so reading it never costs the operator a proxy session or a licence.
+    """
+    global _health_lock
+    if _health_lock is None:
+        _health_lock = asyncio.Lock()
+    async with _health_lock:
+        now = time.time()
+        cached = _health_cache.get("payload")
+        if cached and now - _health_cache.get("at", 0.0) < HEALTH_CACHE_TTL:
+            return web.json_response(cached)
+
+        checks: List[Dict[str, Any]] = []
+        try:
+            await asyncio.wait_for(asyncio.to_thread(run_health_checks, checks), HEALTH_PROBE_TIMEOUT)
+        except asyncio.TimeoutError:
+            checks = list(checks)
+            checks.append(
+                {
+                    "id": "probe",
+                    "label": "health probe",
+                    "status": "fail",
+                    "detail": f"timed out after {HEALTH_PROBE_TIMEOUT:.0f}s with {len(checks)} checks done",
+                    "ms": round(HEALTH_PROBE_TIMEOUT * 1000, 1),
+                }
+            )
+        statuses = {c["status"] for c in checks}
+        payload = {
+            "generated_at": now,
+            "status": "failing" if "fail" in statuses else "degraded" if "warn" in statuses else "ok",
+            "checks": checks,
+        }
+        _health_cache.update(at=now, payload=payload)
+        return web.json_response(payload)
+
+
+def config_secrets(section: Any, nested: bool = False) -> List[str]:
+    """Values in a vault or proxy config that must never reach a health detail.
+
+    Name-based at the top level, and every scalar below it: a nested mapping is driver
+    arguments unshackle cannot name in advance (an API vault's ``headers``, a MySQL vault's
+    ``ssl``, a proxy provider's own block), so it over-collects there on purpose. Short values
+    are skipped, because masking them would garble the detail without hiding anything.
+    """
+    if isinstance(section, dict):
+        items: Iterable[tuple[Any, Any]] = section.items()
+    elif isinstance(section, (list, tuple)):
+        items = [(None, value) for value in section]
+    else:
+        return [str(section)] if nested and section is not None else []
+
+    found: List[str] = []
+    for key, value in items:
+        if isinstance(value, (dict, list, tuple)):
+            found += config_secrets(value, nested=True)
+        elif value is not None and (nested or (isinstance(key, str) and key.lower() in SECRET_KEYS)):
+            found.append(str(value))
+    return [secret for secret in found if len(secret) >= HEALTH_SECRET_MIN]
+
+
+def health_check(check_id: str, label: str, probe: Any, secrets: Iterable[str] = ()) -> Dict[str, Any]:
+    """Time one health probe and turn any exception into a failed check.
+
+    *secrets* are masked out of the detail: a driver's error string can echo the DSN or URL
+    it was given. The detail is then capped, because redaction only hides what it recognises
+    and a driver can raise with a whole response body inside it. Cap after masking, never
+    before: a cut through a secret would leave the tail of it unreplaced.
+    """
+    started = time.perf_counter()
+    try:
+        status, detail = probe()
+    except Exception as e:
+        status, detail = "fail", f"{type(e).__name__}: {e}"
+    masked = redact_text(detail, secrets) or ""
+    if len(masked) > HEALTH_DETAIL_MAX:
+        masked = masked[:HEALTH_DETAIL_MAX] + "…"
+    return {
+        "id": check_id,
+        "label": label,
+        "status": status,
+        "detail": masked,
+        "ms": round((time.perf_counter() - started) * 1000, 1),
+    }
+
+
+def run_health_checks(checks: Optional[List[Dict[str, Any]]] = None) -> List[Dict[str, Any]]:
+    """Probe binaries, CDM devices, key vaults and proxy providers. Blocking; run in a thread.
+
+    Appends to *checks* as each probe finishes rather than returning only at the end, so a
+    caller that gives up on the deadline still has the results that did complete.
+    """
+    from unshackle.commands.env import get_dependencies
+    from unshackle.core.proxies.resolve import initialize_proxy_providers
+
+    if checks is None:
+        checks = []
+
+    for dep in (d for d in get_dependencies() if d["cat"] != "Player"):
+        binary = dep["binary"]
+
+        def probe(binary: Any = binary, dep: Any = dep) -> tuple[str, str]:
+            if not binary:
+                return ("fail" if dep["required"] else "warn", "not found on PATH")
+            version = binary_version(binary) or "unknown version"
+            return "ok", f"{version} · {binary}"
+
+        checks.append(health_check(dep["name"].lower(), dep["name"], probe))
+
+    def cdm_probe() -> tuple[str, str]:
+        wvds = list(config.directories.wvds.glob("*.wvd"))
+        prds = list(config.directories.prds.glob("*.prd"))
+        if not wvds and not prds:
+            return ("fail" if config.cdm else "warn", "no .wvd or .prd device files found")
+        return "ok", f"{len(wvds)} Widevine, {len(prds)} PlayReady"
+
+    checks.append(health_check("cdm", "CDM devices", cdm_probe))
+
+    probe_service = next(iter(Services.get_tags()), "health")
+    for vault_config in config.key_vaults or []:
+        name = vault_config.get("name") or vault_config.get("type", "vault")
+
+        def vault_probe(vault_config: Any = vault_config) -> tuple[str, str]:
+            from unshackle.core.vaults import Vaults
+
+            cfg = dict(vault_config)
+            vaults = Vaults(probe_service)
+            vaults.load_critical(cfg.pop("type"), **cfg)
+            vault = vaults.vaults[0]
+            try:
+                vault.get_key(HEALTH_PROBE_KID, probe_service)
+            except Exception as e:
+                if type(e).__name__ not in ("KeyIdInvalid", "ServiceTagInvalid"):
+                    raise
+            return "ok", str(vault)
+
+        checks.append(health_check(f"vault:{name}", f"vault {name}", vault_probe, config_secrets(vault_config)))
+
+    def bad_keys_probe() -> tuple[str, str]:
+        if not config.key_vaults:
+            return "ok", "no vaults configured"
+        local = [v.get("name") or v["type"] for v in config.key_vaults if v.get("type") == "SQLite"]
+        if local:
+            return "ok", f"flags stored in {', '.join(local)}"
+        return "warn", "no SQLite vault, so a content key a client proves wrong cannot be flagged"
+
+    checks.append(health_check("bad_keys", "bad content key flags", bad_keys_probe))
+
+    def proxy_probe() -> tuple[str, str]:
+        providers = initialize_proxy_providers(raise_errors=True, quiet=True)
+        if not providers:
+            return "ok", "none configured"
+        return "ok", ", ".join(type(p).__name__ for p in providers)
+
+    if config.proxy_providers:
+        checks.append(health_check("proxies", "proxy providers", proxy_probe, config_secrets(config.proxy_providers)))
+
+    return checks
+
+
+async def dashboard_events_handler(request: web.Request) -> web.StreamResponse:
+    """Server-wide SSE event stream: `log`, `session` and `job` events, plus `stats` every 5 s (also the keep-alive).
+
+    Every frame carries `id: <seq>`; a reconnecting EventSource sends Last-Event-ID, and the
+    server replays the missed events from the bus history. With `?since=<seq>` the same missed
+    events come back as one JSON burst instead of an event stream, for clients that poll.
+    """
+    from unshackle.core.api.events import bus
+
+    if "since" in request.query:
+        try:
+            since = int(request.query["since"])
+        except ValueError:
+            since = 0
+        status = await dashboard_status_handler(request)
+        before = bus.seq
+        events = bus.since(since)
+        return web.json_response(
+            {"seq": _poll_cursor(before, events), "stats": json.loads(status.text or "{}"), "events": events}
+        )
+
+    response = web.StreamResponse(
+        headers={
+            "Content-Type": "text/event-stream",
+            "Cache-Control": "no-cache, no-transform",
+            "X-Accel-Buffering": "no",
+            **CORS_HEADERS,
+        }
+    )
+    await response.prepare(request)
+
+    async def send(event: str, data: Dict[str, Any], event_id: Optional[int] = None) -> None:
+        payload = json.dumps(data, separators=(",", ":"), default=str)
+        head = f"id: {event_id}\n" if event_id is not None else ""
+        await response.write(f"{head}event: {event}\ndata: {payload}\n\n".encode())
+
+    async def send_stats() -> None:
+        status = await dashboard_status_handler(request)
+        await send("stats", json.loads(status.text or "{}"))
+
+    queue = bus.subscribe()
+    get_task: Optional[asyncio.Task] = None
+    loop = asyncio.get_running_loop()
+    try:
+        await send_stats()
+        next_stats = loop.time() + 5
+        try:
+            last_id = int(request.headers.get("Last-Event-ID", 0))
+        except ValueError:
+            last_id = 0
+        for item in bus.since(last_id) if last_id else []:
+            await send(item["event"], item["data"], item["seq"])
+        while True:
+            if get_task is None:
+                get_task = asyncio.create_task(queue.get())
+            done, _ = await asyncio.wait({get_task}, timeout=max(0.0, next_stats - loop.time()))
+            if not done:
+                await send_stats()
+                next_stats = loop.time() + 5
+                continue
+            item = get_task.result()
+            get_task = None
+            await send(item["event"], item["data"], item["seq"])
+    except (ConnectionResetError, asyncio.CancelledError):
+        log.debug("SSE dashboard client disconnected")
+    finally:
+        if get_task is not None:
+            get_task.cancel()
+        bus.unsubscribe(queue)
+
+    return response
+
+
 async def cancel_download_job_handler(job_id: str, request: Optional[web.Request] = None) -> web.Response:
-    """Handle cancel/remove download job request."""
+    """Answer the cancel/remove download job request."""
     from unshackle.core.api.download_manager import TERMINAL_STATUSES, get_download_manager
 
     try:
@@ -1340,7 +2738,6 @@ async def cancel_download_job_handler(job_id: str, request: Optional[web.Request
                 details={"job_id": job_id},
             )
 
-        # Terminal jobs can't be cancelled; DELETE removes them from the manager instead.
         if job.status in TERMINAL_STATUSES:
             manager.remove_job(job_id)
             return web.Response(status=204)
@@ -1369,12 +2766,12 @@ async def cancel_download_job_handler(job_id: str, request: Optional[web.Request
 
 
 async def clear_finished_download_jobs_handler(request: Optional[web.Request] = None) -> web.Response:
-    """Handle clear finished download jobs request."""
+    """Answer the clear finished download jobs request."""
     from unshackle.core.api.download_manager import get_download_manager
 
     try:
         manager = get_download_manager()
-        removed = manager.clear_finished_jobs()
+        removed = manager.clear_finished_jobs(owner_key=caller_key(request))
         return web.json_response({"removed": removed})
 
     except APIError:
@@ -1390,7 +2787,7 @@ async def clear_finished_download_jobs_handler(request: Optional[web.Request] = 
 
 
 async def retry_download_job_handler(job_id: str, request: Optional[web.Request] = None) -> web.Response:
-    """Handle retry download job request - enqueue a new job with the original's parameters."""
+    """Answer the retry download job request: enqueue a new job with the original's parameters."""
     from unshackle.core.api.download_manager import TERMINAL_STATUSES, get_download_manager
 
     try:
@@ -1411,20 +2808,22 @@ async def retry_download_job_handler(job_id: str, request: Optional[web.Request]
                 details={"job_id": job_id, "status": job.status.value},
             )
 
-        # Re-apply creation-time gates so retry cannot bypass the caller's service allowlist
-        # or currently-disabled cdm_overrides / allow_job_credentials config.
         if not validate_service(job.service, request):
             raise APIError(
                 APIErrorCode.INVALID_SERVICE,
                 f"Invalid or unavailable service: {job.service}",
                 details={"service": job.service},
             )
-        enforce_download_gates(job.parameters, request)
+        await asyncio.to_thread(enforce_download_gates, {**job.parameters, "service": job.service}, request)
 
         await manager.start_workers()
 
-        # Reuse the raw in-memory parameters; redaction only ever applies to serialized copies.
-        new_job = manager.create_job(job.service, job.title_id, owner_key=caller_key(request), **job.parameters)
+        new_job = manager.create_job(
+            job.service,
+            job.title_id,
+            owner_key=caller_key(request),
+            **{**job.parameters, "server_proxy": server_proxy_allowed(request)},
+        )
 
         return web.json_response(
             {
@@ -1448,7 +2847,7 @@ async def retry_download_job_handler(job_id: str, request: Optional[web.Request]
 
 
 async def prioritize_download_job_handler(job_id: str, request: Optional[web.Request] = None) -> web.Response:
-    """Handle prioritize download job request - move a queued job to the front of the queue."""
+    """Answer the prioritise download job request: move a queued job to the front of the queue."""
     from unshackle.core.api.download_manager import JobStatus, get_download_manager
 
     try:
@@ -1485,23 +2884,40 @@ async def prioritize_download_job_handler(job_id: str, request: Optional[web.Req
         )
 
 
-# ---------------------------------------------------------------------------
-# Platform Handlers (profiles, config, history, maintenance)
-# ---------------------------------------------------------------------------
+async def download_job_input_handler(
+    data: Dict[str, Any], job_id: str, request: Optional[web.Request] = None
+) -> web.Response:
+    """Answer the prompt a running job waits on (its ``input_prompt``), to unblock the service."""
+    from unshackle.core.api.download_manager import get_download_manager
+
+    manager = get_download_manager()
+    job = manager.get_job(job_id)
+    if not job or not owns_job(job, request):
+        raise APIError(APIErrorCode.JOB_NOT_FOUND, "Job not found", details={"job_id": job_id})
+
+    response_text = data.get("response")
+    if response_text is None:
+        raise APIError(APIErrorCode.INVALID_INPUT, "Missing required field: response")
+
+    if not manager.submit_input(job, str(response_text)):
+        raise APIError(APIErrorCode.CONFLICT, "No prompt pending for this job", details={"job_id": job_id})
+    return web.json_response({"status": "accepted"})
 
 
-_CONFIG_SECRET_KEY_RE = re.compile(r"secret|password|token|api_key|credential", re.IGNORECASE)
+CONFIG_SECRET_KEY_RE = re.compile(
+    r"secret|passw|pwd|token|api[_-]?key|credential|auth|cookie|bearer|private", re.IGNORECASE
+)
 
 
-def _redact_config(value: Any) -> Any:
-    """Recursively mask secret-looking keys and URL userinfo; stringify paths."""
+def redact_config(value: Any) -> Any:
+    """Recursively mask secret-looking config keys and URL userinfo. Stringify paths."""
     if isinstance(value, dict):
         return {
-            str(k): (REDACTED if v and _CONFIG_SECRET_KEY_RE.search(str(k)) else _redact_config(v))
+            str(k): (REDACTED if v and CONFIG_SECRET_KEY_RE.search(str(k)) else redact_config(v))
             for k, v in value.items()
         }
     if isinstance(value, (list, tuple)):
-        return [_redact_config(v) for v in value]
+        return [redact_config(v) for v in value]
     if isinstance(value, Path):
         return str(value)
     if isinstance(value, str) and "@" in value:
@@ -1510,18 +2926,14 @@ def _redact_config(value: Any) -> Any:
 
 
 async def profiles_handler(request: Optional[web.Request] = None) -> web.Response:
-    """Handle list credential profiles request."""
+    """Answer the request for the credential profiles."""
     try:
         allowed = get_allowed_services(request)
         profiles: Dict[str, List[str]] = {}
         for service, creds in (config.credentials or {}).items():
-            # a plain (non-dict) credential is unnamed; that service is omitted entirely
             if not isinstance(creds, dict):
                 continue
-            try:
-                tag = Services.get_tag(service)
-            except Exception:
-                tag = service
+            tag = Services.get_tag(str(service))
             if allowed is not None and tag not in allowed:
                 continue
             profiles[tag] = sorted(str(name) for name in creds)
@@ -1536,7 +2948,7 @@ async def profiles_handler(request: Optional[web.Request] = None) -> web.Respons
 
 
 async def server_config_handler(request: Optional[web.Request] = None) -> web.Response:
-    """Handle read-only effective server config request (secrets redacted)."""
+    """Answer the read-only effective server config request (secrets redacted)."""
     from unshackle.core.api.download_manager import get_download_manager
 
     try:
@@ -1548,23 +2960,30 @@ async def server_config_handler(request: Optional[web.Request] = None) -> web.Re
             service_tags = [t for t in service_tags if t in allowed]
 
         payload = {
-            "dl": _redact_config(config.dl),
+            "dl": redact_config(config.dl),
             "serve": {
                 "max_concurrent_downloads": manager.max_concurrent_downloads,
                 "job_retention_hours": manager.job_retention_hours,
                 "history_limit": int(serve_cfg.get("history_limit", 100)),
                 "services": serve_cfg.get("services") or None,
                 "remote_only": bool(serve_cfg.get("remote_only", False)),
-                "cdm_overrides": _redact_config(serve_cfg.get("cdm_overrides")),
+                "cdm_overrides": redact_config(serve_cfg.get("cdm_overrides")),
                 "allow_job_credentials": bool(serve_cfg.get("allow_job_credentials", False)),
-            },
-            "directories": {
-                "downloads": str(config.directories.downloads),
-                "temp": str(config.directories.temp),
-                "cache": str(config.directories.cache),
+                "server_accounts": {
+                    tag: server_account_regions(tag)
+                    for tag in (serve_cfg.get("server_accounts") or {})
+                    if server_accounts_allowed(request, tag)
+                }
+                or None,
             },
             "services": service_tags,
         }
+        if is_admin(request):
+            payload["directories"] = {
+                "downloads": str(config.directories.downloads),
+                "temp": str(config.directories.temp),
+                "cache": str(config.directories.cache),
+            }
         return web.json_response({"config": payload})
 
     except APIError:
@@ -1576,8 +2995,8 @@ async def server_config_handler(request: Optional[web.Request] = None) -> web.Re
 
 
 async def download_history_handler(data: Dict[str, Any], request: Optional[web.Request] = None) -> web.Response:
-    """Handle persisted download history request."""
-    from unshackle.core.api.download_manager import read_job_history
+    """Answer the persisted download history request."""
+    from unshackle.core.api.download_manager import owner_id, read_job_history
 
     try:
         limit = 100
@@ -1594,11 +3013,10 @@ async def download_history_handler(data: Dict[str, Any], request: Optional[web.R
 
         allowed = get_allowed_services(request)
         if allowed is None:
-            history = read_job_history(limit=limit, service=data.get("service"))
+            history = read_job_history(limit=limit, service=data.get("service"), owner=owner_id(caller_key(request)))
         else:
-            # Read unbounded, drop entries outside the caller's allowlist, then apply limit.
             allowed_upper = {a.upper() for a in allowed}
-            entries = read_job_history(limit=0, service=data.get("service"))
+            entries = read_job_history(limit=0, service=data.get("service"), owner=owner_id(caller_key(request)))
             history = [e for e in entries if str(e.get("service") or "").upper() in allowed_upper][:limit]
         return web.json_response({"history": history, "count": len(history)})
 
@@ -1612,12 +3030,12 @@ async def download_history_handler(data: Dict[str, Any], request: Optional[web.R
 
 async def delete_history_handler(job_id: str, request: Optional[web.Request] = None) -> web.Response:
     """Delete one persisted history entry by job_id."""
-    from unshackle.core.api.download_manager import delete_job_history
+    from unshackle.core.api.download_manager import delete_job_history, owner_id
 
     try:
         allowed = get_allowed_services(request)
         allowed_upper = {a.upper() for a in allowed} if allowed is not None else None
-        if not delete_job_history(job_id, allowed=allowed_upper):
+        if not delete_job_history(job_id, allowed=allowed_upper, owner=owner_id(caller_key(request))):
             raise APIError(APIErrorCode.NOT_FOUND, "History entry not found", details={"job_id": job_id})
         return web.Response(status=204)
 
@@ -1629,7 +3047,7 @@ async def delete_history_handler(job_id: str, request: Optional[web.Request] = N
         return handle_api_exception(e, context={"operation": "delete_history"}, debug_mode=debug_mode)
 
 
-def _require_no_active_downloads(operation: str) -> None:
+def require_no_active_downloads(operation: str) -> None:
     """Raise 409 CONFLICT if any job is currently downloading."""
     from unshackle.core.api.download_manager import JobStatus, get_download_manager
 
@@ -1643,11 +3061,12 @@ def _require_no_active_downloads(operation: str) -> None:
 
 
 async def clear_cache_handler(request: Optional[web.Request] = None) -> web.Response:
-    """Handle clear cache directory request."""
+    """Answer the clear cache directory request."""
     from unshackle.commands.env import clear_directory
 
+    require_admin(request)
     try:
-        _require_no_active_downloads("clear cache")
+        require_no_active_downloads("clear cache")
         _, freed_bytes = await asyncio.to_thread(clear_directory, config.directories.cache)
         return web.json_response({"cleared": True, "freed_bytes": freed_bytes})
 
@@ -1660,11 +3079,12 @@ async def clear_cache_handler(request: Optional[web.Request] = None) -> web.Resp
 
 
 async def clear_temp_handler(request: Optional[web.Request] = None) -> web.Response:
-    """Handle clear temp directory request."""
+    """Answer the clear temp directory request."""
     from unshackle.commands.env import clear_directory
 
+    require_admin(request)
     try:
-        _require_no_active_downloads("clear temp")
+        require_no_active_downloads("clear temp")
         _, freed_bytes = await asyncio.to_thread(clear_directory, config.directories.temp)
         return web.json_response({"cleared": True, "freed_bytes": freed_bytes})
 
@@ -1677,20 +3097,15 @@ async def clear_temp_handler(request: Optional[web.Request] = None) -> web.Respo
 
 
 async def refresh_services_handler(request: Optional[web.Request] = None) -> web.Response:
-    """Handle refresh of service repos configured in directories.services."""
-    from unshackle.core.service_repo import is_repo_spec, refresh_repo
+    """Refresh the service repos configured in directories.services and reload the changed services."""
+    from unshackle.core.api.download_manager import busy_services
+    from unshackle.core.api.events import publish_refresh_events
+    from unshackle.core.services import refresh_and_reload
 
+    require_admin(request)
     try:
-        entries = config.directories.services
-        if not isinstance(entries, list):
-            entries = [entries]
-        specs = [e for e in entries if isinstance(e, str) and is_repo_spec(e)]
-
-        repos = []
-        for spec in specs:
-            dest, changes = await asyncio.to_thread(refresh_repo, spec)
-            repos.append({"spec": spec, "updated": dest is not None, "changes": list(changes or [])})
-
+        repos = await asyncio.to_thread(refresh_and_reload, busy_services())
+        publish_refresh_events(repos)
         return web.json_response({"refreshed": all(r["updated"] for r in repos), "repos": repos})
 
     except APIError:
@@ -1701,11 +3116,11 @@ async def refresh_services_handler(request: Optional[web.Request] = None) -> web
         return handle_api_exception(e, context={"operation": "refresh_services"}, debug_mode=debug_mode)
 
 
-_VERSION_RE = re.compile(r"\d+\.\d+(?:\.\d+)*")
+VERSION_RE = re.compile(r"\d+\.\d+(?:\.\d+)*")
 
 
-def _binary_version(path: Any) -> Optional[str]:
-    """Best-effort version probe of a binary; None when nothing parseable."""
+def binary_version(path: Any) -> Optional[str]:
+    """Best-effort version probe of a binary. Returns None when nothing is parseable."""
     import subprocess
 
     for flag in ("--version", "-version"):
@@ -1715,17 +3130,17 @@ def _binary_version(path: Any) -> Optional[str]:
             )
         except (OSError, subprocess.SubprocessError, ValueError):
             return None
-        match = _VERSION_RE.search(proc.stdout or "") or _VERSION_RE.search(proc.stderr or "")
+        match = VERSION_RE.search(proc.stdout or "") or VERSION_RE.search(proc.stderr or "")
         if match:
             return match.group(0)
     return None
 
 
 async def env_check_handler(request: Optional[web.Request] = None) -> web.Response:
-    """Handle environment dependency check request."""
+    """Answer the environment dependency check request."""
     from unshackle.commands.env import get_dependencies
 
-    def _run_checks() -> List[Dict[str, Any]]:
+    def run_checks() -> List[Dict[str, Any]]:
         checks = []
         for dep in get_dependencies():
             binary = dep["binary"]
@@ -1733,14 +3148,14 @@ async def env_check_handler(request: Optional[web.Request] = None) -> web.Respon
                 {
                     "name": dep["name"],
                     "installed": binary is not None,
-                    "version": _binary_version(binary) if binary else None,
+                    "version": binary_version(binary) if binary else None,
                     "required": dep["required"],
                 }
             )
         return checks
 
     try:
-        checks = await asyncio.to_thread(_run_checks)
+        checks = await asyncio.to_thread(run_checks)
         return web.json_response({"checks": checks})
 
     except APIError:
@@ -1751,14 +3166,11 @@ async def env_check_handler(request: Optional[web.Request] = None) -> web.Respon
         return handle_api_exception(e, context={"operation": "env_check"}, debug_mode=debug_mode)
 
 
-# ---------------------------------------------------------------------------
-# Remote-DL Session Handlers
-# ---------------------------------------------------------------------------
-
-
 SESSION_TRANSPORT_KEYS = {
     "service",
     "title_id",
+    "profile",
+    "service_params",
     "season",
     "episode",
     "part",
@@ -1769,36 +3181,179 @@ SESSION_TRANSPORT_KEYS = {
     "cookies",
     "cache",
     "client_region",
+    "proxy_region",
+    "server_cdm",
     "cdm_type",
+    "cdm_security_level",
+    "cdm_relay",
+    "cdm_system_id",
+    "cdm_device_type",
+    "service_config",
     "range_",
     "vcodec",
     "quality",
     "best_available",
+    "dl_params",
 }
 
 
-def _create_service_instance(
+def forwarded_dl_params(data: Dict[str, Any]) -> Dict[str, Any]:
+    """Read the dl track selection that a remote-dl client sends under ``dl_params``.
+
+    Services read these values from ``ctx.parent.params`` to pick the manifests they
+    fetch. They travel in their own object so that they never collide with a service option that
+    has the same name. An absent or malformed value gets the dl default, so an old client that
+    sends no ``dl_params`` gets the same result as a ``dl`` run with no selection flags.
+    ``acodec`` holds codec names or aliases, which become ``Audio.Codec`` members the same way
+    ``dl -a`` converts them; an unknown name is dropped.
+    """
+    raw = data.get("dl_params")
+    if not isinstance(raw, dict):
+        raw = {}
+
+    def str_list(key: str) -> Optional[List[str]]:
+        value = raw.get(key)
+        if isinstance(value, list) and all(isinstance(v, str) for v in value):
+            return list(value)
+        if value is not None:
+            log.warning(f"Ignoring dl_params.{key}: it must be an array of strings")
+        return None
+
+    params: Dict[str, Any] = {}
+    for key in ("lang", "v_lang", "a_lang"):
+        langs = str_list(key)
+        params[key] = langs if langs is not None else list(cast(List[str], DEFAULT_DOWNLOAD_PARAMS[key]))
+    params["acodec"] = []
+    for name in str_list("acodec") or []:
+        try:
+            params["acodec"].extend(AUDIO_CODEC_LIST.convert(name))
+        except click.BadParameter:
+            log.warning(f"Ignoring unknown dl_params.acodec value: {sanitize_log(name)}")
+    params["forced_subs"] = raw.get("forced_subs") is True
+    params["exact_lang"] = raw.get("exact_lang") is True
+    return params
+
+
+MAX_CLIENT_CONFIG_BYTES = 16384
+
+
+def client_config_overlay(
+    service_config: Dict[str, Any], allowed: Iterable[str], supplied: Any
+) -> tuple[Dict[str, Any], bool]:
+    """The service config for a remote session that the client's own device licenses, and whether the client sent an identity.
+
+    Only the ``allowed`` keys come from the client, and a mapping merges its entries over the server's.
+    When the client sends any scalar value (an identity such as an ESN), the server's scalar values for
+    the allowed keys are dropped, so the two identities never mix. With none, the server's stay.
+    """
+    allowed = set(allowed)
+    if supplied is None:
+        supplied = {}
+    if not isinstance(supplied, dict) or len(json.dumps(supplied, default=str)) > MAX_CLIENT_CONFIG_BYTES:
+        raise APIError(
+            APIErrorCode.INVALID_INPUT, f"service_config must be an object under {MAX_CLIENT_CONFIG_BYTES} bytes"
+        )
+
+    def scalar(value: Any) -> bool:
+        return isinstance(value, str) or is_whole_number(value)
+
+    for key, value in supplied.items():
+        if key in allowed and not scalar(value) and not (isinstance(value, dict) and all(map(scalar, value.values()))):
+            raise APIError(
+                APIErrorCode.INVALID_INPUT,
+                f"service_config.{key} must be a string, a whole number, or an object of them",
+            )
+    identity = any(key in allowed and scalar(value) for key, value in supplied.items())
+    merged = {k: v for k, v in service_config.items() if not identity or k not in allowed or isinstance(v, dict)}
+    for key, value in supplied.items():
+        if key not in allowed:
+            log.warning(f"Ignoring service_config.{sanitize_log(str(key))}: the service does not take it from a client")
+        elif isinstance(value, dict):
+            existing = merged.get(key)
+            base = existing if isinstance(existing, dict) else {}
+            merged[key] = {**{k: v for k, v in base.items() if str(k) not in value}, **value}
+        else:
+            merged[key] = value
+    return merged, identity
+
+
+def client_device_cdm(
+    data: Dict[str, Any], input_bridge: Optional[InputBridge], server_device: Optional[Callable[[], Any]] = None
+) -> Any:
+    """The service's view of the client's device: a relaying stand-in when the client can answer CDM calls."""
+    from unshackle.core.cdm.client_relay import ClientDeviceCdm
+
+    level = data.get("cdm_security_level")
+    level = level if is_whole_number(level) else None
+    if not (data.get("cdm_relay") is True and input_bridge is not None):
+        return cdm_type_stub(str(data.get("cdm_type")), level)
+
+    from pywidevine import DeviceTypes
+
+    system_id = data.get("cdm_system_id")
+    device_type = data.get("cdm_device_type")
+    if device_type is not None and device_type not in DeviceTypes.__members__:
+        raise APIError(
+            APIErrorCode.INVALID_INPUT, f"cdm_device_type must be one of {', '.join(DeviceTypes.__members__)}"
+        )
+    return ClientDeviceCdm(
+        input_bridge,
+        server_device=server_device,
+        is_playready=data.get("cdm_type") == "playready",
+        security_level=level,
+        system_id=system_id if is_whole_number(system_id) else None,
+        device_type=DeviceTypes[device_type] if device_type else None,
+    )
+
+
+def create_service_instance(
     normalized_service: str,
     title_id: str,
     data: Dict[str, Any],
     proxy_param: Optional[str],
     proxy_providers: list,
     profile: Optional[str],
+    server_account: bool = False,
+    server_cdm: bool = False,
+    client_device: bool = False,
+    input_bridge: Optional[InputBridge] = None,
 ) -> Any:
-    """Create and authenticate a service instance.
+    """Make a service instance and resolve its credentials and cookies.
 
-    Supports client-sent credentials/cookies (for remote-dl) with fallback
-    to server-local config (for backward compatibility).
+    With ``client_device`` the service sees a stand-in for the client's device, which relays CDM calls
+    through ``input_bridge`` when the client can answer them, and a config holding the client's own identity.
+
+    With ``server_account`` the service takes the server's own credential and cookie file for
+    ``profile`` and drops anything the client sent. Otherwise only client-sent data counts: a
+    client that sends nothing authenticates with nothing, because the server never lends its
+    own accounts.
     """
     from unshackle.commands.dl import dl
     from unshackle.core.credential import Credential
     from unshackle.core.tracks import Video
 
-    service_config = load_service_yaml(normalized_service)
-    cdm = load_full_cdm(normalized_service, profile, data.get("cdm_type"))
+    server_config = service_config = load_service_yaml(normalized_service)
+    service_module = Services.load(normalized_service)
+    cdm: Any
+    client_identity = False
+    if client_device:
+        client_config = getattr(service_module, "CLIENT_CONFIG", ())
+        if client_config:
+            service_config, client_identity = client_config_overlay(
+                server_config, client_config, data.get("service_config")
+            )
 
-    # Reconstruct enum track-selection params from client data so service code that reads
-    # ctx.parent.params (Service.__init__ proxy/range/vcodec/best_available block) sees enums.
+        def lend_server_device() -> Any:
+            """The server's device, with the server's own config back in the dict the service holds as ``self.config``."""
+            if service_config is not server_config:
+                service_config.clear()
+                service_config.update(server_config)
+            return load_full_cdm(normalized_service, profile, None)
+
+        cdm = client_device_cdm(data, input_bridge, lend_server_device)
+    else:
+        cdm = load_full_cdm(normalized_service, profile, None if server_cdm else data.get("cdm_type"))
+
     range_names = data.get("range_")
     range_values: Optional[list] = None
     if range_names:
@@ -1810,23 +3365,34 @@ def _create_service_instance(
                 pass
         range_values = range_values or None
 
-    vcodec_names = data.get("vcodec")
-    vcodec_values: Optional[list] = None
-    if vcodec_names:
-        vcodec_values = []
-        for name in vcodec_names:
-            try:
-                vcodec_values.append(Video.Codec[name])
-            except KeyError:
-                pass
-        vcodec_values = vcodec_values or None
+    vcodec_values = resolve_vcodec(data.get("vcodec"))
 
     extra_params = {
         "range_": range_values,
         "vcodec": vcodec_values,
         "quality": data.get("quality"),
         "best_available": data.get("best_available", False),
+        **forwarded_dl_params(data),
     }
+
+    if server_account:
+        cookies = server_account_cookies(normalized_service, profile)
+        credential = dl.get_credentials(normalized_service, profile)
+    else:
+        credential = None
+        cred_data = data.get("credentials")
+        if cred_data and isinstance(cred_data, dict):
+            credential = Credential(
+                username=cred_data["username"],
+                password=cred_data["password"],
+                extra=cred_data.get("extra"),
+            )
+        cookies = load_client_cookies(data.get("cookies"))
+
+    extra_params["cookies_supplied"] = cookies is not None
+    extra_params["client_device"] = client_device
+    extra_params["client_identity"] = client_identity
+    extra_params["profile"] = profile
 
     parent_ctx = build_parent_ctx(
         profile,
@@ -1838,56 +3404,23 @@ def _create_service_instance(
         extra_params=extra_params,
     )
 
-    service_module = Services.load(normalized_service)
     service_instance = instantiate_service(parent_ctx, service_module, title_id, data, SESSION_TRANSPORT_KEYS)
-
-    # Resolve credentials: client-sent > server-local
-    cred_data = data.get("credentials")
-    if cred_data and isinstance(cred_data, dict):
-        credential = Credential(
-            username=cred_data["username"],
-            password=cred_data["password"],
-            extra=cred_data.get("extra"),
-        )
-    else:
-        credential = dl.get_credentials(normalized_service, profile)
-
-    # Resolve cookies: client-sent > server-local
-    cookie_text = data.get("cookies")
-    if cookie_text and isinstance(cookie_text, str):
-        import base64
-        import tempfile
-        from http.cookiejar import MozillaCookieJar
-
-        cookie_str = safe_inflate(base64.b64decode(cookie_text)).decode("utf-8")
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False, encoding="utf-8") as f:
-            f.write(cookie_str)
-            tmp_path = f.name
-        try:
-            cookies = MozillaCookieJar(tmp_path)
-            cookies.load(ignore_discard=True, ignore_expires=True)
-        finally:
-            import os
-
-            os.unlink(tmp_path)
-    else:
-        cookies = dl.get_cookie_jar(normalized_service, profile)
 
     return service_instance, cookies, credential
 
 
 async def session_create_handler(data: Dict[str, Any], request: Optional[web.Request] = None) -> web.Response:
-    """Handle session creation: authenticate + get titles + get tracks + get chapters.
+    """Answer the remote session creation: authenticate + get titles + get tracks + get chapters.
 
     This is the main entry point for remote-dl clients. It creates a persistent
-    session on the server with the authenticated service instance, fetches all
+    remote session on the server with the authenticated service instance, fetches all
     titles and tracks, and returns everything the client needs for track selection.
     """
     from unshackle.core.api.session_store import get_session_store
 
     service_tag = data.get("service")
     title_id = data.get("title_id")
-    profile = data.get("profile")
+    profile = client_profile(data)
 
     if not service_tag:
         raise APIError(APIErrorCode.INVALID_INPUT, "Missing required parameter: service")
@@ -1903,45 +3436,64 @@ async def session_create_handler(data: Dict[str, Any], request: Optional[web.Req
         )
 
     try:
-        proxy_param, proxy_providers = _resolve_handler_proxy(data, normalized_service)
+        proxy_param, proxy_providers = await asyncio.to_thread(resolve_handler_proxy, data, normalized_service, request)
 
-        import hashlib
         import uuid as uuid_mod
-
-        from unshackle.core.cacher import Cacher
-        from unshackle.core.config import config as app_config
 
         session_id = str(uuid_mod.uuid4())
         api_key = request.headers.get("X-Secret-Key", "anonymous") if request else "anonymous"
-        api_key_hash = hashlib.pbkdf2_hmac("sha256", api_key.encode(), b"unshackle-session-ns", 100_000).hex()[:12]
-        session_cache_tag = f"_sessions/{api_key_hash}/{session_id}/{normalized_service}"
+        session_cache_dir = f"_sessions/{api_key_namespace(request)}/{session_id}/{normalized_service}"
+        session_cache_tag: Optional[str] = session_cache_dir
 
-        service_instance, cookies, credential = _create_service_instance(
-            normalized_service,
-            title_id,
-            data,
-            proxy_param,
-            proxy_providers,
-            profile,
+        server_account = server_account_for(request, normalized_service)
+        if server_account:
+            region = data.get("proxy_region") or data.get("client_region")
+            if region is not None and not (isinstance(region, str) and re.fullmatch(r"[A-Za-z]{2}", region)):
+                raise APIError(APIErrorCode.INVALID_INPUT, "proxy_region must be a two-letter country code.")
+            if region is None and data.get("no_proxy"):
+                region = await asyncio.to_thread(server_region)
+            profile = next_server_profile(normalized_service, region)
+            log.info(f"Using server account '{sanitize_log(profile or 'default')}' for {normalized_service}")
+
+        use_server_cdm, max_height = choose_session_cdm(request, normalized_service, data)
+        client_device = (
+            not use_server_cdm
+            and bool(data.get("cdm_type"))
+            and (max_height is not None or data.get("cdm_relay") is True)
         )
+        bridge = InputBridge()
+        log_buffer = None if server_account else SessionLogBuffer()
+        service_class_name = getattr(Services.load(normalized_service), "__name__", normalized_service)
 
-        service_instance.cache = Cacher(session_cache_tag)
+        def build_service() -> Any:
+            with capture_service_logs(service_class_name, log_buffer):
+                return create_service_instance(
+                    normalized_service,
+                    title_id,
+                    data,
+                    proxy_param,
+                    proxy_providers,
+                    profile,
+                    server_account=server_account,
+                    server_cdm=use_server_cdm,
+                    client_device=client_device,
+                    input_bridge=bridge,
+                )
+
+        service_instance, cookies, credential = await asyncio.to_thread(build_service)
+        if log_buffer:
+            service_instance.log = SessionLogMirror(service_instance.log, log_buffer)
+
+        if server_account:
+            session_cache_tag = None
+            service_instance.cache = Cacher(f"_accounts/{normalized_service}/{profile or 'default'}")
+        else:
+            service_instance.cache = Cacher(session_cache_dir)
 
         cache_data = data.get("cache", {})
-        if cache_data:
-            import base64
+        if cache_data and session_cache_tag:
+            write_client_cache(cache_data, session_cache_tag)
 
-            cache_dir = app_config.directories.cache / session_cache_tag
-            cache_dir.mkdir(parents=True, exist_ok=True)
-            for key, content in cache_data.items():
-                safe_name = safe_cache_key(key)
-                if not safe_name:
-                    log.warning(f"Rejecting unsafe session cache key: {sanitize_log(key)}")
-                    continue
-                decompressed = safe_inflate(base64.b64decode(content)).decode("utf-8")
-                (cache_dir / safe_name).with_suffix(".json").write_text(decompressed, encoding="utf-8")
-
-        bridge = InputBridge()
         service_instance._input_bridge = bridge
 
         store = get_session_store()
@@ -1949,31 +3501,53 @@ async def session_create_handler(data: Dict[str, Any], request: Optional[web.Req
             normalized_service,
             service_instance,
             session_id=session_id,
+            owner_key=api_key,
+            creator_ip=request.remote if request else None,
+            server_account=(profile or "default") if server_account else None,
         )
-        session.creator_ip = request.remote if request else None
-        session.owner_key = api_key
         session.cache_tag = session_cache_tag
+        session.server_cdm = use_server_cdm
+        session.server_cdm_max_height = max_height
+        session.server_vault = client_device and server_vault_allowed(request, normalized_service)
+        stand_in = getattr(getattr(getattr(service_instance, "ctx", None), "obj", None), "cdm", None)
+        session.server_device = getattr(stand_in, "lent", False) is True
+        session.client_auth = not server_account and (
+            cookies is not None or credential is not None or bool(cache_data and session_cache_tag)
+        )
+        if isinstance(data.get("client"), dict) and len(json.dumps(data["client"], default=str)) <= 4096:
+            session.client = data["client"]
         session.input_bridge = bridge
+        session.log_buffer = log_buffer
         session.auth_status = AuthStatus.AUTHENTICATING
 
-        async def _run_auth() -> None:
+        async def run_auth() -> None:
             try:
                 await asyncio.to_thread(service_instance.authenticate, cookies, credential)
+                if not server_account:
+                    session.client_auth = True
                 session.auth_status = AuthStatus.AUTHENTICATED
                 bridge.status = AuthStatus.AUTHENTICATED
             except (Exception, SystemExit) as e:
                 log.exception("Auth failed for session %s", session_id)
                 session.auth_status = AuthStatus.FAILED
-                session.auth_error = str(e)
+                session.auth_error = redact_secrets(str(e))
                 bridge.status = AuthStatus.FAILED
+            finally:
+                if store.peek(session_id) is not session:
+                    SessionStore.cleanup_cache_dir(session_cache_tag)
 
-        asyncio.create_task(_run_auth())
+        asyncio.create_task(run_auth())
 
         return web.json_response(
             {
                 "session_id": session.session_id,
                 "service": normalized_service,
                 "status": "authenticating",
+                "server_account": server_account,
+                "server_cdm": use_server_cdm,
+                "server_cdm_max_height": max_height,
+                "server_vault": session.server_vault,
+                "server_device": session.server_device,
             }
         )
 
@@ -1990,31 +3564,32 @@ async def session_create_handler(data: Dict[str, Any], request: Optional[web.Req
 
 
 async def session_titles_handler(session_id: str, request: Optional[web.Request] = None) -> web.Response:
-    """Get titles for the authenticated session.
+    """Get titles for the authenticated remote session.
 
-    Called after session/create. This is separate from auth so that
-    interactive auth flows (OTP, captcha) can complete before titles
-    are fetched.
+    Called after `session/create`. This is separate from auth so that
+    interactive auth flows (OTP, captcha) can complete before the server
+    fetches titles.
     """
-    session = await _get_validated_session(session_id, request)
-    _require_authenticated(session)
+    session = await get_validated_session(session_id, request)
+    require_authenticated(session)
 
     try:
         service_instance = session.service_instance
-        titles = service_instance.get_titles()
+        async with session.lock:
+            try:
+                titles = await asyncio.to_thread(service_instance.get_titles)
+            finally:
+                session.touch()
         session.titles = titles
 
-        # Serialize titles and build title map
-        if hasattr(titles, "__iter__") and not isinstance(titles, str):
-            titles_list = list(titles)
-        else:
-            titles_list = [titles]
+        titles_list = listed_titles(titles)
 
         serialized_titles = []
         for t in titles_list:
             tid = str(t.id) if hasattr(t, "id") else str(id(t))
             session.title_map[tid] = t
-            serialized_titles.append(_stamp_service_flags(serialize_title(t), service_instance))
+            serialized_titles.append(stamp_service_flags(serialize_title(t), service_instance))
+        SessionStore.publish_update(session)
 
         return web.json_response(
             {
@@ -2033,17 +3608,67 @@ async def session_titles_handler(session_id: str, request: Optional[web.Request]
         )
 
 
+def client_session_auth(session: Any) -> tuple[Dict[str, str], Dict[str, str]]:
+    """The service session headers and cookies a remote client may receive.
+
+    A client whose own login succeeded gets them back. For a server account the cookie jar
+    stays on the server and the server drops the auth-bearing headers, so the client cannot
+    reuse a login the server paid for. A remote session on the server's lent device keeps its cookies (the client's account)
+    but drops those headers too.
+    """
+    svc_session = session.service_instance.session
+    headers = dict(svc_session.headers) if hasattr(svc_session, "headers") and svc_session.headers else {}
+    cookies: Dict[str, str] = {}
+    if hasattr(svc_session, "cookies"):
+        for cookie in svc_session.cookies:
+            if hasattr(cookie, "name") and hasattr(cookie, "value"):
+                cookies[cookie.name] = cookie.value
+    if not client_owns_login(session):
+        headers = {k: v for k, v in headers.items() if not CONFIG_SECRET_KEY_RE.search(str(k))}
+    if not session.client_auth:
+        cookies = {}
+    return headers, cookies
+
+
+def client_owns_login(session: Any) -> bool:
+    """Whether the login state of ``session`` is the client's to take back.
+
+    A remote session on the server's lent device logs in with the server's device identity, so its tokens stay there.
+    """
+    return bool(session.client_auth) and not getattr(session, "server_device", False)
+
+
+def scrub_secret_keys(value: Any) -> Any:
+    """``value`` without any dict entry, at any depth, whose key looks like a secret."""
+    if isinstance(value, dict):
+        return {k: scrub_secret_keys(v) for k, v in value.items() if not CONFIG_SECRET_KEY_RE.search(str(k))}
+    if isinstance(value, list):
+        return [scrub_secret_keys(v) for v in value]
+    return value
+
+
+def scrub_track_data(data: Optional[Dict[str, Any]], session: Any) -> Optional[Dict[str, Any]]:
+    """Drop secret-looking keys, at any depth, from a serialised ``track.data`` when the login is the server's.
+
+    A service can stash a token in ``track.data`` for its license call; under the same rule as
+    :func:`client_session_auth` that token never reaches a client that did not log in itself.
+    """
+    if not data or client_owns_login(session):
+        return data
+    return scrub_secret_keys(data) or None
+
+
 async def session_tracks_handler(
     data: Dict[str, Any], session_id: str, request: Optional[web.Request] = None
 ) -> web.Response:
-    """Get tracks and chapters for a specific title in the session.
+    """Get tracks and chapters for a specific title in the remote session.
 
-    Called per-title by the client after session/create returns titles.
+    Called per-title by the client after `session/create` returns titles.
     This keeps auth separate from track fetching, allowing interactive
-    auth flows (OTP, captcha) before any tracks are requested.
+    auth flows (OTP, captcha) before the client requests any tracks.
     """
-    session = await _get_validated_session(session_id, request)
-    _require_authenticated(session)
+    session = await get_validated_session(session_id, request)
+    require_authenticated(session)
 
     title_id = data.get("title_id")
     if not title_id:
@@ -2057,50 +3682,53 @@ async def session_tracks_handler(
             details={"available_titles": list(session.title_map.keys())},
         )
 
+    session.current_title_id = str(title_id)
+    SessionStore.publish_update(session)
+
     try:
         service_instance = session.service_instance
-        tracks = service_instance.get_tracks(title)
+        async with session.lock:
+            try:
+                tracks = await asyncio.to_thread(service_instance.get_tracks, title)
+            finally:
+                session.touch()
 
-        title_tracks: Dict[str, Any] = {}
-        for track in tracks.videos:
-            title_tracks[str(track.id)] = track
-            session.tracks[str(track.id)] = track
-        for track in tracks.audio:
-            title_tracks[str(track.id)] = track
-            session.tracks[str(track.id)] = track
-        for track in tracks.subtitles:
-            title_tracks[str(track.id)] = track
-            session.tracks[str(track.id)] = track
-        session.tracks_by_title[str(title_id)] = title_tracks
+            title_tracks: Dict[str, Any] = {}
+            for track in tracks.videos:
+                title_tracks[str(track.id)] = track
+                session.tracks[str(track.id)] = track
+            for track in tracks.audio:
+                title_tracks[str(track.id)] = track
+                session.tracks[str(track.id)] = track
+            for track in tracks.subtitles:
+                title_tracks[str(track.id)] = track
+                session.tracks[str(track.id)] = track
+            session.tracks_by_title[str(title_id)] = title_tracks
+            SessionStore.publish_update(session)
 
-        try:
-            chapters = service_instance.get_chapters(title)
-            session.chapters_by_title[str(title_id)] = chapters if chapters else []
-        except (NotImplementedError, Exception):
-            session.chapters_by_title[str(title_id)] = []
+            try:
+                chapters = await asyncio.to_thread(service_instance.get_chapters, title)
+                session.chapters_by_title[str(title_id)] = chapters if chapters else []
+            except (NotImplementedError, Exception):
+                session.chapters_by_title[str(title_id)] = []
 
-        video_tracks = sorted(tracks.videos, key=lambda t: t.bitrate or 0, reverse=True)
-        audio_tracks = sorted(tracks.audio, key=lambda t: t.bitrate or 0, reverse=True)
+            video_tracks = sorted(tracks.videos, key=lambda t: t.bitrate or 0, reverse=True)
+            audio_tracks = sorted(tracks.audio, key=lambda t: t.bitrate or 0, reverse=True)
 
-        manifests = _extract_manifests(tracks)
+            manifests = extract_manifests(tracks)
+            track_manifests = extract_track_manifests(tracks)
 
-        svc_session = session.service_instance.session
-        session_headers = dict(svc_session.headers) if hasattr(svc_session, "headers") else {}
-        session_cookies = {}
-        if hasattr(svc_session, "cookies"):
-            for cookie in svc_session.cookies:
-                if hasattr(cookie, "name") and hasattr(cookie, "value"):
-                    session_cookies[cookie.name] = cookie.value
+            session_headers, session_cookies = client_session_auth(session)
 
         from unshackle.core.config import config as app_config
 
         api_key = request.headers.get("X-Secret-Key", "anonymous") if request else "anonymous"
-        user_cfg = app_config.serve.get("users", {}).get(api_key, {})
+        user_cfg = serve_user_config(api_key)
         has_wv = bool(user_cfg.get("devices"))
         has_pr = bool(user_cfg.get("playready_devices"))
 
         service_tag = session.service_tag
-        config_cdm_type = _detect_cdm_type_for_service(service_tag, app_config)
+        config_cdm_type = detect_cdm_type_for_service(service_tag, app_config)
 
         track_has_wv = any(
             d.__class__.__name__ == "Widevine" for t in list(tracks.videos) + list(tracks.audio) if t.drm for d in t.drm
@@ -2124,28 +3752,28 @@ async def session_tracks_handler(
             server_cdm_type = "playready"
 
         original_ids = original_audio_ids(audio_tracks, title)
+        video = [serialize_video_track(t, include_url=True) for t in video_tracks]
+        audio = [serialize_audio_track(t, include_url=True, is_original=t.id in original_ids) for t in audio_tracks]
+        subtitles = [serialize_subtitle_track(t, include_url=True) for t in tracks.subtitles]
+        for d in video + audio + subtitles:
+            d["data"] = scrub_track_data(d.get("data"), session)
 
         return web.json_response(
             {
-                "title": serialize_title(title),
-                "video": [serialize_video_track(t, include_url=True) for t in video_tracks],
-                "audio": [
-                    serialize_audio_track(t, include_url=True, is_original=t.id in original_ids) for t in audio_tracks
-                ],
-                "subtitles": [serialize_subtitle_track(t, include_url=True) for t in tracks.subtitles],
+                "title": stamp_service_flags(serialize_title(title), service_instance),
+                "video": video,
+                "audio": audio,
+                "subtitles": subtitles,
                 "chapters": [
                     {"timestamp": ch.timestamp, "name": ch.name}
                     for ch in session.chapters_by_title.get(str(title_id), [])
                 ],
-                "attachments": [
-                    {"url": a.url, "name": a.name, "mime_type": a.mime_type, "description": a.description}
-                    for a in tracks.attachments
-                    if hasattr(a, "url") and a.url
-                ],
+                "attachments": [a for a in map(serialize_attachment, tracks.attachments) if a],
                 "manifests": manifests,
+                "track_manifests": track_manifests,
                 "session_headers": session_headers,
                 "session_cookies": session_cookies,
-                "server_cdm": server_cdm_allowed(request),
+                "server_cdm": session.server_cdm,
                 "server_cdm_type": server_cdm_type,
             }
         )
@@ -2163,13 +3791,14 @@ async def session_tracks_handler(
 async def session_segments_handler(
     data: Dict[str, Any], session_id: str, request: Optional[web.Request] = None
 ) -> web.Response:
-    """Resolve segment URLs for selected tracks.
+    """Get segment URLs for selected tracks.
 
     The client calls this after selecting which tracks to download.
     Returns segment URLs, init data, DRM info, and any headers/cookies
     needed for CDN download.
     """
-    session = await _get_validated_session(session_id, request)
+    session = await get_validated_session(session_id, request)
+    require_authenticated(session)
 
     track_ids = data.get("track_ids", [])
     if not track_ids:
@@ -2195,32 +3824,12 @@ async def session_segments_handler(
                 "drm": serialize_drm(track.drm) if hasattr(track, "drm") and track.drm else None,
             }
 
-            # Extract session headers/cookies for CDN access
-            service_session = session.service_instance.session
-            if hasattr(service_session, "headers"):
-                # Only include relevant headers, not all session headers
-                headers = dict(service_session.headers) if service_session.headers else {}
-                track_info["headers"] = headers
-            else:
-                track_info["headers"] = {}
+            track_info["headers"], track_info["cookies"] = client_session_auth(session)
 
-            if hasattr(service_session, "cookies"):
-                cookie_dict = {}
-                for cookie in service_session.cookies:
-                    if hasattr(cookie, "name") and hasattr(cookie, "value"):
-                        cookie_dict[cookie.name] = cookie.value
-                    elif isinstance(cookie, str):
-                        pass  # Skip non-standard cookie objects
-                track_info["cookies"] = cookie_dict
-            else:
-                track_info["cookies"] = {}
-
-            # Include manifest-specific data for segment resolution. Round-trip through
-            # JSON so any non-serializable value becomes its str() (default=str).
             if hasattr(track, "data") and track.data:
                 import json
 
-                track_info["data"] = json.loads(json.dumps(track.data, default=str))
+                track_info["data"] = scrub_track_data(json.loads(json.dumps(track.data, default=str)), session)
             else:
                 track_info["data"] = {}
 
@@ -2240,22 +3849,17 @@ async def session_segments_handler(
         )
 
 
-def _cdm_type_stub(cdm_type: str) -> SimpleNamespace:
-    """Lightweight CDM stand-in so ``is_playready_cdm()`` (reads ``.is_playready``)
-    can detect the type without loading a full CDM."""
-    return SimpleNamespace(is_playready=cdm_type == "playready")
-
-
-def _resolve_server_cdm(service: str, profile: Optional[str], cdm_type: Optional[str]) -> Optional[Any]:
-    """Resolve CDM for the server context.
+def resolve_server_cdm(service: str, profile: Optional[str], cdm_type: Optional[str]) -> Optional[Any]:
+    """Get the CDM for the server context.
 
     Checks the server's own CDM config (``config.cdm[service]``) to
     determine the CDM type without loading the full CDM object. This
-    ensures that when ``server_cdm: true`` is used, the server's CDM
-    determines device selection (e.g. PlayReady vs Widevine).
+    makes sure that when you use ``server_cdm: true``, the server's CDM
+    determines device selection (e.g. PlayReady vs Widevine). An entry with
+    ``widevine`` and ``playready`` gives the DRM system that it lists first.
 
-    Falls back to a lightweight stub from *cdm_type* only if no server
-    CDM is configured for the service.
+    Falls back to a lightweight stub from *cdm_type* only if the configuration
+    has no server CDM for the service.
     """
     from unshackle.core.config import config as app_config
 
@@ -2264,37 +3868,58 @@ def _resolve_server_cdm(service: str, profile: Optional[str], cdm_type: Optional
         if isinstance(cdm_name, dict):
             lower_keys = {k.lower(): v for k, v in cdm_name.items()}
             if {"widevine", "playready"} & lower_keys.keys():
-                cdm_name = lower_keys.get("playready") or lower_keys.get("widevine")
+                systems = [lower_keys[key] for key in lower_keys if key in ("widevine", "playready")]
+                cdm_name = next(filter(None, systems), None)
             else:
                 cdm_name = cdm_name.get("default") or next(iter(cdm_name.values()), None)
 
         if cdm_name and isinstance(cdm_name, str):
-            detected_type = _detect_cdm_type(cdm_name, app_config)
+            detected_type = detect_cdm_type(cdm_name, app_config)
             if detected_type:
-                return _cdm_type_stub(detected_type)
+                return cdm_type_stub(detected_type)
 
     if cdm_type:
-        return _cdm_type_stub(cdm_type)
+        return cdm_type_stub(cdm_type)
     return None
 
 
-def _detect_cdm_type_for_service(service: str, app_config: Any) -> Optional[str]:
-    """Detect the CDM type configured for a service in config.cdm."""
-    cdm_name = ci_get(app_config.cdm, service)
-    if not cdm_name:
-        return None
+def configured_cdm_name(service: str, drm_type: str, app_config: Any) -> Optional[str]:
+    """The device name config.cdm maps a service to for one DRM system; None when the tier decides.
+
+    A dict names a device per system (``widevine`` / ``playready`` keys) or a ``default``.
+    Any other dict shape, such as the quality tiers ``dl`` reads, falls through to the
+    global ``cdm.default``: the server has no track context to pick a tier with.
+    """
+    cdm_name = ci_get(app_config.cdm, service) if service else None
     if isinstance(cdm_name, dict):
         lower_keys = {k.lower(): v for k, v in cdm_name.items()}
-        if {"widevine", "playready"} & lower_keys.keys():
-            return "playready" if "playready" in lower_keys else "widevine"
-        cdm_name = cdm_name.get("default") or next(iter(cdm_name.values()), None)
+        drm_key = drm_type if drm_type in ("widevine", "playready") else None
+        cdm_name = lower_keys.get(drm_key) or lower_keys.get("default") or ci_get(app_config.cdm, "default")
     if cdm_name and isinstance(cdm_name, str):
-        return _detect_cdm_type(cdm_name, app_config)
+        return cdm_name
     return None
 
 
-def _detect_cdm_type(cdm_name: str, app_config: Any) -> Optional[str]:
-    """Detect CDM type (playready/widevine) from config without loading it.
+def detect_cdm_type_for_service(service: str, app_config: Any) -> Optional[str]:
+    """The DRM system config.cdm settles for a service; None when the mapping leaves it open.
+
+    A mapping that names one system gets that system. A device name gets the type of the
+    device ``resolve_device_name`` returns for it, so the routes plan with the device they
+    load. A mapping that names a device for both systems settles nothing.
+    """
+    cdm_name = ci_get(app_config.cdm, service)
+    if isinstance(cdm_name, dict):
+        named = [system for system in ("widevine", "playready") if system in {k.lower() for k in cdm_name}]
+        if named:
+            return named[0] if len(named) == 1 else None
+    device_name = configured_cdm_name(service, "widevine", app_config)
+    if device_name:
+        return detect_cdm_type(device_name, app_config)
+    return None
+
+
+def detect_cdm_type(cdm_name: str, app_config: Any) -> Optional[str]:
+    """Detect CDM type (PlayReady/widevine) from config without loading it.
 
     Checks remote_cdm entries and local file extensions to determine the type.
     """
@@ -2316,28 +3941,36 @@ def _detect_cdm_type(cdm_name: str, app_config: Any) -> Optional[str]:
     return None
 
 
-def _require_authenticated(session: Any) -> None:
-    """Raise if the session has not finished authenticating."""
-    if session.auth_status == AuthStatus.FAILED:
+def require_authenticated(session: Any) -> None:
+    """Raise if the remote session has not finished authenticating."""
+    status = getattr(session, "auth_status", None)
+    if status == AuthStatus.FAILED:
         raise APIError(
             APIErrorCode.AUTH_FAILED,
             f"Authentication failed: {session.auth_error or 'unknown error'}",
         )
-    if session.auth_status in (AuthStatus.AUTHENTICATING, AuthStatus.PENDING_INPUT):
+    if status in (AuthStatus.AUTHENTICATING, AuthStatus.PENDING_INPUT):
         raise APIError(
             APIErrorCode.INVALID_INPUT,
-            f"Session authentication not complete (status: {session.auth_status.value})",
-            details={"auth_status": session.auth_status.value},
+            f"Session authentication not complete (status: {status.value})",
+            details={"auth_status": status.value},
         )
 
 
 async def session_prompt_get_handler(session_id: str, request: Optional[web.Request] = None) -> web.Response:
-    """Poll for pending interactive prompts during authentication.
+    """Poll for pending interactive prompts during authentication, and for CDM calls at any time.
 
     Returns the current auth status and any pending prompt that the
-    remote client should display to the user.
+    remote client should display to the user. A CDM call comes first, because service code can
+    wait on the client's CDM after authentication too, for example in get_tracks.
     """
-    session = await _get_validated_session(session_id, request)
+    session = await get_validated_session(session_id, request)
+
+    bridge = session.input_bridge
+    if bridge and (cdm_call := bridge.get_pending_cdm_call()):
+        return web.json_response(
+            {"status": "pending_input", "prompt": bridge.get_pending_prompt(), "cdm_call": cdm_call}
+        )
 
     if session.auth_status == AuthStatus.AUTHENTICATED:
         return web.json_response({"status": "authenticated"})
@@ -2345,7 +3978,6 @@ async def session_prompt_get_handler(session_id: str, request: Optional[web.Requ
     if session.auth_status == AuthStatus.FAILED:
         return web.json_response({"status": "failed", "error": session.auth_error or "unknown error"})
 
-    bridge = session.input_bridge
     if bridge:
         prompt = bridge.get_pending_prompt()
         if prompt:
@@ -2362,7 +3994,7 @@ async def session_prompt_post_handler(
     The remote client calls this after collecting user input (OTP code,
     PIN, or device-code confirmation) to unblock the server auth thread.
     """
-    session = await _get_validated_session(session_id, request)
+    session = await get_validated_session(session_id, request)
 
     response_text = data.get("response")
     if response_text is None:
@@ -2372,12 +4004,33 @@ async def session_prompt_post_handler(
     if bridge is None or bridge.status != AuthStatus.PENDING_INPUT:
         raise APIError(APIErrorCode.INVALID_INPUT, "No prompt pending for this session")
 
-    bridge.submit_response(str(response_text))
+    if not bridge.submit_response(str(response_text)):
+        raise APIError(APIErrorCode.INVALID_INPUT, "No prompt pending for this session")
     return web.json_response({"status": "accepted"})
 
 
-async def _get_validated_session(session_id: str, request: Optional[web.Request]) -> Any:
-    """Fetch a session and verify the caller owns it.
+async def session_logs_handler(session_id: str, since: int = 0, request: Optional[web.Request] = None) -> web.Response:
+    """Drain the remote session's service log records newer than *since*.
+
+    Gives a remote client the service's server-side ``self.log`` output for
+    its own remote session - the reason an auth, title, or manifest step
+    failed. Works in every auth state, because a failed session is exactly
+    when the client needs the logs.
+    """
+    session = await get_validated_session(session_id, request)
+    buffer = session.log_buffer
+    logs = buffer.since(since) if buffer else []
+    return web.json_response(
+        {
+            "session_id": session_id,
+            "logs": logs,
+            "last_seq": logs[-1]["seq"] if logs else since,
+        }
+    )
+
+
+async def get_validated_session(session_id: str, request: Optional[web.Request]) -> Any:
+    """Fetch a remote session and make sure that the caller owns it.
 
     Ownership is bound to the authenticating X-Secret-Key rather than the source IP:
     behind a reverse proxy every caller shares the proxy's address, so the IP check
@@ -2410,40 +4063,94 @@ async def _get_validated_session(session_id: str, request: Optional[web.Request]
     return session
 
 
-def _resolve_handler_proxy(data: Dict[str, Any], normalized_service: str) -> tuple[Optional[str], list]:
-    """Resolve proxy and initialize providers from API request data.
+def resolve_handler_proxy(
+    data: Dict[str, Any], normalized_service: str, request: Optional[web.Request] = None
+) -> tuple[Optional[str], list]:
+    """Get the proxy and the proxy providers for an API request.
 
-    Handles explicit proxy param, provider:country format, and
-    client_region-based auto-proxy when server region differs.
+    ``server_proxy`` on the calling API key decides whether the server spends its own proxy
+    subscriptions on this client. Without it the proxy-provider list stays empty, so the server
+    rejects a country code in ``proxy``, and a client in another region must send a full proxy
+    URI or ``no_proxy``. The returned list reaches ``ContextData.proxy_providers``, so the same gate
+    also governs the geofence auto-proxy in ``Service.__init__``.
+
+    The client region is the client-reported ``client_region`` field: an identifier, not a
+    security boundary, because the spend gate is ``server_proxy`` on the API key. A client that
+    reports no region, and an unknown region on either side, never blocks the request.
     """
     proxy_param = data.get("proxy")
     no_proxy = data.get("no_proxy", False)
     proxy_providers: list = []
+    allowed = server_proxy_allowed(request)
 
-    if not no_proxy:
+    if (
+        proxy_param
+        and re.match(r"^(https?://|socks|controld://)", str(proxy_param))
+        and server_account_for(request, normalized_service)
+    ):
+        raise APIError(
+            APIErrorCode.FORBIDDEN,
+            "A server-account service does not accept a client proxy URI. Pass a country code or nothing.",
+            details={"service": normalized_service},
+        )
+
+    if allowed and not no_proxy:
         proxy_providers = initialize_proxy_providers()
 
     if proxy_param and not no_proxy:
         try:
             proxy_param = resolve_proxy(proxy_param, proxy_providers)
         except ValueError as e:
+            if allowed:
+                raise APIError(
+                    APIErrorCode.INVALID_PROXY,
+                    f"Proxy error: {redact_text(str(e))}",
+                    details={"proxy": redact_text(data.get("proxy")), "service": normalized_service},
+                )
             raise APIError(
                 APIErrorCode.INVALID_PROXY,
-                f"Proxy error: {e}",
-                details={"proxy": data.get("proxy"), "service": normalized_service},
+                "This server does not resolve country codes into proxies. "
+                "Pass --proxy with a full proxy URI (http://, https:// or socks5://).",
+                details={"service": normalized_service},
             )
 
     client_region = data.get("client_region")
-    if not proxy_param and not no_proxy and client_region and proxy_providers:
+    if client_region is not None and not isinstance(client_region, str):
+        raise APIError(
+            APIErrorCode.INVALID_INPUT,
+            "client_region must be a string country code.",
+            details={"service": normalized_service},
+        )
+
+    if not proxy_param and not no_proxy and client_region and (proxy_providers or not allowed):
         try:
             from unshackle.core.utils.ip_info import get_ip_info
 
             server_ip_info = get_ip_info(None, cached=True)
             server_region = server_ip_info.get("country", "").lower() if server_ip_info else None
-        except Exception:
+        except Exception as e:
+            log.debug(f"Server region lookup failed: {e!r}")
             server_region = None
 
-        if server_region and server_region == client_region.lower():
+        geoblock = getattr(Services.load(normalized_service), "GEOBLOCK", ()) or ()
+        if client_region.lower() in {x.lower() for x in geoblock}:
+            raise APIError(
+                APIErrorCode.GEOFENCE,
+                f"Service is not available in your region ({client_region.upper()}). "
+                "Pass --proxy with a proxy outside the blocked regions.",
+                details={"service": normalized_service},
+            )
+
+        in_client_region = bool(server_region) and server_region == client_region.lower()
+        if not allowed:
+            if server_region and not in_client_region:
+                raise APIError(
+                    APIErrorCode.INVALID_PROXY,
+                    "This server is in a different region from yours. Pass --proxy with a proxy "
+                    "in the region you want, or pass --no-proxy to use the server's own connection.",
+                    details={"service": normalized_service},
+                )
+        elif in_client_region:
             log.info(f"Server already in client region '{sanitize_log(client_region)}', no proxy needed")
         else:
             try:
@@ -2455,46 +4162,89 @@ def _resolve_handler_proxy(data: Dict[str, Any], normalized_service: str) -> tup
     return proxy_param, proxy_providers
 
 
-def _find_title_for_track(track_id: str, session: Any) -> Any:
+def find_title_for_track(track_id: str, session: Any) -> Any:
     """Find the title object that owns a given track."""
     for t_id, tracks_dict in session.tracks_by_title.items():
         if track_id in tracks_dict:
             return session.title_map.get(t_id)
     if session.title_map:
-        return next(iter(session.title_map.values()))
+        return session.title_map.get(session.current_title_id) or next(iter(session.title_map.values()))
     return None
 
 
-def _extract_pssh_from_track(track: Any, drm_type: str) -> Optional[str]:
-    """Extract PSSH base64 string from a track's DRM objects."""
-    if not track.drm:
-        return None
-    pssh_b64 = None
-    for drm_obj in track.drm:
+def extract_pssh_from_track(track: Any, drm_type: str) -> Optional[str]:
+    """The base64 PSSH of the track's DRM object for `drm_type`; None when the track has none of that system."""
+    for drm_obj in track.drm or []:
         drm_class = drm_obj.__class__.__name__
-        if drm_class == "Widevine" and hasattr(drm_obj, "_pssh") and drm_obj._pssh:
-            if hasattr(drm_obj._pssh, "dumps"):
-                pssh_b64 = drm_obj._pssh.dumps()
-                if drm_type == "widevine":
-                    break
-        elif drm_class == "PlayReady":
-            if hasattr(drm_obj, "data") and drm_obj.data.get("pssh_b64"):
-                pssh_b64 = drm_obj.data["pssh_b64"]
-                if drm_type == "playready":
-                    break
-    return pssh_b64
+        if drm_type == "widevine" and drm_class == "Widevine":
+            pssh = getattr(drm_obj, "_pssh", None)
+            if pssh and hasattr(pssh, "dumps"):
+                return pssh.dumps()
+        elif drm_type == "playready" and drm_class == "PlayReady":
+            pssh_b64 = getattr(drm_obj, "data", {}).get("pssh_b64")
+            if pssh_b64:
+                return pssh_b64
+    return None
 
 
-def _ensure_track_drm(track: Any) -> None:
+def fetch_init_segment(track: Any, session: Any = None) -> Optional[bytes]:
+    """The init segment of a DASH track; None for a track that is not DASH, or when the fetch fails."""
+    from unshackle.core.manifests import DASH as DASHManifest
+
+    dash = (getattr(track, "data", None) or {}).get("dash") or {}
+    if not all(dash.get(k) is not None for k in ("period", "adaptation_set", "representation", "manifest")):
+        return None
+
+    session = getattr(track, "session", None) or session
+    if session is None:
+        return None
+
+    try:
+        return DASHManifest.get_period_segments(
+            period=dash["period"],
+            adaptation_set=dash["adaptation_set"],
+            representation=dash["representation"],
+            manifest=dash["manifest"],
+            track=track,
+            track_url=track.url,
+            session=session,
+        )[0]
+    except Exception as e:
+        log.warning(f"Init segment fetch failed for {track.id}: {e!r}")
+        return None
+
+
+def drm_from_init_segment(track: Any, session: Any = None, init_data: Optional[bytes] = None) -> list:
+    """Read the DRM headers out of a DASH track's init segment.
+
+    Some manifests carry no ContentProtection PSSH; the real header reaches the player only
+    in the init segment, so the server must read it there too.
+    """
+    from unshackle.core.drm import PlayReady, Widevine
+
+    if init_data is None:
+        init_data = fetch_init_segment(track, session)
+    if not init_data:
+        return []
+
+    drms = []
+    for drm_cls in (Widevine, PlayReady):
+        try:
+            drms.append(drm_cls.from_init_data(init_data))
+        except Exception as e:
+            log.debug(f"No usable {drm_cls.__name__} PSSH in the init segment of {track.id}: {e!r}")
+    return drms
+
+
+def ensure_track_drm(track: Any, session: Any = None, init_data: Optional[bytes] = None) -> None:
     """Extract DRM from manifest data if track has none.
 
-    Supports DASH (ContentProtection elements), HLS (EXT-X-KEY from
-    playlist fetch), and ISM (ProtectionHeader elements).
+    Supports DASH (ContentProtection elements, then the init segment), HLS
+    (EXT-X-KEY from playlist fetch), and ISM (ProtectionHeader elements).
     """
     if track.drm:
         return
 
-    # DASH: extract from ContentProtection elements
     if track.data.get("dash"):
         from unshackle.core.manifests import DASH as DASHManifest
 
@@ -2505,40 +4255,44 @@ def _ensure_track_drm(track: Any) -> None:
             if track.drm:
                 return
 
-    # HLS: fetch playlist and extract DRM from EXT-X-KEY
-    if track.data.get("hls") and track.url:
+        track.drm = drm_from_init_segment(track, session, init_data) or None
+        if track.drm:
+            return
+
+    if (track.data.get("hls") or descriptor_name(track) == "HLS") and track.url:
         try:
             import m3u8
 
             from unshackle.core.drm import PlayReady, Widevine
             from unshackle.core.manifests import HLS
 
-            playlist = m3u8.load(track.url)
+            http = getattr(track, "session", None) or session
+            playlist = m3u8.loads(utf8_text(http.get(track.url)), uri=track.url) if http else m3u8.load(track.url)
             keys = [k for k in (playlist.keys or []) + (playlist.session_keys or []) if k is not None]
             for key in keys:
                 try:
-                    drm = HLS.get_drm(key)
+                    drm = HLS.get_drm_or_probe(key, playlist, track, probe_session=http)
                     if isinstance(drm, (Widevine, PlayReady)):
                         track.drm = [drm]
                         return
-                except Exception:
+                except Exception as e:
+                    log.debug(f"Skipping HLS key {key}: {e!r}")
                     continue
-        except Exception:
-            pass
+        except Exception as e:
+            log.debug(f"HLS DRM prefetch failed for {track.id}: {e!r}")
 
-    # ISM: extract from ProtectionHeader elements
     if track.data.get("ism"):
         try:
             from unshackle.core.manifests import ISM as ISMManifest
 
-            stream_index = track.data["ism"].get("stream_index")
-            if stream_index is not None:
-                track.drm = ISMManifest.get_drm(stream_index)
-        except Exception:
-            pass
+            manifest = track.data["ism"].get("manifest")
+            if manifest is not None:
+                track.drm = ISMManifest.get_drm(manifest.xpath(".//ProtectionHeader"))
+        except Exception as e:
+            log.warning(f"ISM DRM extraction failed for {track.id}: {e!r}")
 
 
-def _resolve_device_name(user_config: dict, drm_type: str, service_tag: str = "") -> str:
+def resolve_device_name(user_config: dict, drm_type: str, service_tag: str = "") -> str:
     """Get the CDM device name, checking service-specific config.cdm first.
 
     Resolution order:
@@ -2547,12 +4301,8 @@ def _resolve_device_name(user_config: dict, drm_type: str, service_tag: str = ""
     """
     from unshackle.core.config import config as app_config
 
-    cdm_name = ci_get(app_config.cdm, service_tag) if service_tag else None
-    if isinstance(cdm_name, dict):
-        drm_key = {"widevine": "widevine", "playready": "playready"}.get(drm_type)
-        lower_keys = {k.lower(): v for k, v in cdm_name.items()}
-        cdm_name = lower_keys.get(drm_key) or lower_keys.get("default") or ci_get(app_config.cdm, "default")
-    if cdm_name and isinstance(cdm_name, str):
+    cdm_name = configured_cdm_name(service_tag, drm_type, app_config)
+    if cdm_name:
         return cdm_name
 
     if drm_type == "playready":
@@ -2566,7 +4316,72 @@ def _resolve_device_name(user_config: dict, drm_type: str, service_tag: str = ""
     return device_name
 
 
-def _load_server_vaults(service_name: str) -> Any:
+def vault_candidates(client_drm_type: str) -> List[str]:
+    """Both DRM systems, the client's first: a vault lookup needs only the KIDs, whatever device made the manifest."""
+    first = client_drm_type if client_drm_type in ("widevine", "playready") else "widevine"
+    return [first, "playready" if first == "widevine" else "widevine"]
+
+
+def server_drm_candidates(
+    service_tag: str,
+    user_config: dict,
+    client_drm_type: str,
+    track: Any,
+    warn: Callable[[str], None] = log.warning,
+) -> List[str]:
+    """The DRM systems the server can license a track with, in the order to try them.
+
+    The server's config.cdm mapping goes first; with no mapping, the client's choice goes
+    first. A system stays only when the device the server would load for it is of that
+    system, so the route never plans a licence that fails on the wrong device type. The
+    track's own drm_preference moves its system to the front when the server has it.
+    """
+    from unshackle.core.config import config as app_config
+
+    server_type = detect_cdm_type_for_service(service_tag, app_config)
+    first = server_type or (client_drm_type if client_drm_type in ("widevine", "playready") else "widevine")
+    candidates: List[str] = []
+    for drm_type in (first, *(system for system in ("widevine", "playready") if system != first)):
+        try:
+            device_name = resolve_device_name(user_config, drm_type, service_tag)
+        except APIError:
+            continue
+        if detect_cdm_type(device_name, app_config) in (None, drm_type):
+            candidates.append(drm_type)
+
+    preferred = drm_preference_name(track)
+    if preferred:
+        if preferred in candidates:
+            candidates.remove(preferred)
+            candidates.insert(0, preferred)
+        else:
+            warn(
+                f"Track {sanitize_log(str(track.id)[:12])} wants {preferred} DRM "
+                "but the server has no device for it, using the configured DRM instead"
+            )
+    return candidates
+
+
+def pick_server_pssh(track: Any, candidates: List[str]) -> Optional[tuple[str, str]]:
+    """`(drm_type, pssh)` for the first candidate the track carries a header for; None when it has none.
+
+    A track with only a PlayReady header still licenses under the Widevine device: the
+    Widevine DRM class converts the PlayReady PSSH on construction.
+    """
+    for candidate in candidates:
+        pssh_str = extract_pssh_from_track(track, candidate)
+        if not pssh_str and candidate == "widevine":
+            pssh_str = extract_pssh_from_track(track, "playready")
+            if pssh_str:
+                log.info(
+                    f"Track {sanitize_log(str(track.id)[:12])} has only a PlayReady PSSH, licensing it with the Widevine device"
+                )
+        if pssh_str:
+            return candidate, pssh_str
+    return None
+
+
+def load_server_vaults(service_name: str) -> Any:
     """Load server vaults from config.key_vaults."""
     from unshackle.core.config import config as app_config
     from unshackle.core.services import Services
@@ -2584,73 +4399,183 @@ def _load_server_vaults(service_name: str) -> Any:
     return vaults
 
 
-def _check_vaults(kids: list, service_name: str) -> Optional[Dict[str, str]]:
-    """Check server vaults for existing keys matching all KIDs.
+def check_vaults(kids: list, service_name: str) -> Optional[tuple[Dict[str, str], Dict[str, str]]]:
+    """Examine the server vaults for existing content keys that match all KIDs.
 
-    Returns a KID:KEY dict if ALL KIDs are found, None otherwise.
+    Returns `(KID:KEY, KID:vault name)` if ALL KIDs are found, None otherwise. The vault
+    name travels to the client, which is the only side that can prove the content key decrypts.
     """
     from uuid import UUID
 
     try:
-        vaults = _load_server_vaults(service_name)
+        vaults = load_server_vaults(service_name)
         if not vaults.vaults:
             return None
         keys: Dict[str, str] = {}
+        sources: Dict[str, str] = {}
         for kid in kids:
             kid_uuid = kid if isinstance(kid, UUID) else UUID(hex=str(kid))
             content_key, vault_used = vaults.get_key(kid_uuid)
             if content_key:
                 keys[kid_uuid.hex] = content_key
+                sources[kid_uuid.hex] = vault_used.name if vault_used else "unknown"
             else:
                 return None
         if keys:
             log.info(f"Vault hit: {len(keys)} key(s) from server vaults, skipping CDM")
-            return keys
-    except Exception:
-        pass
+            return keys, sources
+    except Exception as e:
+        log.debug(f"Server vault lookup failed: {e!r}")
     return None
 
 
-def _cache_to_vaults(keys: Dict[str, str], service_name: str) -> None:
-    """Cache newly obtained keys to server vaults."""
+CACHED_PAIRS: set[tuple[str, str, str]] = set()
+
+
+def cache_to_vaults(keys: Dict[str, str], service_name: str) -> None:
+    """Cache newly obtained keys to server vaults.
+
+    A PlayReady licence always runs, and a Widevine licence runs when one PSSH KID has no content
+    key in a vault, so the same content keys come back on every request for a title. This process
+    does not send a pair again after every vault accepted it.
+    """
     from uuid import UUID
 
     try:
-        vaults = _load_server_vaults(service_name)
+        new = {kid: key for kid, key in keys.items() if (service_name, kid, key) not in CACHED_PAIRS}
+        if not new:
+            return
+        vaults = load_server_vaults(service_name)
         if not vaults.vaults:
             return
 
-        key_map = {UUID(hex=kid): key for kid, key in keys.items()}
+        key_map = {UUID(hex=kid): key for kid, key in new.items()}
         cached = vaults.add_keys(key_map)
+        if cached == len([vault for vault in vaults.vaults if not vault.no_push]):
+            CACHED_PAIRS.update((service_name, kid, key) for kid, key in new.items())
         if cached:
-            log.info(f"Cached {cached} key(s) to {cached} server vault(s)")
+            log.info(f"Cached {len(key_map)} key(s) to {cached}/{len(vaults)} server vault(s)")
     except (Exception, SystemExit) as e:
         log.warning(f"Failed to cache keys to vaults: {e}")
 
 
-def _handle_single_server_cdm(
+def track_injected_keys(track: Any, drm_class: str) -> Dict[str, str]:
+    """`KID:KEY` pairs a service wrote onto the track's own DRM objects of `drm_class`.
+
+    Some services skip the CDM exchange: the licence callback fetches the keys itself,
+    writes them into ``track.drm[0].content_keys`` and returns a value the CDM cannot
+    parse. ``dl.py`` accepts that failed parse because the object it licensed holds the
+    keys. The server licenses a rebuilt object, so it reads the track's objects instead.
+    """
+    keys: Dict[str, str] = {}
+    for drm in getattr(track, "drm", None) or []:
+        if drm.__class__.__name__ != drm_class:
+            continue
+        for kid, key in (getattr(drm, "content_keys", None) or {}).items():
+            keys[kid.hex if hasattr(kid, "hex") else str(kid).replace("-", "")] = key
+    return keys
+
+
+def license_with_track_fallback(drm: Any, track: Any, **kwargs: Any) -> Dict[str, str]:
+    """Run `drm.get_content_keys` and merge in the keys the service put on the track itself."""
+    try:
+        drm.get_content_keys(**kwargs)
+    except Exception:
+        if not track_injected_keys(track, drm.__class__.__name__):
+            raise
+    return {
+        **track_injected_keys(track, drm.__class__.__name__),
+        **{kid.hex: key for kid, key in drm.content_keys.items()},
+    }
+
+
+def pssh_kids(pssh_b64: str, drm_type: str) -> set:
+    """The KIDs a base64 PSSH names, for either DRM system."""
+    if drm_type == "playready":
+        from pyplayready.system.pssh import PSSH as PlayReadyPSSH
+
+        from unshackle.core.drm import PlayReady
+
+        return set(PlayReady(pssh=PlayReadyPSSH(base64.b64decode(pssh_b64)), pssh_b64=pssh_b64).kids)
+    from pywidevine.pssh import PSSH as WvPSSH
+
+    from unshackle.core.drm import Widevine
+
+    return set(Widevine(pssh=WvPSSH(pssh_b64)).kids)
+
+
+def require_track_pssh(track: Any, pssh_b64: str, drm_type: str) -> None:
+    """Reject a client PSSH that names a KID the track does not carry.
+
+    The server CDM path answers from the vault before any license exchange, so an
+    unchecked PSSH would make the key vault answer with content keys for any title. The
+    track's own PSSH passes as it is, so a header without KIDs still licenses.
+    """
+    if pssh_b64 == extract_pssh_from_track(track, drm_type):
+        return
+    try:
+        client_kids = pssh_kids(pssh_b64, drm_type)
+    except Exception:
+        raise APIError(APIErrorCode.INVALID_INPUT, "The pssh parameter is not a valid PSSH box") from None
+    track_kids = {kid for drm in (getattr(track, "drm", None) or []) for kid in (getattr(drm, "kids", None) or [])}
+    if not client_kids or not track_kids or not client_kids <= track_kids:
+        raise APIError(
+            APIErrorCode.FORBIDDEN,
+            "The pssh parameter does not belong to this track.",
+            details={"track_id": str(getattr(track, "id", ""))},
+        )
+
+
+def handle_single_server_cdm(
     service: Any,
     title: Any,
     track: Any,
     pssh_b64: Optional[str],
     drm_type: str,
     request: Optional[web.Request],
+    sources: Optional[Dict[str, str]] = None,
+    refusal: Optional[APIError] = None,
+    vault_only: bool = False,
 ) -> Dict[str, str]:
-    """Handle single-track server_cdm licensing using the DRM class get_content_keys() flow."""
+    """Do the single-track server_cdm licensing with the DRM class get_content_keys() flow.
+
+    ``sources`` is filled with the vault name for every returned content key a server vault
+    supplied. A content key the CDM licensed gets no entry. It raises ``refusal`` before a live licence:
+    after a Widevine vault miss, or at once for PlayReady, whose licence can carry keys its header does not name.
+    With ``vault_only`` no server device is involved: the header's KIDs come from the vault, else ``refusal``.
+    """
     import base64
 
     from unshackle.core.cdm import load_cdm
-    from unshackle.core.config import config as app_config
+    from unshackle.core.cdm.detect import is_playready_cdm, is_widevine_cdm
 
-    _ensure_track_drm(track)
+    ensure_track_drm(track, getattr(service, "session", None))
 
     if not pssh_b64:
-        pssh_b64 = _extract_pssh_from_track(track, drm_type)
+        pssh_b64 = extract_pssh_from_track(track, drm_type)
     if not pssh_b64:
         raise APIError(APIErrorCode.INVALID_INPUT, "No PSSH available for server_cdm licensing")
 
+    if vault_only:
+        from unshackle.core.drm import PlayReady, Widevine
+
+        if drm_type == "playready":
+            from pyplayready.system.pssh import PSSH as PlayReadyPSSH
+
+            kids = PlayReady(pssh=PlayReadyPSSH(base64.b64decode(pssh_b64)), pssh_b64=pssh_b64).kids
+        else:
+            from pywidevine.pssh import PSSH as WvPSSH
+
+            kids = Widevine(pssh=WvPSSH(pssh_b64)).kids
+        vault_hit = check_vaults(kids, service.__class__.__name__)
+        if vault_hit:
+            if sources is not None:
+                sources.update(vault_hit[1])
+            return vault_hit[0]
+        raise refusal or APIError(APIErrorCode.NO_CONTENT, "The server vault holds no key for this track")
+
     api_key = request.headers.get("X-Secret-Key", "anonymous") if request else "anonymous"
-    user_config = app_config.serve.get("users", {}).get(api_key, {})
+    user_config = serve_user_config(api_key)
 
     if drm_type == "playready":
         from pyplayready.system.pssh import PSSH as PlayReadyPSSH
@@ -2658,23 +4583,29 @@ def _handle_single_server_cdm(
         from unshackle.core.drm import PlayReady
 
         pr_pssh = PlayReadyPSSH(base64.b64decode(pssh_b64))
-        pr_drm = PlayReady(pssh=pr_pssh, pssh_b64=pssh_b64)
+        siblings = [d for d in (getattr(track, "drm", None) or []) if isinstance(d, PlayReady)]
+        manifest_kid = next((getattr(d, "kid", None) for d in siblings if getattr(d, "kid", None)), None)
+        pr_drm = PlayReady(pssh=pr_pssh, pssh_b64=pssh_b64, kid=manifest_kid)
+        if siblings:
+            pr_drm.absorb(*siblings)
 
-        # Gate on the caller's CDM device first so a caller with no device cannot
-        # harvest server-side keys from the vault fallback below.
-        device_name = _resolve_device_name(user_config, drm_type, service.__class__.__name__)
+        device_name = resolve_device_name(user_config, drm_type, service.__class__.__name__)
 
-        vault_keys = _check_vaults(pr_drm.kids, service.__class__.__name__)
-        if vault_keys:
-            return vault_keys
+        if refusal:
+            raise refusal
 
         cdm = load_cdm(device_name, service_name=service.__class__.__name__)
-        pr_drm.get_content_keys(
+        if not is_playready_cdm(cdm):
+            raise APIError(APIErrorCode.INVALID_INPUT, f"CDM device '{device_name}' is not a PlayReady device")
+        keys = license_with_track_fallback(
+            pr_drm,
+            track,
             cdm=cdm,
             certificate=lambda challenge, **_: None,
-            licence=lambda challenge, **_: service.get_playready_license(challenge=challenge, title=title, track=track),
+            licence=lambda **kw: service.get_playready_license(
+                **declared_kwargs(service.get_playready_license, {**kw, "title": title, "track": track})
+            ),
         )
-        keys = {kid.hex: key for kid, key in pr_drm.content_keys.items()}
     elif drm_type == "widevine":
         from pywidevine.pssh import PSSH as WvPSSH
 
@@ -2683,23 +4614,31 @@ def _handle_single_server_cdm(
         wv_pssh = WvPSSH(pssh_b64)
         wv_drm = Widevine(pssh=wv_pssh)
 
-        # Gate on the caller's CDM device first so a caller with no device cannot
-        # harvest server-side keys from the vault fallback below.
-        device_name = _resolve_device_name(user_config, drm_type, service.__class__.__name__)
+        device_name = resolve_device_name(user_config, drm_type, service.__class__.__name__)
 
-        vault_keys = _check_vaults(wv_drm.kids, service.__class__.__name__)
-        if vault_keys:
+        vault_hit = check_vaults(wv_drm.kids, service.__class__.__name__)
+        if vault_hit:
+            vault_keys, vault_sources = vault_hit
+            if sources is not None:
+                sources.update(vault_sources)
             return vault_keys
+        if refusal:
+            raise refusal
 
         cdm = load_cdm(device_name, service_name=service.__class__.__name__)
-        wv_drm.get_content_keys(
+        if not is_widevine_cdm(cdm):
+            raise APIError(APIErrorCode.INVALID_INPUT, f"CDM device '{device_name}' is not a Widevine device")
+        keys = license_with_track_fallback(
+            wv_drm,
+            track,
             cdm=cdm,
             certificate=lambda challenge, **_: service.get_widevine_service_certificate(
                 challenge=challenge, title=title, track=track
             ),
-            licence=lambda challenge, **_: service.get_widevine_license(challenge=challenge, title=title, track=track),
+            licence=lambda **kw: service.get_widevine_license(
+                **declared_kwargs(service.get_widevine_license, {**kw, "title": title, "track": track})
+            ),
         )
-        keys = {kid.hex: key for kid, key in wv_drm.content_keys.items()}
     else:
         raise APIError(
             APIErrorCode.INVALID_PARAMETERS,
@@ -2709,149 +4648,306 @@ def _handle_single_server_cdm(
     if not keys:
         raise APIError(APIErrorCode.NO_CONTENT, "Server CDM returned no content keys")
 
-    _cache_to_vaults(keys, service.__class__.__name__)
+    cache_to_vaults(keys, service.__class__.__name__)
     return keys
 
 
-def _handle_proxy_license(
+def handle_proxy_license(
     service: Any,
     title: Any,
     track: Any,
     challenge_b64: Optional[str],
     drm_type: str,
+    certificate: bool = False,
 ) -> web.Response:
-    """Forward a client CDM challenge to the service license endpoint."""
+    """Forward a client CDM challenge to the service license endpoint, or to its certificate hook with ``certificate``."""
     import base64
 
     if not challenge_b64:
         raise APIError(APIErrorCode.INVALID_INPUT, "Missing required parameter: challenge")
     challenge_bytes = base64.b64decode(challenge_b64)
 
-    if drm_type == "widevine":
-        license_response = service.get_widevine_license(challenge=challenge_bytes, title=title, track=track)
-    elif drm_type == "playready":
-        license_response = service.get_playready_license(challenge=challenge_bytes, title=title, track=track)
-    else:
+    if drm_type not in ("widevine", "playready"):
         raise APIError(
             APIErrorCode.INVALID_PARAMETERS,
             f"Unsupported DRM type: {drm_type}",
             details={"drm_type": drm_type, "supported": ["widevine", "playready"]},
         )
 
-    if isinstance(license_response, str):
-        license_response = license_response.encode("utf-8")
+    try:
+        if drm_type == "widevine" and certificate:
+            license_blob = service.get_widevine_service_certificate(
+                **declared_kwargs(
+                    service.get_widevine_service_certificate,
+                    {"challenge": challenge_bytes, "title": title, "track": track},
+                )
+            )
+        elif drm_type == "widevine":
+            license_blob = service.get_widevine_license(
+                **declared_kwargs(
+                    service.get_widevine_license, {"challenge": challenge_bytes, "title": title, "track": track}
+                )
+            )
+        else:
+            challenge_str = challenge_bytes.decode("utf-8", errors="replace")
+            license_blob = service.get_playready_license(
+                **declared_kwargs(
+                    service.get_playready_license, {"challenge": challenge_str, "title": title, "track": track}
+                )
+            )
+    except APIError:
+        raise
+    except (Exception, SystemExit) as exc:
+        log.exception(f"{sanitize_log(drm_type)} licence request failed for the proxied challenge")
+        raise APIError(APIErrorCode.SERVICE_ERROR, f"Licence request failed: {exc}") from None
 
-    return web.json_response({"license": base64.b64encode(license_response).decode("ascii")})
+    if license_blob is None:
+        return web.json_response({"license": None})
+    if isinstance(license_blob, str):
+        license_blob = base64.b64decode(license_blob) if drm_type == "widevine" else license_blob.encode("utf-8")
+
+    return web.json_response({"license": base64.b64encode(license_blob).decode("ascii")})
+
+
+async def session_segment_filter_handler(
+    data: Dict[str, Any], session_id: str, request: Optional[web.Request] = None
+) -> web.Response:
+    """Run the service's HLS ``OnSegmentFilter`` for one track and return the unwanted segment URIs.
+
+    The client fetches the same media playlist again. Only the URIs leave the server; the
+    filter and the data it reads stay on it.
+    """
+    session = await get_validated_session(session_id, request)
+    require_authenticated(session)
+
+    track_id = data.get("track_id")
+    if not track_id:
+        raise APIError(APIErrorCode.INVALID_INPUT, "Missing required parameter: track_id")
+
+    track = session.tracks.get(track_id)
+    if not track:
+        raise APIError(
+            APIErrorCode.TRACK_NOT_FOUND,
+            f"Track not found in session: {track_id}",
+            details={"track_id": track_id, "session_id": session_id},
+        )
+
+    segment_filter = getattr(track, "OnSegmentFilter", None)
+    if not callable(segment_filter) or not getattr(track, "url", None):
+        return web.json_response({"unwanted": None})
+
+    def unwanted_segments() -> list[str]:
+        import m3u8
+
+        response = session.service_instance.session.get(track.url)
+        if not getattr(response, "ok", True):
+            raise ValueError(f"playlist request failed: {response.status_code}")
+        playlist = m3u8.loads(utf8_text(response), uri=str(track.url))
+        return [segment.absolute_uri for segment in playlist.segments if segment_filter(segment)]
+
+    try:
+        async with session.lock:
+            unwanted = await asyncio.to_thread(unwanted_segments)
+    except (Exception, SystemExit):
+        log.exception(f"Error running the segment filter for track {sanitize_log(str(track_id))}")
+        raise APIError(APIErrorCode.SERVICE_ERROR, "Could not run the segment filter for this track") from None
+
+    return web.json_response({"unwanted": unwanted})
 
 
 async def session_license_handler(
     data: Dict[str, Any], session_id: str, request: Optional[web.Request] = None
 ) -> web.Response:
-    """Handle DRM licensing in proxy or server_cdm mode.
+    """Do the DRM licensing in proxy or server_cdm mode.
 
     Proxy mode (default): forwards client CDM challenge to the service's
     license endpoint, returns raw license bytes for client-side parsing.
 
-    Server-CDM mode (mode="server_cdm"): server uses its own CDM to generate
-    the challenge, obtain the license, and extract KID:KEY pairs. Supports
+    Server-CDM mode (mode="server_cdm"): server uses its own CDM to make
+    the challenge, get the license, and extract `KID:KEY` pairs. Supports
     batch (track_ids list) and single-track requests.
     """
-    import base64
 
-    session = await _get_validated_session(session_id, request)
+    session = await get_validated_session(session_id, request)
+    require_authenticated(session)
 
+    async with session.lock:
+        return await asyncio.to_thread(license_response, data, session, session_id, request)
+
+
+def license_response(
+    data: Dict[str, Any], session: Any, session_id: str, request: Optional[web.Request]
+) -> web.Response:
+    """The licence response for :func:`session_license_handler`, made on a worker thread."""
     track_id = data.get("track_id")
     track_ids = data.get("track_ids")
     challenge_b64 = data.get("challenge")
     drm_type = data.get("drm_type", "widevine")
     mode = data.get("mode", "proxy")
 
-    if mode == "server_cdm" and not server_cdm_allowed(request):
+    vault_only = getattr(session, "server_cdm", None) is False
+    if mode == "server_cdm" and not (
+        getattr(session, "server_vault", False) if vault_only else server_cdm_allowed(request, session.service_tag)
+    ):
         raise APIError(
             APIErrorCode.FORBIDDEN,
-            "Server CDM licensing is not enabled for this key. Use a local CDM (proxy mode).",
+            "Server CDM licensing is not enabled for this key on this service. Use a local CDM (proxy mode).",
         )
 
     if mode == "server_cdm" and track_ids:
-        from unshackle.core.config import config as app_config
-
         api_key = request.headers.get("X-Secret-Key", "anonymous") if request else "anonymous"
-        user_config = app_config.serve.get("users", {}).get(api_key, {})
+        user_config = serve_user_config(api_key)
         service = session.service_instance
-        has_wv_device = bool(user_config.get("devices"))
-        has_pr_device = bool(user_config.get("playready_devices"))
-
         service_tag = session.service_tag
-        config_cdm_type = _detect_cdm_type_for_service(service_tag, app_config)
 
         all_keys: Dict[str, Dict[str, str]] = {}
-        seen_pssh: set[str] = set()
+        vault_keys: list[str] = []
+        clear_tracks: list[str] = []
+        drm_types: Dict[str, str] = {}
+        keys_by_pssh: Dict[tuple, Dict[str, str]] = {}
+        sources_by_pssh: Dict[tuple, Dict[str, str]] = {}
+        drm_type_by_pssh: Dict[tuple, str] = {}
         actual_drm_type: Optional[str] = None
+        capped_tracks: Dict[str, Dict[str, Any]] = {}
+
+        def pssh_set(track: Any) -> tuple:
+            """Every PSSH and KID the track carries, as the rest of the cache key.
+
+            Two tracks can share their first PSSH and still need different licences,
+            because the server licenses every header the track holds and asks for every
+            KID the manifest named on it.
+            """
+            drms = getattr(track, "drm", None) or []
+            return (
+                tuple(sorted(str(getattr(d, "pssh_b64", "") or "") for d in drms)),
+                tuple(sorted(str(kid) for d in drms for kid in (getattr(d, "kids", None) or []))),
+            )
+
+        def warn(message: str) -> None:
+            """Log on the server and copy into the remote session buffer the client drains.
+
+            The buffer takes only ``service.log``, so a licensing failure raised
+            here would otherwise reach the client as a bare "no content keys".
+            """
+            log.warning(message)
+            if session.log_buffer:
+                session.log_buffer.append(logging.WARNING, message)
+
+        def license_track(
+            track: Any, title: Any, candidates: list
+        ) -> tuple[Dict[str, str], Optional[str], Optional[str]]:
+            """`(keys, drm_type, pssh)` for the track's current DRM, licensing once per unique PSSH.
+
+            A track the server must not license live goes into ``capped_tracks`` with no keys, and its PSSH
+            stays uncached, as a track under the cap can share it.
+            """
+            picked = pick_server_pssh(track, candidates)
+            if not picked:
+                warn(f"No PSSH on track {sanitize_log(str(track.id)[:12])} for {', '.join(candidates) or 'any CDM'}")
+                return {}, None, None
+            candidate, pssh_str = picked
+
+            cache_key = (pssh_str, pssh_set(track))
+            if cache_key not in keys_by_pssh:
+                keys_by_pssh[cache_key] = {}
+                sources_by_pssh[cache_key] = {}
+                try:
+                    keys = handle_single_server_cdm(
+                        service,
+                        title,
+                        track,
+                        pssh_str,
+                        candidate,
+                        request,
+                        sources_by_pssh[cache_key],
+                        live_licence_refusal(session, track),
+                        vault_only=vault_only,
+                    )
+                    if keys:
+                        keys_by_pssh[cache_key] = keys
+                        drm_type_by_pssh[cache_key] = candidate
+                except SystemExit:
+                    warn(f"Service exited while resolving keys for track {sanitize_log(str(track.id)[:12])}, skipping")
+                except (Exception, SystemExit) as e:
+                    if isinstance(e, APIError) and e.error_code is APIErrorCode.SERVER_CDM_CAPPED:
+                        del keys_by_pssh[cache_key], sources_by_pssh[cache_key]
+                        capped_tracks[str(track.id)] = e.details
+                        return {}, None, pssh_str
+                    warn(f"Failed to resolve keys for track {sanitize_log(str(track.id)[:12])}: {redact_all(str(e))}")
+            return keys_by_pssh[cache_key], drm_type_by_pssh.get(cache_key), pssh_str
 
         for tid in track_ids:
             track = session.tracks.get(tid)
             if not track:
                 continue
 
-            _ensure_track_drm(track)
+            svc_session = getattr(service, "session", None)
+            init_data = fetch_init_segment(track, svc_session)
+            ensure_track_drm(track, svc_session, init_data)
             if not track.drm:
+                log.info(f"Track {sanitize_log(tid[:12])} carries no DRM, so it has no keys to resolve")
+                clear_tracks.append(tid)
                 continue
 
-            title = _find_title_for_track(tid, session)
+            title = find_title_for_track(tid, session)
+            candidates = (
+                vault_candidates(drm_type)
+                if vault_only
+                else server_drm_candidates(service_tag, user_config, drm_type, track, warn)
+            )
 
-            track_drm_type = None
-            pssh_str = None
-            if config_cdm_type == "playready":
-                pssh_str = _extract_pssh_from_track(track, "playready")
-                if pssh_str:
-                    track_drm_type = "playready"
-                if not pssh_str:
-                    pssh_str = _extract_pssh_from_track(track, "widevine")
-                    if pssh_str:
-                        track_drm_type = "widevine"
-            elif config_cdm_type == "widevine":
-                pssh_str = _extract_pssh_from_track(track, "widevine")
-                if pssh_str:
-                    track_drm_type = "widevine"
-                if not pssh_str:
-                    pssh_str = _extract_pssh_from_track(track, "playready")
-                    if pssh_str:
-                        track_drm_type = "playready"
-            else:
-                if has_wv_device:
-                    pssh_str = _extract_pssh_from_track(track, "widevine")
-                    if pssh_str:
-                        track_drm_type = "widevine"
-                if not pssh_str and has_pr_device:
-                    pssh_str = _extract_pssh_from_track(track, "playready")
-                    if pssh_str:
-                        track_drm_type = "playready"
+            keys, track_drm_type, pssh_str = license_track(track, title, candidates)
+            refusal = capped_tracks.pop(tid, None)
 
-            if not pssh_str or not track_drm_type:
+            track_kid = None
+            if init_data:
+                try:
+                    track_kid = track.get_key_id(init_data)
+                except Exception as e:
+                    log.debug(f"KID probe failed for {sanitize_log(tid[:12])}: {e!r}")
+            if track_kid and track_kid.hex not in keys:
+                manifest_drm = track.drm
+                track.drm = drm_from_init_segment(track, init_data=init_data) or manifest_drm
+                init_keys, init_drm_type, init_pssh = license_track(track, title, candidates)
+                init_refusal = capped_tracks.pop(tid, None)
+                if init_pssh != pssh_str:
+                    log.info(
+                        f"The manifest PSSH gave no content key for KID {track_kid.hex} of track "
+                        f"{sanitize_log(tid[:12])}, tried the init segment PSSH"
+                    )
+                if track_kid.hex in init_keys:
+                    keys, track_drm_type, pssh_str = init_keys, init_drm_type, init_pssh
+                    refusal = None
+                else:
+                    track.drm = manifest_drm
+                    refusal = refusal or init_refusal
+                    if not refusal:
+                        warn(f"No content key for KID {track_kid.hex} of track {sanitize_log(tid[:12])}")
+            if refusal:
+                capped_tracks[tid] = refusal
                 continue
 
-            if pssh_str in seen_pssh:
-                for prev_keys in all_keys.values():
-                    if prev_keys:
-                        all_keys[tid] = prev_keys
-                        break
-                continue
-            seen_pssh.add(pssh_str)
-
-            try:
-                keys = _handle_single_server_cdm(service, title, track, pssh_str, track_drm_type, request)
-                if keys:
-                    all_keys[tid] = keys
-                    if track_drm_type:
-                        actual_drm_type = track_drm_type
-            except SystemExit:
-                log.warning(f"Service exited while resolving keys for track {sanitize_log(tid[:12])}, skipping")
-            except (Exception, SystemExit) as e:
-                log.warning(f"Failed to resolve keys for track {sanitize_log(tid[:12])}: {e}")
+            if keys:
+                all_keys[tid] = keys
+                sources = sources_by_pssh.get((pssh_str, pssh_set(track)), {}) if pssh_str is not None else {}
+                note_served_keys(session, keys, sources)
+                if sources:
+                    vault_keys.extend(sources)
+            if keys and track_drm_type:
+                drm_types[tid] = track_drm_type
+                actual_drm_type = track_drm_type
 
         response: Dict[str, Any] = {"keys": all_keys}
+        if clear_tracks:
+            response["clear_tracks"] = clear_tracks
+        if vault_keys:
+            response["vault_keys"] = vault_keys
         if actual_drm_type:
             response["drm_type"] = actual_drm_type
+        if drm_types:
+            response["drm_types"] = drm_types
+        if capped_tracks:
+            response["capped_tracks"] = capped_tracks
         return web.json_response(response)
 
     if not track_id:
@@ -2866,37 +4962,64 @@ async def session_license_handler(
         )
 
     try:
-        title = _find_title_for_track(track_id, session)
+        title = find_title_for_track(track_id, session)
         service = session.service_instance
 
         pssh_b64 = data.get("pssh")
-        if pssh_b64:
-            if not track.drm:
-                track.drm = []
-            if drm_type == "playready":
-                track.pr_pssh = pssh_b64
-                from pyplayready.system.pssh import PSSH as PlayReadyPSSH
-
-                from unshackle.core.drm import PlayReady
-
-                pr_pssh = PlayReadyPSSH(base64.b64decode(pssh_b64))
-                pr_drm = PlayReady(pssh=pr_pssh, pssh_b64=pssh_b64)
-                track.drm.append(pr_drm)
-            elif drm_type == "widevine":
-                from pywidevine.pssh import PSSH as WidevinePSSH
-
-                from unshackle.core.drm import Widevine
-
-                wv_pssh = WidevinePSSH(pssh_b64)
-                wv_drm = Widevine(pssh=wv_pssh)
-                track.drm.append(wv_drm)
+        if pssh_b64 or mode == "server_cdm":
+            ensure_track_drm(track, getattr(service, "session", None))
 
         if mode == "server_cdm":
-            keys = _handle_single_server_cdm(service, title, track, pssh_b64, drm_type, request)
+            api_key = request.headers.get("X-Secret-Key", "anonymous") if request else "anonymous"
+            candidates = (
+                vault_candidates(drm_type)
+                if vault_only
+                else server_drm_candidates(session.service_tag, serve_user_config(api_key), drm_type, track)
+            )
+            picked = pick_server_pssh(track, candidates)
+            if not picked:
+                raise APIError(
+                    APIErrorCode.INVALID_INPUT,
+                    f"No PSSH on track {sanitize_log(track_id[:12])} for {', '.join(candidates) or 'any CDM'}",
+                )
+            server_drm_type, server_pssh = picked
+            if pssh_b64 and server_drm_type != drm_type:
+                log.info(
+                    f"Client asked for {sanitize_log(drm_type)} on track {sanitize_log(track_id[:12])}, "
+                    f"licensing with the server's {server_drm_type} CDM"
+                )
+                pssh_b64 = None
+            if pssh_b64:
+                require_track_pssh(track, pssh_b64, drm_type)
+                if drm_type == "playready":
+                    track.pr_pssh = pssh_b64
+            key_sources: Dict[str, str] = {}
+            keys = handle_single_server_cdm(
+                service,
+                title,
+                track,
+                pssh_b64 or server_pssh,
+                server_drm_type,
+                request,
+                key_sources,
+                live_licence_refusal(session, track),
+                vault_only=vault_only,
+            )
             log.info(f"Server CDM resolved {len(keys)} key(s) for track {sanitize_log(track_id[:12])}")
-            return web.json_response({"keys": keys})
+            note_served_keys(session, keys, key_sources)
+            return web.json_response({"keys": keys, "vault_keys": list(key_sources), "drm_type": server_drm_type})
 
-        return _handle_proxy_license(service, title, track, challenge_b64, drm_type)
+        if pssh_b64:
+            require_track_pssh(track, pssh_b64, drm_type)
+            if drm_type == "playready":
+                track.pr_pssh = pssh_b64
+
+        certificate = data.get("is_certificate") is True
+        if getattr(session, "server_device", False) and not certificate:
+            denied = live_licence_refusal(session, track)
+            if denied:
+                raise denied
+        return handle_proxy_license(service, title, track, challenge_b64, drm_type, certificate=certificate)
 
     except APIError:
         raise
@@ -2917,9 +5040,59 @@ async def session_license_handler(
         )
 
 
+def note_served_keys(session: Any, keys: Dict[str, str], sources: Dict[str, str]) -> None:
+    """Remember every KID:KEY the remote session handed out and which server vault supplied it.
+
+    The vault name stays on the server: a bad-key report names only the pair, and the
+    server looks the source up here to flag its own row.
+    """
+    for kid, key in keys.items():
+        session.served_keys[kid] = (key, sources.get(kid, "cdm"))
+
+
+async def session_bad_key_handler(
+    data: Dict[str, Any], session_id: str, request: Optional[web.Request] = None
+) -> web.Response:
+    """Flag a server-vault content key the client proved wrong, so the next licence reaches the CDM.
+
+    The server never sees a segment, so the client is the only side that can test a content key.
+    Only a pair this remote session served can be flagged, which keeps a client from
+    poisoning the bad-key table for content keys it never received.
+    """
+    from uuid import UUID
+
+    session = await get_validated_session(session_id, request)
+    require_authenticated(session)
+
+    kid = str(data.get("kid") or "").replace("-", "").lower()
+    key = str(data.get("key") or "").lower()
+    served_key, source = session.served_keys.get(kid, ("", ""))
+    if not key or served_key.lower() != key:
+        log.warning(f"Session {sanitize_log(session_id[:12])} reported a bad content key it was never served: {kid}")
+        raise APIError(APIErrorCode.INVALID_INPUT, "This session was not served that KID:KEY pair")
+
+    vaults = load_server_vaults(session.service_instance.__class__.__name__)
+
+    def flag() -> None:
+        for vault in vaults.vaults:
+            if not vault.local and vault.name != source:
+                continue
+            try:
+                vault.flag_bad_key(vaults.service, UUID(hex=kid), served_key, source)
+            except Exception as e:
+                log.debug(f"Could not flag {kid} as bad in vault {sanitize_log(vault.name)}: {e!r}")
+
+    await asyncio.to_thread(flag)
+    session.served_keys.pop(kid, None)
+    log.warning(
+        f"Client proved {kid}:{served_key} from vault {sanitize_log(source)} wrong, flagged in the server vaults"
+    )
+    return web.json_response({"flagged": True})
+
+
 async def session_info_handler(session_id: str, request: Optional[web.Request] = None) -> web.Response:
-    """Check session validity and get session info."""
-    session = await _get_validated_session(session_id, request)
+    """Make sure that the remote session is valid, and get the remote session info."""
+    session = await get_validated_session(session_id, request)
 
     from unshackle.core.api.session_store import get_session_store
 
@@ -2928,7 +5101,7 @@ async def session_info_handler(session_id: str, request: Optional[web.Request] =
             "session_id": session.session_id,
             "service": session.service_tag,
             "valid": True,
-            "expires_in": get_session_store()._ttl,
+            "expires_in": get_session_store().ttl,
             "track_count": len(session.tracks),
             "title_count": len(session.title_map),
         }
@@ -2936,30 +5109,17 @@ async def session_info_handler(session_id: str, request: Optional[web.Request] =
 
 
 async def session_delete_handler(session_id: str, request: Optional[web.Request] = None) -> web.Response:
-    """Delete a session, return updated cache files, and clean up server-side data."""
-    import base64
-    import zlib
-
+    """Delete a remote session, return updated cache files, and clean up server-side data."""
     from unshackle.core.api.session_store import get_session_store
-    from unshackle.core.config import config as app_config
 
-    session = await _get_validated_session(session_id, request)
+    session = await get_validated_session(session_id, request)
     store = get_session_store()
 
     if session.input_bridge:
         session.input_bridge.cancel()
 
     cache_tag = session.cache_tag
-    cache_data: Dict[str, str] = {}
-    if cache_tag:
-        cache_dir = app_config.directories.cache / cache_tag
-        if cache_dir.is_dir():
-            for f in cache_dir.glob("*.json"):
-                if not f.stem.startswith("titles_"):
-                    try:
-                        cache_data[f.stem] = base64.b64encode(zlib.compress(f.read_bytes())).decode("ascii")
-                    except Exception:
-                        pass
+    cache_data = collect_cache_files(cache_tag) if cache_tag and client_owns_login(session) else {}
 
     await store.delete(session_id)
 

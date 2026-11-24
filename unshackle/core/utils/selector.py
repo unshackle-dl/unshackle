@@ -31,16 +31,16 @@ class Selector:
         collapse_on_start: bool = False,
     ):
         """
-        Initialize the Selector.
+        Initialise the Selector.
 
         Args:
             options: List of strings to select from.
             cursor_style: Rich style for the highlighted cursor item.
             text_style: Rich style for normal items.
             page_size: Number of items to show per page.
-            minimal_count: Minimum number of items that must be selected.
+            minimal_count: Minimum number of items you must select.
             dependencies: Dictionary mapping parent index to list of child indices.
-            collapse_on_start: If True, child items are hidden initially.
+            collapse_on_start: If True, the Selector hides child items initially.
         """
         self.options = options
         self.cursor_style = cursor_style
@@ -49,7 +49,6 @@ class Selector:
         self.minimal_count = minimal_count
         self.dependencies = dependencies or {}
 
-        # Parent-Child mapping for quick lookup
         self.child_to_parent = {}
         for parent, children in self.dependencies.items():
             for child in children:
@@ -59,10 +58,8 @@ class Selector:
         self.selected_indices = set()
         self.scroll_offset = 0
 
-        # Tree view state
         self.expanded_headers = set()
         if not collapse_on_start:
-            # Expand all by default
             self.expanded_headers.update(self.dependencies.keys())
 
     def get_visible_indices(self) -> list[int]:
@@ -72,13 +69,11 @@ class Selector:
         """
         visible = []
         for idx in range(len(self.options)):
-            # If it's a child, check if parent is expanded
             if idx in self.child_to_parent:
                 parent = self.child_to_parent[idx]
                 if parent in self.expanded_headers:
                     visible.append(idx)
             else:
-                # It's a header or independent item, always visible
                 visible.append(idx)
         return visible
 
@@ -88,9 +83,7 @@ class Selector:
         """
         visible_indices = self.get_visible_indices()
 
-        # Adjust scroll offset to ensure cursor is visible
         if self.cursor_index not in visible_indices:
-            # Fallback if cursor got hidden (should be handled in move, but safety check)
             self.cursor_index = visible_indices[0] if visible_indices else 0
 
         try:
@@ -99,17 +92,14 @@ class Selector:
             cursor_visual_pos = 0
             self.cursor_index = visible_indices[0]
 
-        # Calculate logical page start/end based on VISIBLE items
         start_idx = self.scroll_offset
         end_idx = start_idx + self.page_size
 
-        # Dynamic scroll adjustment
         if cursor_visual_pos < start_idx:
             self.scroll_offset = cursor_visual_pos
         elif cursor_visual_pos >= end_idx:
             self.scroll_offset = cursor_visual_pos - self.page_size + 1
 
-        # Re-calc render range
         render_indices = visible_indices[self.scroll_offset : self.scroll_offset + self.page_size]
 
         table = Table(show_header=False, show_edge=False, box=None, pad_edge=False, padding=(0, 1, 0, 0))
@@ -130,7 +120,6 @@ class Selector:
 
             table.add_row(indicator_text, content_text)
 
-        # Fill empty rows to maintain height
         rows_rendered = len(render_indices)
         for _ in range(self.page_size - rows_rendered):
             table.add_row(Text(" "), Text(" "))
@@ -180,7 +169,6 @@ class Selector:
 
         total_visible = len(visible_indices)
 
-        # Calculate current logical page
         current_page = self.scroll_offset // self.page_size
         total_pages = (total_visible + self.page_size - 1) // self.page_size
 
@@ -189,9 +177,7 @@ class Selector:
         if 0 <= new_page < total_pages:
             self.scroll_offset = new_page * self.page_size
 
-            # Move cursor to top of new page
             try:
-                # Calculate what visual index corresponds to the start of the new page
                 new_visual_cursor = self.scroll_offset
                 if new_visual_cursor < len(visible_indices):
                     self.cursor_index = visible_indices[new_visual_cursor]
@@ -229,7 +215,7 @@ class Selector:
     def toggle_expand_all(self):
         """
         Toggles expansion state of ALL headers.
-        If all are expanded -> Collapse all.
+        If every header shows its children -> Collapse all.
         Otherwise -> Expand all.
         """
         if not self.dependencies:
@@ -252,23 +238,21 @@ class Selector:
     def get_input_windows(self):
         """
         Captures and parses keyboard input on Windows systems using msvcrt.
-        Returns command strings like 'UP', 'DOWN', 'ENTER', etc.
+        Returns command strings such as 'UP', 'DOWN', or 'ENTER'.
         """
         key = msvcrt.getch()
-        # Ctrl+C (0x03) or ESC (0x1b)
         if key == b"\x03" or key == b"\x1b":
             return "CANCEL"
-        # Special keys prefix (Arrow keys, etc., send 0xe0 or 0x00 first)
         if key == b"\xe0" or key == b"\x00":
             try:
                 key = msvcrt.getch()
-                if key == b"H":  # Arrow Up
+                if key == b"H":
                     return "UP"
-                if key == b"P":  # Arrow Down
+                if key == b"P":
                     return "DOWN"
-                if key == b"K":  # Arrow Left
+                if key == b"K":
                     return "LEFT"
-                if key == b"M":  # Arrow Right
+                if key == b"M":
                     return "RIGHT"
             except Exception:
                 pass
@@ -303,36 +287,33 @@ class Selector:
     def get_input_unix(self):
         """
         Captures and parses keyboard input on Unix/Linux systems using click.getchar().
-        Returns command strings like 'UP', 'DOWN', 'ENTER', etc.
+        Returns command strings such as 'UP', 'DOWN', or 'ENTER'.
         """
         char = click.getchar()
-        # Ctrl+C
         if char == "\x03":
             return "CANCEL"
 
-        # ANSI Escape Sequences for Arrow Keys
         mapping = {
-            "\x1b[A": "UP",  # Escape + [ + A
-            "\x1b[B": "DOWN",  # Escape + [ + B
-            "\x1b[C": "RIGHT",  # Escape + [ + C
-            "\x1b[D": "LEFT",  # Escape + [ + D
+            "\x1b[A": "UP",
+            "\x1b[B": "DOWN",
+            "\x1b[C": "RIGHT",
+            "\x1b[D": "LEFT",
         }
         if char in mapping:
             return mapping[char]
 
-        # Handling manual Escape sequences
-        if char == "\x1b":  # ESC
+        if char == "\x1b":
             try:
                 next1 = click.getchar()
-                if next1 in ("[", "O"):  # Sequence indicators
+                if next1 in ("[", "O"):
                     next2 = click.getchar()
-                    if next2 == "A":  # Arrow Up
+                    if next2 == "A":
                         return "UP"
-                    if next2 == "B":  # Arrow Down
+                    if next2 == "B":
                         return "DOWN"
-                    if next2 == "C":  # Arrow Right
+                    if next2 == "C":
                         return "RIGHT"
-                    if next2 == "D":  # Arrow Left
+                    if next2 == "D":
                         return "LEFT"
                 return "CANCEL"
             except Exception:
@@ -418,9 +399,9 @@ def select_multiple(
         options: List of options to display.
         minimal_count: Minimum number of selections required.
         page_size: Number of items per page.
-        return_indices: If True, returns indices; otherwise returns the option strings.
-        cursor_style: Style color for the cursor.
-        collapse_on_start: If True, child items are hidden initially.
+        return_indices: If True, returns indices. If False, returns the option strings.
+        cursor_style: Style colour for the cursor.
+        collapse_on_start: If True, the Selector hides child items initially.
     """
     selector = Selector(
         options=options,

@@ -1,11 +1,12 @@
 import gzip
+import importlib
 import socket
 import threading
 
 import pytest
 import requests as rq
 
-from unshackle.core.downloaders.requests import _is_content_encoded, download
+from unshackle.core.downloaders.requests import download, is_content_encoded
 
 
 @pytest.mark.parametrize(
@@ -34,7 +35,7 @@ from unshackle.core.downloaders.requests import _is_content_encoded, download
     ],
 )
 def test_is_content_encoded(value, expected):
-    assert _is_content_encoded(value) is expected
+    assert is_content_encoded(value) is expected
 
 
 PLAIN = b"WEBVTT\n\n" + b"".join(f"{i:05d} cue text\n".encode() for i in range(2000))
@@ -50,9 +51,9 @@ class _EncodingServer:
         self.sock.bind(("127.0.0.1", 0))
         self.sock.listen(8)
         self.url = f"http://127.0.0.1:{self.sock.getsockname()[1]}/sub.vtt"
-        threading.Thread(target=self._serve, daemon=True).start()
+        threading.Thread(target=self.serve, daemon=True).start()
 
-    def _serve(self):
+    def serve(self):
         while True:
             try:
                 conn, _ = self.sock.accept()
@@ -107,4 +108,48 @@ def test_encoded_body_discards_a_partial_instead_of_range_resuming(tmp_path, enc
     save_path = tmp_path / "sub.vtt"
     save_path.with_name("sub.vtt.!dev").write_bytes(PLAIN[:5000])
     list(download(url=encoding_server.url, save_path=save_path, session=rq.Session()))
+    assert save_path.read_bytes() == PLAIN
+
+
+class _FakeRnetResponse:
+    def __init__(self, status_code, headers, body):
+        self.status_code = status_code
+        self.headers = headers
+        self.content_length = len(body)
+        self._body = body
+
+    def raise_for_status(self):
+        pass
+
+    def stream(self):
+        yield self._body
+
+    def close(self):
+        pass
+
+
+class _FakeRnetSession:
+    """Duck-typed rnet stand-in: an encoded 206 for a Range request (the resume the
+    fail-closed guard must reject), an encoded 200 for the clean restart."""
+
+    def __init__(self, body):
+        self.body = body
+        self.range_requests = 0
+
+    def get(self, url, stream=True, **kwargs):
+        headers = kwargs.get("headers") or {}
+        if any(k.lower() == "range" for k in headers):
+            self.range_requests += 1
+            return _FakeRnetResponse(206, {"Content-Encoding": "zstd"}, b"\x00mid-stream-slice\x00")
+        return _FakeRnetResponse(200, {"Content-Encoding": "zstd"}, self.body)
+
+
+def test_rnet_encoded_body_discards_a_partial_instead_of_range_resuming(tmp_path, monkeypatch):
+    dl = importlib.import_module("unshackle.core.downloaders.requests")
+    monkeypatch.setattr(dl, "is_rnet_session", lambda s: isinstance(s, _FakeRnetSession))
+    session = _FakeRnetSession(PLAIN)
+    save_path = tmp_path / "sub.vtt"
+    save_path.with_name("sub.vtt.!dev").write_bytes(PLAIN[:5000])
+    list(download(url="http://127.0.0.1:1/sub.vtt", save_path=save_path, session=session))
+    assert session.range_requests == 1
     assert save_path.read_bytes() == PLAIN

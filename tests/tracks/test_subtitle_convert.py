@@ -50,7 +50,7 @@ Dialogue: 0,0:00:03.00,0:00:04.00,Default,,0,0,0,,World
 
 
 @pytest.fixture(autouse=True)
-def _no_subtitleedit(monkeypatch):
+def no_subtitleedit(monkeypatch):
     """Default every test to a SubtitleEdit-less environment; tests opt in when needed."""
     monkeypatch.setattr(binaries, "SubtitleEdit", None)
 
@@ -67,16 +67,12 @@ def cue_count(path) -> int:
     return len(re.findall(r"-->", path.read_text("utf8")))
 
 
-# --- capability matrix / resolver -------------------------------------------------------
-
-
 def test_resolve_webvtt_to_srt_order():
     chain = [b.name for b in sc.resolve_backends(Codec.WebVTT, Codec.SubRip)]
     assert chain == ["subby", "pysubs2", "pycaption"]
 
 
 def test_resolve_ass_to_srt_only_pysubs2_without_subtitleedit():
-    # subby and pycaption cannot read ASS, so only pysubs2 remains.
     chain = [b.name for b in sc.resolve_backends(Codec.SubStationAlphav4, Codec.SubRip)]
     assert chain == ["pysubs2"]
 
@@ -88,13 +84,11 @@ def test_subtitleedit_ranks_first_when_available(monkeypatch):
 
 
 def test_styled_ass_to_ttml_vtt_prefers_pysubs2_over_subtitleedit(monkeypatch):
-    # Measured: SE flattens ASS inline styling to TTML/VTT; pysubs2 keeps i/b/u.
     monkeypatch.setattr(binaries, "SubtitleEdit", "/usr/bin/seconv")
     for target in (Codec.TimedTextMarkupLang, Codec.WebVTT):
         chain = [b.name for b in sc.resolve_backends(Codec.SubStationAlphav4, target)]
         assert chain[0] == "pysubs2", f"expected pysubs2 first for ASS->{target.name}, got {chain}"
-        assert "subtitleedit" in chain  # still a fallback
-    # ASS->SRT keeps SE first (only backend that keeps colour there).
+        assert "subtitleedit" in chain
     chain = [b.name for b in sc.resolve_backends(Codec.SubStationAlphav4, Codec.SubRip)]
     assert chain[0] == "subtitleedit"
 
@@ -102,11 +96,10 @@ def test_styled_ass_to_ttml_vtt_prefers_pysubs2_over_subtitleedit(monkeypatch):
 def test_pin_then_fallback_orders_pin_first():
     chain = [b.name for b in sc.resolve_backends(Codec.WebVTT, Codec.SubRip, pin="pysubs2")]
     assert chain[0] == "pysubs2"
-    assert "subby" in chain  # fallbacks remain after the pin
+    assert "subby" in chain
 
 
 def test_pin_unavailable_falls_back_to_ranked_chain():
-    # subtitleedit pinned but not installed -> just the ranked available backends.
     chain = [b.name for b in sc.resolve_backends(Codec.WebVTT, Codec.SubRip, pin="subtitleedit")]
     assert chain == ["subby", "pysubs2", "pycaption"]
 
@@ -117,7 +110,6 @@ def test_fallback_runs_when_first_backend_fails(tmp_path, monkeypatch):
     def boom(self, source, src, target, out):
         raise RuntimeError("backend exploded")
 
-    # WebVTT->SRT chain is [subby, pysubs2, pycaption]; kill subby, expect pysubs2 to finish.
     monkeypatch.setattr(sc.SubbyBackend, "convert", boom)
     sub = make_sub(tmp_path, "x.vtt", VTT_SAMPLE, Codec.WebVTT)
     out = sub.convert(Codec.SubRip, forced=True)
@@ -128,17 +120,14 @@ def test_fallback_runs_when_first_backend_fails(tmp_path, monkeypatch):
 def test_no_backend_for_unsupported_target_raises(tmp_path):
     sub = make_sub(tmp_path, "x.ass", ASS_SAMPLE, Codec.SubStationAlphav4)
     with pytest.raises(NotImplementedError):
-        sub.convert(Codec.fVTT, forced=True)  # no backend writes segmented fVTT
-
-
-# --- styled-ASS protection --------------------------------------------------------------
+        sub.convert(Codec.fVTT, forced=True)
 
 
 def test_ass_to_srt_kept_as_is_when_not_forced(tmp_path, monkeypatch):
     monkeypatch.setattr("unshackle.core.config.config.subtitle", {}, raising=False)
     sub = make_sub(tmp_path, "x.ass", ASS_SAMPLE, Codec.SubStationAlphav4)
     out = sub.convert(Codec.SubRip, forced=False)
-    assert sub.codec == Codec.SubStationAlphav4  # unchanged
+    assert sub.codec == Codec.SubStationAlphav4
     assert out == sub.path
     assert out.suffix == ".ass"
 
@@ -150,10 +139,7 @@ def test_ass_to_srt_converts_when_forced(tmp_path, monkeypatch):
     assert sub.codec == Codec.SubRip
     assert out.suffix == ".srt"
     assert cue_count(out) == 2
-    assert "{\\" not in out.read_text("utf8")  # override tags stripped
-
-
-# --- conversion paths -------------------------------------------------------------------
+    assert "{\\" not in out.read_text("utf8")
 
 
 def test_webvtt_to_srt_conversion(tmp_path, monkeypatch):
@@ -169,8 +155,6 @@ def test_same_codec_is_noop(tmp_path):
     assert sub.convert(Codec.SubRip) == sub.path
     assert sub.codec == Codec.SubRip
 
-
-# --- ASS/SSA font detection ------------------------------------------------------------
 
 FONT_ASS = """[Script Info]
 ScriptType: v4.00+
@@ -190,22 +174,14 @@ Dialogue: 0,0:00:05.00,0:00:06.00,Default,,0,0,0,,{\\fnGeorgia\\b1}bold note
 
 def test_extract_fonts_styles_and_inline_overrides():
     fonts = Subtitle.extract_fonts(FONT_ASS)
-    # Style fontnames (column located via Format line, @-prefix stripped) + inline \fn overrides
     assert fonts == {"Trebuchet MS", "Arial Unicode MS", "Times New Roman", "Georgia"}
-    # case-insensitive de-dup keeps the mixed-case spelling, not "times new roman"
     assert "times new roman" not in fonts
 
 
 def test_extract_fonts_handles_non_default_column_order():
-    ass = (
-        "[V4+ Styles]\n"
-        "Format: Name, Fontsize, Fontname, Bold\n"  # Fontname not in the usual position
-        "Style: Main,28,Verdana,0\n"
-    )
+    ass = "[V4+ Styles]\nFormat: Name, Fontsize, Fontname, Bold\nStyle: Main,28,Verdana,0\n"
     assert Subtitle.extract_fonts(ass) == {"Verdana"}
 
-
-# --- non-Latin scripts (RTL / CJK) preserved through conversion ------------------------
 
 CJK_RTL_VTT = """WEBVTT
 
@@ -225,7 +201,7 @@ CJK_RTL_VTT = """WEBVTT
 
 @pytest.mark.parametrize(
     "pattern",
-    [r"[؀-ۿ]", r"[가-힣]", r"[一-鿿]"],  # Arabic, Hangul, CJK
+    [r"[؀-ۿ]", r"[가-힣]", r"[一-鿿]"],
 )
 def test_non_latin_scripts_survive_vtt_to_srt(tmp_path, monkeypatch, pattern):
     monkeypatch.setattr("unshackle.core.config.config.subtitle", {}, raising=False)
@@ -233,10 +209,8 @@ def test_non_latin_scripts_survive_vtt_to_srt(tmp_path, monkeypatch, pattern):
     out = sub.convert(Codec.SubRip, forced=True)
     text = out.read_text("utf8")
     assert cue_count(out) == 3
-    assert re.search(pattern, text)  # script survived the round-trip, no mojibake
+    assert re.search(pattern, text)
 
-
-# --- SDH stripping ----------------------------------------------------------------------
 
 SDH_SRT = """1
 00:00:01,000 --> 00:00:02,000
@@ -253,18 +227,41 @@ Hello there.
 
 
 def test_sdh_stripping_removes_effects_keeps_dialogue(tmp_path, monkeypatch):
-    # subby's SDHStripper runs on SRT without SubtitleEdit installed.
     monkeypatch.setattr("unshackle.core.config.config.subtitle", {"sdh_method": "subby"}, raising=False)
     sub = make_sub(tmp_path, "x.srt", SDH_SRT, Codec.SubRip)
     sub.strip_hearing_impaired()
     out = sub.path.read_text("utf8")
-    assert "Hello there." in out  # real dialogue kept
-    assert "door creaks" not in out  # bracketed effect removed (subby SDHStripper)
+    assert "Hello there." in out
+    assert "door creaks" not in out
 
 
-# --- segmented (box-encapsulated) formats: fVTT (wvtt) / fTTML (stpp) --------------------
-# These ship from DASH/HLS as fragmented MP4 (e.g. HBO Max). The downloader concatenates
-# init + media segments into one file; parse() reads the MP4 boxes directly.
+SDH_ASS = """[Script Info]
+ScriptType: v4.00+
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,Arial,20,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,1,2,10,10,18,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:01.00,0:00:02.00,Default,,0,0,0,,[door creaks]
+Dialogue: 0,0:00:03.00,0:00:04.00,Default,,0,0,0,,Hello there.
+"""
+
+
+def test_sdh_stripping_ass_without_subtitleedit_content_matches_codec(tmp_path, monkeypatch):
+    monkeypatch.setattr("unshackle.core.config.config.subtitle", {"sdh_method": "auto"}, raising=False)
+    sub = make_sub(tmp_path, "x.ass", SDH_ASS, Codec.SubStationAlphav4)
+    sub.strip_hearing_impaired()
+
+    assert sub.codec == Codec.SubRip
+    assert sub.path.suffix == ".srt"
+    text = sub.path.read_text("utf8")
+    assert "[Script Info]" not in text and "Dialogue:" not in text
+    assert "-->" in text
+    assert "Hello there." in text
+    assert "door creaks" not in text
+
 
 FIXTURES = pathlib.Path(__file__).parent / "fixtures"
 
@@ -296,7 +293,6 @@ def test_segmented_fvtt_parses_and_converts(tmp_path, monkeypatch):
     seg.write_bytes(data)
     sub = Subtitle(url="https://example.test/x", language="en", codec=Codec.fVTT)
     sub.path = seg
-    # download() converts fVTT -> WebVTT (not "forced"); chain is subby then pycaption.
     out = sub.convert(Codec.WebVTT)
     assert sub.codec == Codec.WebVTT
     assert cue_count(out) == 2
@@ -319,7 +315,6 @@ def test_segmented_fttml_parses_and_converts(tmp_path, monkeypatch):
     seg.write_bytes(data)
     sub = Subtitle(url="https://example.test/x", language="en", codec=Codec.fTTML)
     sub.path = seg
-    # download() converts fTTML -> TTML (only pycaption can read fTTML); then -> SRT.
     sub.convert(Codec.TimedTextMarkupLang)
     assert sub.codec == Codec.TimedTextMarkupLang
     out = sub.convert(Codec.SubRip, forced=True)

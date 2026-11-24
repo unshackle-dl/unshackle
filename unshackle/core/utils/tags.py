@@ -5,11 +5,12 @@ import subprocess
 import tempfile
 import time
 from pathlib import Path
-from typing import Optional, Union
+from typing import Any, Optional, Union
 from xml.sax.saxutils import escape
 
 from unshackle.core import binaries
 from unshackle.core.config import config
+from unshackle.core.music.tagger import write_music_metadata
 from unshackle.core.providers import (
     ExternalIds,
     fuzzy_match,
@@ -18,6 +19,7 @@ from unshackle.core.providers import (
 )
 from unshackle.core.titles.episode import Episode
 from unshackle.core.titles.movie import Movie
+from unshackle.core.titles.music import Song
 from unshackle.core.titles.title import Title
 from unshackle.core.utils.subprocess import log_tool_run
 
@@ -29,6 +31,9 @@ def apply_tags(path: Path, tags: dict[str, str]) -> None:
         return
     if not binaries.Mkvpropedit:
         log.debug("mkvpropedit not found on PATH; skipping tags")
+        return
+    if Path(path).suffix.lower() not in (".mkv", ".mka", ".mks", ".webm"):
+        log.debug("Not a Matroska file; skipping tags for %s", path)
         return
     log.debug("Applying tags to %s: %s", path, tags)
     xml_lines = ['<?xml version="1.0" encoding="UTF-8"?>', "<Tags>", "  <Tag>", "    <Targets/>"]
@@ -64,8 +69,8 @@ def apply_tags(path: Path, tags: dict[str, str]) -> None:
         tmp_path.unlink(missing_ok=True)
 
 
-def _build_tags_from_ids(ids: ExternalIds, kind: str) -> dict[str, str]:
-    """Build standard MKV tags from external IDs."""
+def build_tags_from_ids(ids: ExternalIds, kind: str) -> dict[str, str]:
+    """Assemble standard MKV tags from external IDs."""
     tags: dict[str, str] = {}
     if ids.imdb_id:
         tags["IMDB"] = ids.imdb_id
@@ -87,8 +92,20 @@ def tag_file(
     tvdb_id: Optional[int] = None,
     anilist_id: Optional[Union[int, str]] = None,
     anime: bool = False,
+    session: Any = None,
 ) -> None:
     log.debug("Tagging file %s with title %r", path, title)
+
+    if isinstance(title, Song):
+        try:
+            music_result = write_music_metadata(path, title, session=session)
+        except Exception as e:
+            log.warning("Music tagging failed for %s: %s", path.name, e)
+            return
+        if music_result.skipped and music_result.reason:
+            log.warning("Music metadata skipped for %s: %s", path.name, music_result.reason)
+        return
+
     custom_tags: dict[str, str] = {}
 
     if config.tag and config.tag_group_name:
@@ -129,7 +146,7 @@ def tag_file(
             )
 
             if result and result.external_ids:
-                standard_tags = _build_tags_from_ids(result.external_ids, kind)
+                standard_tags = build_tags_from_ids(result.external_ids, kind)
         except Exception as e:
             log.warning("Metadata lookup failed, applying custom tags only: %s", e)
 

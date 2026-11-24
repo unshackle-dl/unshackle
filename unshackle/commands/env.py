@@ -7,12 +7,11 @@ from typing import Optional
 
 import click
 from rich.padding import Padding
-from rich.table import Table
 from rich.tree import Tree
 
 from unshackle.core import binaries
 from unshackle.core.config import POSSIBLE_CONFIG_PATHS, config, config_path
-from unshackle.core.console import console
+from unshackle.core.console import console, listing_table, print_wide
 from unshackle.core.constants import context_settings
 from unshackle.core.services import Services
 from unshackle.core.temp import TASK_PREFIX, is_stale
@@ -20,11 +19,28 @@ from unshackle.core.temp import TASK_PREFIX, is_stale
 
 def get_dependencies() -> list[dict]:
     """Binary dependency inventory shared by `env check` and the API env check."""
-    return [
-        # Core Media Tools
-        {"name": "FFmpeg", "binary": binaries.FFMPEG, "required": True, "desc": "Media processing", "cat": "Core"},
-        {"name": "FFprobe", "binary": binaries.FFProbe, "required": True, "desc": "Media analysis", "cat": "Core"},
-        {"name": "MKVToolNix", "binary": binaries.MKVToolNix, "required": True, "desc": "MKV muxing", "cat": "Core"},
+    deps = [
+        {
+            "name": "FFmpeg",
+            "binary": binaries.FFMPEG,
+            "required": True,
+            "desc": "Media processing",
+            "cat": "Core",
+        },
+        {
+            "name": "FFprobe",
+            "binary": binaries.FFProbe,
+            "required": True,
+            "desc": "Media analysis",
+            "cat": "Core",
+        },
+        {
+            "name": "MKVToolNix",
+            "binary": binaries.MKVToolNix,
+            "required": True,
+            "desc": "MKV muxing",
+            "cat": "Core",
+        },
         {
             "name": "mkvpropedit",
             "binary": binaries.Mkvpropedit,
@@ -46,8 +62,13 @@ def get_dependencies() -> list[dict]:
             "desc": "DRM decryption",
             "cat": "DRM",
         },
-        # HDR Processing
-        {"name": "dovi_tool", "binary": binaries.DoviTool, "required": False, "desc": "Dolby Vision", "cat": "HDR"},
+        {
+            "name": "dovi_tool",
+            "binary": binaries.DoviTool,
+            "required": False,
+            "desc": "Dolby Vision",
+            "cat": "HDR",
+        },
         {
             "name": "HDR10Plus_tool",
             "binary": binaries.HDR10PlusTool,
@@ -55,7 +76,6 @@ def get_dependencies() -> list[dict]:
             "desc": "HDR10+ metadata",
             "cat": "HDR",
         },
-        # Subtitle Tools
         {
             "name": "SubtitleEdit",
             "binary": binaries.SubtitleEdit,
@@ -70,10 +90,20 @@ def get_dependencies() -> list[dict]:
             "desc": "CC extraction",
             "cat": "Subtitle",
         },
-        # Media Players
-        {"name": "FFplay", "binary": binaries.FFPlay, "required": False, "desc": "Simple player", "cat": "Player"},
-        {"name": "MPV", "binary": binaries.MPV, "required": False, "desc": "Advanced player", "cat": "Player"},
-        # Network Tools
+        {
+            "name": "FFplay",
+            "binary": binaries.FFPlay,
+            "required": False,
+            "desc": "Simple player",
+            "cat": "Player",
+        },
+        {
+            "name": "MPV",
+            "binary": binaries.MPV,
+            "required": False,
+            "desc": "Advanced player",
+            "cat": "Player",
+        },
         {
             "name": "HolaProxy",
             "binary": binaries.HolaProxy,
@@ -81,14 +111,45 @@ def get_dependencies() -> list[dict]:
             "desc": "Proxy service",
             "cat": "Network",
         },
-        {"name": "Caddy", "binary": binaries.Caddy, "required": False, "desc": "Web server", "cat": "Network"},
-        {"name": "Docker", "binary": binaries.Docker, "required": False, "desc": "Gluetun VPN", "cat": "Network"},
-        {"name": "git", "binary": binaries.Git, "required": False, "desc": "Service repos", "cat": "Network"},
+        {
+            "name": "Caddy",
+            "binary": binaries.Caddy,
+            "required": False,
+            "desc": "Web server",
+            "cat": "Network",
+        },
+        {
+            "name": "Docker",
+            "binary": binaries.Docker,
+            "required": False,
+            "desc": "Gluetun VPN",
+            "cat": "Network",
+        },
+        {
+            "name": "git",
+            "binary": binaries.Git,
+            "required": False,
+            "desc": "Service repos",
+            "cat": "Network",
+        },
     ]
+
+    for reg in binaries.get_registered_dependencies():
+        deps.append(
+            {
+                "name": reg["name"],
+                "binary": getattr(binaries, reg["attr"], None),
+                "required": False,
+                "desc": reg["desc"],
+                "cat": "Service",
+            }
+        )
+
+    return deps
 
 
 def clear_directory(path: Path) -> tuple[int, int]:
-    """Delete a directory's contents, returning (files_removed, freed_bytes); recreates the dir.
+    """Delete a directory's contents, returning (files_removed, freed_bytes). Recreates the dir.
 
     Skips task directories that belong to a running download.
     """
@@ -132,31 +193,25 @@ def check() -> None:
     """Checks environment for the required dependencies."""
     all_deps = get_dependencies()
 
-    # Track overall status
     all_required_installed = True
     total_installed = 0
     total_required = 0
     missing_required = []
 
-    # Create a single table
-    table = Table(
-        title="Environment Dependencies", title_style="bold", show_header=True, header_style="bold", expand=False
-    )
-    table.add_column("Category", style="bold cyan", width=10)
-    table.add_column("Tool", width=16)
+    table = listing_table("Environment Dependencies", expand=True, show_lines=True)
+    table.add_column("Category", style="cyan", width=10)
+    table.add_column("Tool", style="text", width=16)
     table.add_column("Status", justify="center", width=10)
     table.add_column("Req", justify="center", width=4)
-    table.add_column("Purpose", style="bright_black", width=20)
+    table.add_column("Purpose", style="text2", overflow="fold")
 
     last_cat = None
     for dep in all_deps:
         path = dep["binary"]
 
-        # Category column (only show when it changes)
         category = dep["cat"] if dep["cat"] != last_cat else ""
         last_cat = dep["cat"]
 
-        # Status
         if path:
             status = "[green]✓[/green]"
             total_installed += 1
@@ -169,23 +224,22 @@ def check() -> None:
         if dep["required"]:
             total_required += 1
 
-        # Required column (compact)
         req = "[red]Y[/red]" if dep["required"] else "[bright_black]-[/bright_black]"
 
-        # Add row
         table.add_row(category, dep["name"], status, req, dep["desc"])
 
-    console.print(Padding(table, (1, 2)))
+    print_wide(table)
 
-    # Compact summary
-    summary_parts = [f"[bold]Total:[/bold] {total_installed}/{len(all_deps)}"]
+    summary_parts = [f"[text]Total:[/text] [repr.number]{total_installed}[/]/[repr.number]{len(all_deps)}[/]"]
 
     if all_required_installed:
         summary_parts.append("[green]All required tools installed ✓[/green]")
     else:
         summary_parts.append(f"[red]Missing required: {', '.join(missing_required)}[/red]")
 
-    console.print(Padding("  ".join(summary_parts), (1, 2)))
+    console.print(Padding("  ".join(summary_parts), (0, 3, 1, 3)))
+    if not all_required_installed:
+        console.print(Padding("[text]Run [cyan]unshackle setup[/cyan] to install them.[/text]", (0, 3, 1, 3)))
 
 
 @env.command()
@@ -277,7 +331,6 @@ def theme() -> None:
         progress.append("  12.4 MB/s", style=palette["cyan"])
         progress.append("  0:00:42", style=text2)
 
-        # one frozen frame of GradientPulseBarColumn's dark_gray-to-pink cosine sweep
         lo = Color.parse(palette["dark_gray"]).triplet
         hi = Color.parse(palette["pink"]).triplet
         assert lo and hi
@@ -288,8 +341,8 @@ def theme() -> None:
             pulse.append("━", style=lut[int(fade * 31)])
 
         block = Group(header, swatch, Text(), docstring, *options, tracks, *logs, Text(), progress, pulse)
-        console.print(Padding(block, (1, 2, 1, 2)))
-        console.print(Rule(style=guide, characters="─"))
+        print_wide(block, (1, 2, 1, 2))
+        print_wide(Rule(style=guide, characters="─"), (0, 0))
     console.print()
 
 
@@ -301,14 +354,16 @@ def info() -> None:
     if config_path:
         log.info(f"Config loaded from {config_path}")
     else:
-        tree = Tree("No config file found, you can use any of the following locations:")
+        tree = Tree(
+            "[text]No config file found, you can use any of the following locations:[/]", guide_style="bright_black"
+        )
         for i, path in enumerate(POSSIBLE_CONFIG_PATHS, start=1):
             tree.add(f"[repr.number]{i}.[/] [text2]{path.resolve()}[/]")
         console.print(Padding(tree, (0, 5)))
 
-    table = Table(title="Directories", title_style="bold", expand=True)
-    table.add_column("Name", no_wrap=True)
-    table.add_column("Path", no_wrap=False, overflow="fold")
+    table = listing_table("Directories", expand=True, show_lines=True)
+    table.add_column("Name", style="cyan", no_wrap=True)
+    table.add_column("Path", style="text2", no_wrap=False, overflow="fold")
 
     path_vars = {
         x: Path(os.getenv(x))
@@ -316,18 +371,19 @@ def info() -> None:
         if sys.platform == "win32" and os.getenv(x)
     }
 
-    for name in sorted(dir(config.directories)):
-        if name.startswith("__") or name == "app_dirs":
-            continue
-        attr_value = getattr(config.directories, name)
+    rows = {
+        name: getattr(config.directories, name)
+        for name in dir(config.directories)
+        if not name.startswith("__") and name != "app_dirs"
+    }
+    rows["user_binaries"] = binaries.user_binaries_dir
+    for name in sorted(rows):
+        attr_value = rows[name]
 
-        # Handle both single Path objects and lists of Path objects
         if isinstance(attr_value, list):
-            # For lists, show each path on a separate line
             paths_str = "\n".join(str(p.resolve()) if isinstance(p, Path) else str(p) for p in attr_value)
             table.add_row(name.title(), paths_str)
         else:
-            # For single Path objects, use the original logic
             path = attr_value.resolve()
             for var, var_path in path_vars.items():
                 if path.is_relative_to(var_path):
@@ -335,7 +391,7 @@ def info() -> None:
                     break
             table.add_row(name.title(), str(path))
 
-    console.print(Padding(table, (1, 5)))
+    print_wide(table)
 
 
 @env.group(name="clear", short_help="Clear an environment directory.", context_settings=context_settings)

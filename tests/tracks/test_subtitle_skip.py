@@ -77,7 +77,7 @@ class Harness:
 
 
 @pytest.fixture(autouse=True)
-def _clear_event():
+def clear_event():
     DOWNLOAD_CANCELLED.clear()
     yield
     DOWNLOAD_CANCELLED.clear()
@@ -97,9 +97,9 @@ def test_failed_subtitle_does_not_truncate_video_or_audio():
         on_subtitle_skipped=h.on_subtitle_skipped,
     )
 
-    assert set(h.completed) == {"v", "a"}  # both fatal tracks fully downloaded
-    assert h.early_returned == []  # nothing early-returned because of the subtitle
-    assert h.skipped == [sub]  # the subtitle was recorded as skipped
+    assert set(h.completed) == {"v", "a"}
+    assert h.early_returned == []
+    assert h.skipped == [sub]
 
 
 def test_good_subtitle_kept_bad_subtitle_skipped():
@@ -115,8 +115,8 @@ def test_good_subtitle_kept_bad_subtitle_skipped():
         on_subtitle_skipped=h.on_subtitle_skipped,
     )
 
-    assert "s-en" in h.completed  # the available subtitle still downloaded
-    assert h.skipped == [bad]  # only the failing one was skipped
+    assert "s-en" in h.completed
+    assert h.skipped == [bad]
 
 
 def test_subtitle_failure_stays_fatal_without_flag():
@@ -134,7 +134,7 @@ def test_subtitle_failure_stays_fatal_without_flag():
             on_subtitle_skipped=h.on_subtitle_skipped,
         )
 
-    assert not DOWNLOAD_CANCELLED.is_set()  # the finally clears the event even on the fatal path
+    assert not DOWNLOAD_CANCELLED.is_set()
 
 
 def test_cancel_event_is_reset_between_titles():
@@ -169,7 +169,7 @@ def test_cancel_event_cleared_after_failed_final_subtitle():
         on_subtitle_skipped=h.on_subtitle_skipped,
     )
 
-    assert not DOWNLOAD_CANCELLED.is_set()  # the helper clears it on exit for any later code
+    assert not DOWNLOAD_CANCELLED.is_set()
 
 
 def test_all_subtitles_skipped_video_audio_kept():
@@ -186,8 +186,8 @@ def test_all_subtitles_skipped_video_audio_kept():
         on_subtitle_skipped=h.on_subtitle_skipped,
     )
 
-    assert set(h.completed) == {"v", "a"}  # both fatal tracks survived
-    assert {t.id for t in h.skipped} == {"s-en", "s-he"}  # every failing subtitle recorded
+    assert set(h.completed) == {"v", "a"}
+    assert {t.id for t in h.skipped} == {"s-en", "s-he"}
 
 
 def test_duplicate_language_subtitles_distinguished_by_id():
@@ -204,7 +204,7 @@ def test_duplicate_language_subtitles_distinguished_by_id():
         on_subtitle_skipped=h.on_subtitle_skipped,
     )
 
-    assert [t.id for t in h.skipped] == ["en-forced", "en-sdh"]  # same language, distinct ids
+    assert [t.id for t in h.skipped] == ["en-forced", "en-sdh"]
 
 
 def test_skipped_subtitle_contract():

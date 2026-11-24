@@ -21,7 +21,6 @@ class SimklProvider(MetadataProvider):
     def search(self, title: str, year: Optional[int], kind: str) -> Optional[MetadataResult]:
         self.log.debug("Searching Simkl for %r (%s, %s)", title, kind, year)
 
-        # Construct appropriate filename based on type
         filename = f"{title}"
         if year:
             filename = f"{title} {year}"
@@ -42,18 +41,17 @@ class SimklProvider(MetadataProvider):
             self.log.debug("Simkl search failed: %s", exc)
             return None
 
-        # Handle case where SIMKL returns empty list (no results)
         if isinstance(data, list):
             self.log.debug("Simkl returned list (no matches) for %r", filename)
             return None
 
-        return self._parse_response(data, title, year, kind)
+        return self.parse_response(data, title, year, kind)
 
     def get_by_id(self, provider_id: Union[int, str], kind: str) -> Optional[MetadataResult]:
-        return None  # SIMKL has no direct ID lookup used here
+        return None
 
     def get_external_ids(self, provider_id: Union[int, str], kind: str) -> ExternalIds:
-        return ExternalIds()  # IDs come from search() response
+        return ExternalIds()
 
     def find_by_imdb_id(self, imdb_id: str, kind: str) -> Optional[ExternalIds]:
         """Look up TMDB/TVDB IDs from an IMDB ID using SIMKL's /search/id and detail endpoints."""
@@ -77,11 +75,9 @@ class SimklProvider(MetadataProvider):
         if not simkl_id:
             return None
 
-        # Map SIMKL type to endpoint
         simkl_type = entry.get("type", "")
         endpoint = "tv" if simkl_type in ("tv", "anime") else "movies"
 
-        # Fetch full details to get cross-referenced IDs
         try:
             r2 = self.session.get(
                 f"{self.BASE_URL}/{endpoint}/{simkl_id}",
@@ -115,7 +111,7 @@ class SimklProvider(MetadataProvider):
             tvdb_id=tvdb_id,
         )
 
-    def _parse_response(
+    def parse_response(
         self, data: dict, search_title: str, search_year: Optional[int], kind: str
     ) -> Optional[MetadataResult]:
         """Parse a SIMKL response into a MetadataResult."""
@@ -131,12 +127,10 @@ class SimklProvider(MetadataProvider):
         result_title = info.get("title")
         result_year = info.get("year")
 
-        # Verify title matches
         if not result_title or not fuzzy_match(result_title, search_title):
             self.log.debug("Simkl title mismatch: searched %r, got %r", search_title, result_title)
             return None
 
-        # Verify year if provided (allow 1 year difference)
         if search_year and result_year and abs(search_year - result_year) > 1:
             self.log.debug("Simkl year mismatch: searched %d, got %d", search_year, result_year)
             return None

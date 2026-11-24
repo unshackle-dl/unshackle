@@ -13,8 +13,8 @@ from unshackle.core.providers.tvdb import primary_language as tvdb_language
 @pytest.mark.parametrize(
     ("tag", "expected"),
     [
-        ("ja", "ja"),  # TMDB alpha-2
-        ("jpn", "ja"),  # IMDb alpha-3
+        ("ja", "ja"),
+        ("jpn", "ja"),
         ("pt-BR", "pt-BR"),
         (None, None),
         ("", None),
@@ -43,7 +43,7 @@ def test_imdb_language_is_alpha_2() -> None:
     "data",
     [
         {},
-        {"spokenLanguages": None},  # search hits can come back with the whole block null
+        {"spokenLanguages": None},
         {"spokenLanguages": {}},
         {"spokenLanguages": {"spokenLanguages": []}},
         {"spokenLanguages": {"spokenLanguages": None}},
@@ -57,9 +57,9 @@ def test_imdb_language_missing(data: dict) -> None:
     ("names", "expected"),
     [
         ("Korean", "ko"),
-        ("Korean, English", "ko"),  # OMDb lists the main language first
+        ("Korean, English", "ko"),
         ("", None),
-        ("None", None),  # OMDb's literal placeholder for unknown
+        ("None", None),
         ("Not A Language", None),
     ],
 )
@@ -70,8 +70,8 @@ def test_omdb_language_from_english_name(names: str, expected: str | None) -> No
 @pytest.mark.parametrize(
     ("data", "expected"),
     [
-        ({"primary_language": "kor"}, "kor"),  # /search
-        ({"originalLanguage": "kor"}, "kor"),  # /series/{id}/extended
+        ({"primary_language": "kor"}, "kor"),
+        ({"originalLanguage": "kor"}, "kor"),
         ({"primary_language": ""}, None),
         ({}, None),
     ],

@@ -5,7 +5,7 @@ from uuid import UUID
 import pymysql
 from pymysql.cursors import DictCursor
 
-from unshackle.core.services import Services
+from unshackle.core.config import config
 from unshackle.core.vault import Vault
 
 
@@ -14,11 +14,12 @@ class MySQL(Vault):
 
     def __init__(self, name: str, host: str, database: str, username: str, no_push: bool = False, **kwargs):
         """
-        All extra arguments provided via **kwargs will be sent to pymysql.connect.
-        This can be used to provide more specific connection information.
+        All extra arguments given through **kwargs will be sent to pymysql.connect.
+        Use this to give more specific connection information.
         """
         super().__init__(name, no_push)
         self.slug = f"{host}:{database}:{username}"
+        kwargs.setdefault("connect_timeout", config.vault_timeout or 10)
         self.conn_factory = ConnectionFactory(
             dict(host=host, db=database, user=username, cursorclass=DictCursor, **kwargs)
         )
@@ -31,36 +32,8 @@ class MySQL(Vault):
         if isinstance(kid, UUID):
             kid = kid.hex
 
-        service_variants = [service]
-        if service != service.lower():
-            service_variants.append(service.lower())
-        if service != service.upper():
-            service_variants.append(service.upper())
-
-        conn = self.conn_factory.get()
-        cursor = conn.cursor()
-
-        try:
-            for service_name in service_variants:
-                if not self.has_table(service_name):
-                    continue
-
-                cursor.execute(
-                    # TODO: SQL injection risk
-                    f"SELECT `id`, `key_` FROM `{service_name}` WHERE `kid`=%s AND `key_`!=%s",
-                    (kid, "0" * 32),
-                )
-                cek = cursor.fetchone()
-                if cek:
-                    return cek["key_"]
-
-            return None
-        finally:
-            cursor.close()
-
-    def get_keys(self, service: str) -> Iterator[tuple[str, str]]:
-        if not self.has_table(service):
-            # no table, no keys, simple
+        table = self.resolve_table(service)
+        if not table:
             return None
 
         conn = self.conn_factory.get()
@@ -68,8 +41,25 @@ class MySQL(Vault):
 
         try:
             cursor.execute(
-                # TODO: SQL injection risk
-                f"SELECT `kid`, `key_` FROM `{service}` WHERE `key_`!=%s",
+                f"SELECT `id`, `key_` FROM `{table}` WHERE `kid`=%s AND `key_`!=%s",
+                (kid, "0" * 32),
+            )
+            cek = cursor.fetchone()
+            return cek["key_"] if cek else None
+        finally:
+            cursor.close()
+
+    def get_keys(self, service: str) -> Iterator[tuple[str, str]]:
+        table = self.resolve_table(service)
+        if not table:
+            return None
+
+        conn = self.conn_factory.get()
+        cursor = conn.cursor()
+
+        try:
+            cursor.execute(
+                f"SELECT `kid`, `key_` FROM `{table}` WHERE `key_`!=%s",
                 ("0" * 32,),
             )
             for row in cursor.fetchall():
@@ -80,6 +70,8 @@ class MySQL(Vault):
     def add_key(self, service: str, kid: Union[UUID, str], key: str) -> bool:
         if not key or key.count("0") == len(key):
             raise ValueError("You cannot add a NULL Content Key to a Vault.")
+
+        service = self.resolve_table(service) or service
 
         if not self.has_permission("INSERT", table=service):
             raise PermissionError(f"MySQL vault {self.slug} has no INSERT permission.")
@@ -98,15 +90,12 @@ class MySQL(Vault):
 
         try:
             cursor.execute(
-                # TODO: SQL injection risk
                 f"SELECT `id` FROM `{service}` WHERE `kid`=%s AND `key_`=%s",
                 (kid, key),
             )
             if cursor.fetchone():
-                # table already has this exact KID:KEY stored
                 return True
             cursor.execute(
-                # TODO: SQL injection risk
                 f"INSERT INTO `{service}` (kid, key_) VALUES (%s, %s)",
                 (kid, key),
             )
@@ -120,6 +109,8 @@ class MySQL(Vault):
         for kid, key in kid_keys.items():
             if not key or key.count("0") == len(key):
                 raise ValueError("You cannot add a NULL Content Key to a Vault.")
+
+        service = self.resolve_table(service) or service
 
         if not self.has_permission("INSERT", table=service):
             raise PermissionError(f"MySQL vault {self.slug} has no INSERT permission.")
@@ -145,9 +136,13 @@ class MySQL(Vault):
         cursor = conn.cursor()
 
         try:
-            placeholders = ",".join(["%s"] * len(kid_keys))
-            cursor.execute(f"SELECT kid FROM `{service}` WHERE kid IN ({placeholders})", list(kid_keys.keys()))
-            existing_kids = {row["kid"] for row in cursor.fetchall()}
+            existing_kids: set[str] = set()
+            kid_list = list(kid_keys)
+            for i in range(0, len(kid_list), 10000):
+                batch = kid_list[i : i + 10000]
+                placeholders = ",".join(["%s"] * len(batch))
+                cursor.execute(f"SELECT kid FROM `{service}` WHERE kid IN ({placeholders})", batch)
+                existing_kids.update(row["kid"] for row in cursor.fetchall())
 
             new_keys = {kid: key for kid, key in kid_keys.items() if kid not in existing_kids}
 
@@ -170,13 +165,36 @@ class MySQL(Vault):
         try:
             cursor.execute("SHOW TABLES")
             for table in cursor.fetchall():
-                # each entry has a key named `Tables_in_<db name>`
-                yield Services.get_tag(list(table.values())[0])
+                yield list(table.values())[0]
         finally:
             cursor.close()
 
+    def resolve_table(self, name: str) -> Optional[str]:
+        """
+        Get the actual Table name matching `name` case-insensitively, if it exists.
+
+        The UPPER() comparison is explicit so the result does not depend on the server's
+        `lower_case_table_names` setting. Where both spellings exist, exact case wins.
+        """
+        conn = self.conn_factory.get()
+        cursor = conn.cursor()
+
+        try:
+            cursor.execute(
+                "SELECT TABLE_NAME FROM information_schema.TABLES"
+                " WHERE TABLE_SCHEMA=%s AND UPPER(TABLE_NAME)=UPPER(%s)",
+                (conn.db, name),
+            )
+            names = [list(row.values())[0] for row in cursor.fetchall()]
+        finally:
+            cursor.close()
+
+        if name in names:
+            return name
+        return names[0] if names else None
+
     def has_table(self, name: str) -> bool:
-        """Check if the Vault has a Table with the specified name."""
+        """Return True if the Vault has a Table with the specified name."""
         conn = self.conn_factory.get()
         cursor = conn.cursor()
 
@@ -190,7 +208,7 @@ class MySQL(Vault):
             cursor.close()
 
     def create_table(self, name: str):
-        """Create a Table with the specified name if not yet created."""
+        """Make a Table with the specified name if it does not exist yet."""
         if self.has_table(name):
             return
 
@@ -202,7 +220,6 @@ class MySQL(Vault):
 
         try:
             cursor.execute(
-                # TODO: SQL injection risk
                 f"""
                 CREATE TABLE IF NOT EXISTS {name} (
                   id          int AUTO_INCREMENT PRIMARY KEY,
@@ -217,7 +234,7 @@ class MySQL(Vault):
             cursor.close()
 
     def get_permissions(self) -> list:
-        """Get and parse Grants to a more easily usable list tuple array."""
+        """Get and parse Grants to a more usable list tuple array."""
         conn = self.conn_factory.get()
         cursor = conn.cursor()
 
@@ -239,7 +256,7 @@ class MySQL(Vault):
             cursor.close()
 
     def has_permission(self, operation: str, database: Optional[str] = None, table: Optional[str] = None) -> bool:
-        """Check if the current connection has a specific permission."""
+        """Return True if the current connection has a specific permission."""
         grants = [x for x in self.permissions if x[0] == ["*"] or operation.upper() in x[0]]
         if grants and database:
             grants = [x for x in grants if x[1][0] in (database, "*")]
@@ -253,10 +270,10 @@ class ConnectionFactory:
         self._con = con
         self._store = threading.local()
 
-    def _create_connection(self) -> pymysql.Connection:
+    def create_connection(self) -> pymysql.Connection:
         return pymysql.connect(**self._con)
 
     def get(self) -> pymysql.Connection:
         if not hasattr(self._store, "conn"):
-            self._store.conn = self._create_connection()
+            self._store.conn = self.create_connection()
         return self._store.conn

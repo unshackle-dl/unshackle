@@ -1,20 +1,20 @@
 # Error Responses
 
 Every endpoint of the unshackle REST API reports failures in a single, predictable
-shape. Whether a request was rejected because a field was missing, a service refused
-to authenticate, or the download worker crashed, the server answers with a JSON body
+shape. The cause can be a missing field, a service that refuses to authenticate, or a
+download worker that crashed. In each case the server answers with a JSON body
 that carries a machine-readable **error code**, a human-readable **message**, and a
 matching **HTTP status**. This page documents that format and catalogues every error
-code the server can emit.
+code the server can send.
 
-If you are building a client against the API, read this page alongside the endpoint
-reference. Each endpoint lists the specific codes it raises, and the meanings of
-those codes are defined here.
+If you write a client against the API, read this page alongside the endpoint
+reference. Each endpoint lists the specific codes it raises, and this page gives the
+meanings of those codes.
 
 !!! note "Where this comes from"
-    The error format is defined in `unshackle/core/api/errors.py`, and the wrapper
+    `unshackle/core/api/errors.py` defines the error format, and the wrapper
     that turns raised errors into responses lives in `unshackle/core/api/routes.py`.
-    Nothing on this page is invented; it reflects the actual server behaviour.
+    Nothing on this page is invented. It reflects the actual server behaviour.
 
 ## The standard error shape
 
@@ -59,7 +59,7 @@ included when it is non-empty, so a client must treat a missing `details` as "no
 extra information". Some concrete examples you may encounter:
 
 - A validation failure may include the offending field or the list of valid values.
-- A "title not found" error on a remote-dl session includes `available_titles`.
+- A "title not found" error on a remote session includes `available_titles`.
 - A maintenance conflict includes `active_jobs`, the jobs blocking the operation.
 - Categorised exceptions add a `reason` tag, such as `"network_connectivity"` or
   `"geofence_restriction"`.
@@ -68,8 +68,8 @@ extra information". Some concrete examples you may encounter:
 
 The `retryable` field appears **only when it is `true`**. It is set for conditions
 the server believes are transient: network errors, rate limiting, and temporary
-service unavailability. When you see it, backing off and retrying is reasonable; when
-it is absent, assume the request will keep failing until you change something.
+service unavailability. When you see it, you can back off and try the request again.
+When it is absent, assume the request will keep failing until you change something.
 
 !!! example "A retryable network error"
     ```json
@@ -96,18 +96,28 @@ but the defaults hold for the overwhelming majority of responses.
 |---|---|---|
 | `INVALID_INPUT` | 400 | A required field is missing, or the request body could not be parsed. Also used as the generic "your input was malformed" code. |
 | `INVALID_SERVICE` | 400 | The named service is unknown, or is not permitted for your API key. |
-| `INVALID_PROXY` | 400 | The supplied proxy specification could not be resolved or is malformed. |
+| `INVALID_PROXY` | 400 | The supplied proxy specification could not be resolved or is malformed, or the proxy failed the [exit check](../../guide/proxies-and-vpn.md#exit-check). |
 | `INVALID_PARAMETERS` | 400 | One or more download or query parameters failed validation (bad codec, bitrate, sort field, and so on). |
 | `AUTH_FAILED` | 401 | Authentication with the streaming service failed (bad credentials or cookies). |
-| `FORBIDDEN` | 403 | The action is not allowed. Raised by server-side gates (per-key restrictions on CDM or credential overrides) and by session IP binding. |
-| `GEOFENCE` | 403 | The content is not available in the applicable region. |
+| `FORBIDDEN` | 403 | The action is not allowed. Raised by server-side gates (per-key restrictions on CDM or credential overrides) and by remote session IP binding. |
+| `SERVER_CDM_CAPPED` | 403 | The server CDM does not license live above the `server_cdm_max_height` of the API key. `details.reason` is `server_cdm_max_height` (with `details.max_height`), `client_device`, for a remote session where the client's own device licenses, or `server_device`, for a remote session that runs on the server's device. A remote client licenses the track with its own device, except for `server_device`: then only its own vaults can supply the key. |
+| `GEOFENCE` | 403 | The title is not available in the applicable region. |
 | `NOT_FOUND` | 404 | A requested resource (title, history entry, and so on) does not exist. |
 | `NO_CONTENT` | 404 | The request was valid but produced nothing: no matching titles, tracks, episodes, or keys. |
 | `JOB_NOT_FOUND` | 404 | The referenced download job does not exist. |
 | `SESSION_NOT_FOUND` | 404 | The remote-dl session does not exist or has expired. |
-| `TRACK_NOT_FOUND` | 404 | A referenced track ID is not present in the session. |
+| `TRACK_NOT_FOUND` | 404 | A referenced track ID is not present in the remote session. |
 | `CONFLICT` | 409 | The target resource is in a state that disallows the action (retrying a running job, prioritising a non-queued job, clearing cache during an active download). |
 | `RATE_LIMITED` | 429 | The streaming service is rate-limiting requests. Retryable. |
+
+!!! warning "Not every `429` is `RATE_LIMITED`"
+    The server has a rate limit of its own. An API key over `serve.tiers.<name>.rate_limit`
+    or `serve.users.<key>.rate_limit` gets a `429` from the authentication middleware, before
+    any handler runs, so it carries no `error_code` and is not the `RATE_LIMITED` code above.
+    It is the shape `{"status": 429, "message": "Rate limit exceeded."}` with a `Retry-After`
+    header. Read `Retry-After` and wait it out rather than retrying on a backoff of your own:
+    the window is fixed, so an early retry only spends the next window. See
+    [Authentication](authentication.md#rate-limit-rejections).
 
 ### Server errors (5xx)
 
@@ -125,7 +135,7 @@ but the defaults hold for the overwhelming majority of responses.
     If a code is ever emitted without a mapped status, the server falls back to
     `500`. In practice every code above has an explicit mapping.
 
-## How errors are produced
+## How the server produces errors
 
 Understanding where an error comes from helps interpret it.
 
@@ -141,14 +151,14 @@ The classification is keyword-based, checked in order:
 
 | If the error mentions... | It becomes | Retryable |
 |---|---|---|
-| auth, login, credential, unauthorized, forbidden, token | `AUTH_FAILED` (401) | no |
-| connection, timeout, network, unreachable, socket, dns, resolve (or `ConnectionError`, `TimeoutError`, `URLError`, `SSLError`) | `NETWORK_ERROR` (503) | yes |
-| geofence, region, "not available in", territory | `GEOFENCE` (403) | no |
-| "not found", 404, "does not exist", "invalid id" | `NOT_FOUND` (404) | no |
-| rate limit, too many requests, 429, throttle | `RATE_LIMITED` (429) | yes |
-| drm, license, widevine, playready, decrypt | `DRM_ERROR` (502) | no |
-| "service unavailable", 503, maintenance, "temporarily unavailable" | `SERVICE_UNAVAILABLE` (503) | yes |
-| invalid, malformed, validation (or `ValueError`, `ValidationError`) | `INVALID_INPUT` (400) | no |
+| `auth`, `login`, `credential`, `unauthorized`, `forbidden`, `token` | `AUTH_FAILED` (401) | no |
+| `connection`, `timeout`, `network`, `unreachable`, `socket`, `dns`, `resolve` (or `ConnectionError`, `TimeoutError`, `URLError`, `SSLError`) | `NETWORK_ERROR` (503) | yes |
+| `geofence`, `geoblock`, `region`, `not available in`, `territory` | `GEOFENCE` (403) | no |
+| `not found`, `404`, `does not exist`, `invalid id` | `NOT_FOUND` (404) | no |
+| `rate limit`, `too many requests`, `429`, `throttle` | `RATE_LIMITED` (429) | yes |
+| `drm`, `license`, `widevine`, `playready`, `decrypt` | `DRM_ERROR` (502) | no |
+| `service unavailable`, `503`, `maintenance`, `temporarily unavailable` | `SERVICE_UNAVAILABLE` (503) | yes |
+| `invalid`, `malformed`, `validation` (or `ValueError`, `ValidationError`) | `INVALID_INPUT` (400) | no |
 | anything else | `INTERNAL_ERROR` (500) | no |
 
 Categorised errors include a `reason` tag inside `details` (such as
@@ -171,8 +181,8 @@ the server returns `INVALID_INPUT` (400) with the parse error in
 
 ## The authentication error exception
 
-There is one place where the response does **not** follow the standard shape: the API
-key authentication middleware. When you send a request to a protected endpoint
+There is one place where the response does **not** follow the standard shape: the
+API key authentication middleware. When you send a request to a protected endpoint
 without a valid `X-Secret-Key` header, the middleware short-circuits with a legacy
 body that uses an integer `status` and no `error_code` or `timestamp`.
 
@@ -189,10 +199,22 @@ body that uses an integer `status` and no `error_code` or `timestamp`.
     ```
 
 !!! warning "Handle both shapes"
-    A robust client must expect two error formats: the standard structured error
+    A client must expect two error formats: the standard structured error
     (string `status` of `"error"`, with `error_code`), and this authentication error
     (integer `status`, no `error_code`). The `GET /api/health` endpoint is exempt
     from authentication, so it never returns the key-error shape.
+
+## Late failures with status `200`
+
+The remote session `titles`, `tracks` and `license` routes send status `200` and the headers
+when the work takes longer than 30 seconds. They then send a newline every 30 seconds to keep
+the connection open. See [Slow responses](endpoints.md#slow-responses). A failure after that
+time arrives as the standard error body, but with status `200`. The body has no field for the
+HTTP status that the error would otherwise have. `error_code` and `retryable` stay in the body.
+
+!!! warning "Check the body on these routes"
+    On these routes a `200` does not always mean success. Parse the body and treat
+    `"status": "error"` with an `error_code` as a failure.
 
 ## Responses with no body
 
@@ -201,13 +223,13 @@ Not every failure or completion has a JSON body. Some endpoints answer with
 deleting a history entry.
 
 !!! warning "Do not parse `204` bodies"
-    A `204` response has no body. Clients must check the status code before attempting
-    to decode JSON, or the decode will fail on an empty string.
+    A `204` response has no body. Clients must examine the status code before they
+    decode JSON, or the decode will fail on an empty string.
 
 ## Debug information
 
-By default, error responses never include tracebacks or internal diagnostics. If the
-server was started with the `--debug-api` flag, every structured error gains a
+By default, error responses never include tracebacks or internal diagnostics. If you
+start the server with the `--debug-api` flag, every structured error gains a
 `debug_info` object:
 
 ```json title="Error with --debug-api enabled"
@@ -225,7 +247,7 @@ server was started with the `--debug-api` flag, every structured error gains a
 
 The `debug_info` object always carries `exception_type` and, for exception-derived
 errors, a formatted `traceback`. Some endpoints add extra diagnostics such as
-captured worker stderr.
+captured job worker stderr.
 
 !!! warning "Developer use only"
     `--debug-api` exposes internal tracebacks in responses. Enable it only for local
@@ -235,20 +257,21 @@ captured worker stderr.
 
 For anyone writing a consumer of the API, a durable strategy is:
 
-1. **Read the HTTP status first.** It tells you the broad class of outcome and lets
-   you handle the `204`/no-body and authentication-error cases before touching the
+1. **Read the HTTP status first.** It tells you the broad class of outcome, and it
+   lets you find the `204`/no-body and authentication-error cases before you read the
    body.
 2. **Branch on `error_code`.** For structured errors, this is the stable identifier
-   to switch on. Do not match on `message`.
-3. **Respect `retryable`.** When it is `true`, back off and retry; the reference
-   client retries `429`, `500`, `502`, `503`, and `504` with exponential backoff. When
-   absent, fix the request rather than repeating it.
-4. **Fall back gracefully.** Unrecognised codes should be surfaced using the
-   `message` plus the HTTP status.
+   to switch on. Do not use `message` as the identifier.
+3. **Respect `retryable`.** When it is `true`, back off and try the request again. The
+   reference client retries `429`, `500`, `502`, `503`, and `504` with exponential
+   backoff. When absent, fix the request rather than repeating it.
+4. **Fall back gracefully.** For an unrecognised code, show the `message` and the
+   HTTP status.
 
 !!! note "Reference consumer"
     unshackle's own remote-download client treats any status of `400` or above as
-    fatal: it logs `Server error [<error_code>]: <message>` and exits. It also wraps
+    fatal, and a `200` body with `"status": "error"` and an `error_code` too: it logs
+    `Server error [<error_code>]: <message>` and exits. It also wraps
     requests in a retry adapter (five attempts, backing off on `429`, `500`, `502`,
     `503`, and `504`). This is a reasonable template for your own client's error
     handling.

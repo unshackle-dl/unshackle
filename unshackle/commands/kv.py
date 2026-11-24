@@ -2,15 +2,25 @@ import logging
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union, cast
+from uuid import UUID
 
 import click
+from rich.console import RenderableType
 from rich.padding import Padding
+from rich.progress import (
+    MofNCompleteColumn,
+    Progress,
+    SpinnerColumn,
+    TextColumn,
+    TimeElapsedColumn,
+    TimeRemainingColumn,
+)
 from rich.text import Text
 from rich.tree import Tree
 
 from unshackle.core.config import config
-from unshackle.core.console import console
+from unshackle.core.console import GradientPulseBarColumn, console
 from unshackle.core.constants import context_settings
 from unshackle.core.services import Services
 from unshackle.core.vault import Vault
@@ -46,9 +56,59 @@ def process_service_keys(from_vault: Vault, service: str, log: logging.Logger) -
     return {kid: key for kid, key in content_keys if kid not in bad_keys}
 
 
+class _PaddedProgress(Progress):
+    """Progress bar with a blank line above it and a left indent matching log rows."""
+
+    def get_renderable(self) -> RenderableType:
+        return Padding(super().get_renderable(), (1, 0, 0, 5))
+
+
+def add_keys_with_progress(vault: Vault, service: str, kid_keys: dict[str, str], log: logging.Logger) -> int:
+    """Add content keys to a vault. Network vaults write in batches behind a progress bar."""
+    if type(vault).__name__ in ("MySQL", "SQLite"):
+        return vault.add_keys(service, cast(dict[Union[UUID, str], str], kid_keys))
+
+    def chunk(i: int) -> int:
+        return 500 if i and getattr(vault, "batch_insert", True) else 1
+
+    kids = list(kid_keys)
+    added = 0
+    with _PaddedProgress(
+        SpinnerColumn(finished_text=""),
+        TextColumn("[bold]{task.description}"),
+        GradientPulseBarColumn(bar_width=None),
+        MofNCompleteColumn(),
+        "•",
+        TextColumn("[green]{task.fields[added]} new"),
+        "•",
+        TimeElapsedColumn(),
+        "•",
+        TimeRemainingColumn(compact=True),
+        console=console,
+        transient=True,
+        expand=True,
+    ) as progress:
+        task = progress.add_task(f"{service} → {vault}", total=len(kids), added=0)
+        i = 0
+        while i < len(kids):
+            batch: dict[Union[UUID, str], str] = {kid: kid_keys[kid] for kid in kids[i : i + chunk(i)]}
+            added += vault.add_keys(service, batch)
+            i += len(batch)
+            progress.update(task, advance=len(batch), added=added)
+    return added
+
+
 def copy_service_data(to_vault: Vault, from_vault: Vault, service: str, log: logging.Logger) -> int:
     """Copy data for a single service between vaults."""
-    content_keys = process_service_keys(from_vault, service, log)
+    if service.lower() == "bad_keys":
+        return 0
+    try:
+        content_keys = process_service_keys(from_vault, service, log)
+    except Exception as e:
+        log.warning(f"{service}: Could not read from {from_vault} ({e}), skipped")
+        return 0
+
+    content_keys = {kid: key for kid, key in content_keys.items() if not to_vault.is_bad_key(kid, key)}
     total_count = len(content_keys)
 
     if total_count == 0:
@@ -56,7 +116,7 @@ def copy_service_data(to_vault: Vault, from_vault: Vault, service: str, log: log
         return 0
 
     try:
-        added = to_vault.add_keys(service, content_keys)
+        added = add_keys_with_progress(to_vault, service, content_keys, log)
     except PermissionError:
         log.warning(f"{service}: No permission to create table in {to_vault}, skipped")
         return 0
@@ -97,7 +157,7 @@ def copy(
 ) -> None:
     """
     Copy data from multiple Key Vaults into a single Key Vault.
-    Rows with matching KIDs are skipped unless there's no KEY set.
+    The copy skips rows with matching KIDs, unless the row has no content key.
     Existing data is not deleted or altered.
 
     The `to_vault_name` argument is the key vault you wish to copy data to.
@@ -124,7 +184,7 @@ def copy(
         raise click.UsageError("--service and --local-only are mutually exclusive.")
 
     if service:
-        service = Services.get_tag(service)
+        service = Services.get_vault_tag(service)
         log.info(f"Filtering by service: {service}")
 
     installed: Optional[set[str]] = None
@@ -134,11 +194,18 @@ def copy(
 
     total_added = 0
     for from_vault in from_vaults:
-        services_to_copy = [service] if service else list(from_vault.get_services())
+        if service:
+            services_to_copy = [service]
+        else:
+            try:
+                services_to_copy = list(from_vault.get_services())
+            except Exception as e:
+                log.debug(f"{from_vault.name}: cannot list services ({e}), skipped")
+                continue
 
         if installed is not None:
             before = len(services_to_copy)
-            services_to_copy = [s for s in services_to_copy if s and s.upper() in installed]
+            services_to_copy = [s for s in services_to_copy if s and Services.get_tag(s).upper() in installed]
             skipped = before - len(services_to_copy)
             if skipped:
                 log.info(f"{from_vault.name}: skipping {skipped} service(s) not installed locally")
@@ -171,16 +238,16 @@ def sync(
     local_only: bool = False,
 ) -> None:
     """
-    Ensure multiple Key Vaults copies of all keys as each other.
-    It's essentially just a bi-way copy between each vault.
-    To see the precise details of what it's doing between each
+    Make sure that every Key Vault has copies of all the content keys of the others.
+    It is essentially a bi-way copy between each vault.
+    To see the precise details of what it does between each
     provided vault, see the documentation for the `copy` command.
     """
     if not len(vaults) > 1:
         raise click.ClickException("You must provide more than one Vault to sync.")
 
     ctx.invoke(
-        copy,
+        copy.callback,
         to_vault_name=vaults[0],
         from_vault_names=vaults[1:],
         service=service,
@@ -188,7 +255,7 @@ def sync(
     )
     for i in range(1, len(vaults)):
         ctx.invoke(
-            copy,
+            copy.callback,
             to_vault_name=vaults[i],
             from_vault_names=[vaults[i - 1]],
             service=service,
@@ -204,9 +271,9 @@ def add(file: Path, service: str, vaults: list[str]) -> None:
     """
     Add new Content Keys to Key Vault(s) by service.
 
-    File should contain one key per line in the format KID:KEY (HEX:HEX).
+    File should contain one content key per line in the format KID:KEY (HEX:HEX).
     Each line should have nothing else within it except for the KID:KEY.
-    Encoding is presumed to be UTF8.
+    unshackle reads the file as UTF8.
     """
     if not file.exists():
         raise click.ClickException(f"File provided ({file}) does not exist.")
@@ -218,7 +285,7 @@ def add(file: Path, service: str, vaults: list[str]) -> None:
         raise click.ClickException("You must provide at least one Vault.")
 
     log = logging.getLogger("kv")
-    service = Services.get_tag(service)
+    service = Services.get_vault_tag(service)
 
     vaults_ = load_vaults(list(vaults))
 
@@ -237,7 +304,7 @@ def add(file: Path, service: str, vaults: list[str]) -> None:
 
     for vault in vaults_:
         log.info(f"Adding {total_count} Content Keys to {vault}")
-        added_count = vault.add_keys(service, kid_keys)
+        added_count = add_keys_with_progress(vault, service, kid_keys, log)
         existed_count = total_count - added_count
         log.info(f"{vault}: {added_count} newly added, {existed_count} already existed (skipped)")
 
@@ -245,7 +312,7 @@ def add(file: Path, service: str, vaults: list[str]) -> None:
 
 
 def search_vault(vault: Vault, kid: str, services: list[str], log: logging.Logger) -> Optional[tuple[str, str]]:
-    """Return the (service, key) of the first service table in a vault holding the KID."""
+    """Return the service and content key from the first service table in a vault holding the KID."""
 
     def probe(svc: str) -> Optional[tuple[str, str]]:
         try:
@@ -282,13 +349,13 @@ def search_vault(vault: Vault, kid: str, services: list[str], log: logging.Logge
 )
 def search(kid: str, service: Optional[str], vault_name: Optional[str]) -> None:
     """
-    Search configured Key Vault(s) for a KID and report any matching KEY.
+    Examine configured Key Vault(s) for a KID and report the content key it finds.
 
-    KID must be 32 hex characters (no dashes). If --service is omitted, every
-    service table in each vault is scanned; vaults that cannot list their
-    tables are probed with every locally installed service tag instead, so
-    passing --service is much faster. If --vault is omitted, every vault in
-    the config is searched.
+    KID must be 32 hex characters (no dashes). If you do not give --service,
+    unshackle scans every service table in each vault. For a vault that cannot
+    show its tables, unshackle probes every locally installed service tag
+    instead, so --service is much faster. If you do not give --vault, unshackle
+    examines every vault in the config.
     """
     log = logging.getLogger("kv")
 
@@ -305,7 +372,7 @@ def search(kid: str, service: Optional[str], vault_name: Optional[str]) -> None:
 
     vaults_ = load_vaults(vault_names)
 
-    service_tag = Services.get_tag(service) if service else None
+    service_tag = Services.get_vault_tag(service) if service else None
 
     hits: list[tuple[str, str, str]] = []
     for vault in vaults_:
@@ -343,19 +410,20 @@ def search(kid: str, service: Optional[str], vault_name: Optional[str]) -> None:
 @kv.command()
 @click.argument("vaults", nargs=-1, type=click.UNPROCESSED)
 def prepare(vaults: list[str]) -> None:
-    """Create Service Tables on Vaults if not yet created."""
+    """Make Service Tables on Vaults if they do not exist yet."""
     log = logging.getLogger("kv")
 
     vaults_ = load_vaults(vaults)
 
     for vault in vaults_:
-        if hasattr(vault, "has_table") and hasattr(vault, "create_table"):
-            for service_tag in Services.get_tags():
-                if vault.has_table(service_tag):
-                    log.info(f"{vault} already has a {service_tag} Table")
+        if hasattr(vault, "resolve_table") and hasattr(vault, "create_table"):
+            for service_tag in dict.fromkeys(Services.get_vault_tag(tag) for tag in Services.get_tags()):
+                existing = vault.resolve_table(service_tag)
+                if existing:
+                    log.info(f"{vault} already has a {existing} Table")
                 else:
                     try:
-                        vault.create_table(service_tag, commit=True)
+                        vault.create_table(service_tag)
                         log.info(f"{vault}: Created {service_tag} Table")
                     except PermissionError:
                         log.error(f"{vault} user has no create table permission, skipping...")

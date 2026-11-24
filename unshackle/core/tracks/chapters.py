@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import os
 import re
+import threading
 from abc import ABC
 from pathlib import Path
 from typing import Any, Iterable, Optional, Union
@@ -88,7 +90,7 @@ class Chapters(SortedKeyList, ABC):
         - {j}: A number starting at 1 that increments any time a Chapter has no name.
                E.g., `"Chapter {j}"`: "Chapter 1", "Intro", "Chapter 2".
 
-        These are formatted with f-strings, directives are supported.
+        unshackle formats these with f-strings, so format directives work.
         For example, `"Chapter {i:02}"` will result in `"Chapter 01"`.
         """
         chapters = []
@@ -120,7 +122,10 @@ class Chapters(SortedKeyList, ABC):
         path.parent.mkdir(parents=True, exist_ok=True)
 
         ogm_text = self.dumps(*args, **kwargs)
-        return path.write_text(ogm_text, encoding="utf8")
+        tmp = path.with_name(f"{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
+        written = tmp.write_text(ogm_text, encoding="utf8")
+        os.replace(tmp, path)
+        return written
 
     def add(self, value: Chapter) -> None:
         if not isinstance(value, Chapter):

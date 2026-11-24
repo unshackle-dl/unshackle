@@ -93,7 +93,7 @@ def test_merge_multi_range_yields_one_group_per_range() -> None:
         make_video("sdr", range_=SDR, height=2160, codec=HEVC),
         make_video("hdr10", range_=HDR10, height=2160, codec=HEVC),
         make_video("dv", range_=DV, height=2160, codec=HEVC),
-        make_video("dv-hybrid", range_=DV, height=1080, codec=HEVC),  # different height
+        make_video("dv-hybrid", range_=DV, height=1080, codec=HEVC),
     ]
     groups = group_videos_by_variant(videos, merge=True)
     assert len(groups) == 4
@@ -119,7 +119,6 @@ def test_merge_preserves_first_seen_order() -> None:
         make_video("hevc-fr", range_=SDR, height=1080, codec=HEVC, language="fr"),
     ]
     groups = group_videos_by_variant(videos, merge=True)
-    # HEVC group seen first (and gathers both languages), AVC group second.
     assert [v.id for v in groups[0]] == ["hevc-en", "hevc-fr"]
     assert [v.id for v in groups[1]] == ["avc-en"]
 

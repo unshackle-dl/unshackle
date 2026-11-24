@@ -2,6 +2,7 @@ import importlib
 import inspect
 import threading
 import time
+from types import SimpleNamespace
 
 import pytest
 
@@ -9,6 +10,13 @@ from unshackle.core.constants import DOWNLOAD_CANCELLED
 from unshackle.core.downloaders.requests import TokenBucket, format_speed, parse_speed_limit, set_speed_limit
 
 requests_downloader = importlib.import_module("unshackle.core.downloaders.requests")
+
+
+@pytest.fixture(autouse=True)
+def clean_cancel():
+    DOWNLOAD_CANCELLED.clear()
+    yield
+    DOWNLOAD_CANCELLED.clear()
 
 
 @pytest.mark.parametrize(
@@ -81,16 +89,17 @@ def test_bucket_holds_aggregate_rate_across_threads():
     for t in threads:
         t.join()
     achieved = sum(totals) / (time.monotonic() - start)
-    # exceeding the limit is a real failure; undershoot is scheduler noise on a loaded box
     assert achieved <= rate * 1.1
     assert achieved >= rate * 0.5
 
 
-def test_bucket_chunk_larger_than_capacity_does_not_deadlock():
+def test_bucket_chunk_larger_than_capacity_does_not_deadlock(monkeypatch):
+    waits: list[float] = []
+    monkeypatch.setattr(requests_downloader, "DOWNLOAD_CANCELLED", SimpleNamespace(wait=waits.append))
     bucket = TokenBucket(1_000_000)
-    start = time.monotonic()
     bucket.consume(1_100_000)
-    assert 1.0 < time.monotonic() - start < 2.0
+    assert len(waits) == 1
+    assert 1.0 < waits[0] < 2.0
 
 
 def test_locked_limit_ignores_unlocked_calls():
@@ -99,11 +108,11 @@ def test_locked_limit_ignores_unlocked_calls():
         set_speed_limit(5_000_000, lock=True)
         set_speed_limit(None)
         set_speed_limit(1_000_000)
-        limiter = requests_downloader._speed_limiter
+        limiter = requests_downloader.speed_limiter
         assert limiter is not None and limiter.rate == 5_000_000
     finally:
-        requests_downloader._speed_limit_locked = False
-        requests_downloader._speed_limiter = None
+        requests_downloader.speed_limit_locked = False
+        requests_downloader.speed_limiter = None
 
 
 def test_bucket_wait_aborts_on_cancellation():

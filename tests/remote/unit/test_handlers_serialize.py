@@ -2,11 +2,18 @@
 
 from __future__ import annotations
 
+import io
+
 import pytest
+import requests
 from langcodes import Language
 
+from unshackle.core.api.errors import APIError, APIErrorCode
 from unshackle.core.api.handlers import (
+    drm_preference_name,
+    listed_titles,
     sanitize_log,
+    search_handler,
     serialize_audio_track,
     serialize_drm,
     serialize_subtitle_track,
@@ -27,7 +34,7 @@ class _FakeSvc:
     pass
 
 
-def _video(**overrides) -> Video:
+def video(**overrides) -> Video:
     base = dict(
         url="https://example.com/v.mpd",
         language=Language.get("en"),
@@ -44,7 +51,7 @@ def _video(**overrides) -> Video:
     return Video(**base)
 
 
-def _audio(**overrides) -> Audio:
+def audio(**overrides) -> Audio:
     base = dict(
         url="https://example.com/a.mpd",
         language=Language.get("en"),
@@ -60,7 +67,7 @@ def _audio(**overrides) -> Audio:
     return Audio(**base)
 
 
-def _subtitle(**overrides) -> Subtitle:
+def subtitle(**overrides) -> Subtitle:
     base = dict(
         url="https://example.com/s.vtt",
         language=Language.get("en"),
@@ -75,9 +82,6 @@ def _subtitle(**overrides) -> Subtitle:
     return Subtitle(**base)
 
 
-# ---------- sanitize_log ----------
-
-
 @pytest.mark.parametrize(
     "raw, expected",
     [
@@ -89,9 +93,6 @@ def _subtitle(**overrides) -> Subtitle:
 )
 def test_sanitize_log(raw, expected: str) -> None:
     assert sanitize_log(raw) == expected
-
-
-# ---------- serialize_title ----------
 
 
 def test_serialize_title_movie() -> None:
@@ -138,14 +139,31 @@ def test_serialize_title_episode_unnamed_falls_back_to_number() -> None:
     assert d["name"] == "Episode 05"
 
 
-# ---------- serialize_video/audio/subtitle ----------
+def test_no_titles_is_a_service_error() -> None:
+    with pytest.raises(APIError) as exc:
+        listed_titles(None)
+    assert exc.value.error_code == APIErrorCode.SERVICE_ERROR
+
+
+def test_init_segment_reports_the_http_status() -> None:
+    refused = requests.Response()
+    refused.status_code = 403
+    refused.raw = io.BytesIO()
+
+    class FakeSession(requests.Session):
+        def request(self, *args: object, **kwargs: object) -> requests.Response:
+            return refused
+
+    track = Video(url="https://cdn.example/v.mp4", language=Language.get("en"))
+    with pytest.raises(ValueError, match="HTTP 403"):
+        track.get_init_segment(session=FakeSession())
 
 
 def test_serialize_video_track_basic() -> None:
-    d = serialize_video_track(_video())
+    d = serialize_video_track(video())
     assert d["id"] == "video-001"
     assert d["codec"] == "AVC"
-    assert d["bitrate"] == 5000  # kbps
+    assert d["bitrate"] == 5000
     assert d["resolution"] == "1920x1080"
     assert d["fps"] == 24
     assert d["range"] == "SDR"
@@ -155,12 +173,12 @@ def test_serialize_video_track_basic() -> None:
 
 
 def test_serialize_video_track_include_url() -> None:
-    d = serialize_video_track(_video(), include_url=True)
+    d = serialize_video_track(video(), include_url=True)
     assert d["url"] == "https://example.com/v.mpd"
 
 
 def test_serialize_audio_track_basic() -> None:
-    d = serialize_audio_track(_audio())
+    d = serialize_audio_track(audio())
     assert d["id"] == "audio-001"
     assert d["codec"] == "AAC"
     assert d["bitrate"] == 128
@@ -168,16 +186,38 @@ def test_serialize_audio_track_basic() -> None:
     assert d["descriptive"] is False
 
 
+def test_serialize_video_track_drm_preference_round_trip() -> None:
+    d = serialize_video_track(video())
+    assert d["drm_preference"] is None
+    v = video()
+    v.drm_preference = "pr"
+    assert serialize_video_track(v)["drm_preference"] == "pr"
+
+
+def test_serialize_audio_track_drm_preference() -> None:
+    a = audio()
+    a.drm_preference = "widevine"
+    assert serialize_audio_track(a)["drm_preference"] == "widevine"
+
+
+def test_drm_preference_name_maps_short_forms() -> None:
+    v = video()
+    assert drm_preference_name(v) is None
+    v.drm_preference = "pr"
+    assert drm_preference_name(v) == "playready"
+    v.drm_preference = "wv"
+    assert drm_preference_name(v) == "widevine"
+    v.drm_preference = "widevine"
+    assert drm_preference_name(v) == "widevine"
+
+
 def test_serialize_subtitle_track_basic() -> None:
-    d = serialize_subtitle_track(_subtitle(forced=True))
+    d = serialize_subtitle_track(subtitle(forced=True))
     assert d["id"] == "sub-001"
     assert d["codec"] == "WebVTT"
     assert d["forced"] is True
     assert d["sdh"] is False
     assert d["cc"] is False
-
-
-# ---------- serialize_drm ----------
 
 
 def test_serialize_drm_none_returns_none() -> None:
@@ -200,15 +240,13 @@ def test_serialize_drm_widevine_minimal() -> None:
     assert isinstance(out, list)
     assert len(out) == 1
     info = out[0]
-    assert info["type"] == "_widevine"  # class name lowercased
+    assert info["type"] == "_widevine"
     assert info["pssh"] == "BASE64PSSH=="
     assert info["kids"] == ["00112233445566778899aabbccddeeff"]
     assert info["license_url"] == "https://lic.example.com/wv"
 
 
 def test_serialize_drm_playready_pssh_without_dumps_is_omitted() -> None:
-    # pyplayready's PSSH exposes no dumps()/to_base64()/__bytes__; serialization
-    # must omit the pssh field rather than emit an object repr.
     class _PSSH:
         pass
 
@@ -222,14 +260,8 @@ def test_serialize_drm_playready_pssh_without_dumps_is_omitted() -> None:
     assert info["kids"] == ["00112233445566778899aabbccddeeff"]
 
 
-# ---------- validate_service ----------
-
-
 def test_validate_service_unknown_returns_none() -> None:
     assert validate_service("NOPE_THIS_IS_NOT_REAL_") is None
-
-
-# ---------- validate_download_parameters ----------
 
 
 def test_validate_download_params_accepts_defaults() -> None:
@@ -253,7 +285,7 @@ def test_validate_download_params_accepts_defaults() -> None:
         ({"video_only": True, "audio_only": True}, "exclusive"),
         ({"no_subs": True, "subs_only": True}, "no_subs and subs_only"),
         ({"no_audio": True, "audio_only": True}, "no_audio and audio_only"),
-        ({"s_lang": ["en"], "require_subs": ["en"]}, "s_lang and require_subs"),
+        ({"require_subs": "en"}, "require_subs must be an array"),
         ({"range": "UHD"}, "Invalid range"),
         ({"range": ["SDR", "UHD"]}, "Invalid range value"),
     ],
@@ -261,7 +293,6 @@ def test_validate_download_params_accepts_defaults() -> None:
 def test_validate_download_params_errors(data: dict, fragment) -> None:
     result = validate_download_parameters(data)
     if fragment is None:
-        # A dash-containing string is valid syntactically per current rule
         assert result is None
     else:
         assert result is not None
@@ -287,3 +318,30 @@ def test_validate_download_params_accepts_valid_values() -> None:
         )
         is None
     )
+
+
+async def test_search_missing_service_raises_invalid_input() -> None:
+    with pytest.raises(APIError) as exc:
+        await search_handler({"query": "dune"}, None)
+    assert exc.value.error_code == APIErrorCode.INVALID_INPUT
+    assert APIError.default_http_status(exc.value.error_code) == 400
+
+
+async def test_search_unknown_service_raises_invalid_service() -> None:
+    with pytest.raises(APIError) as exc:
+        await search_handler({"service": "NOPE_THIS_IS_NOT_REAL_", "query": "x"}, None)
+    assert exc.value.error_code == APIErrorCode.INVALID_SERVICE
+
+
+def test_resolve_vcodec_rejects_junk_as_invalid_input() -> None:
+    """Session routes skip validate_download_parameters, so a bad codec must be a 400, not a 500."""
+    from unshackle.core.api.errors import APIErrorCode
+    from unshackle.core.api.handlers import resolve_vcodec
+    from unshackle.core.tracks import Video
+
+    assert resolve_vcodec(["H265"]) == [Video.Codec.HEVC]
+    assert resolve_vcodec(None) is None
+    for junk in ("XVID", 5, [5]):
+        with pytest.raises(APIError) as exc:
+            resolve_vcodec(junk)
+        assert exc.value.error_code == APIErrorCode.INVALID_INPUT

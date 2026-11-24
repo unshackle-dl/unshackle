@@ -121,11 +121,10 @@ def test_encrypted_ism_rung_gets_the_exported_keys(tmp_path: Path, monkeypatch: 
     monkeypatch.setattr(ISM, "from_url", lambda url, session=None, **kw: ISM.from_text(ISM_ENCRYPTED, url))
     parsed = ISM.from_text(ISM_ENCRYPTED, ISM_URL).to_tracks(language="en")
 
-    # export the licensed rung only, as a finished download would
-    licensed = max(parsed.videos, key=lambda t: t.bitrate or 0)
     export = export_tracks(tmp_path, parsed, ISM_URL)
     doc = json.loads(export.read_text(encoding="utf8"))
-    doc["titles"]["movie-1"]["tracks"][licensed.id]["keys"] = {"0" * 32: "ab" * 16}
+    doc["titles"][0]["keys"] = {"1" * 32: "ab" * 16}
+    doc["titles"][0]["drm"] = [{"system": "playready"}]
     export.write_text(json.dumps(doc), encoding="utf8")
 
     svc, tracks = import_tracks(export)
@@ -180,5 +179,26 @@ def test_hls_tracks_tolerate_the_empty_manifest_data(tmp_path: Path) -> None:
 
     track = tracks.videos[0]
     assert not track.data.get("hls"), "to_dict cannot carry the m3u8 objects, and does not need to"
-    track.data["hls"]["segment_durations"] = [1, 2, 3]  # hls.py, in download_track
+    track.data["hls"]["segment_durations"] = [1, 2, 3]
     assert track.data["hls"]["segment_durations"] == [1, 2, 3]
+
+
+def test_hls_round_trip_keeps_the_dropped_segments(tmp_path: Path) -> None:
+    """An import has no service to run the segment filter, so the export carries the dropped URIs."""
+    original = HLS.from_text(HLS_MANIFEST, HLS_URL).to_tracks(language="en")
+    video = original.videos[0]
+    dropped = "https://cdn.example/bumper_1.m4s?token=a"
+    video.data["hls"]["unwanted_segments"] = [dropped]
+
+    export = export_tracks(tmp_path, original, HLS_URL)
+    _, tracks = import_tracks(export)
+
+    rebuilt = next(t for t in tracks.videos if t.id == video.id)
+    assert rebuilt.OnSegmentFilter(SimpleNamespace(absolute_uri="https://cdn.example/bumper_1.m4s?token=b"))
+    assert not rebuilt.OnSegmentFilter(SimpleNamespace(absolute_uri="https://cdn.example/main_1.m4s"))
+    assert rebuilt.data["hls"]["unwanted_segments"] == [dropped]
+    assert all(t.OnSegmentFilter is None for t in tracks if t.id != video.id)
+
+    video.data["hls"]["unwanted_segments"] = []
+    _, tracks = import_tracks(export_tracks(tmp_path, original, HLS_URL))
+    assert next(t for t in tracks.videos if t.id == video.id).OnSegmentFilter is None, "a stale list must go"

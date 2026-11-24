@@ -22,8 +22,6 @@ def _body(resp) -> dict:
 
 
 def test_api_error_default_http_status_per_code() -> None:
-    # Every live APIErrorCode and the status a client observes for it. This is the
-    # status half of the error contract PRD 05 must preserve through the collapse.
     cases = {
         APIErrorCode.INVALID_INPUT: 400,
         APIErrorCode.INVALID_SERVICE: 400,
@@ -32,6 +30,7 @@ def test_api_error_default_http_status_per_code() -> None:
         APIErrorCode.AUTH_FAILED: 401,
         APIErrorCode.FORBIDDEN: 403,
         APIErrorCode.GEOFENCE: 403,
+        APIErrorCode.SERVER_CDM_CAPPED: 403,
         APIErrorCode.NOT_FOUND: 404,
         APIErrorCode.NO_CONTENT: 404,
         APIErrorCode.JOB_NOT_FOUND: 404,
@@ -47,7 +46,6 @@ def test_api_error_default_http_status_per_code() -> None:
         APIErrorCode.NETWORK_ERROR: 503,
         APIErrorCode.SERVICE_UNAVAILABLE: 503,
     }
-    # Lock that the cases above are the *complete* live set — a new/removed code trips this.
     assert {c.name for c in cases} == {c.name for c in APIErrorCode}
     for code, expected in cases.items():
         assert APIError(code, "x").http_status == expected, code
@@ -109,6 +107,13 @@ def test_build_error_response_debug_mode_includes_traceback() -> None:
         (Exception("Connection refused"), APIErrorCode.NETWORK_ERROR),
         (TimeoutError("read timeout"), APIErrorCode.NETWORK_ERROR),
         (Exception("Not available in your region"), APIErrorCode.GEOFENCE),
+        (Exception("Service is geoblocked in GB"), APIErrorCode.GEOFENCE),
+        (
+            Exception(
+                "Service is not available in your region (GB). Pass --proxy with a proxy outside the blocked regions."
+            ),
+            APIErrorCode.GEOFENCE,
+        ),
         (Exception("Title not found"), APIErrorCode.NOT_FOUND),
         (Exception("HTTP 429 too many requests"), APIErrorCode.RATE_LIMITED),
         (Exception("DRM license fetch failed"), APIErrorCode.DRM_ERROR),
@@ -118,9 +123,9 @@ def test_build_error_response_debug_mode_includes_traceback() -> None:
     ],
 )
 def test_categorize_exception(exc: Exception, expected_code: APIErrorCode) -> None:
-    api_err = categorize_exception(exc, context={"service": "ATV"})
+    api_err = categorize_exception(exc, context={"service": "EXAMPLE"})
     assert api_err.error_code == expected_code
-    assert api_err.details.get("service") == "ATV"
+    assert api_err.details.get("service") == "EXAMPLE"
 
 
 def test_categorize_preserves_context() -> None:
@@ -142,12 +147,6 @@ def test_handle_api_exception_categorizes_generic() -> None:
     assert body["error_code"] == "NETWORK_ERROR"
 
 
-# --- Error contract harness (PRD 05 gate) ---------------------------------
-# Locks the FULL observable response — (http status, error_code, retryable) — that
-# a client sees for a generic (non-APIError) exception flowing through the
-# handle_api_exception funnel that every route's `except Exception` path calls.
-# This is the equivalence reference: after the categorize_exception collapse,
-# any tuple that changes here is a client-visible behaviour change, not a refactor.
 @pytest.mark.parametrize(
     "exc, status, code, retryable",
     [
@@ -168,12 +167,10 @@ def test_error_contract_generic_exception(exc: Exception, status: int, code: str
     assert resp.status == status
     body = _body(resp)
     assert body["error_code"] == code
-    # retryable is only serialized when True (build_error_response omits it otherwise).
     assert body.get("retryable", False) is retryable
 
 
 def test_error_contract_apierror_passthrough_full_shape() -> None:
-    # APIError carriers keep status + code + message + details + retryable verbatim.
     err = APIError(APIErrorCode.RATE_LIMITED, "slow down", details={"retry_after": 5}, retryable=True)
     resp = handle_api_exception(err)
     assert resp.status == 429

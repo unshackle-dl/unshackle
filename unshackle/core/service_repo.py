@@ -14,15 +14,15 @@ log = logging.getLogger("services")
 
 
 class DirtyServiceRepo(Exception):
-    """A clone has uncommitted or unpushed local changes; refresh is refused to protect them."""
+    """A clone has uncommitted or unpushed local changes. unshackle refuses to refresh it, to protect them."""
 
     def __init__(self, path: Path):
         self.path = path
         super().__init__(str(path))
 
 
-DEFAULT_TTL = 24 * 60 * 60  # refresh at most once a day (mirrors UpdateChecker)
-STAMP_SUFFIX = ".fetch"  # last-fetch unix time, kept beside (not inside) the clone
+DEFAULT_TTL = 24 * 60 * 60
+STAMP_SUFFIX = ".fetch"
 
 
 def stamp_for(dest: Path) -> Path:
@@ -30,7 +30,6 @@ def stamp_for(dest: Path) -> Path:
     return dest.parent / f"{dest.name}{STAMP_SUFFIX}"
 
 
-# owner/repo shorthand: exactly two path-like segments, no scheme
 SHORTHAND_RE = re.compile(r"^[\w.-]+/[\w.-]+$")
 
 
@@ -40,13 +39,12 @@ def is_repo_spec(value: object) -> bool:
         return False
     if value.startswith(("http://", "https://", "ssh://", "git@")) or value.endswith(".git"):
         return True
-    # owner/repo shorthand, but only if there's no local dir by that name (paths win)
     base = value.split("@", 1)[0]
     return bool(SHORTHAND_RE.match(base)) and not Path(value).expanduser().exists()
 
 
 def parse_spec(spec: str) -> tuple[str, Optional[str], str]:
-    """Return (clone_url, branch, dest_name). `@branch` is honored for http/shorthand, not ssh."""
+    """Return (clone_url, branch, dest_name). This function honours `@branch` for http/shorthand, not for ssh."""
     is_ssh = spec.startswith(("git@", "ssh://"))
     branch: Optional[str] = None
     url = spec
@@ -54,12 +52,12 @@ def parse_spec(spec: str) -> tuple[str, Optional[str], str]:
         url, branch = spec.rsplit("@", 1)
     if SHORTHAND_RE.match(url) and not url.startswith(("http", "ssh", "git@")):
         url = f"https://github.com/{url}"
-    return url, branch, _slug(url)
+    return url, branch, slug(url)
 
 
-def _slug(url: str) -> str:
+def slug(url: str) -> str:
     """Filesystem-safe clone dir name from a repo URL, host included so same owner/repo on
-    different hosts don't collide, e.g. github.com__owner__repo."""
+    different hosts do not collide, e.g. github.com__owner__repo."""
     cleaned = re.sub(r"^[a-z]+://", "", url).split("@")[-1].replace(":", "/")
     cleaned = re.sub(r"\.git$", "", cleaned)
     return "__".join(p for p in cleaned.split("/") if p)
@@ -67,7 +65,7 @@ def _slug(url: str) -> str:
 
 def repos_base() -> Path:
     """Where clones live: <first configured local services dir>/_repos (else the default)."""
-    from unshackle.core.config import Config, config  # lazy: avoid config <-> service_repo import cycle
+    from unshackle.core.config import Config, config
 
     entries = config.directories.services
     if not isinstance(entries, list):
@@ -79,29 +77,28 @@ def repos_base() -> Path:
 
 
 def resolve_service_repo(spec: str, *, ttl: int = DEFAULT_TTL, force: bool = False) -> Optional[Path]:
-    """Resolve a repo spec to its local clone dir.
+    """Find the local clone dir of a repo spec.
 
-    First use clones it. ``force=True`` (manual ``refresh-services``) hard-resets the clone to
-    upstream, discarding local changes. Otherwise a TTL-stale clone is fast-forwarded, but a dirty
-    clone raises ``DirtyServiceRepo`` so the automated dl/search path can warn and exit instead of
-    clobbering in-progress edits.
+    First use clones it. Only a TTL-stale clone touches the network. With ``force=True``
+    (``services_repo_force``) the refresh hard-resets the clone to upstream and discards local
+    changes. Without it the refresh fast-forwards, and a dirty clone raises ``DirtyServiceRepo``
+    so the automated dl/search path can warn and exit instead of clobbering in-progress edits.
+    Manual ``refresh-services`` uses ``refresh_repo`` and ignores the TTL.
     """
     url, branch, dest_name = parse_spec(spec)
     dest = repos_base() / dest_name
     stamp = stamp_for(dest)
 
     if not dest.exists():
-        return _clone(url, branch, dest, stamp)
-    if force:
-        _force_sync(dest, stamp)
-    elif _is_stale(stamp, ttl):
-        _pull(dest, stamp)
-    return dest  # ponytail: git IS the cache layer — no bespoke fetch/integrity code
+        return clone(url, branch, dest, stamp)
+    if is_stale(stamp, ttl):
+        force_sync(dest, stamp) if force else pull(dest, stamp)
+    return dest
 
 
-def _clone(url: str, branch: Optional[str], dest: Path, stamp: Path) -> Optional[Path]:
+def clone(url: str, branch: Optional[str], dest: Path, stamp: Path) -> Optional[Path]:
     if not binaries.Git:
-        log.error("git not found on PATH — cannot fetch service repo %s", url)
+        log.error("git not found on PATH; cannot fetch service repo %s", url)
         return None
     dest.parent.mkdir(parents=True, exist_ok=True)
     args = [str(binaries.Git), "clone", "--depth", "1"]
@@ -111,55 +108,55 @@ def _clone(url: str, branch: Optional[str], dest: Path, stamp: Path) -> Optional
     try:
         subprocess.run(args, check=True, capture_output=True)  # nosec B603
     except subprocess.CalledProcessError as e:
-        log.error("failed to clone service repo %s: %s", url, _stderr(e))
-        shutil.rmtree(dest, ignore_errors=True)  # don't leave a half-cloned dir that sticks on retries
+        log.error("failed to clone service repo %s: %s", url, stderr_text(e))
+        shutil.rmtree(dest, ignore_errors=True)
         return None
-    _write_stamp(stamp)
+    write_stamp(stamp)
     log.info("cloned service repo %s", url)
     return dest
 
 
-def _pull(dest: Path, stamp: Path) -> None:
+def pull(dest: Path, stamp: Path) -> None:
     if not binaries.Git:
-        _write_stamp(stamp)
+        write_stamp(stamp)
         return
-    # never clobber local edits — refuse to refresh a dirty clone and let the caller exit cleanly
-    if _is_dirty(dest):
+    if is_dirty(dest):
         raise DirtyServiceRepo(dest)
     try:
         subprocess.run([str(binaries.Git), "-C", str(dest), "pull", "--ff-only"], check=True, capture_output=True)  # nosec B603
     except subprocess.CalledProcessError as e:
-        log.warning("could not update service repo at %s, using existing copy: %s", dest, _stderr(e))
-    _write_stamp(stamp)  # stamp regardless so a flaky remote can't trigger a fetch every run (force overrides)
+        log.warning("could not update service repo at %s, using existing copy: %s", dest, stderr_text(e))
+    write_stamp(stamp)
 
 
 def refresh_repo(spec: str) -> tuple[Optional[Path], list[str]]:
     """Force-sync a repo to upstream and return (clone dir, git-style per-service change lines).
 
-    Used by the manual ``refresh-services`` command. Change lines look like ``+ TAG (added)`` /
-    ``~ TAG (modified)`` / ``- TAG (removed)`` plus a shortstat; empty list means already up to date.
+    Used by the manual ``refresh-services`` command. Each line is one service tag with a status
+    prefix: ``+TAG`` added, ``~TAG`` modified, ``-TAG`` removed, ``!TAG`` local changes discarded.
+    An empty list means the clone is already up to date.
     """
     url, branch, dest_name = parse_spec(spec)
     dest = repos_base() / dest_name
     stamp = stamp_for(dest)
     if not dest.exists():
-        return _clone(url, branch, dest, stamp), ["cloned (new)"]
+        return clone(url, branch, dest, stamp), ["cloned (new)"]
     if not binaries.Git:
         return dest, []
-    old = _head(dest)
-    discarded = _local_dirty_services(dest)  # uncommitted edits the force reset is about to wipe
-    _force_sync(dest, stamp)
-    lines = [f"! {tag} (local changes discarded)" for tag in discarded]
-    lines += _changed_services(dest, old, _head(dest))  # upstream changes pulled in
+    old = head(dest)
+    discarded = local_dirty_services(dest)
+    force_sync(dest, stamp)
+    lines = [f"!{tag}" for tag in discarded]
+    lines += changed_services(dest, old, head(dest))
     return dest, lines
 
 
-def _head(dest: Path) -> Optional[str]:
+def head(dest: Path) -> Optional[str]:
     r = subprocess.run([str(binaries.Git), "-C", str(dest), "rev-parse", "HEAD"], capture_output=True)  # nosec B603
     return r.stdout.decode(errors="ignore").strip() if r.returncode == 0 else None
 
 
-def _local_dirty_services(dest: Path) -> list[str]:
+def local_dirty_services(dest: Path) -> list[str]:
     """Top-level service dirs with uncommitted edits to tracked files (lost on a force reset)."""
     r = subprocess.run([str(binaries.Git), "-C", str(dest), "diff", "--name-only", "HEAD"], capture_output=True)  # nosec B603
     if r.returncode != 0:
@@ -167,8 +164,8 @@ def _local_dirty_services(dest: Path) -> list[str]:
     return sorted({line.split("/")[0] for line in r.stdout.decode(errors="ignore").splitlines() if line})
 
 
-def _changed_services(dest: Path, old: Optional[str], new: Optional[str]) -> list[str]:
-    """Summarise a HEAD old->new diff grouped by top-level service dir, plus a line shortstat."""
+def changed_services(dest: Path, old: Optional[str], new: Optional[str]) -> list[str]:
+    """Summarise a HEAD old->new diff as one ``+TAG``/``~TAG``/``-TAG`` token per top-level service directory."""
     if not old or not new or old == new:
         return []
     git = str(binaries.Git)
@@ -179,48 +176,43 @@ def _changed_services(dest: Path, old: Optional[str], new: Optional[str]) -> lis
             parts = raw.split("\t")
             if len(parts) < 2:
                 continue
-            by_dir.setdefault(parts[-1].split("/")[0], set()).add(parts[0][0])  # parts[-1]=new path (handles renames)
+            by_dir.setdefault(parts[-1].split("/")[0], set()).add(parts[0][0])
     sym = {"added": "+", "modified": "~", "removed": "-"}
     lines = []
     for top in sorted(by_dir):
         codes = by_dir[top]
         kind = "added" if codes == {"A"} else "removed" if codes == {"D"} else "modified"
-        lines.append(f"{sym[kind]} {top} ({kind})")
-    short = subprocess.run([git, "-C", str(dest), "diff", "--shortstat", f"{old}..{new}"], capture_output=True)  # nosec B603
-    if short.returncode == 0 and short.stdout.strip():
-        lines.append(short.stdout.decode(errors="ignore").strip())
+        lines.append(f"{sym[kind]}{top}")
     return lines
 
 
-def _force_sync(dest: Path, stamp: Path) -> None:
-    """Hard-reset the clone to its upstream, discarding local changes (manual refresh only)."""
+def force_sync(dest: Path, stamp: Path) -> None:
+    """Hard-reset the clone to its upstream, discarding local changes."""
     if not binaries.Git:
-        _write_stamp(stamp)
+        write_stamp(stamp)
         return
     git = str(binaries.Git)
     try:
         subprocess.run([git, "-C", str(dest), "fetch", "--depth", "1", "origin"], check=True, capture_output=True)  # nosec B603
         subprocess.run([git, "-C", str(dest), "reset", "--hard", "@{u}"], check=True, capture_output=True)  # nosec B603
     except subprocess.CalledProcessError as e:
-        log.warning("could not force-refresh service repo at %s, using existing copy: %s", dest, _stderr(e))
-    _write_stamp(stamp)
+        log.warning("could not force-refresh service repo at %s, using existing copy: %s", dest, stderr_text(e))
+    write_stamp(stamp)
 
 
-def _is_dirty(dest: Path) -> bool:
+def is_dirty(dest: Path) -> bool:
     """True if the clone has uncommitted edits to tracked files or local commits not on its upstream.
 
-    Untracked files are intentionally ignored: a `git pull --ff-only` only touches tracked files, so
-    untracked content (including `__pycache__` that importing the services creates) is never at risk
-    and must not falsely flag the clone as dirty.
+    This function intentionally ignores untracked files: a `git pull --ff-only` only touches tracked
+    files, so untracked files (including `__pycache__` that importing the services creates) are never
+    at risk and must not falsely flag the clone as dirty.
     """
     git = str(binaries.Git)
-    # modifications to tracked files only (--untracked-files=no skips __pycache__ etc.)
     status = subprocess.run(
         [git, "-C", str(dest), "status", "--porcelain", "--untracked-files=no"], capture_output=True
     )  # nosec B603
     if status.returncode == 0 and status.stdout.strip():
         return True
-    # local commits ahead of upstream (committed but not pushed); no upstream → treat as clean
     ahead = subprocess.run([git, "-C", str(dest), "rev-list", "--count", "@{u}..HEAD"], capture_output=True)  # nosec B603
     if ahead.returncode == 0:
         try:
@@ -230,14 +222,14 @@ def _is_dirty(dest: Path) -> bool:
     return False
 
 
-def _is_stale(stamp: Path, ttl: int) -> bool:
+def is_stale(stamp: Path, ttl: int) -> bool:
     try:
         return (time.time() - float(stamp.read_text().strip())) >= ttl
     except (OSError, ValueError):
         return True
 
 
-def _write_stamp(stamp: Path) -> None:
+def write_stamp(stamp: Path) -> None:
     try:
         stamp.parent.mkdir(parents=True, exist_ok=True)
         stamp.write_text(str(time.time()))
@@ -245,5 +237,5 @@ def _write_stamp(stamp: Path) -> None:
         pass
 
 
-def _stderr(e: subprocess.CalledProcessError) -> str:
+def stderr_text(e: subprocess.CalledProcessError) -> str:
     return (e.stderr or b"").decode(errors="ignore").strip()

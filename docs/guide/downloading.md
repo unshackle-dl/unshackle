@@ -9,23 +9,23 @@ the download flow itself.
 !!! note "Where the full flag list lives"
     This page covers the flags you will use most and explains how they interact. It is
     not an exhaustive enumeration. For the complete, always-current list of every option
-    and its exact wording, run `unshackle dl --help`. Every flag shown here can also be
+    and its exact wording, use `unshackle dl --help`. Every flag shown here can also be
     given a default in your configuration file. See
     [Configuration file](../getting-started/configuration-file.md).
 
 ## Command shape
 
-A download is always three layers: the root CLI, the `dl` command (which is where all
-the flags below are parsed), and a **service tag** subcommand that carries the title
-argument.
+A download is always three layers: the root CLI, the `dl` command (which is where
+unshackle parses all the flags below), and a **service tag** subcommand that carries the
+title argument.
 
 ```shell
 unshackle dl [OPTIONS] SERVICE [SERVICE ARGUMENTS]
 ```
 
 - `unshackle`: the root command.
-- `dl`: the download command. **All of the options on this page are parsed here**, so
-  they go *before* the service tag.
+- `dl`: the download command. **unshackle parses all of the options on this page here**,
+  so they go *before* the service tag.
 - `SERVICE`: a service tag such as `EXAMPLE1`, `EXAMPLE2`, `EXAMPLE3`. Service tags are
   case-insensitive and honour each service's aliases (for example `example+` resolves to
   its real tag).
@@ -41,31 +41,31 @@ unshackle dl -q 1080 -v H.265 -r HDR10 --lang en EXAMPLE 'https://www.example.co
 ```
 
 !!! tip "See what a service accepts"
-    Because the positional argument is defined by each service, run
-    `unshackle dl SERVICE --help` (e.g. `unshackle dl EXAMPLE --help`) to see that service's
-    own argument and any service-specific options.
+    Because each service defines its own positional argument, use
+    `unshackle dl SERVICE --help` (for example `unshackle dl EXAMPLE --help`) to see that
+    service's own argument and any service-specific options.
 
 ## The download flow
 
-When you run a download, `dl` moves through the pipeline below. Understanding the order
-helps explain why, for example, `--list` stops early and why keys are fetched even with
-`--skip-dl`.
+When you start a download, `dl` moves through the pipeline below. The order tells you
+why, for example, `--list` stops early, and why unshackle fetches the content keys even
+with `--skip-dl`.
 
 1. **Setup**: load the DRM CDM, key vaults, proxy providers, cookies, and credentials.
 2. **Authenticate**: sign in to the service with your profile's cookies/credentials.
 3. **Fetch titles**: retrieve the movie, episode list, or album (cached unless
    `--no-cache`/`--reset-cache`).
-4. **Filter titles**: apply `--wanted`, `--latest-episode`, or `--select-titles`.
+4. **Filter titles**: apply `--wanted`, `--latest-episode`, `--latest-episodes`, or `--select-titles`.
 5. **Get tracks**: parse the manifest into video, audio, subtitle, and chapter tracks.
 6. **Select tracks**: narrow each type down using your quality, codec, range, language,
    and bitrate flags.
 7. **Download**: pull segments for the selected tracks (concurrently per `--downloads`).
-8. **License & decrypt**: acquire content keys (vault → CDM), decrypt each track.
+8. **License & decrypt**: get the content keys (vault → CDM), decrypt each track.
 9. **Post-process**: extract closed captions, convert subtitles, repack, mux with
    `mkvmerge`, and move the finished file to your downloads directory.
 
 `--list` prints the tracks a title exposes and stops before selection. `--list-titles`
-prints every title the service returned and stops before `--wanted`/`--latest-episode`
+prints every title the service returned and stops before `--wanted`/`--latest-episode`/`--latest-episodes`
 filtering. `--skip-dl` runs the license step but skips the actual segment download.
 
 ## Choosing quality
@@ -84,9 +84,12 @@ unshackle dl -q 2160,1080,720 EXAMPLE 81234567
 ```
 
 !!! note "16:9 canvas matching"
-    Resolution matching is by track **height** first. If no track has an exact matching
-    height, unshackle falls back to a 16:9-canvas match, so `-q 1080` will also match an
-    anamorphic `1920×804` track (computed as `int(width × 9 / 16)`).
+    Resolution matching is by track **height** first. If no track height matches exactly,
+    unshackle falls back to a 16:9-canvas match, so `-q 1080` also selects an
+    anamorphic `1920×804` track (computed as `int(width × 9 / 16)`). unshackle applies the
+    fallback to each range and codec on its own. A service that crops only its HDR10 tracks
+    therefore keeps its `3840×1920` HDR10 track, even when another range has an exact
+    `2160` height match.
 
 ### Best-available and worst
 
@@ -94,18 +97,18 @@ By default a missing requested resolution is an error. Two flags change that:
 
 | Flag | Behaviour |
 | --- | --- |
-| `--best-available` | If the requested resolution(s) aren't present, continue with the best that *is* available instead of failing. Also softens missing video/audio/subtitle languages and hybrid fallbacks. |
+| `--best-available` (`--warn-only`) | If the requested resolution(s) are not present, continue with the best that *is* available instead of failing. Also softens missing video/audio/subtitle languages and hybrid fallbacks, and with `--all-drm` a DRM system that does not license. |
 | `--worst` | Within the specified quality, pick the **lowest** bitrate rendition. **Requires `-q/--quality`.** |
 
 ```shell title="Never fail on a missing resolution"
 unshackle dl -q 2160 --best-available EXAMPLE 0ABC123
 ```
 
-## Video codec and color range
+## Video codec and colour range
 
 ### Codec
 
-`-v` / `--vcodec` selects one or more video codecs; the default is any codec. It accepts
+`-v` / `--vcodec` selects one or more video codecs. The default is any codec. It accepts
 either enum **names** or their **values**, comma-separated.
 
 | Name | Value |
@@ -117,15 +120,17 @@ either enum **names** or their **values**, comma-separated.
 | `VP9` | `VP9` |
 | `AV1` | `AV1` |
 
+`H264` and `H265` are aliases of `AVC` and `HEVC`.
+
 ```shell title="Either spelling works"
 unshackle dl -v HEVC   EXAMPLE 81234567
 unshackle dl -v H.265  EXAMPLE 81234567
 unshackle dl -v hevc,avc EXAMPLE 81234567
 ```
 
-### Color range
+### Colour range
 
-`-r` / `--range` selects one or more color ranges; the default is `SDR`.
+`-r` / `--range` selects one or more colour ranges. The default is `SDR`.
 
 | Range | Meaning |
 | --- | --- |
@@ -141,13 +146,13 @@ unshackle dl -q 2160 -r HDR10,DV EXAMPLE '...'
 ```
 
 !!! warning "HYBRID requires dovi_tool"
-    `-r HYBRID` produces a single hybrid stream by injecting the Dolby Vision RPU
-    metadata onto an HDR10/HDR10+ base layer using **dovi_tool**.
-    It requires the `dovi_tool` binary, resolved from unshackle's `binaries/` folder or
-    your `PATH`. The normal case is a DV track plus an HDR10 or HDR10+ base. With HDR10+
+    `-r HYBRID` makes a single hybrid track by injecting the Dolby Vision RPU
+    metadata onto an HDR10/HDR10+ base layer with **dovi_tool**.
+    It requires the `dovi_tool` binary, resolved from unshackle's `binaries/` folder,
+    the `binaries` folder of your user data directory, or your `PATH`. The normal case is a DV track plus an HDR10 or HDR10+ base. With HDR10+
     and no DV, unshackle converts the HDR10+ metadata to DV instead, which also needs
     `hdr10plus_tool`. With no DV and no HDR10+, the title fails.
-    When HDR10+ is present it is preferred over HDR10 as the base layer.
+    When HDR10+ is present, unshackle prefers it over HDR10 as the base layer.
 
     To keep an HDR10+ deliverable *alongside* the hybrid, request both ranges:
     `-r HYBRID,HDR10P`. `-r HYBRID` on its own muxes only the merged hybrid.
@@ -165,13 +170,13 @@ resolution/codec/range/language combination. You can constrain this.
 | `-ab-range` / `--abitrate-range` | Audio bitrate range in kbps, e.g. `128-256`. |
 
 !!! warning "Exact vs range are mutually exclusive"
-    `--vbitrate` cannot be combined with `--vbitrate-range`, and likewise for the audio
+    You cannot combine `--vbitrate` with `--vbitrate-range`, and likewise for the audio
     pair. Pick one form.
 
 ### Real bitrate probing
 
 Manifest-declared bitrates are sometimes rounded or wrong. Services often advertise a
-**peak** or **nominal** bandwidth that is far from the stream's real average. This matters
+**peak** or **nominal** bandwidth that is far from the track's real average. This matters
 because a track's bitrate drives the track listing, the sort order, *and* the
 `--vbitrate`/`--vbitrate-range` selection above. A bogus declared value therefore makes
 unshackle pick the wrong track. These flags probe the actual media size to compute a true
@@ -182,26 +187,26 @@ bitrate for the top renditions, overriding the manifest value:
   language). Slower than the video variant because there are more renditions to probe.
 
 !!! note "Reading the probed numbers"
-    A single-file track (DASH `SegmentBase`/`BaseURL`) is measured **exactly**. A
+    unshackle measures a single-file track (DASH `SegmentBase`/`BaseURL`) **exactly**. A
     multi-segment track (most HLS) is a **sampled estimate**, normally within a few percent
     of the true value. For MPEG-TS HLS the probed figure also reads a few percent *above*
     the demuxed elementary stream, because the segment bytes include container overhead.
     That is the real *delivered* size, not an over-report or a bug.
 
 !!! tip "Why not every rendition is probed"
-    Probing does not touch every rendition. Only the five highest declared-bitrate
-    renditions of each quality tier are probed in parallel (video grouped by codec and
-    range, audio by codec, channels, language, and descriptive flag), and unshackle
-    extends a group downward while a lower unprobed rendition could still outrank a
-    probed one. This keeps probing fast even when a service exposes dozens of renditions.
-    Tracks whose duration can't be determined fall back to `ffprobe`, and a probe failure
-    is non-fatal: the manifest value is simply left in place.
+    Probing does not touch every rendition. unshackle probes only the five highest
+    declared-bitrate renditions of each quality tier, in parallel (video grouped by codec
+    and range, audio by codec, channels, language, and descriptive flag). It extends a
+    group downward while a lower unprobed rendition could still outrank a probed one.
+    This keeps probing fast even when a service exposes dozens of renditions. A track
+    whose duration unshackle cannot find falls back to `ffprobe`. A probe failure is
+    non-fatal: the manifest value stays in place.
 
 ## Audio codec, channels, and Atmos
 
 ### Codec
 
-`-a` / `--acodec` selects one or more audio codecs (comma-separated); the default is any.
+`-a` / `--acodec` selects one or more audio codecs (comma-separated). The default is any.
 
 | Name | Value | Codec |
 | --- | --- | --- |
@@ -212,11 +217,12 @@ bitrate for the top renditions, overriding the manifest value:
 | `OPUS` | `OPUS` | Opus |
 | `OGG` | `VORB` | Vorbis |
 | `DTS` | `DTS` | DTS |
+| `DTSX` | `DTS-X` | DTS:X Profile 2 (DTS-UHD) |
 | `ALAC` | `ALAC` | Apple Lossless |
 | `FLAC` | `FLAC` | FLAC |
 
-Names, values, and a few aliases are accepted: `eac3` and `ddp` both resolve to `EC3`,
-and `vorbis` resolves to `OGG`.
+unshackle accepts names, values, and a few aliases: `eac3` and `ddp` both give `EC3`,
+and `vorbis` gives `OGG`.
 
 ```shell title="Prefer Dolby Digital Plus, fall back to AAC"
 unshackle dl -a EC3,AAC EXAMPLE 81234567
@@ -224,13 +230,35 @@ unshackle dl -a EC3,AAC EXAMPLE 81234567
 
 ### Channels and Atmos
 
-- `-c` / `--channels`: desired channel layout, e.g. `5.1` or `2.0`. Matching is by
-  ceiling, so `5.1` implicitly matches a `6.0`-reported layout.
-- `-naa` / `--noatmos`: exclude Dolby Atmos audio tracks from selection.
+- `-c` / `--channels`: desired channel layout, for example `5.1` or `2.0`. Matching is by
+  ceiling, so `5.1` implicitly matches a `6.0`-reported layout. An immersive layout such as
+  `5.1.4` matches on its total number of channels, so `-c 10` selects it.
+- `-naa` / `--noatmos`: exclude Atmos audio tracks from selection.
 
 ```shell title="5.1 audio, no Atmos"
 unshackle dl -c 5.1 --noatmos EXAMPLE 0ABC123
 ```
+
+### Music quality
+
+A music service gives one `Audio` track for each codec and bitrate it offers for a song.
+The audio options above choose between them: `-a` picks the codec and `-ab` or `-ab-range`
+picks the bitrate. If you set neither, unshackle takes the best track.
+
+`-q` / `--quality` is a video height. It has no effect on a music download.
+
+```shell title="Take the lossless track"
+unshackle dl -a FLAC EXAMPLE 81234567
+```
+
+```shell title="Take the lossy track at 320 kb/s"
+unshackle dl -a AAC -ab 320 EXAMPLE 81234567
+```
+
+!!! tip "Two FLAC tracks in one release"
+    A service can offer both a CD FLAC and a hi-res FLAC. The two have the same codec, so
+    the bitrate is what separates them. Use `--list` to read the bitrates, then give `-ab`
+    the one you want.
 
 ## Languages
 
@@ -243,8 +271,8 @@ unshackle dl -c 5.1 --noatmos EXAMPLE 0ABC123
 unshackle dl -l orig,en EXAMPLE 81234567
 ```
 
-The special token `orig` is resolved to the title's actual original language everywhere
-it is used. You can override each stream type independently:
+unshackle changes the special token `orig` to the title's own original language
+everywhere you use it. You can override each track type independently:
 
 - `-vl` / `--v-lang`: language for **video only** (overrides `-l` for video). Useful
   when the burned-in video language differs from the audio you want.
@@ -263,8 +291,8 @@ Put a `-` in front of a language to remove it from the selection. This works on 
 unshackle dl -sl all,-es EXAMPLE 81234567
 ```
 
-The exclusions are subtracted from the languages the flag would otherwise select, and the
-order of the values does not matter. If you give only exclusions, the flag keeps its own
+unshackle subtracts the exclusions from the languages the flag would otherwise select,
+and the order of the values does not matter. If you give only exclusions, the flag keeps its own
 default: `-sl -es` is the same as `-sl all,-es`, and `-l -es` is the same as `-l orig,-es`.
 
 ```shell title="Only exclusions"
@@ -276,7 +304,7 @@ unshackle dl -l -es EXAMPLE 81234567
 ```
 
 `-vl` and `-al` have no default of their own: they cascade to `-l`. An override that names
-a language replaces `-l` for that stream type, exclusions included. An override that gives
+a language replaces `-l` for that track type, exclusions included. An override that gives
 only exclusions adds them to the ones from `-l`.
 
 ```shell title="Cascade"
@@ -285,13 +313,13 @@ unshackle dl -l en,-es -vl ja EXAMPLE 81234567
 ```
 
 !!! note "Rules for exclusion tokens"
-    - `orig` is resolved per title, so `-sl -orig` drops the subtitles in the title's
-      original language.
+    - `orig` becomes the title's own original language, so `-sl -orig` drops the
+      subtitles in that language.
     - `--exact-lang` applies to exclusions with the same matching rules as selection:
       `-es` removes exactly the tracks that `es` would select. Without it, `-es` also
       removes `es-419` and `es-ES`.
     - Tracks with no language tag are never excluded.
-    - `-all` is rejected. Name the languages you do not want instead.
+    - unshackle rejects `-all`. Name the languages you do not want instead.
     - The comma form is the documented style. `-sl -es` also works, but a shell can read
       a lone `-es` as another option.
 
@@ -309,17 +337,17 @@ subtitle:
 ```
 
 Subtitles then start with English, Spanish, and French. The languages you leave out follow
-alphabetically, after the title's original language. Nothing is removed. Audio works the
-same way, but the languages you leave out keep their bitrate and codec order instead of an
+alphabetically, after the title's original language. unshackle removes nothing. Audio
+works the same way, but the languages you leave out keep their bitrate and codec order instead of an
 alphabetical one.
 
 See [`subtitle.language_priority`](../reference/configuration/download.md#subtitle) for the details.
 
 ### Exact vs fuzzy matching
 
-By default language matching is fuzzy: `-l en` also accepts `en-US`, `en-GB`, etc. (up
-to a small distance). Pass `--exact-lang` to require an exact match: with it, `-l es-419`
-matches only `es-419`, not `es-ES`.
+By default language matching is fuzzy: `-l en` also accepts `en-US`, `en-GB`, and the
+other regional forms (up to a small distance). Pass `--exact-lang` when only an exact
+match is acceptable: with it, `-l es-419` selects only `es-419`, not `es-ES`.
 
 !!! tip "The `all` and `best` tokens"
     For audio, the tokens `all` and `best` bypass the usual one-track-per-language pick
@@ -330,8 +358,8 @@ matches only `es-419`, not `es-ES`.
 
 ### Selecting subtitle languages
 
-`-sl` / `--s-lang` sets the wanted subtitle language(s). The default is `all`, meaning
-every available subtitle language is downloaded.
+`-sl` / `--s-lang` sets the wanted subtitle language(s). The default is `all`, so
+unshackle downloads every available subtitle language.
 
 ```shell title="Only English and Spanish subtitles"
 unshackle dl -sl en,es EXAMPLE 81234567
@@ -343,24 +371,56 @@ except Spanish, forced Spanish subtitles included.
 
 ### Requiring subtitles
 
-`--require-subs` takes a list of languages that **must** exist. If they all exist, *all*
-subtitles are downloaded; if any is missing, the title fails. This is useful for gating a
-download on the presence of a specific subtitle track.
+`--require-subs` takes a list of languages that **must** exist. If any is missing, the
+title fails, even under `--best-available` / `--warn-only`. Use it when a download is only
+worth keeping if a specific subtitle track is present.
 
-!!! warning "Cannot combine with `--s-lang`"
-    `--require-subs` and `--s-lang` are mutually exclusive. Use one or the other.
+It gates the title. It does not select tracks: `--s-lang` still decides what to keep, and
+it defaults to `all`:
+
+```bash
+# every subtitle language, but only if English is one of them
+unshackle dl --require-subs en EXAMPLE 0ABC123
+
+# English, Korean and Japanese only, and only if English is present
+unshackle dl -sl en,ko,ja --require-subs en EXAMPLE 0ABC123
+```
+
+### Requiring audio and video languages
+
+`--require-audio` and `--require-video` take a list of languages that **must** exist. If
+one is missing, the title fails, even under `--best-available` / `--warn-only`. Like
+`--require-subs`, they gate the title without selecting tracks: `-l` / `-al` / `-vl` still
+decide what unshackle downloads.
+
+This matters most with `-l best` or `-l all`, which accept whatever the service offers and
+so never report a missing language on their own:
+
+```bash
+# every audio language except French, but only if English is one of them
+unshackle dl -l best,-fr --require-audio en EXAMPLE 0ABC123
+
+# English is required, French is optional
+unshackle dl -l en,fr --require-audio en --warn-only EXAMPLE 0ABC123
+```
+
+The check runs against the full track list, before any language selection or exclusion.
+`orig` resolves to the title language, and `--exact-lang` applies. Audio carried inside the
+video track counts. `--no-audio` and `--no-video` drop the matching requirement.
 
 ### Forced subtitles and output format
 
 - `-fs` / `--forced-subs`: include forced subtitle tracks (signs/foreign dialogue).
-  Without this flag, forced subs are dropped from selection.
+  Without this flag, unshackle drops forced subtitle tracks from the selection.
 - `-fsl` / `--forced-s-lang`: keep forced subtitles only in these languages (implies
   `-fs`). Works independently of `--s-lang`, so `-sl all -fsl en` grabs every full
   subtitle but only the English forced track. It accepts exclusions too: `-fsl all,-es`
   keeps every forced subtitle except the Spanish one, and `-fsl -es` means the same.
+- `-fso` / `--forced-subs-only`: keep only the forced subtitle tracks and drop every
+  other subtitle (implies `-fs`). `--s-lang` and `-fsl` still select the languages.
 - `--sub-format`: set the output subtitle format, converting only when necessary.
   Accepts codec names/values and common aliases (`srt`, `vtt`, `ass`, `ssa`, `ttml`,
-  etc.), or the literal `original` to keep the source format.
+  and the other codec aliases), or the literal `original` to keep the source format.
 
 | Value | Format |
 | --- | --- |
@@ -376,20 +436,22 @@ unshackle dl --sub-format srt EXAMPLE 81234567
 ```
 
 !!! note "SDH stripping happens by default"
-    When a subtitle track is marked SDH (for the deaf/hard-of-hearing) and there is no
-    plain same-language subtitle, unshackle produces a stripped, non-SDH variant
-    automatically. This behaviour is governed by the `subtitle.strip_sdh` config option
+    When a subtitle track carries the SDH flag (for the deaf/hard-of-hearing) and there
+    is no plain same-language subtitle, unshackle makes a stripped, non-SDH track
+    automatically. The `subtitle.strip_sdh` config option controls this behaviour
     (default on).
 
-## Selecting episodes
+## Selecting episodes and tracks
 
-For series, several flags control which episodes are downloaded. By default, **all**
-episodes are downloaded.
+For series, several flags control which episodes unshackle downloads. The same flags
+select the tracks of a music release. By default, unshackle downloads **all** episodes and
+**all** tracks.
 
 ### Wanted ranges
 
-`-w` / `--wanted` accepts flexible season/episode ranges, comma-separated. Prefix a token
-with `-` to exclude it.
+`-w` / `--wanted` accepts season and episode ranges, comma-separated. Prefix a token
+with `-` to exclude it. For a music release, the same option takes track numbers. Read
+[music tracks](#music-tracks) below.
 
 === "Whole seasons"
 
@@ -440,13 +502,57 @@ with `-` to exclude it.
     unshackle dl -w 2026-08-01:2026-08-31,-2026-08-15 EXAMPLE 81234567
     ```
 
+### Music tracks
+
+`-w` selects the tracks of an album, EP, single, or playlist. Give a track by its number.
+A release with more than one disc uses the `{disc}x{track}` form. A number on its own is a
+track on disc 1, which is the number the track list shows for a single-disc release.
+
+=== "Tracks"
+
+    ```shell
+    # Track 3
+    unshackle dl -w 3 EXAMPLE 81234567
+
+    # Tracks 1 through 5
+    unshackle dl -w 1-5 EXAMPLE 81234567
+
+    # Tracks 1, 3 and 7
+    unshackle dl -w 1,3,7 EXAMPLE 81234567
+    ```
+
+=== "More than one disc"
+
+    ```shell
+    # Disc 2, track 3
+    unshackle dl -w 2x3 EXAMPLE 81234567
+
+    # Disc 2, tracks 1 through 4
+    unshackle dl -w 2x1-2x4 EXAMPLE 81234567
+
+    # Disc 1 track 3, through disc 2 track 2
+    unshackle dl -w 1x3-2x2 EXAMPLE 81234567
+    ```
+
+=== "Exclusions"
+
+    ```shell
+    # Tracks 1 through 8, but not track 4
+    unshackle dl -w 1-8,-4 EXAMPLE 81234567
+    ```
+
+!!! tip "Read the track list first"
+    `--list-titles` prints the release with its disc and track numbers, so you can see
+    which numbers to give `-w`.
+
 ### Daily and date-based content
 
 Talk shows, news and sports have no official episode numbering, so unshackle names them
-by air date. An episode that carries an air date is written as `Show.YYYY.MM.DD` instead of
-`SxxExx`, the `{date}` token holds the ISO date, and the season folder becomes the year.
+by air date. unshackle writes an episode that carries an air date as `Show.YYYY.MM.DD`
+instead of `SxxExx`, the `{date}` token holds the ISO date, and the season folder becomes
+the year.
 
-A service that only carries this kind of content sets `DAILY = True` on its class, and a
+A service that only carries this kind of title sets `DAILY = True` on its class, and a
 service can set `air_date` on each episode itself. Add `--daily` to mark any other title
 as date-based:
 
@@ -455,14 +561,14 @@ unshackle dl --daily --tvdb 73871 --enrich EXAMPLE 81234567
 ```
 
 With `--enrich` and a TVDB ID, `--daily` fills in the air date of every episode that has
-none. An air date the service already set is kept. Dates before 1970 and dates in the
-future are skipped, because TVDB carries placeholder schedule dates for episodes that
+none. An air date the service already set is kept. unshackle skips dates before 1970 and
+dates in the future, because TVDB carries placeholder schedule dates for episodes that
 have not aired. Without `--enrich` unshackle has no source to fill from, and says so.
 
-A dated episode answers to its air date in `-w`, as well as to its `SxxExx` key. A date
+A dated episode answers to its air date in `-w`, as well as to its `SxxExx` token. A date
 token is a plain ISO date (`2026-08-11`). A date range uses a colon (`2026-08-01:2026-08-31`),
 because the dashes in a date are part of the date. A range cannot span more than 1000 days.
-Date tokens and `SxxExx` tokens can be mixed in one `-w`.
+You can mix date tokens and `SxxExx` tokens in one `-w`.
 
 ### Split episodes
 
@@ -480,14 +586,14 @@ A season token such as `S01` covers every episode and every part, so you only ne
 when you want a part on its own.
 
 !!! warning "A part range stays inside one episode"
-    `S01E01.1-S01E01.3` is valid. `S01E01.1-S01E02.3` is rejected, because the parser
-    cannot know how many parts episode 1 has and so cannot work out where the range ends.
-    To span episodes, list the parts you want as separate tokens:
+    `S01E01.1-S01E01.3` is valid. unshackle rejects `S01E01.1-S01E02.3`, because the
+    parser cannot know how many parts episode 1 has and so cannot work out where the range
+    ends. To span episodes, write the parts you want as separate tokens:
     `-w S01E01.2,S01E02.1`.
 
 !!! note "A part of an unsplit episode selects nothing"
     `-w S01E02.2` on an episode that was never split is deliberately empty: it tells you
-    the episode has no parts, rather than quietly handing you the whole episode. Run
+    the episode has no parts, rather than quietly handing you the whole episode. Use
     `--list-titles` to see which episodes carry parts.
 
 ### Other selection flags
@@ -496,10 +602,17 @@ when you want a part on its own.
 | --- | --- |
 | `--select-titles` | Interactively pick episodes of a series, or films when a title has more than one. **Cannot combine with `-w`.** |
 | `--latest-episode` | Download only the single most recent episode. |
-| `--list-titles` | List every title the service returned, then stop. `-w`/`--latest-episode` are not applied to this listing. |
+| `--latest-episodes N` | Download only the N most recent episodes. The newest episodes can come from more than one season. A [split episode](#split-episodes) counts as one episode, and all its parts download. |
+| `--list-titles` | List every title the service returned, then stop. `-w`, `--latest-episode` and `--latest-episodes` are not applied to this listing. |
+
+When `--latest-episode` or `--latest-episodes` is set, `-w` has no effect.
 
 ```shell title="Grab just the newest episode"
 unshackle dl --latest-episode EXAMPLE 81234567
+```
+
+```shell title="Grab the three newest episodes"
+unshackle dl --latest-episodes 3 EXAMPLE 81234567
 ```
 
 ## Including and excluding track types
@@ -520,13 +633,34 @@ or negatively (everything but these).
 - `-na` / `--no-audio`
 - `-ns` / `--no-subs`
 - `-nc` / `--no-chapters`
+- `-nt` / `--no-attachments` (cover art, subtitle fonts, and files the service attaches)
 
 Additional track-type flags:
 
 - `-ad` / `--audio-description`: include descriptive (audio-description) tracks, which
-  are dropped by default.
+  unshackle drops by default.
+- `-ado` / `--audio-description-only`: keep only the descriptive tracks and drop the
+  standard audio. It does not need `-ad`. Add `-A` to download no video or subtitles.
 - `--skip-subtitle-errors`: if a subtitle fails to download, skip it and continue rather
   than aborting the whole title. Video and audio failures remain fatal.
+
+!!! note "The `-only` kind flags"
+    `-ado` and `-fso` each keep one kind of track inside its track type. They do not drop
+    the other track types: `-ado` still downloads the video, and `-fso` still downloads
+    video and audio. Add `-A` or `-S` for that.
+
+    - The language flags still apply. With the default `-l orig`, `-ado` fails when the
+      descriptive track is not in the original language. Select the language with `-al`.
+    - A flag that drops the same tracks is an error, for example `-ado` with `--no-audio`
+      or `-fso` with `-A`.
+    - A title with no track of that kind stops a run of one title. A run of more than one
+      title skips that title with a warning and continues.
+    - unshackle reads the kind from the manifest or from the service. A track that
+      neither of them marks as descriptive or forced does not match.
+
+```shell title="Audio description only, in English"
+unshackle dl -A -ado -al en EXAMPLE 81234567
+```
 
 ```shell title="Subtitles only"
 unshackle dl -S -sl en EXAMPLE 81234567
@@ -538,7 +672,7 @@ unshackle dl -nc EXAMPLE 81234567
 
 !!! note
     You can combine an `*-only` flag with `no-*` flags to fine-tune: `*-only` chooses the
-    starting set of categories, then `no-*` subtracts from it. Attachments (e.g. fonts)
+    starting set of categories, then `no-*` subtracts from it. Attachments (for example fonts)
     are always kept.
 
 ## Listing and dry runs
@@ -548,8 +682,9 @@ Before committing to a long download, inspect what unshackle *would* do:
 | Flag | Effect |
 | --- | --- |
 | `--list` | List the tracks the service exposes for each title, then stop. No selection, no download. |
-| `--list-titles` | List every title the service returned, then stop. `-w`/`--latest-episode` are not applied to this listing. |
+| `--list-titles` | List every title the service returned, then stop. `-w`, `--latest-episode` and `--latest-episodes` are not applied to this listing. |
 | `--skip-dl` | Skip downloading but still acquire the decryption keys. |
+| `--all-drm` | License each track with both Widevine and PlayReady. See [Widevine and PlayReady on the same title](drm-and-cdm.md#widevine-and-playready-on-the-same-title). |
 
 ```shell title="See the track selection without downloading"
 unshackle dl -q 1080 -v H.265 -r HDR10 --list EXAMPLE 81234567
@@ -559,9 +694,9 @@ unshackle dl -q 1080 -v H.265 -r HDR10 --list EXAMPLE 81234567
 
 ### Output location and folders
 
-- `-o` / `--output`: override the output directory for this run (otherwise the
-  configured downloads directory is used).
-- `--no-folder`: do not create a per-show folder for TV downloads.
+- `-o` / `--output`: override the output directory for this run (otherwise unshackle
+  uses the configured downloads directory).
+- `--no-folder`: do not make a per-show folder for TV downloads.
 - `--no-source`: remove the service source tag from the filename and path.
 
 ```shell title="Send this download somewhere specific"
@@ -570,14 +705,56 @@ unshackle dl -o ~/Videos/incoming EXAMPLE 81234567
 
 ### Muxing behaviour
 
-By default, tracks are muxed into a single Matroska (`.mkv`) file with `mkvmerge`. These
-flags change how the output is assembled:
+By default, `mkvmerge` muxes the tracks of a movie or an episode into a single Matroska
+(`.mkv`) file. These flags change how unshackle assembles the output:
 
 | Flag | Behaviour | Default source |
 | --- | --- | --- |
 | `--no-mux` | Do not mux; keep the individual track files. | - |
+| `--sample` | Download a short sample: 60 seconds from 2 minutes in, or `--sample START-END` for a window in seconds. | - |
+| `--include-sample` | Download the full title, then also cut a 60 second sample from each muxed file into a `Sample` folder. | - |
 | `--split-audio` | Write a separate output file per audio codec instead of merging all audio. | config `muxing.merge_audio` (on) |
 | `--merge-video` | Mux video tracks that share a height, range, and codec into one file, so only language varies inside a file. | config `muxing.merge_video` (off) |
+
+!!! note "`--sample` needs a segmented track"
+    `--sample` downloads only the segments that hold the window, and `mkvmerge` cuts the output
+    to the window. The cut starts at the first video keyframe in the window, so a sample can be
+    some seconds short. unshackle downloads each subtitle track in full and then keeps only the
+    cues of the window.
+
+    The run stops before the download starts in two conditions: a service gives a video or
+    audio track as one file with no segments and no segment index, or the title ends before the
+    window starts.
+
+    A sidecar subtitle file with `sidecar_format: original` is not trimmed. It holds the segments around the
+    window, or the whole file when the track is one file.
+
+!!! note "Music is never muxed"
+    A song skips the muxer. unshackle keeps the container that the service
+    delivered, such as `.flac`, `.m4a`, or `.mp3`, and writes the metadata into that file.
+    Read [Music output files](output-and-naming.md#music-output-files).
+
+### After the download
+
+`--postscript "<command>"` runs your own command once per output file, with unshackle's
+metadata substituted into `{variable}` placeholders. It is repeatable, and it replaces the
+`post_scripts` config for that run. No `success` post-script operates under `--no-mux`, because
+that run writes no muxed output. A `failure` post-script still operates if the download fails.
+
+```shell title="Hand each finished file to an uploader"
+unshackle dl --postscript "python /opt/upload.py {filepath} --service={service}" EXAMPLE 81234567
+```
+
+`--no-postscript` operates the run with no post-script at all. It silences the `post_scripts`
+config and `--postscript` together, for every event and mode.
+
+```shell title="Skip the uploader for one run"
+unshackle dl --no-postscript EXAMPLE 81234567
+```
+
+For post-scripts that continue across runs, for the `season` and `run` modes, for `failure`
+post-scripts and for the full variable list, see
+[Post-scripts](../reference/configuration/post-scripts.md).
 
 ### Naming tags
 
@@ -590,27 +767,35 @@ unshackle dl --tag MYGRP --repack EXAMPLE 81234567
 
 ## Proxies
 
-`--proxy` accepts a full proxy URI, a 2-letter country code (resolved through your
-configured proxy providers), or a `provider:region` form.
+`--proxy` accepts a full proxy URI, a country or location code (resolved through your
+configured proxy providers), or a `provider:region` form. See
+[Proxies & VPN](proxies-and-vpn.md#how-proxy-resolution-works) for the exact grammar.
 
 ```shell title="Proxy forms"
 unshackle dl --proxy us EXAMPLE 81234567
 unshackle dl --proxy nordvpn:ca EXAMPLE 81234567
+unshackle dl --proxy controld:yul EXAMPLE 81234567
 unshackle dl --proxy 'http://user:pass@host:8080' EXAMPLE 81234567
 ```
 
-Two related flags:
+Three related flags:
 
 - `--no-proxy`: force-disable all proxy use for this run.
 - `--no-proxy-download`: bypass the proxy for **all downloads**. The manifest,
-  license, and authentication requests still go through the proxy. This is useful when the
-  proxy is only needed to satisfy geo-checks, not to move the bulk of the data.
+  license, and authentication requests still go through the proxy. This is useful when you
+  need the proxy only to satisfy geo-checks, not to move the bulk of the data.
+- `--proxy-download`: use a different proxy for **all downloads**. The manifest,
+  license, and authentication requests still go through `--proxy`. Takes the same forms
+  as `--proxy`.
 
 ## Performance and caching
 
 | Flag | Purpose |
 | --- | --- |
 | `--workers N` | Threads used per track for segment downloads. Default depends on the downloader. |
+| `--adaptive-workers` | Opt-in: start the per-track worker count at `--workers`, reduce it when the CDN returns errors, then raise it again while the extra workers add measured throughput. The count never goes above `--workers`. Off by default (fixed worker count). |
+| `--download-processes N` | Opt-in: split a large segment batch across `N` download processes, each with its own worker pool. A single process tops out around 1.3 Gb/s (Python interpreter limit); `2` reaches 2.5GbE line rate on fast CDNs. Only engages for batches of 24+ segments. Ignored while `--speed-limit` (or serve's `global_speed_limit`) is set: the cap is one shared budget, which extra processes cannot share, so the download stays in a single process. Also ignored when the service HTTP session carries state a child process cannot rebuild, such as a custom TLS adapter. The download stays in a single process instead of running with the wrong settings. Default `1`. |
+| `--continue-downloads` | Opt-in: keep completed segment files when a download fails so the next run resumes instead of restarting from zero. One-off enable of the [`continue_downloads`](../reference/configuration/download.md#continue_downloads) config option, which documents what can and cannot resume. |
 | `--downloads N` | Number of tracks downloaded concurrently. Default `1`. |
 | `--slow [MIN-MAX]` | Add a delay between titles to look more like a real device. `--slow` alone means 60-120s; `--slow 20-40` sets a custom range. Minimum 20s. |
 | `--no-cache` | Bypass the title cache for this download. |
@@ -627,26 +812,82 @@ unshackle dl -w S01 --slow 30-60 EXAMPLE 81234567
 ## Keys, vaults, and export
 
 By default, unshackle checks your **key vaults** first and only asks a **CDM** to license
-a key when the vault misses. You can force one side or the other:
+a content key when the vault misses. You can force one side or the other:
 
-- `--cdm-only`: only use the CDM (skip vaults).
-- `--vaults-only`: only use key vaults (never license via the CDM); a missing key fails.
+- `--cdm-only`: only use the CDM (skip vaults). Over a `server_cdm` remote session the flag does not reach the server, whose vault shortcut still runs; it only skips the client's decode check on a server key.
+- `--cdm <name>`: use the named CDM device for this run, ignoring the `cdm` config mapping (including its quality and Widevine/PlayReady sub-entries). Over `--remote`, that device licenses the remote session, not the server CDM.
+- `--vaults-only`: only use key vaults and never license through the CDM. A missing
+  content key fails.
 
 ```shell title="Fetch keys only, no download"
 unshackle dl --skip-dl EXAMPLE 81234567
 ```
 
-`--export` writes a JSON file, into the configured exports directory, containing track
-info and the acquired content keys for each title. This is the format consumed by
-`unshackle import` to reconstruct a download later.
+`--export` writes a `mediaexport` JSON file into the configured exports directory. It holds
+the manifest, the DRM init data, the content keys, the KIDs of each track and the title
+metadata for each title. `unshackle import` reads it to reconstruct a download later, and gives
+each track only the content keys for its KIDs. The importer also reads the
+older unshackle `version: 2` files and unidl's own export files.
 
 ```shell title="Export track info and keys"
 unshackle dl --skip-dl --export EXAMPLE 81234567
 ```
 
+Add `--all-drm` to get the content keys of each DRM system the title offers. The export then
+holds the DRM init data of both. A Key Vault that has a content key stops the challenge for
+its KID; add `--cdm-only` to send a challenge for each DRM system.
+
+```shell title="License with Widevine and PlayReady, no download"
+unshackle dl --skip-dl --all-drm --export EXAMPLE 81234567
+```
+
+The file name tells what the file holds, in the form
+`{title}.{scope}.{resolutions}.{codecs}.{ranges}.{manifests}.{audio}-{SERVICE}.json`:
+
+| Export | File name |
+|---|---|
+| A movie | `Example.Movie.2024.1080p.h264.sdr.hls.aac2.0-EXAMPLE.json` |
+| A whole season | `Example.Show.S01.2160p.h265.sdr.hdr10.dash.dd5.1-EXAMPLE.json` |
+| Episodes 5 to 9 and 12 | `Example.Show.S01E05-E09.S01E12.1080p.h264.sdr.dash.aac2.0-EXAMPLE.json` |
+
+- A dot separates each part and each word of the title. The name has no spaces or
+  underscores. It does not follow your `output_template`: a template with spaces does not
+  change the export name.
+- The scope is `S01` only when the file holds every episode the service lists for that season.
+  Otherwise it names each run of episodes. Whole seasons in a row become `S01-S03`. After three
+  parts, `+N` counts the parts left out. A movie has no scope.
+- The quality parts come from the video and audio tracks selected for the titles in the file.
+  Each value shows once.
+- unshackle renames the file after each write, so the name always matches what the file holds.
+  When a run stops early, the file is complete for the titles it holds.
+- When another file already has the name, unshackle adds `-2`, `-3`, and so on. It never
+  writes over another export.
+
+The run logs the file name at the first write, the track and content key counts for each title, and
+at the end the path and the total counts.
+
+The export holds a content key for each track your flags selected and no others. To make a
+file another person can use, select generously: for example `-a AAC,EC3` and every language
+you want them to have. An import can only pick tracks whose key is in the file. A track
+that another tool exported as a direct file URL is added next to the manifest's own tracks.
+An export with no manifest, for example a unidl export of whole media files, gets all of its
+tracks from those URLs. If such an export does not give the title a language, `orig` has no
+value: select the languages with `-l` and `-vl`.
+
+An import uses only the content keys in the file and in your vaults. It never gets a licence
+from a CDM. When a track needs a content key that neither has, the import stops and names the
+KID. To fix this, export the title again with that track selected.
+
+!!! warning "The export file is a secret"
+    It holds the content keys and usually a signed manifest URL. Hand it over on purpose,
+    not by accident.
+
+The [mediaexport](https://github.com/unshackle-dl/mediaexport) package specifies the
+`mediaexport` format and is the reader and writer unshackle uses.
+
 !!! note "Region is recorded only with a proxy"
-    When `--proxy` is used, the export records the region so an import can reproduce the
-    correct geofence. Without a proxy, no region is stored.
+    When you use `--proxy`, the export records the region so an import can reproduce the
+    correct geofence. Without a proxy, the export stores no region.
 
 !!! warning "Some DASH and Smooth exports need a title language"
     An import re-fetches the DASH or ISM manifest and parses it again. Most manifests label
@@ -655,22 +896,26 @@ unshackle dl --skip-dl --export EXAMPLE 81234567
     service. If a service never sets it, importing that export fails with a message naming
     the service. Neither end guesses a language for you, so the fix belongs in the service.
 
+    An HLS master playlist gives no language for a video track. When the export gives no
+    title language, the video track takes the language of the default audio track. When
+    the master playlist gives no audio language either, the import stops with a message.
+
 ## Metadata and tagging
 
 unshackle looks up metadata automatically, but you can override the identifiers used for
 tagging and naming. An ID you give is authoritative: unshackle looks it up directly instead of
 searching by title, and the ID stays in the tags. An ID only settles *which* title this is.
 To also take that source's title, year and original language, add `--enrich`. Give at most one
-of `--tmdb`, `--imdb` and `--tvdb`; unshackle works the rest out from it. To stop the automatic
+of `--tmdb`, `--imdb` and `--tvdb`, and unshackle works the rest out from it. To stop the automatic
 lookups but keep the IDs you give, set
 [`disable_metadata`](../reference/configuration/misc.md#external-api-keys) in your config.
 
 | Flag | Example | Purpose |
 | --- | --- | --- |
 | `--tmdb` | `--tmdb 27205` | Use this TMDB ID instead of an automatic search. Needs `tmdb_api_key`. |
-| `--imdb` | `--imdb tt1375666` | Use this IMDb ID instead of an automatic search. Needs no key. |
+| `--imdb` | `--imdb tt1375666` | Use this IMDb ID instead of an automatic search. Needs no API key. |
 | `--tvdb` | `--tvdb 73871` | Use this TVDB ID instead of looking the series up. Needs `tvdb_api_key`. |
-| `--anilist` | `--anilist 21` | Use this AniList ID instead of an automatic search. `mal:12345` is also accepted. Needs no key. |
+| `--anilist` | `--anilist 21` | Use this AniList ID instead of an automatic search. `mal:12345` is also accepted. Needs no API key. |
 | `--enrich` | - | Overwrite the show title, year and original language with the external source's. **Requires** one of `--tmdb`, `--imdb`, `--tvdb`, or `--anilist`. |
 | `--tvdb-order` | `--tvdb-order dvd` | Renumber episodes to a TVDB season order. Needs `tvdb_api_key`. |
 
@@ -684,27 +929,28 @@ unshackle dl --imdb tt1375666 --enrich EXAMPLE 81234567
 
 ### What each metadata provider supplies
 
-Providers differ in what they answer with, so the fields `--enrich` can replace depend on
-which ID you gave. Every provider except `imdb` only runs when its key is configured:
+Metadata providers differ in what they answer with, so the fields `--enrich` can replace
+depend on which ID you gave. Every metadata provider except `imdb` and `anilist` only
+operates when you set its config key:
 
 | Provider | Config key | Title and year | Original language | External IDs it returns |
 | --- | --- | --- | --- | --- |
 | TMDB | `tmdb_api_key` | yes | yes, alpha-2 such as `ko` | IMDb, TMDB, TVDB |
 | TVDB | `tvdb_api_key` | yes | yes, alpha-3 such as `kor` | TMDB, TVDB, sometimes IMDb |
 | OMDb | `omdb_api_key` | yes | yes, as an English name such as `Korean` | IMDb |
-| IMDb | *(no key needed)* | yes | yes, alpha-2 such as `ko` | IMDb |
+| IMDb | *(no config key needed)* | yes | yes, alpha-2 such as `ko` | IMDb |
 | SIMKL | `simkl_client_id` | yes | no, it publishes a country and no language | IMDb, TMDB, TVDB |
-| AniList | *(no key needed)* | yes | yes, worked out from the country of origin, such as `ja` | AniList |
+| AniList | *(no config key needed)* | yes | yes, worked out from the country of origin, such as `ja` | AniList |
 
 Whatever the tag looks like, unshackle normalises it before use, so `ko`, `kor` and `Korean`
 all end up as the same language.
 
 !!! note "AniList only answers for anime"
-    It is last in the default provider order and returns nothing for a title that is not
-    anime. The only cost is one search that misses. Put `anilist` earlier in
+    It is last in the default metadata provider order and returns nothing for a title
+    that is not anime. The only cost is one search that misses. Put `anilist` earlier in
     [`metadata_providers`](../reference/configuration/misc.md#external-api-keys) if you mostly
-    download anime. Which of the three AniList title variants is used is set by
-    [`anilist_title_language`](../reference/configuration/misc.md#external-api-keys).
+    download anime. [`anilist_title_language`](../reference/configuration/misc.md#external-api-keys)
+    sets which of the three AniList title variants unshackle uses.
 
     A service can also mark its titles as anime. For those titles unshackle tries AniList
     first. When AniList has no match, it falls through to the normal order.
@@ -713,33 +959,35 @@ Each ID goes to the providers that read that kind of ID, in
 [`metadata_providers`](../reference/configuration/misc.md#external-api-keys) order:
 
 - `--tmdb` reads TMDB.
-- `--imdb` reads IMDb, then falls back to OMDb. IMDb needs no key, so this path works out of
-  the box, and an OMDb key only matters when IMDb has no answer.
+- `--imdb` reads IMDb, then falls back to OMDb. IMDb needs no API key, so this path works
+  out of the box, and an OMDb API key only matters when IMDb has no answer.
 - `--tvdb` reads TVDB. It needs `tvdb_api_key`.
-- `--anilist` reads AniList, which needs no key. It supplies the title, the year and the
+- `--anilist` reads AniList, which needs no API key. It supplies the title, the year and the
   original language, and writes an AniList tag. It knows no TMDB, IMDB or TVDB ID, so pair it
   with `--tmdb`, `--imdb` or `--tvdb` when you want those tags as well.
 
-Give **one** of `--tmdb`, `--imdb` and `--tvdb`. They cannot be combined, because one ID does
-the job on its own: unshackle resolves the other two from it and writes all three to the tags.
+Give **one** of `--tmdb`, `--imdb` and `--tvdb`. You cannot combine them, because one ID
+does the job on its own: unshackle finds the other two from it and writes all three to the
+tags.
 Passing two is an error rather than a silent choice between them. `--anilist` is the exception
 and still pairs with one of the three, which is how you tag an anime title with a western ID.
 
-The ID you give must have a provider that can actually resolve it, so unshackle checks that
-before it downloads anything. `--tmdb` without `tmdb_api_key`, or an ID whose providers your
-`metadata_providers` list leaves out, fails immediately with a message naming what to set.
-`--imdb` needs no key, since the `imdb` provider is keyless and in the default order.
+The ID you give must have a metadata provider that can find it, so unshackle makes sure of
+that before it downloads anything. `--tmdb` without `tmdb_api_key`, or an ID whose metadata
+providers your `metadata_providers` list leaves out, fails immediately with a message naming
+what to set. `--imdb` needs no API key, because the `imdb` metadata provider is keyless
+and in the default order.
 
 With `--enrich`, the title, year and original language are all replaced with the external
 source's values, whether or not the service already filled them in. A field the source does
-not answer with is left alone, and unshackle logs which fields those were, so a provider with
-a thin record cannot blank out what the service told you.
+not answer with is left alone, and unshackle logs which fields those were, so a metadata provider
+with a thin record cannot blank out what the service told you.
 
 `--enrich` also fills in the absolute episode number of each episode from TVDB's absolute
 order, for any series that has one and where the service did not supply it. Anime is the
-usual beneficiary, but no part of this is limited to anime. This only adds the
-[`{absolute}`](../reference/configuration/output.md#output_template) naming variable. The
-season and episode numbers are never changed.
+usual beneficiary, but nothing here applies only to anime. This only adds the
+[`{absolute}`](../reference/configuration/output.md#output_template) naming variable.
+`--enrich` never changes the season and episode numbers.
 
 With `--daily`, `--enrich` also fills in the air date of each episode from TVDB. See
 [Daily and date-based content](#daily-and-date-based-content).
@@ -748,12 +996,13 @@ With `--daily`, `--enrich` also fills in the air date of each episode from TVDB.
     Track selection reads the original language, so replacing it changes which audio is
     treated as the original. That is the point when a service mislabels it, but it means a
     wrong ID can pick the wrong audio track and not only write a wrong name. Without
-    `--enrich` the service's own value is kept and track selection is untouched.
+    `--enrich`, unshackle keeps the service's own value and does not change track
+    selection.
 
 ### Episode ordering
 
-A service does not always number a series the way TVDB's aired order does. Some services list
-Futurama in TVDB's `alternate` (Streaming) order, for example, while TVDB's `official` order
+A service does not always number a series the way TVDB's aired order does. Some services use
+TVDB's `alternate` (Streaming) order for Futurama, for example, while TVDB's `official` order
 holds back four season-one episodes to the start of season two. `--tvdb-order` works out which
 order the service used, then renumbers the episodes into the order you asked for:
 
@@ -765,26 +1014,26 @@ Available orders are `official` (aired), `dvd`, `absolute`, `alternate`, and `re
 `tvdb_order` in your config to apply one by default.
 
 !!! warning "Orders that do not cover the whole series"
-    An order can leave out episodes the service carries. TVDB's `dvd` order does not list
-    Futurama's four movies. Those episodes keep their original numbering. If that would give
+    An order can leave out episodes the service carries. TVDB's `dvd` order does not
+    contain Futurama's four movies. Those episodes keep their original numbering. If that would give
     two episodes the same season/episode slot, and so the same filename, unshackle logs an
     error and leaves the numbering untouched. Pick an order that covers the whole series.
 
 ## Configuration defaults
 
-Every flag on this page can be set as a default in your configuration file so you don't
-have to type it each time, and defaults can be scoped per service. See
+You can set every flag on this page as a default in your configuration file so you do not
+have to type it each time, and you can scope defaults per service. See
 [Configuration file](../getting-started/configuration-file.md) for the `dl:` block and
 per-service overrides.
 
 !!! tip "Explicit flags always win"
-    A value you pass on the command line (or via an environment variable) always takes
+    A value you pass on the command line (or through an environment variable) always takes
     precedence over both the global `dl:` defaults and any per-service `dl:` overrides.
-    Config only fills in options you didn't set explicitly.
+    Config only fills in options you did not set explicitly.
 
 ## Quick reference
 
-A condensed lookup of the most-used options. Run `unshackle dl --help` for the complete,
+A condensed lookup of the most-used options. Use `unshackle dl --help` for the complete,
 authoritative list.
 
 | Flag | Short | Meaning |
@@ -792,7 +1041,7 @@ authoritative list.
 | `--quality` | `-q` | Target resolution(s), e.g. `1080,720`. |
 | `--vcodec` | `-v` | Video codec(s). |
 | `--acodec` | `-a` | Audio codec(s). |
-| `--range` | `-r` | Color range(s); default `SDR`. |
+| `--range` | `-r` | Colour range(s). Default `SDR`. |
 | `--channels` | `-c` | Audio channel layout. |
 | `--noatmos` | `-naa` | Exclude Atmos audio. |
 | `--lang` | `-l` | Video + audio language(s); default `orig`. `-` excludes, e.g. `all,-es`. |
@@ -802,20 +1051,25 @@ authoritative list.
 | `--forced-subs` | `-fs` | Include forced subtitles. |
 | `--forced-s-lang` | `-fsl` | Forced subtitle language(s); implies `-fs`. `-` excludes. |
 | `--sub-format` | | Output subtitle format. |
-| `--wanted` | `-w` | Episode/season range, or an air date. |
+| `--wanted` | `-w` | Episode/season range, an air date, or a track number for a music release (`1-5`, `2x3`). |
 | `--daily` | | Fill missing air dates from TVDB during `--enrich`. |
 | `--select-titles` | | Interactively pick episodes or films. |
 | `--latest-episode` | | Only the newest episode. |
+| `--latest-episodes N` | | Only the N newest episodes. |
 | `--video-only` / `--audio-only` / `--subs-only` | `-V` / `-A` / `-S` | Restrict track types. |
-| `--no-video` / `--no-audio` / `--no-subs` / `--no-chapters` | `-nv` / `-na` / `-ns` / `-nc` | Skip track types. |
+| `--no-video` / `--no-audio` / `--no-subs` / `--no-chapters` / `--no-attachments` | `-nv` / `-na` / `-ns` / `-nc` / `-nt` | Skip track types. |
 | `--worst` | | Lowest bitrate within `-q`. |
+| `--require-audio` | | Audio languages that must exist. The title fails if one is missing. |
+| `--require-video` | | Video languages that must exist. The title fails if one is missing. |
 | `--best-available` | | Degrade gracefully instead of failing. |
 | `--output` | `-o` | Output directory for this run. |
 | `--split-audio` / `--merge-video` / `--no-mux` | | Muxing behaviour. |
-| `--proxy` / `--no-proxy` / `--no-proxy-download` | | Proxy control. |
+| `--postscript` / `--no-postscript` | | Run a command after each output file, or run none. |
+| `--proxy` / `--no-proxy` / `--no-proxy-download` / `--proxy-download` | | Proxy control. |
 | `--workers` / `--downloads` / `--slow` | | Concurrency and pacing. |
 | `--list` / `--list-titles` / `--skip-dl` | | Dry runs. |
-| `--cdm-only` / `--vaults-only` | | Key source control. |
+| `--cdm-only` / `--vaults-only` | | Content key source control. |
+| `--cdm <name>` | | Pin one CDM device, bypassing the `cdm` config mapping. |
 | `--export` | | Export track info and keys to JSON. |
 | `--tmdb` / `--imdb` / `--tvdb` / `--anilist` / `--enrich` | | Metadata overrides. |
 | `--tvdb-order` | | Renumber episodes to a TVDB season order. |

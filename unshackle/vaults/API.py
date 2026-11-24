@@ -1,7 +1,7 @@
 from typing import Iterator, Optional, Union
 from uuid import UUID
 
-from requests import Session
+from requests import Response, Session
 
 from unshackle.core import __version__
 from unshackle.core.vault import Vault
@@ -133,22 +133,18 @@ class API(Vault):
         if error:
             raise error(f"{message} ({code})")
 
-        # the kid:key was new to the vault (optional)
         added = bool(data.get("added"))
-        # the key for kid was changed/updated (optional)
         updated = bool(data.get("updated"))
 
         return added or updated
 
     def add_keys(self, service: str, kid_keys: dict[Union[UUID, str], str]) -> int:
-        # Normalize keys
         normalized_keys = {str(kid).replace("-", ""): key for kid, key in kid_keys.items()}
         kid_list = list(normalized_keys.keys())
 
         if not kid_list:
             return 0
 
-        # Try batches starting at 500, stepping down by 100 on failure, fallback to 1
         batch_size = 500
         total_added = 0
         i = 0
@@ -166,7 +162,6 @@ class API(Vault):
                     allow_redirects=False,
                 )
 
-                # Check for HTTP errors that suggest batch is too large
                 if response.status_code in (413, 414, 400) and batch_size > 1:
                     if batch_size > 100:
                         batch_size -= 100
@@ -177,7 +172,6 @@ class API(Vault):
                 response.raise_for_status()
                 data = response.json()
             except Exception:
-                # JSON decode error or connection issue - try smaller batch
                 if batch_size > 1:
                     if batch_size > 100:
                         batch_size -= 100
@@ -200,15 +194,53 @@ class API(Vault):
             if error:
                 raise error(f"{message} ({code})")
 
-            # each kid:key that was new to the vault (optional)
             added = int(data.get("added", 0))
-            # each key for a kid that was changed/updated (optional)
             updated = int(data.get("updated", 0))
 
             total_added += added + updated
             i += batch_size
 
         return total_added
+
+    def flag_bad_key(self, service: str, kid: Union[UUID, str], key: str, source: str) -> None:
+        """Report a pair that failed to decrypt. The vault only accepts pairs it served."""
+        if self.no_push:
+            return
+        if isinstance(kid, UUID):
+            kid = kid.hex
+        response = self.session.post(
+            url=f"{self.uri}/bad-keys/{kid}",
+            json={"content_key": key, "service": service},
+            headers={"Accept": "application/json"},
+            timeout=self.timeout,
+            allow_redirects=False,
+        )
+        self._check(response, ignore=frozenset({1, 4}))
+
+    def unflag_bad_key(self, kid: Union[UUID, str], key: str) -> None:
+        if self.no_push:
+            return
+        if isinstance(kid, UUID):
+            kid = kid.hex
+        response = self.session.delete(
+            url=f"{self.uri}/bad-keys/{kid}/{key}",
+            headers={"Accept": "application/json"},
+            timeout=self.timeout,
+            allow_redirects=False,
+        )
+        self._check(response, ignore=frozenset({1}))
+
+    @staticmethod
+    def _check(response: Response, ignore: frozenset[int] = frozenset()) -> None:
+        if response.status_code in (404, 405, 501):
+            return
+        response.raise_for_status()
+        data = response.json()
+        code = int(data.get("code", 0))
+        if not code or code in ignore:
+            return
+        error = {1: Exceptions.AuthRejected, 2: Exceptions.TooManyRequests}.get(code, ValueError)
+        raise error(f"{data.get('message')} ({code})")
 
     def get_services(self) -> Iterator[str]:
         response = self.session.post(
@@ -242,7 +274,7 @@ class Exceptions:
         """Authentication Error Occurred, is your token valid? Do you have permission to make this call?"""
 
     class TooManyRequests(Exception):
-        """Rate Limited; Sent too many requests in a given amount of time."""
+        """Rate Limited. Sent too many requests in a given amount of time."""
 
     class PageInvalid(Exception):
         """Requested page does not exist."""

@@ -17,20 +17,18 @@ from unshackle.core.utilities import log_event
 
 log = logging.getLogger(__name__)
 
-# MPEG-TS: 188-byte packets, sync byte 0x47 at every packet boundary (shared with sample_aes).
 SYNC_BYTE = 0x47
 TS_PACKET_SIZE = 188
-# Consecutive packet boundaries that must carry the sync byte to call a segment clear MPEG-TS.
 TS_SYNC_CHECKS = 4
 
 
 class ClearKey:
-    """AES Clear Key DRM System."""
+    """AES-128 ClearKey (HLS) DRM system."""
 
     def __init__(self, key: Union[bytes, str], iv: Optional[Union[bytes, str]] = None):
         """
-        Generally IV should be provided where possible. If not provided, it will be
-        set to \x00 of the same bit-size of the key.
+        Give the IV where possible. If you do not give an IV, unshackle sets it to
+        \x00 of the same bit-size as the content key.
         """
         if isinstance(key, str):
             key = bytes.fromhex(key.replace("0x", ""))
@@ -50,34 +48,29 @@ class ClearKey:
         self.iv: bytes = iv
         self._warned_clear: bool = False
 
-    def _warn_clear(self, reason: str) -> None:
-        """Warn once per track that a segment was passed through undecrypted."""
+    def warn_clear(self, reason: str) -> None:
+        """Warn once per track that unshackle passed a segment through undecrypted."""
         if not self._warned_clear:
             log.warning("ClearKey: manifest signaled AES-128 encryption but %s; passing segment through.", reason)
             self._warned_clear = True
 
     def decrypt(self, path: Path) -> None:
-        """Decrypt a Track with AES Clear Key DRM."""
+        """Decrypt a Track with AES-128 ClearKey (HLS) DRM."""
         if not path or not path.exists():
             raise ValueError("Tried to decrypt a file that does not exist.")
 
         data = path.read_bytes()
 
-        # Mislabeled-clear guard: plaintext MPEG-TS the manifest wrongly tags AES-128. Require the
-        # 0x47 sync byte at 4 consecutive packet boundaries plus an exact packet-count length, so
-        # real CBC ciphertext matching all of these is negligible (~1/256^4).
         if (
             len(data) % TS_PACKET_SIZE == 0
             and len(data) >= TS_PACKET_SIZE * TS_SYNC_CHECKS
             and all(data[i * TS_PACKET_SIZE] == SYNC_BYTE for i in range(TS_SYNC_CHECKS))
         ):
-            self._warn_clear("the segment is clear MPEG-TS")
+            self.warn_clear("the segment is clear MPEG-TS")
             return
 
-        # Valid AES-128-CBC ciphertext is always a 16-byte multiple; anything else is not
-        # ciphertext (truncated/clear/SAMPLE-AES). Decrypting would raise, so pass it through.
         if len(data) % AES.block_size != 0:
-            self._warn_clear(f"the segment length ({len(data)} bytes) is not a multiple of {AES.block_size}")
+            self.warn_clear(f"the segment length ({len(data)} bytes) is not a multiple of {AES.block_size}")
             return
 
         log_event(
@@ -93,7 +86,6 @@ class ClearKey:
         try:
             decrypted = unpad(decrypted, AES.block_size)
         except ValueError:
-            # the decrypted data is likely already in the block size boundary
             pass
 
         decrypted_path = path.with_suffix(f".decrypted{path.suffix}")
@@ -108,9 +100,9 @@ class ClearKey:
         Load a ClearKey from an M3U(8) Playlist's EXT-X-KEY.
 
         Parameters:
-            m3u_key: A Key object parsed from a m3u(8) playlist using
+            m3u_key: A `Key` object parsed from a m3u(8) playlist using
                 the `m3u8` library.
-            session: Optional session used to request external URIs with.
+            session: Optional HTTP session used to request external URIs with.
                 Useful to set headers, proxies, cookies, and so forth.
         """
         if not isinstance(m3u_key, Key):
@@ -127,15 +119,11 @@ class ClearKey:
             session = Session()
 
         if not session.headers.get("User-Agent"):
-            # commonly needed default for HLS playlists
             session.headers["User-Agent"] = "smartexoplayer/1.1.0 (Linux;Android 8.0.0) ExoPlayerLib/2.13.3"
 
         if m3u_key.uri.startswith("data:"):
             media_types, payload = m3u_key.uri[5:].split(",", 1)
             media_types = media_types.split(";")
-            # Materialise the key bytes here so the 16-byte check covers both encodings: base64
-            # decodes to bytes, a raw payload is latin-1 bytes. A raw str would otherwise reach
-            # __init__ and be reinterpreted through fromhex.
             if "base64" in media_types:
                 key = base64.b64decode(payload)
             else:

@@ -7,14 +7,15 @@ from enum import Enum
 import pytest
 
 from unshackle.core.remote_service import (
-    _build_title,
-    _build_tracks,
-    _deserialize_audio,
-    _deserialize_subtitle,
-    _deserialize_video,
-    _enum_get,
-    _match_track,
-    _reconstruct_drm,
+    RemoteService,
+    build_title,
+    build_tracks,
+    deserialize_audio,
+    deserialize_subtitle,
+    deserialize_video,
+    enum_get,
+    match_track,
+    reconstruct_drm,
 )
 from unshackle.core.titles.episode import Episode
 from unshackle.core.titles.movie import Movie
@@ -29,70 +30,78 @@ class _Color(Enum):
 
 
 def test_enum_get_known() -> None:
-    assert _enum_get(_Color, "RED") is _Color.RED
+    assert enum_get(_Color, "RED") is _Color.RED
 
 
 def test_enum_get_unknown_returns_default() -> None:
-    assert _enum_get(_Color, "PURPLE", default=_Color.BLUE) is _Color.BLUE
+    assert enum_get(_Color, "PURPLE", default=_Color.BLUE) is _Color.BLUE
 
 
 def test_enum_get_none_returns_default() -> None:
-    assert _enum_get(_Color, None, default=_Color.RED) is _Color.RED
+    assert enum_get(_Color, None, default=_Color.RED) is _Color.RED
 
 
 def test_deserialize_video_minimal() -> None:
-    v = _deserialize_video({"id": "video-1", "codec": "AVC", "width": 1920, "height": 1080, "bitrate": 5000})
+    v = deserialize_video({"id": "video-1", "codec": "AVC", "width": 1920, "height": 1080, "bitrate": 5000})
     assert isinstance(v, Video)
     assert v.id == "video-1"
     assert v.codec is Video.Codec.AVC
-    assert v.bitrate == 5_000_000  # kbps -> bps
+    assert v.bitrate == 5_000_000
     assert v.width == 1920
     assert v.height == 1080
     assert v.range is Video.Range.SDR
 
 
 def test_deserialize_video_unknown_codec_falls_back_to_none() -> None:
-    v = _deserialize_video({"id": "v2", "codec": "MADE_UP", "width": 0, "height": 0})
+    v = deserialize_video({"id": "v2", "codec": "MADE_UP", "width": 0, "height": 0})
     assert v.codec is None
 
 
-def test_deserialize_audio_atmos_flag_sets_joc() -> None:
-    a = _deserialize_audio({"id": "a1", "codec": "AAC", "atmos": True, "channels": 6, "bitrate": 256})
+def test_deserialize_audio_atmos_flag_without_a_count() -> None:
+    a = deserialize_audio({"id": "a1", "codec": "AAC", "atmos": True, "channels": 6, "bitrate": 256})
     assert isinstance(a, Audio)
-    assert a.joc == 1
+    assert a.atmos is True
+    assert a.joc is None
     assert a.channels == 6
     assert a.bitrate == 256_000
 
 
+def test_deserialize_audio_atmos_keeps_a_real_joc_count() -> None:
+    a = deserialize_audio({"id": "a3", "codec": "EC3", "atmos": True, "joc": 16, "channels": 6})
+    assert a.atmos is True
+    assert a.joc == 16
+
+
 def test_deserialize_audio_no_atmos() -> None:
-    a = _deserialize_audio({"id": "a2", "codec": "AAC", "channels": 2})
-    assert a.joc == 0
+    a = deserialize_audio({"id": "a2", "codec": "AAC", "channels": 2})
+    assert a.atmos is False
+    assert not a.joc
 
 
 def test_deserialize_subtitle_forced_flag() -> None:
-    s = _deserialize_subtitle({"id": "s1", "codec": "WebVTT", "language": "en", "forced": True})
+    s = deserialize_subtitle({"id": "s1", "codec": "WebVTT", "language": "en", "forced": True})
     assert isinstance(s, Subtitle)
     assert s.forced is True
     assert s.sdh is False
 
 
 def test_deserialize_subtitle_sdh_flag() -> None:
-    s = _deserialize_subtitle({"id": "s2", "codec": "WebVTT", "language": "en", "sdh": True})
+    s = deserialize_subtitle({"id": "s2", "codec": "WebVTT", "language": "en", "sdh": True})
     assert s.sdh is True
     assert s.forced is False
 
 
 def test_reconstruct_drm_empty() -> None:
-    assert _reconstruct_drm(None) == []
-    assert _reconstruct_drm([]) == []
+    assert reconstruct_drm(None) == []
+    assert reconstruct_drm([]) == []
 
 
 def test_reconstruct_drm_skips_entries_without_pssh() -> None:
-    assert _reconstruct_drm([{"type": "widevine"}]) == []
+    assert reconstruct_drm([{"type": "widevine"}]) == []
 
 
 def test_reconstruct_drm_invalid_pssh_silently_dropped() -> None:
-    assert _reconstruct_drm([{"type": "widevine", "pssh": "not-real-pssh"}]) == []
+    assert reconstruct_drm([{"type": "widevine", "pssh": "not-real-pssh"}]) == []
 
 
 def test_build_tracks_aggregates() -> None:
@@ -102,33 +111,79 @@ def test_build_tracks_aggregates() -> None:
         "subtitles": [{"id": "s", "codec": "WebVTT", "language": "en"}],
         "attachments": [],
     }
-    t = _build_tracks(data)
+    t = build_tracks(data)
     assert len(t.videos) == 1
     assert len(t.audio) == 1
     assert len(t.subtitles) == 1
 
 
+def test_build_tracks_restores_drm_preference() -> None:
+    data = {
+        "video": [{"id": "v", "codec": "AVC", "width": 1280, "height": 720, "drm_preference": "playready"}],
+        "audio": [{"id": "a", "codec": "AAC", "channels": 2, "drm_preference": "wv"}],
+        "subtitles": [],
+    }
+    t = build_tracks(data)
+    assert t.videos[0].drm_preference == "playready"
+    assert t.audio[0].drm_preference == "wv"
+
+
+def test_build_tracks_ignores_unknown_drm_preference() -> None:
+    data = {"video": [{"id": "v", "codec": "AVC", "width": 1, "height": 1, "drm_preference": "fairplay"}]}
+    t = build_tracks(data)
+    assert t.videos[0].drm_preference is None
+
+
 def test_match_track_by_id() -> None:
-    a = _deserialize_video({"id": "v1", "codec": "AVC", "width": 1920, "height": 1080})
-    b = _deserialize_video({"id": "v2", "codec": "AVC", "width": 1280, "height": 720})
-    remote = _deserialize_video({"id": "v2", "codec": "AVC", "width": 1280, "height": 720})
-    assert _match_track(remote, [a, b]) is b
+    a = deserialize_video({"id": "v1", "codec": "AVC", "width": 1920, "height": 1080})
+    b = deserialize_video({"id": "v2", "codec": "AVC", "width": 1280, "height": 720})
+    remote = deserialize_video({"id": "v2", "codec": "AVC", "width": 1280, "height": 720})
+    assert match_track(remote, [a, b]) is b
 
 
 def test_match_track_by_attributes_when_id_missing() -> None:
-    local = _deserialize_video({"id": "X", "codec": "AVC", "width": 1920, "height": 1080, "language": "en"})
-    remote = _deserialize_video({"id": "Y", "codec": "AVC", "width": 1920, "height": 1080, "language": "en"})
-    assert _match_track(remote, [local]) is local
+    local = deserialize_video({"id": "X", "codec": "AVC", "width": 1920, "height": 1080, "language": "en"})
+    remote = deserialize_video({"id": "Y", "codec": "AVC", "width": 1920, "height": 1080, "language": "en"})
+    assert match_track(remote, [local]) is local
+
+
+def test_match_track_by_attributes_keeps_range_and_bitrate_apart() -> None:
+    sdr = deserialize_video(
+        {"id": "a", "codec": "HEVC", "width": 1920, "height": 960, "language": "en", "range": "SDR", "bitrate": 8000000}
+    )
+    hdr = deserialize_video(
+        {
+            "id": "b",
+            "codec": "HEVC",
+            "width": 1920,
+            "height": 960,
+            "language": "en",
+            "range": "HDR10",
+            "bitrate": 5000000,
+        }
+    )
+    remote = deserialize_video(
+        {
+            "id": "z",
+            "codec": "HEVC",
+            "width": 1920,
+            "height": 960,
+            "language": "en",
+            "range": "HDR10",
+            "bitrate": 5000000,
+        }
+    )
+    assert match_track(remote, [sdr, hdr]) is hdr
 
 
 def test_match_track_no_candidates_returns_none() -> None:
-    remote = _deserialize_video({"id": "X", "codec": "AVC", "width": 1, "height": 1})
-    assert _match_track(remote, []) is None
+    remote = deserialize_video({"id": "X", "codec": "AVC", "width": 1, "height": 1})
+    assert match_track(remote, []) is None
 
 
 def test_build_title_movie() -> None:
     info = {"type": "movie", "id": "movie-0001", "name": "Foo", "year": 2024, "language": "en"}
-    title = _build_title(info, "ATV", "fallback")
+    title = build_title(info, "EXAMPLE", "fallback")
     assert isinstance(title, Movie)
     assert title.id == "movie-0001"
     assert title.name == "Foo"
@@ -145,7 +200,7 @@ def test_build_title_episode() -> None:
         "year": 2024,
         "language": "en",
     }
-    title = _build_title(info, "ATV", "fallback")
+    title = build_title(info, "EXAMPLE", "fallback")
     assert isinstance(title, Episode)
     assert title.season == 1
     assert title.number == 2
@@ -153,5 +208,416 @@ def test_build_title_episode() -> None:
 
 
 def test_build_title_falls_back_to_id_when_missing() -> None:
-    title = _build_title({"type": "movie", "name": "x"}, "ATV", "fallback-id")
+    title = build_title({"type": "movie", "name": "x"}, "EXAMPLE", "fallback-id")
     assert title.id == "fallback-id"
+
+
+def test_credential_cache_digests_cover_common_key_schemes() -> None:
+    import hashlib
+
+    from unshackle.core.credential import Credential
+    from unshackle.core.remote_service import credential_cache_digests
+
+    cred = Credential("user@example.com", "hunter2")
+    digests = credential_cache_digests(cred)
+    assert cred.sha1 in digests
+    assert hashlib.sha1(cred.username.encode()).hexdigest() in digests
+    assert hashlib.md5(cred.username.encode()).hexdigest() in digests
+
+
+def test_cache_stem_relevance_filters_foreign_digests_and_profiles() -> None:
+    import hashlib
+
+    from unshackle.core.credential import Credential
+    from unshackle.core.remote_service import cache_stem_is_relevant, credential_cache_digests
+
+    active = Credential("us@example.com", "pw1")
+    other = Credential("uk@example.com", "pw2")
+    allowed = credential_cache_digests(active)
+    foreign = {"uk"}
+
+    assert cache_stem_is_relevant(f"tokens_{active.sha1}", allowed, "us", foreign)
+    assert not cache_stem_is_relevant(f"tokens_{other.sha1}", allowed, "us", foreign)
+    username_hash = hashlib.sha1(active.username.encode()).hexdigest()
+    assert cache_stem_is_relevant(f"device_id_{username_hash}", allowed, "us", foreign)
+    assert cache_stem_is_relevant("session_guid", allowed, "us", foreign)
+    assert cache_stem_is_relevant("tokens", allowed, "us", foreign)
+    assert cache_stem_is_relevant("tokens_us", allowed, "us", foreign)
+    assert not cache_stem_is_relevant("tokens_uk", allowed, "us", foreign)
+    assert cache_stem_is_relevant(f"tokens_intl_{active.sha1}", allowed, "us", foreign)
+    assert cache_stem_is_relevant(f"tokens_uk_{active.sha1}", allowed, "us", foreign)
+
+
+def test_cache_stem_relevance_active_profile_beats_region_collision() -> None:
+    from unshackle.core.remote_service import cache_stem_is_relevant
+
+    assert cache_stem_is_relevant("tokens_default_us_androidtv_abc123", set(), "default", {"us", "de"})
+    assert not cache_stem_is_relevant("tokens_us_us_androidtv_abc123", set(), "default", {"us", "de"})
+    assert cache_stem_is_relevant("web_device_id_default_us", set(), "default", {"us"})
+
+
+def test_cache_stem_relevance_without_credential_withholds_hex_stems() -> None:
+    from unshackle.core.credential import Credential
+    from unshackle.core.remote_service import cache_stem_is_relevant
+
+    stray = Credential("someone@example.com", "pw")
+    assert not cache_stem_is_relevant(f"tokens_{stray.sha1}", set(), "default", set())
+    assert cache_stem_is_relevant("tokens_guest", set(), "default", set())
+
+
+def test_cache_stem_relevance_separator_and_case_profile_names() -> None:
+    from unshackle.core.remote_service import cache_stem_is_relevant
+
+    assert not cache_stem_is_relevant("tokens_us-east", set(), "eu", {"us-east"})
+    assert not cache_stem_is_relevant("tokens_us_east", set(), "eu", {"us-east"})
+    assert not cache_stem_is_relevant("tokens_UK", set(), "us", {"uk"})
+    assert cache_stem_is_relevant("tokens_US-EAST", set(), "us-east", {"eu"})
+    assert not cache_stem_is_relevant("tokens_us-east", set(), "us", {"us-east"})
+    assert cache_stem_is_relevant("tokens_default_us_androidtv_abc123", set(), "default", {"us"})
+
+
+def test_load_cache_files_wiring(tmp_path, monkeypatch) -> None:
+    import json
+    import logging
+    from types import SimpleNamespace
+
+    from unshackle.core.config import config
+    from unshackle.core.credential import Credential
+    from unshackle.core.remote_service import RemoteService
+
+    tag = "TESTSVC"
+    cache_dir = tmp_path / tag
+    cache_dir.mkdir()
+    other = Credential("other@example.com", "pw2")
+    for stem in ("tokens_us", "tokens_uk", "tokens_default", "session_guid", f"tokens_{other.sha1}", "titles_abc"):
+        (cache_dir / f"{stem}.json").write_text(json.dumps({"k": stem}))
+
+    monkeypatch.setattr(config.directories, "cache", tmp_path)
+    monkeypatch.setattr(
+        config,
+        "credentials",
+        {tag: {"default": "a@example.com:pw", "us": "b@example.com:pw", "uk": "c@example.com:pw"}},
+    )
+    stub = SimpleNamespace(service_tag=tag, log=logging.getLogger("test"))
+
+    sent = RemoteService.load_cache_files(stub, "us")
+    assert set(sent) == {"tokens_us", "session_guid"}
+
+    sent = RemoteService.load_cache_files(stub, "missing")
+    assert set(sent) == {"tokens_default", "session_guid"}
+
+
+def test_load_cache_files_forwards_nested_keys(tmp_path, monkeypatch) -> None:
+    """A service that keeps its cache in subfolders (NF: session_web/<sha1>.json) must have
+    those files forwarded under the Cacher key, and the credential filter must still apply
+    to the basename of a nested file."""
+    import base64
+    import json
+    import logging
+    import zlib
+    from types import SimpleNamespace
+
+    from unshackle.core.config import config
+    from unshackle.core.credential import Credential
+    from unshackle.core.remote_service import RemoteService
+
+    tag = "TESTSVC"
+    cache_dir = tmp_path / tag
+    active = Credential("a@example.com", "pw")
+    other = Credential("other@example.com", "pw2")
+    for rel in (
+        "tokens",
+        f"session_web/{active.sha1}",
+        f"session_web/{other.sha1}",
+        "session_androidtv/default",
+        "MSL/web/keys",
+        "MSL/web/keys.v2",
+        f"{other.sha1}/state",
+        "titles_abc",
+        "sub/titles_abc",
+    ):
+        path = cache_dir / f"{rel}.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({"k": rel}))
+
+    monkeypatch.setattr(config.directories, "cache", tmp_path)
+    monkeypatch.setattr(config, "credentials", {tag: {"default": f"{active.username}:{active.password}"}})
+    stub = SimpleNamespace(service_tag=tag, log=logging.getLogger("test"))
+
+    sent = RemoteService.load_cache_files(stub, None)
+    assert set(sent) == {
+        "tokens",
+        f"session_web/{active.sha1}",
+        "session_androidtv/default",
+        "MSL/web/keys",
+        "MSL/web/keys.v2",
+    }
+    payload = json.loads(zlib.decompress(base64.b64decode(sent[f"session_web/{active.sha1}"])))
+    assert payload == {"k": f"session_web/{active.sha1}"}
+
+
+def test_save_returned_cache_writes_nested_keys_and_rejects_escapes(tmp_path, monkeypatch) -> None:
+    import base64
+    import logging
+    import zlib
+    from types import SimpleNamespace
+
+    from unshackle.core.config import config
+    from unshackle.core.remote_service import RemoteService
+
+    tag = "TESTSVC"
+    monkeypatch.setattr(config.directories, "cache", tmp_path)
+    stub = SimpleNamespace(service_tag=tag, log=logging.getLogger("test"))
+
+    def blob(text: str) -> str:
+        return base64.b64encode(zlib.compress(text.encode())).decode("ascii")
+
+    RemoteService.save_returned_cache(
+        stub,
+        {
+            "tokens": blob("flat"),
+            "session_web/abc": blob("nested"),
+            "session_web\\def": blob("windows"),
+            "MSL/keys.v2": blob("dotted"),
+            "../escape": blob("bad"),
+            "/abs": blob("bad"),
+            "C:/x": blob("bad"),
+        },
+    )
+
+    assert (tmp_path / tag / "tokens.json").read_text() == "flat"
+    assert (tmp_path / tag / "session_web" / "abc.json").read_text() == "nested"
+    assert (tmp_path / tag / "session_web" / "def.json").read_text() == "windows"
+    assert (tmp_path / tag / "MSL" / "keys.v2.json").read_text() == "dotted"
+    assert not (tmp_path / "escape.json").exists()
+    written = sorted(p.relative_to(tmp_path).as_posix() for p in tmp_path.rglob("*.json"))
+    assert written == [
+        f"{tag}/MSL/keys.v2.json",
+        f"{tag}/session_web/abc.json",
+        f"{tag}/session_web/def.json",
+        f"{tag}/tokens.json",
+    ]
+
+
+def test_save_returned_cache_drops_other_profiles_files(tmp_path, monkeypatch) -> None:
+    """A returned file for another profile must not overwrite that profile's local file."""
+    import base64
+    import logging
+    import zlib
+    from types import SimpleNamespace
+
+    from unshackle.core.config import config
+    from unshackle.core.remote_service import RemoteService
+
+    tag = "TESTSVC"
+    monkeypatch.setattr(config.directories, "cache", tmp_path)
+    monkeypatch.setattr(config, "credentials", {tag: {"default": "a@example.com:pw", "work": "b@example.com:pw"}})
+    stub = SimpleNamespace(service_tag=tag, log=logging.getLogger("test"))
+    blob = base64.b64encode(zlib.compress(b"x")).decode("ascii")
+
+    RemoteService.save_returned_cache(stub, {"tokens_work": blob, "tokens_default": blob, "tokens": blob}, "work")
+
+    assert sorted(p.name for p in (tmp_path / tag).iterdir()) == ["tokens.json", "tokens_work.json"]
+
+
+def test_save_returned_cache_ignores_oversized_payload(tmp_path, monkeypatch) -> None:
+    import logging
+    from types import SimpleNamespace
+
+    from unshackle.core.api.sanitize import MAX_SESSION_CACHE_KEYS
+    from unshackle.core.config import config
+    from unshackle.core.remote_service import RemoteService
+
+    monkeypatch.setattr(config.directories, "cache", tmp_path)
+    stub = SimpleNamespace(service_tag="TESTSVC", log=logging.getLogger("test"))
+    RemoteService.save_returned_cache(stub, {f"k{i}": "x" for i in range(MAX_SESSION_CACHE_KEYS + 1)})
+    assert not list(tmp_path.rglob("*.json"))
+
+
+@pytest.mark.asyncio
+async def test_session_delete_returns_nested_cache_keys(tmp_path, monkeypatch) -> None:
+    """The server harvests a session's whole cache tree and keys each file by its path
+    relative to the session cache dir, so it round-trips to the same Cacher key."""
+    import base64
+    import json
+    import zlib
+    from types import SimpleNamespace
+
+    from unshackle.core.api import handlers, session_store
+
+    cache_tag = "_sessions/abc/sid/TESTSVC"
+    cache_dir = tmp_path / cache_tag
+    for rel in ("tokens", "session_web/abc", "titles_x", "MSL/web/keys", "MSL/keys.v2"):
+        path = cache_dir / f"{rel}.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(rel)
+    monkeypatch.setattr(handlers.config.directories, "cache", tmp_path)
+
+    session = SimpleNamespace(cache_tag=cache_tag, client_auth=True, input_bridge=None)
+
+    async def fake_validated(session_id, request):
+        return session
+
+    class FakeStore:
+        async def delete(self, session_id):
+            return True
+
+    monkeypatch.setattr(handlers, "get_validated_session", fake_validated)
+    monkeypatch.setattr(session_store, "get_session_store", lambda: FakeStore())
+
+    response = await handlers.session_delete_handler("sid", None)
+    body = json.loads(response.body)
+    assert set(body["cache"]) == {"tokens", "session_web/abc", "MSL/web/keys", "MSL/keys.v2"}
+    assert zlib.decompress(base64.b64decode(body["cache"]["session_web/abc"])) == b"session_web/abc"
+
+
+def test_resolve_manifest_data_matches_across_per_range_manifests() -> None:
+    """One ISM manifest per range. The HDR10 track must take the quality level from its
+    own manifest, not the same-sized one in the SDR manifest, in any manifest order."""
+    import base64
+    import zlib
+
+    from tests.core.test_ism_init import VIDEO_HEVC_PQ_CPD, VIDEO_HEVC_SDR_CPD
+    from tests.core.test_ism_range import manifest_xml
+    from unshackle.core.manifests import ISM
+    from unshackle.core.remote_service import resolve_manifest_data
+
+    urls = {"sdr": "https://x/sdr/manifest", "hdr": "https://x/hdr/manifest"}
+    xml = {"sdr": manifest_xml(VIDEO_HEVC_SDR_CPD), "hdr": manifest_xml(VIDEO_HEVC_PQ_CPD)}
+    local = {k: ISM.from_text(xml[k], url=urls[k]).to_tracks(language="en").videos[0] for k in xml}
+    assert local["sdr"].range == Video.Range.SDR and local["hdr"].range == Video.Range.HDR10
+
+    remote_hdr = deserialize_video(
+        {
+            "id": str(local["hdr"].id),
+            "codec": "HEVC",
+            "width": 3840,
+            "height": 2160,
+            "language": "en",
+            "range": "HDR10",
+            "bitrate_bps": 15000000,
+        }
+    )
+    tracks = build_tracks({"video": [], "audio": [], "subtitles": []})
+    tracks.videos.append(remote_hdr)
+    manifests = [
+        {"type": "ism", "url": urls[k], "data": base64.b64encode(zlib.compress(xml[k].encode())).decode()}
+        for k in ("sdr", "hdr")
+    ]
+
+    resolve_manifest_data(tracks, manifests)
+
+    assert remote_hdr.data["ism"]["quality_level"].get("CodecPrivateData") == VIDEO_HEVC_PQ_CPD
+
+
+def test_session_create_writes_nested_cache_and_skips_colliding_keys(tmp_path, monkeypatch) -> None:
+    """The server writes a nested key under the session cache dir with the ``.json``
+    suffix appended, not substituted, and a key that collides with an existing file
+    (``x`` then ``x.json/y``) is skipped instead of failing the whole create."""
+    import asyncio
+    import base64
+    import logging
+    import zlib
+    from types import SimpleNamespace
+
+    from unshackle.core.api import handlers
+
+    class Stop(Exception):
+        pass
+
+    def blob(text: str) -> str:
+        return base64.b64encode(zlib.compress(text.encode())).decode("ascii")
+
+    monkeypatch.setattr(handlers.config.directories, "cache", tmp_path)
+    monkeypatch.setattr(handlers, "validate_service", lambda service, request=None: service)
+    monkeypatch.setattr(handlers, "resolve_handler_proxy", lambda *args: (None, []))
+    monkeypatch.setattr(handlers, "server_account_for", lambda *args: False)
+    monkeypatch.setattr(handlers.Services, "load", lambda service: type("Svc", (), {}))
+    monkeypatch.setattr(
+        handlers,
+        "create_service_instance",
+        lambda *args, **kwargs: (SimpleNamespace(log=logging.getLogger("Svc")), None, None),
+    )
+    monkeypatch.setattr("unshackle.core.api.session_store.get_session_store", lambda: (_ for _ in ()).throw(Stop()))
+
+    cache = {"x": blob("flat"), "x.json/y": blob("collides"), "MSL/keys.v2": blob("dotted")}
+    response = asyncio.run(handlers.session_create_handler({"service": "TESTSVC", "title_id": "t", "cache": cache}))
+    assert response.status == 500
+
+    written = {p.name: p.read_text() for p in tmp_path.rglob("*.json") if p.is_file()}
+    assert written == {"x.json": "flat", "keys.v2.json": "dotted"}
+
+
+class _SentCreate(Exception):
+    pass
+
+
+def _remote_service(parent_params: dict, service_params: dict) -> RemoteService:
+    """A RemoteService whose session create raises _SentCreate with the request body."""
+    import logging
+    from types import SimpleNamespace
+
+    import requests
+
+    def post(path: str, data: dict) -> dict:
+        raise _SentCreate(data)
+
+    svc = object.__new__(RemoteService)
+    svc.ctx = SimpleNamespace(parent=SimpleNamespace(params={"no_proxy": True, **parent_params}), obj=None)
+    svc.service_tag = "EXAMPLE"
+    svc.title_id = "t1"
+    svc._server_accounts = {"global": True}
+    svc._server_cdm = True
+    svc._service_params = service_params
+    svc._session = requests.Session()
+    svc.log = logging.getLogger("test")
+    svc.client = SimpleNamespace(post=post, server_url="https://server.example")
+    return svc
+
+
+def _sent_create_data(parent_params: dict, service_params: dict) -> dict:
+    with pytest.raises(_SentCreate) as exc:
+        _remote_service(parent_params, service_params).authenticate()
+    return exc.value.args[0]
+
+
+@pytest.mark.parametrize("no_proxy, expected", [(False, {"all": "http://proxy.example:8080"}), (True, {})])
+def test_the_client_session_downloads_through_the_proxy_it_sends(
+    monkeypatch: pytest.MonkeyPatch, no_proxy: bool, expected: dict
+) -> None:
+    """The client fetches playlists and segments itself, so --proxy must reach its own session too."""
+    from unshackle.core import remote_service
+
+    monkeypatch.setattr(remote_service, "resolve_remote_proxy_arg", lambda proxy: proxy)
+    monkeypatch.setattr("unshackle.core.utils.ip_info.get_ip_info", lambda *args, **kwargs: None)
+    svc = _remote_service({"no_proxy": no_proxy, "proxy": "http://proxy.example:8080"}, {})
+    with pytest.raises(_SentCreate) as exc:
+        svc.authenticate()
+    assert dict(svc._session.proxies) == expected
+    assert exc.value.args[0].get("proxy") == (None if no_proxy else "http://proxy.example:8080")
+
+
+def test_dl_selection_travels_nested_and_a_service_option_cannot_override_it() -> None:
+    parent_params = {
+        "lang": ["orig", "es-419"],
+        "v_lang": [],
+        "a_lang": [],
+        "acodec": [Audio.Codec.EC3],
+        "forced_subs": True,
+        "exact_lang": True,
+    }
+    data = _sent_create_data(parent_params, {"lang": 3, "a_lang": "x"})
+    assert data["dl_params"] == {
+        "lang": ["orig", "es-419"],
+        "v_lang": [],
+        "a_lang": [],
+        "acodec": ["EC3"],
+        "forced_subs": True,
+        "exact_lang": True,
+    }
+    assert data["lang"] == 3
+    assert data["service_params"] == {"lang": 3, "a_lang": "x"}
+
+
+def test_no_dl_params_when_the_ctx_has_no_selection() -> None:
+    assert "dl_params" not in _sent_create_data({}, {})

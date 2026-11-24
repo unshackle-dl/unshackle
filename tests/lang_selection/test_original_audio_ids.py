@@ -21,18 +21,13 @@ class FakeTitle:
 @pytest.mark.parametrize(
     "title_language,track_languages,expected",
     [
-        # paradigm collapse: CLDR calls these the same language, RFC 4647 picks the specific one
         (["en"], ["en", "en-US"], ["en"]),
         (["en"], ["en-US", "en-GB"], ["en-US"]),
         (["pt"], ["pt-BR", "pt-PT"], ["pt-BR"]),
         (["es"], ["es-ES", "es-419"], ["es-ES"]),
-        # non-paradigm regionals: exact mode drops them, so the fuzzy fallback catches
-        # them and the flag still matches what a default 'orig' download selects
         (["es"], ["es-419"], ["es-419"]),
         (["fr"], ["fr-CA"], ["fr-CA"]),
-        # alias
         (["zh"], ["cmn"], ["cmn"]),
-        # nothing in the original language, and no language on the title at all
         (["en"], ["ja", "de"], []),
         ([None], ["en"], []),
     ],

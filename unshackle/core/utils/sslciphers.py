@@ -8,9 +8,9 @@ class SSLCiphers(HTTPAdapter):
     """
     Custom HTTP Adapter to change the TLS Cipher set and security requirements.
 
-    Security Level may optionally be provided. A level above 0 must be used at all times.
-    A list of Security Levels and their security is listed below. Usually 2 is used by default.
-    Do not set the Security level via @SECLEVEL in the cipher list.
+    You can optionally give a Security Level. Always use a level above 0. The list of
+    Security Levels and their security is below. Usually the default is 2.
+    Do not set the Security level with @SECLEVEL in the cipher list.
 
     Level 0:
         Everything is permitted. This retains compatibility with previous versions of OpenSSL.
@@ -44,6 +44,8 @@ class SSLCiphers(HTTPAdapter):
         than 15360 bits and ECC keys shorter than 512 bits are prohibited.
     """
 
+    __attrs__ = [*HTTPAdapter.__attrs__, "_ssl_context"]
+
     def __init__(self, cipher_list: Optional[str] = None, security_level: int = 0, *args, **kwargs):
         if cipher_list:
             if not isinstance(cipher_list, str):
@@ -56,13 +58,12 @@ class SSLCiphers(HTTPAdapter):
             raise ValueError(f"The security_level must be a value between 0 and 5, not {security_level}")
 
         if not cipher_list:
-            # cpython's default cipher list differs to Python-requests cipher list
             cipher_list = "DEFAULT"
 
         cipher_list += f":@SECLEVEL={security_level}"
 
         ctx = ssl.create_default_context()
-        ctx.check_hostname = False  # For some reason this is needed to avoid a verification error
+        ctx.check_hostname = False
         ctx.set_ciphers(cipher_list)
 
         self._ssl_context = ctx

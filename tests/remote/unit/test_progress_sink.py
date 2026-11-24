@@ -19,7 +19,6 @@ from unshackle.core.api.progress import (
 pytestmark = pytest.mark.unit
 
 
-# --- lightweight track stand-ins (label/weight key off class name + attributes) ---
 class _Range:
     def __init__(self, value):
         self.value = value
@@ -45,7 +44,7 @@ class Subtitle:
         self.bitrate = None
 
 
-def _noop(**kwargs):
+def noop(**kwargs):
     pass
 
 
@@ -59,37 +58,34 @@ def test_track_progress_label():
 def test_weight_video_over_audio_over_subtitle():
     assert track_progress_weight(Video(bitrate=4_000_000)) == 4_000_000
     assert track_progress_weight(Audio(bitrate=200_000)) == 200_000
-    # subtitle has no bitrate -> small fixed weight, far below media
     assert track_progress_weight(Subtitle()) < track_progress_weight(Audio(bitrate=200_000))
 
 
 def test_weighting_makes_video_dominate_progress():
     updates: list[dict] = []
     video, sub = Video(bitrate=4_000_000), Subtitle()
-    cbs = build_job_progress_callables([video, sub], [_noop, _noop], updates.append)
+    cbs = build_job_progress_callables([video, sub], [noop, noop], updates.append)
 
-    # subtitle fully done, video untouched -> progress is tiny (subtitle barely weighted)
     cbs[1](downloaded="Downloaded")
     assert updates[-1]["completed_tracks"] == 1
     assert updates[-1]["progress"] < 5.0
 
-    # video half done -> progress is dominated by video (scaled into the 0..ceiling download band)
     cbs[0](total=100, completed=50)
     assert updates[-1]["progress"] > 40.0
 
 
 def test_active_tracks_labels_reported_and_cleared_on_done():
     updates: list[dict] = []
-    cbs = build_job_progress_callables([Video(2160, "DV"), Audio("en-US", "2.0")], [_noop, _noop], updates.append)
+    cbs = build_job_progress_callables([Video(2160, "DV"), Audio("en-US", "2.0")], [noop, noop], updates.append)
 
-    cbs[0](total=100, completed=10)  # video downloading
+    cbs[0](total=100, completed=10)
     assert updates[-1]["active_tracks"] == ["video 2160p DV"]
     assert updates[-1]["phase"] == "downloading video 2160p DV"
 
-    cbs[1](total=100, completed=10)  # audio also downloading
+    cbs[1](total=100, completed=10)
     assert updates[-1]["active_tracks"] == ["video 2160p DV", "audio en-US 2.0"]
 
-    cbs[0](downloaded="Downloaded")  # video done -> drops out of active
+    cbs[0](downloaded="Downloaded")
     assert updates[-1]["active_tracks"] == ["audio en-US 2.0"]
 
 
@@ -119,9 +115,8 @@ def test_aggregate_progress_is_monotonic_with_counts():
 
 
 def test_all_tracks_done_reaches_download_ceiling():
-    # Downloads fill up to the ceiling; dl.result drives muxing the rest of the way to 100.
     updates: list[dict] = []
-    cbs = build_job_progress_callables([Audio(bitrate=1000), Audio(bitrate=1000)], [_noop, _noop], updates.append)
+    cbs = build_job_progress_callables([Audio(bitrate=1000), Audio(bitrate=1000)], [noop, noop], updates.append)
 
     cbs[0](total=10, completed=10, downloaded="Downloaded")
     assert updates[-1]["progress"] < DOWNLOAD_PROGRESS_CEILING
@@ -136,22 +131,22 @@ def test_finished_track_does_not_dip_when_callable_reused_for_decrypt():
     """A track hits 100% (then decrypt reuses the callable with completed=0); the aggregate must
     hold, never dip - even before the terminal 'Downloaded'/'Decrypted' string arrives."""
     updates: list[dict] = []
-    cbs = build_job_progress_callables([Video(bitrate=1000), Video(bitrate=1000)], [_noop, _noop], updates.append)
+    cbs = build_job_progress_callables([Video(bitrate=1000), Video(bitrate=1000)], [noop, noop], updates.append)
 
-    cbs[0](total=100, completed=100)  # download hits 100% BEFORE any terminal string -> 50%
-    cbs[0](total=200, completed=0)  # decrypt phase resets counts, still no terminal string
-    cbs[0](total=200, completed=100)  # decrypt mid-way
-    cbs[0](total=200, completed=200, downloaded="Decrypted")  # terminal
+    cbs[0](total=100, completed=100)
+    cbs[0](total=200, completed=0)
+    cbs[0](total=200, completed=100)
+    cbs[0](total=200, completed=200, downloaded="Decrypted")
 
     progresses = [u["progress"] for u in updates]
-    assert progresses == sorted(progresses)  # monotonic, no dip
+    assert progresses == sorted(progresses)
     assert updates[-1]["progress"] == pytest.approx(DOWNLOAD_PROGRESS_CEILING / 2)
     assert updates[-1]["completed_tracks"] == 1
 
 
 def test_skipped_subtitle_counts_as_done():
     updates: list[dict] = []
-    cbs = build_job_progress_callables([Subtitle()], [_noop], updates.append)
+    cbs = build_job_progress_callables([Subtitle()], [noop], updates.append)
     cbs[0](downloaded="[yellow]SKIPPED")
     assert updates[-1]["completed_tracks"] == 1
     assert updates[-1]["progress"] == pytest.approx(DOWNLOAD_PROGRESS_CEILING)

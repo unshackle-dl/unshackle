@@ -1,11 +1,11 @@
 import logging
+import time
 from abc import ABCMeta, abstractmethod
 from collections.abc import Callable, Generator
 from dataclasses import dataclass, field
 from http.cookiejar import CookieJar
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional, Union
-from urllib.parse import urlparse, urlunparse
+from typing import TYPE_CHECKING, Any, Optional, TypeVar, Union
 
 if TYPE_CHECKING:
     from unshackle.core.api.input_bridge import InputBridge
@@ -16,20 +16,96 @@ import requests
 from requests.adapters import HTTPAdapter, Retry
 from rich.padding import Padding
 from rich.rule import Rule
-from rich.text import Text
 
 from unshackle.core.cacher import Cacher
 from unshackle.core.config import config
-from unshackle.core.console import console
+from unshackle.core.console import console, prompt_user, show_notice
 from unshackle.core.constants import AnyTrack
 from unshackle.core.credential import Credential
 from unshackle.core.drm import DRM_T
+from unshackle.core.proxies.basic import Basic
+from unshackle.core.proxies.resolve import find_provider
 from unshackle.core.search_result import SearchResult
-from unshackle.core.title_cacher import TitleCacher, get_account_hash, get_region_from_proxy
+from unshackle.core.session import (
+    BACKOFF_FACTOR,
+    CONNECT_TIMEOUT,
+    MAX_BACKOFF,
+    MAX_RETRIES,
+    POOL_MAX_SIZE,
+    READ_TIMEOUT,
+    RETRY_METHODS,
+    STATUS_FORCELIST,
+)
+from unshackle.core.title_cacher import TitleCacher, get_account_hash
 from unshackle.core.titles import Title_T, Titles_T, remap_titles
 from unshackle.core.tracks import Chapters, Tracks
 from unshackle.core.tracks.video import Video
-from unshackle.core.utils.ip_info import get_ip_info
+from unshackle.core.utilities import declared_kwargs
+from unshackle.core.utils.ip_info import get_ip_info, verify_proxy_exit
+from unshackle.core.utils.redact import mask_proxy
+
+DEFAULT_TIMEOUT = (CONNECT_TIMEOUT, READ_TIMEOUT)
+
+
+class TimeoutSession(requests.Session):
+    """requests.Session applying DEFAULT_TIMEOUT when the caller passes none.
+
+    requests has no native default timeout. Without one, a stalled connect or
+    read hangs forever. RnetSession bounds every request through its client's
+    connect_timeout/read_timeout, so this mirrors that on the requests path.
+    A per-request non-None ``timeout=`` wins. :class:`TimeoutHTTPAdapter` on the
+    mounted adapters still replaces an explicit ``timeout=None`` with the default,
+    so there is no unbounded read, as with RnetSession where the client-level
+    timeouts always apply. Pass a large timeout instead.
+    """
+
+    def request(self, *args: Any, **kwargs: Any) -> requests.Response:
+        kwargs.setdefault("timeout", DEFAULT_TIMEOUT)
+        return super().request(*args, **kwargs)
+
+
+class TimeoutHTTPAdapter(HTTPAdapter):
+    """HTTPAdapter applying DEFAULT_TIMEOUT when the caller passes none.
+
+    Backstops :class:`TimeoutSession` for the ``session.send(prepared)`` path,
+    which bypasses ``Session.request``. RnetSession bounds those too through its
+    client, so this keeps parity. A per-request non-None ``timeout=`` wins.
+    ``None`` (unset, or explicitly passed) gets the default, because the adapter
+    cannot distinguish the two, and rnet has no unbounded mode either.
+    """
+
+    __attrs__ = [*HTTPAdapter.__attrs__, "default_timeout"]
+
+    def __init__(self, *args: Any, timeout: Any = DEFAULT_TIMEOUT, **kwargs: Any) -> None:
+        self.default_timeout = timeout
+        super().__init__(*args, **kwargs)
+
+    def send(self, request: Any, **kwargs: Any) -> Any:
+        if kwargs.get("timeout") is None:
+            kwargs["timeout"] = getattr(self, "default_timeout", DEFAULT_TIMEOUT)
+        return super().send(request, **kwargs)
+
+
+def grow_session_pool(session: Any, size: int) -> None:
+    """Grow a shared requests session's connection pool to ``size`` before track downloads start.
+
+    The worker threads of every track draw on this one pool, because the downloader never
+    remounts an HTTP session the caller passes in (see downloaders/requests.py). The pool must hold
+    ``downloads * workers`` connections, or threads queue for a slot instead of reading.
+    Call this before any download thread exists: the rebuild races with other threads that call
+    ``get_adapter``. RnetSession does not block on its idle-pool cap, so this function skips it.
+
+    Every mounted adapter grows in place, through its own ``init_poolmanager``. A service can
+    mount an :class:`HTTPAdapter` subclass, such as ``SSLCiphers``, on any prefix. Mounting a new
+    adapter over it would drop that subclass state, and its TLS context with it.
+    """
+    if not isinstance(session, requests.Session):
+        return
+    for adapter in {id(a): a for a in session.adapters.values()}.values():
+        if not isinstance(adapter, HTTPAdapter) or getattr(adapter, "_pool_maxsize", 0) >= size:
+            continue
+        adapter.init_poolmanager(size, size, block=True)
+        adapter.proxy_manager.clear()
 
 
 @dataclass
@@ -48,58 +124,43 @@ class TrackRequest:
     best_available: bool = False
 
 
-def sanitize_proxy_for_log(uri: Optional[str]) -> Optional[str]:
+def sanitize_proxy_for_log(uri: Optional[str], mask_host: bool = False) -> Optional[str]:
     """
-    Sanitize a proxy URI for logs by redacting any embedded userinfo (username/password).
+    Sanitise a proxy URI for logs by masking any embedded userinfo (username/password).
 
-    Examples:
-      - http://user:pass@host:8080 -> http://REDACTED@host:8080
-      - socks5h://user@host:1080   -> socks5h://REDACTED@host:1080
+    ``serve`` sends these log lines to the client of a remote session, so the mask is
+    unconditional and debug mode never lifts it. ``mask_host`` hides the hostname as
+    well, for a proxy that came from the user-supplied ``Basic`` proxy provider.
     """
     if uri is None:
         return None
     if not isinstance(uri, str):
         return str(uri)
-    if not uri:
-        return uri
+    return mask_proxy(uri, mask_host=mask_host, allow_debug=False)
 
-    try:
-        parsed = urlparse(uri)
 
-        # Handle schemeless proxies like "user:pass@host:port"
-        if not parsed.scheme and not parsed.netloc and "@" in uri and "://" not in uri:
-            # Parse as netloc using a dummy scheme, then strip scheme back out.
-            dummy = urlparse(f"http://{uri}")
-            netloc = dummy.netloc
-            if "@" in netloc:
-                netloc = f"REDACTED@{netloc.split('@', 1)[1]}"
-            # urlparse("http://...") sets path to "" for typical netloc-only strings; keep it just in case.
-            return f"{netloc}{dummy.path}"
-
-        netloc = parsed.netloc
-        if "@" in netloc:
-            netloc = f"REDACTED@{netloc.split('@', 1)[1]}"
-
-        return urlunparse(parsed._replace(netloc=netloc))
-    except Exception:
-        if "@" in uri:
-            return f"REDACTED@{uri.split('@', 1)[1]}"
-        return uri
+T = TypeVar("T")
 
 
 class Service(metaclass=ABCMeta):
-    """The Service Base Class."""
+    """The Service Base Class.
 
-    # Abstract class variables
-    ALIASES: tuple[str, ...] = ()  # list of aliases for the service; alternatives to the service tag.
-    GEOFENCE: tuple[str, ...] = ()  # list of ip regions required to use the service. empty list == no specific region.
-    ANIME: bool = False  # service catalogue is anime; metadata lookups prefer AniList. Title.anime overrides per title.
-    DAILY: bool = False  # catalog is daily/date-based. episodes are named by air date. Title.daily overrides per title.
-    # vault namespace override; when set, key vault read/write uses this tag instead of the service's own.
+    A Service must define the abstract methods. The rest are optional overrides that fall back to the base
+    implementation when a Service does not define them. The main flow operates the HTTP session and
+    authentication methods first, then titles, then tracks and chapters. The license callbacks operate later
+    still, during track download.
+    """
+
+    ALIASES: tuple[str, ...] = ()
+    GEOFENCE: tuple[str, ...] = ()
+    GEOBLOCK: tuple[str, ...] = ()
+    ANIME: bool = False
+    DAILY: bool = False
+    ANONYMOUS_SEARCH: bool = False
     VAULT_TAG: Optional[str] = None
-    # Auth methods the service accepts ("cookies"/"credentials"); when None the REST /services
-    # endpoint infers them from authenticate().
     AUTH_METHODS: Optional[tuple[str, ...]] = None
+    CLIENT_CONFIG: tuple[str, ...] = ()
+    SERVER_DEVICE_OPTIONS: tuple[str, ...] = ()
 
     def __init__(self, ctx: click.Context):
         console.print(Padding(Rule(f"[rule.text]Service: {self.__class__.__name__}"), (1, 2)))
@@ -113,13 +174,11 @@ class Service(metaclass=ABCMeta):
         self.title_cache = TitleCacher(self.__class__.__name__)
         self.cache_dir = config.directories.cache / self.__class__.__name__
 
-        # Store context for cache control flags and credential
         self.ctx = ctx
-        self.credential = None  # Will be set in authenticate()
-        self.current_region = None  # Will be set based on proxy/geolocation
+        self.credential = None
+        self.current_region = None
         self._input_bridge: Optional[InputBridge] = None
 
-        # Set track request from CLI params - services can read/override in their __init__
         vcodec = ctx.parent.params.get("vcodec") if ctx.parent else None
         range_ = ctx.parent.params.get("range_") if ctx.parent else None
         best_available = ctx.parent.params.get("best_available", False) if ctx.parent else False
@@ -129,6 +188,7 @@ class Service(metaclass=ABCMeta):
             best_available=bool(best_available),
         )
 
+        whose = "the server's" if ctx.parent and ctx.parent.params.get("served") else "your"
         if not ctx.parent or not ctx.parent.params.get("no_proxy"):
             if ctx.parent:
                 proxy = ctx.parent.params["proxy"]
@@ -139,37 +199,33 @@ class Service(metaclass=ABCMeta):
                 proxy_query = None
                 proxy_provider_name = None
 
-            # Check for service-specific proxy mapping
             service_name = self.__class__.__name__
             service_config_dict = config.services.get(service_name, {})
             proxy_map = service_config_dict.get("proxy_map", {})
 
             if proxy_map and proxy_query:
-                # Build the full proxy query key (e.g., "nordvpn:ca" or "us")
                 if proxy_provider_name:
                     full_proxy_key = f"{proxy_provider_name}:{proxy_query}"
                 else:
                     full_proxy_key = proxy_query
 
-                # Check if there's a mapping for this query
                 mapped_value = proxy_map.get(full_proxy_key)
                 if mapped_value:
                     self.log.info(
                         f"Found service-specific proxy mapping: {full_proxy_key} -> {sanitize_proxy_for_log(mapped_value)}"
                     )
-                    # Query the proxy provider with the mapped value
                     if proxy_provider_name:
-                        # Specific provider requested
-                        proxy_provider = next(
-                            (x for x in ctx.obj.proxy_providers if x.__class__.__name__.lower() == proxy_provider_name),
-                            None,
-                        )
+                        try:
+                            proxy_provider = find_provider(ctx.obj.proxy_providers, proxy_provider_name)
+                        except ValueError:
+                            proxy_provider = None
                         if proxy_provider:
                             mapped_proxy_uri = proxy_provider.get_proxy(mapped_value)
                             if mapped_proxy_uri:
                                 proxy = mapped_proxy_uri
                                 self.log.info(
-                                    f"Using mapped proxy from {proxy_provider.__class__.__name__}: {sanitize_proxy_for_log(proxy)}"
+                                    f"Using mapped proxy from {proxy_provider.__class__.__name__}: "
+                                    f"{sanitize_proxy_for_log(proxy, mask_host=isinstance(proxy_provider, Basic))}"
                                 )
                             else:
                                 self.log.warning(
@@ -178,13 +234,13 @@ class Service(metaclass=ABCMeta):
                         else:
                             self.log.warning(f"Proxy provider '{proxy_provider_name}' not found, using default proxy")
                     else:
-                        # No specific provider, try all providers
                         for proxy_provider in ctx.obj.proxy_providers:
                             mapped_proxy_uri = proxy_provider.get_proxy(mapped_value)
                             if mapped_proxy_uri:
                                 proxy = mapped_proxy_uri
                                 self.log.info(
-                                    f"Using mapped proxy from {proxy_provider.__class__.__name__}: {sanitize_proxy_for_log(proxy)}"
+                                    f"Using mapped proxy from {proxy_provider.__class__.__name__}: "
+                                    f"{sanitize_proxy_for_log(proxy, mask_host=isinstance(proxy_provider, Basic))}"
                                 )
                                 break
                         else:
@@ -193,16 +249,21 @@ class Service(metaclass=ABCMeta):
                             )
 
             if not proxy:
-                # don't override the explicit proxy set by the user, even if they may be geoblocked
                 with console.status("Checking if current region is Geoblocked...", spinner="dots"):
-                    if self.GEOFENCE:
-                        # Service has geofence - need fresh IP check to determine if proxy needed
+                    if self.GEOFENCE or self.GEOBLOCK:
                         try:
-                            current_region = get_ip_info(self.session)["country"].lower()
-                            if any(x.lower() == current_region for x in self.GEOFENCE):
+                            current_region = (get_ip_info(self.session) or {}).get("country", "").lower()
+                            if not current_region:
+                                self.log.warning(f"Could not find {whose} region, so the region check does not run")
+                            elif self.is_region_allowed(current_region):
                                 self.log.info("Service is not Geoblocked in your region")
+                            elif not (fence_targets := [x for x in self.GEOFENCE if self.is_region_allowed(x)]):
+                                raise click.ClickException(
+                                    f"Service is not available in {whose} region ({current_region.upper()}). "
+                                    "Pass --proxy with a proxy outside the blocked regions."
+                                )
                             else:
-                                requested_proxy = self.GEOFENCE[0]  # first is likely main region
+                                requested_proxy = fence_targets[0]
                                 self.log.info(
                                     f"Service is Geoblocked in your region, getting a Proxy to {requested_proxy}"
                                 )
@@ -211,28 +272,28 @@ class Service(metaclass=ABCMeta):
                                     if proxy:
                                         self.log.info(f"Got Proxy from {proxy_provider.__class__.__name__}")
                                         break
+                                if not proxy:
+                                    self.log.warning(
+                                        f"No proxy available for {requested_proxy}. "
+                                        f"Pass --proxy with a proxy in {requested_proxy}, or the request can fail."
+                                    )
+                        except click.ClickException:
+                            raise
                         except Exception as e:
                             self.log.warning(f"Failed to check geofence: {e}")
-                            current_region = None
                     else:
-                        self.log.info("Service has no Geofence")
+                        self.log.info("Service has no region restrictions")
 
             if proxy:
                 self.session.proxies.update({"all": proxy})
-                # Don't set Proxy-Authorization manually: both rnet (Proxy.all) and
-                # requests authenticate from the credentials embedded in the proxy URL.
-                # A manual header here was malformed (no "Basic " scheme) and broke
-                # plaintext-http forward-proxy requests with HTTP 407.
-                # Always verify proxy IP - proxies can change exit nodes
-                try:
-                    proxy_ip_info = get_ip_info(self.session)
-                    self.current_region = proxy_ip_info.get("country", "").lower() if proxy_ip_info else None
-                except Exception as e:
-                    self.log.warning(f"Failed to verify proxy IP: {e}")
-                    # Fallback to extracting region from proxy config
-                    self.current_region = get_region_from_proxy(proxy)
+                exit_region = verify_proxy_exit(self.session).get("country")
+                self.current_region = exit_region
+                if exit_region and any(x.lower() == exit_region.lower() for x in self.GEOBLOCK):
+                    raise click.ClickException(
+                        f"Service is not available in {whose} proxy's region ({exit_region.upper()}). "
+                        "Pass --proxy with a proxy outside the blocked regions."
+                    )
             else:
-                # No proxy, use cached IP info for title caching (non-critical)
                 try:
                     ip_info = get_ip_info(self.session, cached=True)
                     self.current_region = ip_info.get("country", "").lower() if ip_info else None
@@ -240,7 +301,20 @@ class Service(metaclass=ABCMeta):
                     self.log.debug(f"Failed to get cached IP info: {e}")
                     self.current_region = None
 
-    def _get_tracks_for_variants(
+    @classmethod
+    def is_region_allowed(cls, region: Optional[str]) -> bool:
+        """True when an exit IP in `region` (two-letter region code, any case) can use the service.
+
+        An unknown region (None or empty) is allowed, because there is nothing to compare.
+        """
+        if not region:
+            return True
+        region = region.lower()
+        if any(x.lower() == region for x in cls.GEOBLOCK):
+            return False
+        return not cls.GEOFENCE or any(x.lower() == region for x in cls.GEOFENCE)
+
+    def get_tracks_for_variants(
         self,
         title: Title_T,
         fetch_fn: Callable[..., Tracks],
@@ -252,11 +326,11 @@ class Service(metaclass=ABCMeta):
 
         The fetch_fn signature should be: (title, codec, range_) -> Tracks
 
-        For HYBRID range, fetch_fn is called with HDR10 and DV separately and
-        the DV video tracks are merged into the HDR10 result.
+        For HYBRID range, this helper calls fetch_fn with HDR10 and DV separately,
+        then merges the DV video tracks into the HDR10 result.
 
         Args:
-            title: The title being processed.
+            title: The title to process.
             fetch_fn: A callable that fetches tracks for a specific codec/range.
         """
         all_tracks = Tracks()
@@ -267,7 +341,6 @@ class Service(metaclass=ABCMeta):
 
         for range_val in ranges:
             if range_val == Video.Range.HYBRID:
-                # HYBRID: fetch HDR10 first (full tracks), then DV (video only)
                 for codec_val in codecs:
                     try:
                         hdr_tracks = fetch_fn(title, codec=codec_val, range_=Video.Range.HDR10)
@@ -312,75 +385,110 @@ class Service(metaclass=ABCMeta):
 
         return all_tracks
 
-    # Optional Abstract functions
-    # The following functions may be implemented by the Service.
-    # Otherwise, the base service code (if any) of the function will be executed on call.
-    # The functions will be executed in shown order.
-
     @staticmethod
     def get_session() -> requests.Session:
         """
-        Creates a Python-requests Session, adds common headers
+        Creates a Python-requests HTTP session, adds common headers
         from config, cookies, retry handler, and a proxy if available.
-        :returns: Prepared Python-requests Session
+        :returns: Prepared Python-requests HTTP session
         """
-        session = requests.Session()
+        session = TimeoutSession()
         session.headers.update(config.headers)
         session.mount(
             "https://",
-            HTTPAdapter(
-                max_retries=Retry(total=5, backoff_factor=0.2, status_forcelist=[429, 500, 502, 503, 504]),
-                pool_maxsize=64,
+            TimeoutHTTPAdapter(
+                max_retries=Retry(
+                    total=MAX_RETRIES,
+                    backoff_factor=BACKOFF_FACTOR,
+                    backoff_max=MAX_BACKOFF,
+                    backoff_jitter=0.2,
+                    status_forcelist=STATUS_FORCELIST,
+                    allowed_methods=RETRY_METHODS,
+                    respect_retry_after_header=True,
+                ),
+                pool_connections=POOL_MAX_SIZE,
+                pool_maxsize=POOL_MAX_SIZE,
                 pool_block=True,
             ),
         )
         session.mount("http://", session.adapters["https://"])
         return session
 
+    @staticmethod
+    def get_binaries() -> list[dict]:
+        """
+        Declare custom binary dependencies required by this service.
+        :returns: List of dicts, each with a ``name`` and optional ``candidates`` and ``desc``.
+        """
+        return []
+
     def authenticate(self, cookies: Optional[CookieJar] = None, credential: Optional[Credential] = None) -> None:
         """
         Authenticate the Service with Cookies and/or Credentials (Email/Username and Password).
 
         This is effectively a login() function. Any API calls or object initializations
-        needing to be made, should be made here. This will be run before any of the
-        following abstract functions.
+        needing to be made, should be made here. unshackle operates this method before
+        any of the following abstract functions. The one exception is a search on a
+        Service that sets ``ANONYMOUS_SEARCH``, which does not operate this method.
 
         You should avoid storing or using the Credential outside this function.
         Make any calls you need for any Cookies, Tokens, or such, then use those.
 
-        The Cookie jar should also not be stored outside this function. However, you may load
-        the Cookie jar into the service session.
+        Do not store the cookies outside this function either. However, you can load
+        the cookies into the service HTTP session.
         """
         if cookies is not None:
             if not isinstance(cookies, CookieJar):
                 raise TypeError(f"Expected cookies to be a {CookieJar}, not {cookies!r}.")
             self.session.cookies.update(cookies)
 
-        # Store credential for cache key generation
         self.credential = credential
 
     def request_input(self, prompt: str) -> str:
         """Request interactive input from the user.
 
-        When running locally (CLI), prompts via the shared rich console so the
-        prompt renders correctly alongside Live progress / log handlers.
-        When running in serve mode with an :class:`InputBridge` attached,
-        delegates to the bridge which relays the prompt to the remote client.
+        Locally, prompts through the shared rich console so the prompt renders alongside
+        Live progress. A remote-dl session relays it through its :class:`InputBridge`, and a
+        REST download job relays it through ``prompt_user`` to the job's ``input_prompt``.
         """
         if self._input_bridge is not None:
             return self._input_bridge.request_input(prompt)
-        indent = " " * 5
-        padded = indent + prompt.replace("\n", "\n" + indent)
-        return console.input(Text(padded, style="text"))
+        return prompt_user(prompt)
+
+    def wait_for_approval(
+        self, message: str, check: Callable[[], Optional[T]], timeout: float, interval: float = 3.0
+    ) -> T:
+        """Show ``message``, then call ``check`` until it returns a value.
+
+        Use it for a login that the user approves on another device, such as a pair code.
+        ``check`` returns None while the approval is pending, and must return within a few
+        seconds. Raises TimeoutError after ``timeout`` seconds, and RuntimeError when the
+        remote session no longer exists. A REST download job shows ``message`` as its ``notice``.
+        """
+        self.log.info(message)
+        show_notice(message)
+        deadline = time.monotonic() + timeout
+        try:
+            while True:
+                if self._input_bridge is not None:
+                    self._input_bridge.ensure_active()
+                result = check()
+                if result is not None:
+                    return result
+                if time.monotonic() + interval >= deadline:
+                    raise TimeoutError(f"No approval within {timeout:.0f}s")
+                time.sleep(interval)
+        finally:
+            show_notice(None)
 
     def search(self) -> Generator[SearchResult, None, None]:
         """
-        Search by query for titles from the Service.
+        Find titles from the Service by query.
 
-        The query must be taken as a CLI argument by the Service class.
-        Ideally just re-use the title ID argument (i.e. self.title).
+        The Service class must take the query as a CLI argument.
+        Ideally re-use the title ID argument (that is, self.title).
 
-        Search results will be displayed in the order yielded.
+        unshackle displays the search results in the order yielded.
         """
         raise NotImplementedError(f"Search functionality has not been implemented by {self.__class__.__name__}")
 
@@ -392,10 +500,10 @@ class Service(metaclass=ABCMeta):
 
         :param challenge: The service challenge, providing this to a License endpoint should return the
             privacy certificate that the service uses.
-        :param title: The current `Title` from get_titles that is being executed. This is provided in
-            case it has data needed to be used, e.g. for a HTTP request.
+        :param title: The current `Title` from get_titles that unshackle processes now. unshackle
+            gives this in case it holds data you need, for example for an HTTP request.
         :param track: The current `Track` needing decryption. Provided for same reason as `title`.
-        :return: The Service Privacy Certificate as Bytes or a Base64 string. Don't Base64 Encode or
+        :return: The Service Privacy Certificate as Bytes or a Base64 string. Do not Base64 Encode or
             Decode the data, return as is to reduce unnecessary computations.
         """
 
@@ -403,18 +511,18 @@ class Service(metaclass=ABCMeta):
         """
         Get a Widevine License message by sending a License Request (challenge).
 
-        This License message contains the encrypted Content Decryption Keys and will be
+        This License message contains the encrypted content keys and will be
         read by the Cdm and decrypted.
 
         This is a very important request to get correct. A bad, unexpected, or missing
-        value in the request can cause your key to be detected and promptly banned,
-        revoked, disabled, or downgraded.
+        value in the request can cause the service to detect your CDM device.
+        The service can then ban, revoke, disable, or downgrade that device.
 
         :param challenge: The license challenge from the Widevine CDM.
-        :param title: The current `Title` from get_titles that is being executed. This is provided in
-            case it has data needed to be used, e.g. for a HTTP request.
+        :param title: The current `Title` from get_titles that unshackle processes now. unshackle
+            gives this in case it holds data you need, for example for an HTTP request.
         :param track: The current `Track` needing decryption. Provided for same reason as `title`.
-        :return: The License response as Bytes or a Base64 string. Don't Base64 Encode or
+        :return: The License response as Bytes or a Base64 string. Do not Base64 Encode or
             Decode the data, return as is to reduce unnecessary computations.
         """
 
@@ -424,22 +532,23 @@ class Service(metaclass=ABCMeta):
         """
         Get a PlayReady License message by sending a License Request (challenge).
 
-        This License message contains the encrypted Content Decryption Keys and will be
+        This License message contains the encrypted content keys and will be
         read by the CDM and decrypted.
 
         This is a very important request to get correct. A bad, unexpected, or missing
-        value in the request can cause your key to be detected and promptly banned,
-        revoked, disabled, or downgraded.
+        value in the request can cause the service to detect your CDM device.
+        The service can then ban, revoke, disable, or downgrade that device.
 
         :param challenge: The license challenge from the PlayReady CDM.
-        :param title: The current `Title` from get_titles that is being executed. This is provided in
-            case it has data needed to be used, e.g. for a HTTP request.
+        :param title: The current `Title` from get_titles that unshackle processes now. unshackle
+            gives this in case it holds data you need, for example for an HTTP request.
         :param track: The current `Track` needing decryption. Provided for same reason as `title`.
-        :return: The License response as Bytes or a Base64 string. Don't Base64 Encode or
+        :return: The License response as Bytes or a Base64 string. Do not Base64 Encode or
             Decode the data, return as is to reduce unnecessary computations.
         """
-        # Delegates license handling to the Widevine license method by default if a service-specific PlayReady implementation is not provided.
-        return self.get_widevine_license(challenge=challenge, title=title, track=track)
+        return self.get_widevine_license(
+            **declared_kwargs(self.get_widevine_license, {"challenge": challenge, "title": title, "track": track})
+        )
 
     def get_clearkey_license(
         self, *, challenge: bytes, title: Title_T, track: AnyTrack
@@ -447,13 +556,13 @@ class Service(metaclass=ABCMeta):
         """
         Get a W3C ClearKey License (JWK Set) by sending a License Request (challenge).
 
-        Used for DASH `org.w3.clearkey` content. No CDM is involved: the challenge is
+        Used for DASH `org.w3.clearkey` tracks. unshackle uses no CDM here: the challenge is
         the W3C EME JSON license request, e.g. ``{"kids": ["<base64url>"], "type": "temporary"}``,
         and the license is a JWK Set, e.g. ``{"keys": [{"kty": "oct", "k": "...", "kid": "..."}]}``.
 
         :param challenge: The JSON license request bytes to POST to the license server.
-        :param title: The current `Title` from get_titles that is being executed. This is provided in
-            case it has data needed to be used, e.g. for a HTTP request.
+        :param title: The current `Title` from get_titles that unshackle processes now. unshackle
+            gives this in case it holds data you need, for example for an HTTP request.
         :param track: The current `Track` needing decryption. Provided for same reason as `title`.
         :return: The JWK Set license as a dict, JSON str, or raw bytes. Return None (the default)
             to let the framework POST the challenge to the manifest-provided Laurl, if any.
@@ -461,10 +570,6 @@ class Service(metaclass=ABCMeta):
             `content_keys` in get_tracks.
         """
         return None
-
-    # Required Abstract functions
-    # The following functions *must* be implemented by the Service.
-    # The functions will be executed in shown order.
 
     @abstractmethod
     def get_titles(self) -> Titles_T:
@@ -474,11 +579,11 @@ class Service(metaclass=ABCMeta):
         Return a Movies, Series, or Album objects containing Movie, Episode, or Song title objects respectively.
         The returned data must be for the given title ID, or a spawn of the title ID.
 
-        At least one object is expected to be returned, or it will presume an invalid Title ID was
-        provided.
+        You must return at least one object. If you do not, unshackle presumes an invalid
+        Title ID.
 
         You can use the `data` dictionary class instance attribute of each Title to store data you may need later on.
-        This can be useful to store information on each title that will be required like any sub-asset IDs, or such.
+        This can be useful to store information on each title that you need later, like any sub-asset IDs, or such.
         """
 
     def get_titles_cached(self, title_id: str = None) -> Titles_T:
@@ -495,29 +600,23 @@ class Service(metaclass=ABCMeta):
         Returns:
             Titles object (Movies, Series, or Album)
         """
-        # Try to get title_id from service instance if not provided
         if title_id is None:
-            # Different services store the title ID in different attributes
             if hasattr(self, "title"):
                 title_id = self.title
             elif hasattr(self, "title_id"):
                 title_id = self.title_id
             else:
-                # If we can't determine title_id, just call get_titles directly
                 self.log.debug("Cannot determine title_id for caching, bypassing cache")
                 return self.apply_title_map(self.get_titles())
 
-        # Get cache control flags from context
         no_cache = False
         reset_cache = False
         if self.ctx and self.ctx.parent:
             no_cache = self.ctx.parent.params.get("no_cache", False)
             reset_cache = self.ctx.parent.params.get("reset_cache", False)
 
-        # Get account hash for cache key
         account_hash = get_account_hash(self.credential)
 
-        # Use title cache to get titles with fallback support
         titles = self.title_cache.get_cached_titles(
             title_id=str(title_id),
             fetch_function=self.get_titles,
@@ -546,26 +645,26 @@ class Service(metaclass=ABCMeta):
         Return a Tracks object, which itself can contain Video, Audio, Subtitle or even Chapters.
         Tracks.videos, Tracks.audio, Tracks.subtitles, and Track.chapters should be a List of Track objects.
 
-        Each Track in the Tracks should represent a Video/Audio Stream/Representation/Adaptation or
-        a Subtitle file.
+        Each Track in the Tracks should represent a Video/Audio track, Representation, or
+        Adaptation, or a Subtitle file.
 
-        While one Track should only hold information for one stream/downloadable, try to get as many
-        unique Track objects per stream type so Stream selection by the root code can give you more
-        options in terms of Resolution, Bitrate, Codecs, Language, e.t.c.
+        While one Track should only hold information for one downloadable track, try to get as many
+        unique Track objects per track type so track selection by the root code can give you more
+        options in terms of Resolution, Bitrate, Codecs, Language, and such.
 
         No decision making or filtering of which Tracks get returned should happen here. It can be
         considered an error to filter for e.g. resolution, codec, and such. All filtering based on
         arguments will be done by the root code automatically when needed.
 
-        Make sure you correctly mark which Tracks are encrypted or not, and by which DRM System
-        via its `drm` property.
+        Make sure you correctly mark which Tracks have encryption, and which DRM System they
+        use, with the `drm` property.
 
-        If you are able to obtain the Track's KID (Key ID) as a 32 char (16 bit) HEX string, provide
-        it to the Track's `kid` variable as it will speed up the decryption process later on. It may
-        or may not be needed, that depends on the service. Generally if you can provide it, without
-        downloading any of the Track's stream data, then do.
+        If you can get the Track's KID (Key ID) as a 32 char (16 bit) HEX string, give it to the
+        Track's `kid` variable, as it will speed up the decryption process later on. The service
+        decides whether it is necessary. Generally if you can give it, without downloading any of
+        the Track's media data, then do.
 
-        :param title: The current `Title` from get_titles that is being executed.
+        :param title: The current `Title` from get_titles that unshackle processes now.
         :return: Tracks object containing Video, Audio, Subtitles, and Chapters, if available.
         """
 
@@ -575,12 +674,12 @@ class Service(metaclass=ABCMeta):
         Get Chapters for the Title.
 
         Parameters:
-            title: The current Title from `get_titles` that is being processed.
+            title: The current Title from `get_titles` that unshackle processes now.
 
         You must return a Chapters object containing 0 or more Chapter objects.
 
         You do not need to set a Chapter number or sort/order the chapters in any way as
-        the Chapters class automatically handles all of that for you. If there's no
+        the Chapters class automatically handles all of that for you. If there is no
         descriptive name for a Chapter then do not set a name at all.
 
         You must not set Chapter names to "Chapter {n}" or such. If you (or the user)
@@ -588,15 +687,13 @@ class Service(metaclass=ABCMeta):
         option `chapter_fallback_name`. For example, `"Chapter {i:02}"` for "Chapter 01".
         """
 
-    # Optional Event methods
-
     def on_segment_downloaded(self, track: AnyTrack, segment: Path) -> None:
         """
         Called when one of a Track's Segments has finished downloading.
 
         Parameters:
             track: The Track object that had a Segment downloaded.
-            segment: The Path to the Segment that was downloaded.
+            segment: The Path to the downloaded Segment.
         """
 
     def on_track_downloaded(self, track: AnyTrack) -> None:
@@ -604,7 +701,7 @@ class Service(metaclass=ABCMeta):
         Called when a Track has finished downloading.
 
         Parameters:
-            track: The Track object that was downloaded.
+            track: The downloaded Track object.
         """
 
     def on_track_decrypted(self, track: AnyTrack, drm: DRM_T, segment: Optional[m3u8.Segment] = None) -> None:
@@ -612,9 +709,10 @@ class Service(metaclass=ABCMeta):
         Called when a Track has finished decrypting.
 
         Parameters:
-            track: The Track object that was decrypted.
+            track: The decrypted Track object.
             drm: The DRM object it decrypted with.
-            segment: The HLS segment information that was decrypted.
+            segment: The decrypted HLS segment information. None for DASH and ISM tracks and
+                for an HLS track that merged during the download (merge_segments).
         """
 
     def on_track_repacked(self, track: AnyTrack) -> None:
@@ -622,19 +720,19 @@ class Service(metaclass=ABCMeta):
         Called when a Track has finished repacking.
 
         Parameters:
-            track: The Track object that was repacked.
+            track: The repacked Track object.
         """
 
     def on_track_multiplex(self, track: AnyTrack) -> None:
         """
-        Called when a Track is about to be Multiplexed into a Container.
+        Called immediately before unshackle multiplexes a Track into a Container.
 
-        Note: Right now only MKV containers are multiplexed but in the future
-        this may also be called when multiplexing to other containers like
-        MP4 via ffmpeg/mp4box.
+        Note: Right now unshackle multiplexes only MKV containers. In the future
+        unshackle can also call this when it multiplexes to other containers like
+        MP4 with FFmpeg/mp4box.
 
         Parameters:
-            track: The Track object that was repacked.
+            track: The repacked Track object.
         """
 
 

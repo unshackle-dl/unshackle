@@ -1,29 +1,30 @@
 # Creating a Service
 
 A **service** is a plugin that teaches unshackle how to talk to one streaming
-provider: how to log in, how to look up a title, what video/audio/subtitle
-tracks exist, and how to license any DRM. Everything else (track selection,
-downloading, decryption, muxing, naming) is handled by the unshackle core.
+platform: how to log in, how to look up a title, what video/audio/subtitle
+tracks exist, and how to license any DRM. The unshackle core does everything
+else (track selection, downloading, decryption, muxing, naming).
 
 !!! info "Who this page is for"
     This is a **developer guide**. If you only want to *use* services, see
     [downloading](../guide/downloading.md) and
-    [configuration](../reference/configuration/index.md). Nothing here is required to run
-    the CLI. Service code is deliberately kept separate from the core so it can
-    live in its own private repository.
+    [configuration](../reference/configuration/index.md). You do not need anything here to
+    operate the CLI. The code of a service is deliberately separate from the
+    core, so it can live in its own private repository.
 
-Unshackle ships one reference service, **EXAMPLE**, at
-`unshackle/services/EXAMPLE/`. It is a deliberately exhaustive, non-runnable
-showcase of every framework feature in a single file. Read it alongside this
-page; most snippets below are drawn from it.
+unshackle ships two reference services. **EXAMPLE**, at
+`unshackle/services/EXAMPLE/`, is a non-runnable showcase of every framework
+feature in a single file. Read it alongside this page. Most snippets below come
+from it. **MUSIC_EXAMPLE**, at `unshackle/services/MUSIC_EXAMPLE/`, is the same
+kind of showcase for a music service. If your platform has songs, read that one too.
 
 ---
 
-## How a service is discovered
+## How unshackle finds a service
 
 At startup unshackle scans every path in the `directories.services` config key
 (a **list**). Each entry is either a local directory of services or a remote
-repo spec (a git URL or `owner/repo` shorthand, which is cloned automatically).
+repo spec (a git URL or `owner/repo` shorthand, which unshackle clones for you).
 The default is the bundled `unshackle/services` directory.
 
 Within a services directory, **every subfolder that contains an `__init__.py`
@@ -38,13 +39,13 @@ services/
 
 Two rules the loader enforces:
 
-1. **The class name must exactly match the folder/tag name.** Folder `EXAMPLE` must
+1. **The class name must match the folder/tag name exactly.** Folder `EXAMPLE` must
    define `class EXAMPLE`. A mismatch raises a `RuntimeError`.
 2. **List order is priority.** The first services path to define a given tag
-   wins; later duplicates are shadowed. Put your own local overrides *last* to
+   wins, and unshackle ignores the later duplicates. Put your own local overrides *last* to
    use them as fallbacks, or *first* to override a repo.
 
-Once installed, a service is invoked as a subcommand of `dl`:
+After installation, you call a service as a subcommand of `dl`:
 
 ```bash
 unshackle dl EXAMPLE 20914
@@ -55,11 +56,11 @@ unshackle dl EX 20914          # via an ALIAS
     A service's own settings go in `config.yaml` **inside the service folder**
     (`directories.services/<TAG>/config.yaml`). This is separate from the global
     `unshackle.yaml`. Access it in code as `self.config[...]`. Never hardcode
-    URLs, user agents, or certificates; put them here.
+    URLs, user agents, or certificates. Put them here.
 
 !!! warning "`config.yaml` is shared: keep secrets out of it"
     Treat `config.yaml` as a checked-in file of **defaults**: it belongs in the
-    service repo and is shared by everyone who runs the service. Per-user secrets
+    service repo, and everyone who runs the service shares it. Per-user secrets
     (API keys, device IDs, account tokens) must **not** live here. Those go in the
     user's own `unshackle.yaml` under `services.<TAG>`, which is **merged into
     `self.config` at runtime**. That checked-in-defaults / per-user-overrides
@@ -77,7 +78,7 @@ unshackle dl EX 20914          # via an ALIAS
     ```
 
     A service loaded from a remote repo lives outside the `unshackle` package,
-    so the absolute `unshackle.services.<TAG>.*` path does not resolve and the
+    so Python cannot find the absolute `unshackle.services.<TAG>.*` path and the
     import fails with `no known parent package`. Relative imports work both
     locally and from a cloned repo.
 
@@ -94,29 +95,39 @@ Declared at class level to configure framework behaviour:
 
 | Variable | Type | Purpose |
 |---|---|---|
-| `ALIASES` | `tuple[str, ...]` | Extra tags that resolve to this service (e.g. `("EX", "DOMAIN")`). Default `()`. |
-| `GEOFENCE` | `tuple[str, ...]` | IP region codes the service requires. Empty = no geofence. The **first** entry is treated as the main region for auto-proxy. |
+| `ALIASES` | `tuple[str, ...]` | Extra tags that resolve to this service (e.g. `("EX", "DOMAIN")`). Case does not matter. Default `()`. |
+| `GEOFENCE` | `tuple[str, ...]` | IP region codes the service requires. Empty = no geofence. unshackle treats the **first** entry as the main region for auto-proxy. |
+| `GEOBLOCK` | `tuple[str, ...]` | IP region codes where the service refuses to work. Every other region is allowed. Default `()`. |
 | `VAULT_TAG` | `Optional[str]` | Overrides the key-vault namespace so sibling services can share one vault. Default `None` (use the service's own tag). |
 | `AUTH_METHODS` | `Optional[tuple[str, ...]]` | Auth methods accepted (`"cookies"` / `"credentials"`). When `None`, the REST `/services` endpoint infers them from `authenticate()`. |
+| `ANONYMOUS_SEARCH` | `bool` | Set `True` when `search()` needs no login and no state from `authenticate()`. A search then skips the cookie load, `authenticate()` and the cookie save. Default `False`. |
 | `NO_SUBTITLES` | `bool` | Set `True` on a service with no subtitle tracks to skip subtitle handling entirely. |
-| `ANIME` | `bool` | Set `True` when the catalog is anime, so metadata lookups prefer AniList. A title's own `anime` flag overrides it. |
-| `DAILY` | `bool` | Set `True` when the catalog is daily/date-based (talk shows, news, sports), so episodes are named by air date. A title's own `daily` flag overrides it. |
+| `ANIME` | `bool` | Set `True` when the catalogue is anime, so metadata lookups prefer AniList. A title's own `anime` flag overrides it. |
+| `DAILY` | `bool` | Set `True` when the catalogue is daily/date-based (talk shows, news, sports), so unshackle names episodes by air date. A title's own `daily` flag overrides it. |
 
 !!! note "`NO_SUBTITLES` is a convention, not a base-class attribute"
-    `NO_SUBTITLES` is checked by `dl.py` via `hasattr` and is deliberately **not**
-    declared on the `Service` base class, so it only exists if your service
+    `dl.py` uses `hasattr` to find `NO_SUBTITLES`, and the `Service` base class
+    deliberately does **not** declare it, so it only exists if your service
     defines it. Setting `NO_SUBTITLES = True` is what makes the pipeline skip
-    subtitle work for services that never carry subtitles; leave it off otherwise.
+    subtitle work for services that never carry subtitles. Leave it off otherwise.
 
 `GEOFENCE` drives an automatic proxy: on startup, if you did not pass an
 explicit `--proxy`, the base class does a live IP check and, if your region is
 blocked, fetches a proxy to `GEOFENCE[0]` from your configured proxy providers.
+
+`GEOBLOCK` is the negative form: the service works everywhere except the listed
+regions. With no `GEOFENCE` to name a main region, a `GEOBLOCK` hit stops the run
+with a "not available in your region" error; pass `--proxy` yourself.
 
 ```python
 class EXAMPLE(Service):
     ALIASES = ("EX", "DOMAIN")
     GEOFENCE = ("US", "UK")
     VAULT_TAG = "DIFFERENT_NAME"
+
+
+class WORLDWIDE(Service):
+    GEOBLOCK = ("GB",)
 ```
 
 ### What `Service.__init__` wires up
@@ -129,7 +140,7 @@ will use throughout the service:
 | `self.config` | This service's `config.yaml` contents (a dict), or `None` if absent. |
 | `self.log` | A `logging.Logger` named after your class. |
 | `self.session` | A prepared `requests.Session` with config headers and a retry adapter (5 retries, backoff 0.2, retries on 429/500/502/503/504). |
-| `self.cache` | A `Cacher` for arbitrary key/value data (tokens, etc.). |
+| `self.cache` | A `Cacher` for arbitrary key/value data, for example authentication tokens. |
 | `self.title_cache` | A region/account-aware `TitleCacher` used by `get_titles_cached`. |
 | `self.cache_dir` | `config.directories.cache / <ClassName>`. |
 | `self.track_request` | A `TrackRequest` built from the CLI `--vcodec` / `--range` / `--best-available` flags. |
@@ -149,14 +160,14 @@ class TrackRequest:
 
 !!! note "Read the request, don't second-guess the user"
     Services may narrow `track_request` for hard technical constraints (e.g.
-    *"HDR on this service is only delivered as HEVC"*), but must **not** filter
+    *"this service delivers HDR only as HEVC"*), but must **not** filter
     the tracks they return by resolution, bitrate, or language. All selection is
     done by the core after `get_tracks` returns.
 
 !!! tip "Override `get_session()` to defeat TLS-fingerprint bot detection"
     The base `get_session()` returns a plain `requests.Session` (config headers +
     retry adapter) and **deliberately does not** do TLS impersonation. When a
-    provider blocks you on TLS fingerprint alone, override it to return
+    streaming platform blocks you on TLS fingerprint alone, override it to return
     `session("Chrome131")` (any `rnet.Impersonate` preset). `RnetSession` is a
     drop-in `requests.Session` replacement (same `.get`/`.post`/cookie-jar
     interface), so nothing else in the service changes. If instead you need
@@ -165,9 +176,9 @@ class TrackRequest:
 
 ---
 
-## The methods you implement
+## The methods you write
 
-Methods run in the order shown. Only the three abstract ones are mandatory.
+unshackle calls the methods in the order shown. Only the three abstract ones are mandatory.
 
 ```mermaid
 graph LR
@@ -181,11 +192,11 @@ returns an **instance** of your service. Keep the command `name=` matching the
 tag.
 
 !!! note "`name=` is cosmetic: the directory name is what resolves the command"
-    `unshackle dl EXAMPLE` is dispatched by the **folder/class name**, not by the
-    `name=` in `@click.command`. A mismatched `name=` still loads and runs; it
-    just produces confusing `--help`/usage output that names the wrong command.
-    That confusing output is the reason to keep it in sync, not any dispatch
-    requirement.
+    unshackle chooses the command from the **folder/class name**, not from the
+    `name=` in `@click.command`. A mismatched `name=` still loads and runs. It
+    only produces confusing `--help`/usage output that names the wrong command.
+    That confusing output is the reason to keep it in sync, not any requirement
+    of the command lookup.
 
 ```python
 @staticmethod
@@ -211,7 +222,7 @@ accepted URL/ID formats and options there.
 !!! tip "CDM-aware behaviour"
     The resolved CDM is on `ctx.obj.cdm` (may be `None` for DRM-free runs). Use
     `is_widevine_cdm()` / `is_playready_cdm()` from `unshackle.core.cdm.detect`
-    to classify it. These correctly handle local *and* remote CDMs, so never
+    to classify it. These work correctly for local *and* remote CDMs, so never
     hand-roll an `isinstance` check. Services often pick a device profile or
     manifest endpoint based on which DRM the CDM speaks.
 
@@ -219,7 +230,7 @@ accepted URL/ID formats and options there.
 
 Override to log in with cookies and/or credentials. **Call `super().authenticate()`
 first**: the base implementation loads the cookie jar into `self.session.cookies`
-and stores `self.credential`. Do all token fetching here; it runs before
+and stores `self.credential`. Do all token fetching here. It runs before
 `get_titles`.
 
 ```python
@@ -236,30 +247,53 @@ def authenticate(self, cookies=None, credential=None) -> None:
     self.token = cache.data["token"]
 ```
 
-Cookies come from files under `directories.cookies`; credentials from the
+Cookies come from files under `directories.cookies`. Credentials come from the
 `credentials` map in `unshackle.yaml`. For interactive prompts (OTP, captcha)
 use `self.request_input(prompt)`, never a bare `input()`. Under `serve` mode
 there is no local terminal, so a bare `input()` would hang the server waiting on
-stdin that never arrives; `request_input` instead relays the prompt to the
-remote client through the attached `InputBridge`. Locally it routes through the
-shared Rich console (`console.input`) so the prompt renders correctly alongside
+stdin that never arrives. `request_input` instead relays the prompt to the
+client: a remote-dl session gets it through the attached `InputBridge`, and a
+REST download job shows it as `input_prompt`. Locally it routes through the
+shared Rich console (`prompt_user`) so the prompt renders correctly alongside
 progress and log output.
 
-!!! warning "Key token caches by whatever varies per session"
-    The cache key above is `tokens_{device}_{profile}` on purpose. A token cache
+For a login that the user approves on another device (a pair code, a QR code),
+use `self.wait_for_approval(message, check, timeout)`, never a hand-written
+loop. It shows the message, then calls `check` at each interval until `check`
+returns a value. `check` returns `None` while the approval is pending.
+
+```python
+token = self.wait_for_approval(
+    f"Open {self.config['endpoints']['pair']} and enter code {code}",
+    check=lambda: self.poll_pair_token(code),
+    timeout=expires_in,
+)
+```
+
+It raises `TimeoutError` after `timeout` seconds. Under `serve` mode it also stops
+when the client deletes the remote session, so the loop does not continue on the
+server with no client. The message goes out as a log line, so a remote
+session shows it. A REST download job shows it in its `notice` field until the wait ends.
+
+The wait sees a cancel only between two `check` calls, so `check` must return within a few
+seconds. A `check` that reads a socket keeps the socket open across calls and returns `None`
+after each short idle wait.
+
+!!! warning "Make each token cache entry unique"
+    The cache above uses `tokens_{device}_{profile}` on purpose. A token cache
     must include every dimension that changes the token (device, profile, or
     `credential.sha1`), or two profiles/devices will share one cache entry and
-    stomp each other's tokens. This isn't obvious from the caching API, which
-    happily lets you use a single flat key.
+    stomp each other's tokens. This is not obvious from the caching API, which
+    happily lets you use a single flat name.
 
-!!! warning "Handle the credential carefully"
-    Use the `Credential` only inside `authenticate()` to obtain tokens; don't
+!!! warning "Use the credential carefully"
+    Use the `Credential` only inside `authenticate()` to get tokens. Do not
     stash it or the raw cookie jar elsewhere. The base class already caches
     identity for you.
 
 ### `get_titles`: required
 
-Return a titles collection for the given ID. The return type depends on content:
+Return a titles collection for the given ID. The return type depends on the kind of title:
 
 | Return | Contains | Use for |
 |---|---|---|
@@ -268,8 +302,8 @@ Return a titles collection for the given ID. The return type depends on content:
 | `Album` | `Song` objects | Music |
 
 Every title carries a `language` (its **original recorded language**) and an
-arbitrary `data` dict you can use to stash metadata for later methods. At least
-one title must be returned, or the ID is treated as invalid.
+arbitrary `data` dict you can use to stash metadata for later methods. You must
+return at least one title. If you return none, unshackle treats the ID as invalid.
 
 ```python
 def get_titles(self) -> Titles_T:
@@ -310,7 +344,7 @@ Common constructor fields:
             part=None)
     ```
 
-    Pass `air_date` for daily/sports content to name by date instead of
+    Pass `air_date` for daily and sports titles to name by date instead of
     `SxxExx`. Return a `Series([...])` of episodes. Pass `part` only when the
     service splits one episode into several videos, see
     [Split episodes](#split-episodes).
@@ -318,11 +352,20 @@ Common constructor fields:
 === "Song"
 
     ```python
-    Song(id_, service, name, artist, album, track, disc, year,
-         language=None, data=None)
+    Song(id_, service, name, artist, album, track, disc=1, year=None,
+         language=None, data=None, ...)
     ```
 
-    Return an `Album([...])` of songs.
+    Return an `Album([...])` of songs. `disc` defaults to 1 and `year` is optional.
+    Optional metadata keywords such as `album_artist`, `genre`, `isrc`, `label`,
+    `lyrics` and `artwork_url` feed the tagger and the naming templates. Read the
+    class for the current list.
+
+    From `get_tracks()`, give one `Audio` track for each codec and bitrate you offer
+    for the song. The framework then selects one with its usual audio options.
+    A `Song` skips the muxer, so restore the real container suffix on the track path
+    in `on_track_downloaded`. The **MUSIC_EXAMPLE** service shows the full music
+    surface.
 
 !!! note "The ID must be unique and stable"
     `id_` must be truthy and, if it has a length, at least 4 characters, to
@@ -344,8 +387,8 @@ Episode(..., season=1, number=1, part=1, name="The Reckoning")
 Episode(..., season=1, number=1, part=2, name="The Reckoning")
 ```
 
-1. `part` counts from 1, contiguous. `part=0` is rejected, and `-w` can only address
-   parts up to 99.
+1. `part` counts from 1, contiguous. unshackle rejects `part=0`, and `-w` can only
+   address parts up to 99.
 2. Every part of one episode shares the same `season` and `number`.
 3. Each part is a separate `Episode` with its own unique `id_`.
 4. Unsplit episode: leave `part` unset. Never pass `part=1` for a whole episode.
@@ -365,13 +408,13 @@ Episode(..., season=1, number=1, part=2, name="The Reckoning")
 
 !!! tip "Clean the part out of the name"
     `Episode` discards any `name` that starts with `Episode <number>`, so a raw
-    `"Episode 1 (Part 2): The Reckoning"` leaves you with no episode name at all. Strip
+    `"Episode 1 (Part 2): The Reckoning"` leaves you with no episode name at all. Remove
     the prefix before you pass it, or pass `None`.
 
 Once `part` is set, the filename gains a part token (`S01E01.Part.2`, see
 [Output & naming](../guide/output-and-naming.md#split-episodes)), `-w S01E01.2` selects a
 single part while a bare `-w S01E01` selects them all, and the `--list-titles` tree labels
-the episode `01.2`. The REST API reports it as an extra `part` key on the serialized
+the episode `01.2`. The REST API reports it as an extra `part` field on the serialized
 title, described in [Endpoints](rest-api/endpoints.md#post-apilist-titles).
 
 !!! note "Opt-in and additive"
@@ -382,7 +425,7 @@ title, described in [Endpoints](rest-api/endpoints.md#post-apilist-titles).
 ### `get_tracks`: required
 
 Given one title, return a `Tracks` object holding `Video`, `Audio`, and
-`Subtitle` tracks. In almost all cases you build these by parsing a manifest,
+`Subtitle` tracks. In almost all cases you assemble these by parsing a manifest,
 not by hand.
 
 The manifest parsers live in `unshackle.core.manifests`:
@@ -422,92 +465,80 @@ Each exposes `from_url(url, session=...)` (or `from_text(text, url)`) and then
 
 !!! warning "Always pass `language=`"
     Pass the title's original language to `to_tracks(language=...)`. For DASH and
-    HLS this is **required as a fallback**. If a track's language can't be
-    derived and no valid fallback was given, `to_tracks` raises `ValueError`.
-    It's also what lets the parser flag `is_original_lang` on each track (via
-    `is_close_match`), driving `-l best/all` selection and the filename language
-    token.
+    HLS this is **required as a fallback**. If `to_tracks` cannot derive a track's
+    language and you gave no valid fallback, it raises `ValueError`.
+    It is also what lets the parser flag `is_original_lang` on each track (through
+    `is_close_match`), which drives `-l best/all` selection and the filename
+    language token.
 
 Some services deliver a **separate manifest per codec/range**. The base class
-provides `_get_tracks_for_variants(title, fetch_fn)` to fan out over every
+provides `get_tracks_for_variants(title, fetch_fn)` to fan out over every
 codec×range in the `TrackRequest`, including `HYBRID` (fetch HDR10 + DV and
 merge) and `--best-available` skip-on-error handling:
 
 ```python
 def get_tracks(self, title: Title_T) -> Tracks:
-    def _fetch_variant(title, codec, range_) -> Tracks:
+    def fetch_variant(title, codec, range_) -> Tracks:
         vcodec = "H265" if codec == Video.Codec.HEVC else "H264"
-        return self._fetch_dash_manifest(title, vcodec=vcodec, range_=range_)
-    return self._get_tracks_for_variants(title, _fetch_variant)
+        return self.fetch_dash_manifest(title, vcodec=vcodec, range_=range_)
+    return self.get_tracks_for_variants(title, fetch_variant)
 ```
 
 After parsing, you may **correct** track metadata the manifest gets wrong:
 stamp the real `video.range`, fix odd audio channel counts, mark descriptive
 audio, add hand-built subtitles or an `Attachment` (e.g. cover art). Do *not*
-filter for resolution/bitrate. See `_fetch_dash_manifest` in the EXAMPLE service
+filter for resolution/bitrate. See `fetch_dash_manifest` in the EXAMPLE service
 for a thorough demonstration.
 
 !!! note "Flip HDR10 → HDR10+ by hand when you know the platform embeds it"
     HDR10+ is a **bitstream (SEI)** feature. The HLS parser intentionally does
-    not sniff it from the stream, so a manifest that embeds HDR10+ SEI but labels
+    not sniff it from the bitstream, so a manifest that embeds HDR10+ SEI but labels
     the variant plain HDR10 will parse as HDR10. The label is the only signal
-    the parser has, and it's wrong. Only the service author knows the platform
-    embeds HDR10+, so it's on you to correct `video.range` to HDR10+ here for
+    the parser has, and it is wrong. Only the service author knows the platform
+    embeds HDR10+, so it is on you to correct `video.range` to HDR10+ here for
     those services.
 
 !!! warning "`get_tracks` is your only chance to capture license inputs"
-    The license callbacks (`get_widevine_license`, etc.) fire **much later**, in
+    The license callbacks (`get_widevine_license` and the others) fire **much later**, in
     the download/decrypt step, long after `get_tracks` has returned, and they
     receive **only** `challenge`, `title`, and `track`. Nothing else from the
-    manifest response reaches them. So anything a license call needs (the license
-    URL, `dt-custom-data`, a session token) has to be stashed **now**, during
+    manifest response reaches them. So you must stash anything a license call needs
+    (the license URL, `dt-custom-data`, a session token) **now**, during
     `get_tracks`, onto `self.license_data` or `title.data`. This is a
-    lifecycle-timing consequence you can't infer from the callback signatures.
+    lifecycle-timing consequence you cannot infer from the callback signatures.
 
-!!! tip "Provide the KID if you cheaply can"
-    If you can obtain a track's Key ID (32-char hex) without downloading stream
-    data, set `track.kid`; it speeds up the decryption/key-lookup path. And be
+!!! tip "Give the KID if you cheaply can"
+    If you can get a track's Key ID (32-char hex) without downloading the track
+    data, set `track.kid`. It speeds up the decryption and key-lookup path. And be
     sure encrypted tracks carry the correct `drm` so the core licenses them.
 
 ### `get_chapters`: required
 
-Return a `Chapters` object (0 or more `Chapter`s). You don't need to number or
-sort them; `Chapters` does that automatically and inserts a `00:00:00.000`
-marker if missing. A `Chapter` timestamp accepts `"HH:MM:SS[.mmm]"`, an int in
-milliseconds, or a float in seconds.
+Return a `Chapters` object of 0 or more `Chapter`s. It sorts by timestamp,
+numbers the chapters at mux time, and adds a `00:00:00.000` chapter if none
+exists. Timestamps take `"HH:MM:SS[.mmm]"`, int milliseconds, or float seconds.
 
 ```python
 def get_chapters(self, title: Title_T) -> Chapters:
-    chapters = Chapters()
-    seen: set[int] = set()
-    for ch in title.data.get("chapters", []):
-        chapter = Chapter(timestamp=ch["start"], name=ch.get("name"))
-        if chapter.timestamp == 0 or chapter.timestamp in seen:
-            continue                     # see the warning below
-        seen.add(chapter.timestamp)
-        chapters.add(chapter)
-    return chapters
+    chapters = [Chapter(name=c.get("name"), timestamp=c["start"]) for c in title.data.get("chapters", [])]
+    return Chapters(sorted(chapters, key=lambda c: c.timestamp))
 ```
 
-!!! warning "Skip markers at 0 and de-duplicate timestamps before `add()`"
-    `Chapters.add()` auto-injects a `Chapter(0)` at `00:00:00.000` the first time
-    you add *any* chapter, **and** it raises `ValueError` if a chapter already
-    exists at an exact timestamp. So an API marker reported at `0` (an intro or
-    recap that starts at the very beginning) collides with that auto-inserted
-    opening chapter, and two markers sharing a timestamp collide with each other.
-    Guard both cases: drop any marker at timestamp `0` and de-duplicate timestamps
-    before adding, as above.
+!!! warning "Sort by timestamp before you build the `Chapters`"
+    `Chapters.add()` adds its own unnamed `Chapter(0)` once you add a chapter that is
+    not at `0`, and a duplicate timestamp raises `ValueError`. Sort first, so yours
+    lands before it.
 
-!!! note "An unnamed chapter is the idiom for closing a named range"
-    A `Chapter` with no name is perfectly valid. Inserting an unnamed marker is
-    the standard way to *close out* a named range: e.g. add `Chapter(name="Intro")`
-    at the start and an unnamed `Chapter` where the intro ends, so the "Intro"
-    label applies only to that span.
+    You never need to add `Chapter(0)`. An API chapter at `0` keeps its name. Drop
+    duplicate timestamps.
+
+!!! note "Close a named range with an unnamed chapter"
+    An unnamed `Chapter` ends the range before it: `Chapter(name="Intro")` at the
+    start, an unnamed one where the intro ends.
 
 !!! warning "Don't invent chapter names"
-    Never name chapters `"Chapter 1"` yourself. Leave unnamed markers unnamed;
-    users who want generic names set `chapter_fallback_name` (e.g.
-    `"Chapter {i:02}"`) in their config.
+    Never write `"Chapter 1"`; leave unnamed chapters unnamed. Users set
+    `chapter_fallback_name` in their config (for example, `"Chapter {i:02}"`).
 
 ---
 
@@ -516,7 +547,7 @@ def get_chapters(self, title: Title_T) -> Chapters:
 The core drives licensing. Your job is to answer the license challenges the CDM
 produces. Mark encrypted tracks with the right DRM in `get_tracks` (the manifest
 parsers do this automatically for PSSH/`EXT-X-KEY` found in the manifest), then
-implement the license callbacks you need. Each receives the challenge plus the
+write the license callbacks you need. Each receives the challenge plus the
 current `title` and `track`:
 
 | Method | For | Returns |
@@ -548,20 +579,21 @@ def get_widevine_license(self, *, challenge: bytes, title, track):
 !!! tip "`ClearKeyCENC` (`org.w3.clearkey`) has three escalating integration levels"
     Pick the lowest level that works for the platform:
 
-    1. **The manifest carries a `<Laurl>`**: implement nothing. The framework
+    1. **The manifest carries a `<Laurl>`**: write nothing. The framework
        POSTs the challenge to that URL itself.
-    2. **A custom endpoint or extra headers are needed**: override
+    2. **Your service needs a custom endpoint or extra headers**: override
        `get_clearkey_license` to do the POST yourself.
     3. **Keys arrive obfuscated or through a bespoke channel**: fetch and unwrap
-       the key in `get_tracks` and pre-populate
+       the content key in `get_tracks` and pre-populate
        `drm.content_keys[kid] = key_hex` on the track's `ClearKeyCENC`. The
        non-obvious payoff: when every KID is already keyed, the framework skips
        the license round-trip entirely.
 
-Things you don't handle:
+Things the service does not do:
 
-- **HLS AES-128 (`ClearKey`)** and **DRM-free** content have no license
-  callback. The key comes from the manifest and is applied directly.
+- **HLS AES-128 (`ClearKey`)** tracks and **DRM-free** tracks have no license
+  callback. The content key comes from the manifest, and unshackle applies it
+  directly.
 - **Key vaults** cache `KID:KEY` pairs across runs, so repeat downloads skip the
   license round-trip entirely.
 - **Decryption tooling** (shaka-packager or mp4decrypt) and the choice of local
@@ -577,6 +609,12 @@ Override any of these to react to pipeline stages (all no-ops by default):
 `on_segment_downloaded`, `on_track_downloaded`, `on_track_decrypted`,
 `on_track_repacked`, `on_track_multiplex`. Also override `search()` to yield
 `SearchResult` objects for `unshackle search`.
+
+!!! warning "Set `ANONYMOUS_SEARCH` only for a search that needs no account"
+    With `ANONYMOUS_SEARCH = True`, `search()` operates on an HTTP session with no cookies, and
+    `authenticate()` does not run. Set it only when the search results do not depend on the
+    account, and when `search()` does its own setup. A `search()` that reads a token, a header
+    or a region from `authenticate()` fails or gives results for the wrong region.
 
 ```python
 def search(self) -> Generator[SearchResult, None, None]:
@@ -678,7 +716,7 @@ endpoints:
   license: https://api.myservice.com/v1/license/widevine
 ```
 
-Test it with:
+Try it with:
 
 ```bash
 unshackle dl MYSVC https://myservice.com/watch/abc123
@@ -689,12 +727,13 @@ unshackle dl MYSVC https://myservice.com/watch/abc123
 ## Checklist
 
 - [ ] Folder name, class name, and Click `name=` all match the tag exactly.
-- [ ] `cli` is a `@staticmethod` returning an instance; `__init__` calls `super().__init__(ctx)`.
-- [ ] `get_titles`, `get_tracks`, `get_chapters` implemented; titles carry the original `language`.
-- [ ] Tracks come from a manifest parser with `to_tracks(language=title.language)`; no filtering by quality/language.
-- [ ] Encrypted tracks are marked with DRM; the license callbacks you need return responses **unmodified**.
-- [ ] URLs, user agents, and certificates live in `config.yaml`, read via `self.config[...]`.
+- [ ] `cli` is a `@staticmethod` that returns an instance. `__init__` calls `super().__init__(ctx)`.
+- [ ] `get_titles`, `get_tracks` and `get_chapters` written. Titles carry the original `language`.
+- [ ] Tracks come from a manifest parser with `to_tracks(language=title.language)`. No filtering by quality or language.
+- [ ] Encrypted tracks carry their DRM. The license callbacks you need return responses **unmodified**.
+- [ ] URLs, user agents, and certificates live in `config.yaml`, read through `self.config[...]`.
 - [ ] Multi-file services import their own modules relatively (`from .helpers import x`), so they work when loaded from a repo.
 
-Read `unshackle/services/EXAMPLE/` end to end; it annotates every feature
-touched above in one place.
+Read `unshackle/services/EXAMPLE/` end to end. It annotates every feature
+touched above in one place. For a music service, read
+`unshackle/services/MUSIC_EXAMPLE/` too.

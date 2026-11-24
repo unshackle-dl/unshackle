@@ -8,15 +8,10 @@ from typing import Any, Callable
 class Events:
     class Types(Enum):
         _reserved = 0
-        # A Track's segment has finished downloading
         SEGMENT_DOWNLOADED = 1
-        # Track has finished downloading
         TRACK_DOWNLOADED = 2
-        # Track has finished decrypting
         TRACK_DECRYPTED = 3
-        # Track has finished repacking
         TRACK_REPACKED = 4
-        # Track is about to be Multiplexed into a Container
         TRACK_MULTIPLEX = 5
 
     def __init__(self):
@@ -35,10 +30,10 @@ class Events:
 
         Parameters:
             event_type: The Events.Type to subscribe to.
-            callback: The function or lambda to call on event emit.
-            ephemeral: Unsubscribe the callback from the event on first emit.
-                Note that this is not thread-safe and may be called multiple
-                times at roughly the same time.
+            callback: The function or lambda to call when `emit()` sends the event.
+            ephemeral: Unsubscribe the callback from the event at the first `emit()` call.
+                Note that this is not thread-safe, so unshackle can call the
+                callback several times at roughly the same time.
         """
         [self.__subscriptions, self.__ephemeral][ephemeral][event_type].append(callback)
 
@@ -48,7 +43,7 @@ class Events:
 
         Parameters:
             event_type: The Events.Type to unsubscribe from.
-            callback: The function or lambda to remove from event emit.
+            callback: The function or lambda to remove from the `emit()` callbacks.
         """
         if callback in self.__subscriptions[event_type]:
             self.__subscriptions[event_type].remove(callback)
@@ -57,10 +52,10 @@ class Events:
 
     def emit(self, event_type: Events.Types, *args: Any, **kwargs: Any) -> None:
         """
-        Emit an Event, executing all subscribed Callbacks.
+        Send an Event to all subscribed Callbacks.
 
         Parameters:
-            event_type: The Events.Type to emit.
+            event_type: The Events.Type to send.
             args: Positional arguments to pass to callbacks.
             kwargs: Keyword arguments to pass to callbacks.
         """

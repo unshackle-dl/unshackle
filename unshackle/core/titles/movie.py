@@ -4,6 +4,7 @@ from typing import Any, Iterable, Optional, Union
 
 from langcodes import Language
 from pymediainfo import MediaInfo
+from rich.console import RenderableType
 from rich.tree import Tree
 from sortedcontainers import SortedKeyList
 
@@ -46,9 +47,9 @@ class Movie(Title):
         self.year = year
         self.description = description
 
-    def _build_template_context(self, media_info: MediaInfo, show_service: bool = True) -> dict:
+    def build_template_context(self, media_info: MediaInfo, show_service: bool = True) -> dict:
         """Build template context dictionary from MediaInfo."""
-        context = self._build_base_template_context(media_info, show_service)
+        context = self.build_base_template_context(media_info, show_service)
         context["title"] = self.name.replace("$", "S")
         context["year"] = self.year or ""
         return context
@@ -62,8 +63,8 @@ class Movie(Title):
         if folder:
             template = config.get_folder_template("movies")
             if template:
-                context = self._build_template_context(media_info, show_service)
-                spacer = detect_spacer(template)  # one style for the whole path
+                context = self.build_template_context(media_info, show_service)
+                spacer = detect_spacer(template)
                 segments = [
                     TemplateFormatter(seg, spacer).format(context)
                     for seg in re.split(r"[\\/]", template)
@@ -75,8 +76,12 @@ class Movie(Title):
                 name += f" ({self.year})"
             return sanitize_filename(name, " ")
 
-        formatter = TemplateFormatter(config.output_template["movies"])
-        context = self._build_template_context(media_info, show_service)
+        template = config.output_template.get("movies")
+        if not template:
+            return sanitize_filename(str(self), " ")
+
+        formatter = TemplateFormatter(template)
+        context = self.build_template_context(media_info, show_service)
         return formatter.format(context)
 
 
@@ -87,10 +92,9 @@ class Movies(SortedKeyList, ABC):
     def __str__(self) -> str:
         if not self:
             return super().__str__()
-        # TODO: Assumes there's only one movie
         return self[0].name + (f" ({self[0].year})" if self[0].year else "")
 
-    def tree(self, verbose: bool = False) -> Tree:
+    def tree(self, verbose: bool = False) -> RenderableType:
         num_movies = len(self)
         tree = Tree(f"{num_movies} Movie{['s', ''][num_movies == 1]}", guide_style="bright_black")
         if verbose:

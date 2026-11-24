@@ -24,22 +24,22 @@ class ExternalIds:
 
     imdb_id: Optional[str] = None
     tmdb_id: Optional[int] = None
-    tmdb_kind: Optional[str] = None  # "movie" or "tv"
+    tmdb_kind: Optional[str] = None
     tvdb_id: Optional[int] = None
     anilist_id: Optional[int] = None
 
 
 @dataclass
 class MetadataResult:
-    """Unified metadata result from any provider."""
+    """Unified metadata result from any metadata provider."""
 
     title: Optional[str] = None
     year: Optional[int] = None
-    kind: Optional[str] = None  # "movie" or "tv"
+    kind: Optional[str] = None
     external_ids: ExternalIds = field(default_factory=ExternalIds)
-    original_language: Optional[str] = None  # alpha-2 or alpha-3, whichever the provider speaks
-    source: str = ""  # provider name, e.g. "tmdb", "simkl", "imdb"
-    raw: Optional[dict] = None  # original API response for caching
+    original_language: Optional[str] = None
+    source: str = ""
+    raw: Optional[dict] = None
 
 
 class MetadataProvider(metaclass=ABCMeta):
@@ -71,11 +71,11 @@ class MetadataProvider(metaclass=ABCMeta):
 
     @abstractmethod
     def is_available(self) -> bool:
-        """Return True if this provider has the credentials/keys it needs."""
+        """Return True if this metadata provider has the credentials/keys it needs."""
 
     @abstractmethod
     def search(self, title: str, year: Optional[int], kind: str) -> Optional[MetadataResult]:
-        """Search for a title and return metadata, or None on failure/no match."""
+        """Find a title and return its metadata, or None on failure or when nothing matches."""
 
     @abstractmethod
     def get_by_id(self, provider_id: Union[int, str], kind: str) -> Optional[MetadataResult]:
@@ -86,15 +86,15 @@ class MetadataProvider(metaclass=ABCMeta):
         """Fetch external IDs for a title by this provider's native ID."""
 
 
-def _clean(s: str) -> str:
+def clean(s: str) -> str:
     return STRIP_RE.sub("", s).lower()
 
 
-def _strip_year(s: str) -> str:
+def strip_year(s: str) -> str:
     return YEAR_RE.sub("", s).strip()
 
 
 def fuzzy_match(a: str, b: str, threshold: float = 0.8) -> bool:
-    """Return True if ``a`` and ``b`` are a close match."""
-    ratio = SequenceMatcher(None, _clean(a), _clean(b)).ratio()
+    """Return True if ``a`` and ``b`` match closely."""
+    ratio = SequenceMatcher(None, clean(a), clean(b)).ratio()
     return ratio >= threshold

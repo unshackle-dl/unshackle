@@ -1,8 +1,5 @@
-# Generated from PlayReady drmresults.h (DRM_E_/DRM_S_ result codes).
-
 from __future__ import annotations
 
-# {unsigned_hresult: (symbol, description)}
 ERRORS: dict[int, tuple[str, str]] = {
     0x00000001: ("DRM_S_FALSE", "Operation was successful, but returned a FALSE test condition."),
     0x00000002: ("DRM_S_MORE_DATA", "Operation was successful, but more data is available."),
@@ -843,15 +840,15 @@ ERRORS: dict[int, tuple[str, str]] = {
 
 REVOCATION_CODES = frozenset(
     {
-        0x8004C065,  # DRM_E_DEVCERT_REVOKED
-        0x8004C053,  # DRM_E_CERTIFICATE_REVOKED
-        0x8004C07D,  # DRM_E_ACTIVATION_GROUP_CERT_REVOKED_ERROR
+        0x8004C065,
+        0x8004C053,
+        0x8004C07D,
     }
 )
 
 
 def is_revocation(code: int) -> bool:
-    """True if the HRESULT means a device or certificate was revoked (signed or unsigned)."""
+    """True if the HRESULT means a revoked device or a revoked certificate (signed or unsigned)."""
     return code is not None and (code & 0xFFFFFFFF) in REVOCATION_CODES
 
 
@@ -872,14 +869,13 @@ def describe(code: int) -> str | None:
 
 
 if __name__ == "__main__":
-    # ponytail: one check, signed and unsigned forms resolve to the same entry
     assert describe(0x8004C065) == describe(-2147172251)
     assert "DEVCERT_REVOKED" in describe(-2147172251)
-    assert describe(-1021) is None  # non-DRM_E service code
-    assert is_revocation(0x8004C065) and is_revocation(-2147172251)  # DEVCERT_REVOKED, both forms
-    assert not is_revocation(0x8004C006)  # INVALIDLICENSE is not revocation
-    assert is_revocation(0x8004C07D)  # activation group cert revoked
-    assert not is_revocation(0x8004A013)  # metering sig, not revocation
-    assert not is_revocation(0x8004C0C4)  # rev-list-not-available, not revocation
-    assert not is_revocation(0x8004C0C2)  # content license revoked, not device
+    assert describe(-1021) is None
+    assert is_revocation(0x8004C065) and is_revocation(-2147172251)
+    assert not is_revocation(0x8004C006)
+    assert is_revocation(0x8004C07D)
+    assert not is_revocation(0x8004A013)
+    assert not is_revocation(0x8004C0C4)
+    assert not is_revocation(0x8004C0C2)
     print("ok")

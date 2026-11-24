@@ -28,11 +28,11 @@ class Attachment:
         session: Optional[AnySession] = None,
     ):
         """
-        Create a new Attachment.
+        Make a new Attachment.
 
         If providing a path, the file must already exist.
         If providing a URL, download() fetches the file during the download phase.
-        Either path or url must be provided.
+        You must give either path or url.
 
         If name is not provided it will use the file name (without extension).
         If mime_type is not provided, it will try to guess it.
@@ -43,7 +43,7 @@ class Attachment:
             name: Name of the attachment.
             mime_type: MIME type of the attachment.
             description: Description of the attachment.
-            session: Optional requests session to use for downloading.
+            session: Optional requests HTTP session to download the file with.
         """
         if path is None and url is None:
             raise ValueError("Either path or url must be provided.")
@@ -59,7 +59,6 @@ class Attachment:
             parsed_url = urlparse(url)
             file_name = os.path.basename(parsed_url.path) or "attachment"
 
-            # Use provided name for the file if available
             if name:
                 safe_name = re.sub(r'[<>:"/\\|?*]', "", name).replace(" ", "_")
                 file_name = f"{safe_name}{os.path.splitext(file_name)[1]}"
@@ -103,6 +102,7 @@ class Attachment:
         session: Optional[AnySession] = None,
         *,
         no_proxy_download: bool = False,
+        proxy_download: Optional[str] = None,
     ) -> None:
         """Download a URL-backed attachment to the temp directory."""
         if self.path is not None or not self.url or DOWNLOAD_LICENCE_ONLY.is_set():
@@ -111,8 +111,11 @@ class Attachment:
         from unshackle.core.tracks.track import direct_session
 
         session = session or self.session or requests.Session()
-        if no_proxy_download and any(session.proxies.values()):
-            session = direct_session(session)
+        if no_proxy_download:
+            if any(session.proxies.values()):
+                session = direct_session(session)
+        elif proxy_download:
+            session = direct_session(session, proxy_download)
 
         download_path = config.directories.temp / (self.file_name or "attachment")
         try:
@@ -151,8 +154,9 @@ class Attachment:
         return hex(checksum)
 
     def delete(self) -> None:
-        if self.path and self.path.exists():
-            self.path.unlink()
+        """Delete the file only if it is in the temp directory. Files in other locations belong to the user."""
+        if self.path and self.path.is_relative_to(config.directories.temp):
+            self.path.unlink(missing_ok=True)
         self.path = None
 
     @classmethod
@@ -165,14 +169,14 @@ class Attachment:
         session: Optional[AnySession] = None,
     ) -> "Attachment":
         """
-        Create an attachment from a URL.
+        Make an attachment from a URL.
 
         Args:
             url: URL to download the attachment from.
             name: Name of the attachment.
             mime_type: MIME type of the attachment.
             description: Description of the attachment.
-            session: Optional requests session to use for downloading.
+            session: Optional requests HTTP session to download the file with.
 
         Returns:
             Attachment: A new attachment instance.

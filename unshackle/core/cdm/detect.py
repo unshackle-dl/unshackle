@@ -1,11 +1,24 @@
 from __future__ import annotations
 
-from typing import Any
+from types import SimpleNamespace
+from typing import Any, Optional
+
+
+def cdm_type_stub(cdm_type: str, security_level: Optional[int] = None) -> SimpleNamespace:
+    """Type-only CDM stand-in so is_widevine_cdm()/is_playready_cdm() (and thus
+    get_drm_for_cdm) route correctly without loading a real device. Used for
+    server_cdm mode, where the server holds the device and returns the keys.
+
+    ``security_level`` lets a service pick a robustness tier; the attribute is absent when unknown."""
+    stub = SimpleNamespace(is_playready=cdm_type == "playready")
+    if security_level is not None:
+        stub.security_level = security_level
+    return stub
 
 
 def is_remote_cdm(cdm: Any) -> bool:
     """
-    Return True if the CDM instance is backed by a remote/service CDM.
+    Return True if a remote CDM or a service CDM backs the CDM instance.
 
     This is useful for service logic that needs to know whether the CDM runs
     locally (in-process) vs over HTTP/RPC (remote).
@@ -102,11 +115,11 @@ def cdm_location(cdm: Any) -> str:
 
 def is_playready_cdm(cdm: Any) -> bool:
     """
-    Return True if the given CDM should be treated as PlayReady.
+    Return True if unshackle treats the given CDM as PlayReady.
 
     This intentionally supports both:
     - Local PlayReady CDMs (pyplayready.cdm.Cdm)
-    - Remote/wrapper CDMs (e.g. DecryptLabsRemoteCDM) that expose `is_playready`
+    - Remote/wrapper CDMs (for example DecryptLabsRemoteCDM) that have `is_playready`
     """
 
     if cdm is None:
@@ -162,10 +175,10 @@ def is_remote_widevine_cdm(cdm: Any) -> bool:
 
 def is_widevine_cdm(cdm: Any) -> bool:
     """
-    Return True if the given CDM should be treated as Widevine.
+    Return True if unshackle treats the given CDM as Widevine.
 
-    Note: for remote/wrapper CDMs that expose `is_playready`, Widevine is treated
-    as the logical opposite.
+    Note: for remote/wrapper CDMs that have `is_playready`, unshackle treats
+    Widevine as the logical opposite.
     """
 
     if cdm is None:

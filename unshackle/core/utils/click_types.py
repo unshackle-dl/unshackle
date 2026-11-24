@@ -6,7 +6,10 @@ import click
 from click.shell_completion import CompletionItem
 from pywidevine.cdm import Cdm as WidevineCdm
 
+from unshackle.core.constants import DEFAULT_SAMPLE
 from unshackle.core.tracks.audio import Audio
+from unshackle.core.tracks.subtitle import Subtitle
+from unshackle.core.tracks.video import Video
 
 
 class VideoCodecChoice(click.Choice):
@@ -18,31 +21,31 @@ class VideoCodecChoice(click.Choice):
     - Enum values: H.264, H.265, VC-1, VP8, VP9, AV1
     """
 
-    def __init__(self, codec_enum):
+    def __init__(self, codec_enum: type[Video.Codec]) -> None:
         self.codec_enum = codec_enum
-        # Build choices from both enum names and values
-        choices = []
+        self._name_to_codec: dict[str, Video.Codec] = {}
         for codec in codec_enum:
-            choices.append(codec.name.lower())  # e.g., "avc", "hevc"
-            choices.append(codec.value)  # e.g., "H.264", "H.265"
-        super().__init__(choices, case_sensitive=False)
+            for choice in (codec.name.lower(), codec.value.lower()):
+                self._name_to_codec[choice] = codec
 
-    def convert(self, value: Any, param: Optional[click.Parameter] = None, ctx: Optional[click.Context] = None):
+        aliases = {"h264": "AVC", "h265": "HEVC"}
+        for alias, target in aliases.items():
+            if target in codec_enum.__members__:
+                self._name_to_codec[alias] = codec_enum[target]
+
+        super().__init__(list(self._name_to_codec), case_sensitive=False)
+
+    def convert(self, value: Any, param: Optional[click.Parameter] = None, ctx: Optional[click.Context] = None) -> Any:
         if not value:
             return None
+        if isinstance(value, self.codec_enum):
+            return value
 
-        # First try to convert using the parent class
         converted_value = super().convert(value, param, ctx)
-
-        # Now map the converted value back to the enum
-        for codec in self.codec_enum:
-            if converted_value.lower() == codec.name.lower():
-                return codec
-            if converted_value == codec.value:
-                return codec
-
-        # This shouldn't happen if the parent conversion worked
-        self.fail(f"'{value}' is not a valid video codec", param, ctx)
+        codec = self._name_to_codec.get(str(converted_value).lower())
+        if codec is None:
+            self.fail(f"'{value}' is not a valid video codec", param, ctx)
+        return codec
 
 
 class MultipleVideoCodecChoice(VideoCodecChoice):
@@ -68,7 +71,10 @@ class MultipleVideoCodecChoice(VideoCodecChoice):
 
         chosen_values: list[Any] = []
         for v in values:
-            chosen_values.append(super().convert(v.strip(), param, ctx))
+            token = v.strip() if isinstance(v, str) else str(v).strip()
+            if not token:
+                continue
+            chosen_values.append(super().convert(token, param, ctx))
         return chosen_values
 
 
@@ -84,17 +90,14 @@ class SubtitleCodecChoice(click.Choice):
 
     def __init__(self, codec_enum):
         self.codec_enum = codec_enum
-        # Build choices from enum names, values, and common aliases
         choices = []
         aliases = {}
 
         for codec in codec_enum:
-            choices.append(codec.name.lower())  # e.g., "subrip", "webvtt"
+            choices.append(codec.name.lower())
 
-            # Only add the value if it's different from common aliases
             value_lower = codec.value.lower()
 
-            # Add common aliases and track them
             if codec.name == "SubRip":
                 if "srt" not in choices:
                     choices.append("srt")
@@ -103,32 +106,27 @@ class SubtitleCodecChoice(click.Choice):
                 if "vtt" not in choices:
                     choices.append("vtt")
                 aliases["vtt"] = codec
-                # Also add the enum value if different
                 if value_lower != "vtt" and value_lower not in choices:
                     choices.append(value_lower)
             elif codec.name == "SubStationAlpha":
                 if "ssa" not in choices:
                     choices.append("ssa")
                 aliases["ssa"] = codec
-                # Also add the enum value if different
                 if value_lower != "ssa" and value_lower not in choices:
                     choices.append(value_lower)
             elif codec.name == "SubStationAlphav4":
                 if "ass" not in choices:
                     choices.append("ass")
                 aliases["ass"] = codec
-                # Also add the enum value if different
                 if value_lower != "ass" and value_lower not in choices:
                     choices.append(value_lower)
             elif codec.name == "TimedTextMarkupLang":
                 if "ttml" not in choices:
                     choices.append("ttml")
                 aliases["ttml"] = codec
-                # Also add the enum value if different
                 if value_lower != "ttml" and value_lower not in choices:
                     choices.append(value_lower)
             else:
-                # For other codecs, just add the enum value
                 if value_lower not in choices:
                     choices.append(value_lower)
 
@@ -144,30 +142,34 @@ class SubtitleCodecChoice(click.Choice):
         if str(value).lower() == "original":
             return "original"
 
-        # First try to convert using the parent class
         converted_value = super().convert(value, param, ctx)
 
-        # Check aliases first
         if converted_value.lower() in self.aliases:
             return self.aliases[converted_value.lower()]
 
-        # Now map the converted value back to the enum
         for codec in self.codec_enum:
             if converted_value.lower() == codec.name.lower():
                 return codec
             if converted_value.lower() == codec.value.lower():
                 return codec
 
-        # This shouldn't happen if the parent conversion worked
         self.fail(f"'{value}' is not a valid subtitle codec", param, ctx)
 
 
 class ContextData:
-    def __init__(self, config: dict, cdm: WidevineCdm, proxy_providers: list, profile: Optional[str] = None):
+    def __init__(
+        self,
+        config: dict,
+        cdm: WidevineCdm,
+        proxy_providers: list,
+        profile: Optional[str] = None,
+        cdm_entry: bool = False,
+    ):
         self.config = config
         self.cdm = cdm
         self.proxy_providers = proxy_providers
         self.profile = profile
+        self.cdm_entry = cdm_entry
 
 
 class SeasonRange(click.ParamType):
@@ -180,8 +182,13 @@ class SeasonRange(click.ParamType):
     MAX_DATE_SPAN = 1000
 
     DATE_TOKEN = re.compile(r"^(?P<left>\d{4}-\d{2}-\d{2})(:(?P<right>\d{4}-\d{2}-\d{2}))?$")
+    TOKEN = re.compile(
+        r"^(?:S(?P<season>\d+)(E(?P<episode>\d+)(\.(?P<part>\d+))?)?"
+        r"|((?P<disc>\d+)x)?(?P<track>\d+))$",
+        re.IGNORECASE,
+    )
 
-    def _parse_date_token(self, token: str, match: re.Match) -> list[str]:
+    def parse_date_token(self, token: str, match: re.Match) -> list[str]:
         """Expand an ISO date token or ':'-separated date range into ISO day keys."""
         try:
             left = date.fromisoformat(match.group("left"))
@@ -195,17 +202,41 @@ class SeasonRange(click.ParamType):
             self.fail(f"Invalid range, a date range cannot span more than {self.MAX_DATE_SPAN} days: {token}")
         return [(left + timedelta(days=i)).isoformat() for i in range(span)]
 
+    def token_sides(self, match: re.Match) -> tuple[int, Optional[int], Optional[int]]:
+        """Read one side of a token as (season, episode, part), episode/part None when absent.
+
+        A music disc x track token shares this (season, episode, part) space, disc reading
+        as the season and track as the episode. An omitted disc is disc 1, not every disc: a bare number is
+        the number the tracklist shows for a single-disc release, and widening it would
+        silently add tracks on a multi-disc release.
+        """
+        if match.group("season") is not None:
+            episode = match.group("episode")
+            part = match.group("part")
+            return (
+                int(match.group("season")),
+                int(episode) if episode is not None else None,
+                int(part) if part is not None else None,
+            )
+        disc = match.group("disc")
+        return int(disc) if disc is not None else 1, int(match.group("track")), None
+
     def parse_tokens(self, *tokens: str) -> list[str]:
         """
         Parse multiple tokens or ranged tokens as '{s}x{e}' strings.
 
-        An episode split into separately playable parts is addressed as '{s}x{e}.{p}'.
-        A part range must stay inside one episode, since how many parts an episode has
-        is not knowable here. A part-qualified exclusion cannot be removed from the
-        computed keys (they are base keys), so it becomes a '!' key resolved at match time.
+        You address an episode split into separately playable parts as '{s}x{e}.{p}'.
+        A part range must stay inside one episode, because how many parts an episode has
+        is not knowable here. unshackle cannot remove a part-qualified exclusion from the
+        computed keys, because those are base keys. The exclusion becomes a '!' entry that
+        unshackle applies later, when it matches an episode to the wanted keys.
 
-        Dated content is addressed by ISO air date. A date range uses ':' only, because
+        You address an episode by its ISO air date. A date range uses ':' only, because
         a date's own '-' separators are not a range separator.
+
+        A music release uses the same keys, its disc reading as the season and its track
+        as the episode. You address a track as '{d}x{t}', or by its number alone, which
+        is a track on disc 1.
 
         Supports exclusioning by putting a `-` before the token.
 
@@ -225,6 +256,10 @@ class SeasonRange(click.ParamType):
             ["2026-08-11"]
             >>> sr.parse_tokens("2026-08-01:2026-08-03", "-2026-08-02")
             ["2026-08-01", "2026-08-03"]
+            >>> sr.parse_tokens("3")
+            ["1x3"]
+            >>> sr.parse_tokens("1-3", "2x1")
+            ["1x1", "1x2", "1x3", "2x1"]
         """
         if len(tokens) == 0:
             return []
@@ -234,34 +269,21 @@ class SeasonRange(click.ParamType):
             exclude = token.startswith("-")
             if exclude:
                 token = token[1:]
-            # dates carry their own '-' separators, so they must be read before the range split
             date_match = self.DATE_TOKEN.match(token)
             if date_match:
-                (computed if not exclude else exclusions).extend(self._parse_date_token(token, date_match))
+                (computed if not exclude else exclusions).extend(self.parse_date_token(token, date_match))
                 continue
-            parsed = [
-                re.match(r"^S(?P<season>\d+)(E(?P<episode>\d+)(\.(?P<part>\d+))?)?$", x, re.IGNORECASE)
-                for x in re.split(r"[:-]", token)
-            ]
+            parsed = [self.TOKEN.match(x) for x in re.split(r"[:-]", token)]
             if len(parsed) > 2:
                 self.fail(f"Invalid token, only a left and right range is acceptable: {token}")
             if len(parsed) == 1:
-                # the same match object is read with different per-side defaults, so a bare
-                # S01 spans from MIN_EPISODE to MAX_EPISODE
                 parsed.append(parsed[0])
             if any(x is None for x in parsed):
                 self.fail(f"Invalid token, syntax error occurred: {token}")
-            left, right = parsed[0], parsed[1]
-            from_season = int(left.group("season"))  # type: ignore[union-attr]
-            from_episode_raw = left.group("episode")  # type: ignore[union-attr]
-            from_episode = int(from_episode_raw) if from_episode_raw is not None else self.MIN_EPISODE
-            from_part_raw = left.group("part")  # type: ignore[union-attr]
-            from_part = int(from_part_raw) if from_part_raw is not None else None
-            to_season = int(right.group("season"))  # type: ignore[union-attr]
-            to_episode_raw = right.group("episode")  # type: ignore[union-attr]
-            to_episode = int(to_episode_raw) if to_episode_raw is not None else self.MAX_EPISODE
-            to_part_raw = right.group("part")  # type: ignore[union-attr]
-            to_part = int(to_part_raw) if to_part_raw is not None else None
+            from_season, from_episode_raw, from_part = self.token_sides(parsed[0])  # type: ignore[arg-type]
+            from_episode = from_episode_raw if from_episode_raw is not None else self.MIN_EPISODE
+            to_season, to_episode_raw, to_part = self.token_sides(parsed[1])  # type: ignore[arg-type]
+            to_episode = to_episode_raw if to_episode_raw is not None else self.MAX_EPISODE
             if from_season > to_season:
                 self.fail(f"Invalid range, left side season cannot be bigger than right side season: {token}")
             if from_season == to_season and from_episode > to_episode:
@@ -285,9 +307,8 @@ class SeasonRange(click.ParamType):
                     (computed if not exclude else exclusions).append(f"{s}x{e}")
         for exclusion in exclusions:
             if "." in exclusion:
-                computed.append(f"!{exclusion}")  # base key stays; resolved at match time
+                computed.append(f"!{exclusion}")
             else:
-                # a base exclusion must drop that episode's part keys too, or they still match
                 prefix = f"{exclusion}."
                 computed = [k for k in computed if k != exclusion and not k.startswith(prefix)]
         return list(set(computed))
@@ -344,12 +365,12 @@ class AudioCodecList(click.ParamType):
 
     name = "audio_codec_list"
 
-    def __init__(self, codec_enum):
+    def __init__(self, codec_enum: type[Audio.Codec]) -> None:
         self.codec_enum = codec_enum
         self._name_to_codec: dict[str, Audio.Codec] = {}
         for codec in codec_enum:
-            self._name_to_codec[codec.name.lower()] = codec
-            self._name_to_codec[codec.value.lower()] = codec
+            for choice in (codec.name.lower(), codec.value.lower()):
+                self._name_to_codec[choice] = codec
 
         aliases = {
             "eac3": "EC3",
@@ -359,6 +380,14 @@ class AudioCodecList(click.ParamType):
         for alias, target in aliases.items():
             if target in codec_enum.__members__:
                 self._name_to_codec[alias] = codec_enum[target]
+
+    @property
+    def choices(self) -> list[str]:
+        """Every spelling convert() accepts, in declaration order. Mirrors click.Choice.choices."""
+        return list(self._name_to_codec)
+
+    def get_metavar(self, *args: Any, **kwargs: Any) -> str:
+        return f"[{'|'.join(self.choices)}]"
 
     def convert(self, value: Any, param: Optional[click.Parameter] = None, ctx: Optional[click.Context] = None) -> list:
         if not value:
@@ -380,17 +409,28 @@ class AudioCodecList(click.ParamType):
             if key in self._name_to_codec:
                 codecs.append(self._name_to_codec[key])
             else:
-                valid = sorted(set(self._name_to_codec.keys()))
-                self.fail(f"'{val}' is not valid. Choices: {', '.join(valid)}", param, ctx)
-        return list(dict.fromkeys(codecs))  # Remove duplicates, preserve order
+                self.fail(f"'{val}' is not valid. Choices: {', '.join(sorted(self.choices))}", param, ctx)
+        return list(dict.fromkeys(codecs))
+
+    def shell_complete(self, ctx: click.Context, param: click.Parameter, incomplete: str) -> list[CompletionItem]:
+        """
+        Complete the codec after the last comma.
+
+        Parameters:
+            ctx: Invocation context for this command.
+            param: The parameter that requests completion.
+            incomplete: The value to complete. Can be empty.
+        """
+        prefix, sep, last = incomplete.rpartition(",")
+        return [CompletionItem(f"{prefix}{sep}{choice}") for choice in self.choices if choice.startswith(last.lower())]
 
 
 class MultipleChoice(click.Choice):
     """
-    The multiple choice type allows multiple values to be checked against
-    a fixed set of supported values.
+    The multiple choice type takes several values. Each value must be in a fixed
+    set of permitted values.
 
-    It internally uses and is based off of click.Choice.
+    It internally uses and extends click.Choice.
     """
 
     name = "multiple_choice"
@@ -418,15 +458,21 @@ class MultipleChoice(click.Choice):
 
     def shell_complete(self, ctx: click.Context, param: click.Parameter, incomplete: str) -> list[CompletionItem]:
         """
-        Complete choices that start with the incomplete value.
+        Complete the choice after the last comma.
 
         Parameters:
             ctx: Invocation context for this command.
-            param: The parameter that is requesting completion.
-            incomplete: Value being completed. May be empty.
+            param: The parameter that requests completion.
+            incomplete: The value to complete. Can be empty.
         """
-        incomplete = incomplete.rsplit(",")[-1]
-        return super(self).shell_complete(ctx, param, incomplete)
+        prefix, sep, last = incomplete.rpartition(",")
+        if not self.case_sensitive:
+            last = last.casefold()
+        return [
+            CompletionItem(f"{prefix}{sep}{choice}")
+            for choice in (self.normalize_choice(c, ctx) for c in self.choices)
+            if choice.startswith(last)
+        ]
 
 
 class SlowDelayRange(click.ParamType):
@@ -447,18 +493,39 @@ class SlowDelayRange(click.ParamType):
             self.fail(f"'{value}' is not a valid range. Use format: MIN-MAX (e.g., 20-40)", param, ctx)
 
         low, high = int(match.group(1)), int(match.group(2))
-        if low < 20:
-            self.fail(f"Minimum delay must be at least 20 seconds, got {low}", param, ctx)
+        if low < 5:
+            self.fail(f"Minimum delay must be at least 5 seconds, got {low}", param, ctx)
         if low > high:
             self.fail(f"Min ({low}) cannot be greater than max ({high})", param, ctx)
 
         return (low, high)
 
 
+class SampleRange(click.ParamType):
+    """Parses a sample window string like '60-120' into a tuple of (start, end) seconds."""
+
+    name = "sample_range"
+
+    def convert(
+        self, value: Any, param: Optional[click.Parameter], ctx: Optional[click.Context]
+    ) -> Optional[tuple[int, int]]:
+        if isinstance(value, bool):
+            return DEFAULT_SAMPLE if value else None
+        if isinstance(value, (list, tuple)) and len(value) == 2:
+            value = f"{value[0]}-{value[1]}"
+
+        match = re.match(r"^(\d+)-(\d+)$", str(value))
+        if not match or int(match.group(1)) >= int(match.group(2)):
+            self.fail(f"'{value}' is not a valid sample window. Use format: START-END (e.g., 60-120)", param, ctx)
+
+        return (int(match.group(1)), int(match.group(2)))
+
+
 SEASON_RANGE = SeasonRange()
 LANGUAGE_RANGE = LanguageRange()
 QUALITY_LIST = QualityList()
 AUDIO_CODEC_LIST = AudioCodecList(Audio.Codec)
+VIDEO_CODEC_LIST = MultipleVideoCodecChoice(Video.Codec)
+SUBTITLE_CODEC = SubtitleCodecChoice(Subtitle.Codec)
 SLOW_DELAY_RANGE = SlowDelayRange()
-
-# VIDEO_CODEC_CHOICE will be created dynamically when imported
+SAMPLE_RANGE = SampleRange()

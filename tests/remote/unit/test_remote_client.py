@@ -55,9 +55,9 @@ def test_post_sends_json_body(client: RemoteClient) -> None:
     responses.add_callback(
         responses.POST, "http://srv:8786/api/session/create", callback=cb, content_type="application/json"
     )
-    result = client.post("/api/session/create", {"service": "ATV"})
+    result = client.post("/api/session/create", {"service": "EXAMPLE"})
     assert result == {"session_id": "abc"}
-    assert captured["body"] == {"service": "ATV"}
+    assert captured["body"] == {"service": "EXAMPLE"}
 
 
 @responses.activate
@@ -100,7 +100,6 @@ def test_401_falls_back_to_next_auth_header(client: RemoteClient) -> None:
     assert client.get("/api/services") == {"status": "ok"}
     assert seen == [("secret-xyz", None), (None, "secret-xyz")]
 
-    # the winning header is sticky: no second attempt on the next request
     seen.clear()
     assert client.get("/api/services") == {"status": "ok"}
     assert seen == [(None, "secret-xyz")]
@@ -168,3 +167,43 @@ def test_timeout_raises_systemexit(client: RemoteClient) -> None:
     )
     with pytest.raises(SystemExit):
         client.get("/api/health")
+
+
+@responses.activate
+def test_late_error_after_heartbeat_is_fatal(client: RemoteClient) -> None:
+    """A heartbeat response carries a late failure as a 200 error body after leading newlines."""
+    body = "\n\n" + json.dumps({"status": "error", "error_code": "SERVICE_ERROR", "message": "late"})
+    responses.add(responses.GET, "http://srv:8786/api/session/s/titles", body=body, status=200)
+    with pytest.raises(SystemExit):
+        client.get("/api/session/s/titles")
+    assert client.request("get", "/api/session/s/titles", optional=True) == {}
+
+
+@responses.activate
+def test_heartbeat_body_parses_past_leading_newlines(client: RemoteClient) -> None:
+    responses.add(responses.GET, "http://srv:8786/api/session/s/titles", body='\n\n{"titles": []}', status=200)
+    assert client.get("/api/session/s/titles") == {"titles": []}
+
+
+def test_read_timeout_in_body_reports_timeout(client: RemoteClient, caplog: pytest.LogCaptureFixture) -> None:
+    """requests re-raises a read timeout in the body as a ConnectionError; the client still names the timeout."""
+    import requests
+    import urllib3
+
+    def stalled(*args: object, **kwargs: object) -> None:
+        raise requests.ConnectionError(urllib3.exceptions.ReadTimeoutError(None, "", "Read timed out."))
+
+    client.session.get = stalled  # type: ignore[method-assign]
+    with pytest.raises(SystemExit):
+        client.get("/api/session/s/titles")
+    assert "timed out after 120" in caplog.text
+
+
+@responses.activate
+def test_proxy_error_page_logs_its_title(client: RemoteClient, caplog: pytest.LogCaptureFixture) -> None:
+    page = "<!DOCTYPE html><html><head><title>example.com | 524: A timeout occurred</title></head><body>x</body></html>"
+    responses.add(responses.GET, "http://srv:8786/api/session/s/titles", body=page, status=524)
+    with pytest.raises(SystemExit):
+        client.get("/api/session/s/titles")
+    assert "HTTP 524: example.com | 524: A timeout occurred" in caplog.text
+    assert "DOCTYPE" not in caplog.text

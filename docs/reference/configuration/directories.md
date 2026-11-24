@@ -1,10 +1,10 @@
 # Directories { #directories }
 
-The `directories` key is a **dict** mapping directory names to filesystem paths. Only the
-names listed below are honoured; a handful are **protected** and cannot be moved (attempts
-to override them are silently skipped). All defaults are computed relative to the installed
-package, and every user-settable path is passed through `Path(...).expanduser()`, so `~`
-works.
+The `directories` config key is a **dict** mapping directory names to filesystem paths.
+unshackle honours only the names listed below. A handful are **protected** and you cannot
+move them, and unshackle silently ignores an override of one. unshackle computes all
+defaults relative to the installed package, and passes every user-settable path through
+`Path(...).expanduser()`, so `~` works.
 
 ```yaml title="unshackle.yaml"
 directories:
@@ -16,31 +16,31 @@ directories:
 
 | Key | Type | Default | Overridable | Purpose |
 |-----|------|---------|:-----------:|---------|
-| `downloads` | path | `<repo>/downloads` | ✅ | Default output directory for finished files. |
-| `temp` | path | `<repo>/temp` | ✅ | Temporary working files during download/decrypt/mux. |
-| `cache` | path | `<data>/cache` | ✅ | Generic cache, title cache, and the update-check store. |
-| `cookies` | path | `<data>/cookies` | ✅ | Per-service cookie files (and VPN cookie files). |
-| `logs` | path | `<data>/logs` | ✅ | Log files. |
-| `exports` | path | `<data>/exports` | ✅ | Export JSON files. |
-| `wvds` | path | `<data>/WVDs` | ✅ | Widevine device files (`.wvd`). |
-| `prds` | path | `<data>/PRDs` | ✅ | PlayReady device files (`.prd`). |
-| `dcsl` | path | `<data>/DCSL` | ✅ | DCSL data. |
-| `commands` | path | `unshackle/commands` | ✅ | CLI command modules. |
-| `services` | list \| path | `[unshackle/services]` | ✅ | Service search paths and/or remote repo specs (see below). |
-| `vaults` | path | `unshackle/vaults` | ✅ | Vault backend modules. |
-| `fonts` | path | `unshackle/fonts` | ✅ | Bundled fonts. |
-| `user_configs` | path | `unshackle/` | ❌ protected | Where `unshackle.yaml` lives. |
-| `data` | path | `unshackle/` | ❌ protected | Base for the data subdirectories above. |
-| `core_dir` | path | `unshackle/core` | ❌ protected | Package core. |
-| `namespace_dir` | path | `unshackle/` | ❌ protected | Package root. |
-| `app_dirs` | - | `AppDirs("unshackle", False)` | ❌ protected | Internal AppDirs instance. |
+| `downloads` | path | `<repo>/downloads` | Yes | Default output directory for finished files. |
+| `temp` | path | `<repo>/temp` | Yes | Temporary working files during download/decrypt/mux. |
+| `cache` | path | `<data>/cache` | Yes | Generic cache, title cache, and the update-check store. |
+| `cookies` | path | `<data>/cookies` | Yes | Per-service cookie files (and VPN cookie files). |
+| `logs` | path | `<data>/logs` | Yes | Log files. |
+| `exports` | path | `<data>/exports` | Yes | Export JSON files. |
+| `wvds` | path | `<data>/WVDs` | Yes | Widevine device files (`.wvd`). |
+| `prds` | path | `<data>/PRDs` | Yes | PlayReady device files (`.prd`). |
+| `dcsl` | path | `<data>/DCSL` | Yes | DCSL data. |
+| `commands` | path | `unshackle/commands` | Yes | CLI command modules. |
+| `services` | list \| path | `[unshackle/services]` | Yes | Service search paths and/or remote repo specs (see below). |
+| `vaults` | path | `unshackle/vaults` | Yes | Vault backend modules. |
+| `fonts` | path | `unshackle/fonts` | Yes | Bundled fonts. |
+| `user_configs` | path | `unshackle/` | No protected | Where `unshackle.yaml` lives. |
+| `data` | path | `unshackle/` | No protected | Base for the data subdirectories above. |
+| `core_dir` | path | `unshackle/core` | No protected | Package core. |
+| `namespace_dir` | path | `unshackle/` | No protected | Package root. |
+| `app_dirs` | - | `AppDirs("unshackle", False)` | No protected | Internal AppDirs instance. |
 
 !!! note "The `services` directory is special"
     `services` may be a **list**, and each entry can be either a local directory or a
     **repository spec**: a git URL (`https://...`, `ssh://...`, `git@...`, or anything ending in
-    `.git`) or `owner/repo` shorthand. Repo specs are cloned and updated automatically; plain
-    paths are used as-is. **List order is priority**: the first source to define a service
-    tag wins.
+    `.git`) or `owner/repo` shorthand. unshackle clones and updates repo specs automatically,
+    and uses plain paths as they are. **List order is priority**: the first source to define a
+    service tag wins.
 
     ```yaml
     directories:
@@ -51,11 +51,11 @@ directories:
     ```
 
 !!! info "How git-backed service repos are handled"
-    unshackle's use of git is **read-only on the remote**: it only ever performs a shallow
-    `clone`, `fetch`, `pull`, and a local `reset`; **nothing is ever pushed**. Private repos
-    are authenticated through your existing git credential helper, and unshackle stores no
+    unshackle's use of git is **read-only on the remote**: it only ever does a shallow
+    `clone`, `fetch`, `pull`, and a local `reset`. **unshackle never pushes anything**. Your
+    existing git credential helper authenticates private repos, and unshackle stores no
     tokens of its own. Clones live under `<first-local-services-dir>/_repos/<host>__<owner>__<repo>/`
-    (or the bundled `unshackle/services`), and **nothing is written to the cache directory**. After
+    (or the bundled `unshackle/services`), and **unshackle writes nothing to the cache directory**. After
     the first clone unshackle re-pulls **at most once every 24 h**, so it does not touch the
     network on every run.
 
@@ -67,6 +67,23 @@ directories:
     `unshackle util refresh-services` command instead **hard-resets** the clone to upstream,
     discarding any local edits.
 
+    Set `services_repo_force: true` to make the automatic 24 h refresh behave like
+    `refresh-services`. When a refresh is due, the run fetches and hard-resets every clone,
+    and discards any local edits in `_repos/`. Runs between refreshes do not touch the
+    network. Use it on unattended hosts where nobody edits the clones by hand.
+
+    ```yaml
+    services_repo_force: true
+    ```
+
+!!! info "Refresh inside `serve`"
+    A running server does not restart to pick up a refresh. Both the periodic refresh
+    (`serve.services_refresh_interval`, see [serve](services.md#serve)) and the manual
+    `POST /api/maintenance/refresh-services` endpoint hard-reset the clones and then re-import
+    only the services that changed. A service with a running or queued download job keeps its
+    current code until that job finishes, then swaps; `GET /api/services` marks it with
+    `pending_update` in the meantime.
+
 !!! warning "Read-only installs and reinstalls"
     If the services directory lives inside the installed package, a reinstall can delete the
     `_repos` clones. They are re-cloned on next use. On **read-only installs** you must
@@ -74,9 +91,9 @@ directories:
 
 ## Filenames { #filenames }
 
-The `filenames` key is a **dict** of templated file/name patterns. Each value is used
-verbatim (no path processing). Braced fields like `{time}` and `{service}` are filled in at
-runtime.
+The `filenames` config key is a **dict** of templated file/name patterns. unshackle uses
+each value verbatim (no path processing). It fills in braced fields like `{time}` and
+`{service}` at runtime.
 
 | Key | Type | Default | Notes |
 |-----|------|---------|-------|

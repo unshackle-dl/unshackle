@@ -43,7 +43,6 @@ def test_bt709_codec_private_data_stays_sdr() -> None:
 
 
 def test_colourless_codec_private_data_defaults_sdr() -> None:
-    # Real 10-bit sample without a VUI colour description: unspecified -> SDR.
     assert parse_video(VIDEO_HEVC10_CPD).range == Video.Range.SDR
 
 
@@ -53,8 +52,6 @@ def test_get_video_range_dolby_vision_fourcc() -> None:
 
 
 def test_dv_track_from_real_smooth_cpd() -> None:
-    # Live manifests ship lowercase "dvhe"; its VUI is Unspecified so the
-    # FourCC short-circuit is the only thing standing between DV and SDR.
     video = parse_video(VIDEO_HEVC_DV_CPD, fourcc="dvhe")
     assert video.range == Video.Range.DV
     assert ISM.get_video_range("hvc1", VIDEO_HEVC_DV_CPD) == Video.Range.SDR

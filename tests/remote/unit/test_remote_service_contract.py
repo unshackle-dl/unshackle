@@ -40,8 +40,5 @@ def test_remote_service_implements_contract(name: str) -> None:
 
 
 def test_get_clearkey_license_returns_none() -> None:
-    # Regression: clearkey uses no CDM, so the adapter returns None and the
-    # framework POSTs the manifest Laurl itself. __new__ skips the networked
-    # __init__, so the method must not touch self.
     svc = RemoteService.__new__(RemoteService)
     assert svc.get_clearkey_license(challenge=b"", title=None, track=None) is None

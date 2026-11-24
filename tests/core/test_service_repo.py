@@ -31,7 +31,6 @@ def test_is_repo_spec(value, expected):
 
 
 def test_is_repo_spec_existing_path_wins(tmp_path):
-    # an owner/repo-looking value that exists locally is a path, not a repo
     local = tmp_path / "owner" / "repo"
     local.mkdir(parents=True)
     assert service_repo.is_repo_spec(str(local)) is False
@@ -51,7 +50,6 @@ def test_parse_spec(spec, url, branch, dest):
 
 
 def test_slug_distinguishes_hosts():
-    # same owner/repo on different hosts must not share a clone dir
     a = service_repo.parse_spec("https://github.com/owner/repo")[2]
     b = service_repo.parse_spec("https://gitlab.com/owner/repo")[2]
     assert a != b
@@ -66,11 +64,11 @@ def test_repos_base_uses_configured_local_dir(monkeypatch, tmp_path):
 
 def test_is_stale(tmp_path):
     stamp = tmp_path / "stamp"
-    assert service_repo._is_stale(stamp, ttl=10) is True  # missing → stale
+    assert service_repo.is_stale(stamp, ttl=10) is True
     stamp.write_text(str(time.time()))
-    assert service_repo._is_stale(stamp, ttl=10) is False  # fresh
+    assert service_repo.is_stale(stamp, ttl=10) is False
     stamp.write_text(str(time.time() - 100))
-    assert service_repo._is_stale(stamp, ttl=10) is True  # old
+    assert service_repo.is_stale(stamp, ttl=10) is True
 
 
 def test_clone_invokes_git(monkeypatch, tmp_path):
@@ -81,7 +79,7 @@ def test_clone_invokes_git(monkeypatch, tmp_path):
 
     def fake_run(args, **kw):
         calls.append(args)
-        (tmp_path / "github.com__owner__repo").mkdir(parents=True, exist_ok=True)  # simulate clone output
+        (tmp_path / "github.com__owner__repo").mkdir(parents=True, exist_ok=True)
         return subprocess.CompletedProcess(args, 0, b"", b"")
 
     monkeypatch.setattr(service_repo.subprocess, "run", fake_run)
@@ -90,7 +88,7 @@ def test_clone_invokes_git(monkeypatch, tmp_path):
     assert dest == tmp_path / "github.com__owner__repo"
     assert calls[0][:4] == ["git", "clone", "--depth", "1"]
     assert "-b" in calls[0] and "main" in calls[0]
-    assert service_repo.stamp_for(dest).exists()  # stamp written (beside the clone, not inside)
+    assert service_repo.stamp_for(dest).exists()
 
 
 def test_clone_missing_git_returns_none(monkeypatch, tmp_path):
@@ -110,7 +108,7 @@ def test_fresh_clone_skips_pull(monkeypatch, tmp_path):
     assert service_repo.resolve_service_repo("a/b") == dest
 
 
-def _git_stub(porcelain=b"", ahead=b"0"):
+def git_stub(porcelain=b"", ahead=b"0"):
     """Fake subprocess.run for git: dirty checks return given output, pull succeeds."""
 
     def run(args, **kw):
@@ -119,31 +117,30 @@ def _git_stub(porcelain=b"", ahead=b"0"):
             return subprocess.CompletedProcess(args, 0, porcelain, b"")
         if sub == "rev-list":
             return subprocess.CompletedProcess(args, 0, ahead, b"")
-        return subprocess.CompletedProcess(args, 0, b"", b"")  # pull
+        return subprocess.CompletedProcess(args, 0, b"", b"")
 
     return run
 
 
 def test_is_dirty_uncommitted(monkeypatch):
     monkeypatch.setattr(service_repo.binaries, "Git", "git")
-    monkeypatch.setattr(service_repo.subprocess, "run", _git_stub(porcelain=b" M EXAMPLE/__init__.py\n"))
-    assert service_repo._is_dirty(Path("/x")) is True
+    monkeypatch.setattr(service_repo.subprocess, "run", git_stub(porcelain=b" M EXAMPLE/__init__.py\n"))
+    assert service_repo.is_dirty(Path("/x")) is True
 
 
 def test_is_dirty_commits_ahead(monkeypatch):
     monkeypatch.setattr(service_repo.binaries, "Git", "git")
-    monkeypatch.setattr(service_repo.subprocess, "run", _git_stub(porcelain=b"", ahead=b"2"))
-    assert service_repo._is_dirty(Path("/x")) is True
+    monkeypatch.setattr(service_repo.subprocess, "run", git_stub(porcelain=b"", ahead=b"2"))
+    assert service_repo.is_dirty(Path("/x")) is True
 
 
 def test_is_dirty_clean(monkeypatch):
     monkeypatch.setattr(service_repo.binaries, "Git", "git")
-    monkeypatch.setattr(service_repo.subprocess, "run", _git_stub(porcelain=b"", ahead=b"0"))
-    assert service_repo._is_dirty(Path("/x")) is False
+    monkeypatch.setattr(service_repo.subprocess, "run", git_stub(porcelain=b"", ahead=b"0"))
+    assert service_repo.is_dirty(Path("/x")) is False
 
 
 def test_is_dirty_ignores_untracked_files(monkeypatch):
-    # status must ask git to skip untracked files so importing services (__pycache__) isn't "dirty"
     seen = []
     monkeypatch.setattr(service_repo.binaries, "Git", "git")
 
@@ -153,7 +150,7 @@ def test_is_dirty_ignores_untracked_files(monkeypatch):
         return subprocess.CompletedProcess(args, 0, out, b"")
 
     monkeypatch.setattr(service_repo.subprocess, "run", run)
-    service_repo._is_dirty(Path("/x"))
+    service_repo.is_dirty(Path("/x"))
     status_args = next(a for a in seen if a[3] == "status")
     assert "--untracked-files=no" in status_args
 
@@ -162,17 +159,17 @@ def test_auto_refresh_refuses_dirty_clone(monkeypatch, tmp_path):
     """Auto path (force=False): a stale clone with local edits raises instead of clobbering."""
     dest = tmp_path / "github.com__a__b"
     dest.mkdir(parents=True)
-    service_repo.stamp_for(dest).write_text("0")  # stale → refresh due
+    service_repo.stamp_for(dest).write_text("0")
     monkeypatch.setattr(service_repo, "repos_base", lambda: tmp_path)
     monkeypatch.setattr(service_repo.binaries, "Git", "git")
-    monkeypatch.setattr(service_repo.subprocess, "run", _git_stub(porcelain=b" M f\n"))
+    monkeypatch.setattr(service_repo.subprocess, "run", git_stub(porcelain=b" M f\n"))
     with pytest.raises(service_repo.DirtyServiceRepo) as ei:
         service_repo.resolve_service_repo("a/b")
     assert ei.value.path == dest
 
 
 def test_manual_refresh_force_overwrites(monkeypatch, tmp_path):
-    """Manual path (force=True): hard-reset to upstream, never raises on a dirty clone."""
+    """Force path (services_repo_force): hard-resets a stale clone, never raises; leaves a fresh clone alone."""
     dest = tmp_path / "github.com__a__b"
     dest.mkdir(parents=True)
     monkeypatch.setattr(service_repo, "repos_base", lambda: tmp_path)
@@ -184,8 +181,12 @@ def test_manual_refresh_force_overwrites(monkeypatch, tmp_path):
         lambda args, **kw: (calls.append(args[3]), subprocess.CompletedProcess(args, 0, b"", b""))[1],
     )
     assert service_repo.resolve_service_repo("a/b", force=True) == dest
-    assert "fetch" in calls and "reset" in calls  # force-sync ran
-    assert "status" not in calls  # no dirty gate on the force path
+    assert "fetch" in calls and "reset" in calls
+    assert "status" not in calls
+    calls.clear()
+    service_repo.write_stamp(service_repo.stamp_for(dest))
+    assert service_repo.resolve_service_repo("a/b", force=True) == dest
+    assert calls == []
 
 
 def test_changed_services_groups_by_top_dir(monkeypatch):
@@ -194,18 +195,13 @@ def test_changed_services_groups_by_top_dir(monkeypatch):
     def run(args, **kw):
         if "--name-status" in args:
             out = b"A\tNEW/__init__.py\nM\tOLD/__init__.py\nM\tOLD/config.yaml\nD\tGONE/__init__.py\n"
-        elif "--shortstat" in args:
-            out = b" 4 files changed, 10 insertions(+), 2 deletions(-)\n"
         else:
             out = b""
         return subprocess.CompletedProcess(args, 0, out, b"")
 
     monkeypatch.setattr(service_repo.subprocess, "run", run)
-    lines = service_repo._changed_services(Path("/x"), "aaa", "bbb")
-    assert "+ NEW (added)" in lines
-    assert "~ OLD (modified)" in lines
-    assert "- GONE (removed)" in lines
-    assert any("4 files changed" in line for line in lines)
+    lines = service_repo.changed_services(Path("/x"), "aaa", "bbb")
+    assert lines == ["-GONE", "+NEW", "~OLD"]
 
 
 def test_local_dirty_services_lists_edited_dirs(monkeypatch):
@@ -213,9 +209,11 @@ def test_local_dirty_services_lists_edited_dirs(monkeypatch):
     monkeypatch.setattr(
         service_repo.subprocess,
         "run",
-        lambda *a, **k: subprocess.CompletedProcess(a, 0, b"CR/__init__.py\nCR/config.yaml\nNF/__init__.py\n", b""),
+        lambda *a, **k: subprocess.CompletedProcess(
+            a, 0, b"EXAMPLE/__init__.py\nEXAMPLE/config.yaml\nDEMO/__init__.py\n", b""
+        ),
     )
-    assert service_repo._local_dirty_services(Path("/x")) == ["CR", "NF"]
+    assert service_repo.local_dirty_services(Path("/x")) == ["DEMO", "EXAMPLE"]
 
 
 def test_refresh_reports_discarded_local_edits(monkeypatch, tmp_path):
@@ -227,26 +225,25 @@ def test_refresh_reports_discarded_local_edits(monkeypatch, tmp_path):
 
     def run(args, **kw):
         if "diff" in args and "--name-only" in args:
-            return subprocess.CompletedProcess(args, 0, b"CR/__init__.py\n", b"")  # local edit present
+            return subprocess.CompletedProcess(args, 0, b"CR/__init__.py\n", b"")
         if "rev-parse" in args:
-            return subprocess.CompletedProcess(args, 0, b"samehead\n", b"")  # upstream did not advance
-        return subprocess.CompletedProcess(args, 0, b"", b"")  # fetch/reset/diff
+            return subprocess.CompletedProcess(args, 0, b"samehead\n", b"")
+        return subprocess.CompletedProcess(args, 0, b"", b"")
 
     monkeypatch.setattr(service_repo.subprocess, "run", run)
     _, changes = service_repo.refresh_repo("a/b")
-    assert changes == ["! CR (local changes discarded)"]
+    assert changes == ["!CR"]
 
 
 def test_changed_services_up_to_date(monkeypatch):
     monkeypatch.setattr(service_repo.binaries, "Git", "git")
-    # same HEAD before/after → no diff computed at all
     monkeypatch.setattr(service_repo.subprocess, "run", lambda *a, **k: pytest.fail("no git diff when HEAD unchanged"))
-    assert service_repo._changed_services(Path("/x"), "same", "same") == []
+    assert service_repo.changed_services(Path("/x"), "same", "same") == []
 
 
 @pytest.mark.parametrize("order", [["a", "b"], ["b", "a"]])
 def test_collision_first_source_wins(tmp_path, order):
-    """Discovery dedupes by tag honoring list order — the FIRST source to define a tag wins,
+    """Discovery dedupes by tag honoring list order: the FIRST source to define a tag wins,
     whether it's a local dir or a repo clone; later duplicates are shadowed."""
     dirs = {}
     for name in ("a", "b"):
@@ -257,7 +254,7 @@ def test_collision_first_source_wins(tmp_path, order):
 
     seen: dict = {}
     shadowed: list = []
-    for name in order:  # services.py preserves config order
+    for name in order:
         for path in dirs[name].glob("*/__init__.py"):
             tag = path.parent.stem
             if tag in seen:

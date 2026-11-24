@@ -1,11 +1,11 @@
-"""Unit tests for resolve_server / _resolve_proxy in unshackle.core.remote_service."""
+"""Unit tests for resolve_server / resolve_proxy_arg in unshackle.core.remote_service."""
 
 from __future__ import annotations
 
 import click
 import pytest
 
-from unshackle.core.remote_service import _resolve_proxy, resolve_server
+from unshackle.core.remote_service import resolve_proxy_arg, resolve_server
 
 pytestmark = pytest.mark.unit
 
@@ -28,7 +28,7 @@ def single_remote_service(monkeypatch: pytest.MonkeyPatch) -> None:
             "primary": {
                 "url": "https://primary:8080",
                 "api_key": "key-abc",
-                "services": {"ATV": True, "NF": True},
+                "services": {"EXAMPLE": True, "DEMO": True},
                 "server_cdm": True,
             }
         },
@@ -97,7 +97,7 @@ def test_resolve_server_single_picks_only_entry(single_remote_service) -> None:
     assert url == "https://primary:8080"
     assert key == "key-abc"
     assert services["_server_cdm"] is True
-    assert services.get("ATV") is True
+    assert services.get("EXAMPLE") is True
 
 
 def test_resolve_server_explicit_name(single_remote_service) -> None:
@@ -122,12 +122,12 @@ def test_resolve_server_multi_with_name(multi_remote_services) -> None:
     url, key, services = resolve_server("b")
     assert url == "https://b:8080"
     assert key == "kb"
-    assert services["_server_cdm"] is False
+    assert services["_server_cdm"] is None
 
 
 def test_resolve_proxy_none_returns_none() -> None:
-    assert _resolve_proxy(None) is None
-    assert _resolve_proxy("") is None
+    assert resolve_proxy_arg(None) is None
+    assert resolve_proxy_arg("") is None
 
 
 def test_resolve_proxy_passes_through_value(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -136,7 +136,7 @@ def test_resolve_proxy_passes_through_value(monkeypatch: pytest.MonkeyPatch) -> 
     monkeypatch.setattr(resolve_mod, "initialize_proxy_providers", lambda: [])
     monkeypatch.setattr(resolve_mod, "resolve_proxy", lambda arg, providers: f"http://proxy/{arg}")
 
-    assert _resolve_proxy("us") == "http://proxy/us"
+    assert resolve_proxy_arg("us") == "http://proxy/us"
 
 
 def test_resolve_proxy_value_error_becomes_click(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -150,5 +150,5 @@ def test_resolve_proxy_value_error_becomes_click(monkeypatch: pytest.MonkeyPatch
     monkeypatch.setattr(resolve_mod, "resolve_proxy", boom)
 
     with pytest.raises(click.ClickException) as exc:
-        _resolve_proxy("xx")
+        resolve_proxy_arg("xx")
     assert "no such country" in str(exc.value.message)

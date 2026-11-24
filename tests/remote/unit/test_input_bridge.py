@@ -94,3 +94,12 @@ def test_status_setter() -> None:
     bridge = InputBridge()
     bridge.status = AuthStatus.AUTHENTICATED
     assert bridge.status is AuthStatus.AUTHENTICATED
+
+
+def test_request_input_after_authentication_fails_fast() -> None:
+    """The client stops polling for prompts once authenticated, so a later prompt must not wait for an answer."""
+    bridge = InputBridge()
+    bridge.status = AuthStatus.AUTHENTICATED
+    with pytest.raises(RuntimeError, match="after authentication"):
+        bridge.request_input("Pick a profile", timeout=5)
+    assert bridge.status is AuthStatus.AUTHENTICATED

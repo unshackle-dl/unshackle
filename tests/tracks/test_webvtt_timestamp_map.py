@@ -10,7 +10,6 @@ def test_strips_timestamp_map_keeps_cues():
 
 
 def test_strips_lowercase_timestamp_map():
-    # SubtitleEdit honours the header case-insensitively, so the strip must too
     text = "WEBVTT\nx-timestamp-map=MPEGTS:900000,LOCAL:00:00:00.000\n\n00:00:22.690 --> 00:00:24.710\nHi\n"
     out = Subtitle.strip_webvtt_timestamp_map(text)
     assert "x-timestamp-map" not in out.lower()

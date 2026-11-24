@@ -50,7 +50,7 @@ def sweep_task_dirs(root: Path) -> None:
 
 @contextmanager
 def task_temp_dir(task_id: Optional[str] = None) -> Iterator[Path]:
-    """Point config.directories.temp at a private dir for this run; remove it on any exit."""
+    """Point config.directories.temp at a private dir for this task. Remove it on any exit."""
     root = config.directories.temp
     root.mkdir(parents=True, exist_ok=True)
     sweep_task_dirs(root)
@@ -69,7 +69,7 @@ def task_temp_dir(task_id: Optional[str] = None) -> Iterator[Path]:
 
 
 def with_task_temp(fn: Callable[P, R]) -> Callable[P, R]:
-    """Run the wrapped callable inside its own task temp dir."""
+    """Call the wrapped callable inside its own task temp dir."""
 
     @functools.wraps(fn)
     def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:

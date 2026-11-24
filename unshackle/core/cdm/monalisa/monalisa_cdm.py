@@ -1,8 +1,8 @@
 """
 MonaLisa CDM - WASM-based Content Decryption Module wrapper.
 
-This module provides key extraction from MonaLisa-protected content using
-a WebAssembly module that runs locally via wasmtime.
+This module extracts content keys from MonaLisa-protected titles. It uses a
+WebAssembly module that runs locally with wasmtime.
 """
 
 import base64
@@ -14,23 +14,21 @@ import re
 import sys
 import uuid
 from pathlib import Path
-from typing import Dict, Optional, Union
+from typing import Dict, Union
 
 import wasmtime
-
-from unshackle.core import binaries
 
 logger = logging.getLogger(__name__)
 
 
 class MonaLisaCDM:
     """
-    MonaLisa CDM wrapper for WASM-based key extraction.
+    MonaLisa CDM wrapper for WASM-based content key extraction.
 
     This CDM differs from Widevine/PlayReady in that it does not use a
-    challenge/response flow with a license server. Instead, the license
-    (ticket) is provided directly by the service API, and keys are extracted
-    locally via the WASM module.
+    challenge/response flow with a license server. Instead, the service API
+    gives the license (ticket) directly, and the WASM module extracts the
+    content keys locally.
     """
 
     DYNAMIC_BASE = 6065008
@@ -50,7 +48,7 @@ class MonaLisaCDM:
 
     def __init__(self, device_path: Path):
         """
-        Initialize the MonaLisa CDM.
+        Initialise the MonaLisa CDM.
 
         Args:
             device_path: Path to the device file (.mld).
@@ -93,13 +91,6 @@ class MonaLisaCDM:
         self.exports = {}
         self.ctx = None
 
-    @staticmethod
-    def get_worker_path() -> Optional[Path]:
-        """Get ML-Worker binary path from the unshackle binaries system."""
-        if binaries.ML_Worker:
-            return Path(binaries.ML_Worker)
-        return None
-
     def open(self) -> int:
         """
         Open a CDM session.
@@ -108,15 +99,15 @@ class MonaLisaCDM:
             Session ID (always 1 for MonaLisa).
 
         Raises:
-            RuntimeError: If session initialization fails.
+            RuntimeError: If CDM session initialization fails.
         """
         try:
             self.store = wasmtime.Store(self.engine)
             memory_type = wasmtime.MemoryType(wasmtime.Limits(256, 256))
             self.memory = wasmtime.Memory(self.store, memory_type)
 
-            self._write_i32(self.DYNAMICTOP_PTR, self.DYNAMIC_BASE)
-            imports = self._build_imports()
+            self.write_i32(self.DYNAMICTOP_PTR, self.DYNAMIC_BASE)
+            imports = self.build_imports()
             self.instance = wasmtime.Instance(self.store, self.module, imports)
 
             ex = self.instance.exports(self.store)
@@ -136,20 +127,16 @@ class MonaLisaCDM:
             ctx = self.exports["_monalisa_context_alloc"](self.store)
             self.ctx = ctx
 
-            # _monalisa_context_alloc is expected to return a positive pointer/handle.
-            # Treat 0/negative/non-int-like values as allocation failure.
             try:
                 ctx_int = int(ctx)
-            except Exception:
+            except (TypeError, ValueError):
                 ctx_int = None
 
             if ctx_int is None or ctx_int <= 0:
-                # Ensure we don't leave a partially-initialized instance around.
                 self.close()
                 raise RuntimeError(f"Failed to allocate MonaLisa context (ctx={ctx!r})")
             return 1
         except Exception as e:
-            # Clean up partial state (e.g., store/memory/instance) before propagating failure.
             self.close()
             if isinstance(e, RuntimeError):
                 raise
@@ -179,7 +166,7 @@ class MonaLisaCDM:
             Dictionary with keys: kid (hex), key (hex), type ("CONTENT").
 
         Raises:
-            RuntimeError: If session not open or license validation fails.
+            RuntimeError: If the CDM session is not open, or license validation fails.
             ValueError: If license_data is empty.
         """
         if not self.instance or not self.memory or self.ctx is None:
@@ -193,7 +180,7 @@ class MonaLisaCDM:
         else:
             license_b64 = license_data
 
-        ret = self._ccall(
+        ret = self.ccall(
             "monalisa_set_license",
             int,
             self.ctx,
@@ -205,13 +192,11 @@ class MonaLisaCDM:
         if ret != 0:
             raise RuntimeError(f"License validation failed with code: {ret}")
 
-        key_bytes = self._extract_license_key_bytes()
+        key_bytes = self.extract_license_key_bytes()
 
-        # Extract DCID from license to generate KID
         try:
             decoded = base64.b64decode(license_b64).decode("ascii", errors="ignore")
         except Exception as e:
-            # Avoid logging raw license content; log only safe metadata.
             logger.exception("Failed to base64-decode MonaLisa license (len=%s): %s", len(license_b64), e)
             decoded = ""
 
@@ -222,10 +207,9 @@ class MonaLisaCDM:
         if m:
             kid_bytes = uuid.uuid5(uuid.NAMESPACE_DNS, m.group()).bytes
         else:
-            # No DCID in the license: derive a deterministic per-license KID to avoid collisions.
             try:
                 license_raw = base64.b64decode(license_b64)
-            except Exception:
+            except ValueError:
                 license_raw = license_b64.encode("utf-8", errors="replace")
 
             license_hash = hashlib.sha256(license_raw).hexdigest()
@@ -233,8 +217,8 @@ class MonaLisaCDM:
 
         return {"kid": kid_bytes.hex(), "key": key_bytes.hex(), "type": "CONTENT"}
 
-    def _extract_license_key_bytes(self) -> bytes:
-        """Extract the 16-byte decryption key from WASM memory."""
+    def extract_license_key_bytes(self) -> bytes:
+        """Extract the 16-byte content key from WASM memory."""
         data_ptr = self.memory.data_ptr(self.store)
         data_len = self.memory.data_len(self.store)
 
@@ -247,7 +231,7 @@ class MonaLisaCDM:
 
         return bytes(mem_ptr.contents[start:end])
 
-    def _ccall(self, func_name: str, return_type: type, *args):
+    def ccall(self, func_name: str, return_type: type, *args):
         """Call a WASM function with automatic string conversion."""
         stack = 0
         converted_args = []
@@ -259,20 +243,18 @@ class MonaLisaCDM:
                         stack = self.exports["stackSave"](self.store)
                     max_length = (len(arg) << 2) + 1
                     ptr = self.exports["stackAlloc"](self.store, max_length)
-                    self._string_to_utf8(arg, ptr, max_length)
+                    self.string_to_utf8(arg, ptr, max_length)
                     converted_args.append(ptr)
                 else:
                     converted_args.append(arg)
 
             result = self.exports[func_name](self.store, *converted_args)
         finally:
-            # stackAlloc pointers live on the WASM stack; always restore even if the call throws.
             if stack != 0:
                 exc = sys.exc_info()[1]
                 try:
                     self.exports["stackRestore"](self.store, stack)
                 except Exception:
-                    # If we're already failing, don't mask the original exception.
                     if exc is None:
                         raise
 
@@ -280,7 +262,7 @@ class MonaLisaCDM:
             return bool(result)
         return result
 
-    def _write_i32(self, addr: int, value: int) -> None:
+    def write_i32(self, addr: int, value: int) -> None:
         """Write a 32-bit integer to WASM memory."""
         if addr % 4 != 0:
             raise ValueError(f"Unaligned i32 write: addr={addr} (must be 4-byte aligned)")
@@ -293,7 +275,7 @@ class MonaLisaCDM:
         mem_ptr = ctypes.cast(data, ctypes.POINTER(ctypes.c_int32))
         mem_ptr[addr >> 2] = value
 
-    def _string_to_utf8(self, data: str, ptr: int, max_length: int) -> int:
+    def string_to_utf8(self, data: str, ptr: int, max_length: int) -> int:
         """Convert string to UTF-8 and write to WASM memory."""
         encoded = data.encode("utf-8")
         write_length = min(len(encoded), max_length - 1)
@@ -306,7 +288,7 @@ class MonaLisaCDM:
         mem_ptr[ptr + write_length] = 0
         return write_length
 
-    def _write_ascii_to_memory(self, string: str, buffer: int, dont_add_null: int = 0) -> None:
+    def write_ascii_to_memory(self, string: str, buffer: int, dont_add_null: int = 0) -> None:
         """Write ASCII string to WASM memory."""
         mem_data = self.memory.data_ptr(self.store)
         mem_ptr = ctypes.cast(mem_data, ctypes.POINTER(ctypes.c_ubyte))
@@ -318,8 +300,8 @@ class MonaLisaCDM:
         if dont_add_null == 0:
             mem_ptr[buffer + len(encoded)] = 0
 
-    def _build_imports(self):
-        """Build the WASM import stubs required by the MonaLisa module."""
+    def build_imports(self):
+        """Assemble the WASM import stubs the MonaLisa module needs."""
 
         def sys_fcntl64(a, b, c):
             return 0
@@ -381,15 +363,15 @@ class MonaLisaCDM:
             buf_size = 0
             for index, string in enumerate(self.ENV_STRINGS):
                 ptr = environ_buf + buf_size
-                self._write_i32(environ_ptr + index * 4, ptr)
-                self._write_ascii_to_memory(string, ptr)
+                self.write_i32(environ_ptr + index * 4, ptr)
+                self.write_ascii_to_memory(string, ptr)
                 buf_size += len(string) + 1
             return 0
 
         def environ_sizes_get(penviron_count, penviron_buf_size):
-            self._write_i32(penviron_count, len(self.ENV_STRINGS))
+            self.write_i32(penviron_count, len(self.ENV_STRINGS))
             buf_size = sum(len(s) + 1 for s in self.ENV_STRINGS)
-            self._write_i32(penviron_buf_size, buf_size)
+            self.write_i32(penviron_buf_size, buf_size)
             return 0
 
         i32 = wasmtime.ValType.i32()

@@ -4,13 +4,14 @@
 
 - **Type:** `dict` &nbsp;·&nbsp; **Default:** `{}`
 
-Persistent defaults for the `dl` command. The block is used as Click's `default_map`, so any
-`dl` flag can be given a default here. See [Downloading](../../guide/downloading.md) and the
+Persistent defaults for the `dl` command. unshackle uses the block as Click's `default_map`,
+so you can give any `dl` flag a default here. See [Downloading](../../guide/downloading.md) and the
 [CLI Reference](../../guide/cli-reference.md) for what each flag does.
 
-**Key naming.** A key is the flag's long name with dashes replaced by underscores
-(`--best-available` → `best_available`, `--sub-format` → `sub_format`). A few keys are named
-after the flag's internal destination rather than its visible name; set these exact keys:
+**Config key naming.** A config key is the flag's long name with dashes replaced by
+underscores (`--best-available` → `best_available`, `--sub-format` → `sub_format`). A few
+config keys use the flag's internal destination and not its visible name. Set these exact
+config keys:
 
 | Flag | Config key |
 |------|-----------|
@@ -27,7 +28,7 @@ after the flag's internal destination rather than its visible name; set these ex
 [`services.<TAG>.dl`](services.md) override → this global `dl:` block → the built-in
 default. In other words, config only fills in options you did not set on the command line.
 
-Common keys (a useful subset; every `dl` flag works):
+Common config keys. This is a useful subset, and every `dl` flag works:
 
 | Key | Type | Default | Sets |
 |-----|------|---------|------|
@@ -42,14 +43,24 @@ Common keys (a useful subset; every `dl` flag works):
 | `sub_format` | str | *(unset)* | Convert subtitles to this format (`srt`, `vtt`, `original`, ...). |
 | `forced_subs` | bool | `false` | Include forced subtitle tracks. |
 | `forced_s_lang` | list | `[]` | Forced subtitle language(s); implies `forced_subs`. A `-` prefix excludes. |
-| `no_subs` / `no_audio` / `no_chapters` | bool | `false` | Skip that track type. |
+| `forced_subs_only` | bool | `false` | Keep only forced subtitle tracks; implies `forced_subs`. |
+| `audio_description` | bool | `false` | Include descriptive (audio-description) tracks. |
+| `audio_description_only` | bool | `false` | Keep only descriptive (audio-description) tracks. |
+| `no_subs` / `no_audio` / `no_chapters` / `no_attachments` | bool | `false` | Skip that track type. `no_attachments` also skips attaching subtitle fonts. |
 | `downloads` | int | `1` | Tracks downloaded concurrently. |
 | `workers` | int | *(downloader default)* | Threads per track. |
 | `speed_limit` | str | *(unlimited)* | Total download speed cap across all downloads combined, e.g. `500k`, `5M`, `1.5G` or plain bytes/sec. Values are bytes, not bits (`5M` = 5.0 MB/s). |
 | `slow` | str | *(unset)* | Inter-title delay, e.g. `"20-40"`. |
-| `best_available` | bool | `false` | Fall back to best quality if the request is unavailable. |
+| `best_available` | bool | `false` | Warn instead of failing when a requested resolution, range, or language is missing, or when one DRM system does not license under `--all-drm`. The CLI flag is `--best-available`, also spelled `--warn-only`. |
 | `proxy` | str | *(unset)* | Default proxy URI or 2-letter country. |
 | `no_folder` | bool | `false` | Do not create a per-title folder. |
+
+!!! note "`no` and `yes` are language tags"
+    YAML reads a bare `no` as `false` and a bare `yes` as `true`. unshackle puts both back to
+    the tags `no` (Norwegian) and `yes` (Nyankpa) in every config key that takes a language: `lang`,
+    `v_lang`, `a_lang`, `s_lang`, `forced_s_lang`, `require_audio`, `require_video`,
+    `require_subs`, [`language_priority`](#subtitle), [`muxing.default_language`](#muxing) and
+    the [`language_tags`](#language_tags) rules. Quotes (`lang: "no"`) work as well.
 
 ```yaml title="Global download defaults"
 dl:
@@ -89,21 +100,87 @@ dl:
 
 !!! note "`serve` uses these same keys"
     The [`serve`](services.md#serve) block accepts most of the same `dl` option keys at its top level
-    to set server-wide download defaults for every request it handles. Keys the API does not know
-    are ignored there (`speed_limit`, for example; `serve` has its own `global_speed_limit`).
+    to set server-wide download defaults for every request it handles. The API ignores the
+    config keys it does not know there, `speed_limit` for example. `serve` has its own
+    `global_speed_limit`.
+
+## `continue_downloads`
+
+- **Type:** `bool` &nbsp;·&nbsp; **Default:** `false`
+
+Keep a failed download's completed segment files so the next download resumes from where it
+stopped instead of restarting from byte zero.
+
+unshackle reuses only whole, fully downloaded segments. It always discards partially written
+segments, and no partial-byte (`Range`) resume across runs takes place. Reuse is possible only
+with proof that the segmentation did not change. The manifest URL, segment count, and byte
+ranges must all match the previous download, or the download silently restarts clean.
+
+!!! note "What can and cannot resume"
+    - Segmented DASH, ISM, and HLS tracks resume.
+    - Single-file (non-segmented) downloads and DASH tracks collapsed to a single ranged
+      download never make segment files, so this option does not apply to them (the
+      downloader has its own in-flight partial-file handling for those).
+    - HLS resumes Widevine/PlayReady and unencrypted titles only. An AES-128 title always
+      restarts. An HLS failure during the post-download merge step also restarts.
+    - A track downloaded with [`merge_segments`](#merge_segments) or
+      [`decrypt_segments`](drm.md#decrypt_segments) never resumes. Both options consume
+      or rewrite the segment files during the download.
+
+For a one-off resume without changing config, pass `dl --continue-downloads` on the
+command line (the flag can only enable resume, never disable it).
+
+```yaml title="Resume failed downloads"
+continue_downloads: true
+```
+
+## `merge_segments`
+
+- **Type:** `bool` &nbsp;·&nbsp; **Default:** `false`
+
+Appends each segment to the output file as soon as it and every segment before it have
+arrived, instead of joining all the segment files after the last one lands. The join runs
+during the download, so the "Merging" step after the last segment goes away. The output file
+is the same either way.
+
+Segments arrive out of order because the workers run in parallel. unshackle keeps a cursor on
+the next segment it needs and appends every segment that is ready in order, then deletes the
+segment file. With [`decrypt_segments`](drm.md#decrypt_segments) also on, each segment is
+appended after its decryption completes, never before.
+
+This option is off by default because it disables resume, and because its cost during the
+download is not measured. The append reads each segment straight after a worker wrote it, so
+the read usually comes from the page cache. On a hard disk, the append to one file while the
+workers write many segment files can still make the head seek. If a download gets slower with
+the option on, turn it off.
+
+This applies to video and audio tracks from DASH, ISM, and HLS. An HLS track qualifies
+only when every segment shares one init segment and one `EXT-X-KEY`, with no
+`EXT-X-DISCONTINUITY`, and the DRM is Widevine, PlayReady, or none. AES-128 tracks, tracks
+with content key rotation or discontinuities, and subtitle tracks keep the merge after the download.
+
+!!! note "No resume"
+
+    A track that merges segment by segment always downloads from the start.
+    [`continue_downloads`](#continue_downloads) cannot reuse its segments, because unshackle
+    deletes each segment after it appends it.
+
+```yaml
+merge_segments: true
+```
 
 ## `subtitle`
 
 - **Type:** `dict` &nbsp;·&nbsp; **Default:** `{}`
 
-Subtitle handling: SDH stripping, format conversion, and whether subtitles are muxed in or
-written as sidecar files. See [Subtitles](../../guide/subtitles.md) for the full guide.
+Subtitle handling: SDH stripping, format conversion, and whether unshackle muxes the subtitles
+in or writes them as sidecar files. See [Subtitles](../../guide/subtitles.md) for the full guide.
 
 | Sub-key | Type | Default | Description |
 |---------|------|---------|-------------|
 | `strip_sdh` | bool | `true` | Strip SDH/CC cues (hearing-impaired annotations) into a clean track. |
 | `sdh_method` | str | `"auto"` | SDH-stripping backend to use. |
-| `preserve_formatting` | bool | `true` | Keep styling/positioning when converting or stripping. |
+| `preserve_formatting` | bool | `true` | Pass WebVTT cue text through as written. `false` re-encodes it through pycaption, which merges identical cues but flattens styling. unshackle removes WebVTT-only cue markup either way. |
 | `convert_before_strip` | bool | `true` | Convert to the working format before stripping SDH. |
 | `conversion_method` | str | `"auto"` | Subtitle conversion backend. |
 | `output_mode` | str | `"mux"` | `mux` embeds subtitles in the MKV; `sidecar` writes separate files; `both` writes sidecars and still muxes. |
@@ -140,7 +217,7 @@ subtitle:
     | Default | English, Arabic, Bulgarian, Spanish, French, Japanese |
     | With the list above | English, Spanish, French, Arabic, Bulgarian, Japanese |
 
-    Nothing is removed, unlike `-sl`, which drops every subtitle language it does not name.
+    unshackle removes nothing, unlike `-sl`, which drops every subtitle language it does not name.
 
     Use `orig` in the list for the title's original language. A base tag also covers its
     regional forms, so `en` sorts `en-US` and `en-GB`, but `zh` does **not** cover
@@ -203,10 +280,12 @@ Matroska (MKV) muxing options.
 | `default_language` | dict | `{}` | Force which language is flagged *default* per track type, e.g. `{audio: en, subtitle: en}`. |
 | `merge_audio` | bool | `true` | Merge all audio into one file. `--split-audio` on the CLI flips this off. |
 | `merge_video` | bool | `false` | Merge video tracks that share height, range, and codec into one file, so only language varies inside a file. `--merge-video` on the CLI flips this on. |
+| `concurrency` | int | `4` | How many mkvmerge processes run at the same time when a title muxes more than one output file (one per video variant or audio codec). Each process uses one CPU core, so this shortens the mux step on an SSD. Set it to `1` on a hard disk, where parallel writes are slower. |
 
 ```yaml
 muxing:
   set_title: true
+  concurrency: 4
   default_language:
     audio: en
     subtitle: en
@@ -217,14 +296,27 @@ muxing:
 - **Type:** `dict` &nbsp;·&nbsp; **Default:** `{}`
 
 Language-tag remapping and the rule engine behind the `{lang_tag}` filename variable. When a
-`rules` list is present, each rule is evaluated in order and the first match's `tag` is used.
-A rule may test:
+`rules` list is present, unshackle evaluates each rule in order and uses the first match's
+`tag`. A rule can examine:
 
 | Condition | Meaning |
 |-----------|---------|
-| `audio` | Matches against the audio track languages. |
+| `audio` | At least one audio language matches. |
 | `subs_contain` | At least one subtitle language matches. |
-| `subs_contain_all` | Every listed language must be present (scalar or list). |
+| `subs_contain_all` | Every listed language must be present. |
+| `dual` / `multi` / `dubbed` | `true` matches when that filename variable is set, `false` when it is not. |
+
+Each language condition takes one language tag or a list of them. A list matches when **any**
+entry matches, except `subs_contain_all`, which needs them all. An entry that is not a valid
+language tag (for example `japanese`) never matches. `dual`, `multi` and `dubbed` take a bare
+`true` or `false`, not a quoted string. unshackle skips a rule with a condition name it does
+not know, or with any other value in a boolean condition. It logs a warning in each of these
+cases and tries the next rule.
+
+`dual`, `multi` and `dubbed` carry the same meaning as the
+[filename variables of those names](#dual_multi_mode). Pair one with a language to name a
+release yourself, in place of the fixed `DUAL`, `MULTi` and `DUBBED` text. A rule that names
+`dubbed: true` and a language tags a localized dub without tagging a native release the same way.
 
 ```yaml
 language_tags:
@@ -232,7 +324,17 @@ language_tags:
     - audio: [ja]
       subs_contain: [en]
       tag: "SUBBED"
+    - audio: th
+      dubbed: true
+      tag: "THAIDUB"
+    - audio: th
+      dual: true
+      tag: "THAIDUAL"
 ```
+
+!!! note "Put `{lang_tag}` where you want the name"
+    These rules fill `{lang_tag}`. To use your own name in place of the fixed text, keep
+    `{lang_tag?}` in the template and leave out `{dual?}`, `{multi?}` and `{dubbed?}`.
 
 ## `dual_multi_mode`
 

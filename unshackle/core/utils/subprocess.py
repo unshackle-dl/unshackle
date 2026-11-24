@@ -17,10 +17,10 @@ def log_tool_run(
     duration_ms: Optional[float] = None,
     **context: object,
 ) -> None:
-    """Emit a structured ``tool_run`` debug-log entry for an external tool invocation.
+    """Send a structured ``tool_run`` debug-log entry for an external tool invocation.
 
-    Central helper so every binary call (ffmpeg, mkvpropedit, dovi_tool, etc.) logs the
-    same shape. No-op when debug logging is disabled.
+    Central helper so every binary call (FFmpeg, mkvpropedit, dovi_tool, and the other
+    tools) logs the same shape. No-op when debug logging is off.
     """
     dl = get_debug_logger()
     if not dl:
@@ -40,8 +40,102 @@ def log_tool_run(
     )
 
 
+FFMPEG_INCONCLUSIVE = (
+    "not found for",
+    "no decoder found",
+    "sub-sample encryption info",
+    "error reading header",
+    "not a decoding option",
+)
+
+FFMPEG_MISSING_REFERENCE = (
+    "mmco",
+    "missing reference",
+    "co located pocs unavailable",
+    "reference picture missing",
+    "could not find ref with poc",
+)
+FFMPEG_CHECK_TIMEOUT = 120
+
+
+def ffmpeg_decodes(path: Path, start: Optional[float] = None, seconds: float = 3, video: Optional[bool] = None) -> bool:
+    """Return True when FFmpeg decodes a window of the file without an error.
+
+    A wrong content key leaves the container intact and the samples as noise, which the
+    decoders reject. ``-xerror`` stops at the first error so the check stays short.
+
+    With ``start``, the check decodes ``seconds`` from that time. An FFmpeg copy cuts the
+    window first, so no sample after the window gets to the decoder. Without ``start``, the
+    check decodes the first seconds and the last 4 seconds, because a title can open with
+    a clear or separately keyed lead.
+
+    Every frame is decoded, because an HEVC keyframe decrypted with a wrong key can decode
+    without an error. When a window starts inside a GOP and the only error is a missing
+    reference frame, the check decodes the keyframes of that window again and uses that
+    verdict. ``video=False`` skips that second pass.
+
+    A file this FFmpeg build cannot judge counts as a pass, never as a wrong key, and so
+    does a check that does not finish in time.
+    """
+    if not binaries.FFMPEG:
+        raise EnvironmentError('FFmpeg executable "ffmpeg" not found but is required.')
+    ffmpeg = str(binaries.FFMPEG)
+
+    def decode(window: list[str], keyframes: bool) -> bool:
+        check = [ffmpeg, "-nostdin", "-v", "error", "-err_detect", "explode", "-xerror"]
+        if keyframes:
+            check += ["-skip_frame:v", "nokey"]
+        cut = None
+        try:
+            if start is None:
+                ff = subprocess.run(
+                    [*check, *window, "-i", str(path), "-f", "null", "-"],
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    timeout=FFMPEG_CHECK_TIMEOUT,
+                )
+            else:
+                cut = subprocess.Popen(
+                    [ffmpeg, "-nostdin", "-v", "error", "-ignore_editlist", "1", *window, "-i", str(path)]
+                    + ["-map", "0:v?", "-map", "0:a?", "-c", "copy", "-f", "nut", "pipe:1"],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.DEVNULL,
+                )
+                ff = subprocess.run(
+                    [*check, "-i", "pipe:", "-f", "null", "-"],
+                    stdin=cut.stdout,
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    timeout=FFMPEG_CHECK_TIMEOUT,
+                )
+        except subprocess.TimeoutExpired:
+            return True
+        finally:
+            if cut:
+                if cut.stdout:
+                    cut.stdout.close()
+                cut.kill()
+                cut.wait()
+        err = ff.stderr.lower()
+        if cut and cut.returncode not in (0, -9) and "error opening input" in err:
+            return True
+        if ff.returncode == 0 or any(m in err for m in FFMPEG_INCONCLUSIVE):
+            return True
+        if not keyframes and video is not False and any(m in err for m in FFMPEG_MISSING_REFERENCE):
+            return decode(window, keyframes=True)
+        return False
+
+    if start is not None:
+        return decode(["-ss", f"{start:.6f}", "-t", f"{max(seconds - 0.5, seconds / 2):.6f}"], keyframes=False)
+    return decode(["-t", str(seconds)], keyframes=False) and decode(["-sseof", "-4", "-t", "4"], keyframes=False)
+
+
 def ffprobe(uri: Union[bytes, Path]) -> dict:
-    """Use ffprobe on the provided data to get stream information."""
+    """Use FFprobe on the provided data to get its track information (``-show_streams``)."""
     if not binaries.FFProbe:
         raise EnvironmentError('FFProbe executable "ffprobe" not found but is required.')
 
@@ -88,10 +182,10 @@ def run_step(
     output: Optional[Path] = None,
     label: str = "subprocess step",
 ) -> bytes:
-    """Run a CLI step that writes to `output` (when provided). Returns stderr bytes.
+    """Operate a CLI step that writes to `output` (when provided). Returns stderr bytes.
 
     Raises RuntimeError with the stderr tail when the process exits non-zero, or when
-    `output` is given and does not exist / is empty after the run.
+    you give `output` and it does not exist or is empty after the step.
     """
     if output is not None:
         output.unlink(missing_ok=True)

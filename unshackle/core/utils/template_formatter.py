@@ -28,7 +28,7 @@ class TemplateFormatter:
     """
 
     def __init__(self, template: str, spacer: str | None = None):
-        """Initialize the template formatter.
+        """Initialise the template formatter.
 
         Args:
             template: Template string with variables in {variable} format
@@ -38,9 +38,9 @@ class TemplateFormatter:
         """
         self.template = template
         self.spacer = spacer or detect_spacer(template)
-        self.variables = self._extract_variables()
+        self.variables = self.extract_variables()
 
-    def _extract_variables(self) -> list[str]:
+    def extract_variables(self) -> list[str]:
         """Extract all variables from the template."""
         pattern = r"\{([^}]+)\}"
         matches = re.findall(pattern, self.template)
@@ -79,10 +79,8 @@ class TemplateFormatter:
                         safe_value = str(value).strip()
                         result = result.replace(placeholder, safe_value)
                     else:
-                        # Remove the placeholder and consume the adjacent separator on one side
-                        # e.g. "{disc?}-{track}" → "{track}" when disc is empty
-                        # e.g. "{title}.{edition?}.{quality}" → "{title}.{quality}" when edition is empty
-                        def _remove_conditional(m: re.Match) -> str:
+
+                        def remove_conditional(m: re.Match) -> str:
                             s = m.group(0)
                             has_left = s[0] in ".- "
                             has_right = s[-1] in ".- "
@@ -94,7 +92,7 @@ class TemplateFormatter:
 
                         result = re.sub(
                             rf"[\.\s\-]?{re.escape(placeholder)}[\.\s\-]?",
-                            _remove_conditional,
+                            remove_conditional,
                             result,
                             count=1,
                         )
@@ -107,15 +105,13 @@ class TemplateFormatter:
                     safe_value = str(value).strip()
                     result = result.replace(placeholder, safe_value)
 
-            # Clean up multiple consecutive dots/separators and other artifacts
-            result = re.sub(r"\.{2,}", ".", result)  # Multiple dots -> single dot
-            result = re.sub(r"\.-", "-", result)  # Remove dots before dashes (for dot-based templates)
-            result = re.sub(r"[\.\s]+([)\]])", r"\1", result)  # Remove dots/spaces before closing bracket
-            result = re.sub(r"\(\s*\)|\[\s*\]", "", result)  # Remove empty brackets (empty conditional)
-            # bracket removal is what creates neighbouring separators, so collapse after it
-            result = re.sub(r"\s{2,}", " ", result)  # Multiple spaces -> single space
-            result = re.sub(r"(?:-\s*)+-", "-", result)  # Multiple dashes (with optional spaces) -> single dash
-            result = re.sub(r"^[\.\s\-]+|[\.\s\-]+$", "", result)  # Remove leading/trailing dots, spaces, dashes
+            result = re.sub(r"\.{2,}", ".", result)
+            result = re.sub(r"\.-", "-", result)
+            result = re.sub(r"[\.\s]+([)\]])", r"\1", result)
+            result = re.sub(r"\(\s*\)|\[\s*\]", "", result)
+            result = re.sub(r"\s{2,}", " ", result)
+            result = re.sub(r"(?:-\s*)+-", "-", result)
+            result = re.sub(r"^[\.\s\-]+|[\.\s\-]+$", "", result)
 
             result = sanitize_filename(result, spacer=self.spacer)
 
@@ -165,5 +161,5 @@ class TemplateFormatter:
         optional = []
         for variable in self.variables:
             if variable.endswith("?"):
-                optional.append(variable[:-1])  # Remove the ?
+                optional.append(variable[:-1])
         return optional

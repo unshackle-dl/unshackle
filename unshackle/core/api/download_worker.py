@@ -1,31 +1,96 @@
-"""Standalone worker process entry point for executing download jobs."""
+"""Standalone job worker process entry point for executing download jobs."""
 
 from __future__ import annotations
 
+import io
 import json
 import logging
 import os
+import queue
 import sys
+import threading
+import time
 import traceback
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Callable, Dict
+from uuid import uuid4
 
-from .download_manager import _perform_download
+from unshackle.core.api.input_bridge import AUTH_INPUT_TIMEOUT
+from unshackle.core.console import set_notice_handler, set_prompt_handler
+
+from .download_manager import perform_download
 
 log = logging.getLogger("download_worker")
 
 
-def _read_payload(path: Path) -> Dict[str, Any]:
+def read_payload(path: Path) -> Dict[str, Any]:
     with path.open("r", encoding="utf-8") as handle:
         return json.load(handle)
 
 
-def _write_result(path: Path, payload: Dict[str, Any]) -> None:
-    # Atomic replace: the parent polls this file while it is being rewritten.
+_replace_lock = threading.Lock()
+
+
+def write_result(path: Path, payload: Dict[str, Any]) -> None:
+    """Write the payload with an atomic replace, because the parent polls this file during the write.
+
+    Each call gets its own temp name, so two threads writing this destination cannot replace away
+    the temp file the other is about to move.
+
+    Windows denies the replace while another thread or the parent holds the destination open. The
+    lock removes the in-process contention; the retry covers the parent process.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(path.name + ".tmp")
-    tmp.write_text(json.dumps(payload), encoding="utf-8")
-    os.replace(tmp, path)
+    tmp = path.with_name(f"{path.name}.{uuid4().hex}.tmp")
+    try:
+        tmp.write_text(json.dumps(payload), encoding="utf-8")
+        with _replace_lock:
+            for attempt in range(10):
+                try:
+                    os.replace(tmp, path)
+                    return
+                except PermissionError:
+                    if attempt == 9:
+                        raise
+                    time.sleep(0.02 * (attempt + 1))
+    except OSError:
+        tmp.unlink(missing_ok=True)
+        raise
+
+
+def relay_prompts(progress_callback: Callable[[Dict[str, Any]], None]) -> None:
+    """Send each prompt_user() prompt to the parent as ``input_prompt`` progress, and read the answer from stdin.
+
+    The parent writes each answer as one JSON string per line, so an answer can hold a newline. The reader
+    uses unbuffered stdin: a daemon thread blocked in ``sys.stdin.buffer`` aborts the interpreter at shutdown.
+    Prompts go out one at a time, and a prompt discards answers that arrived before it, such as a late
+    answer to a prompt that timed out. A show_notice() message goes out as ``notice`` progress and needs no answer.
+    """
+    answers: queue.Queue[str] = queue.Queue()
+    one_prompt = threading.Lock()
+
+    def read_answers() -> None:
+        for line in io.FileIO(sys.stdin.fileno(), "rb", closefd=False):
+            answers.put(json.loads(line.decode("utf-8", errors="replace")))
+
+    threading.Thread(target=read_answers, name="prompt-answers", daemon=True).start()
+
+    def ask(prompt: str) -> str:
+        with one_prompt:
+            while not answers.empty():
+                answers.get_nowait()
+            progress_callback({"input_prompt": prompt})
+            try:
+                return answers.get(timeout=AUTH_INPUT_TIMEOUT)
+            except queue.Empty:
+                raise TimeoutError(
+                    f"No client answer to the authentication prompt within {AUTH_INPUT_TIMEOUT:.0f}s"
+                ) from None
+            finally:
+                progress_callback({"input_prompt": None})
+
+    set_prompt_handler(ask)
+    set_notice_handler(lambda message: progress_callback({"notice": message}))
 
 
 def main(argv: list[str]) -> int:
@@ -44,7 +109,7 @@ def main(argv: list[str]) -> int:
     exit_code = 0
 
     try:
-        payload = _read_payload(payload_path)
+        payload = read_payload(payload_path)
         job_id = payload["job_id"]
         service = payload["service"]
         title_id = payload["title_id"]
@@ -52,21 +117,23 @@ def main(argv: list[str]) -> int:
 
         log.info(f"Worker starting job {job_id} ({service}:{title_id})")
 
-        # Merged so sparse keys (current_title, output_files) survive later writes.
         progress_state: Dict[str, Any] = {}
+        progress_lock = threading.Lock()
 
         def progress_callback(progress_data: Dict[str, Any]) -> None:
             """Write progress updates to file for main process to read."""
             if progress_path:
                 try:
-                    progress_state.update(progress_data)
-                    log.info(f"Writing progress update: {progress_data}")
-                    _write_result(progress_path, progress_state)
+                    with progress_lock:
+                        progress_state.update(progress_data)
+                        log.info(f"Writing progress update: {progress_data}")
+                        write_result(progress_path, progress_state)
                     log.info(f"Progress update written to {progress_path}")
                 except Exception as e:
                     log.error(f"Failed to write progress update: {e}")
 
-        output_files = _perform_download(job_id, service, title_id, params, progress_callback=progress_callback)
+        relay_prompts(progress_callback)
+        output_files = perform_download(job_id, service, title_id, params, progress_callback=progress_callback)
 
         result = {"status": "success", "output_files": output_files}
 
@@ -96,7 +163,7 @@ def main(argv: list[str]) -> int:
 
     finally:
         try:
-            _write_result(result_path, result)
+            write_result(result_path, result)
         except Exception as exc:  # noqa: BLE001 - last resort logging
             log.error(f"Failed to write worker result file: {exc}")
 

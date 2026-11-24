@@ -9,7 +9,7 @@ from unshackle.core.utilities import import_module_by_path
 
 log = logging.getLogger("commands")
 
-_COMMANDS = sorted(
+COMMANDS = sorted(
     (path for path in config.directories.commands.glob("*.py") if path.stem.lower() != "__init__"), key=lambda x: x.stem
 )
 
@@ -35,9 +35,9 @@ def load_command(path: Path) -> object:
 def load_commands(paths: list[Path]) -> tuple[dict[str, object], list[str]]:
     """Load every command, returning the good ones plus a list of load errors.
 
-    Importing this module must never raise (it runs at CLI startup, before Rich
-    is installed, so a raise here prints an ugly pre-setup traceback). Instead we
-    collect failures and surface them once, cleanly, when the CLI is used.
+    Importing this module must never raise (it runs at CLI startup, before unshackle
+    installs Rich, so a raise here prints an ugly pre-setup traceback). Instead we
+    collect failures and surface them once, cleanly, when the user operates the CLI.
     """
     modules: dict[str, object] = {}
     errors: list[str] = []
@@ -49,7 +49,7 @@ def load_commands(paths: list[Path]) -> tuple[dict[str, object], list[str]]:
     return modules, errors
 
 
-_MODULES, LOAD_ERRORS = load_commands(_COMMANDS)
+MODULES, LOAD_ERRORS = load_commands(COMMANDS)
 
 
 def check_load_errors() -> None:
@@ -65,12 +65,12 @@ class Commands(click.Group):
     def list_commands(self, ctx: click.Context) -> list[str]:
         """Returns a list of command names from the command filenames."""
         check_load_errors()
-        return [x.stem.replace("_", "-") for x in _COMMANDS]
+        return [x.stem.replace("_", "-") for x in COMMANDS]
 
     def get_command(self, ctx: click.Context, name: str) -> Optional[click.Command]:
         """Load the command code and return the main click command function."""
         check_load_errors()
-        module = _MODULES.get(name) or _MODULES.get(name.replace("-", "_"))
+        module = MODULES.get(name) or MODULES.get(name.replace("-", "_"))
         if not module:
             raise click.ClickException(f"Unable to find command by the name '{name}'")
 
@@ -79,5 +79,4 @@ class Commands(click.Group):
         return cmd
 
 
-# Hide direct access to commands from quick import form, they shouldn't be accessed directly
 __all__ = ("Commands",)

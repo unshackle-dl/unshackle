@@ -20,7 +20,7 @@ import pytest
 pytestmark = [pytest.mark.live, pytest.mark.slow]
 
 
-def _wait_titles(http_session, server_url: str, sid: str, timeout: float = 120.0):
+def wait_titles(http_session, server_url: str, sid: str, timeout: float = 120.0):
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         r = http_session.get(f"{server_url}/api/session/{sid}/titles", timeout=30)
@@ -38,14 +38,14 @@ def _wait_titles(http_session, server_url: str, sid: str, timeout: float = 120.0
     return None
 
 
-def _pick_target_title(titles, season: int = 1, episode: int = 1):
+def pick_target_title(titles, season: int = 1, episode: int = 1):
     for t in titles:
         if t.get("type") == "episode" and t.get("season") == season and t.get("number") == episode:
             return t
     return titles[0] if titles else None
 
 
-def _pick_track_at_height(video_tracks, target_height: int):
+def pick_track_at_height(video_tracks, target_height: int):
     """Prefer SDR + AVC at the requested height; smallest bitrate wins."""
     same_height = [v for v in video_tracks if v.get("height") == target_height]
     preferred = [v for v in same_height if v.get("codec") == "AVC" and v.get("range") == "SDR"]
@@ -80,10 +80,10 @@ def test_license_server_cdm(http_session, server_url: str, service_case) -> None
     sid = r.json()["session_id"]
 
     try:
-        body = _wait_titles(http_session, server_url, sid)
+        body = wait_titles(http_session, server_url, sid)
         if not body:
             pytest.skip(f"{service}: titles timeout")
-        target = _pick_target_title(
+        target = pick_target_title(
             body.get("titles") or [],
             season=conf.get("target_season", 1),
             episode=conf.get("target_episode", 1),
@@ -97,7 +97,7 @@ def test_license_server_cdm(http_session, server_url: str, service_case) -> None
             timeout=240,
         )
         assert tr.status_code == 200, tr.text
-        track = _pick_track_at_height(tr.json().get("video") or [], target_height)
+        track = pick_track_at_height(tr.json().get("video") or [], target_height)
         if not track:
             pytest.skip(f"{service}: no track at height={target_height}")
 

@@ -45,17 +45,48 @@ echo [OK] uv installed and reachable.
 
 :install_deps
 echo.
-uv sync
+findstr /b /c:"name = \"unshackle\"" "%~dp0pyproject.toml" >nul 2>&1
+if %errorlevel% neq 0 goto tool_install
+
+cd /d "%~dp0"
+uv sync --compile-bytecode
 if %errorlevel% neq 0 (
     echo [ERR] Dependency install failed. See errors above.
     pause
     exit /b 1
 )
+set "SETUP=uv run unshackle setup"
+set "RERUN=Run it again with: uv run unshackle setup"
+set "NOTE="
+goto run_setup
+
+:tool_install
+uv tool install --compile-bytecode git+https://github.com/unshackle-dl/unshackle.git
+if %errorlevel% neq 0 (
+    echo [ERR] unshackle install failed. See errors above.
+    pause
+    exit /b 1
+)
+uv tool update-shell
+set "TOOL_BIN="
+for /f "delims=" %%B in ('uv tool dir --bin') do set "TOOL_BIN=%%B"
+set "SETUP="%TOOL_BIN%\unshackle.exe" setup"
+set "RERUN=Run it again in a new terminal with: unshackle setup"
+set "NOTE=Open a new terminal so that the unshackle command is on your PATH."
+
+:run_setup
+echo.
+%SETUP%
+if %errorlevel% neq 0 (
+    echo [ERR] unshackle is installed, but setup failed. See errors above.
+    echo %RERUN%
+    pause
+    exit /b 1
+)
 
 echo.
-echo Installation completed successfully!
-echo Try:
-echo   uv run unshackle --help
+echo Installation completed successfully.
+if defined NOTE echo %NOTE%
 echo.
 pause
 endlocal

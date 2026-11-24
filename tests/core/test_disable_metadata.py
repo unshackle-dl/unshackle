@@ -35,7 +35,7 @@ class FakeProvider(MetadataProvider):
 
 
 @pytest.fixture(autouse=True)
-def _disabled(monkeypatch: pytest.MonkeyPatch) -> None:
+def disabled(monkeypatch: pytest.MonkeyPatch) -> None:
     """Turn metadata off and keep every test off the network."""
     monkeypatch.setattr(config, "disable_metadata", True)
     monkeypatch.setattr(config, "metadata_providers", [])

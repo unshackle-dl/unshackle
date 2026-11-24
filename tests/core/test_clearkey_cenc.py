@@ -17,7 +17,6 @@ from uuid import UUID
 
 import pytest
 
-# lxml.etree: XML parser used to build ContentProtection fixtures for DASH.get_drm
 from lxml import etree
 
 from unshackle.core.drm import drm_from_dict
@@ -120,7 +119,6 @@ def test_get_drm_clearkey_laurl_variants(laurl_xml: str) -> None:
 
 
 def test_get_drm_clearkey_kid_from_sibling_mp4protection() -> None:
-    # Canonical DASH-IF shape: default_KID on the mp4protection element only.
     clearkey = protection(f'<ContentProtection schemeIdUri="{CLEARKEY_URN}" value="ClearKey1.0"/>')
     mp4protection = protection(
         f'<ContentProtection xmlns:cenc="{CENC_NS}" '
@@ -165,7 +163,6 @@ def test_get_content_keys_challenge_shape() -> None:
     assert licence.challenge is not None
     request = json.loads(licence.challenge.decode("utf8"))
     assert request == {"kids": [b64url_nopad(KID.bytes)], "type": "temporary"}
-    # W3C EME mandates unpadded base64url key IDs
     assert all("=" not in kid for kid in request["kids"])
 
 
@@ -199,7 +196,7 @@ def test_get_content_keys_skips_when_already_keyed() -> None:
     drm = ClearKeyCENC(kids=[KID], content_keys={KID: KEY.hex()})
     drm.get_content_keys(licence=licence)
 
-    assert licence.challenge is None  # no license round-trip needed
+    assert licence.challenge is None
 
 
 def test_to_dict_roundtrip() -> None:

@@ -6,6 +6,267 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 This changelog is automatically generated using [git-cliff](https://git-cliff.org).
 
+## [6.0.0] - 2026-10-13
+
+### Features
+
+- *binary*: Add custom binary registration for services
+- *cdm*: Send license_type and privacy_mode with the request to the server
+- *click*: Change the minimum time for slow
+- *downloader*: Adaptive worker scaling, tail boost, session parity, resume fixes
+- *downloader*: Fan large segment batches across worker processes
+- *downloader*: Resume failed downloads from completed segments across runs
+- *dl*: Run user post-download scripts with metadata variables
+- *dl*: Add --require-audio/--require-video and --warn-only alias
+- *drm*: Let a track pin the DRM system it licenses with
+- *dl*: Add --no-attachments to skip cover art and subtitle fonts
+- *dl*: Add --cdm to pin one CDM device for a run
+- *post-scripts*: Add wait option to block until the script exits
+- *post-scripts*: Show a spinner while waiting for a script
+- *services*: Add services_repo_force and compact refresh output
+- *serve*: Hot-reload service repos on a timer without a restart
+- *serve*: Gate server_cdm per service and let clients follow it
+- *kv*: Show a progress bar while adding keys to a vault
+- *serve*: [**breaking**] Gate the server's own proxies behind server_proxy
+- *vaults*: Batch HTTP json vault writes with InsertKeys
+- *remote*: Forward HLS segment filters to remote clients
+- *serve*: Add --quiet mode and developer dashboard API
+- *serve*: [**breaking**] Add server-held accounts for remote sessions
+- *serve*: Forward per-session service logs to remote-dl clients
+- *proxy*: Mask proxy credentials in console and API output
+- *remote*: Spoof a type-only CDM so server_cdm clients need no local .wvd/.prd
+- *serve*: Add operator dashboard endpoints and per-key rate limits
+- *audio*: Support DTS:X Profile 2 with MP4 muxing
+- *dl*: Add --no-postscript to skip post-scripts for one run
+- *api*: Report the live title and the client's command line to the dashboard
+- *vaults*: Flag and skip wrong content keys from poisoned vaults
+- *remote*: Verify server-CDM vault keys on the client and report bad pairs
+- *dl*: Add --proxy-download for a separate download proxy
+- *vaults*: Report bad keys to the vault that served them
+- *service*: Add GEOBLOCK negative geofence
+- *dash*: Add merge_segments to append segments during the download
+- *manifests*: Extend merge_segments rolling merge to HLS and ISM
+- *export*: Write mediaexport files and read legacy exports through the package
+- *proxies*: Add Control D proxy provider
+- *export*: Record each track's KIDs
+- *import*: Build tracks from direct-file export rows
+- *export*: Name export files after their titles and tracks
+- *export*: Separate export file name parts with dots
+- *remote*: Keep slow remote session requests alive with a heartbeat
+- *remote*: Cap server CDM licensing by height per API key and service
+- *remote*: List only configured services on the dashboard
+- *serve*: Relay service prompts from download jobs to the REST client
+- *remote*: Let a remote client license with its own device identity
+- *dl*: Add --latest-episodes N to download the N newest episodes
+- *setup*: Add unshackle setup command and cross-platform install scripts
+- *remote*: License with the client's device when the user picked one
+- *dl*: Add --all-drm to license Widevine and PlayReady per track
+- *dl*: Add --audio-description-only and --forced-subs-only
+- *serve*: Log CDM calls for the dashboard
+- *serve*: Reload unshackle.yaml on SIGHUP without a restart
+- *serve*: Add --cdm-only for a CDM backend with no REST API
+- *service*: Add wait_for_approval and return the cache for a login with no prompt
+- *serve*: Relay approval messages to jobs and proxy remote downloads
+- *search*: Add ANONYMOUS_SEARCH to skip the login for a service
+- *dl*: Add --sample and --include-sample
+- *dl*: Load the DRM system a cdm entry lists first
+- *api*: Forward exact_lang to the service context
+
+### Bug Fixes
+
+- *downloader*: Release hedge loser file handles before merge sweep
+- *downloader*: Validate 206 on byte-range segments and force identity encoding
+- *downloader*: Stop leaked racers holding segment handles after a failed batch
+- *dash*: License ClearKeyCENC before decrypt
+- *subtitle*: Convert ASS to SRT in the SDH-strip fallback
+- *api*: Keep sub_format "original" working through the API
+- *webvtt*: Don't shorten cues when splicing boundary duplicates
+- *api*: Reject backslash traversal in safe_cache_key
+- *downloader*: Honor Retry-After with cancel-safe backoff, add fault-injection bench and tests
+- *downloader*: Keep speed-limited batches in a single process
+- *downloader*: Fail closed on rnet content codings outside the old allowlist
+- *downloader*: Accept a 200 whose body is exactly the requested byte-range slice
+- *downloader*: Report rolling speed on the multiprocess progress bar
+- *downloaders*: Submit segments in a window so progress can drain
+- *api*: Pass adaptive_workers and download_processes to dl.result
+- *downloader*: Validate Content-Range before placing 206 bytes
+- *downloader*: Harden ranged reads, teardown and multiprocess sessions
+- *titles*: Drop folder {year?} when it repeats the dated season label
+- *cli*: Work around rich-click's patched click classes
+- *vaults*: Look tables up by the name the vault stores
+- *hls*: Keep ad-filtered segments out of DRM key state
+- *music*: Remux songs into the container of their codec
+- *api*: Survive Windows errno 13 on the job progress file
+- *api*: Guard two more Windows errno 13 paths in the serve layer
+- *dl*: Accept a clamped 206 and report audio-description-only titles
+- *services*: Match service aliases without case
+- *downloader*: Keep retrying while a cut connection makes progress
+- *downloader*: Bound requests after a cut and stop retry nesting
+- *subtitle*: Keep WebVTT-only cue markup out of converted subtitles
+- *proxies*: Resolve windscribevpn hostname prefixes and uk alias
+- *mux*: Give each parallel mux its own chapters temp file
+- *remote*: Carry the full title and track state across the remote API
+- *HTTP*: Simplify key retrieval condition in get_key method
+- *tracks*: Match resolutions per range and codec
+- *remote*: Resolve service names against the remote server
+- *remote*: Send only the active profile's cache files to the server
+- *utils*: Preserve _ssl_context when copying SSLCiphers adapter
+- *util*: Remove :
+- *cli*: Show banner when dl -q is used
+- *serve*: License multi-key PlayReady through server CDM instead of vault subset
+- *remote*: Raise GET timeout to 120s so large catalogs load
+- *cdm*: Scope remote CDM licence state to its session
+- *remote*: Pass fallback language to ISM re-parse
+- *ism*: Signal Dolby Vision and Atmos from Smooth manifests
+- *dash*: Number SegmentTimeline segments from startNumber
+- *remote*: Match re-parsed manifest tracks by ID before attributes
+- *remote*: Send per-track MPD fragments for service-built AdaptationSets
+- *dl*: Repair damaged cookie files without rewriting them
+- *kv*: Keep copy log rows single-spaced
+- *dl*: Fall back to local vaults when the server CDM returns no key
+- *cli*: Stop service tags from renaming CLI options
+- *dl*: Log vault writes under their own title
+- *dl*: Specify 'subtitle tracks' in error log message
+- *remote*: Keep option choices and optional title in remote -h
+- *audio*: Accept immersive channel layouts like 5.1.4
+- *serve*: Resolve DRM keys for manifests with no ContentProtection PSSH
+- *dl*: Reject local proxies when --remote targets another machine
+- *dl*: End a cancelled track by raising instead of returning short
+- *services*: Name the build a compiled service is missing
+- *serve*: Lock shared session state and throttle progress writes
+- *downloader*: Correct truncation, ranged sizing, and session carry
+- *dl*: Cache server-CDM keys to the local vaults
+- *drm*: License every PlayReady header until all KIDs are covered
+- *dash*: Treat a missing FFprobe as no PSSH instead of crashing
+- *api*: License every PlayReady header in the server CDM path
+- *api*: Reach every PlayReady header on all server CDM routes
+- *api*: Let the server CDM see service-supplied keys and HLS track DRM
+- *api*: Tell the service that the client sent a cookie jar
+- *api*: Stop serve leaking server credentials, paths, and cross-tenant data
+- *api*: Keep error URLs readable and mask host paths in dashboard logs
+- *api*: Reject a NUL byte in output_dir before resolving it
+- *manifests*: Flag DASH audio using the standard description role
+- *api*: Serialize the job progress replace to stop Windows errno 13
+- *api*: Decode challenge bytes to UTF-8 for PlayReady license request
+- *proxy*: Check the proxy exit IP before any service request
+- *cookies*: Find Firefox profiles in the XDG config directory
+- *naming*: Correct language tag rule matching and add state conditions
+- *config*: Keep no and yes as language tags
+- *import*: Inject only the imported title's keys into each track
+- *main*: Remove unwanted -
+- *serve*: Defer service hot reload while a remote session uses it
+- *remote*: Return session cache for device-code and cache-only logins
+- *remote*: Honor proxy client cdm_type for DRM system selection
+- *drm*: Log missing Widevine/PlayReady PSSH at debug level
+- *cli*: Make the click param types the one source of codec spellings
+- *vaults*: Verify vault content keys per KID from the fragment map
+- *vaults*: Harden the KID window check and clear a stale flag on licence
+- *remote*: Forward nested service cache files to and from the server
+- *remote*: Stop warning about missing keys for tracks that carry no DRM
+- *remote*: Keep the server's own CDM when the tier licenses with server_cdm
+- *post-scripts*: Expose {part} and all title-owned variables on failure
+- *serve*: Apply staged service reloads when sessions end, with a max staging age
+- *remote*: Let the server's CDM mapping decide the DRM system under server_cdm
+- *remote*: Forward dl track selection and profile to remote sessions
+- *dl*: Skip empty vault pushes and count cached keys once
+- *serve*: Stop repeating server vault pushes and retry failed ones
+- *export*: Import side-loaded subtitles and keep conflicting keys apart
+- *export*: Strip session headers from exports and normalise merged keys
+- *import*: Read export files through mediaexport
+- *export*: Skip bad keys and failed writes without stopping the download
+- *import*: Report refused titles and fail when none is usable
+- *drm*: Give the zero-KID fallback only the track's own key
+- *import*: Give each track only the keys it declares
+- *import*: Stop clearly when no export or vault key exists
+- *export*: Name the file from the first write
+- *import*: Say an import uses the export's keys, not a server CDM
+- *import*: Give no title keys to a track that is clear
+- *import*: Read an HLS export that names no title language or master key
+- *remote*: Report a missing title list and a refused track URI clearly
+- *tracks*: Keep the Dolby Vision record when remuxing video with ffmpeg
+- *proxies*: Match surfshark's current server api
+- *proxies*: Skip a proxy provider that fails to load
+- *proxies*: Return None for unservable queries and repair live providers
+- *proxies*: Link to the expressvpn device login with the code prefilled
+- *cdm*: Skip the server header probe for pywidevine and pyplayready remote CDMs
+- *api*: Stop dashboard event and log reads racing worker threads
+- *api*: Keep the worker's error on failed jobs, gate tracebacks behind --debug-api
+- *sanitize*: Keep nonspacing marks on letters in unicode filenames
+- *sanitize*: Normalise filenames to NFC and keep combining marks
+- *console*: Write UTF-8 to redirected streams on Windows
+- *dl*: Keep the --enrich original language after get_tracks
+- *attachment*: Keep custom fonts after mux cleanup
+- *dl*: Keep the --enrich title and year after get_tracks
+- *docs*: Hide the release version in the header repo widget
+- *dl*: Read the vaults first under --all-drm
+- *hybrid*: Read the container file for a base that had the DV fixup
+- *cdm*: Send a PlayReady licence without an XML declaration as XML
+- *import*: Carry the HLS segment filter in an export
+- *cdm*: Simplify cached keys retrieval in CustomRemoteCDM
+- *hls*: Read the key id from the init segment when the PSSH has none
+- *api*: Follow the cdm config key order for the server CDM
+
+### Documentation
+
+- *session*: Correct stale pool-size comment
+- Strip non-essential comments, fold key facts into docstrings
+- *services*: Add MUSIC_EXAMPLE reference service
+- Apply simplified technical english across docs and docstrings.
+- Phase 2 of the prose style across docs and docstrings
+- Widen supported shaka-packager range to 2.6.1 or >= 3.10.0
+- *dev*: Correct get_chapters guidance on markers at timestamp 0
+- *example*: Show drm_preference pinning for dual-PSSH manifests
+- *post-scripts*: Use post-script as the one term for hooks
+- *api*: Describe the dashboard session payload in the OpenAPI yaml
+- *cli*: Correct --merge-video scope in cli reference
+- *export*: Describe the export file name and its messages
+
+### Performance Improvements
+
+- *downloader*: Slow-start ramp for the adaptive worker controller
+- *downloader*: Use per-arrival reads only while a segment is hedge-raced
+- *dash*: Collapse single-URL byte-range segments into one direct download
+- *downloader*: Stride multiprocess chunk assignment across children
+- *api*: Skip progress re-parse when the file is unchanged
+- *api*: Append job history instead of rewriting the file
+- *downloader*: Unblock hedge-loser reads at teardown
+- *dash*: Speed up segment collection and URL templating
+- *dl*: Parallelise mux, licensing, and vault lookups; size the shared pool
+- *dl*: Overlap hybrid builds with muxing, tag in the mux thread, preload DRM in parallel
+- *hybrid*: Reuse DV-side files across resolutions, trim the RPU chain, fix L6 fallback
+- *dl*: Push vault key writes to a background thread
+- *drm*: Decrypt fMP4 segments during download with mp4decrypt
+- *kv*: Push whole services to SQL vaults in one call
+- *kv*: Push keys to vaults concurrently, log one summary per title
+- *sample*: Download only the subtitle segments around the window
+- *manifests*: Decode manifests without charset detection
+
+### Changes
+
+- *monalisa*: Remove ML-Worker and improve MonaLisa DRM
+- *downloader*: Extract shared byte-range split helper
+- *console*: Route interactive prompts through a themed helper
+- *core*: [**breaking**] Drop leading underscores from internal definitions
+- *tests*: Drop leading underscores from test helper functions
+- *music*: [**breaking**] Make Song an ordinary Title on the generic path
+- *console*: Style env listings like the rich-click help screens
+- *drm*: Drop the hardcoded service branch in the license flow
+- *proxies*: Share proxy dispatch between dl, search and resolve_proxy
+
+### Maintenance
+
+- Restore memory/ to .gitignore from dev
+- *scripts*: Expand bench suite for cross-machine runs
+- *scripts*: Harden bench suite report capture
+- *scripts*: Add attempt-1-only tail-slow fault to downloader bench
+- Bump dev version to 5.5.0
+- Mark install.sh executable
+
+### Builds
+
+- *deps*: Pull mediaexport from github in the package metadata
+- *deps*: Lock mediaexport at fa9357e
+
 ## [5.4.0] - 2026-08-15
 
 ### Features

@@ -3,7 +3,7 @@
 # This is a MINIMAL starter. Every option has a sane default, so unshackle runs
 # even with most of this file empty or removed.
 #
-# The full, canonical configuration reference lives in docs/ — start at
+# The full, canonical configuration reference lives in docs/. Start at
 # docs/README.md. Each section below points to the doc that documents it.
 
 # Group or username appended to download filenames after a dash.

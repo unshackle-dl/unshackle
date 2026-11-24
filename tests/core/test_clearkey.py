@@ -29,9 +29,6 @@ def encrypt(plaintext: bytes, key: bytes = KEY, iv: bytes = IV) -> bytes:
 
 
 def clear_ts(packets: int = 4) -> bytes:
-    # Plaintext MPEG-TS: sync byte 0x47 at every 188-byte packet boundary. Default 4 packets so
-    # the fixture satisfies the hardened 4-boundary sniff (and 752 B is 16-aligned, so it must be
-    # caught by the clear-TS guard, not the len%16 guard).
     return b"".join(bytes([SYNC_BYTE]) + b"\x00" * (TS_PACKET_SIZE - 1) for _ in range(packets))
 
 
@@ -56,7 +53,7 @@ def test_clear_ts_passes_through(tmp_path) -> None:
 
 
 def test_non_block_aligned_passes_through(tmp_path) -> None:
-    data = b"\x01" * 17  # not TS, and not a 16-byte multiple -> not valid CBC ciphertext
+    data = b"\x01" * 17
     assert len(data) % AES.block_size != 0
     seg = tmp_path / "0.ts"
     seg.write_bytes(data)
@@ -88,7 +85,7 @@ def test_warns_once_per_instance(tmp_path, caplog) -> None:
     assert len(warnings) == 1
 
 
-def _data_key(raw: bytes, base64_encoded: bool = True) -> Key:
+def data_key(raw: bytes, base64_encoded: bool = True) -> Key:
     if base64_encoded:
         uri = "data:text/plain;base64," + base64.b64encode(raw).decode("ascii")
     else:
@@ -97,30 +94,26 @@ def _data_key(raw: bytes, base64_encoded: bool = True) -> Key:
 
 
 def test_data_uri_key_decodes_and_validates_length() -> None:
-    drm = ClearKey.from_m3u_key(_data_key(KEY))
+    drm = ClearKey.from_m3u_key(data_key(KEY))
     assert drm.key == KEY
 
 
 def test_data_uri_key_wrong_length_rejected() -> None:
     with pytest.raises(ValueError, match="Unexpected Length"):
-        ClearKey.from_m3u_key(_data_key(b"\x00" * 8))
+        ClearKey.from_m3u_key(data_key(b"\x00" * 8))
 
 
 def test_raw_data_uri_key_materialises_and_validates() -> None:
-    # A raw (non-base64) data: payload must be taken as literal key bytes, not hex-parsed.
-    drm = ClearKey.from_m3u_key(_data_key(KEY, base64_encoded=False))
+    drm = ClearKey.from_m3u_key(data_key(KEY, base64_encoded=False))
     assert drm.key == KEY
 
 
 def test_raw_data_uri_key_wrong_length_rejected() -> None:
     with pytest.raises(ValueError, match="Unexpected Length"):
-        ClearKey.from_m3u_key(_data_key(b"\x01" * 8, base64_encoded=False))
+        ClearKey.from_m3u_key(data_key(b"\x01" * 8, base64_encoded=False))
 
 
 def test_data_uri_split_tolerates_commas_in_payload() -> None:
-    # base64 with padding contains no comma, but the split must only break on the first comma
-    # so a payload that itself contains a comma is not truncated. Encode a 16-byte key whose
-    # base64 happens to be split-safe, and assert the mediatype comma is the only split point.
     raw = bytes(range(16))
     b64 = base64.b64encode(raw).decode("ascii")
     key = Key(
@@ -160,19 +153,15 @@ def test_sequence_number_iv_uses_absolute_media_sequence() -> None:
     wanted segment's ``media_sequence`` (EXT-X-MEDIA-SEQUENCE + absolute position).
     """
     master = m3u8.loads(SEQ_PLAYLIST)
-    # media sequence numbers are the offset (100) plus absolute playlist position.
     assert [s.media_sequence for s in master.segments] == [100, 101, 102, 103]
 
-    # Drop an early segment (index 1), as an OnSegmentFilter would.
     unwanted = {master.segments[1]}
     wanted_segments = [s for s in master.segments if s not in unwanted]
 
-    # download index 1 is the SECOND surviving segment (absolute seq 102), not 101.
     download_i = 1
     seq = wanted_segments[download_i].media_sequence
     assert seq == 102
 
     iv = int(seq).to_bytes(16, "big")
     assert iv == (102).to_bytes(16, "big")
-    # the old download-index derivation would have produced the wrong IV (100 + 1 = 101)
     assert iv != (100 + download_i).to_bytes(16, "big")

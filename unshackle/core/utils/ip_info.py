@@ -8,14 +8,13 @@ import requests
 
 from unshackle.core.cacher import Cacher
 
-CACHE_KEY = "ip_info_v3"
-CACHE_TTL = 86400  # 24 hours
+CACHE_KEY = "ip_info_v4"
+CACHE_TTL = 86400
 PROVIDER_STATE_KEY = "ip_provider_state"
-RATE_LIMIT_COOLDOWN = 300  # 5 minutes
+RATE_LIMIT_COOLDOWN = 300
 REQUEST_TIMEOUT = 10
 
-# Only these keys are persisted to the global cache.
-GEO_CACHE_KEYS = ("country", "country_code")
+GEO_CACHE_KEYS = ("ip", "country", "country_code")
 
 Fetcher = Callable[[requests.Session], Optional[dict]]
 
@@ -23,7 +22,7 @@ log = logging.getLogger("ip_info")
 
 
 class RateLimited(Exception):
-    """Raised by a provider fetcher when the upstream returns 429."""
+    """Raised by a geolocation API fetcher when the upstream returns 429."""
 
 
 def normalize(
@@ -37,7 +36,7 @@ def normalize(
     as_name: str = "",
     continent_code: str = "",
 ) -> Optional[dict]:
-    """Build the canonical IP-info dict, or None if no country code is present."""
+    """Assemble the canonical IP-info dict, or None if no country code is present."""
     code = country_code.strip()
     if not code:
         return None
@@ -94,19 +93,21 @@ def parse_ip_api_in(data: dict) -> Optional[dict]:
 
 def lookup_session(source: Optional[requests.Session]) -> requests.Session:
     """
-    Build a plain, retry-free requests session for IP geolocation.
+    Assemble a plain, retry-free `requests` HTTP session for IP geolocation.
 
-    Geolocation needs no TLS fingerprinting, so we skip the impersonated rnet
-    session and the base session's urllib3 retry loop — both retry 429 internally,
-    which hides the response and defeats fast provider handover. With a bare session
-    a 429 comes straight back so we can move to the next provider immediately. Only
-    the proxy is carried over so proxied lookups still report the proxy's exit IP.
+    Geolocation needs no TLS fingerprinting, so we skip the impersonated rnet HTTP
+    session, and the urllib3 retry loop of the base HTTP session. Both retry 429
+    internally, which hides the response and defeats fast handover to the next
+    geolocation API. With a bare HTTP session a 429 comes straight back, so we can
+    move to the next API immediately. This function carries over the proxy only, so
+    proxied lookups still report the proxy's exit IP.
     """
     sess = requests.Session()
     proxies = getattr(source, "proxies", None)
     if proxies:
         proxy = proxies.get("all") or proxies.get("https") or proxies.get("http")
         if proxy:
+            sess.trust_env = False
             sess.proxies.update({"http": proxy, "https": proxy})
     return sess
 
@@ -139,7 +140,7 @@ def fetch_ipinfo(session: requests.Session) -> Optional[dict]:
 
 
 def fetch_ip_api_in(session: requests.Session) -> Optional[dict]:
-    """ip-api.in has no /me endpoint — resolve IP via ipify first, then look it up."""
+    """ip-api.in has no /me endpoint, so get the IP from ipify first, then look it up."""
     ip_resp = session.get("https://api.ipify.org", timeout=REQUEST_TIMEOUT)
     if ip_resp.status_code == 429:
         raise RateLimited()
@@ -183,22 +184,26 @@ def get_ip_info(
     session: Optional[requests.Session] = None,
     *,
     cached: bool = False,
+    errors: Optional[list[Exception]] = None,
 ) -> Optional[dict]:
     """
-    Look up IP/geolocation info via ipinfo.io (Lite when `ipinfo_api_key` configured)
+    Look up IP/geolocation info through ipinfo.io (Lite when `ipinfo_api_key` configured)
     with fallback to ip-api.in.
 
     Live lookups return a dict with `ip`, `country` (lowercase ISO2), `country_code`
     (uppercase ISO2), `region`, `city`, `org`, `asn`, `as_name`, `continent_code` and
-    `_provider`. Cached lookups return only `country`/`country_code` (see GEO_CACHE_KEYS).
-    Returns None if every provider fails.
+    `_provider`. Cached lookups return only `ip`/`country`/`country_code` (see GEO_CACHE_KEYS).
+    Returns None if every geolocation API fails.
 
     Args:
-        session: Optional requests session. If a proxied session is passed, the
-            returned info reflects the proxy's exit IP. Auth headers for ipinfo
-            are sent per-request; never mutated onto session.headers.
+        session: Optional `requests` HTTP session. If you pass a proxied session,
+            the returned info reflects the proxy's exit IP. unshackle sends the
+            ipinfo auth headers per-request, and never mutates them onto
+            session.headers.
         cached: When True, read/write a 24h Cacher-backed entry. Use only for
-            local IP lookups — never with a proxied session.
+            local IP lookups, never with a proxied HTTP session.
+        errors: When given, each geolocation API that raised an exception adds it to
+            this list. A 429 or an unusable response adds nothing.
     """
     cache = None
     if cached:
@@ -231,6 +236,8 @@ def get_ip_info(
             continue
         except Exception as e:
             log.debug(f"Provider {name} failed with exception: {e}")
+            if errors is not None:
+                errors.append(e)
             continue
 
         if not normalized:
@@ -250,3 +257,34 @@ def get_ip_info(
 
     log.warning("All IP geolocation providers failed")
     return None
+
+
+def verify_proxy_exit(session: requests.Session) -> dict:
+    """
+    Look up the exit IP of the proxy on `session`, and check that it is not the local IP.
+
+    Returns the live IP info of the proxy exit, or an empty dict when geolocation APIs
+    answered through the proxy (a 429, or no usable data) but none returned an IP. Raises
+    ConnectionError when no geolocation API got a response through the proxy, or
+    when the proxy exit IP is the local IP. This function does not check the exit country.
+    The local IP comes from the 24h cached local lookup, and a live local lookup must
+    confirm a match before this function rejects the proxy. If the local IP is not known,
+    the IP comparison does not occur.
+    """
+    errors: list[Exception] = []
+    info = get_ip_info(session, errors=errors)
+    if not info:
+        if len(errors) < len(build_providers()):
+            log.warning("No geolocation API returned the proxy exit IP, so the exit IP check does not occur")
+            return {}
+        raise ConnectionError(
+            f"Proxy check failed: no IP lookup got through the proxy ({type(errors[-1]).__name__}). "
+            "The proxy is down or refused the connection."
+        )
+    exit_ip = info.get("ip")
+    server_ip = (get_ip_info(cached=True) or {}).get("ip")
+    if exit_ip and server_ip == exit_ip and (get_ip_info() or {}).get("ip") == exit_ip:
+        raise ConnectionError(
+            "Proxy check failed: the proxy exit IP is the IP of this machine, so traffic does not go through the proxy."
+        )
+    return info

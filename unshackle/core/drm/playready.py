@@ -7,6 +7,7 @@ import subprocess
 import textwrap
 import time
 from pathlib import Path
+from threading import Lock
 from typing import Any, Callable, Optional, Union
 from uuid import UUID
 
@@ -15,6 +16,7 @@ from construct import Container
 from pymp4.parser import Box
 from pyplayready.cdm import Cdm as PlayReadyCdm
 from pyplayready.system.pssh import PSSH
+from pyplayready.system.wrmheader import WRMHeader
 from requests import Session
 from rich.text import Text
 
@@ -22,12 +24,16 @@ from unshackle.core import binaries
 from unshackle.core.config import config
 from unshackle.core.console import console
 from unshackle.core.constants import AnyTrack
+from unshackle.core.drm import key_args as drm_key_args
+from unshackle.core.session import utf8_text
 from unshackle.core.utilities import get_boxes, log_event
 from unshackle.core.utils.subprocess import ffprobe
 
 
 class PlayReady:
     """PlayReady DRM System."""
+
+    _ABSORB_LOCK = Lock()
 
     def __init__(
         self,
@@ -41,23 +47,17 @@ class PlayReady:
         if not isinstance(pssh, PSSH):
             raise TypeError(f"Expected pssh to be a {PSSH}, not {pssh!r}")
 
+        kids: list[UUID] = []
+        for header in pssh.wrm_headers:
+            for header_kid in self.header_kids(header):
+                if header_kid not in kids:
+                    kids.append(header_kid)
         if pssh_b64:
-            kids = self._extract_kids_from_pssh_b64(pssh_b64)
-        else:
-            kids = []
+            for extra_kid in self.extract_kids_from_pssh_b64(pssh_b64):
+                if extra_kid not in kids:
+                    kids.append(extra_kid)
 
-        # Extract KIDs using pyplayready's WrmHeader key_ids
-        if not kids:
-            for header in pssh.wrm_headers:
-                for signed_key_id in getattr(header, "key_ids", []):
-                    try:
-                        if isinstance(signed_key_id.value, UUID):
-                            kids.append(signed_key_id.value)
-                        else:
-                            kids.append(UUID(bytes_le=base64.b64decode(signed_key_id.value)))
-                    except Exception:
-                        continue
-
+        self._kid: Optional[UUID] = None
         if kid:
             if isinstance(kid, str):
                 kid = UUID(hex=kid)
@@ -65,11 +65,14 @@ class PlayReady:
                 kid = UUID(bytes=kid)
             if not isinstance(kid, UUID):
                 raise ValueError(f"Expected kid to be a {UUID}, str, or bytes, not {kid!r}")
+            self._kid = kid
             if kid not in kids:
                 kids.append(kid)
 
         self._pssh = pssh
         self._kids = kids
+        self._extra_headers: list[WRMHeader] = []
+        self._refused_headers: set[str] = set()
 
         if not self.kids:
             raise PlayReady.Exceptions.KIDNotFound("No Key ID was found within PSSH and none were provided.")
@@ -79,23 +82,17 @@ class PlayReady:
         if pssh_b64:
             self.data.setdefault("pssh_b64", pssh_b64)
 
-    def _extract_kids_from_pssh_b64(self, pssh_b64: str) -> list[UUID]:
+    def extract_kids_from_pssh_b64(self, pssh_b64: str) -> list[UUID]:
         """Extract all KIDs from base64-encoded PSSH data."""
         try:
-            # PSSH XML comes from third-party manifests; defusedxml guards against entity expansion
             import defusedxml.ElementTree as ET
 
-            # Decode the PSSH
             pssh_bytes = base64.b64decode(pssh_b64)
 
-            # Try to find XML in the PSSH data
-            # PlayReady PSSH usually has XML embedded in it
             pssh_str = pssh_bytes.decode("utf-16le", errors="ignore")
 
-            # Find WRMHEADER
             xml_start = pssh_str.find("<WRMHEADER")
             if xml_start == -1:
-                # Try UTF-8
                 pssh_str = pssh_bytes.decode("utf-8", errors="ignore")
                 xml_start = pssh_str.find("<WRMHEADER")
 
@@ -109,7 +106,6 @@ class PlayReady:
 
                 kids = []
 
-                # Extract from CUSTOMATTRIBUTES/KIDS
                 kid_elements = root.findall(".//pr:CUSTOMATTRIBUTES/pr:KIDS/pr:KID", ns)
                 for kid_elem in kid_elements:
                     value = kid_elem.get("VALUE")
@@ -118,10 +114,9 @@ class PlayReady:
                             kid_bytes = base64.b64decode(value + "==")
                             kid_uuid = UUID(bytes_le=kid_bytes)
                             kids.append(kid_uuid)
-                        except Exception:
+                        except ValueError:
                             pass
 
-                # v4.2/v4.3: DATA/PROTECTINFO/KIDS/KID
                 protectinfo_kids = root.findall(".//pr:DATA/pr:PROTECTINFO/pr:KIDS/pr:KID", ns)
                 for kid_elem in protectinfo_kids:
                     value = kid_elem.get("VALUE")
@@ -131,10 +126,9 @@ class PlayReady:
                             kid_uuid = UUID(bytes_le=kid_bytes)
                             if kid_uuid not in kids:
                                 kids.append(kid_uuid)
-                        except Exception:
+                        except ValueError:
                             pass
 
-                # v4.1: DATA/PROTECTINFO/KID
                 protectinfo_kid = root.findall(".//pr:DATA/pr:PROTECTINFO/pr:KID", ns)
                 for kid_elem in protectinfo_kid:
                     value = kid_elem.get("VALUE")
@@ -144,10 +138,9 @@ class PlayReady:
                             kid_uuid = UUID(bytes_le=kid_bytes)
                             if kid_uuid not in kids:
                                 kids.append(kid_uuid)
-                        except Exception:
+                        except ValueError:
                             pass
 
-                # v4.0: DATA/KID
                 individual_kids = root.findall(".//pr:DATA/pr:KID", ns)
                 for kid_elem in individual_kids:
                     if kid_elem.text:
@@ -156,12 +149,12 @@ class PlayReady:
                             kid_uuid = UUID(bytes_le=kid_bytes)
                             if kid_uuid not in kids:
                                 kids.append(kid_uuid)
-                        except Exception:
+                        except ValueError:
                             pass
 
                 return kids
 
-        except Exception:
+        except (ValueError, SyntaxError):
             pass
 
         return []
@@ -178,7 +171,7 @@ class PlayReady:
 
         if track.descriptor == track.Descriptor.HLS:
             m3u_url = track.url
-            master = m3u8.loads(session.get(m3u_url).text, uri=m3u_url)
+            master = m3u8.loads(utf8_text(session.get(m3u_url)), uri=m3u_url)
             pssh_boxes.extend(
                 Box.parse(base64.b64decode(x.uri.split(",")[-1]))
                 for x in (master.session_keys or master.keys)
@@ -253,7 +246,8 @@ class PlayReady:
     def to_dict(self) -> dict[str, Any]:
         """Serialise this DRM instance for export/import (PSSH + KIDs).
 
-        Content keys are stored once at the export's track level, not duplicated here.
+        unshackle stores the content keys once at the export's track level, and does not
+        duplicate them here.
         """
         return {
             "system": "PlayReady",
@@ -265,7 +259,73 @@ class PlayReady:
     def kids(self) -> list[UUID]:
         return self._kids
 
-    def _extract_keys_from_cdm(self, cdm: PlayReadyCdm, session_id: bytes) -> dict:
+    @staticmethod
+    def header_kids(header: WRMHeader) -> list[UUID]:
+        """Return the KIDs one WRM header names, in header order."""
+        kids: list[UUID] = []
+        for signed_key_id in getattr(header, "key_ids", []):
+            try:
+                if isinstance(signed_key_id.value, UUID):
+                    kids.append(signed_key_id.value)
+                else:
+                    kids.append(UUID(bytes_le=base64.b64decode(signed_key_id.value)))
+            except (ValueError, TypeError):
+                continue
+        return kids
+
+    def absorb(self, *others: PlayReady) -> None:
+        """Fold sibling PlayReady objects into this one so their headers and KIDs get licensed too.
+
+        A manifest can attach one PlayReady object per WRM header to the same track
+        (ISM shares its Protection list across tracks; HLS emits one per EXT-X-KEY). The
+        caller keeps this object's identity, which the decrypt path and drm_lock depend on.
+        """
+        with PlayReady._ABSORB_LOCK:
+            known = {header.dumps() for header in [*self.pssh.wrm_headers, *self._extra_headers]}
+            for other in others:
+                if other is self:
+                    continue
+                for header in other.distinct_headers():
+                    if header.dumps() not in known:
+                        known.add(header.dumps())
+                        self._extra_headers.append(header)
+                for kid in other.kids:
+                    if kid not in self._kids:
+                        self._kids.append(kid)
+                for kid, key in dict(other.content_keys).items():
+                    self.content_keys.setdefault(kid, key)
+
+    def distinct_headers(self) -> list[WRMHeader]:
+        """Return the WRM headers to license, deduplicated by the KID set each one names.
+
+        Two headers naming the same KIDs (a v4.0 header beside its v4.3 twin, or one PRH per
+        rendition for one content key) cost one challenge. A header with no readable KID is kept: it
+        may still be the only route to a content key nothing else names.
+        """
+        headers: list[WRMHeader] = []
+        seen: set[frozenset[UUID]] = set()
+        for header in [*self.pssh.wrm_headers, *self._extra_headers]:
+            kid_set = frozenset(self.header_kids(header))
+            if kid_set and kid_set in seen:
+                continue
+            seen.add(kid_set)
+            headers.append(header)
+        return headers
+
+    @staticmethod
+    def pro_b64_for(header: WRMHeader) -> str:
+        """Build a base64 one-record PlayReady Object holding only this header.
+
+        Remote CDMs send the value given to set_pssh_b64 rather than the header passed
+        to get_license_challenge, so a per-header challenge needs a per-header PRO.
+        """
+        record = header.dumps().encode("utf-16-le")
+        pro = PSSH.PlayreadyHeader.build(
+            {"length": 10 + len(record), "records": [{"type": 1, "length": len(record), "data": record}]}
+        )
+        return base64.b64encode(pro).decode()
+
+    def extract_keys_from_cdm(self, cdm: PlayReadyCdm, session_id: bytes) -> dict:
         """Extract keys from CDM session with cross-library compatibility.
 
         Args:
@@ -297,15 +357,96 @@ class PlayReady:
         return keys
 
     def get_content_keys(self, cdm: PlayReadyCdm, certificate: Callable, licence: Callable) -> None:
+        """License every distinct WRM header whose KIDs still lack a content key.
+
+        A v4.2+ header may list several KIDs and one response may stack several licences,
+        so one challenge often covers everything. Content that ships several headers (ISM
+        with one ProtectionHeader per track type, HLS with one PRH per playlist) gets one
+        challenge per header that is not yet covered. Headers are sent as-is: Microsoft lets
+        the server ignore the header, so a merged header could ask for keys it never grants.
+
+        A header that a round refused, or that yielded nothing, is not sent again by this
+        object: every track of a title runs this method, and a repeat would only repeat the
+        refusal.
+        """
+        headers = self.distinct_headers()
+        wanted = set(self.kids)
+        for index, header in enumerate(headers):
+            header_kids = self.header_kids(header)
+            if header_kids and set(header_kids) <= self.content_keys.keys():
+                continue
+            if len(headers) > 1 and header.dumps() in self._refused_headers:
+                continue
+            if len(headers) == 1:
+                pssh_b64, required = self.pssh_b64, self.kids
+            else:
+                pssh_b64, required = self.pro_b64_for(header), header_kids or self.kids
+            try:
+                keys = self._license_header(cdm, header, pssh_b64, required, licence)
+            except PlayReady.Exceptions.DeviceRevoked:
+                raise
+            except Exception as e:
+                self._refused_headers.add(header.dumps())
+                if not self.content_keys and index == len(headers) - 1:
+                    raise
+                log_event(
+                    "drm_license_error",
+                    level="WARNING",
+                    message=f"PlayReady header {index + 1}/{len(headers)} was refused: {e}",
+                    drm_type="PlayReady",
+                    header_kids=[kid.hex for kid in header_kids],
+                )
+                continue
+            self.content_keys.update(keys)
+            if keys:
+                log_event(
+                    "drm_content_keys",
+                    level="INFO",
+                    message=f"Recovered {len(keys)} PlayReady content key(s) from CDM",
+                    drm_type="PlayReady",
+                    key_count=len(keys),
+                    keys=[{"kid": k.hex if hasattr(k, "hex") else str(k), "key": v} for k, v in keys.items()],
+                )
+            else:
+                self._refused_headers.add(header.dumps())
+
+        if not self.content_keys:
+            raise PlayReady.Exceptions.EmptyLicense("No Content Keys were within the License")
+
+        missing = wanted - self.content_keys.keys()
+        if missing:
+            log_event(
+                "drm_missing_keys",
+                level="WARNING",
+                message=f"No PlayReady key for KID(s) {', '.join(sorted(kid.hex for kid in missing))}",
+                drm_type="PlayReady",
+                missing_kids=[kid.hex for kid in missing],
+            )
+
+    def _license_header(
+        self,
+        cdm: PlayReadyCdm,
+        header: WRMHeader,
+        pssh_b64: Optional[str],
+        required_kids: list[UUID],
+        licence: Callable,
+    ) -> dict[UUID, str]:
+        """Run one challenge/response round for a single header and return the keys it yielded."""
         session_id = cdm.open()
         try:
-            if hasattr(cdm, "set_pssh_b64") and self.pssh_b64:
-                cdm.set_pssh_b64(self.pssh_b64)
+            if hasattr(cdm, "set_pssh_b64") and pssh_b64:
+                try:
+                    cdm.set_pssh_b64(pssh_b64, session_id=session_id)
+                except TypeError:
+                    cdm.set_pssh_b64(pssh_b64)
 
             if hasattr(cdm, "set_required_kids"):
-                cdm.set_required_kids(self.kids)
+                try:
+                    cdm.set_required_kids(required_kids, session_id=session_id)
+                except TypeError:
+                    cdm.set_required_kids(required_kids)
 
-            challenge = cdm.get_license_challenge(session_id, self.pssh.wrm_headers[0])
+            challenge = cdm.get_license_challenge(session_id, header)
 
             if challenge:
                 license_str = ""
@@ -316,10 +457,10 @@ class PlayReady:
                         message="Requesting PlayReady license",
                         drm_type="PlayReady",
                         challenge_size=len(challenge),
-                        kid_count=len(self.kids),
+                        kid_count=len(required_kids),
                     )
                     try:
-                        license_res = licence(challenge=challenge, pssh_b64=self.pssh_b64)
+                        license_res = licence(challenge=challenge, pssh_b64=pssh_b64)
                     except TypeError:
                         license_res = licence(challenge=challenge)
                     if isinstance(license_res, bytes):
@@ -330,7 +471,7 @@ class PlayReady:
                     if "<License>" not in license_str:
                         try:
                             license_str = base64.b64decode(license_str + "===").decode()
-                        except Exception:
+                        except ValueError:
                             pass
 
                     cdm.parse_license(session_id, license_str)
@@ -344,35 +485,21 @@ class PlayReady:
                 except PlayReady.Exceptions.DeviceRevoked:
                     raise
                 except Exception as e:
-                    revoked = self._detect_revocation(license_str) or self._detect_revocation(str(e))
+                    revoked = self.detect_revocation(license_str) or self.detect_revocation(str(e))
                     if revoked:
                         raise PlayReady.Exceptions.DeviceRevoked(revoked) from e
                     raise
 
-            keys = self._extract_keys_from_cdm(cdm, session_id)
-            self.content_keys.update(keys)
-
-            if keys:
-                log_event(
-                    "drm_content_keys",
-                    level="INFO",
-                    message=f"Recovered {len(keys)} PlayReady content key(s) from CDM",
-                    drm_type="PlayReady",
-                    key_count=len(keys),
-                    keys=[{"kid": k.hex if hasattr(k, "hex") else str(k), "key": v} for k, v in keys.items()],
-                )
+            return self.extract_keys_from_cdm(cdm, session_id)
         finally:
             cdm.close(session_id)
 
-        if not self.content_keys:
-            raise PlayReady.Exceptions.EmptyLicense("No Content Keys were within the License")
-
     @staticmethod
-    def _detect_revocation(text: str) -> Optional[str]:
+    def detect_revocation(text: str) -> Optional[str]:
         """Return the decoded error string if a revocation HRESULT is present, else None.
 
         Reads the code from the raw SOAP body (<StatusCode>0x8004C065</StatusCode>)
-        or from an exception message that carries it, so any service is covered.
+        or from an exception message that carries it, so this method covers any service.
         """
         from unshackle.core.drm.playready_errors import describe, is_revocation
 
@@ -391,7 +518,7 @@ class PlayReady:
             path: Path to the encrypted file to decrypt
         Raises:
             EnvironmentError if the required decryption executable could not be found.
-            ValueError if the track has not yet been downloaded.
+            ValueError if unshackle has not yet downloaded the track.
             SubprocessError if the decryption process returned a non-zero exit code.
         """
         if not self.content_keys:
@@ -415,9 +542,9 @@ class PlayReady:
 
         decrypt_start = time.monotonic()
         if decrypter == "mp4decrypt":
-            self._decrypt_with_mp4decrypt(path)
+            self.decrypt_with_mp4decrypt(path)
         else:
-            self._decrypt_with_shaka_packager(path)
+            self.decrypt_with_shaka_packager(path)
 
         log_event(
             "drm_decrypt_complete",
@@ -430,28 +557,28 @@ class PlayReady:
             output_size=path.stat().st_size if path.exists() else 0,
         )
 
-    def _decrypt_with_mp4decrypt(self, path: Path) -> None:
+    def own_kids(self) -> list[UUID]:
+        """Return the KIDs that identify this track's own content key.
+
+        The KID given to the constructor (from the manifest or the init segment) names the
+        track exactly. A PSSH can name the KIDs of other renditions too.
+        """
+        if self._kid and self._kid in self.content_keys:
+            return [self._kid]
+        return self.kids
+
+    def mp4decrypt_key_args(self) -> list[str]:
+        """Build the mp4decrypt --key arguments for every content key and the zero-KID fallback."""
+        return drm_key_args.mp4decrypt_key_args(self.content_keys, self.own_kids())
+
+    def decrypt_with_mp4decrypt(self, path: Path) -> None:
         """Decrypt using mp4decrypt"""
         if not binaries.Mp4decrypt:
             raise EnvironmentError("mp4decrypt executable not found but is required.")
 
         output_path = path.with_stem(f"{path.stem}_decrypted")
 
-        # Build key arguments
-        key_args = []
-        for kid, key in self.content_keys.items():
-            kid_hex = kid.hex if hasattr(kid, "hex") else str(kid).replace("-", "")
-            key_hex = key if isinstance(key, str) else key.hex()
-            key_args.extend(["--key", f"{kid_hex}:{key_hex}"])
-
-        # Fallback for tracks whose tenc default_KID is all-zero and whose real
-        # KID is signalled out-of-band: emit a zero-KID entry per content key.
-        zero_kid = "00" * 16
-        existing_kids = {kid.hex if hasattr(kid, "hex") else str(kid).replace("-", "") for kid in self.content_keys}
-        if zero_kid not in existing_kids:
-            for key in self.content_keys.values():
-                key_hex = key if isinstance(key, str) else key.hex()
-                key_args.extend(["--key", f"{zero_kid}:{key_hex}"])
+        key_args = self.mp4decrypt_key_args()
 
         cmd = [
             str(binaries.Mp4decrypt),
@@ -483,8 +610,8 @@ class PlayReady:
         path.unlink()
         shutil.move(output_path, path)
 
-    def _decrypt_with_shaka_packager(self, path: Path) -> None:
-        """Decrypt using Shaka Packager (original method)"""
+    def decrypt_with_shaka_packager(self, path: Path) -> None:
+        """Decrypt with shaka-packager (original method)"""
         if not binaries.ShakaPackager:
             raise EnvironmentError("Shaka Packager executable not found but is required.")
 
@@ -496,18 +623,7 @@ class PlayReady:
                 f"input={path},stream=0,output={output_path},output_format=MP4",
                 "--enable_raw_key_decryption",
                 "--keys",
-                ",".join(
-                    [
-                        *[
-                            f"label={i}:key_id={kid.hex}:key={key.lower()}"
-                            for i, (kid, key) in enumerate(self.content_keys.items())
-                        ],
-                        *[
-                            f"label={i}:key_id={'00' * 16}:key={key.lower()}"
-                            for i, (kid, key) in enumerate(self.content_keys.items(), len(self.content_keys))
-                        ],
-                    ]
-                ),
+                drm_key_args.shaka_keys(self.content_keys, self.own_kids()),
                 "--temp_dir",
                 config.directories.temp,
             ]

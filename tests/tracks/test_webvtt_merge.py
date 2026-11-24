@@ -12,9 +12,6 @@ from __future__ import annotations
 
 from unshackle.core.utils.webvtt import merge_segmented_webvtt
 
-# Two segments, each a full WebVTT document with its own X-TIMESTAMP-MAP header,
-# as they arrive concatenated from a DASH/HLS subtitle stream. The first cue carries
-# span tags, an {\an8} override, a cue setting, and a literal &lt; entity.
 SEGMENTED_VTT = (
     "WEBVTT\n"
     "X-TIMESTAMP-MAP=MPEGTS:900000,LOCAL:00:00:00.000\n\n"
@@ -35,8 +32,8 @@ def test_merge_preserves_inline_formatting():
 
 def test_merge_preserves_cue_settings_and_entities():
     out = merge_segmented_webvtt(SEGMENTED_VTT, segment_durations=[900000, 900000], timescale=1)
-    assert "line:10% align:center" in out  # cue positioning survives
-    assert "&lt;" in out  # a literal entity is not turned into a stray tag
+    assert "line:10% align:center" in out
+    assert "&lt;" in out
 
 
 def test_merge_collapses_headers_into_single_document():
@@ -46,8 +43,6 @@ def test_merge_collapses_headers_into_single_document():
 
 
 def test_merge_dedupes_boundary_duplicate_cues():
-    # A cue that spans a segment boundary is emitted in both segments; the merge
-    # should collapse the adjacent identical pair into one.
     dup = SEGMENTED_VTT + (
         "\nWEBVTT\n"
         "X-TIMESTAMP-MAP=MPEGTS:2700000,LOCAL:00:00:00.000\n\n"
@@ -59,16 +54,12 @@ def test_merge_dedupes_boundary_duplicate_cues():
 
 
 def test_merge_keeps_timing_lines_verbatim():
-    # String-level merge must not re-render timestamps (pycaption shortened
-    # 00:00:01.000 -> 00:01.000) and must keep the settings tail untouched.
     out = merge_segmented_webvtt(SEGMENTED_VTT, segment_durations=[900000, 900000], timescale=1)
     assert "00:00:01.000 --> 00:00:03.000 line:10% align:center" in out
     assert "00:00:04.000 --> 00:00:06.000" in out
 
 
 def test_merge_splices_triple_duplicate_into_one():
-    # A cue spanning two boundaries appears in three consecutive segments; the
-    # kept cue must be extended each time (latent bug: extending the dropped one).
     vtt = (
         "WEBVTT\n\n00:00:01.000 --> 00:00:02.000\nSame cue\n\n"
         "WEBVTT\n\n00:00:02.000 --> 00:00:03.000\nSame cue\n\n"
@@ -77,6 +68,14 @@ def test_merge_splices_triple_duplicate_into_one():
     out = merge_segmented_webvtt(vtt)
     assert out.count("Same cue") == 1
     assert "00:00:01.000 --> 00:00:04.000" in out
+
+
+def test_merge_duplicate_ending_earlier_keeps_later_end():
+    vtt = "WEBVTT\n\n00:00:01.000 --> 00:00:05.000\n[music]\n\nWEBVTT\n\n00:00:04.900 --> 00:00:04.950\n[music]\n"
+    out = merge_segmented_webvtt(vtt)
+    assert out.count("[music]") == 1
+    assert "00:00:01.000 --> 00:00:05.000" in out, f"kept cue was truncated:\n{out}"
+    assert "00:00:04.950" not in out
 
 
 def test_merge_drops_cue_ids_and_notes_keeps_style():
@@ -90,11 +89,10 @@ def test_merge_drops_cue_ids_and_notes_keeps_style():
     assert "Hello" in out
     assert "some-cue-id-42" not in out
     assert "NOTE" not in out
-    assert "STYLE\n::cue { color: red }" in out  # kept; players without STYLE support ignore it
+    assert "STYLE\n::cue { color: red }" in out
 
 
 def test_merge_dedupes_repeated_style_blocks_before_cues():
-    # Every segment repeats the same STYLE block; keep exactly one, before the first cue.
     style = "WEBVTT\n\nSTYLE\n::cue { color: red }\n\n"
     vtt = style + "00:00:01.000 --> 00:00:02.000\nOne\n\n" + style + "00:00:03.000 --> 00:00:04.000\nTwo\n"
     out = merge_segmented_webvtt(vtt)

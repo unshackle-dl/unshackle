@@ -169,6 +169,5 @@ def test_clear_directory_removes_stale_task_dir(temp_root: Path) -> None:
     files_count, freed_bytes = clear_directory(temp_root)
     assert not task_dir.exists()
     assert temp_root.is_dir()
-    # glob("**/*") never matches dotfiles, so .lock is not counted
     assert files_count == 1
     assert freed_bytes == 5

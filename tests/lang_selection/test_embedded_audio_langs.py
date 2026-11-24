@@ -28,5 +28,4 @@ def test_every_declaring_video_counts():
 
 @pytest.mark.parametrize("videos", [[video(audio_language="zh-CN")], [video(audio_language="zh-CN"), video()]])
 def test_dropping_the_video_drops_its_audio(videos):
-    # --audio-only / --no-video discard the track the audio lives in, so nothing is embedded
     assert embedded_audio_langs(videos, False) == []

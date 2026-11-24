@@ -1,0 +1,172 @@
+"""Cancel/abort hardening for the downloader.
+
+Pins three teardown-safety invariants:
+
+- ``dispatch_parts`` must NOT finalize when the process-global ``DOWNLOAD_CANCELLED``
+  fires mid-download: part workers return silently keeping partials, so every future
+  completes without error, and finalizing would strip the ``.!dev`` control file and
+  pass off a hole-filled pre-truncated file as complete on the next run.
+- A worker parked in the retry backoff wait (which can reach MAX_BACKOFF) must wake and
+  exit as soon as the batch abort is set, instead of sleeping out the full delay and
+  stalling shutdown or the merge.
+- A segment batch that starts with a cross-track cancel set, or meets one mid-flight, must
+  end by raising ``DownloadCancelled`` in adaptive mode as well as fixed. Adaptive's tail
+  window holds back boost candidates, and the cancel keeps ``seg_done`` short, so without
+  the raise it busy-loops forever on a batch it will never finish.
+"""
+
+import importlib
+import threading
+import time
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+import pytest
+from requests import Session
+
+from unshackle.core.constants import DownloadCancelled
+
+dl = importlib.import_module("unshackle.core.downloaders.requests")
+
+pytestmark = pytest.mark.unit
+
+BODY = b"x" * 4096
+
+
+class _Handler(BaseHTTPRequestHandler):
+    def do_GET(self) -> None:
+        server = self.server
+        if server.always_status:
+            self.send_response(server.always_status)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+        rng = self.headers.get("Range")
+        if rng:
+            start, end = (int(x) for x in rng.removeprefix("bytes=").split("-"))
+            body = BODY[start : end + 1]
+            self.send_response(206)
+            self.send_header("Content-Range", f"bytes {start}-{end}/{len(BODY)}")
+        else:
+            body = BODY
+            self.send_response(200)
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        if server.gate is not None:
+            self.wfile.write(body[:64])
+            self.wfile.flush()
+            server.started.set()
+            server.gate.wait(timeout=10)
+            self.wfile.write(body[64:])
+        else:
+            self.wfile.write(body)
+
+    def log_message(self, *args):
+        pass
+
+
+class _Server(ThreadingHTTPServer):
+    daemon_threads = True
+
+    def handle_error(self, request, client_address):
+        pass
+
+
+@pytest.fixture
+def server():
+    srv = _Server(("127.0.0.1", 0), _Handler)
+    srv.always_status = 0
+    srv.gate = None
+    srv.started = threading.Event()
+    thread = threading.Thread(target=srv.serve_forever, daemon=True)
+    thread.start()
+    yield srv
+    if srv.gate is not None:
+        srv.gate.set()
+    srv.shutdown()
+    thread.join(timeout=5)
+
+
+@pytest.fixture(autouse=True)
+def clear_cancel():
+    dl.DOWNLOAD_CANCELLED.clear()
+    yield
+    dl.DOWNLOAD_CANCELLED.clear()
+
+
+def url(server: _Server) -> str:
+    host, port = server.server_address
+    return f"http://{host}:{port}/seg.bin"
+
+
+def test_dispatch_parts_does_not_finalize_on_global_cancel(server, tmp_path):
+    server.gate = threading.Event()
+    save_path = tmp_path / "big.bin"
+
+    def cancel_when_started() -> None:
+        assert server.started.wait(timeout=10)
+        dl.DOWNLOAD_CANCELLED.set()
+        server.gate.set()
+
+    canceller = threading.Thread(target=cancel_when_started)
+    canceller.start()
+    events = list(
+        dl.dispatch_parts(
+            url=url(server),
+            save_path=save_path,
+            session=Session(),
+            total_size=len(BODY),
+            max_workers=2,
+        )
+    )
+    canceller.join(timeout=10)
+
+    assert not any("file_downloaded" in ev for ev in events)
+    assert save_path.with_name(f"{save_path.name}.!dev").exists()
+
+
+def test_backoff_wait_exits_promptly_on_batch_abort(server, tmp_path, monkeypatch):
+    server.always_status = 503
+    monkeypatch.setattr(dl, "retry_sleep", lambda exc, attempts: 30.0)
+    abort = threading.Event()
+
+    def consume() -> None:
+        for _ in dl.download(
+            url=url(server),
+            save_path=tmp_path / "seg.bin",
+            session=Session(),
+            segmented=True,
+            abort=abort,
+        ):
+            pass
+
+    worker = threading.Thread(target=consume)
+    start = time.monotonic()
+    worker.start()
+    time.sleep(0.5)
+    abort.set()
+    worker.join(timeout=10)
+    assert not worker.is_alive()
+    assert time.monotonic() - start < 10
+
+
+@pytest.mark.parametrize("adaptive", [False, True])
+def test_cancelled_batch_raises_instead_of_finishing_or_hanging(server, tmp_path, adaptive):
+    dl.DOWNLOAD_CANCELLED.set()
+    urls = [f"{url(server)}?i={i}" for i in range(40)]
+    result: list = []
+
+    def run() -> None:
+        try:
+            for _ in dl.requests(urls, tmp_path, "{i}.mp4", max_workers=16, adaptive=adaptive):
+                pass
+            result.append(None)
+        except BaseException as exc:  # noqa: BLE001 (the type is the assertion)
+            result.append(exc)
+
+    worker = threading.Thread(target=run, daemon=True)
+    worker.start()
+    worker.join(timeout=15)
+
+    assert not worker.is_alive(), "requests() never returned on a cancelled batch"
+    assert isinstance(result[0], DownloadCancelled)
+    assert not list(tmp_path.iterdir())

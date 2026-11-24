@@ -6,7 +6,7 @@ from typing import Optional, Union
 import requests
 
 from unshackle.core.config import config
-from unshackle.core.providers._base import ExternalIds, MetadataProvider, MetadataResult, _clean, _strip_year
+from unshackle.core.providers._base import ExternalIds, MetadataProvider, MetadataResult, clean, strip_year
 
 
 class TMDBProvider(MetadataProvider):
@@ -21,14 +21,14 @@ class TMDBProvider(MetadataProvider):
         return bool(config.tmdb_api_key)
 
     @property
-    def _api_key(self) -> str:
+    def api_key(self) -> str:
         return config.tmdb_api_key
 
     def search(self, title: str, year: Optional[int], kind: str) -> Optional[MetadataResult]:
-        search_title = _strip_year(title)
+        search_title = strip_year(title)
         self.log.debug("Searching TMDB for %r (%s, %s)", search_title, kind, year)
 
-        params: dict[str, str | int] = {"api_key": self._api_key, "query": search_title}
+        params: dict[str, str | int] = {"api_key": self.api_key, "query": search_title}
         if year is not None:
             params["year" if kind == "movie" else "first_air_date_year"] = year
 
@@ -56,7 +56,7 @@ class TMDBProvider(MetadataProvider):
             candidates = [c for c in candidates if c]
 
             for candidate in candidates:
-                ratio = SequenceMatcher(None, _clean(search_title), _clean(candidate)).ratio()
+                ratio = SequenceMatcher(None, clean(search_title), clean(candidate)).ratio()
                 if ratio > best_ratio:
                     best_ratio = ratio
                     best_id = result.get("id")
@@ -72,9 +72,8 @@ class TMDBProvider(MetadataProvider):
         if best_id is None:
             return None
 
-        # Fetch full detail for caching
-        detail = self._fetch_detail(best_id, kind)
-        ext_raw = self._fetch_external_ids_raw(best_id, kind)
+        detail = self.fetch_detail(best_id, kind)
+        ext_raw = self.fetch_external_ids_raw(best_id, kind)
 
         date = (detail or {}).get("release_date") or (detail or {}).get("first_air_date")
         result_year = int(date[:4]) if date and len(date) >= 4 and date[:4].isdigit() else None
@@ -97,7 +96,7 @@ class TMDBProvider(MetadataProvider):
         )
 
     def get_by_id(self, provider_id: Union[int, str], kind: str) -> Optional[MetadataResult]:
-        detail = self._fetch_detail(int(provider_id), kind)
+        detail = self.fetch_detail(int(provider_id), kind)
         if not detail:
             return None
 
@@ -116,7 +115,7 @@ class TMDBProvider(MetadataProvider):
         )
 
     def get_external_ids(self, provider_id: Union[int, str], kind: str) -> ExternalIds:
-        raw = self._fetch_external_ids_raw(int(provider_id), kind)
+        raw = self.fetch_external_ids_raw(int(provider_id), kind)
         if not raw:
             return ExternalIds(tmdb_id=int(provider_id), tmdb_kind=kind)
         return ExternalIds(
@@ -127,12 +126,17 @@ class TMDBProvider(MetadataProvider):
         )
 
     def find_by_imdb_id(self, imdb_id: str, kind: str) -> Optional[ExternalIds]:
-        """Look up TMDB/TVDB IDs from an IMDB ID using TMDB's /find endpoint."""
+        """Look up TMDB/TVDB IDs from an IMDB ID using TMDB's /find endpoint.
+
+        When the requested kind has no results, unshackle tries the other kind, so the
+        returned tmdb_kind can differ from the kind asked for. Returns None if the request fails or
+        nothing matches.
+        """
         self.log.debug("Looking up IMDB ID %s on TMDB", imdb_id)
         try:
             r = self.session.get(
                 f"{self.BASE_URL}/find/{imdb_id}",
-                params={"api_key": self._api_key, "external_source": "imdb_id"},
+                params={"api_key": self.api_key, "external_source": "imdb_id"},
                 timeout=30,
             )
             r.raise_for_status()
@@ -141,14 +145,12 @@ class TMDBProvider(MetadataProvider):
             self.log.debug("TMDB find by IMDB ID failed: %s", exc)
             return None
 
-        # Check movie_results or tv_results based on kind
         if kind == "movie":
             results = data.get("movie_results") or []
         else:
             results = data.get("tv_results") or []
 
         if not results:
-            # Try the other type as fallback
             fallback_key = "tv_results" if kind == "movie" else "movie_results"
             results = data.get(fallback_key) or []
             if results:
@@ -165,8 +167,7 @@ class TMDBProvider(MetadataProvider):
 
         self.log.debug("TMDB find -> ID %s (%s) for IMDB %s", tmdb_id, kind, imdb_id)
 
-        # Now fetch the full external IDs from TMDB to get TVDB etc.
-        ext_raw = self._fetch_external_ids_raw(tmdb_id, kind)
+        ext_raw = self.fetch_external_ids_raw(tmdb_id, kind)
 
         return ExternalIds(
             imdb_id=imdb_id,
@@ -175,11 +176,11 @@ class TMDBProvider(MetadataProvider):
             tvdb_id=ext_raw.get("tvdb_id") if ext_raw else None,
         )
 
-    def _fetch_detail(self, tmdb_id: int, kind: str) -> Optional[dict]:
+    def fetch_detail(self, tmdb_id: int, kind: str) -> Optional[dict]:
         try:
             r = self.session.get(
                 f"{self.BASE_URL}/{kind}/{tmdb_id}",
-                params={"api_key": self._api_key},
+                params={"api_key": self.api_key},
                 timeout=30,
             )
             r.raise_for_status()
@@ -188,11 +189,11 @@ class TMDBProvider(MetadataProvider):
             self.log.debug("Failed to fetch TMDB detail: %s", exc)
             return None
 
-    def _fetch_external_ids_raw(self, tmdb_id: int, kind: str) -> Optional[dict]:
+    def fetch_external_ids_raw(self, tmdb_id: int, kind: str) -> Optional[dict]:
         try:
             r = self.session.get(
                 f"{self.BASE_URL}/{kind}/{tmdb_id}/external_ids",
-                params={"api_key": self._api_key},
+                params={"api_key": self.api_key},
                 timeout=30,
             )
             r.raise_for_status()

@@ -3,18 +3,20 @@ Subtitle conversion backend registry.
 
 Routing is data-driven: each backend declares which (source -> target) codec pairs it can
 read/write, whether it is available in the current environment, and a preference rank.
-``resolve_backends`` filters the registry to the available backends that support the
-requested pair and orders them by rank; ``run_conversion`` tries each in turn (a real
+``resolve_backends`` filters the registry to the available backends that can convert the
+requested pair and orders them by rank. ``run_conversion`` tries each in turn (a real
 fallback chain) until one succeeds.
 
 The public entry point stays ``Subtitle.convert`` / ``Subtitle.strip_hearing_impaired`` in
-subtitle.py — this module only holds the selection + conversion logic so subtitle.py keeps
+subtitle.py. This module only holds the selection + conversion logic so subtitle.py keeps
 the codec enum, ``parse``, sanitizers and cue helpers (the collaborators backends reuse).
 """
 
 from __future__ import annotations
 
+import html
 import logging
+import re
 import subprocess
 import time
 from pathlib import Path
@@ -32,8 +34,6 @@ log = logging.getLogger("subtitle")
 
 Codec = Subtitle.Codec
 
-# SubtitleEdit (and the cross-platform seconv port) /convert format names.
-# Shared by SubtitleEditBackend, strip_hearing_impaired and reverse_rtl so the map lives once.
 SUBTITLE_EDIT_FORMATS: dict[Codec, str] = {
     Codec.SubRip: "subrip",
     Codec.SubStationAlpha: "substationalpha",
@@ -44,14 +44,12 @@ SUBTITLE_EDIT_FORMATS: dict[Codec, str] = {
     Codec.MicroDVD: "microdvd",
 }
 
-# pycaption can only WRITE these three formats.
 PYCAPTION_WRITERS = {
     Codec.SubRip: pycaption.SRTWriter,
     Codec.TimedTextMarkupLang: pycaption.DFXPWriter,
     Codec.WebVTT: pycaption.WebVTTWriter,
 }
 
-# pysubs2 format identifiers per codec.
 PYSUBS2_FORMATS: dict[Codec, str] = {
     Codec.SubRip: "srt",
     Codec.SubStationAlpha: "ssa",
@@ -66,7 +64,7 @@ PYSUBS2_FORMATS: dict[Codec, str] = {
 
 
 def is_seconv(binary: object) -> bool:
-    """True for the SubtitleEdit 5+ CLI (seconv); 4.x binaries need legacy /convert syntax."""
+    """True for the SubtitleEdit 5+ CLI (seconv). 4.x binaries need legacy /convert syntax."""
     name = str(binary).replace("\\", "/").rsplit("/", 1)[-1]
     return name.lower().rsplit(".", 1)[0] == "seconv"
 
@@ -82,12 +80,12 @@ def subtitleedit_args(
     reverse_rtl: bool = False,
 ) -> list[str]:
     """
-    Build a SubtitleEdit batch-convert command in 5.x (seconv ``--flags``) or 4.x
+    Assemble a SubtitleEdit batch-convert command in 5.x (seconv ``--flags``) or 4.x
     (``/convert /flags``) syntax, per ``is_seconv``.
 
-    Both name the output ``<input-stem>.<format-ext>``; ``output_folder`` steers placement
+    Both name the output ``<input-stem>.<format-ext>``. ``output_folder`` steers placement
     (a bare ``--output-filename`` resolves against the cwd, not the input dir). Overwrite is
-    always set so re-runs and in-place transforms (SDH/RTL) don't fail on an existing file.
+    always set so re-runs and in-place transforms (SDH/RTL) do not fail on an existing file.
     """
     if not is_seconv(binary):
         args = [str(binary), "/convert", str(src), fmt, "/encoding:utf8", "/overwrite"]
@@ -113,8 +111,6 @@ def subtitleedit_args(
     return args
 
 
-# Styled SubStation formats flattened to SRT lose positioning/colours/italics.
-# Never performed automatically — only when the user explicitly forces a target format.
 LOSSY_DOWNCONVERTS: frozenset[tuple[Codec, Codec]] = frozenset(
     {
         (Codec.SubStationAlpha, Codec.SubRip),
@@ -148,7 +144,6 @@ class SubtitleEditBackend:
         return bool(binaries.SubtitleEdit)
 
     def can_convert(self, source: Codec, target: Codec) -> bool:
-        # Segmented box formats cannot be read by SubtitleEdit.
         if source in (Codec.fTTML, Codec.fVTT):
             return False
         return source in self.reads and target in self.writes
@@ -179,8 +174,6 @@ class SubtitleEditBackend:
             source=str(source),
             target=str(target),
         )
-        # SE5 names the output <input-stem>.<format-ext>, which may differ from our target
-        # suffix (e.g. timedtext1.0 -> .ttml). Normalise it onto `out`.
         if not out.exists():
             produced = next((p for p in src.parent.glob(f"{src.stem}.*") if p not in (src, out)), None)
             if produced is None:
@@ -189,7 +182,7 @@ class SubtitleEditBackend:
 
 
 class Pysubs2Backend:
-    """pysubs2 — pure Python, broad format support, best fidelity for SSA/ASS (native style model)."""
+    """pysubs2: pure Python, broad format support, best fidelity for SSA/ASS (native style model)."""
 
     name = "pysubs2"
     formats = frozenset(PYSUBS2_FORMATS)
@@ -201,20 +194,18 @@ class Pysubs2Backend:
         return source in self.formats and target in self.formats
 
     def rank(self, source: Codec, target: Codec) -> int:
-        # Preferred reader for styled SubStation sources; solid general fallback otherwise.
         return 1 if source in (Codec.SubStationAlpha, Codec.SubStationAlphav4) else 2
 
     def convert(self, source: Codec, src: Path, target: Codec, out: Path) -> None:
-        subs = pysubs2.load(str(src), encoding="utf-8")
+        subs = pysubs2.load(str(src), encoding="utf-8-sig")
         subs.save(str(out), format_=PYSUBS2_FORMATS[target], encoding="utf-8")
 
 
 class SubbyBackend:
-    """subby — purpose-built for streaming subs. WebVTT/fVTT/SAMI -> SRT + CommonIssuesFixer cleanup."""
+    """subby: purpose-built for streaming subs. WebVTT/fVTT/SAMI -> SRT + CommonIssuesFixer cleanup."""
 
     name = "subby"
     reads = frozenset({Codec.WebVTT, Codec.fVTT, Codec.SAMI})
-    # Native SRT output; non-SRT targets re-encoded from the SRT intermediate via pycaption.
     writes = frozenset({Codec.SubRip, Codec.TimedTextMarkupLang, Codec.WebVTT})
     converters = {
         Codec.WebVTT: WebVTTConverter,
@@ -229,7 +220,6 @@ class SubbyBackend:
         return source in self.reads and target in self.writes
 
     def rank(self, source: Codec, target: Codec) -> int:
-        # Great for *->SRT (adds cleanup); the SRT intermediate is lossy for other targets.
         return 1 if target == Codec.SubRip else 5
 
     def convert(self, source: Codec, src: Path, target: Codec, out: Path) -> None:
@@ -249,7 +239,7 @@ class SubbyBackend:
 
 
 class PycaptionBackend:
-    """pycaption — last resort. Note: flattens positioning/italics (devine #39), so ranked last."""
+    """pycaption: last resort. Flattens positioning/italics (devine #39), so ranked last."""
 
     name = "pycaption"
     reads = frozenset({Codec.SubRip, Codec.TimedTextMarkupLang, Codec.WebVTT, Codec.SAMI, Codec.fTTML, Codec.fVTT})
@@ -281,13 +271,36 @@ REGISTRY: list[SubtitleBackend] = [
 
 
 def resolve_backends(source: Codec, target: Codec, *, pin: Optional[str] = None) -> list[SubtitleBackend]:
-    """Available backends that support source->target, ordered by rank. A pin is tried first."""
+    """Available backends that can convert source->target, ordered by rank. A pinned backend goes first."""
     available = [b for b in REGISTRY if b.is_available() and b.can_convert(source, target)]
     if pin:
         pinned = [b for b in available if b.name == pin]
         rest = sorted((b for b in available if b.name != pin), key=lambda b: b.rank(source, target))
         return pinned + rest
     return sorted(available, key=lambda b: b.rank(source, target))
+
+
+PLAIN_TEXT_TARGETS: frozenset[Codec] = frozenset({Codec.SubRip, Codec.SubStationAlpha, Codec.SubStationAlphav4})
+
+
+def decode_entities(out: Path) -> None:
+    """
+    Turn HTML entities into real characters in a format that has no entity syntax.
+
+    FFmpeg's SubRip reader (mpv, VLC, Plex, Jellyfin) and libass draw ``&amp;`` and the
+    other entities as literal text. Backends differ here: subby and SubtitleEdit
+    decode, pysubs2 does not.
+    """
+    text = out.read_text(encoding="utf8")
+    if "&" not in text:
+        return
+    decoded = re.sub(
+        r"&(?:#\d{1,7}|#[xX][0-9a-fA-F]{1,6}|[A-Za-z][A-Za-z0-9]{1,31});",
+        lambda m: html.unescape(m.group(0)),
+        text,
+    )
+    if decoded != text:
+        out.write_text(decoded, encoding="utf8")
 
 
 def finalize(sub: Subtitle, target: Codec, out: Path) -> Path:
@@ -307,8 +320,8 @@ def run_conversion(sub: Subtitle, target: Codec, *, pin: Optional[str] = None, f
     Convert ``sub`` to ``target`` using the best available backend, falling back through the
     capability chain on failure.
 
-    ``forced`` is True only for explicit user requests (``--sub-format``); lossy downconverts
-    (styled SubStation -> SRT) are skipped unless forced.
+    ``forced`` is True only for explicit user requests (``--sub-format``). unshackle skips
+    lossy downconverts (styled SubStation -> SRT) unless ``forced`` is True.
     """
     if sub.path is None or not sub.path.exists():
         raise ValueError("You must download the subtitle track first.")
@@ -339,6 +352,8 @@ def run_conversion(sub: Subtitle, target: Codec, *, pin: Optional[str] = None, f
             last_exc = e
             log.debug(f"Subtitle backend {backend.name} failed ({source.name}->{target.name}): {e}")
             continue
+        if target in PLAIN_TEXT_TARGETS:
+            decode_entities(out)
         return finalize(sub, target, out)
 
     raise RuntimeError(f"All subtitle backends failed for {source.name}->{target.name}") from last_exc

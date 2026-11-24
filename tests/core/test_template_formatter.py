@@ -13,8 +13,7 @@ import pytest
 from unshackle.core.config import config
 from unshackle.core.titles.episode import Episode
 from unshackle.core.titles.movie import Movie
-from unshackle.core.titles.music import Song as MusicSong
-from unshackle.core.titles.song import Song
+from unshackle.core.titles.music import Song
 from unshackle.core.utilities import sanitize_filename
 from unshackle.core.utils.template_formatter import TemplateFormatter, detect_spacer
 
@@ -22,13 +21,10 @@ from unshackle.core.utils.template_formatter import TemplateFormatter, detect_sp
 @pytest.mark.parametrize(
     ("template", "context", "expected"),
     [
-        # An omitted conditional inside brackets must take the whole group with it.
         ("{title} ({year?})", {"title": "Some Movie", "year": ""}, "Some Movie"),
         ("{title} [{quality?}]", {"title": "Some Movie", "quality": ""}, "Some Movie"),
         ("{title} ({year?}) [{quality?}]", {"title": "T", "year": "", "quality": ""}, "T"),
-        # The group survives when the value is present.
         ("{title} ({year?})", {"title": "Some Movie", "year": "2024"}, "Some Movie (2024)"),
-        # #107: the dash wins, so the release tag stays attached.
         (
             "{title}.{year}.{atmos?}-{tag}",
             {"title": "Some Movie", "year": "2024", "atmos": "", "tag": "GRP"},
@@ -39,9 +35,7 @@ from unshackle.core.utils.template_formatter import TemplateFormatter, detect_sp
             {"title": "Some Movie", "year": "2024", "atmos": "Atmos", "tag": "GRP"},
             "Some.Movie.2024.Atmos-GRP",
         ),
-        # A conditional between two dashes must not leave a doubled separator.
         ("{title} - {edition?} - {year}", {"title": "A", "edition": "", "year": "2024"}, "A - 2024"),
-        # Consecutive omitted conditionals collapse to nothing.
         ("{a?} {b?} {title}", {"a": "", "b": "", "title": "T"}, "T"),
         ("{show} S{season}E{ep} {name?}", {"show": "Show", "season": "01", "ep": "02", "name": ""}, "Show S01E02"),
     ],
@@ -95,25 +89,21 @@ def test_sanitize_filename_keeps_interior_dots():
 @pytest.mark.parametrize(
     ("template", "context", "expected"),
     [
-        # Space-separated style.
         ("{title} ({year})", {"title": "Some Movie", "year": "2024"}, "Some Movie (2024)"),
         (
             "{title} {year} {quality} {source}",
             {"title": "Some Movie", "year": "2024", "quality": "1080p", "source": "WEB-DL"},
             "Some Movie 2024 1080p WEB-DL",
         ),
-        # Dot-separated style.
         (
             "{title}.{year}.{quality}.{source}",
             {"title": "Some Movie", "year": "2024", "quality": "1080p", "source": "WEB-DL"},
             "Some.Movie.2024.1080p.WEB-DL",
         ),
-        # Interior dots in the title itself survive both styles.
         ("{title}.{year}", {"title": "Mr. Robot", "year": "2015"}, "Mr.Robot.2015"),
         ("{title} ({year})", {"title": "Mr. Robot", "year": "2015"}, "Mr. Robot (2015)"),
         ("{title}.{year}", {"title": "S.W.A.T.", "year": "2017"}, "S.W.A.T.2017"),
         ("{title} ({year})", {"title": "S.W.A.T.", "year": "2017"}, "S.W.A.T. (2017)"),
-        # A decimal inside a codec name is not a separator.
         (
             "{title}.{year}.{audio}-{tag}",
             {"title": "Some Movie", "year": "2024", "audio": "DDP5.1", "tag": "GRP"},
@@ -183,7 +173,7 @@ def make_album_song(**overrides):
         album_artist="Some Artist",
     )
     kwargs.update(overrides)
-    return MusicSong(**kwargs)
+    return Song(**kwargs)
 
 
 def assert_safe_path(result: str):
@@ -241,8 +231,6 @@ def test_series_folder_handles_both_separator_styles(folder_config, template, ex
 @pytest.mark.parametrize(
     ("template", "expected"),
     [
-        # A segment with one variable has no gap to judge by, so it follows the whole
-        # path's style instead of falling back to a dot.
         ("Music/{artist}/{album} ({year?})", "Music/Some Artist/Some Album (2025)"),
         ("Music/{artist}/{album}.{year?}", "Music/Some.Artist/Some.Album.2025"),
         ("{artist}/{album}", "Some.Artist/Some.Album"),
@@ -263,7 +251,7 @@ def test_single_variable_segments_follow_the_whole_path(folder_config, template,
         ("{title} ({year})", " "),
         ("Movies/{title} ({year?})", " "),
         ("Shows/{title}.{year?}/Season.{season}", "."),
-        ("{title}", "."),  # nothing between two variables, so scene style wins
+        ("{title}", "."),
     ],
 )
 def test_detect_spacer(template, expected):
@@ -273,8 +261,6 @@ def test_detect_spacer(template, expected):
 @pytest.mark.parametrize(
     ("series_template", "expected"),
     [
-        # Deriving a show folder strips the episode tokens, so the template ends on a
-        # separator once {episode_name?} goes too.
         ("{title}.{year?}.{season_episode}.{episode_name?}", "Some.Show.S01"),
         ("{title} {year?} {season_episode} {episode_name?}", "Some Show S01"),
     ],

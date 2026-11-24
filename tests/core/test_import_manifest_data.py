@@ -83,7 +83,6 @@ def test_export_without_manifest_url_still_rebuilds_dash_manifest_data(tmp_path:
     tracks = service.get_tracks(next(iter(service.get_titles())))
 
     assert [t.id for t in tracks.videos] == ["v-avc"]
-    # DASH.download_track reads all three of these; a missing one is a KeyError mid-download.
     assert set(tracks.videos[0].data.get("dash", {})) >= {"manifest", "adaptation_set", "representation"}
 
 
@@ -100,7 +99,6 @@ def test_exported_hevc_on_its_own_mpd_survives_the_reparse(tmp_path: Path) -> No
     assert "HEVC" in codecs, "the exported HEVC track was dropped, so -v h.265 has nothing to select"
     hevc = next(t for t in tracks.videos if t.codec and t.codec.name == "HEVC")
     assert set(hevc.data.get("dash", {})) >= {"manifest", "adaptation_set", "representation"}
-    # bound to its own manifest's representation, not just to any populated mapping
     assert hevc.data["dash"]["representation"].get("id") == "v-hevc"
 
 
@@ -222,5 +220,5 @@ def test_clearkey_license_hook_is_bindable(tmp_path: Path) -> None:
     service = make_service(tmp_path, AVC_URL, {})
     bound = partial(service.get_clearkey_license, title=None, track=None)
     assert callable(bound)
-    with pytest.raises(RuntimeError, match="keys come from the export"):
+    with pytest.raises(click.ClickException, match="export has no content key"):
         bound(challenge=b"")

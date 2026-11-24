@@ -4,15 +4,23 @@
 
 - **Type:** `dict` &nbsp;·&nbsp; **Default:** `{}`
 
-TLS-fingerprinting and HTTP client settings for the rnet-based session.
+TLS-fingerprinting and HTTP client settings for the rnet-based HTTP session.
 
 | Sub-key | Type | Default | Description |
 |---------|------|---------|-------------|
 | `browser` | str | `"Chrome131"` | Impersonation preset. Must be an exact preset name (e.g. `Chrome131`, `Firefox135`, `Edge101`, `Safari18`, `OkHttp4_12`, `OkHttp5`, `Opera118`); unknown names raise an error. |
 | `http1_only` | bool | *(unset)* | Force HTTP/1.1. |
 | `http2_only` | bool | *(unset)* | Force HTTP/2. |
-| `pool_max_idle_per_host` | int | *(unset)* | Connection-pool tuning. |
-| `pool_max_size` | int | *(unset)* | Connection-pool tuning. |
+| `connect_timeout` | int | `10` | Connect timeout in seconds. |
+| `read_timeout` | int | `30` | Read timeout in seconds (max gap between response chunks). |
+| `timeout` | int | *(unset)* | Total request timeout in seconds. |
+| `allow_redirects` | bool | *(unset)* | Follow redirects automatically (rnet client default when unset). |
+| `pool_idle_timeout` | int | `55` | Seconds an idle pooled connection is kept (default stays under typical ~60s CDN idle kills). |
+| `pool_max_idle_per_host` | int | `64` | Max idle connections kept per host. |
+| `pool_max_size` | int | *(unset)* | Max total connections in the pool. |
+| `tcp_keepalive` | int | `30` | TCP keepalive time in seconds. |
+| `tcp_keepalive_interval` | int | *(unset)* | TCP keepalive probe interval in seconds. |
+| `tcp_keepalive_retries` | int | *(unset)* | TCP keepalive probe retry count. |
 | `tcp_nodelay` | bool | *(unset)* | Disable Nagle's algorithm. |
 
 ```yaml
@@ -35,7 +43,7 @@ network:
 
 - **Type:** `dict` &nbsp;·&nbsp; **Default:** `{}`
 
-Default HTTP headers merged into every session unshackle creates.
+Default HTTP headers merged into every HTTP session unshackle makes.
 
 ```yaml
 headers:
@@ -44,21 +52,22 @@ headers:
 
 !!! warning "Don't set `Accept-Encoding` (and similar) here"
     Compatibility headers such as `Accept-Encoding` are set by the rnet HTTP backend as part of
-    its browser-impersonation profile; overriding them breaks the impersonation fingerprint.
-    This block is for cross-service defaults only (for example `Accept-Language`,
-    `User-Agent`); per-service headers belong in that service's own config.
+    its browser-impersonation profile. If you override them, you break the impersonation
+    fingerprint. This block is for cross-service defaults only (for example `Accept-Language`,
+    `User-Agent`). Per-service headers belong in that service's own config.
 
 ## `proxy_providers`
 
 - **Type:** `dict` &nbsp;·&nbsp; **Default:** `{}`
 
-Proxy/VPN provider configuration. Each sub-key names a provider, and its block is passed
-straight to that provider's constructor. See [Proxies & VPN](../../guide/proxies-and-vpn.md) for
-the full provider guide. Recognised providers and their exit ports:
+Proxy/VPN provider configuration. Each sub-key names a proxy provider, and unshackle passes its
+block straight to that provider's constructor. See [Proxies & VPN](../../guide/proxies-and-vpn.md)
+for the full proxy provider guide. Recognised proxy providers and their exit ports:
 
 | Provider | Config key | Credentials | Proxy scheme/port |
 |----------|-----------|-------------|-------------------|
 | Basic (static) | `basic` | country → URI(s) | as specified |
+| Control D | `controld` | Write API token (profile/resolver pairs optional) | `http://127.0.0.1:{port}` (local forwarder) |
 | NordVPN | `nordvpn` | **service** credentials (48 chars combined) | `https://...:89` |
 | Surfshark | `surfsharkvpn` | **service** credentials (48 chars combined) | `https://...:443` |
 | Windscribe | `windscribevpn` | service credentials | `https://...:443` |
@@ -79,8 +88,20 @@ proxy_providers:
     password: <service password>
 ```
 
+### `controld`
+
+Config keys of the Control D proxy provider. See
+[Control D](../../guide/proxies-and-vpn.md#control-d) for how unshackle uses them.
+
+| Key | Type | Default | Meaning |
+|---|---|---|---|
+| `token` | `str` | required | A Control D API token of type *Write*. |
+| `profile` | `str` | none | Optional. The ID of a profile you made for unshackle. Give it together with `resolver`. Without it, unshackle creates `unshackle-<region>` profiles itself. |
+| `resolver` | `str` | none | Optional. The resolver ID of an endpoint that uses `profile`, or its DoH URL `https://dns.controld.com/<resolver>`. |
+| `profiles` | `list` | `[]` | Optional. More pairs, each a mapping with `profile` and `resolver`. |
+| `max_profiles` | `int` | `4` | The most profiles unshackle uses: your pairs plus the `unshackle-*` endpoints on the account. It must be 1 or more. unshackle creates an `unshackle-<region>` profile and endpoint only while the total is lower. |
+
 !!! note "Provider loading differs between CLI and REST server"
-    The `dl` CLI loads all providers, including `windscribevpn` and `gluetun`. The REST API /
-    remote-client path uses a separate resolver that does **not** load `windscribevpn` or
-    `gluetun`. ExpressVPN and ProtonVPN also auto-load when their cached session exists, and Hola
+    The `dl` CLI loads all providers, including `gluetun`. The REST API / remote-client path
+    does **not** load `gluetun`, because it starts a local Docker container. ExpressVPN and ProtonVPN also auto-load when their cached session exists, and Hola
     auto-loads whenever the `hola-proxy` binary is present.

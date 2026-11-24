@@ -1,5 +1,6 @@
 import atexit
 import logging
+import sys
 from datetime import datetime
 
 import click
@@ -19,11 +20,42 @@ from unshackle.core.update_checker import UpdateChecker
 from unshackle.core.utilities import close_debug_logger, init_debug_logger
 
 
-@click.command(cls=Commands, invoke_without_command=True, context_settings=context_settings)
+def print_banner() -> None:
+    """Print the ASCII banner with the version line."""
+    console.print(
+        Padding(
+            Group(
+                Text(
+                    r"▄• ▄▌ ▐ ▄ .▄▄ ·  ▄ .▄ ▄▄▄·  ▄▄· ▄ •▄ ▄▄▌  ▄▄▄ ." + "\n"
+                    r"█▪██▌•█▌▐█▐█ ▀. ██▪▐█▐█ ▀█ ▐█ ▌▪█▌▄▌▪██•  ▀▄.▀·" + "\n"
+                    r"█▌▐█▌▐█▐▐▌▄▀▀▀█▄██▀▐█▄█▀▀█ ██ ▄▄▐▀▀▄·██▪  ▐▀▀▪▄" + "\n"
+                    r"▐█▄█▌██▐█▌▐█▄▪▐███▌▐▀▐█ ▪▐▌▐███▌▐█.█▌▐█▌▐▌▐█▄▄▌" + "\n"
+                    r" ▀▀▀ ▀▀ █▪ ▀▀▀▀ ▀▀▀ · ▀  ▀ ·▀▀▀ ·▀  ▀.▀▀▀  ▀▀▀ ",
+                    style="ascii.art",
+                ),
+                f"v [repr.number]{__version__}[/]{f' ({__code_hash__})' if __code_hash__ else ''}"
+                f" - © 2025-{datetime.now().year} github.com/unshackle-dl/unshackle",
+            ),
+            (1, 11, 1, 10),
+            expand=True,
+        ),
+        justify="center",
+    )
+
+
+class Main(Commands):
+    """The top-level group. Its help shows the banner, because its callback does not run for --help."""
+
+    def format_help(self, ctx: click.Context, formatter: click.HelpFormatter) -> None:
+        print_banner()
+        super().format_help(ctx, formatter)
+
+
+@click.command(cls=Main, invoke_without_command=True, context_settings=context_settings)
 @click.option("-v", "--version", is_flag=True, default=False, help="Print version information.")
 @click.option("-d", "--debug", is_flag=True, default=False, help="Enable DEBUG level logs and JSON debug logging.")
 def main(version: bool, debug: bool) -> None:
-    """unshackle—Modular Movie, TV, and Music Archival Software."""
+    """unshackle: Modular Movie, TV, and Music Archival Software."""
     debug_logging_enabled = debug or config.debug
 
     logging.basicConfig(
@@ -52,25 +84,12 @@ def main(version: bool, debug: bool) -> None:
 
     traceback.install(console=console, width=80, suppress=[click])
 
-    console.print(
-        Padding(
-            Group(
-                Text(
-                    r"▄• ▄▌ ▐ ▄ .▄▄ ·  ▄ .▄ ▄▄▄·  ▄▄· ▄ •▄ ▄▄▌  ▄▄▄ ." + "\n"
-                    r"█▪██▌•█▌▐█▐█ ▀. ██▪▐█▐█ ▀█ ▐█ ▌▪█▌▄▌▪██•  ▀▄.▀·" + "\n"
-                    r"█▌▐█▌▐█▐▐▌▄▀▀▀█▄██▀▐█▄█▀▀█ ██ ▄▄▐▀▀▄·██▪  ▐▀▀▪▄" + "\n"
-                    r"▐█▄█▌██▐█▌▐█▄▪▐███▌▐▀▐█ ▪▐▌▐███▌▐█.█▌▐█▌▐▌▐█▄▄▌" + "\n"
-                    r" ▀▀▀ ▀▀ █▪ ▀▀▀▀ ▀▀▀ · ▀  ▀ ·▀▀▀ ·▀  ▀.▀▀▀  ▀▀▀ ",
-                    style="ascii.art",
-                ),
-                f"v [repr.number]{__version__}[/]{f' ({__code_hash__})' if __code_hash__ else ''}"
-                f" - © 2025-{datetime.now().year} - github.com/unshackle-dl/unshackle",
-            ),
-            (1, 11, 1, 10),
-            expand=True,
-        ),
-        justify="center",
-    )
+    if "serve" in sys.argv[1:]:
+        serve_args = sys.argv[sys.argv.index("serve") + 1 :]
+        if "--quiet" in serve_args or "-q" in serve_args:
+            return
+
+    print_banner()
 
     if version:
         return
@@ -80,7 +99,7 @@ def main(version: bool, debug: bool) -> None:
             latest_version = UpdateChecker.check_for_updates_sync(__version__)
             if latest_version:
                 console.print(
-                    f"\n[yellow]⚠️  Update available![/yellow] "
+                    f"\n[yellow]Update available![/yellow] "
                     f"Current: {__version__} → Latest: [green]{latest_version}[/green]",
                     justify="center",
                 )

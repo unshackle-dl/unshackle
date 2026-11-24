@@ -1,18 +1,22 @@
 # CLI Reference
 
-A complete reference for every `unshackle` command, subcommand, and flag. Commands are grouped by purpose:
+A complete reference for every `unshackle` command, subcommand, and flag. This page groups the commands by purpose:
 
 - **[`dl`](#dl)**: the download pipeline (the command you use most).
 - **[`search`](#search)**: find titles on a service.
 - **[`import`](#import)**: rebuild a download from an export file.
+- **[`setup`](#setup)**: install the external tools and make a first config.
 - **[`cfg`](#cfg)**, **[`env`](#env)**: manage configuration and the environment.
 - **[`kv`](#kv)**: Key Vault operations.
 - **[`wvd`](#wvd)**, **[`prd`](#prd)**: Widevine / PlayReady device management.
-- **[`serve`](#serve)**: run the local CDM + REST API server.
+- **[`serve`](#serve)**: operate the local CDM and REST API server.
 - **[`util`](#util)**: helper media utilities.
 
+!!! note "Running commands from a clone"
+    This page uses the bare `unshackle` command. From a git clone, the recommended install, run each command as `uv run unshackle ...`.
+
 !!! tip "Getting help on any command"
-    Every command accepts `-h`, `--help`, or `-?`. For example `unshackle dl --help` or `unshackle wvd new --help`. Service-specific arguments for `dl` and `search` (such as a title ID or search query) are defined by each service, so check `unshackle dl SERVICE --help` for those.
+    Every command accepts `-h`, `--help`, or `-?`. For example `unshackle dl --help` or `unshackle wvd new --help`. Each service defines its own arguments for `dl` and `search` (such as a title ID or a query), so examine `unshackle dl SERVICE --help` for those.
 
 ---
 
@@ -24,7 +28,7 @@ unshackle [OPTIONS] COMMAND [ARGS]...
 
 > unshackle: Modular Movie, TV, and Music Archival Software.
 
-Every invocation prints a banner and, when `update_checks` is enabled in your config, checks for a newer release.
+Every invocation prints a banner and, when you enable `update_checks` in your config, checks for a newer release.
 
 | Option | Description |
 |---|---|
@@ -45,7 +49,7 @@ unshackle dl [OPTIONS] SERVICE [SERVICE ARGS...]
 ```
 
 - `OPTIONS`: every flag below, parsed at the `dl` level.
-- `SERVICE`: a service tag (e.g. `EXAMPLE1`, `EXAMPLE2`). Tags are case-insensitive and honour each service's aliases (`example+`, `EXAMPLE2`, etc. all resolve to the same tag).
+- `SERVICE`: a service tag (for example `EXAMPLE1` or `EXAMPLE2`). Tags are case-insensitive and honour each service's aliases (`example+`, `EXAMPLE2`, and the other alias forms all give the same tag).
 - `SERVICE ARGS`: the title, URL, or ID, plus any service-specific options. These belong to the service, not to `dl`.
 
 !!! example "Typical downloads"
@@ -61,7 +65,7 @@ unshackle dl [OPTIONS] SERVICE [SERVICE ARGS...]
     ```
 
 !!! note "Config-driven defaults"
-    Any `dl` flag can be given a default under the `dl:` section of `unshackle.yaml`, and per-service under `services.<TAG>.dl`. Explicit command-line values (and environment values) always win over both; service defaults only fill in options you did not set. See the [configuration file](../getting-started/configuration-file.md) guide.
+    You can give any `dl` flag a default under the `dl:` section of `unshackle.yaml`, and per-service under `services.<TAG>.dl`. Explicit command-line values (and environment values) always win over both. Service defaults only fill in options you did not set. See the [configuration file](../getting-started/configuration-file.md) guide.
 
 ### Quality, codec, bitrate & range
 
@@ -69,8 +73,8 @@ unshackle dl [OPTIONS] SERVICE [SERVICE ARGS...]
 |---|---|---|
 | `-p`, `--profile` | - | Profile for credentials and cookies. |
 | `-q`, `--quality` | best | Resolution(s), comma-separated, e.g. `1080,720`. `-q 1080` also matches anamorphic tracks by 16:9 canvas. |
-| `-v`, `--vcodec` | any | Video codec(s). Accepts names or values: `AVC`/`H.264`, `HEVC`/`H.265`, `VC1`, `VP8`, `VP9`, `AV1`. |
-| `-a`, `--acodec` | any | Audio codec(s), comma-separated. Accepts `AAC`, `AC3`/`DD`, `EC3`/`DD+`/`eac3`/`ddp`, `AC4`, `OPUS`, `OGG`/`vorbis`, `DTS`, `ALAC`, `FLAC`. |
+| `-v`, `--vcodec` | any | Video codec(s). Accepts names or values: `AVC`/`H.264`/`H264`, `HEVC`/`H.265`/`H265`, `VC1`/`VC-1`, `VP8`, `VP9`, `AV1`. |
+| `-a`, `--acodec` | any | Audio codec(s), comma-separated. Accepts `AAC`, `AC3`/`DD`, `EC3`/`DD+`/`eac3`/`ddp`, `AC4`/`AC-4`, `OPUS`, `OGG`/`VORB`/`vorbis`, `DTS`, `DTSX`/`DTS-X`, `ALAC`, `FLAC`. |
 | `-vb`, `--vbitrate` | highest | Exact video bitrate in kbps. |
 | `-ab`, `--abitrate` | highest | Exact audio bitrate in kbps. |
 | `-vb-range`, `--vbitrate-range` | - | Video bitrate range in kbps, e.g. `6000-7000`; picks highest within. Mutually exclusive with `--vbitrate`. |
@@ -79,7 +83,7 @@ unshackle dl [OPTIONS] SERVICE [SERVICE ARGS...]
 | `-c`, `--channels` | - | Audio channels; matches sub-layouts (5.1 ≈ 6.0). |
 | `-naa`, `--noatmos` | off | Exclude Dolby Atmos audio tracks. |
 | `--worst` | off | Pick the lowest bitrate within the requested quality. **Requires `-q`.** |
-| `--best-available` | off | Continue with the best available if a requested resolution/language is absent, instead of failing. |
+| `--best-available`, `--warn-only` | off | Warn and continue when a requested resolution, range, or language is absent, instead of failing. With `--all-drm`, also when one DRM system does not license. |
 | `-rvb`, `--real-video-bitrate` | off | Probe real media size for true video bitrates, overriding the manifest. |
 | `-rab`, `--real-audio-bitrate` | off | Same for audio (slower). |
 
@@ -94,8 +98,11 @@ unshackle dl [OPTIONS] SERVICE [SERVICE ARGS...]
 | `-vl`, `--v-lang` | - | Video-only language (overrides `-l` for video). A `-` prefix excludes. |
 | `-al`, `--a-lang` | - | Audio-only language (overrides `-l` for audio). A `-` prefix excludes. |
 | `-sl`, `--s-lang` | `all` | Subtitle language(s). A `-` prefix excludes, e.g. `all,-es`. |
-| `--require-subs` | - | Required subtitle langs; keeps **all** subs only if these exist. **Cannot combine with `--s-lang`.** |
+| `--require-audio` | - | Audio langs that must exist. The title fails even with `--best-available`. Does not select tracks. |
+| `--require-video` | - | Video langs that must exist. The title fails even with `--best-available`. Does not select tracks. |
+| `--require-subs` | - | Subtitle langs that must exist. Fails the title if one is missing. `--s-lang` still decides what to keep. |
 | `-fs`, `--forced-subs` | off | Include forced subtitle tracks. |
+| `-fso`, `--forced-subs-only` | off | Keep only forced subtitle tracks; drop the other subtitles. Implies `-fs`. |
 | `-fsl`, `--forced-s-lang` | none | Language(s) wanted for forced subtitles; implies `-fs`. A `-` prefix excludes. |
 | `--exact-lang` | off | Exact matching only: `-l es-419` matches `es-419`, not `es-ES`. Applies to selection and to sort order. |
 | `--sub-format` | - | Output subtitle format (`SRT`/`srt`, `VTT`/`webvtt`, `ASS`/`ssa`, `TTML`, `SMI`, ...), or `original` to keep the source format. |
@@ -106,20 +113,21 @@ unshackle dl [OPTIONS] SERVICE [SERVICE ARGS...]
     [`subtitle.language_priority`](../reference/configuration/download.md#subtitle) in your
     configuration file.
 
-The special language tokens `orig`, `all`, and `best` are honoured everywhere a language is expected.
+unshackle honours the special language tokens `orig`, `all`, and `best` everywhere it expects a language.
 
 ### Title & episode selection
 
 | Flag | Description |
 |---|---|
-| `-w`, `--wanted` | Wanted episodes, e.g. `S01-S05,S07`, `S01E01-S02E03`. Supports exclusions with a leading `-` (e.g. `-S03`). For a [split episode](downloading.md#split-episodes), `.N` picks one part (`S01E01.2`), a range must stay inside the episode (`S01E01.1-S01E01.3`), and `S01E01` on its own takes every part. For [dated content](downloading.md#daily-and-date-based-content), a token can also be an ISO air date (`2026-08-11`) or a date range with a colon (`2026-08-01:2026-08-31`). |
+| `-w`, `--wanted` | Wanted episodes, e.g. `S01-S05,S07`, `S01E01-S02E03`. Supports exclusions with a leading `-` (e.g. `-S03`). For a [split episode](downloading.md#split-episodes), `.N` picks one part (`S01E01.2`), a range must stay inside the episode (`S01E01.1-S01E01.3`), and `S01E01` on its own takes every part. For a [dated episode](downloading.md#daily-and-date-based-content), a token can also be an ISO air date (`2026-08-11`) or a date range with a colon (`2026-08-01:2026-08-31`). For a [music release](downloading.md#music-tracks), a token is a track number (`1-5`, `1,3,7`), or `{disc}x{track}` (`2x3`) when the release has more than one disc. |
 | `--select-titles` | Interactively select what to download: episodes of a series, or films when a title has more than one. **Cannot combine with `-w`.** |
 | `--latest-episode` | Download only the single most recent episode. |
+| `--latest-episodes N` | Download only the N most recent episodes. |
 | `--list-titles` | List titles only; do not download. |
 
 ### Track-type inclusion / exclusion
 
-Keep only certain track types, or skip certain track types. Attachments are always kept.
+Keep only certain track types, or skip certain track types.
 
 | Include-only | Skip |
 |---|---|
@@ -127,10 +135,12 @@ Keep only certain track types, or skip certain track types. Attachments are alwa
 | `-A`, `--audio-only` | `-na`, `--no-audio` |
 | `-S`, `--subs-only` | `-ns`, `--no-subs` |
 | `-C`, `--chapters-only` | `-nc`, `--no-chapters` |
+| | `-nt`, `--no-attachments` (cover art, subtitle fonts, and files the service attaches) |
 
 | Flag | Description |
 |---|---|
 | `-ad`, `--audio-description` | Include descriptive (audio-description) tracks. |
+| `-ado`, `--audio-description-only` | Keep only descriptive (audio-description) tracks; drop the standard audio. Does not need `-ad`. |
 | `--skip-subtitle-errors` | Skip a failed subtitle instead of aborting the title. Video/audio failures remain fatal. |
 
 ### Output, muxing & files
@@ -138,42 +148,46 @@ Keep only certain track types, or skip certain track types. Attachments are alwa
 | Flag | Description |
 |---|---|
 | `--split-audio` | Write a separate output file per audio codec instead of merging. Defaults to config `muxing.merge_audio`. |
-| `--merge-video` | Mux all selected video tracks into one file. Defaults to config `muxing.merge_video`. |
+| `--merge-video` | Mux video tracks that share a height, range, and codec into one file, so only language varies inside a file. Defaults to config `muxing.merge_video`. |
 | `-o`, `--output` | Override the output directory for this run. |
 | `--no-folder` | Disable folder creation for TV shows. |
 | `--no-source` | Remove the source tag from the filename/path. |
 | `--no-mux` | Do not mux; keep individual track files. |
+| `--sample` | Download a short sample and write it with a `SAMPLE` tag on the filename in a `Sample` folder inside the output folder. Bare `--sample` = 60 seconds from 2 minutes in; `--sample 0-60` = a custom window in seconds. |
+| `--include-sample` | Download the full title, then also cut a 60 second sample from each muxed file into a `Sample` folder next to it. |
 | `--tag` | Group tag override. |
 | `--repack` | Add a `REPACK` tag to the filename. |
+| `--postscript` | Run a command after each output file, with `{variable}` placeholders substituted. Repeatable. Replaces the `post_scripts` config for this run. See [Post-scripts](../reference/configuration/post-scripts.md). |
+| `--no-postscript` | Run no post-script for this run, neither the configured ones nor `--postscript`. |
 
 ### Metadata & tagging
 
 | Flag | Description |
 |---|---|
 | `--tmdb` | TMDB ID (integer). Used for the tags. Skips the title search. `--enrich` reads it too. Needs `tmdb_api_key`. |
-| `--imdb` | IMDb ID, e.g. `tt1375666`. Used for the tags. Skips the title search. `--enrich` reads it too. Needs no key. |
+| `--imdb` | IMDb ID, e.g. `tt1375666`. Used for the tags. Skips the title search. `--enrich` reads it too. Needs no API key. |
 | `--tvdb` | TVDB ID (integer). Used for the tags. Skips the series lookup that `--tvdb-order` would otherwise do. `--enrich` reads it too. Needs `tvdb_api_key`. |
-| `--anilist` | AniList ID (integer), e.g. `--anilist 21`. A MyAnimeList ID is accepted as `mal:12345` and resolved to the AniList entry. Used for the tags. Skips the title search. `--enrich` reads it too. Needs no key. |
+| `--anilist` | AniList ID (integer), e.g. `--anilist 21`. A MyAnimeList ID is accepted as `mal:12345` and resolved to the AniList entry. Used for the tags. Skips the title search. `--enrich` reads it too. Needs no API key. |
 | `--enrich` | Overwrite show title, year and original language with the external source's. **Requires** one of `--tmdb`, `--imdb`, `--tvdb`, or `--anilist`. |
 | `--daily` | Treat the title as daily/date-based content and fill missing episode air dates from TVDB. The fill needs `--enrich` and a TVDB ID. See [Daily and date-based content](downloading.md#daily-and-date-based-content). |
 | `--tvdb-order` | Renumber episodes to a TVDB season order: `official` (aired), `dvd`, `absolute`, `alternate`, or `regional`. Needs `tvdb_api_key`. |
 
 !!! note "One ID at a time"
-    `--tmdb`, `--imdb` and `--tvdb` cannot be combined. Give one and unshackle resolves the
-    others from it, writing all three to the tags. `--anilist` is outside that rule and pairs
+    You cannot combine `--tmdb`, `--imdb` and `--tvdb`. Give one and unshackle finds the
+    others from it, and writes all three to the tags. `--anilist` is outside that rule and pairs
     with one of them, which is how you attach a western ID to an anime title.
-    An ID with no provider that can resolve it, such as `--tmdb` with no `tmdb_api_key`, fails
-    before the download starts. `--anilist` needs no key, so it never fails this check.
+    An ID with no metadata provider that can find it, such as `--tmdb` with no `tmdb_api_key`,
+    fails before the download starts. `--anilist` needs no API key, so it never fails this check.
 
 #### Episode ordering
 
-A service does not always number a series the way TVDB's aired order does. Some services list
-Futurama in TVDB's `alternate` (Streaming) order, for example. `--tvdb-order` works out which
+A service does not always number a series the way TVDB's aired order does. Some services use
+TVDB's `alternate` (Streaming) order for Futurama, for example. `--tvdb-order` works out which
 order the service used, then renumbers the episodes into the order you asked for.
 
 !!! note "Orders that do not cover the whole series"
-    An order can omit episodes the service carries; TVDB's `dvd` order for Futurama leaves out
-    the four movies. Those episodes keep their original numbering. If that would give two
+    An order can ignore episodes the service carries. TVDB's `dvd` order for Futurama leaves
+    out the four movies. Those episodes keep their original numbering. If that would give two
     episodes the same season/episode slot, and so the same filename, unshackle logs an error
     and keeps the service's numbering unchanged. Pick an order that covers the whole series.
 
@@ -182,16 +196,19 @@ order the service used, then renumbers the episodes into the order you asked for
 | Flag | Description |
 |---|---|
 | `--cdm-only` / `--vaults-only` | Use only the CDM, or only Key Vaults, for key acquisition. |
+| `--cdm <name>` | Use the named CDM device from the `cdm` config mapping for this run, ignoring the service/default mapping. Over `--remote`, that device licenses the remote session, not the server CDM. |
 | `--skip-dl` | Skip the download but still retrieve keys. |
-| `--export` | Export track info and keys to a JSON file in the exports directory. |
+| `--all-drm` | License each track with both Widevine and PlayReady. Needs a CDM for each DRM system. Key Vaults are read first; `--cdm-only` sends a challenge for each system. Not for use with `--cdm`. |
+| `--export` | Export track info and keys to a `mediaexport` JSON file in the exports directory. |
 
 ### Network & proxy
 
 | Flag | Description |
 |---|---|
-| `--proxy` | Proxy URI, a 2-letter country code resolved from configured providers, or `provider:region` (e.g. `nordvpn:ca`, `gluetun:us`, `protonvpn:de:berlin`). |
+| `--proxy` | Proxy URI, a country or location code resolved from configured providers, or `provider:region` (e.g. `nordvpn:ca`, `gluetun:us`, `protonvpn:de:berlin`, `controld:yul`). |
 | `--no-proxy` | Force-disable all proxy use. |
 | `--no-proxy-download` | Bypass the proxy for **all downloads** (manifest, licence, and auth stay proxied). |
+| `--proxy-download` | Use a different proxy for **all downloads**, in the same forms as `--proxy` (manifest, licence, and auth stay on `--proxy`). |
 | `--remote` | Use a remote unshackle server. |
 | `--server` | Name a remote server from the `remote_services` config. |
 
@@ -200,6 +217,9 @@ order the service used, then renumbers the episodes into the order you asked for
 | Flag | Default | Description |
 |---|---|---|
 | `--workers` | downloader default | Per-track download threads. |
+| `--adaptive-workers` | off | Scale per-track segment workers dynamically (up to the `--workers` cap) based on measured CDN throughput and errors. |
+| `--download-processes` | `1` | Split large segment batches (24+) across this many download processes to exceed the single-process throughput cap on multi-gigabit connections. Ignored while a speed limit is set: the cap is one shared budget, which extra processes cannot share, so the download stays in a single process. Also ignored when the service HTTP session carries state a child process cannot rebuild, such as a custom TLS adapter. |
+| `--continue-downloads` | off | Keep completed segment files across runs and resume a previously failed download. One-off enable of the [`continue_downloads`](../reference/configuration/download.md#continue_downloads) config option. |
 | `--downloads` | `1` | Number of tracks downloaded concurrently. |
 | `--speed-limit` | unlimited | Cap total download speed across all threads and tracks, e.g. `500k`, `5M`, `1.5G` or plain bytes/sec. Values are bytes, not bits (`5M` = 5.0 MB/s). `off` disables a configured limit. |
 | `--no-cache` | off | Bypass the title cache. |
@@ -208,24 +228,26 @@ order the service used, then renumbers the episodes into the order you asked for
 | `--slow` | - | Inter-title delay. Bare `--slow` = 60-120s; `--slow 20-40` = custom range (minimum 20s). |
 
 !!! warning "Some flags cannot be combined"
-    `--require-subs` and `--s-lang`; `--select-titles` and `--wanted`; `--worst` requires `--quality`; `--vbitrate` and `--vbitrate-range` (and the audio equivalents) are mutually exclusive.
+    `--select-titles` and `--wanted` are mutually exclusive. `--worst` needs `--quality`. `--vbitrate` and `--vbitrate-range` (and the audio equivalents) are mutually exclusive.
 
 ---
 
 ## `search`
 
-Search a service for titles. Like `dl`, `search` is a group whose subcommands are the installed services, and it reuses `dl`'s authentication, cookie, and proxy machinery.
+Find titles on a service. Like `dl`, `search` is a group whose subcommands are the installed services, and it reuses `dl`'s authentication, cookie, and proxy machinery.
 
 ```
 unshackle search [OPTIONS] SERVICE [QUERY...]
 ```
 
-The query syntax is defined per service. Results are printed as a tree of titles with their service IDs. Feed an ID straight into `dl`.
+Each service defines its own query syntax. unshackle prints the results as a tree of titles with their service IDs. Feed an ID straight into `dl`.
+
+unshackle logs in to the service before the search. A service that declares a search with no login is the exception: unshackle then reads no cookies and no credentials, and `--profile` has no effect.
 
 | Option | Description |
 |---|---|
 | `-p`, `--profile` | Profile for credentials and cookies. |
-| `--proxy` | Proxy URI, 2-letter country code, or `provider:region`. |
+| `--proxy` | Proxy URI, country or location code, or `provider:region` (e.g. `controld:ca`). |
 | `--no-proxy` | Force-disable all proxy use. |
 
 !!! example
@@ -245,7 +267,7 @@ Reconstruct a download (download → decrypt → mux) from an `--export` JSON fi
 unshackle import EXPORT_FILE [DL_ARGS...]
 ```
 
-Any `dl` options placed after the file are forwarded verbatim, so you can override quality, range, proxy, and so on.
+unshackle forwards any `dl` options after the file verbatim, so you can override quality, range, proxy, and so on.
 
 !!! example
     ```shell
@@ -253,13 +275,31 @@ Any `dl` options placed after the file are forwarded verbatim, so you can overri
     unshackle import export.json -r HDR10 --proxy US
     ```
 
-The export file must be a valid v2 export (created by a current build of unshackle via `dl --export`) and must contain a `service` tag.
+The export file can be a `mediaexport` file from `dl --export`, an export from an older version of unshackle, or an export from unidl. The file must name the service it came from.
+
+---
+
+## `setup`
+
+Install the external tools and make a first config.
+
+```
+unshackle setup
+```
+
+The command takes no options and asks its questions at the prompt. It shows the missing [external tools](../getting-started/installation.md#external-tools-on-your-path) and downloads the ones you accept. It puts them in a `binaries` folder, in the package folder of a git clone or in your user data directory for a `uv` tool install. If no `unshackle.yaml` exists, it writes a first one: inside the clone, or to your user config directory for a `uv` tool install. It then makes the data folders and imports `.wvd` and `.prd` devices, one file or folder per answer, until you give an empty answer. It ends with a summary of the tools, the path of a config that it wrote, and a pointer to `env check`. You can run it again: it skips the tools it finds and never overwrites a config. [Installation](../getting-started/installation.md#what-unshackle-setup-does) gives the full steps and where each file goes.
+
+!!! example
+    ```shell
+    uv run unshackle setup   # from a git clone
+    unshackle setup          # from a uv tool install
+    ```
 
 ---
 
 ## `cfg`
 
-Read, set, delete, or list configuration values in `unshackle.yaml` without hand-editing YAML.
+Read, set, delete, or show configuration values in `unshackle.yaml` without hand-editing YAML.
 
 ```
 unshackle cfg [KEY] [VALUE] [OPTIONS]
@@ -273,7 +313,7 @@ unshackle cfg [KEY] [VALUE] [OPTIONS]
 | `--list` | List all set configuration values. |
 
 !!! warning "Comments are stripped"
-    Writing a value through `cfg` rewrites the YAML file and **removes all comments** from it. If your config relies on comments, edit it by hand instead. Setting a value and using `--unset` together is an error.
+    Writing a value through `cfg` rewrites the configuration file and **removes all comments** from it. If your config relies on comments, edit it by hand instead. Setting a value and using `--unset` together is an error.
 
 !!! example
     ```shell
@@ -301,7 +341,7 @@ unshackle env COMMAND [ARGS]...
 unshackle env check
 ```
 
-Prints a dependency table (Category / Tool / Status / Required / Purpose) showing which external tools resolve on your `PATH`, and a summary of how many required tools are installed.
+Prints a dependency table (Category / Tool / Status / Required / Purpose) that shows which external tools unshackle finds on your `PATH`. It also gives a summary of how many required tools are present. If a required tool is missing, it tells you to run [`unshackle setup`](#setup).
 
 | Category | Tools |
 |---|---|
@@ -312,7 +352,7 @@ Prints a dependency table (Category / Tool / Status / Required / Purpose) showin
 | Player | FFplay, MPV |
 | Network | HolaProxy, Caddy, Docker, git |
 
-<small>* required; all others are optional.</small>
+<small>* required. All others are optional.</small>
 
 ### `env info`
 
@@ -320,7 +360,7 @@ Prints a dependency table (Category / Tool / Status / Required / Purpose) showin
 unshackle env info
 ```
 
-Shows where the config was loaded from (or lists the candidate config locations if none was found) and prints a table of every configured directory (downloads, temp, cache, cookies, logs, exports, WVDs, PRDs, services, and more).
+Shows the location unshackle loaded the configuration file from. If it found no file, it shows the candidate locations instead. It then prints a table of every configured directory (downloads, temp, cache, cookies, logs, exports, WVDs, PRDs, services, and more).
 
 ### `env theme`
 
@@ -328,15 +368,15 @@ Shows where the config was loaded from (or lists the candidate config locations 
 unshackle env theme
 ```
 
-Prints a sample of every available CLI theme: colour swatches, help text with option rows, a track listing with video/audio/subtitle entries, log lines, a progress bar, and the gradient pulse bar. The active theme is marked and each theme's aliases are listed. Set your choice with the [`theme`](../reference/configuration/misc.md#appearance) config key.
+Prints a sample of every available CLI theme. Each sample has colour swatches, help text with option rows, and a track listing with video, audio and subtitle entries. It also has log lines, a progress bar, and the gradient pulse bar. unshackle marks the active theme and shows each theme's aliases. Set your choice with the [`theme`](../reference/configuration/misc.md#appearance) config key.
 
 ### `env clear`
 
-Clear an environment directory. The directory is emptied and recreated, and the number of files and bytes freed is reported.
+Clear an environment directory. unshackle empties the directory, makes it again, and reports the number of files and bytes it freed.
 
 | Command | Description |
 |---|---|
-| `unshackle env clear cache [SERVICE]` | Clear the cache directory, or just one service's cache subdirectory. |
+| `unshackle env clear cache [SERVICE]` | Clear the cache directory, or only one service's cache subdirectory. |
 | `unshackle env clear temp` | Clear the temp directory. |
 
 !!! example
@@ -353,7 +393,7 @@ Clear an environment directory. The directory is emptied and recreated, and the 
 
 ## `kv`
 
-Manage Key Vaults. Vaults are configured under `key_vaults` in `unshackle.yaml`, each with a `name`, a `type` (`sqlite`, `mysql`, `http`, `api`), and type-specific options. Service tags are normalised automatically.
+Manage Key Vaults. You configure vaults under `key_vaults` in `unshackle.yaml`, each with a `name`, a `type` (`sqlite`, `mysql`, `http`, `api`), and type-specific options. unshackle normalises service tags automatically.
 
 ```
 unshackle kv COMMAND [ARGS]...
@@ -361,7 +401,7 @@ unshackle kv COMMAND [ARGS]...
 
 ### `kv copy TO_VAULT FROM_VAULT...`
 
-Copy keys from one or more source vaults into a destination vault. Rows with matching KIDs are skipped unless the existing row has no key; existing data is never altered or deleted.
+Copy content keys from one or more source vaults into a destination vault. unshackle skips rows whose KIDs match, unless the existing row has no content key. unshackle never alters or deletes existing data.
 
 | Option | Description |
 |---|---|
@@ -370,15 +410,15 @@ Copy keys from one or more source vaults into a destination vault. Rows with mat
 
 ### `kv sync VAULT...`
 
-Ensure two or more vaults hold the same set of keys, essentially a chained bidirectional copy. Requires more than one vault. Accepts the same `--service` / `--local-only` options as `copy`.
+Make sure that two or more vaults hold the same set of content keys, essentially a chained bidirectional copy. More than one vault is necessary. Accepts the same `--service` / `--local-only` options as `copy`.
 
 ### `kv add FILE SERVICE VAULT...`
 
-Add content keys to one or more vaults for a service. `FILE` contains one `KID:KEY` pair per line (32 hex : 32 hex, UTF-8). Lines that don't match are skipped.
+Add content keys to one or more vaults for a service. `FILE` contains one `KID:KEY` pair per line (32 hex : 32 hex, UTF-8). unshackle skips every line that does not match that form.
 
 ### `kv search KID`
 
-Search configured vaults for a KID (32 hex characters, no dashes) and report any matching key.
+Find a KID (32 hex characters, no dashes) in the configured vaults and report its content key.
 
 | Option | Description |
 |---|---|
@@ -386,11 +426,11 @@ Search configured vaults for a KID (32 hex characters, no dashes) and report any
 | `-v`, `--vault` | Limit the search to a specific configured vault by name. |
 
 !!! note
-    Remote vaults cannot be enumerated without a service, so pass `--service` when searching them.
+    unshackle cannot enumerate remote vaults without a service, so pass `--service` when you examine them.
 
 ### `kv prepare VAULT...`
 
-Create service tables on vaults that use tables, for every installed service, where they don't already exist.
+Make service tables on vaults that use tables, for every installed service, where they do not already exist.
 
 !!! example
     ```shell
@@ -448,7 +488,7 @@ unshackle prd COMMAND [ARGS]...
 
 ### `prd new PATHS...`
 
-Create a new `.prd`. Provide either a single folder containing `zgpriv.dat` (group key) and `bgroupcert.dat` (group certificate), or two file paths (group key, then group certificate).
+Make a new `.prd`. Give either a single folder that contains `zgpriv.dat` (group key) and `bgroupcert.dat` (group certificate), or two file paths (group key, then group certificate).
 
 | Option | Description |
 |---|---|
@@ -460,11 +500,11 @@ Create a new `.prd`. Provide either a single folder containing `zgpriv.dat` (gro
 
 ### `prd reprovision PRD_PATH`
 
-Reprovision an existing device by replacing its leaf certificate and keys. The device must support reprovisioning (version 3 or higher). Accepts the same `-e` / `-s` / `-o` options; defaults to overwriting the device in place.
+Reprovision an existing device by replacing its leaf certificate and keys. Only a device of version 3 or higher can do reprovisioning. Accepts the same `-e` / `-s` / `-o` options. By default it overwrites the device in place.
 
 ### `prd test DEVICE`
 
-Test a device against the Microsoft PlayReady demo server and print the returned keys.
+Do a test of a device against the Microsoft PlayReady demo server and print the returned content keys.
 
 | Option | Default | Description |
 |---|---|---|
@@ -505,7 +545,7 @@ unshackle serve [OPTIONS]
 WVD files in the WVDs directory and PRD files in the PRDs directory are auto-loaded. The REST API lives under `http://<host>:<port>/api/`, with Swagger UI at `/api/docs/` and a health check at `/api/health` (exempt from auth).
 
 !!! warning "Configure `api_secret` first"
-    Unless you pass `--no-key`, `serve.api_secret` must be set in your config. Requests authenticate with the `X-Secret-Key` header. Running with `--no-key` disables authentication entirely and should only be used on a trusted, private network.
+    Unless you pass `--no-key`, `serve.api_secret` must be set in your config. Requests authenticate with the `X-Secret-Key` header. `--no-key` disables authentication entirely. Only use it on a trusted, private network.
 
     ```yaml title="unshackle.yaml"
     serve:
@@ -530,7 +570,7 @@ WVD files in the WVDs directory and PRD files in the PRDs directory are auto-loa
 
 ## `util`
 
-Various helper media utilities. When a command is given a directory, it processes every `.mkv`/`.mp4` inside it in natural (S01E01 before S01E10) order.
+Various helper media utilities. When you give a command a directory, it processes every `.mkv`/`.mp4` inside it in natural (S01E01 before S01E10) order.
 
 ```
 unshackle util COMMAND [ARGS]...
@@ -542,7 +582,7 @@ unshackle util COMMAND [ARGS]...
 unshackle util refresh-services
 ```
 
-Force a refresh (git pull / hard reset) of all service repos configured under `directories.services`.
+Force a refresh (git pull / hard reset) of all service repos configured under `directories.services`. This updates the clones on disk. A server that is already running reloads the changed services through `POST /api/maintenance/refresh-services` or `serve.services_refresh_interval` instead.
 
 ### `util crop PATH ASPECT`
 
@@ -565,11 +605,11 @@ Losslessly set the video range flag to full or limited at the bitstream level.
 
 ### `util test PATH`
 
-Decode an entire video with FFmpeg and report any corruptions or errors. All streams are tested by default; subtitles cannot be tested.
+Decode an entire video with FFmpeg and report any corruptions or errors. By default it does a test of every track. It cannot do a test of subtitles.
 
 | Option | Default | Description |
 |---|---|---|
-| `-m`, `--map` | `0` | Test specific streams via FFmpeg's `-map`, e.g. `0:v:0` or `0:a`. |
+| `-m`, `--map` | `0` | Do a test of specific tracks with FFmpeg's `-map`, for example `0:v:0` or `0:a`. |
 
 !!! example
     ```shell

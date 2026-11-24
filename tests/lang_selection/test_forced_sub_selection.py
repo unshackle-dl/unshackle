@@ -15,7 +15,6 @@ from unshackle.core.utilities import keep_forced_subtitle
         (True, "en-US", ["en"], False, True),
         (True, "de", ["en"], False, False),
         (True, "de", ["en", "de"], False, True),
-        # CLDR rates paradigm-regional pairs (en/en-US) distance 0, so exact still matches
         (True, "en-US", ["en"], True, True),
         (True, "en", ["en"], True, True),
         (True, "es-419", ["es-ES"], True, False),

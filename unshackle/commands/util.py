@@ -1,3 +1,4 @@
+import logging
 import re
 import subprocess
 from pathlib import Path
@@ -9,7 +10,7 @@ from unshackle.core import binaries
 from unshackle.core.constants import context_settings
 
 
-def _natural_sort_key(path: Path) -> list:
+def natural_sort_key(path: Path) -> list:
     """Sort key for natural sorting (S01E01 before S01E10)."""
     return [int(part) if part.isdigit() else part.lower() for part in re.split(r"(\d+)", path.name)]
 
@@ -24,27 +25,25 @@ def refresh_services() -> None:
     """Force a refresh (git pull) of all service repos configured in directories.services."""
     from unshackle.core.config import config
     from unshackle.core.service_repo import is_repo_spec, refresh_repo
-    from unshackle.core.utils.redact import redact_path
+
+    log = logging.getLogger("util")
 
     entries = config.directories.services
     if not isinstance(entries, list):
         entries = [entries]
     specs = [e for e in entries if isinstance(e, str) and is_repo_spec(e)]
     if not specs:
-        click.echo("No service repos configured in directories.services.")
+        log.info("No service repos configured in directories.services.")
         return
-    # manual refresh force-overwrites local changes (hard reset to upstream), then reports the diff
     for spec in specs:
         dest, changes = refresh_repo(spec)
         if not dest:
-            click.echo(f"Failed to update {spec} (see log).")
+            log.error(f"Failed to update {spec} (see log).")
             continue
         if changes:
-            click.echo(f"Updated {spec} → {redact_path(str(dest))}")
-            for line in changes:
-                click.echo(f"    {line}")
+            log.info(f"Updated {spec} {' '.join(changes)}")
         else:
-            click.echo(f"No changes {spec}")
+            log.info(f"Up to date: {spec}")
 
 
 @util.command()
@@ -66,7 +65,7 @@ def refresh_services() -> None:
 def crop(path: Path, aspect: str, letter: bool, offset: int, preview: bool) -> None:
     """
     Losslessly crop H.264 and H.265 video files at the bit-stream level.
-    You may provide a path to a file, or a folder of mkv and/or mp4 files.
+    You may give a path to a file, or a folder of mkv and/or mp4 files.
 
     Note: If you notice that the values you put in are not quite working, try
     tune -o/--offset. This may be necessary on videos with sub-sampled chroma.
@@ -74,8 +73,8 @@ def crop(path: Path, aspect: str, letter: bool, offset: int, preview: bool) -> N
     Do note that you may not get an ideal lossless cropping result on some
     cases, again due to sub-sampled chroma.
 
-    It's recommended that you try -o about 10 or so pixels and lower it until
-    you get as close in as possible. Do make sure it's not over-cropping either
+    Try -o about 10 or so pixels and lower it until you get as close in as
+    possible. Do make sure it is not over-cropping either
     as it may go from being 2px away from a perfect crop, to 20px over-cropping
     again due to sub-sampled chroma.
     """
@@ -83,7 +82,7 @@ def crop(path: Path, aspect: str, letter: bool, offset: int, preview: bool) -> N
         raise click.ClickException('FFmpeg executable "ffmpeg" not found but is required.')
 
     if path.is_dir():
-        paths = sorted(list(path.glob("*.mkv")) + list(path.glob("*.mp4")), key=_natural_sort_key)
+        paths = sorted(list(path.glob("*.mkv")) + list(path.glob("*.mp4")), key=natural_sort_key)
     else:
         paths = [path]
     for video_path in paths:
@@ -109,7 +108,7 @@ def crop(path: Path, aspect: str, letter: bool, offset: int, preview: bool) -> N
             raise click.ClickException("Cannot crop less than 0, are you cropping in the right direction?")
 
         if preview:
-            out_path = ["-f", "mpegts", "-"]  # pipe
+            out_path = ["-f", "mpegts", "-"]
         else:
             out_path = [
                 str(
@@ -123,7 +122,6 @@ def crop(path: Path, aspect: str, letter: bool, offset: int, preview: bool) -> N
                                     "crop",
                                     str(offset or ""),
                                     {
-                                        # ffmpeg's MKV muxer does not yet support HDR
                                         "HEVC": "h265",
                                         "AVC": "h264",
                                     }.get(video_track.commercial_name, ".mp4"),
@@ -176,17 +174,17 @@ def crop(path: Path, aspect: str, letter: bool, offset: int, preview: bool) -> N
 def range_(path: Path, full: bool, preview: bool) -> None:
     """
     Losslessly set the Video Range flag to full or limited at the bit-stream level.
-    You may provide a path to a file, or a folder of mkv and/or mp4 files.
+    You may give a path to a file, or a folder of mkv and/or mp4 files.
 
     If you ever notice blacks not being quite black, and whites not being quite white,
-    then you're video may have the range set to the wrong value. Flip its range to the
+    then your video may have the range set to the wrong value. Flip its range to the
     opposite value and see if that fixes it.
     """
     if not binaries.FFMPEG:
         raise click.ClickException('FFmpeg executable "ffmpeg" not found but is required.')
 
     if path.is_dir():
-        paths = sorted(list(path.glob("*.mkv")) + list(path.glob("*.mp4")), key=_natural_sort_key)
+        paths = sorted(list(path.glob("*.mkv")) + list(path.glob("*.mp4")), key=natural_sort_key)
     else:
         paths = [path]
     for video_path in paths:
@@ -200,7 +198,7 @@ def range_(path: Path, full: bool, preview: bool) -> None:
             raise click.ClickException(f"{video_track.commercial_name} Codec not supported.")
 
         if preview:
-            out_path = ["-f", "mpegts", "-"]  # pipe
+            out_path = ["-f", "mpegts", "-"]
         else:
             out_path = [
                 str(
@@ -214,7 +212,6 @@ def range_(path: Path, full: bool, preview: bool) -> None:
                                     "range",
                                     ["limited", "full"][full],
                                     {
-                                        # ffmpeg's MKV muxer does not yet support HDR
                                         "HEVC": "h265",
                                         "AVC": "h264",
                                     }.get(video_track.commercial_name, ".mp4"),
@@ -261,18 +258,18 @@ def range_(path: Path, full: bool, preview: bool) -> None:
 )
 def test(path: Path, map_: str) -> None:
     """
-    Decode an entire video and check for any corruptions or errors using FFmpeg.
-    You may provide a path to a file, or a folder of mkv and/or mp4 files.
+    Decode an entire video and examine it for any corruptions or errors using FFmpeg.
+    You may give a path to a file, or a folder of mkv and/or mp4 files.
 
-    Tests all streams within the file by default. Subtitles cannot be tested.
-    You may choose specific streams using the -m/--map parameter. E.g.,
-    '0:v:0' to test the first video stream, or '0:a' to test all audio streams.
+    Does a test of all tracks in the file by default. You cannot test subtitle
+    tracks. You may choose specific tracks with the -m/--map parameter.
+    For example, '0:v:0' for the first video track, or '0:a' for all audio tracks.
     """
     if not binaries.FFMPEG:
         raise click.ClickException('FFmpeg executable "ffmpeg" not found but is required.')
 
     if path.is_dir():
-        paths = sorted(list(path.glob("*.mkv")) + list(path.glob("*.mp4")), key=_natural_sort_key)
+        paths = sorted(list(path.glob("*.mkv")) + list(path.glob("*.mp4")), key=natural_sort_key)
     else:
         paths = [path]
     for video_path in paths:

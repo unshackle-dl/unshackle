@@ -2,6 +2,7 @@ import ast
 import contextlib
 import gzip
 import importlib.util
+import inspect
 import json
 import logging
 import os
@@ -16,7 +17,7 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 from types import ModuleType
-from typing import Any, Optional, Sequence, Union
+from typing import Any, Callable, Mapping, Optional, Sequence, Union
 from urllib.parse import ParseResult, urlparse
 from uuid import uuid4
 
@@ -67,7 +68,7 @@ def rotate_log_file(log_path: Path, keep: int = 20) -> Path:
         raise ValueError("A log path must be provided")
 
     try:
-        log_path.relative_to(Path(""))  # file name only
+        log_path.relative_to(Path(""))
     except ValueError:
         pass
     else:
@@ -80,7 +81,6 @@ def rotate_log_file(log_path: Path, keep: int = 20) -> Path:
     if log_path.parent.exists():
         log_files = [x for x in log_path.parent.iterdir() if x.suffix == log_path.suffix]
         for log_file in log_files[::-1][keep - 1 :]:
-            # keep n newest files and delete the rest
             log_file.unlink()
 
     log_path.parent.mkdir(parents=True, exist_ok=True)
@@ -96,7 +96,6 @@ def import_module_by_path(path: Path) -> ModuleType:
     if not path.exists():
         raise ValueError("Path does not exist")
 
-    # compute package hierarchy for relative import support
     if path.is_relative_to(config.directories.core_dir):
         name = []
         _path = path.parent
@@ -105,7 +104,6 @@ def import_module_by_path(path: Path) -> ModuleType:
             _path = _path.parent
         name = ".".join([config.directories.core_dir.stem] + name[::-1])
     else:
-        # is outside the src package
         if str(path.parent.parent) not in sys.path:
             sys.path.insert(1, str(path.parent.parent))
         name = path.parent.stem
@@ -118,46 +116,58 @@ def import_module_by_path(path: Path) -> ModuleType:
     return module
 
 
-def sanitize_filename(filename: str, spacer: str = ".") -> str:
+def sanitize_filename(filename: str, spacer: str = ".", unicode: Optional[bool] = None) -> str:
     """
-    Sanitize a string to be filename safe.
+    Sanitise a string to be filename safe.
 
     The spacer is safer to be a '.' for older DDL and p2p sharing spaces.
-    This includes web-served content via direct links and such.
+    This includes files served on the web through direct links and such.
 
-    Set `unicode_filenames: true` in config to preserve native language
-    characters (Korean, Japanese, Chinese, etc.) instead of transliterating
-    them to ASCII equivalents.
+    Set `unicode_filenames: true` in config to preserve the characters of the
+    original language (for example Korean, Japanese, or Chinese) instead of
+    transliterating them to ASCII equivalents. Pass ``unicode`` to decide that
+    for one call instead of the config value. The name goes to NFC first, so
+    composed and decomposed spellings of a title give the same name.
     """
-    # optionally replace non-ASCII characters with ASCII equivalents
-    if not config.unicode_filenames:
+    filename = unicodedata.normalize("NFC", filename)
+    if not (config.unicode_filenames if unicode is None else unicode):
         filename = unidecode(filename)
         filename = re.sub(r"\[\(+", "[", filename)
         filename = re.sub(r"\)+\]", "]", filename)
-
-    # remove or replace further characters as needed
-    filename = "".join(c for c in filename if unicodedata.category(c) != "Mn")  # hidden characters
-    filename = filename.replace("/", " & ").replace(";", " & ")  # e.g. multi-episode filenames
+    filename = "".join(c for c in filename if unicodedata.category(c) != "Cc")
+    filename = filename.replace("/", " & ").replace(";", " & ")
     if spacer == ".":
-        filename = re.sub(r" - ", spacer, filename)  # title separators to spacer (avoids .-. pattern)
-    filename = re.sub(r"[:; ]", spacer, filename)  # structural chars to (spacer)
-    filename = re.sub(r"[\\*!?¿,'\"" "<>|$#~]", "", filename)  # not filename safe chars
-    filename = re.sub(rf"[{spacer}]{{2,}}", spacer, filename)  # remove extra neighbouring (spacer)s
-    filename = filename.strip(" .")  # strip leading and trailing spaces and dots for OS path safety
+        filename = re.sub(r" - ", spacer, filename)
+    filename = re.sub(r"[:; ]", spacer, filename)
+    filename = re.sub(r"[\\*!?¿,'\"" "<>|$#~]", "", filename)
+    filename = re.sub(rf"[{spacer}]{{2,}}", spacer, filename)
+    filename = filename.strip(" .")
 
-    return filename
+    return unicodedata.normalize("NFC", filename)
 
 
 def is_close_match(language: Union[str, Language], languages: Sequence[Union[str, Language, None]]) -> bool:
-    """Check if a language is a close match to any of the provided languages."""
+    """Examine whether a language closely matches any of the given languages."""
     languages = [x for x in languages if x]
     if not languages:
         return False
     return closest_match(language, list(map(str, languages)))[1] <= LANGUAGE_MAX_DISTANCE
 
 
+def valid_language(language: Any) -> Optional[str]:
+    """Return the language tag as text, or None when it is not a valid tag."""
+    if not language:
+        return None
+    try:
+        Language.get(str(language))
+    except LanguageTagError:
+        logging.getLogger("utilities").warning("%r is not a valid language tag, ignoring it", language)
+        return None
+    return str(language)
+
+
 def is_exact_match(language: Union[str, Language], languages: Sequence[Union[str, Language, None]]) -> bool:
-    """Check if a language is an exact match to any of the provided languages."""
+    """Examine whether a language exactly matches any of the given languages."""
     languages = [x for x in languages if x]
     if not languages:
         return False
@@ -168,8 +178,8 @@ def partition_exclusions(tokens: Optional[Sequence[str]]) -> tuple[list[str], li
     """
     Split selection tokens into wanted values and values excluded with a leading '-'.
 
-    Both sides keep the order they were written in and drop later repeats. A bare '-'
-    carries no value and is skipped.
+    Both sides keep the order the user wrote them in and drop later repeats. A bare '-'
+    carries no value, so this function ignores it.
 
     Example:
         >>> partition_exclusions(["all", "-es"])
@@ -213,7 +223,7 @@ def keep_forced_subtitle(
     forced_s_lang: Sequence[str],
     exact: bool = False,
 ) -> bool:
-    """The -fsl filter: non-forced tracks always pass, forced tracks only if they match forced_s_lang."""
+    """The -fsl filter: non-forced tracks always pass, forced tracks only when they match forced_s_lang."""
     if not forced:
         return True
     if not forced_s_lang:
@@ -222,11 +232,34 @@ def keep_forced_subtitle(
     return match_func(language, forced_s_lang)
 
 
+def kind_only_conflict(params: Mapping[str, Any]) -> Optional[tuple[str, str]]:
+    """
+    Return the first (kind-only flag, flag that drops its track type) pair that are both set.
+
+    The ``*_only`` track-type flags combine, so another one only drops the kind-only
+    flag's track type when its own ``*_only`` flag is not set as well.
+    """
+    for flag, own_only, no_flag in (
+        ("audio_description_only", "audio_only", "no_audio"),
+        ("forced_subs_only", "subs_only", "no_subs"),
+    ):
+        if not params.get(flag):
+            continue
+        if params.get(no_flag):
+            return flag, no_flag
+        if params.get(own_only):
+            continue
+        for other in ("video_only", "audio_only", "subs_only", "chapters_only"):
+            if params.get(other):
+                return flag, other
+    return None
+
+
 def embedded_audio_langs(videos: Sequence[Any], keep_videos: bool) -> list[str]:
     """
     Return the audio languages carried inside video tracks rather than beside them.
 
-    A muxed stream keeps its audio in the video track, which a service declares by setting
+    A muxed video keeps its audio in the video track, which a service declares by setting
     ``data["audio_language"]``. That audio is only available while the video is kept, so
     dropping the video (``--audio-only``, ``--no-video``) drops the language with it.
     """
@@ -235,16 +268,51 @@ def embedded_audio_langs(videos: Sequence[Any], keep_videos: bool) -> list[str]:
     return [video.data["audio_language"] for video in videos if video.data.get("audio_language")]
 
 
+def apply_original_language(title: Any, language: Language) -> None:
+    """
+    Make ``language`` the title's original language over the one the service set.
+
+    A service tags its videos and original-language flags with its own guess, so the videos that
+    carry that guess move to ``language`` and every track's flag is set again.
+    """
+    guess = title.language
+    if guess == language:
+        return
+    for video in title.tracks.videos:
+        if guess and video.language == guess:
+            video.language = language
+    for track in title.tracks:
+        track.is_original_lang = bool(track.language and is_close_match(track.language, [language]))
+    title.language = language
+
+
 def find_missing_langs(
     requested: Sequence[str],
     available: Sequence[Union[str, Language, None]],
     *,
     exact: bool = False,
 ) -> list[str]:
-    """Return requested language tokens with no match in available languages."""
+    """Return the requested language tokens that match no available language."""
     match_func = is_exact_match if exact else is_close_match
     skip = {"all", "best", "orig"}
     return [tok for tok in requested if tok not in skip and not match_func(tok, available)]
+
+
+def missing_required_langs(
+    required: Sequence[str],
+    available: Sequence[Union[str, Language, None]],
+    original: Optional[Union[str, Language]] = None,
+    *,
+    exact: bool = False,
+) -> list[str]:
+    """
+    Return the required language tokens that match no available track language.
+
+    "orig" becomes the title language, and drops out when the title has none. An exclusion
+    token ("-fr") asks for a language to be absent, so it is never a required language.
+    """
+    wanted, _ = partition_exclusions(list(required))
+    return find_missing_langs(resolve_sort_langs(wanted, original), available, exact=exact)
 
 
 def as_requested(tokens: Sequence[str], orig_token: Optional[str]) -> str:
@@ -263,13 +331,13 @@ def matching_languages(
     In exact mode CLDR tag distance is not sufficient on its own: it rates a base language and
     its "paradigm" regional variant as the same language (distance 0 for en/en-US, pt/pt-BR), so
     it cannot separate en-US from en. Follow RFC 4647 Lookup: prefer the string-equal tag, and
-    fall back to the distance match only when no such tag is present (e.g. zh matches cmn).
+    fall back to the distance rating only when no such tag is present (for example, zh matches
+    cmn).
     """
     tags = {str(x) for x in available if x}
     try:
         want = Language.get(str(language)).to_tag().casefold()
     except LanguageTagError:
-        # e.g. a config typo in language_priority; an unparseable tag matches nothing
         return set()
     if not exact:
         return {tag for tag in tags if is_close_match(language, [tag])}
@@ -281,8 +349,8 @@ def resolve_sort_langs(tokens: Sequence[str], original: Optional[Union[str, Lang
     """
     Prepare language tokens for a Tracks.sort_* by_language argument.
 
-    "orig" becomes the title language, or is dropped when the title has none. "all" and
-    "best" pass through, because the sort methods resolve them against the tracks. The
+    "orig" becomes the title language. This function drops it when the title has none.
+    "all" and "best" pass through, because the sort methods find them among the tracks. The
     result keeps the first position of each language and drops later repeats.
     """
     resolved: list[str] = []
@@ -321,11 +389,8 @@ def get_boxes(data: bytes, box_type: bytes, as_bytes: bool = False) -> Box:  # t
         - For each box found, the function updates the search offset to skip past
           the current box to avoid finding the same box multiple times
         - The function handles validation errors for certain box types (e.g., tenc)
-        - The size field is located 4 bytes before the box type identifier
+        - The size field sits 4 bytes before the box type identifier
     """
-    # using slicing to get to the wanted box is done because parsing the entire box and recursively
-    # scanning through each box and its children often wouldn't scan far enough to reach the wanted box.
-    # since it doesn't care what child box the wanted box is from, this works fine.
     if not isinstance(data, (bytes, bytearray)):
         raise ValueError("data must be bytes")
 
@@ -370,8 +435,8 @@ def ap_case(text: str, keep_spaces: bool = False, stop_words: tuple[str] = None)
 
     Parameters:
         text: The text string to title case with AP/APA style.
-        keep_spaces: To keep the original whitespace, or to just use a normal space.
-            This would only be needed if you have special whitespace between words.
+        keep_spaces: To keep the original whitespace, or to use a normal space.
+            You need this only if you have special whitespace between words.
         stop_words: Override the default stop words with your own ones.
     """
     if not text:
@@ -415,9 +480,8 @@ def ap_case(text: str, keep_spaces: bool = False, stop_words: tuple[str] = None)
     )
 
 
-# Common country code aliases that differ from ISO 3166-1 alpha-2
 COUNTRY_CODE_ALIASES = {
-    "uk": "gb",  # United Kingdom -> Great Britain
+    "uk": "gb",
 }
 
 
@@ -439,7 +503,6 @@ def get_country_name(code: str) -> Optional[str]:
         >>> get_country_name('uk')
         'United Kingdom'
     """
-    # Handle common aliases
     code = COUNTRY_CODE_ALIASES.get(code.lower(), code.lower())
 
     try:
@@ -470,17 +533,14 @@ def get_country_code(name: str) -> Optional[str]:
         'GB'
     """
     try:
-        # Try exact name match first
         country = pycountry.countries.get(name=name.title())
         if country:
             return country.alpha_2.upper()
 
-        # Try common name (e.g., "Bolivia" vs "Bolivia, Plurinational State of")
         country = pycountry.countries.get(common_name=name.title())
         if country:
             return country.alpha_2.upper()
 
-        # Try fuzzy search as fallback
         results = pycountry.countries.search_fuzzy(name)
         if results:
             return results[0].alpha_2.upper()
@@ -508,9 +568,10 @@ def time_elapsed_since(start: float) -> str:
 
 def try_ensure_utf8(data: bytes) -> bytes:
     """
-    Try to ensure that the given data is encoded in UTF-8.
+    Try to make sure that the given data is in UTF-8.
 
-    Gzip or zlib compressed input is decompressed first, detected by magic bytes.
+    This function first decompresses gzip or zlib compressed input, which it detects
+    by magic bytes.
     Callers hand in bytes read from files and from responses they fetched
     themselves, so there is no Content-Encoding header left to consult.
 
@@ -518,17 +579,17 @@ def try_ensure_utf8(data: bytes) -> bytes:
         data: Input data that may or may not yet be UTF-8 or another encoding.
 
     Returns the input data encoded in UTF-8 if successful. If unable to detect the
-    encoding of the input data, then the original data is returned as-received.
+    encoding of the input data, then this function returns the original data as-received.
     """
     if data[:2] == b"\x1f\x8b":
         try:
             data = gzip.decompress(data)
-        except Exception:
+        except (OSError, EOFError, zlib.error):
             pass
     elif data[:1] == b"\x78" and len(data) > 1 and data[1:2] in (b"\x01", b"\x5e", b"\x9c", b"\xda"):
         try:
             data = zlib.decompress(data)
-        except Exception:
+        except zlib.error:
             pass
 
     try:
@@ -536,12 +597,9 @@ def try_ensure_utf8(data: bytes) -> bytes:
         return data
     except UnicodeDecodeError:
         try:
-            # CP-1252 is a superset of latin1 but has gaps. Replace unknown
-            # characters instead of failing on them.
             return data.decode("cp1252", errors="replace").encode("utf8")
         except UnicodeDecodeError:
             try:
-                # last ditch effort to detect encoding
                 detection_result = chardet.detect(data)
                 if not detection_result["encoding"]:
                     return data.decode("utf-8", errors="replace").encode("utf-8")
@@ -554,8 +612,8 @@ def get_free_port() -> int:
     """
     Get an available port to use between a-b (inclusive).
 
-    The port is freed as soon as this has returned, therefore, it
-    is possible for the port to be taken before you try to use it.
+    This function frees the port as soon as it returns. Thus something else
+    can take the port before you use it.
     """
     with contextlib.closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as s:
         s.bind(("", 0))
@@ -592,7 +650,6 @@ def extract_font_family(font_path: Path) -> Optional[str]:
     Returns:
         Font family name if successfully extracted, None otherwise
     """
-    # Suppress verbose fontTools logging during font table parsing
     import io
 
     logging.getLogger("fontTools").setLevel(logging.ERROR)
@@ -606,13 +663,10 @@ def extract_font_family(font_path: Path) -> Optional[str]:
         font = ttLib.TTFont(font_path, lazy=True)
         name_table = font["name"]
 
-        # Try to get family name (nameID 1) for Windows platform (platformID 3)
-        # This matches the naming convention used in Windows registry
         for record in name_table.names:
             if record.nameID == 1 and record.platformID == 3:
                 return record.toUnicode()
 
-        # Fallback to other platforms if Windows name not found
         for record in name_table.names:
             if record.nameID == 1:
                 return record.toUnicode()
@@ -650,7 +704,7 @@ def scan_font_directory(font_dir: Path, fonts: dict[str, Path], log: logging.Log
 
     Args:
         font_dir: Directory to scan
-        fonts: Dictionary to populate with found fonts
+        fonts: Dictionary to fill with found fonts
         log: Logger instance for error reporting
     """
     font_files = list(font_dir.rglob("*.ttf")) + list(font_dir.rglob("*.otf"))
@@ -707,8 +761,6 @@ def get_system_fonts() -> dict[str, Path]:
     return get_unix_fonts()
 
 
-# Common Windows font names mapped to their Linux equivalents
-# Ordered by preference (first match is used)
 FONT_ALIASES = {
     "Arial": ["Liberation Sans", "DejaVu Sans", "Nimbus Sans", "FreeSans"],
     "Arial Black": ["Liberation Sans", "DejaVu Sans", "Nimbus Sans"],
@@ -729,7 +781,7 @@ FONT_ALIASES = {
 
 def find_case_insensitive(font_name: str, fonts: dict[str, Path]) -> Optional[Path]:
     """
-    Find font by case-insensitive name match.
+    Find a font by a case-insensitive name.
 
     Args:
         font_name: Font family name to find
@@ -747,43 +799,37 @@ def find_case_insensitive(font_name: str, fonts: dict[str, Path]) -> Optional[Pa
 
 def find_font_with_fallbacks(font_name: str, system_fonts: dict[str, Path]) -> Optional[Path]:
     """
-    Find a font by name with intelligent fallback matching.
+    Find a font by name, with intelligent fallbacks.
 
     Tries multiple strategies in order:
-    1. Exact match (case-sensitive)
-    2. Case-insensitive match
+    1. Exact name (case-sensitive)
+    2. Exact name (case-insensitive)
     3. Alias lookup (Windows → Linux font equivalents)
-    4. Partial/prefix match
+    4. Partial or prefix name
 
     Args:
         font_name: The requested font family name (e.g., "Arial", "Times New Roman")
         system_fonts: Dictionary of available fonts (family name → path)
 
     Returns:
-        Path to the matched font file, or None if no match found
+        Path to the matched font file, or None when no font matches
     """
     if not system_fonts:
         return None
 
-    # Strategy 1: Exact match (case-sensitive)
     if font_name in system_fonts:
         return system_fonts[font_name]
 
-    # Strategy 2: Case-insensitive match
     if result := find_case_insensitive(font_name, system_fonts):
         return result
 
-    # Strategy 3: Alias lookup
     if font_name in FONT_ALIASES:
         for alias in FONT_ALIASES[font_name]:
-            # Try exact match for alias
             if alias in system_fonts:
                 return system_fonts[alias]
-            # Try case-insensitive match for alias
             if result := find_case_insensitive(alias, system_fonts):
                 return result
 
-    # Strategy 4: Partial/prefix match as last resort
     font_name_lower = font_name.lower()
     for name, path in system_fonts.items():
         if name.lower().startswith(font_name_lower):
@@ -792,7 +838,6 @@ def find_font_with_fallbacks(font_name: str, system_fonts: dict[str, Path]) -> O
     return None
 
 
-# Mapping of font families to system packages that provide them
 FONT_PACKAGES = {
     "liberation": {
         "debian": "fonts-liberation fonts-liberation2",
@@ -818,20 +863,18 @@ def suggest_font_packages(missing_fonts: list[str]) -> dict[str, list[str]]:
     Suggest system packages to install for missing fonts.
 
     Args:
-        missing_fonts: List of font family names that couldn't be found
+        missing_fonts: List of font family names that could not be found
 
     Returns:
-        Dictionary mapping package names to lists of fonts they would provide
+        Dictionary mapping package names to lists of fonts they would give
     """
     suggestions = {}
 
-    # Check which fonts from aliases would help
     needed_aliases = set()
     for font in missing_fonts:
         if font in FONT_ALIASES:
             needed_aliases.update(FONT_ALIASES[font])
 
-    # Map needed aliases to packages
     for package_name, package_info in FONT_PACKAGES.items():
         provided_fonts = package_info["fonts"]
         matching_fonts = [f for f in provided_fonts if f in needed_aliases]
@@ -873,17 +916,17 @@ class DebugLogger:
     Structured JSON debug logger for unshackle.
 
     Outputs JSON Lines format where each line is a complete JSON object.
-    This makes it easy to parse, filter, and analyze logs programmatically.
+    This makes it easy to parse, filter, and analyse logs programmatically.
     """
 
     def __init__(self, log_path: Optional[Path] = None, enabled: bool = False, log_keys: bool = False):
         """
-        Initialize the debug logger.
+        Initialise the debug logger.
 
         Args:
-            log_path: Path to the log file. If None, logging is disabled.
-            enabled: Whether debug logging is enabled.
-            log_keys: Whether to log decryption keys (for debugging key issues).
+            log_path: Path to the log file. None turns logging off.
+            enabled: True to turn debug logging on.
+            log_keys: True to log the content keys (to debug content key issues).
         """
         self.enabled = enabled and log_path is not None
         self.log_path = log_path
@@ -897,7 +940,7 @@ class DebugLogger:
             self.log_session_start()
 
     def log_session_start(self):
-        """Log the start of a new session with environment information."""
+        """Log the ``session_start`` entry, with environment information."""
         import platform
 
         from unshackle.core import __code_hash__, __version__
@@ -935,7 +978,7 @@ class DebugLogger:
 
         Args:
             level: Log level (DEBUG, INFO, WARNING, ERROR)
-            operation: Name of the operation being performed
+            operation: Name of the operation
             message: Human-readable message
             context: Additional context information
             service: Service tag
@@ -993,14 +1036,13 @@ class DebugLogger:
 
     def sanitize_data(self, data: Any) -> Any:
         """
-        Sanitize data for JSON serialization.
+        Sanitise data for JSON serialization.
         Handles complex objects and removes sensitive information.
         """
         if data is None:
             return None
 
         if isinstance(data, str):
-            # mask secrets, collapse content/CDN URLs, and strip local path prefixes
             return redact_all(data)
 
         if isinstance(data, (int, float, bool)):
@@ -1056,7 +1098,7 @@ class DebugLogger:
             **kwargs: Additional context
 
         Returns:
-            Operation ID that can be used to log the end of the operation
+            Operation ID you can use to log the end of the operation
         """
         op_id = str(uuid4())[:8]
         self.log(
@@ -1096,9 +1138,9 @@ class DebugLogger:
         Log a service API call.
 
         Args:
-            method: HTTP method (GET, POST, etc.)
+            method: HTTP method (for example GET or POST)
             url: Request URL
-            **kwargs: Additional request details (headers, body, etc.)
+            **kwargs: Additional request details (for example headers or body)
         """
         message = kwargs.pop("message", "")
         level = kwargs.pop("level", "DEBUG")
@@ -1108,10 +1150,10 @@ class DebugLogger:
 
     def log_drm_operation(self, drm_type: str, operation: str, **kwargs):
         """
-        Log a DRM operation (PSSH extraction, license request, key retrieval).
+        Log a DRM operation (PSSH extraction, license request, content key retrieval).
 
         Args:
-            drm_type: DRM type (Widevine, PlayReady, etc.)
+            drm_type: DRM type (for example Widevine or PlayReady)
             operation: DRM operation name
             **kwargs: Additional context. Pass ``message=``/``level=`` to override the defaults.
         """
@@ -1125,7 +1167,7 @@ class DebugLogger:
 
         Args:
             vault_name: Name of the vault
-            operation: Vault operation (get_key, add_key, etc.)
+            operation: Vault operation (for example get_key or add_key)
             **kwargs: Additional context. Pass ``message=``/``level=`` to override the defaults.
         """
         message = kwargs.pop("message", None) or f"Vault {vault_name}: {operation}"
@@ -1164,23 +1206,22 @@ class DebugLogger:
             self.file_handle = None
 
 
-# Global debug logger instance
-_debug_logger: Optional[DebugLogger] = None
+debug_logger: Optional[DebugLogger] = None
 
 
 def get_debug_logger() -> Optional[DebugLogger]:
     """Get the global debug logger instance."""
-    return _debug_logger
+    return debug_logger
 
 
 def log_event(operation: str, *, level: str = "DEBUG", message: str = "", **kwargs: Any) -> None:
-    """Emit a single structured debug-log entry. No-op when debug logging is disabled.
+    """Send a single structured debug-log entry. No-op when debug logging is off.
 
-    The canonical one-shot logging primitive — replaces the
+    The canonical one-shot logging primitive. Replaces the
     ``if dl := get_debug_logger(): dl.log(...)`` guard boilerplate. To add logging to a new
     feature, call ``log_event("my_feature_event", message="...", context={...})``.
     """
-    dl = _debug_logger
+    dl = debug_logger
     if dl:
         dl.log(level=level, operation=operation, message=message, **kwargs)
 
@@ -1190,7 +1231,7 @@ def timed_operation(operation: str, *, level: str = "DEBUG", message: str = "", 
     """Time a block and log ``operation`` once it finishes, with ``duration_ms``.
 
     Logs at ``level`` with ``success=True`` on normal exit, or at ERROR with the exception and
-    ``success=False`` if the block raises (then re-raises). No-op when debug logging is disabled,
+    ``success=False`` if the block raises (then re-raises). No-op when debug logging is off,
     so it is always safe to wrap a block in it.
 
     Example::
@@ -1198,7 +1239,7 @@ def timed_operation(operation: str, *, level: str = "DEBUG", message: str = "", 
         with timed_operation("mux", context={"output": str(path)}):
             run_mkvmerge(...)
     """
-    dl = _debug_logger
+    dl = debug_logger
     if not dl:
         yield
         return
@@ -1228,25 +1269,42 @@ def timed_operation(operation: str, *, level: str = "DEBUG", message: str = "", 
 
 def init_debug_logger(log_path: Optional[Path] = None, enabled: bool = False, log_keys: bool = False):
     """
-    Initialize the global debug logger.
+    Initialise the global debug logger.
 
     Args:
         log_path: Path to the log file
-        enabled: Whether debug logging is enabled
-        log_keys: Whether to log decryption keys (for debugging key issues)
+        enabled: True to turn debug logging on
+        log_keys: True to log the content keys (to debug content key issues)
     """
-    global _debug_logger
-    if _debug_logger:
-        _debug_logger.close()
-    _debug_logger = DebugLogger(log_path=log_path, enabled=enabled, log_keys=log_keys)
+    global debug_logger
+    if debug_logger:
+        debug_logger.close()
+    debug_logger = DebugLogger(log_path=log_path, enabled=enabled, log_keys=log_keys)
 
 
 def close_debug_logger():
     """Close the global debug logger."""
-    global _debug_logger
-    if _debug_logger:
-        _debug_logger.close()
-        _debug_logger = None
+    global debug_logger
+    if debug_logger:
+        debug_logger.close()
+        debug_logger = None
+
+
+def declared_kwargs(fn: Callable[..., Any], kwargs: dict[str, Any]) -> dict[str, Any]:
+    """Keep only the arguments ``fn`` declares, so an extra one never raises TypeError.
+
+    A service licence function that never asked for ``pssh`` or ``session_id`` must not fail
+    on them. Filter only against a signature this function can read and call by keyword.
+    Anything else, such as the licence function of a compiled service, gets every argument,
+    and the caller handles the TypeError.
+    """
+    try:
+        params = inspect.signature(fn).parameters
+    except (TypeError, ValueError):
+        return kwargs
+    if "challenge" not in params or any(p.kind is p.VAR_KEYWORD for p in params.values()):
+        return kwargs
+    return {k: v for k, v in kwargs.items() if k in params}
 
 
 __all__ = (

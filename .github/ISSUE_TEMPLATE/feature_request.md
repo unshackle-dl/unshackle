@@ -3,7 +3,7 @@ name: Feature request
 about: Suggest an idea for this project
 title: ""
 labels: ""
-assignees: Sp5rky
+assignees: imSp4rky
 ---
 
 **Feature Category**
@@ -49,5 +49,5 @@ Add any other context or screenshots about the feature request here.
 
 ---
 
-**⚠️ Note:**
+**Note:**
 This project focuses on the core framework and tooling. Service-specific feature requests should focus on what the framework should support, not specific service implementations.

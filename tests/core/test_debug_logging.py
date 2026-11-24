@@ -16,7 +16,14 @@ from unshackle.core.utilities import (
     log_event,
     timed_operation,
 )
-from unshackle.core.utils.redact import redact_all, redact_path, redact_text, redact_url, safe_display_url
+from unshackle.core.utils.redact import (
+    redact_all,
+    redact_path,
+    redact_secrets,
+    redact_text,
+    redact_url,
+    safe_display_url,
+)
 from unshackle.core.utils.subprocess import log_tool_run
 
 pytestmark = pytest.mark.unit
@@ -51,12 +58,9 @@ def debug_log_with_keys(tmp_path: Path):
     close_debug_logger()
 
 
-# ---------- JSONL output shape ----------
-
-
 def test_every_line_is_valid_json_with_required_fields(debug_log: Path):
     log_event("sample_event", message="hi", context={"a": 1})
-    close_debug_logger()  # flush session_end
+    close_debug_logger()
     entries = read_entries(debug_log)
     assert entries, "expected at least one JSONL entry"
     for e in entries:
@@ -72,9 +76,6 @@ def test_session_id_is_stable_across_entries(debug_log: Path):
     assert len(ids) == 1
 
 
-# ---------- log_event ----------
-
-
 def test_log_event_emits_with_level_message_and_context(debug_log: Path):
     log_event("feature_done", level="INFO", message="did it", context={"count": 3})
     e = find(read_entries(debug_log), "feature_done")
@@ -86,10 +87,7 @@ def test_log_event_emits_with_level_message_and_context(debug_log: Path):
 def test_log_event_noop_when_disabled():
     close_debug_logger()
     assert get_debug_logger() is None
-    log_event("should_not_explode", message="no logger")  # must not raise
-
-
-# ---------- timed_operation ----------
+    log_event("should_not_explode", message="no logger")
 
 
 def test_timed_operation_logs_success_and_duration(debug_log: Path):
@@ -115,12 +113,9 @@ def test_timed_operation_logs_error_and_reraises(debug_log: Path):
 
 def test_timed_operation_noop_when_disabled():
     close_debug_logger()
-    with timed_operation("disabled_block"):  # must not raise, must still run body
+    with timed_operation("disabled_block"):
         value = 1 + 1
     assert value == 2
-
-
-# ---------- secret redaction / key gating ----------
 
 
 def test_sanitize_redacts_sensitive_key_names(debug_log: Path):
@@ -132,8 +127,8 @@ def test_sanitize_redacts_sensitive_key_names(debug_log: Path):
             "auth": "bearer x",
             "cookie": "sess=1",
             "secret": "s",
-            "has_password": True,  # has_ prefix stays
-            "quality": "1080p",  # non-secret stays
+            "has_password": True,
+            "quality": "1080p",
         }
     )
     assert cleaned["password"] == "[REDACTED]"
@@ -146,16 +141,16 @@ def test_sanitize_redacts_sensitive_key_names(debug_log: Path):
 
 
 def test_sanitize_gates_key_fields_unless_log_keys(debug_log: Path):
-    dl = get_debug_logger()  # log_keys=False
+    dl = get_debug_logger()
     cleaned = dl.sanitize_data({"content_key": "deadbeef", "kid": "00112233", "key_found": True, "key_count": 2})
-    assert cleaned["content_key"] == "[REDACTED]"  # redacted when log_keys False
-    assert cleaned["kid"] == "00112233"  # kid whitelisted
-    assert cleaned["key_found"] is True  # key_found whitelisted
-    assert cleaned["key_count"] == 2  # _count whitelisted
+    assert cleaned["content_key"] == "[REDACTED]"
+    assert cleaned["kid"] == "00112233"
+    assert cleaned["key_found"] is True
+    assert cleaned["key_count"] == 2
 
 
 def test_sanitize_keeps_keys_when_log_keys_enabled(debug_log_with_keys: Path):
-    dl = get_debug_logger()  # log_keys=True
+    dl = get_debug_logger()
     cleaned = dl.sanitize_data({"content_key": "deadbeef"})
     assert cleaned["content_key"] == "deadbeef"
 
@@ -177,9 +172,9 @@ def test_sanitize_collapses_urls(debug_log: Path):
             "proxy": "http://bob:secret@proxy.example:8080/x",
         }
     )
-    assert cleaned["segment"] == "redacted.mp4"  # extension kept, host/path/query gone
+    assert cleaned["segment"] == "redacted.mp4"
     assert cleaned["manifest"] == "redacted.mpd"
-    assert cleaned["proxy"] == "redacted"  # userinfo + host never reaches disk
+    assert cleaned["proxy"] == "redacted"
 
 
 def test_logged_content_url_is_collapsed_on_disk(debug_log: Path):
@@ -193,9 +188,6 @@ def test_logged_content_url_is_collapsed_on_disk(debug_log: Path):
     assert "user:pw" not in raw
     assert "api_key=zzz" not in raw
     assert "redacted.mp4" in raw
-
-
-# ---------- redact.py helpers ----------
 
 
 @pytest.mark.parametrize(
@@ -221,9 +213,6 @@ def test_safe_display_url_strips_userinfo_and_query():
     assert safe_display_url("https://u:p@host:8080/a/b?token=x&y=2") == "https://host:8080/a/b"
 
 
-# ---------- redact_url ----------
-
-
 @pytest.mark.parametrize(
     ("url", "expected"),
     [
@@ -231,7 +220,7 @@ def test_safe_display_url_strips_userinfo_and_query():
         ("https://cdn.x/v/manifest.mpd", "redacted.mpd"),
         ("https://cdn.x/v/playlist.m3u8", "redacted.m3u8"),
         ("http://u:p@cdn.x/seg.m4s", "redacted.m4s"),
-        ("https://api.example/auth/token", "redacted"),  # no extension
+        ("https://api.example/auth/token", "redacted"),
     ],
 )
 def test_redact_url_collapses_to_redacted_ext(url: str, expected: str):
@@ -246,11 +235,7 @@ def test_redact_url_handles_url_embedded_in_text():
     assert redact_url("got https://cdn.x/a.mp4 ok") == "got redacted.mp4 ok"
 
 
-# ---------- redact_path ----------
-
-
 def test_redact_path_strips_install_root():
-    # redact.py resolves the project/install root as the <unshackle> anchor.
     from unshackle.core.utils import redact as redact_mod
 
     root = str(Path(redact_mod.__file__).resolve().parents[3])
@@ -267,7 +252,6 @@ def test_redact_path_leaves_relative_paths_untouched():
 
 
 def test_redact_path_disabled_by_config(monkeypatch):
-    # config.redact_paths: false shows full paths verbatim
     from unshackle.core.config import config
     from unshackle.core.utils import redact as redact_mod
 
@@ -279,9 +263,6 @@ def test_redact_path_disabled_by_config(monkeypatch):
     assert redact_path(full) == "<unshackle>/temp/Audio.mp4"
 
 
-# ---------- redact_all + output_dir integration ----------
-
-
 def test_redact_all_composes_secrets_urls_and_paths():
     root = str(Path(__import__("unshackle.core.utils.redact", fromlist=["x"]).__file__).resolve().parents[3])
     out = redact_all(f"dl https://u:p@cdn.x/seg.mp4?token=t into {root}/temp")
@@ -290,20 +271,25 @@ def test_redact_all_composes_secrets_urls_and_paths():
     assert "<unshackle>/temp" in out
 
 
+def test_redact_secrets_keeps_the_url_but_drops_credentials_and_paths():
+    root = str(Path(__import__("unshackle.core.utils.redact", fromlist=["x"]).__file__).resolve().parents[3])
+    out = redact_secrets(f"404 Not Found: https://u:p@cdn.x/a/b.mpd?token=t (cwd {root}/temp)")
+    assert "cdn.x/a/b.mpd" in out
+    assert "u:p@" not in out
+    assert "token=t" not in out
+    assert "<unshackle>/temp" in out
+
+
 def test_logged_output_dir_is_path_redacted(debug_log: Path):
     root = str(Path(__import__("unshackle.core.utils.redact", fromlist=["x"]).__file__).resolve().parents[3])
     log_event("downloader_start", context={"output_dir": f"{root}/temp", "filename": "Audio_3eeab4ed.mp4"})
     e = find(read_entries(debug_log), "downloader_start")
     assert e["context"]["output_dir"] == "<unshackle>/temp"
-    assert e["context"]["filename"] == "Audio_3eeab4ed.mp4"  # bare filename untouched
-
-
-# ---------- convenience-helper message override (footgun regression) ----------
+    assert e["context"]["filename"] == "Audio_3eeab4ed.mp4"
 
 
 def test_log_drm_operation_accepts_message_and_level_override(debug_log: Path):
     dl = get_debug_logger()
-    # Previously raised: TypeError: log() got multiple values for keyword argument 'message'
     dl.log_drm_operation("Widevine", "license_request", level="INFO", message="custom msg", kid="abc")
     e = find(read_entries(debug_log), "drm_license_request")
     assert e["message"] == "custom msg"
@@ -332,9 +318,6 @@ def test_log_service_call_accepts_message_override(debug_log: Path):
     assert e["request"]["status"] == 200
 
 
-# ---------- tool_run ----------
-
-
 def test_log_tool_run_success_is_debug(debug_log: Path):
     log_tool_run("ffmpeg concat", "ffmpeg", 0, duration_ms=12.3, segments=5)
     e = find(read_entries(debug_log), "tool_run")
@@ -353,4 +336,4 @@ def test_log_tool_run_failure_is_error(debug_log: Path):
 
 def test_log_tool_run_noop_when_disabled():
     close_debug_logger()
-    log_tool_run("ffmpeg", "ffmpeg", 0)  # must not raise
+    log_tool_run("ffmpeg", "ffmpeg", 0)

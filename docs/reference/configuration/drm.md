@@ -9,8 +9,17 @@ the [DRM & CDM guide](../../guide/drm-and-cdm.md). Device files themselves live 
 - **Type:** `dict` &nbsp;·&nbsp; **Default:** `{}`
 
 Maps a service tag to the CDM (Widevine/PlayReady device) to use, with a `default` fallback.
-Resolution is case-insensitive: a per-request API override wins, then the per-service entry,
-then `default`.
+Resolution is case-insensitive: an override (`dl --cdm <name>`, or the `cdm` field of an API
+job) wins, then the per-service entry, then `default`. An override pins one device for the whole
+run and skips any quality or Widevine/PlayReady sub-entries.
+
+Over `--remote`, an override also makes your device license the remote session, not the server
+CDM. A per-service entry does the same when it names a device without a quality: a device name,
+a `widevine` or `playready` sub-entry, or a profile or `default` sub-entry. A per-service entry
+that selects only by quality, or only for a different profile, loads no device when the run
+starts. unshackle then shows a warning, and the server decides who licenses the remote session.
+With only the top-level `default` entry, the server CDM licenses when the API key has it. See
+[`remote_services`](services.md#remote_services).
 
 ```yaml
 cdm:
@@ -31,13 +40,35 @@ cdm:
     default: chromecdm_l3
 ```
 
-Quality keys support `1080`, `>=1080`, `>720`, `<=576`, `<480` style comparisons; DRM keys
-are `widevine` / `playready`. Quality keys are matched first, but only when a video height is
-known; if the value is still a dict after that, `widevine`/`playready` are used when present,
-otherwise the credential profile name, then `default`.
+Quality keys can hold `1080`, `>=1080`, `>720`, `<=576`, `<480` style comparisons. DRM keys
+are `widevine` / `playready`. unshackle matches the quality keys first, but only when a video
+height is known. If the value is still a dict after that, unshackle uses
+`widevine`/`playready` when present, or else the credential profile name, then `default`.
 
-The resolved name is looked up in [`remote_cdm`](#remote_cdm) by `name` first. If no entry
-matches, it is loaded as a local device file, in this order: `<name>.prd` in
+When an entry holds `widevine` and `playready`, their order sets which device unshackle loads
+first. A track that offers the two DRM systems licenses with that system. A track that offers
+only the other system uses the other device. A `widevine` / `playready` dict in a quality key
+does not set the order. The server CDM of a remote session follows the same order.
+
+A quality key can also hold a dict of `widevine` / `playready` devices, and so can the
+top-level `default` entry:
+
+```yaml
+cdm:
+  default:
+    widevine: chromecdm_l3
+    playready: sl2000
+  EXAMPLE1:
+    ">=1080": { widevine: android_l1, playready: sl3000 }
+    "<1080": { widevine: chromecdm_l3, playready: sl2000 }
+```
+
+A quality key that holds one device name applies to both DRM systems. When a track needs the
+other system, unshackle uses the `widevine` / `playready` config key of the entry. `dl --all-drm`
+needs a device for each system from one of these shapes.
+
+unshackle finds the resolved name in [`remote_cdm`](#remote_cdm) by `name` first. If no entry
+matches, unshackle loads it as a local device file, in this order: `<name>.prd` in
 `directories.prds`, `<name>.prd` in `directories.wvds`, then `<name>.wvd` in
 `directories.wvds`.
 
@@ -45,7 +76,7 @@ matches, it is loaded as a local device file, in this order: `<name>.prd` in
 
 - **Type:** `list[dict]` &nbsp;·&nbsp; **Default:** `[]`
 
-A list of remote CDM server definitions. Each entry is matched by its `name` (referenced from
+A list of remote CDM definitions. unshackle matches each entry by its `name` (referenced from
 [`cdm`](#cdm)), and its `type` selects the backend:
 
 | `type` | Backend | Key fields |
@@ -73,6 +104,13 @@ For the two pywidevine/pyplayready backends, field names are read case-insensiti
 styles: `Device Type`/`device_type`, `System ID`/`system_id`, `Security Level`/`security_level`,
 `Host`/`host`, `Secret`/`secret`, `Device Name`/`device_name`.
 
+!!! note "Serve APIs behind a proxy"
+    unshackle does not send upstream's `HEAD` request or examine the `Server` response
+    header, so the server can operate behind a reverse proxy or a CDN that removes or
+    changes that header. Thus a `host` that is not a serve API fails at the first licence
+    request, not when unshackle loads the CDM. On a redirect to a different host or port,
+    unshackle removes the `secret` from the request.
+
 !!! warning "PlayReady `host` needs a `/playready` suffix"
     pyplayready's `RemoteCdm` treats `host` as a base URL and appends its own endpoint paths,
     so a PlayReady entry's `host` must include the trailing `/playready` segment (for example
@@ -84,12 +122,12 @@ styles: `Device Type`/`device_type`, `System ID`/`system_id`, `Security Level`/`
 | Field | Default | Notes |
 |-------|---------|-------|
 | `host` | `https://keyxtractor.decryptlabs.com` | |
-| `device_name` | `ChromeCDM` | `ChromeCDM`, `L1`, `L2` (Widevine) or `SL2`, `SL3` (PlayReady) |
+| `device_name` | `ChromeCDM` | `ChromeCDM`, `L1`, `L2`, `L3` (Widevine) or `SL2`, `SL3` (PlayReady). The host decides which of these names it serves. |
 | `secret` | from [`decrypt_labs_api_key`](misc.md#external-api-keys) | Sent as the `decrypt-labs-api-key` header. An error is raised if neither is set. |
 | `system_id` | `26830` (Widevine), `0` (PlayReady) | |
 | `security_level` | Widevine `3`; PlayReady `2000` for `SL2`, else `3000` | |
 
-PlayReady mode is used when `device_type` is `PLAYREADY` or `device_name` starts with `SL`.
+unshackle uses PlayReady mode when `device_type` is `PLAYREADY` or `device_name` starts with `SL`.
 
 ### `custom_api` fields { #remote-cdm-custom-api }
 
@@ -105,8 +143,8 @@ PlayReady mode is used when `device_type` is `PLAYREADY` or `device_name` starts
 | `legacy` | dict | Legacy mode options. |
 | `timeout` | int | Default `30`. Request timeout in seconds. |
 
-Transforms cover base64/hex/JSON encoding and `kid:key` parsing. PlayReady mode is used when
-`device.type` is `PLAYREADY` or the device name is `SL2`/`SL3`.
+Transforms cover base64/hex/JSON encoding and `kid:key` parsing. unshackle uses PlayReady mode
+when `device.type` is `PLAYREADY` or the device name is `SL2`/`SL3`.
 
 ```yaml
 remote_cdm:
@@ -135,12 +173,12 @@ remote_cdm:
 
 - **Type:** `str` or `dict` &nbsp;·&nbsp; **Default:** `"shaka"`
 
-Selects the tool used to physically decrypt CENC content. The value is compared
-case-insensitively; `"mp4decrypt"` selects Bento4's mp4decrypt, and **anything else**
-(including `"shaka"`) selects shaka-packager. When the value is a dict, the service key is
-matched case-insensitively and the `default` entry is the fallback.
+Selects the tool that physically decrypts CENC-encrypted tracks. unshackle compares the value
+case-insensitively. `"mp4decrypt"` selects Bento4's mp4decrypt, and **anything else**
+(including `"shaka"`) selects shaka-packager. When the value is a dict, unshackle compares the
+service tag case-insensitively and uses the `default` entry as the fallback.
 
-HLS AES-128 ClearKey is decrypted in-process and ignores this setting.
+unshackle decrypts HLS AES-128 ClearKey in-process and ignores this setting.
 
 === "Global"
 
@@ -155,3 +193,27 @@ HLS AES-128 ClearKey is decrypted in-process and ignores this setting.
       default: shaka
       EXAMPLE1: mp4decrypt
     ```
+
+## `decrypt_segments`
+
+- **Type:** `bool` &nbsp;·&nbsp; **Default:** `false`
+
+Decrypts each fragmented MP4 segment as it arrives, instead of decrypting the whole track
+after the download ends. The decryption runs during the download, so the wait after the last
+segment goes away. The output file is the same either way.
+
+This works with `mp4decrypt` only. Set [`decryption`](#decryption) to `mp4decrypt` for the
+service (or as the default); with `shaka` the option has no effect, because shaka-packager
+cannot decrypt a segment without its init segment. It applies to DASH tracks and to HLS
+tracks that use one init segment, one `EXT-X-KEY` and no `EXT-X-DISCONTINUITY`. Every other
+track keeps the whole-file decryption.
+
+!!! note "No resume"
+
+    A track that decrypts segment by segment always downloads from the start.
+    [`continue_downloads`](download.md#continue_downloads) cannot reuse its segments, because a reused segment
+    is already decrypted.
+
+```yaml
+decrypt_segments: true
+```

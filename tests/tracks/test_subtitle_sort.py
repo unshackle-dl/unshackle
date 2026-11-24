@@ -53,7 +53,6 @@ def test_type_priority_overrides_group_order(tracks: Tracks) -> None:
 
 def test_type_priority_unlisted_types_fall_to_end(tracks: Tracks) -> None:
     tracks.sort_subtitles(by_language=["en"], type_priority=["normal"])
-    # unlisted types keep their pre-sort relative order (stable sort)
     assert shape(tracks) == [
         ("en", "normal"),
         ("en", "sdh"),
@@ -99,7 +98,6 @@ def test_language_grouping_keeps_a_language_with_its_sdh(unprioritised: Tracks) 
 
 
 def test_language_grouping_still_honours_type_priority_and_sections(tracks: Tracks) -> None:
-    # de sits outside by_language, where type-major sorting would interleave it with en
     tracks.add([sub("de"), sub("de", sdh=True)])
     tracks.sort_subtitles(by_language=["it"], type_priority=["normal", "sdh", "forced"], group_by="language")
     assert shape(tracks) == [
@@ -114,7 +112,6 @@ def test_language_grouping_still_honours_type_priority_and_sections(tracks: Trac
 
 
 def test_language_grouping_keeps_regional_variants_adjacent_through_sections() -> None:
-    # "en" floats en-GB and en-US as one block, so each exact tag keeps its variants
     t = Tracks()
     t.add(
         [
@@ -156,7 +153,6 @@ def test_priority_orders_listed_then_rest_alphabetically(many: Tracks) -> None:
 
 
 def test_priority_outranks_the_original_language(many: Tracks) -> None:
-    # "all" resolves to the original language (ja), which must stay below the named ones
     many.sort_subtitles(by_language=["en", "es", "all"], group_by="language")
     assert langs(many) == ["en", "es", "ja", "ar", "bg", "fr"]
 
@@ -205,8 +201,6 @@ def test_fuzzy_priority_floats_regional_variants(regionals: Tracks) -> None:
 
 
 def test_exact_priority_floats_only_the_named_tag(regionals: Tracks) -> None:
-    # CLDR rates en/en-US at distance 0, so exact mode needs the RFC 4647 string preference
-    # to hold en-US back; without it en-US floats and en-GB does not.
     regionals.sort_subtitles(by_language=["en"], group_by="language", exact_match=True)
     assert langs(regionals) == ["en", "ar", "en-GB", "en-US", "ja"]
 
@@ -220,6 +214,5 @@ def test_exact_priority_still_falls_back_when_no_tag_is_string_equal() -> None:
 
 @pytest.mark.parametrize("exact", [False, True])
 def test_unparseable_priority_entry_is_ignored(many: Tracks, exact: bool) -> None:
-    # a config typo in language_priority must not crash the sort
     many.sort_subtitles(by_language=["en", "engrish", "f", ""], group_by="language", exact_match=exact)
     assert langs(many) == ["en", "ar", "bg", "es", "fr", "ja"]

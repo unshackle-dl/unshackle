@@ -19,7 +19,7 @@ class _FakeReq:
         self.headers = {"Accept-Encoding": accept_encoding}
 
 
-def _run(coro):
+def run(coro):
     return asyncio.run(coro)
 
 
@@ -30,7 +30,7 @@ def test_skips_when_client_does_not_accept_gzip() -> None:
         return web.json_response({"data": "x" * 4096})
 
     req = _FakeReq(accept_encoding="identity")
-    resp = _run(compression_middleware(req, handler))
+    resp = run(compression_middleware(req, handler))
     assert resp.headers.get("Content-Encoding") != "gzip"
     assert resp.body == body_json or len(resp.body) >= len(body_json) - 8
 
@@ -39,7 +39,7 @@ def test_skips_when_body_below_threshold() -> None:
     async def handler(req):  # noqa: ARG001
         return web.json_response({"hi": "x"})
 
-    resp = _run(compression_middleware(_FakeReq(), handler))
+    resp = run(compression_middleware(_FakeReq(), handler))
     assert resp.headers.get("Content-Encoding") != "gzip"
 
 
@@ -47,7 +47,7 @@ def test_skips_non_json_response() -> None:
     async def handler(req):  # noqa: ARG001
         return web.Response(body=b"x" * 4096, content_type="text/plain")
 
-    resp = _run(compression_middleware(_FakeReq(), handler))
+    resp = run(compression_middleware(_FakeReq(), handler))
     assert resp.headers.get("Content-Encoding") != "gzip"
 
 
@@ -57,7 +57,7 @@ def test_compresses_large_json_when_accepted() -> None:
     async def handler(req):  # noqa: ARG001
         return web.json_response(big)
 
-    resp = _run(compression_middleware(_FakeReq(), handler))
+    resp = run(compression_middleware(_FakeReq(), handler))
     assert resp.headers.get("Content-Encoding") == "gzip"
     decompressed = gzip.decompress(resp.body)
     assert json.loads(decompressed) == big

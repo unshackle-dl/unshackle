@@ -21,7 +21,7 @@ from unshackle.core.constants import context_settings
     context_settings=context_settings,
 )
 def prd() -> None:
-    """Manage creation of PRD (Playready Device) files."""
+    """Manage creation of PRD (PlayReady Device) files."""
 
 
 @prd.command()
@@ -49,7 +49,7 @@ def new(
     signing_key: Optional[Path],
     output: Optional[Path],
 ) -> None:
-    """Create a new .PRD PlayReady Device file.
+    """Make a new .PRD device file.
 
     Accepts either paths to a group key and certificate or a single directory
     containing ``zgpriv.dat`` and ``bgroupcert.dat``.
@@ -159,7 +159,7 @@ def reprovision_device(
     signing_key: Optional[Path],
     output: Optional[Path] = None,
 ) -> None:
-    """Reprovision a Playready Device (.prd) file."""
+    """Reprovision a PlayReady Device (.prd) file."""
     if not prd_path.is_file():
         raise click.UsageError("prd_path: Not a path to a file, or it doesn't exist.", ctx)
 
@@ -231,7 +231,7 @@ def test(
     ckt: str,
     security_level: str,
 ) -> None:
-    """Test a Playready Device on the Microsoft demo server."""
+    """Do a test of a PlayReady device on the Microsoft demo server."""
 
     if not device.is_file():
         raise click.UsageError("device: Not a path to a file, or it doesn't exist.", ctx)

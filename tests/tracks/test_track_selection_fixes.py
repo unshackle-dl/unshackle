@@ -3,7 +3,8 @@
 Cover the pure ``Tracks`` helpers behind the ``dl`` selection layer:
 
 - ``Tracks.by_resolutions``: the 16:9 canvas fallback must tolerate tracks with
-  no known width instead of crashing on ``int(None * 9 / 16)``.
+  no known width instead of crashing on ``int(None * 9 / 16)``, and it applies to
+  each range and codec on its own.
 - ``Tracks.sort_videos``: resolution outranks bitrate, and an unknown-bitrate
   track can still win on resolution.
 - ``Tracks.sort_audio``: descriptive-last, Atmos, codec_priority then bitrate;
@@ -22,13 +23,14 @@ def make_video(
     bitrate: int | None,
     width: int | None = None,
     codec: Video.Codec = Video.Codec.HEVC,
+    range_: Video.Range = Video.Range.SDR,
 ) -> Video:
     return Video(
         id_=track_id,
         url=f"https://example.test/{track_id}.m3u8",
         language="en",
         codec=codec,
-        range_=Video.Range.SDR,
+        range_=range_,
         width=width,
         height=height,
         bitrate=bitrate,
@@ -55,17 +57,12 @@ def make_audio(
     )
 
 
-# ---------------------------------------------------------------------------
-# by_resolutions: width=None must not crash the canvas fallback
-# ---------------------------------------------------------------------------
-
-
 def test_by_resolutions_tolerates_width_none_track() -> None:
     tracks = Tracks()
     tracks.videos = [
-        make_video("h1080", height=1080, width=1920, bitrate=8_000_000),  # no exact/canvas 720 match
-        make_video("no-width", height=480, width=None, bitrate=1_000_000),  # width-less, must be skipped
-        make_video("canvas-720", height=406, width=1280, bitrate=3_000_000),  # 1280*9/16 == 720
+        make_video("h1080", height=1080, width=1920, bitrate=8_000_000),
+        make_video("no-width", height=480, width=None, bitrate=1_000_000),
+        make_video("canvas-720", height=406, width=1280, bitrate=3_000_000),
     ]
 
     tracks.by_resolutions([720])
@@ -73,9 +70,19 @@ def test_by_resolutions_tolerates_width_none_track() -> None:
     assert [t.id for t in tracks.videos] == ["canvas-720"]
 
 
-# ---------------------------------------------------------------------------
-# sort_videos: resolution before bitrate
-# ---------------------------------------------------------------------------
+def test_by_resolutions_keeps_cropped_variants_of_other_ranges() -> None:
+    """A DV track with an exact height must not remove the cropped HDR10 and SDR tracks."""
+    tracks = Tracks()
+    tracks.videos = [
+        make_video("dv-2160", height=2160, width=3840, bitrate=20_000_000, range_=Video.Range.DV),
+        make_video("hdr10-2160", height=1920, width=3840, bitrate=20_000_000, range_=Video.Range.HDR10),
+        make_video("sdr-2160", height=1920, width=3840, bitrate=15_000_000, range_=Video.Range.SDR),
+        make_video("dv-1080", height=1080, width=1920, bitrate=5_000_000, range_=Video.Range.DV),
+    ]
+
+    tracks.by_resolutions([2160])
+
+    assert [t.id for t in tracks.videos] == ["dv-2160", "hdr10-2160", "sdr-2160"]
 
 
 def test_sort_videos_resolution_outranks_bitrate() -> None:
@@ -102,11 +109,6 @@ def test_sort_videos_unknown_bitrate_still_wins_on_resolution() -> None:
     assert [t.id for t in tracks.videos] == ["unknown-1080", "known-720"]
 
 
-# ---------------------------------------------------------------------------
-# sort_audio: first track after sort is the "best" the dl layer picks
-# ---------------------------------------------------------------------------
-
-
 def test_sort_audio_atmos_ranks_first() -> None:
     tracks = Tracks()
     tracks.audio = [
@@ -120,7 +122,6 @@ def test_sort_audio_atmos_ranks_first() -> None:
 
     best = Tracks.by_language(tracks.audio, ["en"])[0]
     assert best.id == "ec3-atmos"
-    # descriptive always sorts last
     assert tracks.audio[-1].id == "ec3-desc"
 
 
@@ -134,5 +135,4 @@ def test_sort_audio_codec_priority_beats_bitrate() -> None:
     tracks.sort_audio(codec_priority=["EC3", "AC3"])
 
     best = Tracks.by_language(tracks.audio, ["en"])[0]
-    # EC3 is prioritized even though the AC3 track has the higher bitrate
     assert best.id == "ec3-320"

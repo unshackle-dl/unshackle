@@ -1075,6 +1075,11 @@ wheels = [
 ]
 
 [[package]]
+name = "mediaexport"
+version = "0.1.0"
+source = { git = "https://github.com/unshackle-dl/mediaexport?rev=main#fa9357e961d050450b59b1e4a839761121b2bcbd" }
+
+[[package]]
 name = "more-itertools"
 version = "10.8.0"
 source = { registry = "https://pypi.org/simple" }
@@ -2134,7 +2139,7 @@ wheels = [
 
 [[package]]
 name = "unshackle"
-version = "5.4.0"
+version = "6.0.0"
 source = { editable = "." }
 dependencies = [
     { name = "aiohttp" },
@@ -2155,6 +2160,7 @@ dependencies = [
     { name = "langcodes" },
     { name = "language-data" },
     { name = "lxml" },
+    { name = "mediaexport" },
     { name = "mutagen" },
     { name = "protobuf" },
     { name = "pycaption" },
@@ -2211,7 +2217,7 @@ requires-dist = [
     { name = "bandit", specifier = ">=1.9.4" },
     { name = "brotli", specifier = ">=1.1.0,<2" },
     { name = "chardet", specifier = ">=5.2.0,<6" },
-    { name = "click", specifier = ">=8.1.8,<9" },
+    { name = "click", specifier = ">=8.2,<9" },
     { name = "construct", specifier = ">=2.8.8,<3" },
     { name = "crccheck", specifier = ">=1.3.0,<2" },
     { name = "cryptography", specifier = ">=45.0.0,<47" },
@@ -2223,6 +2229,7 @@ requires-dist = [
     { name = "langcodes", specifier = ">=3.4.0,<4" },
     { name = "language-data", specifier = ">=1.4.0" },
     { name = "lxml", specifier = ">=5.2.1,<7" },
+    { name = "mediaexport", git = "https://github.com/unshackle-dl/mediaexport?rev=main" },
     { name = "mutagen", specifier = ">=1.47.0,<2" },
     { name = "protobuf", specifier = ">=4.25.3,<7" },
     { name = "pycaption", specifier = ">=2.2.6,<2.2.27" },

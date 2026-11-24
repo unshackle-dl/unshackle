@@ -8,8 +8,6 @@ from langcodes import Language
 from unshackle.core.utilities import excluded_language_tags, partition_exclusions
 from unshackle.core.utils.click_types import LANGUAGE_RANGE
 
-# --- partition_exclusions ---------------------------------------------------
-
 
 @pytest.mark.parametrize(
     "tokens,expected",
@@ -43,20 +41,15 @@ def test_partition_reads_the_tokens_language_range_produces():
     assert partition_exclusions(LANGUAGE_RANGE.convert("all,-es;-fr")) == (["all"], ["es", "fr"])
 
 
-# --- excluded_language_tags ---------------------------------------------------
-
-
 def test_close_match_excludes_the_regional_variants():
     assert excluded_language_tags(["es"], ["es-419", "es-ES", "en-US"]) == {"es-419", "es-ES"}
 
 
 def test_exact_match_prefers_the_string_equal_tag():
-    # same string preference as selection: an exact 'es' only takes 'es' when it exists
     assert excluded_language_tags(["es"], ["es", "es-ES", "es-419"], exact=True) == {"es"}
 
 
 def test_exact_match_falls_back_to_the_paradigm_variant():
-    # no literal 'es' available, so 'es' resolves the way an exact '-sl es' selection would
     assert excluded_language_tags(["es"], ["es-ES", "es-419"], exact=True) == {"es-ES"}
 
 

@@ -17,7 +17,7 @@ class InsertResult(Enum):
 
 class HTTP(Vault):
     """
-    Key Vault using HTTP API with support for multiple API modes.
+    Key Vault using HTTP API that can operate in several API modes.
 
     Supported modes:
     - query: Uses GET requests with query parameters
@@ -37,7 +37,7 @@ class HTTP(Vault):
         timeout: float = 10.0,
     ):
         """
-        Initialize HTTP Vault.
+        Initialise HTTP Vault.
 
         Args:
             name: Vault name
@@ -57,6 +57,7 @@ class HTTP(Vault):
 
         self.username = username
         self.api_mode = api_mode.lower()
+        self.batch_insert = True
         self.current_title = None
         self.session = Session()
         self.session.headers.update({"User-Agent": f"unshackle v{__version__}"})
@@ -66,7 +67,6 @@ class HTTP(Vault):
             self.session.headers.update({"decrypt-labs-api-key": self.password})
             self.no_push = True
 
-        # Validate configuration based on mode
         if self.api_mode == "query" and not self.username:
             raise ValueError("Username is required for query mode")
         elif self.api_mode not in ["query", "json", "decrypt_labs"]:
@@ -92,7 +92,11 @@ class HTTP(Vault):
             return {"status": "not_found"}
 
         if not r.ok:
-            raise ValueError(f"API returned HTTP Error {r.status_code}: {r.reason.title()}")
+            try:
+                detail = r.json().get("message") or r.reason.title()
+            except (json.JSONDecodeError, AttributeError):
+                detail = r.reason.title()
+            raise ValueError(f"API returned HTTP Error {r.status_code}: {detail}")
 
         try:
             res = r.json()
@@ -180,7 +184,7 @@ class HTTP(Vault):
                 print(f"Failed to get key ({e.__class__.__name__}: {e})")
                 return None
             return None
-        else:  # query mode
+        else:
             response = self.session.get(
                 self.url,
                 params={"service": service.lower(), "username": self.username, "password": self.password, "kid": kid},
@@ -189,7 +193,7 @@ class HTTP(Vault):
 
             data = response.json()
 
-            if data.get("status_code") != 200 or not data.get("keys"):
+            if not data.get("keys"):
                 return None
 
             return data["keys"][0]["key"]
@@ -198,10 +202,8 @@ class HTTP(Vault):
         if self.api_mode == "decrypt_labs":
             return iter([])
         elif self.api_mode == "json":
-            # JSON API doesn't support getting all keys, so return empty iterator
-            # This will cause the copy command to rely on the API's internal duplicate handling
             return iter([])
-        else:  # query mode
+        else:
             response = self.session.get(
                 self.url,
                 params={"service": service.lower(), "username": self.username, "password": self.password},
@@ -244,7 +246,7 @@ class HTTP(Vault):
                 return response.get("inserted", False)
             except Exception:
                 return False
-        else:  # query mode
+        else:
             response = self.session.get(
                 self.url,
                 params={
@@ -276,8 +278,22 @@ class HTTP(Vault):
 
         inserted_count = 0
         title = getattr(self, "current_title", None)
+        failures: list[Exception] = []
 
         if self.api_mode == "json":
+            if self.batch_insert:
+                try:
+                    response = self.request(
+                        "InsertKeys", {"keys": processed_kid_keys, "service": service.lower(), "title": title}
+                    )
+                    if response.get("status") != "not_found":
+                        return int(response.get("inserted", 0))
+                    self.batch_insert = False
+                except ValueError as e:
+                    if "unknown" in str(e).lower() and "method" in str(e).lower():
+                        self.batch_insert = False
+                except Exception:
+                    pass
             for kid, key in processed_kid_keys.items():
                 try:
                     response = self.request(
@@ -293,9 +309,11 @@ class HTTP(Vault):
                         continue
                     if response.get("inserted", False):
                         inserted_count += 1
-                except Exception:
-                    continue
-        else:  # query mode
+                except Exception as e:
+                    failures.append(e)
+            if failures and len(failures) == len(processed_kid_keys):
+                raise failures[-1]
+        else:
             for kid, key in processed_kid_keys.items():
                 response = self.session.get(
                     self.url,
@@ -328,7 +346,7 @@ class HTTP(Vault):
                     yield service
             except Exception:
                 return iter([])
-        else:  # query mode
+        else:
             response = self.session.get(
                 self.url,
                 params={"username": self.username, "password": self.password, "list_services": True},
@@ -346,7 +364,7 @@ class HTTP(Vault):
 
     def set_title(self, title: str):
         """
-        Set a title to be used for the next key insertions.
+        Set a title for the next content key insertions.
         This is optional and will be sent with add_key requests if available.
         """
         self.current_title = title
@@ -355,7 +373,7 @@ class HTTP(Vault):
         self, service: str, kid: Union[UUID, str], key: str, title: Optional[str] = None
     ) -> InsertResult:
         """
-        Insert a key and return detailed result information.
+        Insert a content key and return detailed result information.
         This method provides more granular feedback than the standard add_key method.
         Available in both API modes.
         """
@@ -393,7 +411,7 @@ class HTTP(Vault):
 
             except Exception:
                 return InsertResult.FAILURE
-        else:  # query mode
+        else:
             response = self.session.get(
                 self.url,
                 params={

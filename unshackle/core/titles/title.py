@@ -7,7 +7,12 @@ from langcodes import Language
 from pymediainfo import MediaInfo
 
 from unshackle.core.config import config
-from unshackle.core.constants import AUDIO_CODEC_MAP, DYNAMIC_RANGE_MAP, VIDEO_CODEC_MAP
+from unshackle.core.constants import (
+    AUDIO_CODEC_MAP,
+    DYNAMIC_RANGE_MAP,
+    SPACED_AUDIO_CODECS,
+    VIDEO_CODEC_MAP,
+)
 from unshackle.core.tracks import Tracks
 
 
@@ -27,7 +32,7 @@ class Title:
             data: Arbitrary storage for the title. Often used to store extra metadata
                 information, IDs, URIs, and so on.
         """
-        if not id_:  # includes 0, false, and similar values, this is intended
+        if not id_:
             raise ValueError("A unique ID must be provided")
         if hasattr(id_, "__len__") and len(id_) < 4:
             raise ValueError("The unique ID is not large enough, clash likely.")
@@ -55,7 +60,7 @@ class Title:
     def __eq__(self, other: Title) -> bool:
         return self.id == other.id
 
-    def _build_base_template_context(self, media_info: MediaInfo, show_service: bool = True) -> dict:
+    def build_base_template_context(self, media_info: MediaInfo, show_service: bool = True) -> dict:
         """Build base template context dictionary from MediaInfo.
 
         Extracts video, audio, HDR, HFR, and multi-language information shared
@@ -132,7 +137,7 @@ class Title:
                         track_height = primary_video_track.height
                         if abs(resolution - track_height) <= 10 or track_height in (2160, 1440, 1080, 720, 480):
                             resolution = track_height
-            except Exception:
+            except (ValueError, TypeError, ZeroDivisionError):
                 pass
 
             scan_suffix = "i" if str(getattr(primary_video_track, "scan_type", "")).lower() == "interlaced" else "p"
@@ -169,19 +174,30 @@ class Title:
             codec = primary_audio_track.format
             channel_layout = primary_audio_track.channel_layout or primary_audio_track.channellayout_original
 
+            positions = channel_layout.split(" ") if channel_layout else []
+            heights = sum(1 for position in positions if position.upper().startswith("T"))
+            lfe = sum(1 for position in positions if position.upper().startswith("LFE"))
+
             if channel_layout:
-                channels = float(sum({"LFE": 0.1}.get(position.upper(), 1) for position in channel_layout.split(" ")))
+                channels = float(sum(0.1 if p.upper().startswith("LFE") else 1 for p in positions))
             else:
                 channel_count = primary_audio_track.channel_s or primary_audio_track.channels or 0
                 channels = float(channel_count)
 
             has_atmos = any("JOC" in (t.format_additionalfeatures or "") or t.joc for t in media_info.audio_tracks)
 
+            if heights:
+                channels_str = f"{len(positions) - heights - lfe}.{lfe}.{heights}"
+            else:
+                channels_str = f"{channels:.1f}"
+            audio = AUDIO_CODEC_MAP.get(codec, codec)
+            spacer = " " if audio in SPACED_AUDIO_CODECS else ""
+
             context.update(
                 {
-                    "audio": AUDIO_CODEC_MAP.get(codec, codec),
-                    "audio_channels": f"{channels:.1f}",
-                    "audio_full": f"{AUDIO_CODEC_MAP.get(codec, codec)}{channels:.1f}",
+                    "audio": audio,
+                    "audio_channels": channels_str,
+                    "audio_full": f"{audio}{spacer}{channels_str}",
                     "atmos": "Atmos" if has_atmos else "",
                 }
             )
@@ -196,13 +212,15 @@ class Title:
             if original_lang_tag and original_lang_tag not in audio_lang_bases:
                 context["dubbed"] = "DUBBED"
 
-        lang_tag_rules = config.language_tags.get("rules") if config.language_tags else None
+        language_tags = config.language_tags if isinstance(config.language_tags, dict) else {}
+        lang_tag_rules = language_tags.get("rules")
         if lang_tag_rules and self.tracks:
             from unshackle.core.utils.language_tags import evaluate_language_tag
 
             audio_langs = [a.language for a in self.tracks.audio]
             sub_langs = [s.language for s in self.tracks.subtitles]
-            context["lang_tag"] = evaluate_language_tag(lang_tag_rules, audio_langs, sub_langs)
+            states = {name: bool(context[name]) for name in ("dual", "multi", "dubbed")}
+            context["lang_tag"] = evaluate_language_tag(lang_tag_rules, audio_langs, sub_langs, states)
 
         if config.tag_rules:
             from unshackle.core.utils.tag_rules import evaluate_tag_rules
@@ -216,7 +234,7 @@ class Title:
     @abstractmethod
     def get_filename(self, media_info: MediaInfo, folder: bool = False, show_service: bool = True) -> str:
         """
-        Get a Filename for this Title with the provided Media Info.
+        Get a Filename for this Title with the provided MediaInfo.
         All filenames should be sanitized with the sanitize_filename() utility function.
 
         Parameters:

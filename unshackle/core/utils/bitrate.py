@@ -13,19 +13,16 @@ from urllib.parse import urljoin
 from requests import Session
 
 from unshackle.core.binaries import FFProbe
-from unshackle.core.session import RnetSession
+from unshackle.core.session import RnetSession, utf8_text
 from unshackle.core.utils.subprocess import log_tool_run
 
 if TYPE_CHECKING:
     from unshackle.core.tracks import Track
 
-# Default ISM timescale (ticks per second) per the Smooth Streaming spec.
 ISM_DEFAULT_TIMESCALE = 10_000_000
 
-# Bytes fetched to locate an mp4 moov box when probing duration via ffprobe.
 MOOV_PROBE_BYTES = 4 * 1024 * 1024
 
-# Network timeout (seconds) for probe requests.
 PROBE_TIMEOUT = 15
 
 
@@ -34,10 +31,7 @@ class Segment:
     """One probe target: a media URL, optional byte range, its size, and duration."""
 
     url: str
-    # The original byte-range string (e.g. "0-1023"), preserved as the segment's
-    # identity so distinct ranges of one file are never confused with each other.
     byte_range: Optional[str]
-    # Size in bytes when derivable without a request (from a byte range); else None.
     known_size: Optional[int]
     duration: float
 
@@ -56,10 +50,11 @@ def measure_real_bitrate(
     leaky-bucket ceiling, not an average). This measures the true bitrate
     (bits/sec) from real media byte sizes and durations using ``bytes * 8 / sec``.
 
-    Single-file tracks are measured exactly. Segmented tracks probe up to
-    ``samples`` segments spread across the track and extrapolate; byte-range
-    segments need no request. Returns bits/sec, or ``None`` if it cannot be
-    measured. Never raises — a probe failure must not abort a download.
+    This function measures a single-file track exactly. For a segmented track it
+    probes a maximum of ``samples`` segments spread across the track and
+    extrapolates. A byte-range segment needs no request. Returns bits/sec, or
+    ``None`` when unshackle cannot measure the bitrate. Never raises. A probe
+    failure must not abort a download.
     """
     from unshackle.core.tracks.track import Track
 
@@ -71,10 +66,6 @@ def measure_real_bitrate(
         elif track.descriptor == Track.Descriptor.ISM:
             segments = extract_ism(track, session)
         else:
-            # Descriptor.URL: a single file. Some services parse a DASH
-            # manifest then collapse each representation to its single BaseURL and
-            # flip the descriptor to URL, leaving the manifest (and its duration) in
-            # track.data — recover the duration from there, else probe the file.
             segments = extract_url(track, session, log=log)
             if not segments:
                 log.debug(f"{track.id}: cannot measure real bitrate (no known duration)")
@@ -125,13 +116,13 @@ def apply_real_bitrates(
     """
     Probe real bitrates and overwrite ``track.bitrate`` for the tracks worth probing.
 
-    Probing every rendition is slow when a service exposes dozens. Tracks are
-    grouped by ``group_key`` (a quality tier), and only the ``per_group`` highest
-    declared-bitrate tracks per group are probed, in parallel. Each group is then
-    extended downward: while the lowest probed bitrate in a group sits below the
-    next unprobed track's declared bitrate (so that track could outrank a probed
-    one), the next track is probed too — until the probed set is safely above the
-    rest. Unprobed tracks keep their manifest-declared bitrate.
+    Probing every rendition is slow when a service exposes dozens. This function
+    groups tracks by ``group_key`` (a quality tier) and probes only the
+    ``per_group`` highest declared-bitrate tracks of each group, in parallel. It
+    then extends each group downward: while the lowest probed bitrate in a group
+    sits below the next unprobed track's declared bitrate (so that track could
+    outrank a probed one), it probes the next track too, until the probed set is
+    safely above the rest. Unprobed tracks keep their manifest-declared bitrate.
     """
     groups: defaultdict[Hashable, list["Track"]] = defaultdict(list)
     for track in tracks:
@@ -139,11 +130,9 @@ def apply_real_bitrates(
     for group in groups.values():
         group.sort(key=lambda t: getattr(t, "bitrate", None) or 0, reverse=True)
 
-    # Initial pass: top per_group of every group, all probed concurrently.
     initial = [track for group in groups.values() for track in group[:per_group]]
     probe_batch(initial, session, log=log, workers=workers)
 
-    # Extend each group downward until unprobed tracks can't outrank probed ones.
     for group in groups.values():
         probed = min(per_group, len(group))
         while probed < len(group):
@@ -181,14 +170,14 @@ def probe_batch(
 
 def dedupe(segments: list[Segment]) -> list[Segment]:
     """
-    Collapse segments that address the same bytes so each object is measured once.
+    Collapse segments that address the same bytes, to measure each object one time only.
 
     Manifests sometimes wrap a single file in several segment entries sharing one
-    URL — with no byte range (a ``SegmentTemplate`` whose media pattern has no
+    URL, with no byte range (a ``SegmentTemplate`` whose media pattern has no
     ``$Number$``) or with the same range. Each resolves to the whole file, so
-    counting them all would multiply the size by the segment count. Segments
-    sharing the same ``(url, byte_range)`` are merged into one entry whose duration
-    is the sum they cover. Distinct byte ranges of one file (different offsets) are
+    counting them all would multiply the size by the segment count. This function
+    merges the segments that share the same ``(url, byte_range)`` into one entry
+    whose duration is the sum they cover. Distinct byte ranges of one file (different offsets) are
     kept individual so their sizes still add up to the full track.
     """
     merged: OrderedDict[tuple[str, Optional[str]], Segment] = OrderedDict()
@@ -213,7 +202,7 @@ def pick_samples(segments: list[Segment], samples: int) -> list[Segment]:
 
 
 def probe_size(segment: Segment, session: Union[Session, RnetSession]) -> Optional[int]:
-    """Return a segment's byte size via HEAD, falling back to a ranged GET. Validates status."""
+    """Return a segment's byte size with a HEAD request, falling back to a ranged GET. Validates status."""
     try:
         res = session.head(segment.url, allow_redirects=True, timeout=PROBE_TIMEOUT)
         if getattr(res, "status_code", 0) in (200, 206):
@@ -223,9 +212,6 @@ def probe_size(segment: Segment, session: Union[Session, RnetSession]) -> Option
     except Exception:
         pass
 
-    # Some hosts block or mishandle HEAD; ask for a single byte and read the total.
-    # Require a 206 so a server that ignores Range (returning the whole 200 body)
-    # is not mistaken for a valid size or downloaded wholesale.
     try:
         res = session.get(segment.url, headers={"Range": "bytes=0-0"}, timeout=PROBE_TIMEOUT)
         if getattr(res, "status_code", 0) == 206:
@@ -259,10 +245,10 @@ def uniform_segments(
     total_duration: Optional[float],
 ) -> list[Segment]:
     """
-    Build Segments giving each an equal share of the total duration.
+    Assemble Segments giving each an equal share of the total duration.
 
-    Used for DASH: ``DASH._get_period_segments`` returns timeline *start times*
-    rather than per-segment durations, so they cannot be trusted. Segment lengths
+    Used for DASH: ``DASH.get_period_segments`` returns timeline *start times*
+    rather than per-segment durations, so unshackle cannot trust them. Segment lengths
     are near-uniform in practice, so the track duration (from
     ``mediaPresentationDuration``) split evenly is both correct and timeline-safe.
     """
@@ -285,11 +271,10 @@ def extract_dash(track: "Track", session: Union[Session, RnetSession]) -> list[S
     stored_period = data.get("period")
     track_url = track.url if isinstance(track.url, str) else track.url[0]
 
-    content_periods = [p for p in manifest.findall("Period") if DASH._is_content_period(p, filtered_period_ids)]
+    content_periods = [p for p in manifest.findall("Period") if DASH.is_content_period(p, filtered_period_ids)]
 
     raw_segments: list[tuple[str, Optional[str]]] = []
     for period in content_periods:
-        # rep ids are only unique within an AdaptationSet, so resolve like DASH.download_track
         if period is stored_period:
             matched_as, matched_rep = adaptation_set, representation
         else:
@@ -297,7 +282,7 @@ def extract_dash(track: "Track", session: Union[Session, RnetSession]) -> list[S
         if matched_rep is None or matched_as is None:
             continue
 
-        _, period_segments, _, _, _ = DASH._get_period_segments(
+        _, period_segments, _, _, _ = DASH.get_period_segments(
             period=period,
             adaptation_set=matched_as,
             representation=matched_rep,
@@ -321,18 +306,17 @@ def extract_hls(track: "Track", session: Union[Session, RnetSession]) -> list[Se
 
     playlist_url = track.url if isinstance(track.url, str) else track.url[0]
     res = session.get(playlist_url, timeout=PROBE_TIMEOUT)
-    playlist = m3u8.loads(res.text, uri=playlist_url)
+    playlist = m3u8.loads(utf8_text(res), uri=playlist_url)
 
     out: list[Segment] = []
     for segment in playlist.segments:
         url = urljoin(segment.base_uri or "", segment.uri)
-        byte_range = segment.byterange  # "<length>[@<offset>]"
+        byte_range = segment.byterange
         known_size: Optional[int] = None
         if byte_range:
             length = byte_range.split("@")[0].strip()
             if length.isdigit():
                 known_size = int(length)
-        # EXTINF durations are reliable, so they are used directly (unlike DASH).
         out.append(Segment(url, byte_range, known_size, float(segment.duration or 0)))
     return out
 
@@ -373,8 +357,6 @@ def extract_url(track: "Track", session: Union[Session, RnetSession], *, log: lo
                 duration = duration_ticks / timescale
 
     if not duration or duration <= 0:
-        # Some services clear the manifest data after collapsing to a single
-        # file; fall back to reading the duration straight from the remote file.
         duration = ffprobe_duration(url, session, log=log)
 
     if not duration or duration <= 0:
@@ -386,10 +368,11 @@ def ffprobe_duration(url: str, session: Union[Session, RnetSession], *, log: log
     """
     Read a single-file track's duration (seconds) without a manifest.
 
-    The bundled ffprobe segfaults on network input, so the file's ``moov`` box is
-    fetched over HTTP with the session (keeping the service's proxy/headers) and
-    piped to ffprobe as local bytes. The head of the file is tried first (VOD is
-    usually faststart), then the tail as a fallback for moov-at-end files.
+    The bundled FFprobe segfaults on network input, so unshackle fetches the
+    file's ``moov`` box over HTTP with the HTTP session (keeping the service's
+    proxy/headers) and pipes it to FFprobe as local bytes. This function tries the
+    head of the file first (VOD is usually faststart), then the tail as a fallback
+    for moov-at-end files.
     """
     head = ranged_get(url, session, f"bytes=0-{MOOV_PROBE_BYTES - 1}")
     duration = probe_bytes_duration(head, log)
@@ -416,7 +399,7 @@ def ranged_get(url: str, session: Union[Session, RnetSession], byte_range: str) 
 
 
 def probe_bytes_duration(data: Optional[bytes], log: logging.Logger) -> Optional[float]:
-    """Pipe media bytes to ffprobe and return the format/stream duration in seconds."""
+    """Pipe media bytes to FFprobe and return the container or track duration in seconds."""
     if not data:
         return None
     ffprobe_bin = str(FFProbe) if FFProbe else "ffprobe"

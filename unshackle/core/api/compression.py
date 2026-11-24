@@ -7,9 +7,7 @@ import zlib
 
 from aiohttp import web
 
-# Cap the inflated size of a peer-supplied compressed blob (cookies, session cache,
-# serialized manifests) so a tiny payload cannot expand without bound (zip-bomb DoS).
-MAX_INFLATE_BYTES = 64 * 1024 * 1024  # 64 MiB
+MAX_INFLATE_BYTES = 64 * 1024 * 1024
 
 
 def safe_inflate(data: bytes, max_size: int = MAX_INFLATE_BYTES) -> bytes:

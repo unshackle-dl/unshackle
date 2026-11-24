@@ -6,13 +6,13 @@ well-tagged files, all driven from a single command-line tool, or served over a
 REST API for automation.
 
 It is a fork of [Devine](https://github.com/devine-dl/devine) with DASH, HLS, and
-Smooth Streaming (ISM) parsing, both **Widevine** and **PlayReady** DRM support,
-and a built-in HTTP server.
+Smooth Streaming (ISM) parsing, both **Widevine** and **PlayReady** DRM, and a
+built-in HTTP server.
 
 !!! warning "Use responsibly"
-    unshackle is licensed under [GPL-3.0](https://github.com/unshackle-dl/unshackle/blob/main/LICENSE).
+    The [GPL-3.0](https://github.com/unshackle-dl/unshackle/blob/main/LICENSE) licence covers unshackle.
     Do not use it for content you do not have the rights to. Keep the core free and
-    open, keep service code private, and be kind.
+    open, keep your own services private, and be kind.
 
 ## What it does
 
@@ -24,8 +24,8 @@ at a title and it will:
 - Parse the streaming manifest: **DASH**, **HLS**, or **Smooth Streaming (ISM)**.
 - Select the tracks you asked for by resolution, codec, bitrate, range, language,
   and channel layout.
-- Acquire decryption keys via a **Widevine** or **PlayReady** CDM, with optional
-  **key vaults** so keys are reused instead of re-licensed.
+- Get the content keys through a **Widevine** or **PlayReady** CDM, with optional
+  **key vaults** that let unshackle reuse a content key instead of licensing it again.
 - Decrypt, extract closed captions, repack, and **mux** the result into a Matroska
   (`.mkv`) file with correct language, forced, and default flags.
 - Tag and name the output using configurable filename templates.
@@ -38,33 +38,54 @@ at a title and it will:
 | Manifests | DASH, HLS, and Smooth Streaming (ISM) |
 | DRM | Widevine and PlayReady, with ClearKey support |
 | Video | AVC, HEVC, VC-1, VP8, VP9, AV1; SDR, HLG, HDR10, HDR10+, Dolby Vision, and Dolby Vision **hybrid** merging |
-| Audio | AAC, AC-3, E-AC-3, AC-4, Opus, Vorbis, DTS, ALAC, FLAC; Dolby Atmos handling; per-channel-layout selection |
+| Audio | AAC, AC-3, E-AC-3, AC-4, Opus, Vorbis, DTS, DTS-X, ALAC, FLAC; Dolby Atmos handling; per-channel-layout selection |
 | Subtitles | SRT, WebVTT, ASS/SSA, TTML and more, with optional SDH stripping and format conversion |
 | Key vaults | SQLite, MySQL, and HTTP/API vaults to store and share content keys |
-| Proxies | Basic proxies plus NordVPN, ProtonVPN, Surfshark, Windscribe, ExpressVPN, Gluetun, and Hola providers |
+| Proxies | Basic proxies plus Control D, NordVPN, ProtonVPN, Surfshark, Windscribe, ExpressVPN, Gluetun, and Hola providers |
 | Services | A plugin API for the service modules you write. unshackle includes none |
 | Automation | A REST API with a job queue, live progress, history, and remote-download sessions |
 
 ## Installation at a glance
 
-=== "Install as a tool"
+A git clone with the install script is the recommended way to install unshackle.
 
-    ```shell
-    uv tool install git+https://github.com/unshackle-dl/unshackle.git
-    unshackle --help
-    ```
-
-=== "Run from a clone"
+=== "Linux (recommended)"
 
     ```shell
     git clone https://github.com/unshackle-dl/unshackle.git
     cd unshackle
-    uv run unshackle --help
+    sh install.sh
+    uv run unshackle env check
     ```
+
+=== "Windows (recommended)"
+
+    ```bat
+    git clone https://github.com/unshackle-dl/unshackle.git
+    cd unshackle
+    .\install.bat
+    uv run unshackle env check
+    ```
+
+=== "Advanced: uv tool"
+
+    ```shell
+    uv tool install git+https://github.com/unshackle-dl/unshackle.git
+    unshackle setup
+    ```
+
+    This installs unshackle into the tool folder of `uv`, not a folder that you
+    choose. `unshackle setup` then puts the tools, config, and data in your user
+    data and config directories.
+
+The install script installs `uv` and unshackle, then runs `unshackle setup`. In a
+clone, run every command as `uv run unshackle ...`. The examples on this site use
+the bare `unshackle` command.
 
 !!! note "External tools"
     unshackle shells out to FFmpeg, MKVToolNix, shaka-packager, Bento4, and
-    `dovi_tool` for decryption, repacking, muxing, and Dolby Vision work. See
+    `dovi_tool` for decryption, repacking, muxing, and Dolby Vision work.
+    `unshackle setup` downloads them when a portable build exists for your system. See
     [Installation](getting-started/installation.md) for the full list and recommended versions.
 
 ## A first download
@@ -76,19 +97,19 @@ service's title argument (a URL, ID, or slug).
 unshackle dl -q 1080 -l en EXAMPLE 81234567
 ```
 
-The `dl` command carries all the quality, language, and output flags; the service
-tag (`EXAMPLE` above) selects which streaming service to talk to, and the value after it
-is passed to that service. See the [Quickstart](getting-started/quickstart.md) to go from a fresh
-install to your first file.
+The `dl` command carries all the quality, language, and output flags. The service
+tag (`EXAMPLE` above) selects which streaming service to talk to, and unshackle passes
+the value after it to that service. See the [Quickstart](getting-started/quickstart.md)
+to go from a fresh install to your first file.
 
 ## Where to go next
 
 - **[Installation](getting-started/installation.md)**. Install unshackle and the external tools it depends on.
-- **[Quickstart](getting-started/quickstart.md)**. Configure `unshackle.yaml` and run your first download.
+- **[Quickstart](getting-started/quickstart.md)**. Configure `unshackle.yaml` and do your first download.
 - **[Downloading](guide/downloading.md)**. The full `dl` command guide: quality, codecs, languages, track selection, and output.
-- **[Configuration](getting-started/configuration-file.md)**. Where `unshackle.yaml` lives, the directory layout, and how to edit values. Full key list in the [Configuration Reference](reference/configuration/index.md).
-- **[REST API](dev/rest-api/index.md)**. Run the `serve` HTTP server and drive downloads programmatically.
+- **[Configuration](getting-started/configuration-file.md)**. Where `unshackle.yaml` lives, the directory layout, and how to edit values. Full config key list in the [Configuration Reference](reference/configuration/index.md).
+- **[REST API](dev/rest-api/index.md)**. Operate the `serve` HTTP server and drive downloads programmatically.
 
 !!! tip "Getting help"
-    Run `unshackle --help` or `unshackle dl --help` at any time. The community
+    Operate `unshackle --help` or `unshackle dl --help` at any time. The community
     [Discord](https://discord.gg/mHYyPaCbFK) is the fastest place to ask questions.

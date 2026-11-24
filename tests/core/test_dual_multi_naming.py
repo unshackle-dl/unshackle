@@ -47,7 +47,7 @@ def count_mode(monkeypatch):
 
 
 def ctx(language, languages) -> dict:
-    return make_movie(language)._build_base_template_context(make_media_info(languages))
+    return make_movie(language).build_base_template_context(make_media_info(languages))
 
 
 def test_strict_dual_with_original(strict_mode):
@@ -118,3 +118,10 @@ def test_count_never_dubbed(count_mode):
     assert c["dubbed"] == ""
     assert c["dual"] == ""
     assert c["multi"] == ""
+
+
+def test_a_missing_template_key_falls_back_instead_of_raising(monkeypatch):
+    """dl only checks output_template is non-empty, so the title's own key can be absent."""
+    monkeypatch.setattr(config, "output_template", {"series": "{title}"})
+    name = make_movie("en").get_filename(make_media_info(["en"]))
+    assert name == "The Film (2024)"

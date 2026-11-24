@@ -15,7 +15,7 @@ class TitleCacher:
     Handles caching of Title objects to reduce redundant API calls.
 
     This wrapper provides:
-    - Region-aware caching to handle geo-restricted content
+    - Region-aware caching for geo-restricted titles
     - Automatic fallback to cached data when API calls fail
     - Cache lifetime extension during failures
     - Cache hit/miss statistics for debugging
@@ -28,11 +28,11 @@ class TitleCacher:
         self.stats = {"hits": 0, "misses": 0, "fallbacks": 0}
         self.no_cache = False
 
-    def _generate_cache_key(
+    def generate_cache_key(
         self, title_id: str, region: Optional[str] = None, account_hash: Optional[str] = None
     ) -> str:
         """
-        Generate a unique cache key for title data.
+        Make a unique cache key for title data.
 
         Args:
             title_id: The title identifier
@@ -42,22 +42,16 @@ class TitleCacher:
         Returns:
             A unique cache key string
         """
-        # Hash the title_id to handle complex IDs (URLs, dots, special chars)
-        # This ensures consistent length and filesystem-safe keys
         title_hash = hashlib.sha256(title_id.encode()).hexdigest()[:16]
 
-        # Start with base key using hash
         key_parts = ["titles", title_hash]
 
-        # Add region if available
         if region:
             key_parts.append(region.lower())
 
-        # Add account hash if available
         if account_hash:
-            key_parts.append(account_hash[:8])  # Use first 8 chars of hash
+            key_parts.append(account_hash[:8])
 
-        # Join with underscores
         cache_key = "_".join(key_parts)
 
         return cache_key
@@ -72,7 +66,7 @@ class TitleCacher:
         reset_cache: bool = False,
     ) -> Optional[Titles_T]:
         """
-        Get titles from cache or fetch from API with fallback support.
+        Get titles from the cache, or fetch them from the API with a fallback.
 
         Args:
             title_id: The title identifier
@@ -85,41 +79,33 @@ class TitleCacher:
         Returns:
             Titles object (Movies, Series, or Album)
         """
-        # If caching is globally disabled or no_cache flag is set
         if not config.title_cache_enabled or no_cache:
             self.no_cache = True
             self.log.debug("Cache bypassed, fetching fresh titles")
             return fetch_function()
 
-        # Generate cache key
-        cache_key = self._generate_cache_key(title_id, region, account_hash)
+        cache_key = self.generate_cache_key(title_id, region, account_hash)
 
-        # If reset_cache flag is set, clear the cache entry
         if reset_cache:
             self.log.info(f"Clearing cache for {cache_key}")
             cache_path = (config.directories.cache / self.service_name / cache_key).with_suffix(".json")
             if cache_path.exists():
                 cache_path.unlink()
 
-        # Try to get from cache
         cache = self.cacher.get(cache_key, version=1)
 
-        # Check if we have valid cached data
         if cache and not cache.expired:
             self.stats["hits"] += 1
             self.log.debug(f"Cache hit for {title_id} (hits: {self.stats['hits']}, misses: {self.stats['misses']})")
             return cache.data
 
-        # Cache miss or expired, try to fetch fresh data
         self.stats["misses"] += 1
         self.log.debug(f"Cache miss for {title_id} fetching fresh data")
 
         try:
-            # Attempt to fetch fresh titles
             titles = fetch_function()
 
             if titles:
-                # Successfully fetched, update cache
                 self.log.debug(f"Successfully fetched titles for {title_id}, updating cache")
                 cache = self.cacher.get(cache_key, version=1)
                 cache.set(titles, expiration=datetime.now() + timedelta(seconds=config.title_cache_time))
@@ -127,9 +113,7 @@ class TitleCacher:
             return titles
 
         except Exception as e:
-            # API call failed, check if we have fallback cached data
             if cache and cache.data:
-                # We have expired cached data, use it as fallback
                 current_time = datetime.now()
                 max_retention_time = cache.expiration + timedelta(
                     seconds=config.title_cache_max_retention - config.title_cache_time
@@ -143,7 +127,6 @@ class TitleCacher:
                     )
                     self.log.debug(f"Error was: {e}")
 
-                    # Extend cache lifetime
                     extended_expiration = current_time + timedelta(minutes=5)
                     if extended_expiration < max_retention_time:
                         cache.expiration = extended_expiration
@@ -153,7 +136,6 @@ class TitleCacher:
                 else:
                     self.log.error(f"API call failed and cached data for {title_id} exceeded maximum retention time")
 
-            # Re-raise the exception if no fallback available
             raise
 
     def clear_all_title_cache(self):
@@ -179,8 +161,6 @@ class TitleCacher:
             "hit_rate": f"{hit_rate:.1f}%",
         }
 
-    # -- Generic provider cache methods --
-
     def get_cached_provider(
         self,
         provider_name: str,
@@ -189,11 +169,11 @@ class TitleCacher:
         region: Optional[str] = None,
         account_hash: Optional[str] = None,
     ) -> Optional[dict]:
-        """Get cached metadata for any provider."""
+        """Get the cached data of any metadata provider."""
         if not config.title_cache_enabled or self.no_cache:
             return None
 
-        cache_key = self._generate_cache_key(title_id, region, account_hash)
+        cache_key = self.generate_cache_key(title_id, region, account_hash)
         cache = self.cacher.get(cache_key, version=1)
 
         if not cache or not cache.data:
@@ -217,12 +197,10 @@ class TitleCacher:
 
         self.log.debug(f"{provider_name} cache hit for {title_id}")
 
-        # Return the inner data (provider-specific format)
         response = provider_data.get("response")
         if response is not None:
             return response
 
-        # For TMDB-style caches that store detail + external_ids at top level
         result: dict = {}
         if "detail" in provider_data:
             result["detail"] = provider_data["detail"]
@@ -242,11 +220,11 @@ class TitleCacher:
         account_hash: Optional[str] = None,
         ttl_days: int = 7,
     ) -> None:
-        """Cache metadata from any provider."""
+        """Cache the data of any metadata provider."""
         if not config.title_cache_enabled or self.no_cache:
             return
 
-        cache_key = self._generate_cache_key(title_id, region, account_hash)
+        cache_key = self.generate_cache_key(title_id, region, account_hash)
         cache = self.cacher.get(cache_key, version=1)
 
         if not cache or not cache.data:
@@ -255,9 +233,7 @@ class TitleCacher:
 
         now = datetime.now()
 
-        # Build cache entry in a format compatible with legacy methods
         if provider_name == "tmdb" and "detail" in data:
-            # TMDB stores detail + external_ids at top level
             cache_entry = {
                 **data,
                 "kind": kind,
@@ -265,14 +241,12 @@ class TitleCacher:
                 "expires_at": now + timedelta(days=ttl_days),
             }
         elif provider_name == "simkl":
-            # SIMKL wraps in a "response" key
             cache_entry = {
                 "response": data,
                 "fetched_at": now,
                 "expires_at": now + timedelta(days=ttl_days),
             }
         else:
-            # Generic format: store data directly with metadata
             cache_entry = {
                 "response": data,
                 "kind": kind,
@@ -285,44 +259,9 @@ class TitleCacher:
         self.log.debug(f"Cached {provider_name} data for {title_id}")
 
 
-def get_region_from_proxy(proxy_url: Optional[str]) -> Optional[str]:
-    """
-    Extract region identifier from proxy URL.
-
-    Args:
-        proxy_url: The proxy URL string
-
-    Returns:
-        Region identifier or None
-    """
-    if not proxy_url:
-        return None
-
-    # Try to extract region from common proxy patterns
-    # e.g., "us123.nordvpn.com", "gb-proxy.example.com"
-    import re
-
-    # Pattern for NordVPN style
-    nord_match = re.search(r"([a-z]{2})\d+\.nordvpn", proxy_url.lower())
-    if nord_match:
-        return nord_match.group(1)
-
-    # Pattern for country code at start
-    cc_match = re.search(r"([a-z]{2})[-_]", proxy_url.lower())
-    if cc_match:
-        return cc_match.group(1)
-
-    # Pattern for country code subdomain
-    subdomain_match = re.search(r"://([a-z]{2})\.", proxy_url.lower())
-    if subdomain_match:
-        return subdomain_match.group(1)
-
-    return None
-
-
 def get_account_hash(credential) -> Optional[str]:
     """
-    Generate a hash for account identification.
+    Make a hash for account identification.
 
     Args:
         credential: Credential object
@@ -333,11 +272,9 @@ def get_account_hash(credential) -> Optional[str]:
     if not credential:
         return None
 
-    # Use existing sha1 property if available
     if hasattr(credential, "sha1"):
         return credential.sha1
 
-    # Otherwise generate hash from username
     if hasattr(credential, "username"):
         return hashlib.sha1(credential.username.encode()).hexdigest()
 

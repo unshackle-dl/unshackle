@@ -1,23 +1,26 @@
 from __future__ import annotations
 
 import math
+import subprocess
 from enum import Enum
 from typing import Any, Optional, Union
 
+from unshackle.core import binaries
 from unshackle.core.tracks.track import Track
 
 
 class Audio(Track):
     class Codec(str, Enum):
-        AAC = "AAC"  # https://wikipedia.org/wiki/Advanced_Audio_Coding
-        AC3 = "DD"  # https://wikipedia.org/wiki/Dolby_Digital
-        EC3 = "DD+"  # https://wikipedia.org/wiki/Dolby_Digital_Plus
-        AC4 = "AC-4"  # https://wikipedia.org/wiki/Dolby_AC-4
-        OPUS = "OPUS"  # https://wikipedia.org/wiki/Opus_(audio_format)
-        OGG = "VORB"  # https://wikipedia.org/wiki/Vorbis
-        DTS = "DTS"  # https://en.wikipedia.org/wiki/DTS_(company)#DTS_Digital_Surround
-        ALAC = "ALAC"  # https://en.wikipedia.org/wiki/Apple_Lossless_Audio_Codec
-        FLAC = "FLAC"  # https://en.wikipedia.org/wiki/FLAC
+        AAC = "AAC"
+        AC3 = "DD"
+        EC3 = "DD+"
+        AC4 = "AC-4"
+        OPUS = "OPUS"
+        OGG = "VORB"
+        DTS = "DTS"
+        DTSX = "DTS-X"
+        ALAC = "ALAC"
+        FLAC = "FLAC"
 
         @property
         def extension(self) -> str:
@@ -36,6 +39,8 @@ class Audio(Track):
                 return Audio.Codec.AC4
             if mime == "opus":
                 return Audio.Codec.OPUS
+            if mime in ("dtsx", "dtsy"):
+                return Audio.Codec.DTSX
             if mime == "dtsc":
                 return Audio.Codec.DTS
             if mime == "alac":
@@ -80,18 +85,18 @@ class Audio(Track):
         **kwargs: Any,
     ):
         """
-        Create a new Audio track object.
+        Make a new Audio track object.
 
         Parameters:
             codec: An Audio.Codec enum representing the audio codec.
-                If not specified, MediaInfo will be used to retrieve the codec
-                once the track has been downloaded.
-            bitrate: A number or float representing the average bandwidth in bytes/s.
-                Float values are rounded up to the nearest integer.
+                If not specified, unshackle uses MediaInfo to get the codec
+                after it downloads the track.
+            bitrate: A number or float representing the average bandwidth in bits/s.
+                unshackle rounds float values up to the nearest integer.
             channels: A number, float, or string representing the number of audio channels.
                 Strings may represent numbers or floats. Expanded layouts like 7.1.1 is
                 not supported. All numbers and strings will be cast to float.
-            joc: The number of Joint-Object-Coding Channels/Objects in the audio stream.
+            joc: The number of Joint-Object-Coding Channels/Objects in the audio track.
             descriptive: Mark this audio as being descriptive audio for the blind.
 
         Note: If codec, bitrate, channels, or joc is not specified some checks may be
@@ -153,7 +158,7 @@ class Audio(Track):
 
     @property
     def atmos(self) -> bool:
-        """Return True if the audio track contains Dolby Atmos."""
+        """Return True if the audio track contains Atmos."""
         if self.joc:
             return True
         if isinstance(self.extra, dict):
@@ -186,27 +191,108 @@ class Audio(Track):
         )
 
     @staticmethod
-    def parse_channels(channels: Union[str, int, float]) -> float:
+    def parse_channels(channels: Union[str, int, float]) -> Union[float, str]:
         """
-        Converts a Channel string to a float representing audio channel count and layout.
+        Converts a Channel string to a float representing the audio channel layout.
         E.g. "3" -> "3.0", "2.1" -> "2.1", ".1" -> "0.1".
+
+        An immersive layout names its height channels in a third figure, e.g. "5.1.4",
+        which no float can hold, so it stays the string it came as. Use channel_total for
+        arithmetic on either form.
 
         This does not validate channel strings as genuine channel counts or valid layouts.
         It does not convert the value to assume a sub speaker channel layout, e.g. 5.1->6.0.
-        It also does not support expanded surround sound channel layout strings like 7.1.2.
         """
         if isinstance(channels, str):
-            # TODO: Support all possible DASH channel configurations (https://datatracker.ietf.org/doc/html/rfc8216)
             if channels.upper() == "A000":
                 return 2.0
             elif channels.upper() == "F801":
                 return 5.1
-            elif channels.replace("ch", "").replace(".", "", 1).isdigit():
-                # e.g., '2ch', '2', '2.0', '5.1ch', '5.1'
-                return float(channels.replace("ch", ""))
+            layout = channels.replace("ch", "")
+            if layout.count(".") == 2 and all(part.isdigit() for part in layout.split(".")):
+                return layout
+            elif layout.replace(".", "", 1).isdigit():
+                return float(layout)
             raise NotImplementedError(f"Unsupported Channels string value, '{channels}'")
 
         return float(channels)
+
+    @staticmethod
+    def channel_total(channels: Union[str, int, float]) -> float:
+        """
+        Total number of channels in either channel form, so a caller can compare both.
+
+        A float layout keeps its own value, because a caller compares those by rounding
+        the sub channel up, e.g. 5.1 and 6.0 both match. An immersive layout has no such
+        float, so this adds its figures: "5.1.4" -> 10.0.
+        """
+        if isinstance(channels, str) and channels.count(".") == 2:
+            return float(sum(int(part) for part in channels.split(".")))
+        return float(channels)
+
+    def to_music_container(self) -> bool:
+        """Remux the track into the container of its codec, as a standalone audio file.
+
+        Music titles never reach the muxer, so the downloaded file is the delivered file, and
+        after decryption that is still a fragmented MP4. Its header states a length of zero, so
+        a player stops after the first fragment. FLAC inside an MP4 is also not a FLAC stream.
+        A rename cannot correct either fault. Returns True once the new file replaces the
+        downloaded one; every failure raises.
+        """
+        if not self.path or not self.path.exists():
+            raise ValueError("Cannot remux a Track that has not been downloaded.")
+
+        if not binaries.FFMPEG:
+            raise EnvironmentError('FFmpeg executable "ffmpeg" was not found but is required for this call.')
+
+        containers: dict[Optional[Audio.Codec], str] = {
+            Audio.Codec.FLAC: ".flac",
+            Audio.Codec.OPUS: ".opus",
+            Audio.Codec.OGG: ".ogg",
+        }
+        extension = containers.get(self.codec, ".m4a")
+        original_path = self.path
+        output_path = original_path.with_name(f"{original_path.stem}_music{extension}")
+
+        def ffmpeg(*extra_args: str) -> None:
+            subprocess.run(
+                [
+                    str(binaries.FFMPEG),
+                    "-nostdin",
+                    "-hide_banner",
+                    "-loglevel",
+                    "error",
+                    "-y",
+                    "-i",
+                    str(original_path),
+                    "-map",
+                    "0:a:0",
+                    "-map_metadata",
+                    "-1",
+                    *(["-c:a", "flac"] if extension == ".flac" else ["-c", "copy"]),
+                    *(["-movflags", "+faststart"] if extension == ".m4a" else []),
+                    *extra_args,
+                    str(output_path),
+                ],
+                check=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+
+        try:
+            try:
+                ffmpeg()
+            except subprocess.CalledProcessError as e:
+                if b"not currently supported in container" not in e.stderr:
+                    raise
+                ffmpeg("-f", "mp4")
+        except subprocess.CalledProcessError:
+            output_path.unlink(missing_ok=True)
+            raise
+
+        original_path.unlink()
+        self.path = output_path
+        return True
 
     def get_track_name(self) -> Optional[str]:
         """Return the base Track Name."""

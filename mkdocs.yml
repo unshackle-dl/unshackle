@@ -1,9 +1,11 @@
 site_name: unshackle
-site_description: Movie, TV, and Music archival software — user guide and REST API reference
+site_description: Movie, TV, and Music archival software. User guide and REST API reference
 site_url: https://docs.unshackle.dev/
 repo_url: https://github.com/unshackle-dl/unshackle
 repo_name: unshackle-dl/unshackle
 docs_dir: docs
+extra_css:
+  - assets/extra.css
 
 exclude_docs: |
   reference/configuration.md
@@ -128,6 +130,7 @@ nav:
       - DRM & CDM: reference/configuration/drm.md
       - Network & Proxy: reference/configuration/network.md
       - Key Vaults: reference/configuration/vaults.md
+      - Post-Scripts: reference/configuration/post-scripts.md
       - Other Settings: reference/configuration/misc.md
       - Annotated Example: reference/configuration/example.md
   - Developer:
@@ -139,6 +142,7 @@ nav:
           - Authentication: dev/rest-api/authentication.md
           - Endpoints: dev/rest-api/endpoints.md
           - Job Lifecycle: dev/rest-api/job-lifecycle.md
+          - Dashboard: dev/rest-api/dashboard.md
           - Remote Sessions: dev/rest-api/remote-sessions.md
           - Error Responses: dev/rest-api/errors.md
   - API Reference:

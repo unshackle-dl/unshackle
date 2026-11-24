@@ -20,8 +20,6 @@ def make_video(track_id: str, **data) -> Video:
 
 
 def mux_until_mkvmerge_check(tracks: Tracks) -> None:
-    # the embedded-audio metadata pass runs before the mkvmerge lookup, so a missing
-    # binary stops the mux right after the state under test has been written
     with pytest.raises(RuntimeError, match="MKVToolNix"):
         tracks.mux("Test Title")
 

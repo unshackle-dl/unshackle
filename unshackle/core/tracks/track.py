@@ -3,36 +3,53 @@ import html
 import logging
 import re
 import shutil
+import struct
 import subprocess
+from bisect import bisect_left, bisect_right
 from collections import defaultdict
 from copy import copy
 from dataclasses import dataclass
 from enum import Enum
 from functools import partial
 from pathlib import Path
-from typing import Any, Callable, Iterable, Optional, Union
+from typing import Any, Callable, Iterable, Optional, Sequence, Union
 from uuid import UUID
 from zlib import crc32
 
+import click
+from construct import ConstructError
 from langcodes import Language
+from pymp4.parser import Box
 from requests import Session
 from requests.adapters import HTTPAdapter, Retry
 
 from unshackle.core import binaries
 from unshackle.core.cdm.detect import is_playready_cdm, is_widevine_cdm
 from unshackle.core.config import config
-from unshackle.core.constants import DOWNLOAD_CANCELLED, DOWNLOAD_LICENCE_ONLY
+from unshackle.core.constants import DOWNLOAD_ALL_DRM, DOWNLOAD_CANCELLED, DOWNLOAD_LICENCE_ONLY, DownloadCancelled
 from unshackle.core.downloaders import requests
 from unshackle.core.drm import DRM_T, ClearKeyCENC, PlayReady, Widevine
+from unshackle.core.drm.verify import decrypt_track
 from unshackle.core.events import events
-from unshackle.core.session import RnetSession
+from unshackle.core.session import RnetSession, utf8_text
+from unshackle.core.tracks import resume
 from unshackle.core.utilities import get_boxes, log_event, try_ensure_utf8
 from unshackle.core.utils.subprocess import ffprobe
 
+DRM_PREFERENCE_TYPES: dict[str, Union[type[Widevine], type[PlayReady]]] = {
+    "wv": Widevine,
+    "widevine": Widevine,
+    "pr": PlayReady,
+    "playready": PlayReady,
+}
 
-def direct_session(session: Union[Session, "RnetSession"]) -> Session:
-    """requests.Session with copied headers/cookies and no proxy."""
+
+def direct_session(session: Union[Session, "RnetSession"], proxy: Optional[str] = None) -> Session:
+    """requests.Session with copied headers/cookies and no proxy, or only ``proxy`` when given."""
     new = Session()
+    if proxy:
+        new.trust_env = False
+        new.proxies = {"http": proxy, "https": proxy}
     headers = getattr(session, "headers", None)
     if headers is not None:
         try:
@@ -46,6 +63,15 @@ def direct_session(session: Union[Session, "RnetSession"]) -> Session:
             new.cookies.update(jar if jar is not None else cookies)
         except Exception:
             pass
+        by_domain = getattr(cookies, "get_dict_by_domain", None)
+        if by_domain is not None:
+            try:
+                for domain, named in by_domain().items():
+                    for name, value in named.items():
+                        if name not in new.cookies:
+                            new.cookies.set(name, value, **({"domain": domain} if domain else {}))
+            except Exception:
+                pass
     new.mount(
         "https://",
         HTTPAdapter(
@@ -58,8 +84,13 @@ def direct_session(session: Union[Session, "RnetSession"]) -> Session:
     return new
 
 
-def _read_top_level_box(path: Path, box_type: bytes) -> Optional[bytes]:
-    # seek through top-level box headers; only the wanted box's bytes are read into RAM
+def read_top_level_box(path: Path, box_type: bytes) -> Optional[bytes]:
+    """Read a single top-level box from an MP4 file.
+
+    This function walks only the box headers, so the wanted box is the only payload it reads into memory.
+    Returns None if the file has no such top-level box, or if a box header is truncated or declares an
+    impossible size.
+    """
     file_size = path.stat().st_size
     with path.open("rb") as f:
         start = 0
@@ -68,12 +99,12 @@ def _read_top_level_box(path: Path, box_type: bytes) -> Optional[bytes]:
             if len(header) < 8:
                 return None
             size = int.from_bytes(header[:4], "big")
-            if size == 1:  # 64-bit largesize
+            if size == 1:
                 large = f.read(8)
                 if len(large) < 8:
                     return None
                 size = int.from_bytes(large, "big")
-            elif size == 0:  # box runs to EOF
+            elif size == 0:
                 size = file_size - start
             if size < 8:
                 return None
@@ -85,24 +116,116 @@ def _read_top_level_box(path: Path, box_type: bytes) -> Optional[bytes]:
     return None
 
 
-def has_encrypted_sample_entry(path: Path) -> bool:
-    """True if the MP4's moov still carries an encrypted sample entry (encv/enca).
+def iter_top_level_boxes(path: Path) -> Iterable[tuple[bytes, int, int]]:
+    """Yield (box_type, offset, size) for each top-level box, stopping at the first bad header."""
+    file_size = path.stat().st_size
+    with path.open("rb") as f:
+        offset = 0
+        while offset + 8 <= file_size:
+            f.seek(offset)
+            header = f.read(8)
+            if len(header) < 8:
+                return
+            size = int.from_bytes(header[:4], "big")
+            if size == 1:
+                large = f.read(8)
+                if len(large) < 8:
+                    return
+                size = int.from_bytes(large, "big")
+            elif size == 0:
+                size = file_size - offset
+            if size < 8:
+                return
+            yield header[4:8], offset, size
+            offset += size
 
-    A faithful decrypt rewrites encv/enca back to the real codec 4CC via frma, so a
-    survivor means the decrypt tool skipped/failed the track. This is a 4CC scan
-    scoped to the moov box (where sample entries live), not a structural parse;
-    scoping avoids chance byte collisions in mdat. Any read error -> False.
+
+def find_child_box(buf: bytes, box_type: bytes) -> Optional[bytes]:
+    """Return the first box of the given type nested anywhere in buf, header included."""
+    i = buf.find(box_type, 4)
+    while i != -1:
+        size = int.from_bytes(buf[i - 4 : i], "big")
+        if 8 <= size <= len(buf) - (i - 4):
+            return buf[i - 4 : i - 4 + size]
+        i = buf.find(box_type, i + 1)
+    return None
+
+
+def strip_duplicate_init_boxes(src: Path, dst: Path) -> int:
+    """Write src to dst without its repeated ftyp/moov pairs, returning how many it dropped.
+
+    An HLS track whose playlist carries a discontinuity gets a fresh EXT-X-MAP init for each
+    period, so the merged file holds one ftyp+moov per period. That plays, and mkvmerge takes
+    it, but MP4Box rejects the whole file with "Duplicate 'ftyp' detected!".
+
+    A packager stamps each init with the fetch time, so copies that describe the same format
+    still differ byte for byte. Only the stsd decides how samples decode, so this compares only
+    the stsd: a later moov with a different stsd is a real format change, and dropping it would
+    corrupt the output. In that case, and when there is no duplicate at all, this writes nothing,
+    returns 0, and leaves the caller with the original file.
+    """
+    boxes = list(iter_top_level_boxes(src))
+    duplicates = [(t, o, s) for t, o, s in boxes if t in (b"ftyp", b"moov")]
+    if len(duplicates) <= 2:
+        return 0
+
+    with src.open("rb") as f:
+        stsds = set()
+        for box_type, offset, size in duplicates:
+            if box_type != b"moov":
+                continue
+            f.seek(offset)
+            stsd = find_child_box(f.read(size), b"stsd")
+            if stsd is None:
+                return 0
+            stsds.add(stsd)
+    if len(stsds) > 1:
+        return 0
+
+    dropped = 0
+    seen: set[bytes] = set()
+    with src.open("rb") as f, dst.open("wb") as out:
+        for box_type, offset, size in boxes:
+            if box_type in (b"ftyp", b"moov"):
+                if box_type in seen:
+                    dropped += 1
+                    continue
+                seen.add(box_type)
+            f.seek(offset)
+            remaining = size
+            while remaining:
+                chunk = f.read(min(remaining, 8 * 1024 * 1024))
+                if not chunk:
+                    break
+                out.write(chunk)
+                remaining -= len(chunk)
+    return dropped
+
+
+def has_dts_uhd_sample_entry(path: Path) -> bool:
+    """True if the MP4 holds a DTS-UHD (DTS:X Profile 2) audio sample entry.
+
+    Matroska has no CodecID for DTS-UHD, so mkvmerge stores it as an A_QUICKTIME
+    passthrough and every reader reports the container fallback instead of the codec. A
+    file this returns True for has to go into MP4 to keep its codec readable.
+
+    Only "dtsx"/"dtsy" mean DTS-UHD. DTS:X Profile 1 rides inside DTS-HD Master Audio as
+    "dtsc"/"dtse"/"dtsh"/"dtsl", which Matroska maps to A_DTS and stores properly, so it
+    must not match here. Reading the entry rather than trusting the manifest keeps a
+    mislabelled codec from moving a Profile 1 track out of Matroska.
+
+    A 4CC scan scoped to the moov box, not a structural parse; the scoping avoids chance
+    byte collisions in mdat. Any read error -> False.
     """
     try:
-        moov = _read_top_level_box(path, b"moov")
-    except Exception:
+        moov = read_top_level_box(path, b"moov")
+    except OSError:
         return False
     if not moov:
         return False
-    for tok in (b"encv", b"enca"):
+    for tok in (b"dtsx", b"dtsy"):
         i = moov.find(tok, 4)
         while i != -1:
-            # require a plausible sample-entry box size right before the 4CC
             size = int.from_bytes(moov[i - 4 : i], "big")
             if 16 <= size <= len(moov) - (i - 4):
                 return True
@@ -110,7 +233,31 @@ def has_encrypted_sample_entry(path: Path) -> bool:
     return False
 
 
-def _senc_protects_samples(buf: bytes, body: int, end: int) -> bool:
+def has_encrypted_sample_entry(path: Path) -> bool:
+    """True if the MP4's moov still carries an encrypted sample entry (encv/enca).
+
+    A faithful decrypt rewrites encv/enca back to the real codec 4CC through frma, so a
+    survivor means the decrypt tool skipped/failed the track. This is a 4CC scan
+    scoped to the moov box (where sample entries live), not a structural parse.
+    The scoping avoids chance byte collisions in mdat. Any read error -> False.
+    """
+    try:
+        moov = read_top_level_box(path, b"moov")
+    except OSError:
+        return False
+    if not moov:
+        return False
+    for tok in (b"encv", b"enca"):
+        i = moov.find(tok, 4)
+        while i != -1:
+            size = int.from_bytes(moov[i - 4 : i], "big")
+            if 16 <= size <= len(moov) - (i - 4):
+                return True
+            i = moov.find(tok, i + 1)
+    return False
+
+
+def senc_protects_samples(buf: bytes, body: int, end: int) -> bool:
     """True if a senc/PIFF-uuid box describes protected samples.
 
     An empty senc (sample_count 0) sits on a genuinely clear fragment, so treating it as
@@ -118,16 +265,13 @@ def _senc_protects_samples(buf: bytes, body: int, end: int) -> bool:
     read_per_sample_iv_size.
     """
     flags = int.from_bytes(buf[body + 1 : body + 4], "big")
-    pos = body + 4 + (20 if flags & 0x1 else 0)  # PIFF override: AlgorithmID(3)+IV_size(1)+KID(16)
+    pos = body + 4 + (20 if flags & 0x1 else 0)
     if pos + 4 > end:
         return False
     return int.from_bytes(buf[pos : pos + 4], "big") > 0
 
 
-def _moof_still_encrypted(moof: bytes) -> bool:
-    # senc only: a decrypter detaches just the atom it consumed, so a PIFF uuid can
-    # outlive a good decrypt. ISM arrives as senc via piff_senc_to_cenc.
-    # structural walk: a 4CC byte scan collides with trun payload
+def moof_still_encrypted(moof: bytes) -> bool:
     from unshackle.core.manifests.ism_init import iter_boxes
 
     body = 16 if int.from_bytes(moof[:4], "big") == 1 else 8
@@ -135,7 +279,7 @@ def _moof_still_encrypted(moof: bytes) -> bool:
         if box_type != b"traf":
             continue
         for child, _usertype, child_body, child_end in iter_boxes(moof, traf_body, traf_end):
-            if child == b"senc" and _senc_protects_samples(moof, child_body, child_end):
+            if child == b"senc" and senc_protects_samples(moof, child_body, child_end):
                 return True
     return False
 
@@ -147,19 +291,19 @@ def assert_fragments_decrypted(path: Path) -> None:
     skips, so a survivor marks a silent skip. One cause is a tfhd.sample_description_index
     dangling past the stsd entry count, which mp4decrypt reports as success (exit 0, no
     stderr) while leaving the payload as ciphertext. Unlike has_encrypted_sample_entry
-    (moov-scoped) this is fragment-scoped; the moov comes out clean in that failure.
+    (moov-scoped) this is fragment-scoped. The moov comes out clean in that failure.
 
-    Only a standard senc counts as evidence. Some DASH content ships a PIFF uuid beside it,
-    and a decrypter detaches just the atom it consumed, so that uuid outlives a good
-    decrypt; counting it would condemn a healthy file.
+    Only a standard senc counts as evidence. Some DASH titles ship a PIFF uuid beside it,
+    and a decrypter detaches only the atom it consumed, so that uuid outlives a good
+    decrypt. Counting it would condemn a healthy file.
 
     The guarantee runs in one direction: a survivor proves a skip, while a clean pass is
     only as good as the decrypter's own behaviour. shaka-packager (the default
     `decryption` backend) remuxes into a single fragment and drops senc whether or not it
-    decrypted, so this cannot fire on shaka output. The walk is unbuffered and reads only
-    box headers; it seeks over mdat and never reads it. A malformed box size aborts the
+    decrypted, so this cannot fire on shaka output. The walk does not use a buffer and reads
+    only box headers. It seeks over mdat and never reads it. A malformed box size aborts the
     walk with a warning and returns normally, so a file this function cannot parse is
-    never escalated into a raise. The logged warning is the only signal of that; a caller
+    never escalated into a raise. The logged warning is the only signal of that. A caller
     sees the same silent return it gets from a verified clean file.
     """
     surviving = 0
@@ -176,15 +320,14 @@ def assert_fragments_decrypted(path: Path) -> None:
                     break
                 size = int.from_bytes(header[:4], "big")
                 box_header = 8
-                if size == 1:  # 64-bit largesize
+                if size == 1:
                     large = f.read(8)
                     if len(large) < 8:
                         break
                     size = int.from_bytes(large, "big")
                     box_header = 16
-                elif size == 0:  # box runs to EOF
+                elif size == 0:
                     size = file_size - start
-                # below the consumed header the cursor stalls and desyncs onto payload
                 if size < box_header or start + size > file_size:
                     logging.getLogger("track").warning(
                         f"{path.name}: malformed box size at offset {start}; cannot verify the "
@@ -194,7 +337,7 @@ def assert_fragments_decrypted(path: Path) -> None:
                 if header[4:8] == b"moof":
                     total += 1
                     f.seek(start)
-                    if _moof_still_encrypted(f.read(size)):
+                    if moof_still_encrypted(f.read(size)):
                         surviving += 1
                         if first_offset is None:
                             first_offset = start
@@ -219,6 +362,31 @@ def assert_fragments_decrypted(path: Path) -> None:
         )
 
 
+SAMPLE_PROBE_BYTES = 64 * 1024
+SAMPLE_PROBE_LIMIT = 8 * 1024 * 1024
+
+
+def parse_sidx(data: bytes, offset: int) -> tuple[int, list[tuple[int, int, int]]]:
+    """Read a ``sidx`` box that starts at byte ``offset`` of its file.
+
+    Returns the timescale and one (start time, first byte, last byte) for each subsegment. The list
+    is empty when the box is not a ``sidx`` or when it points at more indexes and not at media.
+    """
+    try:
+        box = Box.parse(data)
+    except ConstructError:
+        return 0, []
+    if box.type != b"sidx" or any(reference.reference_type != "MEDIA" for reference in box.references):
+        return 0, []
+    start, byte = box.earliest_presentation_time, offset + box.end + box.first_offset
+    subsegments: list[tuple[int, int, int]] = []
+    for reference in box.references:
+        subsegments.append((start, byte, byte + reference.referenced_size - 1))
+        start += reference.segment_duration
+        byte += reference.referenced_size
+    return box.timescale, subsegments
+
+
 @dataclass
 class DownloadContext:
     """Shared arguments passed to each manifest's ``download_track``."""
@@ -229,11 +397,13 @@ class DownloadContext:
     session: Optional[Union[Session, "RnetSession"]] = None
     proxy: Optional[str] = None
     max_workers: Optional[int] = None
+    adaptive_workers: bool = False
+    download_processes: int = 1
     license_widevine: Optional[Callable] = None
     cdm: Optional[object] = None
 
     def ensure_session(self) -> Union[Session, "RnetSession"]:
-        """Return the session, or a new ``Session`` if none was set."""
+        """Return the HTTP session, or a new ``Session`` if none was set."""
         session = self.session
         if not session:
             session = Session()
@@ -244,10 +414,12 @@ class DownloadContext:
 
 class Track:
     class Descriptor(Enum):
-        URL = 1  # Direct URL, nothing fancy
-        HLS = 2  # https://en.wikipedia.org/wiki/HTTP_Live_Streaming
-        DASH = 3  # https://en.wikipedia.org/wiki/Dynamic_Adaptive_Streaming_over_HTTP
-        ISM = 4  # https://learn.microsoft.com/en-us/silverlight/smooth-streaming
+        URL = 1
+        HLS = 2
+        DASH = 3
+        ISM = 4
+
+    sample_tail = 0
 
     def __init__(
         self,
@@ -313,6 +485,7 @@ class Track:
         self.needs_repack = needs_repack
         self.name = name
         self.drm = drm
+        self._drm_preference: Optional[str] = None
         self.edition: list[str] = [edition] if isinstance(edition, str) else (edition or [])
         self.session = session
         self.downloader = downloader
@@ -320,12 +493,12 @@ class Track:
         self.from_file = from_file
         self._data: defaultdict[Any, Any] = defaultdict(dict)
         self.data = data or {}
-        self.extra: Any = extra or {}  # allow anything for extra, but default to a dict
+        self.extra: Any = extra or {}
 
         if self.name is None:
             lang = Language.get(self.language)
             if (lang.language or "").lower() == (lang.territory or "").lower():
-                lang.territory = None  # e.g. en-en, de-DE
+                lang.territory = None
             reduced = lang.simplify_script()
             extra_parts = []
             if reduced.script is not None:
@@ -347,8 +520,78 @@ class Track:
 
         self.id = id_
 
-        # TODO: Currently using OnFoo event naming, change to just segment_filter
         self.OnSegmentFilter: Optional[Callable] = None
+        self.sample_start: float = 0.0
+        self.sample_bytes: Optional[tuple[bytes, str]] = None
+
+    def sample_slice(
+        self, starts: Sequence[float], timescale: float = 1, window: Optional[tuple[int, int]] = None
+    ) -> slice:
+        """Return the slice of segments that hold ``window``, from the start time of each segment.
+
+        Sets ``sample_start`` to the start time of the first kept segment, in seconds. A video keeps
+        ``sample_tail`` segments after the window: mkvmerge ends the cut only at a video keyframe, and
+        with no such keyframe the audio and the subtitles continue to their own end.
+        """
+        self.sample_start = 0.0
+        if not window or not starts:
+            return slice(None)
+        low, high = (starts[0] + seconds * timescale for seconds in window)
+        if low > starts[-1] and len(starts) > 1:
+            raise click.ClickException(
+                "The title ends before the sample window starts. Use --sample START-END with an earlier window."
+            )
+        first = max(bisect_right(starts, low) - 1, 0)
+        self.sample_start = (starts[first] - starts[0]) / timescale
+        return slice(first, max(bisect_left(starts, high) + self.sample_tail, first + 1))
+
+    def sample_byte_range(self, session: Union[Session, "RnetSession"]) -> Optional[tuple[bytes, str]]:
+        """Find the bytes of a one-file track that hold the sample window.
+
+        Reads the start of the file for a ``sidx`` box. Returns the bytes before that box, which hold
+        the init data, and the byte range of the window. Returns None when the file has no such index.
+        """
+        if self.sample_bytes or not isinstance(self.url, str):
+            return self.sample_bytes
+        head = b""
+
+        def read_to(end: int) -> None:
+            nonlocal head
+            if end > len(head):
+                res = session.get(self.url, headers={"Range": f"bytes={len(head)}-{end - 1}"})
+                if res.ok:
+                    head += res.content
+
+        pos = 0
+        while pos < SAMPLE_PROBE_LIMIT:
+            if pos + 8 > len(head):
+                read_to(pos + SAMPLE_PROBE_BYTES)
+            if pos + 8 > len(head):
+                return None
+            size, kind = struct.unpack(">I4s", head[pos : pos + 8])
+            if size < 8:
+                return None
+            if kind != b"sidx":
+                pos += size
+                continue
+            read_to(pos + size)
+            timescale, subsegments = parse_sidx(head[pos : pos + size], pos)
+            if not subsegments:
+                return None
+            kept = subsegments[self.sample_slice([start for start, _, _ in subsegments], timescale, config.sample)]
+            self.sample_bytes = head[:pos], f"{kept[0][1]}-{kept[-1][2]}"
+            return self.sample_bytes
+        return None
+
+    def can_sample(self, session: Union[Session, "RnetSession"]) -> bool:
+        """Return False when a sample cannot cut this track, because it is one file with no segment index."""
+        if self.descriptor == self.Descriptor.URL:
+            return bool(self.sample_byte_range(session))
+        if self.descriptor == self.Descriptor.DASH:
+            from unshackle.core.manifests import DASH
+
+            return DASH.has_segment_timing(self)
+        return True
 
     def __repr__(self) -> str:
         return "{name}({items})".format(
@@ -363,7 +606,7 @@ class Track:
         """
         Arbitrary track data dictionary.
 
-        A defaultdict is used with a dict as the factory for easier
+        This uses a defaultdict with a dict as the factory for easier
         nested saving and safer exists-checks.
 
         Reserved keys:
@@ -381,8 +624,8 @@ class Track:
           - segment_durations: list[int] - A list of each segment's duration.
 
         You should not add, change, or remove any data within reserved keys.
-        You may use their data but do note that the values of them may change
-        or be removed at any point.
+        You may use their data, but note that these values can change or be removed
+        at any point.
         """
         return self._data
 
@@ -394,6 +637,58 @@ class Track:
             value = defaultdict(dict, **value)
         self._data = value
 
+    @property
+    def drm_preference(self) -> Optional[str]:
+        """
+        DRM system this track must license with, one of the names in DRM_PREFERENCE_TYPES.
+
+        None (the default) lets the loaded CDM choose. Set it when the manifest advertises more
+        than one DRM system but only one of them licenses this track.
+        """
+        return self._drm_preference
+
+    @drm_preference.setter
+    def drm_preference(self, value: Optional[str]) -> None:
+        if value is None:
+            self._drm_preference = None
+            return
+        if not isinstance(value, str) or value.lower() not in DRM_PREFERENCE_TYPES:
+            raise ValueError(
+                f"Expected drm_preference to be one of {sorted(DRM_PREFERENCE_TYPES)} or None, not {value!r}"
+            )
+        self._drm_preference = value.lower()
+
+    def add_init_drm(self, init_data: Optional[bytes], cdm: Optional[object]) -> None:
+        """Add the Widevine and PlayReady DRM that the init segment carries and the track does not have.
+
+        A track with a different DRM type stays as it is. The DRM system that agrees with the CDM comes first.
+        """
+        log = logging.getLogger("track")
+        held: list[DRM_T] = list(self.drm or [])
+        if not init_data or any(type(d) not in (Widevine, PlayReady) for d in held):
+            return
+        for system in (PlayReady, Widevine) if self.prefers_playready(cdm) else (Widevine, PlayReady):
+            if any(type(d) is system for d in held):
+                continue
+            try:
+                held.append(system.from_init_data(init_data))
+            except (PlayReady.Exceptions.PSSHNotFound, Widevine.Exceptions.PSSHNotFound):
+                continue
+            except Exception as e:
+                if not held:
+                    raise
+                log.debug(f"Could not read the {system.__name__} PSSH of the init segment: {e}")
+        if held:
+            self.drm = held
+        else:
+            log.debug("No PlayReady or Widevine PSSH was found for this track, is it DRM free?")
+
+    def prefers_playready(self, cdm: Optional[object]) -> bool:
+        """Whether to try PlayReady before Widevine. The track's preference wins over the loaded CDM."""
+        if self._drm_preference:
+            return DRM_PREFERENCE_TYPES[self._drm_preference] is PlayReady
+        return is_playready_cdm(cdm)
+
     def download(
         self,
         session: Union[Session, "RnetSession"],
@@ -403,8 +698,15 @@ class Track:
         *,
         cdm: Optional[object] = None,
         no_proxy_download: bool = False,
+        proxy_download: Optional[str] = None,
+        adaptive_workers: bool = False,
+        download_processes: int = 1,
     ):
-        """Download and optionally Decrypt this Track."""
+        """Download and optionally Decrypt this Track.
+
+        For a URL-descriptor Video or Audio track with no `drm` set, unshackle probes the DRM from the
+        track's init data and stores it on the track, so a service need not declare `drm` itself.
+        """
         from unshackle.core.manifests import DASH, HLS, ISM
 
         if DOWNLOAD_LICENCE_ONLY.is_set():
@@ -419,9 +721,13 @@ class Track:
         proxy = next(iter(session.proxies.values()), None)
 
         dl_session = session
-        if no_proxy_download and proxy:
-            dl_session = direct_session(session)
-            proxy = None
+        if no_proxy_download:
+            if proxy:
+                dl_session = direct_session(session)
+                proxy = None
+        elif proxy_download:
+            dl_session = direct_session(session, proxy_download)
+            proxy = proxy_download
 
         track_type = self.__class__.__name__
         save_path = config.directories.temp / f"{track_type}_{self.id}.mp4"
@@ -433,10 +739,19 @@ class Track:
         else:
             save_dir = save_path.parent
 
-        def cleanup():
+        keep_segments = config.continue_downloads and self.descriptor != self.Descriptor.URL
+
+        def cleanup() -> None:
             save_path.unlink(missing_ok=True)
-            if save_dir.exists() and save_dir.name.endswith("_segments"):
-                shutil.rmtree(save_dir)
+            if save_dir.name.endswith("_segments"):
+                if keep_segments:
+                    if save_dir.exists():
+                        for partial in save_dir.rglob("*.!dev"):
+                            partial.unlink(missing_ok=True)
+                else:
+                    if save_dir.exists():
+                        shutil.rmtree(save_dir)
+                    resume.clear_sidecar(save_dir)
 
         if not DOWNLOAD_LICENCE_ONLY.is_set():
             if config.directories.temp.is_file():
@@ -444,10 +759,6 @@ class Track:
 
             config.directories.temp.mkdir(parents=True, exist_ok=True)
 
-            # Delete any pre-existing temp files matching this track.
-            # We can't re-use or continue downloading these tracks as they do not use a
-            # lock file. Or at least the majority don't. Even if they did I've encountered
-            # corruptions caused by sudden interruptions to the lock file.
             cleanup()
 
         try:
@@ -464,25 +775,29 @@ class Track:
                     session=dl_session,
                     proxy=proxy,
                     max_workers=max_workers,
+                    adaptive_workers=adaptive_workers,
+                    download_processes=download_processes,
                     license_widevine=prepare_drm,
                     cdm=cdm,
                 )
                 manifest_parsers[self.descriptor].download_track(track=self, ctx=ctx)
             elif self.descriptor == self.Descriptor.URL:
                 try:
-                    if not self.drm and track_type in ("Video", "Audio"):
-                        # the service might not have explicitly defined the `drm` property
-                        # try find DRM information from the init data of URL based on CDM type
-                        if is_playready_cdm(cdm):
+                    if (
+                        DOWNLOAD_ALL_DRM.is_set()
+                        and track_type in ("Video", "Audio")
+                        and not {Widevine, PlayReady} <= {type(d) for d in self.drm or []}
+                    ):
+                        self.add_init_drm(self.get_init_segment(session=session), cdm)
+                    elif not self.drm and track_type in ("Video", "Audio"):
+                        if self.prefers_playready(cdm):
                             try:
                                 self.drm = [PlayReady.from_track(self, session)]
                             except PlayReady.Exceptions.PSSHNotFound:
                                 try:
                                     self.drm = [Widevine.from_track(self, session)]
                                 except Widevine.Exceptions.PSSHNotFound:
-                                    log.warning(
-                                        "No PlayReady or Widevine PSSH was found for this track, is it DRM free?"
-                                    )
+                                    log.debug("No PlayReady or Widevine PSSH was found for this track, is it DRM free?")
                         else:
                             try:
                                 self.drm = [Widevine.from_track(self, session)]
@@ -490,29 +805,24 @@ class Track:
                                 try:
                                     self.drm = [PlayReady.from_track(self, session)]
                                 except PlayReady.Exceptions.PSSHNotFound:
-                                    log.warning(
-                                        "No Widevine or PlayReady PSSH was found for this track, is it DRM free?"
-                                    )
+                                    log.debug("No Widevine or PlayReady PSSH was found for this track, is it DRM free?")
 
                     if self.drm:
                         track_kid = self.get_key_id(session=session)
                         drm = self.get_drm_for_cdm(cdm)
                         if isinstance(drm, Widevine):
-                            # license and grab content keys
                             if not prepare_drm:
                                 raise ValueError("prepare_drm func must be supplied to use Widevine DRM")
                             progress(downloaded="LICENSING")
                             prepare_drm(drm, track_kid=track_kid)
                             progress(downloaded="[yellow]LICENSED")
                         elif isinstance(drm, PlayReady):
-                            # license and grab content keys
                             if not prepare_drm:
                                 raise ValueError("prepare_drm func must be supplied to use PlayReady DRM")
                             progress(downloaded="LICENSING")
                             prepare_drm(drm, track_kid=track_kid)
                             progress(downloaded="[yellow]LICENSED")
                         elif isinstance(drm, ClearKeyCENC):
-                            # license and grab content keys (no CDM involved)
                             if not prepare_drm:
                                 raise ValueError("prepare_drm func must be supplied to use ClearKey DRM")
                             progress(downloaded="LICENSING")
@@ -524,8 +834,17 @@ class Track:
                     if DOWNLOAD_LICENCE_ONLY.is_set():
                         progress(downloaded="[yellow]SKIPPED")
                     else:
+                        sample_range = None
+                        if config.sample and track_type in ("Video", "Audio"):
+                            sample_range = self.sample_byte_range(dl_session)
+                            if not sample_range:
+                                raise click.ClickException(
+                                    "--sample cannot cut this track: it is one file with no segment index."
+                                )
                         for status_update in self.downloader(
-                            urls=self.url,
+                            urls=[{"url": self.url, "headers": {"Range": f"bytes={sample_range[1]}"}}]
+                            if sample_range
+                            else self.url,
                             output_dir=save_path.parent,
                             filename=save_path.name,
                             headers=dl_session.headers,
@@ -533,6 +852,8 @@ class Track:
                             proxy=proxy,
                             max_workers=max_workers,
                             session=dl_session,
+                            adaptive=adaptive_workers,
+                            processes=download_processes,
                         ):
                             file_downloaded = status_update.get("file_downloaded")
                             if not file_downloaded:
@@ -541,18 +862,24 @@ class Track:
                                     status_update["downloaded"] = f"URL {downloaded}"
                                 progress(**status_update)
 
+                        if sample_range:
+                            media_path = save_path.with_name(f"{save_path.name}.media")
+                            save_path.replace(media_path)
+                            with save_path.open("wb") as joined, media_path.open("rb") as media:
+                                joined.write(sample_range[0])
+                                shutil.copyfileobj(media, joined)
+                            media_path.unlink()
+
                         self.path = save_path
                         events.emit(events.Types.TRACK_DOWNLOADED, track=self)
 
                         if drm:
                             progress(downloaded="Decrypting", completed=0, total=None)
-                            drm.decrypt(save_path)
+                            decrypt_track(drm, save_path, prepare_drm, track_kid)
                             assert_fragments_decrypted(save_path)
                             self.drm = None
                             events.emit(events.Types.TRACK_DECRYPTED, track=self, drm=drm, segment=None)
                             progress(downloaded="Decrypted", completed=100, total=100)
-                            # residual encv/enca => decrypt tool skipped/failed; force a repack so the
-                            # muxer isn't first-FourCC-locked to a generic (encrypted) codec. OR-in only.
                             if has_encrypted_sample_entry(save_path):
                                 self.needs_repack = True
 
@@ -572,21 +899,29 @@ class Track:
                     DOWNLOAD_CANCELLED.set()
                     progress(downloaded="[yellow]CANCELLED")
                     raise
+                except DownloadCancelled:
+                    raise
                 except Exception:
                     DOWNLOAD_CANCELLED.set()
                     progress(downloaded="[red]FAILED")
                     raise
+        except DownloadCancelled:
+            try:
+                cleanup()
+            except OSError:
+                pass
+            progress(downloaded="[yellow]SKIPPED")
+            return
         except (Exception, KeyboardInterrupt):
             if not DOWNLOAD_LICENCE_ONLY.is_set():
                 cleanup()
             raise
 
         if DOWNLOAD_CANCELLED.is_set():
-            # we stopped during the download, let's exit
             return
 
         if not DOWNLOAD_LICENCE_ONLY.is_set():
-            if self.path.stat().st_size <= 3:  # Empty UTF-8 BOM == 3 bytes
+            if self.path.stat().st_size <= 3:
                 raise IOError("Download failed, the downloaded file is empty.")
 
         events.emit(events.Types.TRACK_DOWNLOADED, track=self)
@@ -630,7 +965,7 @@ class Track:
     def to_dict(self) -> dict[str, Any]:
         """Serialise the track for export/import (identity/URL/descriptor/language).
 
-        DRM is not serialised here; the export writer attaches the licensed DRM + keys.
+        DRM is not serialised here. The export writer attaches the licensed DRM + keys.
         Subclasses add their own codec/quality fields.
         """
         data: dict[str, Any] = {
@@ -648,9 +983,9 @@ class Track:
 
     @staticmethod
     def base_kwargs_from_dict(data: dict[str, Any]) -> dict[str, Any]:
-        """Build the shared Track constructor kwargs from a ``to_dict()`` payload.
+        """Assemble the shared Track constructor kwargs from a ``to_dict()`` payload.
 
-        DRM is not reconstructed here — ``to_dict`` does not serialise it, and the import
+        DRM is not reconstructed here: ``to_dict`` does not serialise it, and the import
         flow attaches the licensed DRM + content keys separately.
         """
         return {
@@ -687,14 +1022,21 @@ class Track:
         if not self.drm:
             return None
 
+        if self._drm_preference:
+            wanted = DRM_PREFERENCE_TYPES[self._drm_preference]
+            for drm in self.drm:
+                if isinstance(drm, wanted):
+                    return drm
+
         if is_widevine_cdm(cdm):
             for drm in self.drm:
                 if isinstance(drm, Widevine):
                     return drm
         elif is_playready_cdm(cdm):
-            for drm in self.drm:
-                if isinstance(drm, PlayReady):
-                    return drm
+            playready = [drm for drm in self.drm if isinstance(drm, PlayReady)]
+            if playready:
+                playready[0].absorb(*playready[1:])
+                return playready[0]
 
         return self.drm[0]
 
@@ -702,20 +1044,20 @@ class Track:
         """
         Probe the DRM encryption Key ID (KID) for this specific track.
 
-        It currently supports finding the Key ID by probing the track's stream
-        with ffprobe for `enc_key_id` data, as well as for mp4 `tenc` (Track
-        Encryption) boxes.
+        It can find the Key ID by probing the track with FFprobe for
+        `enc_key_id` data, as well as for mp4 `tenc` (Track Encryption)
+        boxes.
 
         It explicitly ignores PSSH information like the `PSSH` box, as the box
         is likely to contain multiple Key IDs that may or may not be for this
         specific track.
 
         To retrieve the initialization segment, this method calls :meth:`get_init_segment`
-        with the positional and keyword arguments. The return value of `get_init_segment`
-        is then used to determine the Key ID.
+        with the positional and keyword arguments. This method then uses the return value
+        of `get_init_segment` to find the Key ID.
 
         Returns:
-            The Key ID as a UUID object, or None if the Key ID could not be determined.
+            The Key ID as a UUID object, or None if unshackle cannot find the Key ID.
         """
         if not init_data:
             init_data = self.get_init_segment(*args, **kwargs)
@@ -734,20 +1076,20 @@ class Track:
                 return tenc.key_ID
 
         for uuid_box in get_boxes(init_data, b"uuid"):
-            if uuid_box.extended_type == UUID("8974dbce-7be7-4c51-84f9-7148f9882554"):  # tenc
+            if uuid_box.extended_type == UUID("8974dbce-7be7-4c51-84f9-7148f9882554"):
                 tenc = uuid_box.data
                 if tenc.key_ID.int != 0:
                     return tenc.key_ID
 
     def load_drm_if_needed(self, service=None) -> bool:
         """
-        Load DRM information for this track if it was deferred during parsing.
+        Load DRM information for this track if the parser deferred it.
 
         Args:
             service (Service | None): Service instance that can fetch track-specific DRM info
 
         Returns:
-            True if DRM was loaded or already present, False if failed
+            True if the DRM loaded or is already present, False if the load failed
         """
         if not getattr(self, "needs_drm_loading", False):
             return bool(self.drm)
@@ -787,7 +1129,7 @@ class Track:
             session = getattr(self, "session", None) or Session()
 
             response = session.get(self.url)
-            playlist = m3u8.loads(response.text, self.url)
+            playlist = m3u8.loads(utf8_text(response), self.url)
 
             drm_list = []
 
@@ -823,13 +1165,13 @@ class Track:
         session: Optional[Session] = None,
     ) -> bytes:
         """
-        Get the Track's Initial Segment Data Stream.
+        Get the Track's initial segment data.
 
-        HLS and DASH tracks must explicitly provide a URL to the init segment or file.
-        Providing the byte-range for the init segment is recommended where possible.
+        HLS and DASH tracks must explicitly give a URL to the init segment or file.
+        Give the byte-range for the init segment where possible.
 
-        If `byte_range` is not set, it will make a HEAD request and check the size of
-        the file. If the size could not be determined, it will download up to the first
+        If `byte_range` is not set, it will make a HEAD request and examine the size of
+        the file. If it cannot find the size, it will download up to the first
         20KB only, which should contain the entirety of the init segment. You may
         override this by changing the `maximum_size`.
 
@@ -837,12 +1179,12 @@ class Track:
         seems to work well across the board.
 
         Parameters:
-            maximum_size: Size to assume as the content length if byte-range is not
-                used, the content size could not be determined, or the content size
-                is larger than it. A value of 20000 (20KB) or higher is recommended.
+            maximum_size: Size to assume as the response body length if byte-range is
+                not used, if unshackle cannot find the body size, or if the body size
+                is larger than it. Use a value of 20000 (20KB) or higher.
             url: Explicit init map or file URL to probe from.
             byte_range: Range of bytes to download from the explicit or implicit URL.
-            session: Session context, e.g., authorization and headers.
+            session: HTTP session context, for example authorization and headers.
         """
         if not isinstance(maximum_size, int):
             raise TypeError(f"Expected maximum_size to be an {int}, not {type(maximum_size)}")
@@ -890,6 +1232,9 @@ class Track:
         else:
             init_data = None
             s = session.get(url, stream=True)
+            if not s.ok:
+                s.close()
+                raise ValueError(f"Track URI returned HTTP {s.status_code}")
             for chunk in s.iter_content(content_length):
                 init_data = chunk
                 break
@@ -900,14 +1245,14 @@ class Track:
         return init_data
 
     def repackage(self, bsf_v: Optional[str] = None) -> bool:
-        """Remux the track with ffmpeg ``-c copy``.
+        """Remux the track with FFmpeg ``-c copy``.
 
-        When ``bsf_v`` is given it is folded into the same pass as ``-bsf:v`` (used to
-        normalize video VUI colour metadata without a second full-file remux). Repackaging
-        is mandatory; the bitstream filter is best-effort. If the combined run fails (and it
-        isn't the AAC-retry case) it is retried once without ``bsf_v`` so the remux still
-        succeeds. Returns True if the requested ``bsf_v`` was applied (always False when
-        ``bsf_v`` is None, since nothing was requested).
+        A given ``bsf_v`` goes into the same pass as ``-bsf:v``, which normalises video VUI
+        colour metadata without a second full-file remux. Repackaging is mandatory. The
+        bitstream filter is best-effort: if the combined pass fails, and it is not the
+        AAC-retry case, unshackle tries it again once without ``bsf_v`` so the remux still
+        succeeds. Returns True if unshackle applied the requested ``bsf_v`` (always False
+        when ``bsf_v`` is None, because the caller requested nothing).
         """
         if not self.path or not self.path.exists():
             raise ValueError("Cannot repackage a Track that has not been downloaded.")
@@ -918,7 +1263,7 @@ class Track:
         original_path = self.path
         output_path = original_path.with_stem(f"{original_path.stem}_repack")
 
-        def _ffmpeg(extra_args: list[str] = None, bsf: Optional[str] = None):
+        def ffmpeg(extra_args: list[str] = None, bsf: Optional[str] = None):
             args = [
                 binaries.FFMPEG,
                 "-nostdin",
@@ -946,17 +1291,18 @@ class Track:
 
             args.extend(
                 [
-                    # Following are very important!
                     "-map_metadata",
-                    "-1",  # don't transfer metadata to output file
+                    "-1",
                     "-fflags",
-                    "bitexact",  # only have minimal tag data, reproducible mux
+                    "bitexact",
                     "-codec",
                     "copy",
+                    "-strict",
+                    "unofficial",
                 ]
             )
             if bsf:
-                args.extend(["-bsf:v", bsf])
+                args.extend(["-bsf:v", bsf, "-xerror"])
             args.append(str(output_path))
 
             subprocess.run(
@@ -975,18 +1321,15 @@ class Track:
 
         bsf_applied = False
         try:
-            _ffmpeg(bsf=bsf_v)
+            ffmpeg(bsf=bsf_v)
             bsf_applied = bsf_v is not None
         except subprocess.CalledProcessError as e:
             if b"Malformed AAC bitstream detected" in e.stderr:
-                # e.g., TruTV's dodgy encodes
-                _ffmpeg(["-y", "-bsf:a", "aac_adtstoasc"], bsf=bsf_v)
+                ffmpeg(["-y", "-bsf:a", "aac_adtstoasc"], bsf=bsf_v)
                 bsf_applied = bsf_v is not None
             elif bsf_v is not None:
-                # Repack is mandatory, the VUI bitstream filter is best-effort: retry
-                # without it so the remux still succeeds; caller falls back to normalize_vui.
                 output_path.unlink(missing_ok=True)
-                _ffmpeg()
+                ffmpeg()
             else:
                 raise
 

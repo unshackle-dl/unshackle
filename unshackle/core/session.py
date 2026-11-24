@@ -1,9 +1,10 @@
-"""Session utilities for creating HTTP sessions with TLS fingerprinting via rnet (Rust/BoringSSL)."""
+"""Session utilities for creating HTTP sessions with TLS fingerprinting through rnet (Rust/BoringSSL)."""
 
 from __future__ import annotations
 
 import http
 import logging
+import math
 import random
 import time
 from collections.abc import Iterator, MutableMapping
@@ -14,20 +15,27 @@ from typing import Any, Optional
 from urllib.parse import urlencode, urlparse, urlunparse
 
 import rnet
-from requests import HTTPError, Request
+from requests import HTTPError, Request, Response
 from requests.structures import CaseInsensitiveDict
 
 from unshackle.core.config import config
 
-# ---------------------------------------------------------------------------
-# Impersonate preset mapping — rnet uses named presets (no custom JA3/Akamai)
-# ---------------------------------------------------------------------------
+
+MAX_RETRIES = 5
+BACKOFF_FACTOR = 0.2
+MAX_BACKOFF = 60.0
+STATUS_FORCELIST = [429, 500, 502, 503, 504]
+RETRY_METHODS = frozenset({"GET", "POST", "HEAD", "OPTIONS", "PUT", "DELETE", "TRACE"})
+POOL_MAX_SIZE = 64
+CONNECT_TIMEOUT = 10
+READ_TIMEOUT = 30
+
 
 DEFAULT_IMPERSONATE = rnet.Impersonate.Chrome131
 
 
-def _resolve_impersonate(browser: str) -> rnet.Impersonate:
-    """Resolve a browser string to an rnet.Impersonate preset.
+def resolve_impersonate(browser: str) -> rnet.Impersonate:
+    """Change a browser string to an rnet.Impersonate preset.
 
     Accepts exact rnet preset names (e.g. "Chrome131", "OkHttp4_12", "Edge101").
     See https://github.com/0x676e67/rnet for the full list of available presets.
@@ -42,8 +50,7 @@ def _resolve_impersonate(browser: str) -> rnet.Impersonate:
     )
 
 
-# Map string method names to rnet.Method enum
-_METHOD_MAP: dict[str, rnet.Method] = {
+METHOD_MAP: dict[str, rnet.Method] = {
     "GET": rnet.Method.GET,
     "POST": rnet.Method.POST,
     "PUT": rnet.Method.PUT,
@@ -55,23 +62,18 @@ _METHOD_MAP: dict[str, rnet.Method] = {
 }
 
 
-# ---------------------------------------------------------------------------
-# Response headers adapter — bytes → str
-# ---------------------------------------------------------------------------
-
-
 class RnetResponseHeaders(MutableMapping):
     """Read-only str-based view over rnet's bytes-based HeaderMap."""
 
     def __init__(self, header_map: Any) -> None:
         self._map = header_map
 
-    def _decode(self, val: Any) -> str:
+    def decode(self, val: Any) -> str:
         return val.decode("utf-8", errors="replace") if isinstance(val, (bytes, bytearray)) else str(val)
 
     def __getitem__(self, key: str) -> str:
         val = self._map[key]
-        return self._decode(val)
+        return self.decode(val)
 
     def __setitem__(self, key: str, value: str) -> None:
         raise TypeError("Response headers are read-only")
@@ -87,7 +89,7 @@ class RnetResponseHeaders(MutableMapping):
     def __iter__(self) -> Iterator[str]:
         seen: set[str] = set()
         for k, _ in self._map.items():
-            dk = self._decode(k)
+            dk = self.decode(k)
             if dk not in seen:
                 seen.add(dk)
                 yield dk
@@ -99,15 +101,10 @@ class RnetResponseHeaders(MutableMapping):
         val = self._map.get(key)
         if val is None:
             return default
-        return self._decode(val)
+        return self.decode(val)
 
     def items(self) -> list[tuple[str, str]]:
-        return [(self._decode(k), self._decode(v)) for k, v in self._map.items()]
-
-
-# ---------------------------------------------------------------------------
-# Response wrapper — requests-compatible interface
-# ---------------------------------------------------------------------------
+        return [(self.decode(k), self.decode(v)) for k, v in self._map.items()]
 
 
 class RnetResponse:
@@ -198,7 +195,7 @@ class RnetResponse:
             )
 
     def iter_content(self, chunk_size: Optional[int] = None) -> Iterator[bytes]:
-        """Re-chunk rnet's variable-size stream into fixed-size pieces."""
+        """Re-chunk rnet's variable-size data into fixed-size pieces."""
         self._streamed = True
         if chunk_size is None or chunk_size <= 0:
             yield from self._resp.stream()
@@ -214,7 +211,7 @@ class RnetResponse:
             yield bytes(buf)
 
     def stream(self) -> Iterator[bytes]:
-        """Direct pass-through of rnet's native stream iterator."""
+        """Direct pass-through of rnet's native ``stream()`` iterator."""
         self._streamed = True
         yield from self._resp.stream()
 
@@ -225,26 +222,34 @@ class RnetResponse:
             pass
 
 
-# ---------------------------------------------------------------------------
-# Session headers adapter — persists via client.update()
-# ---------------------------------------------------------------------------
+def utf8_text(res: Response | RnetResponse) -> str:
+    """Return the response text, decoded as UTF-8 unless the server sent a charset.
+
+    With no charset, requests assumes ISO-8859-1 for a `text/*` type and runs charset detection
+    on the full body for any other type. Use this only for a format that is UTF-8 by
+    specification, such as M3U8.
+    """
+    if isinstance(res, Response) and "charset" not in res.headers.get("content-type", "").lower():
+        res.encoding = "utf-8"
+    return res.text
 
 
 class RnetSessionHeaders(CaseInsensitiveDict):
-    """Dict-like headers that persist to the rnet client via update()."""
+    """Dict-like headers that write to the rnet client through update()."""
 
-    def __init__(self, client: Any) -> None:
-        self._client = client
+    def __init__(self, session: Optional[RnetSession] = None) -> None:
+        self._session = session
+        self._client: Any = None
         super().__init__()
 
-    def _sync(self) -> None:
+    def sync(self) -> None:
         """Push current headers to the rnet client."""
-        if self._client is not None and hasattr(self, "_store") and self._store:
+        if self._client is not None and hasattr(self, "_store"):
             self._client.update(headers={k: v for k, v in self.items()})
 
     def __setitem__(self, key: str, value: str) -> None:
         super().__setitem__(key, value)
-        self._sync()
+        self.sync()
 
     def update(self, __m: Any = None, **kwargs: Any) -> None:
         if __m:
@@ -256,33 +261,38 @@ class RnetSessionHeaders(CaseInsensitiveDict):
                     super().__setitem__(k, v)
         for k, v in kwargs.items():
             super().__setitem__(k, v)
-        self._sync()
+        self.sync()
 
-    def pop(self, key: str, *args: Any) -> Any:
-        result = super().pop(key, *args)
-        # rnet doesn't support removing individual headers, but we track locally
-        # and always send the full set on next update
-        return result
+    def rebuild(self) -> None:
+        """Remake the rnet client so removed headers stop going out.
+
+        rnet's update() merges into the client default headers and offers no removal,
+        so a header dropped from this dict alone keeps reaching every later host.
+        """
+        if self._session is not None and self._client is not None:
+            self._session.rebuild_client()
 
     def __delitem__(self, key: str) -> None:
         super().__delitem__(key)
+        self.rebuild()
 
-
-# ---------------------------------------------------------------------------
-# Session cookies adapter
-# ---------------------------------------------------------------------------
+    def clear(self) -> None:
+        for key in list(self.keys()):
+            super().__delitem__(key)
+        self.rebuild()
 
 
 class RnetCookieAdapter(MutableMapping):
     """Cookie adapter that bridges requests-style cookie access to rnet."""
 
-    def __init__(self, client: Any) -> None:
+    def __init__(self, client: Any, session: Optional[RnetSession] = None) -> None:
         self._client = client
+        self._session = session
         self._cookies: dict[str, dict[str, str]] = {}
         self._flat: dict[str, str] = {}
         self._original_cookies: list[Any] = []
 
-    def _set_cookie_on_client(self, url: str, name: str, value: str) -> None:
+    def set_cookie_on_client(self, url: str, name: str, value: str) -> None:
         """Set a cookie on the rnet client, or buffer locally if the client is not yet created."""
         if self._client is not None:
             try:
@@ -290,8 +300,8 @@ class RnetCookieAdapter(MutableMapping):
             except Exception:
                 pass
 
-    def _flush_to_client(self) -> None:
-        """Push all buffered cookies to the rnet client once it is created."""
+    def flush_to_client(self) -> None:
+        """Push all buffered cookies to the rnet client after unshackle makes it."""
         if self._client is None:
             return
         for domain, cookies in self._cookies.items():
@@ -302,11 +312,41 @@ class RnetCookieAdapter(MutableMapping):
                 except Exception:
                     pass
 
+    def client_urls(self, domain: Optional[str] = None) -> list[str]:
+        """URLs the rnet cookie jar could hold a cookie under.
+
+        rnet keys its jar by URL and cannot list the jar whole, so a removal has to name every
+        URL this class has set a cookie on and every origin the HTTP session has requested.
+        """
+        urls = {f"https://{d.lstrip('.')}" for d in self._cookies if d}
+        urls.add("https://localhost")
+        if self._session is not None:
+            urls |= set(self._session._origins)
+        if domain is not None:
+            host = domain.lstrip(".")
+            urls = {url for url in urls if (urlparse(url).hostname or "") == host}
+            urls.add(f"https://{host}")
+        return sorted(urls)
+
+    def remove_cookie_on_client(self, name: str, domain: Optional[str] = None) -> None:
+        """Drop a cookie from the rnet cookie jar.
+
+        The client is built with cookie_store=True, so a cookie the server set lives in that
+        jar alone. Dropping it from the local dicts leaves it going out on the wire.
+        """
+        if self._client is None:
+            return
+        for url in self.client_urls(domain):
+            try:
+                self._client.remove_cookie(url, name)
+            except Exception:
+                pass
+
     @property
     def jar(self) -> CookieJar:
         """Return a CookieJar with original Cookie objects (requests compat).
 
-        Used by ``save_cookies`` in dl.py to persist cookies back to disk.
+        ``save_cookies`` in dl.py uses this to write cookies back to disk.
         """
         jar = CookieJar()
         for cookie in self._original_cookies:
@@ -325,20 +365,20 @@ class RnetCookieAdapter(MutableMapping):
                 self._cookies.setdefault(domain, {})[name] = value
                 self._original_cookies.append(cookie)
                 url = f"https://{domain.lstrip('.')}" if domain else "https://localhost"
-                self._set_cookie_on_client(url, name, value)
+                self.set_cookie_on_client(url, name, value)
         elif isinstance(other, dict):
             for name, value in other.items():
                 self._flat[name] = value
-                self._set_cookie_on_client("https://localhost", name, str(value))
+                self.set_cookie_on_client("https://localhost", name, str(value))
             self._flat.update(other)
         elif hasattr(other, "items"):
             for name, value in other.items():
                 self._flat[name] = str(value)
-                self._set_cookie_on_client("https://localhost", name, str(value))
+                self.set_cookie_on_client("https://localhost", name, str(value))
 
         for name, value in kwargs.items():
             self._flat[name] = value
-            self._set_cookie_on_client("https://localhost", name, value)
+            self.set_cookie_on_client("https://localhost", name, value)
 
     def get(
         self, name: str, default: Optional[str] = None, domain: Optional[str] = None, path: Optional[str] = None
@@ -351,7 +391,7 @@ class RnetCookieAdapter(MutableMapping):
         self._flat[name] = value
         self._cookies.setdefault(domain, {})[name] = value
         url = f"https://{domain.lstrip('.')}"
-        self._set_cookie_on_client(url, name, value)
+        self.set_cookie_on_client(url, name, value)
 
     def __getitem__(self, name: str) -> str:
         return self._flat[name]
@@ -363,6 +403,8 @@ class RnetCookieAdapter(MutableMapping):
         self._flat.pop(name, None)
         for domain_cookies in self._cookies.values():
             domain_cookies.pop(name, None)
+        self._original_cookies = [cookie for cookie in self._original_cookies if cookie.name != name]
+        self.remove_cookie_on_client(name)
 
     def __contains__(self, name: object) -> bool:
         return name in self._flat
@@ -379,12 +421,27 @@ class RnetCookieAdapter(MutableMapping):
     def get_dict(self, domain: Optional[str] = None, path: Optional[str] = None) -> dict[str, str]:
         """Return cookies as a plain dict (requests RequestsCookieJar compat).
 
-        If *domain* is given, only cookies for that domain are returned.
-        *path* is accepted for API compatibility but ignored (flat storage).
+        With a *domain*, this method returns only the cookies for that domain.
+        It accepts *path* for API compatibility but ignores it (flat storage).
         """
         if domain is not None:
             return dict(self._cookies.get(domain, {}))
         return dict(self._flat)
+
+    def get_dict_by_domain(self) -> dict[str, dict[str, str]]:
+        """Return cookies grouped by domain, domain-less ones under ``""``.
+
+        rnet scopes each cookie to the host of the URL it was set on, so a copy made with
+        ``get_dict`` can only ever replay against one host. This class records cookies that
+        arrived as a plain dict flat only, and reports them under the empty domain, to match
+        the localhost fallback in :meth:`flush_to_client`.
+        """
+        grouped = {domain: dict(cookies) for domain, cookies in self._cookies.items() if cookies}
+        scoped = {name for cookies in grouped.values() for name in cookies}
+        leftovers = {name: value for name, value in self._flat.items() if name not in scoped}
+        if leftovers:
+            grouped[""] = {**grouped.get("", {}), **leftovers}
+        return grouped
 
     def clear(self, domain: Optional[str] = None, path: Optional[str] = None, name: Optional[str] = None) -> None:
         """Remove cookies (requests RequestsCookieJar compat).
@@ -399,16 +456,27 @@ class RnetCookieAdapter(MutableMapping):
             else:
                 for domain_cookies in self._cookies.values():
                     domain_cookies.pop(name, None)
+            self._original_cookies = [
+                cookie
+                for cookie in self._original_cookies
+                if cookie.name != name or (domain is not None and cookie.domain != domain)
+            ]
+            self.remove_cookie_on_client(name, domain)
         elif domain is not None:
             removed = self._cookies.pop(domain, {})
             for k in removed:
-                # Only remove from flat if no other domain has same key
                 still_exists = any(k in dc for dc in self._cookies.values())
                 if not still_exists:
                     self._flat.pop(k, None)
+            self._original_cookies = [cookie for cookie in self._original_cookies if cookie.domain != domain]
+            for k in removed:
+                self.remove_cookie_on_client(k, domain)
         else:
             self._flat.clear()
             self._cookies.clear()
+            self._original_cookies.clear()
+            if self._client is not None:
+                self._client.clear_cookies()
 
     def items(self) -> list[tuple[str, str]]:
         return list(self._flat.items())
@@ -420,16 +488,11 @@ class RnetCookieAdapter(MutableMapping):
         return list(self._flat.values())
 
 
-# ---------------------------------------------------------------------------
-# Session proxy adapter
-# ---------------------------------------------------------------------------
-
-
 class RnetProxyDict(dict):
     """Dict-like proxy config that syncs to the rnet client.
 
     Accepts ``{"all": url}``, ``{"https": url}``, or ``{"http": url}``
-    and applies via rnet's native ``proxies`` parameter (``List[rnet.Proxy]``).
+    and applies through rnet's native ``proxies`` parameter (``List[rnet.Proxy]``).
     Supports both lazy (pre-client) and live (post-client) proxy updates.
     """
 
@@ -437,7 +500,7 @@ class RnetProxyDict(dict):
         super().__init__()
         self._session = session
 
-    def _sync(self) -> None:
+    def sync(self) -> None:
         proxy = self.get("all") or self.get("https") or self.get("http")
         proxies = [rnet.Proxy.all(proxy)] if proxy else []
         self._session._client_kwargs["proxies"] = proxies or None
@@ -446,16 +509,11 @@ class RnetProxyDict(dict):
 
     def update(self, __m: Any = None, **kwargs: Any) -> None:
         super().update(__m or {}, **kwargs)
-        self._sync()
+        self.sync()
 
     def __setitem__(self, key: str, value: str) -> None:
         super().__setitem__(key, value)
-        self._sync()
-
-
-# ---------------------------------------------------------------------------
-# Exceptions
-# ---------------------------------------------------------------------------
+        self.sync()
 
 
 class MaxRetriesError(Exception):
@@ -464,28 +522,23 @@ class MaxRetriesError(Exception):
         self.__cause__ = cause
 
 
-# ---------------------------------------------------------------------------
-# RnetSession — main session class
-# ---------------------------------------------------------------------------
-
-
 class RnetSession:
     """TLS-fingerprinted HTTP session powered by rnet (Rust/BoringSSL).
 
     Drop-in replacement for CurlSession with requests-compatible API.
     Supports browser impersonation (Chrome, Firefox, Edge, Safari, OkHttp),
-    retry with exponential backoff, cookie persistence, and proxy support.
+    retry with exponential backoff, cookie persistence, and proxies.
 
-    The client is created lazily on the first request so that headers,
-    cookies, and proxies can be configured freely before any connection
-    is established.
+    unshackle makes the client lazily on the first request, so you can
+    configure headers, cookies, and proxies freely before it opens any
+    connection.
     """
 
     def __init__(
         self,
-        max_retries: int = 5,
-        backoff_factor: float = 0.2,
-        max_backoff: float = 60.0,
+        max_retries: int = MAX_RETRIES,
+        backoff_factor: float = BACKOFF_FACTOR,
+        max_backoff: float = MAX_BACKOFF,
         status_forcelist: Optional[list[int]] = None,
         allowed_methods: Optional[set[str]] = None,
         catch_exceptions: Optional[tuple[type[Exception], ...]] = None,
@@ -494,10 +547,11 @@ class RnetSession:
         self.max_retries = max_retries
         self.backoff_factor = backoff_factor
         self.max_backoff = max_backoff
-        self.status_forcelist = status_forcelist or [429, 500, 502, 503, 504]
-        self.allowed_methods = allowed_methods or {"GET", "POST", "HEAD", "OPTIONS", "PUT", "DELETE", "TRACE"}
+        self.status_forcelist = status_forcelist or list(STATUS_FORCELIST)
+        self.allowed_methods = allowed_methods or set(RETRY_METHODS)
         self.catch_exceptions = catch_exceptions or (
             rnet.ConnectionError,
+            rnet.ConnectionResetError,
             rnet.TimeoutError,
             rnet.RequestError,
         )
@@ -511,9 +565,13 @@ class RnetSession:
             "read_timeout",
             "proxies",
             "verify",
-            "redirect",
+            "allow_redirects",
+            "pool_idle_timeout",
             "pool_max_idle_per_host",
             "pool_max_size",
+            "tcp_keepalive",
+            "tcp_keepalive_interval",
+            "tcp_keepalive_retries",
             "http1_only",
             "http2_only",
             "tcp_nodelay",
@@ -533,9 +591,10 @@ class RnetSession:
 
         self._client_kwargs = dict(client_kwargs)
         self._client: Optional[rnet.BlockingClient] = None
+        self._origins: set[str] = set()
 
-        self.headers = RnetSessionHeaders(None)
-        self.cookies = RnetCookieAdapter(None)
+        self.headers = RnetSessionHeaders(self)
+        self.cookies = RnetCookieAdapter(None, self)
         self.proxies = RnetProxyDict(self)
 
         if "headers" in session_kwargs:
@@ -545,22 +604,113 @@ class RnetSession:
         if "proxies" in session_kwargs:
             self.proxies.update(session_kwargs.pop("proxies"))
 
-    def _ensure_client(self) -> rnet.BlockingClient:
-        """Lazily create the rnet client on first use, flushing any buffered state."""
+    @property
+    def impersonate_name(self) -> Optional[str]:
+        """Preset name (e.g. 'Chrome131') for rebuilding this HTTP session in another process.
+
+        rnet enums stringify as 'Impersonate.Chrome131'. Return the trailing name, or None
+        when no preset was set (then the HTTP session is not cheaply rebuildable across
+        processes).
+        """
+        preset = self._client_kwargs.get("impersonate")
+        if preset is None:
+            return None
+        name = str(preset).rsplit(".", 1)[-1]
+        return name or None
+
+    def ensure_client(self) -> rnet.BlockingClient:
+        """Lazily make the rnet client on first use, flushing any buffered state."""
         if self._client is None:
-            self._client = rnet.BlockingClient(**self._client_kwargs)
-            self.headers._client = self._client
-            self.headers._sync()
-            self.cookies._client = self._client
-            self.cookies._flush_to_client()
+            client = rnet.BlockingClient(**self._client_kwargs)
+            self.headers._client = client
+            self.headers.sync()
+            self.cookies._client = client
+            self.cookies.flush_to_client()
+            self._client = client
         return self._client
 
-    def _build_url(self, url: str, params: Optional[Any] = None) -> str:
+    def rebuild_client(self) -> None:
+        """Replace the rnet client with one that carries only the current header set.
+
+        rnet merges header updates and has no header removal, so a new client is the only
+        way to drop a header the caller deleted. Do not pass the headers as default_headers:
+        that replaces the impersonate header set instead of overlaying it, which breaks the
+        fingerprint.
+
+        A new client also starts with an empty cookie jar. This method replays the cookies
+        unshackle set itself, then the cookies of every origin this HTTP session has used.
+        That order lets a value the server rotated win over the buffered one. The new client
+        goes on the HTTP session last, so a request from another thread keeps the old client
+        until the new one holds the headers and the cookies.
+        """
+        old_client = self._client
+        if old_client is None:
+            return
+        client = rnet.BlockingClient(**self._client_kwargs)
+        self.headers._client = client
+        self.headers.sync()
+        self.cookies._client = client
+        self.cookies.flush_to_client()
+        for origin in list(self._origins):
+            self.copy_cookies(old_client, client, origin)
+        self._client = client
+
+    @staticmethod
+    def set_cookie_header(client: rnet.BlockingClient, origin: str, header: str) -> None:
+        """Set every cookie in a ``name=value; ...`` header string on one origin of *client*."""
+        for pair in header.split(";"):
+            name, separator, value = pair.partition("=")
+            if not separator:
+                continue
+            try:
+                client.set_cookie(origin, rnet.Cookie(name.strip(), value.strip()))
+            except Exception:
+                pass
+
+    @staticmethod
+    def copy_cookies(source: rnet.BlockingClient, target: rnet.BlockingClient, origin: str) -> None:
+        """Copy one origin's cookies between clients. rnet cannot list the whole cookie jar."""
+        try:
+            raw = source.get_cookies(origin)
+        except Exception:
+            return
+        if not raw:
+            return
+        RnetSession.set_cookie_header(target, origin, raw.decode("utf-8", errors="replace"))
+
+    def export_origin_cookies(self) -> dict[str, str]:
+        """Cookie headers the live client holds, one per origin this HTTP session has requested.
+
+        The client owns its own cookie jar, so a cookie a server set lives there and in no
+        part of :class:`RnetCookieAdapter`, which records only what was set through it. rnet
+        cannot list the jar, so this covers the origins already requested and no others.
+        """
+        if self._client is None:
+            return {}
+        exported: dict[str, str] = {}
+        for origin in list(self._origins):
+            try:
+                raw = self._client.get_cookies(origin)
+            except Exception:
+                continue
+            if raw:
+                exported[origin] = raw.decode("utf-8", errors="replace")
+        return exported
+
+    def import_origin_cookies(self, exported: dict[str, str]) -> None:
+        """Load cookie headers from :meth:`export_origin_cookies` into this HTTP session's client."""
+        if not exported:
+            return
+        client = self.ensure_client()
+        for origin, header in exported.items():
+            self.set_cookie_header(client, origin, header)
+
+    def build_url(self, url: str, params: Optional[Any] = None) -> str:
         """Encode params into the URL (rnet ignores the params kwarg).
 
         Accepts the same shapes as requests: a mapping, a sequence of pairs, or a
-        pre-built query string/bytes. A string is appended verbatim (already encoded);
-        urlencode() would raise TypeError on it.
+        pre-built query string/bytes. This method appends a string verbatim (already
+        encoded). urlencode() would raise TypeError on it.
         """
         if not params:
             return url
@@ -579,11 +729,19 @@ class RnetSession:
         if response:
             retry_after = response.headers.get("Retry-After")
             if retry_after:
+                wait: Optional[float] = None
                 try:
-                    return float(retry_after)
+                    wait = float(retry_after)
                 except ValueError:
-                    if retry_date := parsedate_to_datetime(retry_after):
-                        return (retry_date - datetime.now(timezone.utc)).total_seconds()
+                    try:
+                        retry_date = parsedate_to_datetime(retry_after)
+                        if retry_date.tzinfo is None:
+                            retry_date = retry_date.replace(tzinfo=timezone.utc)
+                        wait = (retry_date - datetime.now(timezone.utc)).total_seconds()
+                    except Exception:
+                        wait = None
+                if wait is not None and math.isfinite(wait):
+                    return min(wait, self.max_backoff)
 
         if attempt == 0:
             return 0.0
@@ -594,23 +752,33 @@ class RnetSession:
         return min(sleep_time, self.max_backoff)
 
     def request(self, method: str, url: str, **kwargs: Any) -> RnetResponse:
-        client = self._ensure_client()
+        """Send a request, retrying on the status forcelist and on the caught exception types.
+
+        This method retries only the methods in allowed_methods. Any other method gets one try.
+        A max_retries kwarg overrides the HTTP session retry budget for this call alone, where 0
+        means one try with no retries. Once the budget is spent, this method raises
+        MaxRetriesError with the last failure as its cause.
+        """
+        client = self.ensure_client()
         method_upper = method.upper() if isinstance(method, str) else str(method).upper()
 
-        # Build URL with params
-        url = self._build_url(url, kwargs.pop("params", None))
+        max_retries = kwargs.pop("max_retries", None)
+        if max_retries is None:
+            max_retries = self.max_retries
 
-        # Default allow_redirects=True
+        url = self.build_url(url, kwargs.pop("params", None))
+
+        parsed_origin = urlparse(url)
+        if parsed_origin.scheme and parsed_origin.netloc:
+            self._origins.add(f"{parsed_origin.scheme}://{parsed_origin.netloc}")
+
         kwargs.setdefault("allow_redirects", True)
 
-        # Pass verify setting
         if not self.verify:
             kwargs.setdefault("verify", False)
 
-        # Remove kwargs rnet doesn't understand
-        kwargs.pop("stream", None)  # rnet responses are always lazy
+        kwargs.pop("stream", None)
 
-        # Translate requests-compatible 'data' kwarg to rnet equivalents
         data = kwargs.pop("data", None)
         if data is not None:
             if isinstance(data, dict):
@@ -620,16 +788,13 @@ class RnetSession:
             else:
                 kwargs["body"] = data
 
-        # Resolve method enum
-        rnet_method = _METHOD_MAP.get(method_upper)
+        rnet_method = METHOD_MAP.get(method_upper)
         if rnet_method is None:
             raise ValueError(f"Unsupported HTTP method: {method}")
 
-        # Convert headers to standard dict once to resolve PyO3 CaseInsensitiveDict rejection.
         if kwargs.get("headers") is not None:
             kwargs["headers"] = dict(kwargs["headers"])
 
-        # Skip retry for non-allowed methods
         if method_upper not in self.allowed_methods:
             raw_resp = client.request(rnet_method, url, **kwargs)
             return RnetResponse(raw_resp)
@@ -637,12 +802,11 @@ class RnetSession:
         last_exception: Optional[Exception] = None
         response: Optional[RnetResponse] = None
 
-        for attempt in range(self.max_retries + 1):
+        for attempt in range(max_retries + 1):
             try:
                 raw_resp = client.request(rnet_method, url, **kwargs)
                 response = RnetResponse(raw_resp)
 
-                # Log requests when debug_requests is enabled
                 if config.debug_requests:
                     parsed_url = urlparse(url)
                     port_str = f":{parsed_url.port}" if parsed_url.port else ""
@@ -659,20 +823,20 @@ class RnetSession:
 
                 if response.status_code not in self.status_forcelist:
                     return response
-                last_exception = HTTPError(f"Received status code: {response.status_code}")
+                last_exception = HTTPError(f"Received status code: {response.status_code}", response=response)
                 self.log.warning(
                     f"{response.status_code} {response.reason}({urlparse(url).path}). Retrying... "
-                    f"({attempt + 1}/{self.max_retries})"
+                    f"({attempt + 1}/{max_retries})"
                 )
 
             except self.catch_exceptions as e:
                 last_exception = e
                 response = None
                 self.log.warning(
-                    f"{e.__class__.__name__}({urlparse(url).path}). Retrying... ({attempt + 1}/{self.max_retries})"
+                    f"{e.__class__.__name__}({urlparse(url).path}). Retrying... ({attempt + 1}/{max_retries})"
                 )
 
-            if attempt < self.max_retries:
+            if attempt < max_retries:
                 if sleep_duration := self.get_sleep_time(response, attempt + 1):
                     if sleep_duration > 0:
                         time.sleep(sleep_duration)
@@ -704,7 +868,6 @@ class RnetSession:
 
     def prepare_request(self, req: Request) -> Request:
         """Compatibility shim for services using prepared requests."""
-        # Merge session headers into request headers
         if req.headers:
             merged = dict(self.headers)
             merged.update(req.headers)
@@ -730,17 +893,12 @@ class RnetSession:
         return self.request(method, url, **send_kwargs)
 
     def mount(self, prefix: str, adapter: Any) -> None:
-        """No-op — rnet handles TLS and connection pooling natively."""
+        """No-op. rnet does TLS and connection pooling natively."""
         pass
 
     def close(self) -> None:
-        """No-op — rnet manages its own resources."""
+        """No-op. rnet manages its own resources."""
         pass
-
-
-# ---------------------------------------------------------------------------
-# session() factory
-# ---------------------------------------------------------------------------
 
 
 def session(
@@ -748,7 +906,7 @@ def session(
     **kwargs: Any,
 ) -> RnetSession:
     """
-    Create an rnet session with TLS fingerprinting (browser/app impersonation).
+    Make an rnet HTTP session with TLS fingerprinting (browser/app impersonation).
 
     Args:
         browser: Exact rnet.Impersonate preset name. Examples:
@@ -759,7 +917,7 @@ def session(
         **kwargs: Additional arguments passed to RnetSession constructor.
 
     Returns:
-        RnetSession configured with browser impersonation and retry behavior.
+        RnetSession configured with browser impersonation and retry behaviour.
 
     Examples:
         session()                               # Default browser from config
@@ -770,14 +928,33 @@ def session(
     if browser is None:
         browser = config.network.get("browser", "Chrome131")
 
-    impersonate = _resolve_impersonate(browser)
+    impersonate = resolve_impersonate(browser)
 
     session_kwargs: dict[str, Any] = {"impersonate": impersonate}
-    # optional rnet client knobs, see docs/NETWORK_CONFIG.md
-    for key in ("http1_only", "http2_only", "pool_max_idle_per_host", "pool_max_size", "tcp_nodelay"):
+    for key in (
+        "http1_only",
+        "http2_only",
+        "pool_max_idle_per_host",
+        "pool_max_size",
+        "tcp_nodelay",
+        "connect_timeout",
+        "read_timeout",
+        "timeout",
+        "pool_idle_timeout",
+        "tcp_keepalive",
+        "tcp_keepalive_interval",
+        "tcp_keepalive_retries",
+        "allow_redirects",
+    ):
         if key in config.network:
             session_kwargs[key] = config.network[key]
     session_kwargs.update(kwargs)
+
+    session_kwargs.setdefault("connect_timeout", CONNECT_TIMEOUT)
+    session_kwargs.setdefault("read_timeout", READ_TIMEOUT)
+    session_kwargs.setdefault("pool_idle_timeout", 55)
+    session_kwargs.setdefault("pool_max_idle_per_host", POOL_MAX_SIZE)
+    session_kwargs.setdefault("tcp_keepalive", 30)
 
     session_obj = RnetSession(**session_kwargs)
     session_obj.headers.update(config.headers)

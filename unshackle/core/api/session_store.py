@@ -1,8 +1,9 @@
-"""Server-side session store for remote-dl client-server architecture.
+"""Server-side remote session store for the remote-dl client-server architecture.
 
 Maintains authenticated service instances between API calls so that
-a client can authenticate once and then make multiple requests (list tracks,
-resolve segments, proxy license) using the same session.
+a client can authenticate once and then make several requests (get the tracks,
+get the segment URLs, get the licence in proxy mode) with the same
+remote session.
 """
 
 from __future__ import annotations
@@ -10,10 +11,12 @@ from __future__ import annotations
 import asyncio
 import logging
 import uuid
+from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Deque, Dict, List, Optional
 
+from unshackle.core.api.events import bus
 from unshackle.core.api.input_bridge import AUTH_INPUT_TIMEOUT, AuthStatus, InputBridge
 from unshackle.core.api.sanitize import sanitize_log
 from unshackle.core.config import config
@@ -24,22 +27,34 @@ log = logging.getLogger("api.session")
 
 @dataclass
 class SessionEntry:
-    """A single authenticated session with a service."""
+    """A single authenticated remote session with a service."""
 
     session_id: str
     service_tag: str
-    service_instance: Any  # Service instance (authenticated)
-    titles: Any = None  # Titles_T from get_titles()
-    title_map: Dict[str, Any] = field(default_factory=dict)  # title_id -> Title object
-    tracks: Dict[str, Track] = field(default_factory=dict)  # track_id -> Track object
-    tracks_by_title: Dict[str, Dict[str, Track]] = field(default_factory=dict)  # title_key -> {track_id -> Track}
-    chapters_by_title: Dict[str, List[Any]] = field(default_factory=dict)  # title_key -> [Chapter]
+    service_instance: Any
+    titles: Any = None
+    title_map: Dict[str, Any] = field(default_factory=dict)
+    current_title_id: Optional[str] = None
+    tracks: Dict[str, Track] = field(default_factory=dict)
+    served_keys: Dict[str, tuple[str, str]] = field(default_factory=dict)
+    tracks_by_title: Dict[str, Dict[str, Track]] = field(default_factory=dict)
+    chapters_by_title: Dict[str, List[Any]] = field(default_factory=dict)
+    lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False, compare=False)
     creator_ip: Optional[str] = None
-    owner_key: Optional[str] = None  # X-Secret-Key that owns this session
-    cache_tag: Optional[str] = None  # per-session cache directory tag
+    owner_key: Optional[str] = None
+    cache_tag: Optional[str] = None
+    server_account: Optional[str] = None
+    server_cdm: Optional[bool] = None
+    server_cdm_max_height: Optional[int] = None
+    server_vault: bool = False
+    server_device: bool = False
+    client_auth: bool = False
     input_bridge: Optional[InputBridge] = None
+    log_buffer: Optional[Any] = None
     auth_status: AuthStatus = AuthStatus.AUTHENTICATED
     auth_error: Optional[str] = None
+    client: Dict[str, Any] = field(default_factory=dict)
+    actions: Deque[Dict[str, Any]] = field(default_factory=lambda: deque(maxlen=500))
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     last_accessed: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
@@ -47,9 +62,66 @@ class SessionEntry:
         """Update last_accessed timestamp."""
         self.last_accessed = datetime.now(timezone.utc)
 
+    @property
+    def in_use(self) -> bool:
+        """True while a request holds the lock for service work; the store does not expire such a remote session.
+
+        A request can run for longer than the TTL, and expiry would remove the cache directory
+        that the worker thread still writes to.
+        """
+        return self.lock.locked()
+
+    def summary(self) -> Dict[str, Any]:
+        """Dashboard view of the session: no service instance, no raw owner key."""
+        from unshackle.core.api.stats import mask_key
+
+        now = datetime.now(timezone.utc)
+        title_id = (
+            self.current_title_id if self.current_title_id in self.title_map else next(iter(self.title_map), None)
+        )
+        title = self.title_map.get(title_id) if title_id else None
+        return {
+            "id": self.session_id,
+            "owner": mask_key(self.owner_key),
+            "creator_ip": self.creator_ip,
+            "service": self.service_tag,
+            "title_id": title_id,
+            "title": str(title) if title else None,
+            "titles": len(self.title_map),
+            "tracks": len(self.tracks),
+            "auth_status": self.auth_status.value,
+            "auth_error": self.auth_error,
+            "server_account": self.server_account,
+            "server_cdm": self.server_cdm,
+            "server_cdm_max_height": self.server_cdm_max_height,
+            "log_seq": self.log_buffer.last_seq if self.log_buffer else 0,
+            "client": self.client,
+            "actions": list(self.actions),
+            "created_at": self.created_at.isoformat(),
+            "last_accessed": self.last_accessed.isoformat(),
+            "created_ts": self.created_at.timestamp(),
+            "last_accessed_ts": self.last_accessed.timestamp(),
+            "age_seconds": int((now - self.created_at).total_seconds()),
+            "idle_seconds": int((now - self.last_accessed).total_seconds()),
+        }
+
+
+def _schedule_pending_reload(service_tag: str) -> None:
+    """Apply staged service reloads now that a remote session ended; the task runs after the store lock releases."""
+    from unshackle.core.api.download_manager import schedule_pending_reload
+
+    schedule_pending_reload(service_tag)
+
+
+def _publish(action: str, entry: SessionEntry, reason: Optional[str] = None) -> None:
+    data = {"action": action, **entry.summary()}
+    if reason:
+        data["reason"] = reason
+    bus.publish("session", data)
+
 
 class SessionStore:
-    """Thread-safe session store with TTL-based expiration."""
+    """Thread-safe remote session store with TTL-based expiration."""
 
     def __init__(self) -> None:
         self._sessions: Dict[str, SessionEntry] = {}
@@ -57,64 +129,95 @@ class SessionStore:
         self._cleanup_task: Optional[asyncio.Task] = None
 
     @property
-    def _ttl(self) -> int:
-        """Session TTL in seconds from config."""
-        return config.serve.get("session_ttl", 300)  # 5 min default
+    def ttl(self) -> int:
+        """Remote session TTL in seconds from config."""
+        return config.serve.get("session_ttl", 300)
 
     @property
-    def _max_sessions(self) -> int:
-        """Max concurrent sessions from config."""
-        return config.serve.get("max_sessions", 100)
+    def max_sessions(self) -> Optional[int]:
+        """Max concurrent sessions from config; None when the operator set no limit.
+
+        ``max_sessions: null`` or ``0`` means unlimited, so a dashboard can tell "no cap" from
+        a cap that happens to sit at the default.
+        """
+        limit = config.serve.get("max_sessions", 100)
+        return limit if isinstance(limit, int) and limit > 0 else None
 
     async def create(
         self,
         service_tag: str,
         service_instance: Any,
         session_id: Optional[str] = None,
+        owner_key: Optional[str] = None,
+        creator_ip: Optional[str] = None,
+        server_account: Optional[str] = None,
     ) -> SessionEntry:
-        """Create a new session with an authenticated service instance."""
+        """Make a new remote session with an authenticated service instance."""
         async with self._lock:
-            if len(self._sessions) >= self._max_sessions:
-                oldest_id = min(self._sessions, key=lambda k: self._sessions[k].last_accessed)
-                log.warning(f"Max sessions reached ({self._max_sessions}), evicting oldest: {oldest_id}")
-                del self._sessions[oldest_id]
+            max_sessions = self.max_sessions
+            if max_sessions is not None and len(self._sessions) >= max_sessions:
+                sessions = self._sessions
+                oldest_id = min(sessions, key=lambda k: (sessions[k].in_use, sessions[k].last_accessed))
+                log.warning(f"Max sessions reached ({max_sessions}), evicting oldest: {oldest_id}")
+                evicted = self._sessions.pop(oldest_id)
+                if evicted.input_bridge:
+                    evicted.input_bridge.cancel()
+                self.cleanup_cache_dir(evicted.cache_tag)
+                _publish("delete", evicted, "evicted")
+                _schedule_pending_reload(evicted.service_tag)
 
             session_id = session_id or str(uuid.uuid4())
             entry = SessionEntry(
                 session_id=session_id,
                 service_tag=service_tag,
                 service_instance=service_instance,
+                owner_key=owner_key,
+                creator_ip=creator_ip,
+                server_account=server_account,
             )
             self._sessions[session_id] = entry
+            _publish("create", entry)
             log.info(f"Created session {sanitize_log(session_id)} for service {sanitize_log(service_tag)}")
             return entry
 
     async def get(self, session_id: str) -> Optional[SessionEntry]:
-        """Get a session by ID, returns None if not found or expired."""
+        """Get a remote session by ID, returns None if not found or expired."""
         async with self._lock:
             entry = self._sessions.get(session_id)
             if entry is None:
                 return None
 
-            if entry.auth_status not in (AuthStatus.AUTHENTICATING, AuthStatus.PENDING_INPUT):
+            if not entry.in_use and entry.auth_status not in (AuthStatus.AUTHENTICATING, AuthStatus.PENDING_INPUT):
                 elapsed = (datetime.now(timezone.utc) - entry.last_accessed).total_seconds()
-                if elapsed > self._ttl:
-                    log.info(f"Session {sanitize_log(session_id)} expired (elapsed={elapsed:.0f}s, ttl={self._ttl}s)")
-                    del self._sessions[session_id]
+                if elapsed > self.ttl:
+                    log.info(f"Session {sanitize_log(session_id)} expired (elapsed={elapsed:.0f}s, ttl={self.ttl}s)")
+                    self.cleanup_cache_dir(entry.cache_tag)
+                    _publish("delete", self._sessions.pop(session_id), "expired")
+                    _schedule_pending_reload(entry.service_tag)
                     return None
 
             entry.touch()
             return entry
 
+    def peek(self, session_id: str) -> Optional[SessionEntry]:
+        """A remote session entry without touching it, for read-only observers.
+
+        ``get`` refreshes ``last_accessed`` and expires stale entries, so an observer polling
+        through it would keep an idle remote session alive and always report it as active.
+        """
+        return self._sessions.get(session_id)
+
     async def delete(self, session_id: str) -> bool:
-        """Delete a session. Returns True if it existed."""
+        """Delete a remote session. Returns True if it existed."""
         async with self._lock:
             entry = self._sessions.pop(session_id, None)
             if entry:
                 if entry.input_bridge:
                     entry.input_bridge.cancel()
-                self._cleanup_cache_dir(entry.cache_tag)
+                self.cleanup_cache_dir(entry.cache_tag)
+                _publish("delete", entry, "closed")
                 log.info(f"Deleted session {sanitize_log(session_id)}")
+                _schedule_pending_reload(entry.service_tag)
                 return True
             return False
 
@@ -124,17 +227,24 @@ class SessionStore:
             now = datetime.now(timezone.utc)
             expired = []
             for sid, entry in self._sessions.items():
+                if entry.in_use:
+                    continue
                 elapsed = (now - entry.last_accessed).total_seconds()
                 if entry.auth_status in (AuthStatus.AUTHENTICATING, AuthStatus.PENDING_INPUT):
                     if elapsed > AUTH_INPUT_TIMEOUT:
                         expired.append(sid)
-                elif elapsed > self._ttl:
+                elif elapsed > self.ttl:
                     expired.append(sid)
+            ended_tags: set[str] = set()
             for sid in expired:
                 entry = self._sessions.pop(sid)
                 if entry.input_bridge:
                     entry.input_bridge.cancel()
-                self._cleanup_cache_dir(entry.cache_tag)
+                self.cleanup_cache_dir(entry.cache_tag)
+                _publish("delete", entry, "expired")
+                ended_tags.add(entry.service_tag)
+            for tag in ended_tags:
+                _schedule_pending_reload(tag)
             if expired:
                 log.info(f"Cleaned up {len(expired)} expired sessions")
             return len(expired)
@@ -144,15 +254,15 @@ class SessionStore:
         if self._cleanup_task is not None:
             return
 
-        async def _loop() -> None:
+        async def loop() -> None:
             while True:
-                await asyncio.sleep(60)  # Check every minute
+                await asyncio.sleep(60)
                 try:
                     await self.cleanup_expired()
                 except Exception:
                     log.exception("Error during session cleanup")
 
-        self._cleanup_task = asyncio.create_task(_loop())
+        self._cleanup_task = asyncio.create_task(loop())
         log.info("Session cleanup loop started")
 
     async def stop_cleanup_loop(self) -> None:
@@ -172,8 +282,8 @@ class SessionStore:
             log.info(f"Cancelled bridges for {count} active session(s)")
 
     @staticmethod
-    def _cleanup_cache_dir(cache_tag: Optional[str]) -> None:
-        """Remove session cache directory and empty parents."""
+    def cleanup_cache_dir(cache_tag: Optional[str]) -> None:
+        """Remove the remote session cache directory and empty parents."""
         if not cache_tag:
             return
         import shutil
@@ -190,8 +300,25 @@ class SessionStore:
             try:
                 if parent.is_dir() and not any(parent.iterdir()):
                     parent.rmdir()
-            except Exception:
+            except OSError:
                 break
+
+    @staticmethod
+    def publish_update(entry: SessionEntry) -> None:
+        """Tell dashboard listeners that a session's summary changed (titles or tracks loaded, auth settled)."""
+        _publish("update", entry)
+
+    def record_action(self, session_id: str, action: Dict[str, Any]) -> None:
+        """Append one request to the session's action log and tell dashboard listeners."""
+        entry = self._sessions.get(session_id)
+        if entry is None:
+            return
+        entry.actions.append(action)
+        _publish("update", entry)
+
+    def list(self) -> List[SessionEntry]:
+        """Snapshot of every live session."""
+        return list(self._sessions.values())
 
     @property
     def session_count(self) -> int:
@@ -199,13 +326,12 @@ class SessionStore:
         return len(self._sessions)
 
 
-# Singleton instance
-_session_store: Optional[SessionStore] = None
+session_store: Optional[SessionStore] = None
 
 
 def get_session_store() -> SessionStore:
-    """Get or create the global session store singleton."""
-    global _session_store
-    if _session_store is None:
-        _session_store = SessionStore()
-    return _session_store
+    """Get or make the global remote session store singleton."""
+    global session_store
+    if session_store is None:
+        session_store = SessionStore()
+    return session_store

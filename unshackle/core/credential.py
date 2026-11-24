@@ -62,9 +62,9 @@ class Credential:
         Format: {username}:{password}
         Rules:
             Only one Credential must be in this text contents.
-            All whitespace before and after all text will be removed.
+            unshackle removes all whitespace before and after all text.
             Any whitespace between text will be kept and used.
-            The credential can be spanned across one or multiple lines as long as it
+            The credential can span one or multiple lines as long as it
                 abides with all the above rules and the format.
 
         Example that follows the format and rules:
@@ -81,7 +81,7 @@ class Credential:
     def load(cls, path: Path) -> Credential:
         """
         Load Credential from a file path.
-        Use Credential.loads() for loading from text content and seeing the rules and
-        format expected to be found in the URIs contents.
+        Use Credential.loads() to load from a text string, and to see the rules and
+        format expected in the URIs contents.
         """
         return cls.loads(path.read_text("utf8"))

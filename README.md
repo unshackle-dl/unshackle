@@ -26,13 +26,19 @@ A modular archival tool for movies, TV, and music. Fork of [Devine](https://gith
 
 ## Install
 
+The recommended way is a git clone with the install script. The script installs `uv` and unshackle, then runs `unshackle setup` to download the external tools and write a first config.
+
 ```shell
-uv tool install git+https://github.com/unshackle-dl/unshackle.git
-unshackle --help
+git clone https://github.com/unshackle-dl/unshackle.git
+cd unshackle
+sh install.sh                 # Windows: .\install.bat
+uv run unshackle env check
 ```
 
-> [!TIP]
-> Prefer `uv run unshackle ...` inside a clone to keep the virtual environment active.
+In a clone, run every command as `uv run unshackle ...`.
+
+> [!NOTE]
+> Advanced: `uv tool install git+https://github.com/unshackle-dl/unshackle.git` installs unshackle into the tool folder of `uv`, not a folder that you choose. `unshackle setup` then puts the tools, config, and data in your user data and config directories. See [Installation](https://docs.unshackle.dev/getting-started/installation/) for details.
 
 ### Requirements
 
@@ -42,7 +48,7 @@ External tools. (recommended versions):
 - [uv](https://docs.astral.sh/uv/) - ≥ 0.5
 - [FFmpeg](https://ffmpeg.org/) - ≥ 6.0
 - [MKVToolNix](https://mkvtoolnix.download/) - ≥ 80
-- [shaka-packager](https://github.com/shaka-project/shaka-packager/releases/tag/v2.6.1) - 2.6.1
+- [shaka-packager](https://github.com/shaka-project/shaka-packager/releases) - 2.6.1, or ≥ 3.10.0
 
 Optional:
 
@@ -52,4 +58,4 @@ Optional:
 
 ## License
 
-[GPL-3.0](LICENSE). Do not use unshackle for content you lack the rights to. Keep the core free and open; keep service code private. Be kind.
+[GPL-3.0](LICENSE). Do not use unshackle for content you do not have the rights to. Keep the core free and open. Keep service code private. Be kind.

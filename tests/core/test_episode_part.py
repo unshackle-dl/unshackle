@@ -44,9 +44,6 @@ def reset_template():
     config.output_template, config.folder_templates, config.folder_template, config.tag = saved
 
 
-# --- validation -------------------------------------------------------------
-
-
 def test_part_defaults_to_none():
     assert make_episode().part is None
 
@@ -79,9 +76,6 @@ def test_old_cache_entry_reads_as_part_less():
     assert restored.part is None
 
 
-# --- display ----------------------------------------------------------------
-
-
 def test_str_is_unchanged_without_a_part():
     without = make_episode()
     assert str(without) == "The Show S01E01 The Reckoning"
@@ -92,8 +86,6 @@ def test_str_shows_the_selection_syntax():
 
 
 def test_str_tells_dated_parts_apart():
-    # dated content renders the air date instead of SxxExx, so without the suffix both
-    # parts print the same string while their filenames differ
     assert str(make_episode(part=2, air_date="2024-05-06")) == "The Show 2024.05.06.2 The Reckoning"
     assert str(make_episode(air_date="2024-05-06")) == "The Show 2024.05.06 The Reckoning"
 
@@ -125,9 +117,6 @@ def test_series_sorts_parts_within_their_episode():
     assert [(e.number, e.part) for e in series] == [(1, None), (1, 1), (1, 2), (2, None)]
 
 
-# --- naming -----------------------------------------------------------------
-
-
 def test_filename_is_unchanged_without_a_part(reset_template):
     assert make_episode().get_filename(StubMediaInfo()) == "The.Show.S01E01.DummyService-GROUP"
 
@@ -135,7 +124,7 @@ def test_filename_is_unchanged_without_a_part(reset_template):
 def test_dotted_template_folds_the_part_after_the_episode(reset_template):
     name = make_episode(part=2).get_filename(StubMediaInfo())
     assert name == "The.Show.S01E01.Part.2.DummyService-GROUP"
-    assert name.endswith("-GROUP")  # group tag stays last
+    assert name.endswith("-GROUP")
 
 
 def test_spaced_template_uses_spaces(reset_template):
@@ -144,7 +133,7 @@ def test_spaced_template_uses_spaces(reset_template):
 
 
 def test_template_context_leaves_the_season_token_alone(reset_template):
-    ctx = make_episode(part=2)._build_template_context(StubMediaInfo())
+    ctx = make_episode(part=2).build_template_context(StubMediaInfo())
     assert ctx["season"] == "S01"
     assert ctx["episode"] == "E01.Part.2"
     assert ctx["season_episode"] == "S01E01.Part.2"
@@ -152,11 +141,10 @@ def test_template_context_leaves_the_season_token_alone(reset_template):
 
 
 def test_part_token_is_empty_without_a_part(reset_template):
-    assert make_episode()._build_template_context(StubMediaInfo())["part"] == ""
+    assert make_episode().build_template_context(StubMediaInfo())["part"] == ""
 
 
 def test_parts_share_one_season_folder(reset_template):
-    # {season_episode} in a folder template would otherwise carry the part into the path
     reset_template.folder_template = "{title}/{season_episode}"
     folders = {make_episode(part=p).get_filename(StubMediaInfo(), folder=True) for p in (1, 2)}
     assert folders == {"The.Show/S01E01"}
@@ -168,9 +156,6 @@ def test_parts_share_one_derived_season_folder(reset_template):
     assert folders == {make_episode().get_filename(StubMediaInfo(), folder=True)}
 
 
-# --- matching ---------------------------------------------------------------
-
-# the worked key scheme from the design: (token, part-less E1 selected, E1 part 2 selected)
 MATCH_TABLE = [
     (("S01",), True, True),
     (("S01E01",), True, True),

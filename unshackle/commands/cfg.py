@@ -32,7 +32,7 @@ def cfg(ctx: click.Context, key: str, value: str, unset: bool, list_: bool) -> N
         try:
             value = ast.literal_eval(value)
         except (ValueError, SyntaxError):
-            pass  # probably a str without quotes or similar, assume it's a string value
+            pass
 
     log = logging.getLogger("cfg")
 
@@ -45,8 +45,6 @@ def cfg(ctx: click.Context, key: str, value: str, unset: bool, list_: bool) -> N
 
     if not data:
         log.warning("No config file was found or it has no data, yet")
-        # yaml.load() returns `None` if the input data is blank instead of a usable object
-        # force a usable object by making one and removing the only item within it
         data = yaml.load("""__TEMP__: null""")
         del data["__TEMP__"]
 
