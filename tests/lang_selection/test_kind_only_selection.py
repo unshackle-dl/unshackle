@@ -18,8 +18,8 @@ import requests
 
 from unshackle.commands.dl import dl
 from unshackle.core import binaries
-from unshackle.core.api.handlers import DEFAULT_DOWNLOAD_PARAMS
 from unshackle.core.constants import DOWNLOAD_LICENCE_ONLY
+from unshackle.core.dl_options import DEFAULT_DOWNLOAD_PARAMS
 from unshackle.core.service import Service
 from unshackle.core.titles import Episode, Series
 from unshackle.core.tracks import Audio, Subtitle, Tracks, Video

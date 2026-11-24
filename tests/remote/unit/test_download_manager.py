@@ -138,7 +138,7 @@ def test_job_status_values() -> None:
 def test_api_sub_format_keeps_the_original_sentinel() -> None:
     """sub_format "original" keeps the source format, so the API cast must not turn it into a codec or None."""
     from unshackle.commands.dl import dl
-    from unshackle.core.api.handlers import cast_dl_params
+    from unshackle.core.dl_options import cast_dl_params
     from unshackle.core.tracks import Subtitle
 
     assert cast_dl_params(dl.cli, {"sub_format": "ORIGINAL"})["sub_format"] == "original"

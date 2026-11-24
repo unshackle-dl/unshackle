@@ -38,6 +38,7 @@ from unshackle.core.config import config
 from unshackle.core.console import SyncLive, console, prompt_user, show_notice
 from unshackle.core.constants import AnyTrack
 from unshackle.core.credential import Credential
+from unshackle.core.dl_options import remote_dl_params
 from unshackle.core.drm import cbcs, real_kids
 from unshackle.core.manifests.snapshot import match_track, restore
 from unshackle.core.proxies.resolve import is_loopback
@@ -1027,18 +1028,7 @@ class RemoteService:
                 create_data["generate_dv"] = True
             # Services pick the manifests to fetch from these. They go in their own
             # object: flat, a service option with the same name would take them (or override them).
-            # An empty list is sent as-is, because only an absent key falls back to the dl default.
-            params = self.ctx.parent.params
-            dl_params: dict[str, Any] = {
-                key: [str(x) for x in params[key]]
-                for key in ("lang", "v_lang", "a_lang", "s_lang")
-                if params.get(key) is not None
-            }
-            if params.get("acodec") is not None:
-                dl_params["acodec"] = [c.name for c in params["acodec"]]
-            for key in ("forced_subs", "exact_lang"):
-                if key in params:
-                    dl_params[key] = bool(params[key])
+            dl_params = remote_dl_params(self.ctx.parent.params)
             if dl_params:
                 create_data["dl_params"] = dl_params
 

@@ -10,6 +10,7 @@ import pytest
 from unshackle.core.api import download_manager as dm
 from unshackle.core.api import handlers
 from unshackle.core.api.errors import APIError, APIErrorCode
+from unshackle.core.dl_options import DEFAULT_DOWNLOAD_PARAMS
 
 pytestmark = pytest.mark.unit
 
@@ -91,10 +92,10 @@ def test_relayed_job_skips_service_dl(env, monkeypatch):
         return "remote-server", {"tag": "EXAMPLE1"}, data
 
     monkeypatch.setattr(handlers, "relay_target", relay)
-    baseline_workers = handlers.DEFAULT_DOWNLOAD_PARAMS["workers"]
+    baseline_workers = DEFAULT_DOWNLOAD_PARAMS["workers"]
     params = env(dl={"workers": 7})
     assert params["workers"] == baseline_workers
-    assert set(params["client_keys"]) >= set(handlers.DEFAULT_DOWNLOAD_PARAMS)
+    assert set(params["client_keys"]) >= set(DEFAULT_DOWNLOAD_PARAMS)
 
 
 def test_client_sent_keys_uses_the_stamp():

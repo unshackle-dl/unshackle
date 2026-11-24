@@ -959,6 +959,16 @@ async def download(request: web.Request) -> web.Response:
               abitrate:
                 type: integer
                 description: Audio bitrate in kbps (default - None)
+              vbitrate_range:
+                type: string
+                description: >-
+                  Video bitrate range in kbps as "MIN-MAX" (e.g., "6000-7000"). Selects the highest bitrate in the
+                  range. Cannot be used with vbitrate (default - None)
+              abitrate_range:
+                type: string
+                description: >-
+                  Audio bitrate range in kbps as "MIN-MAX" (e.g., "128-256"). Selects the highest bitrate in the
+                  range. Cannot be used with abitrate (default - None)
               range:
                 type: array
                 items:

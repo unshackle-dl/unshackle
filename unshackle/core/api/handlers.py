@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from functools import partial
 from http.cookiejar import CookieJar
 from pathlib import Path
-from typing import AbstractSet, Any, Callable, Dict, Iterable, List, Optional, Set, cast
+from typing import AbstractSet, Any, Callable, Dict, Iterable, List, Optional, Set
 from urllib.parse import urlsplit
 
 import click
@@ -35,6 +35,12 @@ from unshackle.core.cacher import Cacher
 from unshackle.core.cdm.detect import cdm_type_stub, is_playready_cdm
 from unshackle.core.config import config, load_yaml
 from unshackle.core.constants import AnyTrack
+from unshackle.core.dl_options import (
+    DEFAULT_DOWNLOAD_PARAMS,
+    DL_OPTION_API_NAMES,
+    cast_dl_params,
+    forwarded_dl_params,
+)
 from unshackle.core.drm import BlowfishStripe, cbcs, is_null_key
 from unshackle.core.manifests.snapshot import capture
 from unshackle.core.providers.anilist import parse_anilist_ref
@@ -54,7 +60,7 @@ from unshackle.core.tunnel import (
     tunnel_proxy,
 )
 from unshackle.core.utilities import declared_kwargs, kind_only_conflict
-from unshackle.core.utils.click_types import AUDIO_CODEC_LIST, QUALITY_LIST, VIDEO_CODEC_LIST
+from unshackle.core.utils.click_types import QUALITY_LIST, VIDEO_CODEC_LIST
 from unshackle.core.utils.collections import ci_get, merge_dict
 from unshackle.core.utils.hdr10plus import probed_tracks
 from unshackle.core.utils.redact import REDACTED, URL_USERINFO_RE, redact_all, redact_secrets, redact_text
@@ -68,113 +74,6 @@ from unshackle.core.wire import (
 )
 
 log = logging.getLogger("api")
-
-
-DEFAULT_DOWNLOAD_PARAMS = {
-    "profile": None,
-    "quality": [],
-    "vcodec": [],
-    "acodec": [],
-    "vbitrate": None,
-    "abitrate": None,
-    "vbitrate_range": None,
-    "abitrate_range": None,
-    "range": ["SDR"],
-    "channels": None,
-    "no_atmos": False,
-    "wanted": [],
-    "latest_episode": False,
-    "latest_episodes": None,
-    "lang": ["orig"],
-    "v_lang": [],
-    "a_lang": [],
-    "s_lang": ["all"],
-    "require_audio": [],
-    "require_video": [],
-    "require_subs": [],
-    "skip_missing": False,
-    "forced_subs": False,
-    "forced_subs_only": False,
-    "forced_s_lang": [],
-    "exact_lang": False,
-    "sub_format": None,
-    "sub_font": None,
-    "video_only": False,
-    "audio_only": False,
-    "subs_only": False,
-    "chapters_only": False,
-    "no_subs": False,
-    "skip_subtitle_errors": False,
-    "no_audio": False,
-    "no_chapters": False,
-    "no_video": False,
-    "no_attachments": False,
-    "audio_description": False,
-    "audio_description_only": False,
-    "slow": None,
-    "split_audio": None,
-    "skip_dl": False,
-    "all_drm": False,
-    "export": False,
-    "cdm_only": None,
-    "proxy": None,
-    "no_proxy": False,
-    "no_proxy_download": False,
-    "proxy_download": None,
-    "no_folder": False,
-    "no_source": False,
-    "no_mux": False,
-    "sample": None,
-    "include_sample": False,
-    "workers": None,
-    "adaptive_workers": False,
-    "download_processes": 1,
-    "continue_downloads": False,
-    "downloads": 1,
-    "worst": False,
-    "best_available": False,
-    "generate_dv": False,
-    "repack": False,
-    "tag": None,
-    "tmdb_id": None,
-    "imdb_id": None,
-    "tvdb_id": None,
-    "tvdb_order": None,
-    "continuous_episodes": False,
-    "anilist_id": None,
-    "enrich": False,
-    "daily": False,
-    "output_dir": None,
-    "no_cache": False,
-    "reset_cache": False,
-}
-
-API_SHAPED_DL_PARAMS = frozenset({"slow", "wanted"})
-
-
-def cast_dl_params(cli: click.Command, params: Dict[str, Any]) -> Dict[str, Any]:
-    """Cast each ``DEFAULT_DOWNLOAD_PARAMS`` parameter in ``params`` by its dl click type, under its dl option name.
-
-    A missing, ``None`` or empty-string parameter, and an empty ``range``, take the API default, so
-    ``output_dir: ""`` is not the working directory. An ``API_SHAPED_DL_PARAMS`` value stays as sent. A parameter
-    outside ``DEFAULT_DOWNLOAD_PARAMS`` never reaches dl, so a new CLI option is closed to API clients by default.
-    Raises ``click.BadParameter``.
-    """
-    from unshackle.commands.dl import DL_OPTION_ALIASES
-
-    kept: Dict[str, Any] = {}
-    to_cast: Dict[str, Any] = {}
-    for key, default in DEFAULT_DOWNLOAD_PARAMS.items():
-        value = params.get(key)
-        if value is None or value == "" or (key == "range" and value == []):
-            value = default
-        (kept if value is None or key in API_SHAPED_DL_PARAMS else to_cast)[DL_OPTION_ALIASES.get(key, key)] = value
-    try:
-        return {**kept, **cast_service_options(cli.params, click.Context(cli), to_cast)}
-    except click.BadParameter as e:
-        name = (e.param.name if e.param else None) or ""
-        key = next((k for k, v in DL_OPTION_ALIASES.items() if v == name), name)
-        raise click.BadParameter(f"Invalid {key}: {e.message}") from e
 
 
 # Keys that are part of the API transport envelope, not service.cli options.
@@ -2216,13 +2115,11 @@ def enforce_download_gates(params: Dict[str, Any], request: Optional[web.Request
 
 def service_dl_defaults(service: str) -> Dict[str, Any]:
     """The ``services.<TAG>.dl`` values that name an API download parameter, keyed as the API names them."""
-    from unshackle.commands.dl import DL_OPTION_ALIASES
     from unshackle.core.services import ROUTING_PARAMS
 
-    api_names = {click_name: api_name for api_name, click_name in DL_OPTION_ALIASES.items()}
     result: Dict[str, Any] = {}
     for key, value in ((ci_get(config.services, service) or {}).get("dl") or {}).items():
-        key = api_names.get(key, key)
+        key = DL_OPTION_API_NAMES.get(key, key)
         if value is None or key in ROUTING_PARAMS:
             continue
         if key not in DEFAULT_DOWNLOAD_PARAMS:
@@ -3429,44 +3326,6 @@ SESSION_TRANSPORT_KEYS = {
     "generate_dv",
     "dl_params",
 }
-
-
-def forwarded_dl_params(data: Dict[str, Any]) -> Dict[str, Any]:
-    """Read the dl track selection that a remote-dl client sends under ``dl_params``.
-
-    Services read these values from ``ctx.parent.params`` to pick the manifests they
-    fetch. They travel in their own object so that they never collide with a service option that
-    has the same name. An absent or malformed value gets the dl default, so an old client that
-    sends no ``dl_params`` gets the same result as a ``dl`` run with no selection flags.
-    ``acodec`` holds codec names or aliases, which become ``Audio.Codec`` members the same way
-    ``dl -a`` converts them; an unknown name is dropped.
-    """
-    raw = data.get("dl_params")
-    if not isinstance(raw, dict):
-        raw = {}
-
-    def str_list(key: str) -> Optional[List[str]]:
-        value = raw.get(key)
-        if isinstance(value, list) and all(isinstance(v, str) for v in value):
-            return list(value)
-        if value is not None:
-            log.warning(f"Ignoring dl_params.{key}: it must be an array of strings")
-        return None
-
-    params: Dict[str, Any] = {}
-    for key in ("lang", "v_lang", "a_lang", "s_lang"):
-        langs = str_list(key)
-        params[key] = langs if langs is not None else list(cast(List[str], DEFAULT_DOWNLOAD_PARAMS[key]))
-    # the dl CLI default is [], and some services test membership in it
-    params["acodec"] = []
-    for name in str_list("acodec") or []:
-        try:
-            params["acodec"].extend(AUDIO_CODEC_LIST.convert(name))
-        except click.BadParameter:
-            log.warning(f"Ignoring unknown dl_params.acodec value: {sanitize_log(name)}")
-    params["forced_subs"] = raw.get("forced_subs") is True
-    params["exact_lang"] = raw.get("exact_lang") is True
-    return params
 
 
 # A client's service config carries a device identity (an ESN, a few keys), never a bulk payload.

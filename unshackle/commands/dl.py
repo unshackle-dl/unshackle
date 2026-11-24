@@ -50,6 +50,7 @@ from unshackle.core.constants import (
     context_settings,
 )
 from unshackle.core.credential import Credential
+from unshackle.core.dl_options import DL_OPTION_ALIASES
 from unshackle.core.downloaders import (
     default_max_workers,
     format_speed,
@@ -155,10 +156,6 @@ class SkippedSubtitle(TypedDict):
     id: str
     language: str
     title: str
-
-
-# Config keys accepted as natural names for params whose Python name dodges a builtin.
-DL_OPTION_ALIASES = {"range": "range_", "list": "list_"}
 
 
 def parse_language(tag: Optional[str]) -> Optional[Language]:

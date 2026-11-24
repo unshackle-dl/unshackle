@@ -430,7 +430,8 @@ def perform_download(
 
     ctx = click.Context(dl_command.cli)
     ctx.invoked_subcommand = service
-    from unshackle.core.api.handlers import cast_dl_params, load_full_cdm, relay_label
+    from unshackle.core.api.handlers import load_full_cdm, relay_label
+    from unshackle.core.dl_options import DL_OPTION_API_NAMES, cast_dl_params
 
     cdm = load_full_cdm(service, params.get("profile"), params.get("cdm_type"))
     ctx.obj = ContextData(config=service_config, cdm=cdm, proxy_providers=[], profile=params.get("profile"))
@@ -451,7 +452,7 @@ def perform_download(
     from click.core import ParameterSource
 
     for param_name in ctx.params:
-        source_key = "range" if param_name == "range_" else param_name
+        source_key = DL_OPTION_API_NAMES.get(param_name, param_name)
         ctx.set_parameter_source(
             param_name, ParameterSource.COMMANDLINE if source_key in client_keys else ParameterSource.DEFAULT
         )
