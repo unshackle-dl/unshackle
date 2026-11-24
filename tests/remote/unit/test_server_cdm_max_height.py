@@ -10,9 +10,9 @@ import click
 import pyplayready.system.pssh as pr_pssh_mod
 import pytest
 import pywidevine.pssh as wv_pssh_mod
-from rich.table import Table
 
 import unshackle.core.drm as drm_mod
+from tests.core.key_resolver import key_table, resolver
 from tests.remote.key_source import CAPPED, PR_DEVICE, one_title, remote_keys, remote_session
 from unshackle.commands.dl import dl
 from unshackle.core.api import handlers
@@ -539,20 +539,17 @@ class _LocalWidevine(Widevine):
         raise self.Used(cdm)
 
 
+def server_stub_resolver(svc, licence, cdm_for=None):
+    """Content-key resolution for a --cdm-only remote run, whose loaded CDM is the server stub."""
+    return resolver(cdm="server stub", licence=licence, cdm_for=cdm_for, tag="EXAMPLE1", source=svc, cdm_only=True)
+
+
 def prepare(svc, licence, drm=None, track=None, cdm_for=None):
-    runner = dl.__new__(dl)
-    runner._remote_service = svc
-    runner.cdm = "server stub"
-    runner.service = "EXAMPLE1"
-    runner.debug_logger = None
-    runner.log = logging.getLogger("test-server-cdm-cap")
-    runner.cdm_for = cdm_for
-    table = Table()
-    table.add_column()
+    keys = server_stub_resolver(svc, licence, cdm_for)
     drm = drm or _LocalWidevine()
     track = track or SimpleNamespace(id="vid", drm=None, get_drm_for_cdm=lambda cdm: None)
     with pytest.raises(_LocalWidevine.Used) as ei:
-        runner.prepare_drm(drm, track, None, lambda **k: None, licence, table=table, cdm_only=True)
+        keys.licence_for(track, None, key_table())(drm)
     return ei.value.args[0]
 
 
@@ -584,31 +581,15 @@ class PlayReady:
         self.content_keys = {}
 
 
-def test_a_mid_download_handover_puts_the_keys_on_the_callers_drm(monkeypatch):
+def test_a_mid_download_handover_puts_the_keys_on_the_callers_drm():
     """The caller decrypts with the DRM object it passed in, so the local licence must fill that one."""
-    monkeypatch.setattr(dl, "LICENSE_KEY_CACHE", {})
     svc = remote_keys(local_cdm="local device")
-    runner = dl.__new__(dl)
-    runner._remote_service = svc
-    runner.cdm = "server stub"
-    runner.service = "EXAMPLE1"
-    runner.debug_logger = None
-    runner.log = logging.getLogger("test-server-cdm-cap")
-    runner.flush_vault_writes = lambda pending: None
-    table = Table()
-    table.add_column()
+    keys = server_stub_resolver(svc, lambda **k: svc.client_licensed.add("vid"))
     server_drm, local_drm = PlayReady(), _KeyedWidevine()
     track = SimpleNamespace(id="vid", drm=[server_drm, local_drm], get_drm_for_cdm=lambda cdm: local_drm)
 
-    runner.prepare_drm(
-        server_drm,
-        track,
-        None,
-        lambda **k: None,
-        lambda **k: svc.client_licensed.add("vid"),
-        table=table,
-        cdm_only=True,
-    )
+    keys.licence_for(track, None, key_table())(server_drm)
+    keys.wait_vault_writes()
 
     assert server_drm.content_keys == {UUID(int=0xCA9): "ab" * 16}
 

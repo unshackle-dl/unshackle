@@ -8,9 +8,9 @@ from uuid import UUID
 
 import pytest
 
-from tests.remote.key_source import remote_keys
-from unshackle.commands import dl as dl_module
-from unshackle.commands.dl import dl
+from tests.core.key_resolver import NoVaults, key_table, resolver
+from unshackle.core.drm import key_resolution
+from unshackle.core.drm.key_resolution import ContentKeyResolver
 from unshackle.core.vault import RateLimited, vault_session
 from unshackle.core.vaults import Vaults
 from unshackle.vaults.API import API, Exceptions
@@ -81,20 +81,35 @@ class FakeDRM:
         out.rename(path)
 
 
-def make_cmd(monkeypatch: pytest.MonkeyPatch, vaults: Vaults) -> dl:
-    monkeypatch.setattr(dl_module.binaries, "FFMPEG", "ffmpeg")
+def make_resolver(monkeypatch: pytest.MonkeyPatch, vaults: Vaults) -> ContentKeyResolver:
+    monkeypatch.setattr(key_resolution.binaries, "FFMPEG", "ffmpeg")
     monkeypatch.setattr(
-        dl_module,
+        key_resolution,
         "ffmpeg_decodes",
         lambda path, start=None, seconds=3, video=None: path.read_bytes() == b"plain:" + GOOD.encode(),
     )
-    cmd = dl.__new__(dl)
-    cmd.log = SimpleNamespace(warning=print, info=print, debug=print)
-    cmd.vaults = vaults
-    cmd.vault_cache_tally = None
-    dl.LICENSE_KEY_CACHE.clear()
-    dl.LICENSE_KEY_CACHE[KID] = BAD
-    return cmd
+    keys = resolver(vaults, tag="SVC")
+    ContentKeyResolver.LICENSE_KEY_CACHE[KID] = BAD
+    return keys
+
+
+class BatchDRM(SimpleNamespace):
+    """A DRM that a batch licence fills with ``batch``."""
+
+
+SERVER = SimpleNamespace(
+    resolve_server_keys=lambda title: [d.content_keys.update(d.batch) for t in title.tracks for d in t.drm],
+    vault_source=lambda kid, key: None,
+)
+
+
+def batch_title(*batches: dict[UUID, str], kids: Optional[list[UUID]] = None) -> SimpleNamespace:
+    """A title with one track per batch, whose DRM names ``kids`` (every KID of its batch by default)."""
+    return SimpleNamespace(
+        tracks=[
+            SimpleNamespace(drm=[BatchDRM(kids=kids or list(keys), content_keys={}, batch=keys)]) for keys in batches
+        ]
+    )
 
 
 def test_decrypt_verified_flags_and_retries(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -104,7 +119,7 @@ def test_decrypt_verified_flags_and_retries(tmp_path: Path, monkeypatch: pytest.
     vaults = Vaults("SVC")
     vaults.vaults = [local, poisoned]
     assert vaults.get_key(KID) == (BAD, poisoned)
-    cmd = make_cmd(monkeypatch, vaults)
+    keys = make_resolver(monkeypatch, vaults)
 
     path = tmp_path / "video.mp4"
     path.write_bytes(b"cipher")
@@ -119,21 +134,21 @@ def test_decrypt_verified_flags_and_retries(tmp_path: Path, monkeypatch: pytest.
         vaults.vaults.append(other)
         drm.content_keys[KID] = vaults.get_key(KID)[0]
 
-    cmd.decrypt_verified(drm, path, licence, KID)
-    cmd.wait_vault_writes()
+    keys.decrypt_verified(drm, path, licence, KID)
+    keys.wait_vault_writes()
 
     assert path.read_bytes() == b"plain:" + GOOD.encode()
     assert drm.decrypted_with == [{KID: BAD}, {KID: GOOD}]
     assert local.is_bad_key(KID, BAD)
     assert local.get_key(KID, "SVC") == GOOD  # the key that proved itself on the retry is kept locally
-    assert KID not in dl.LICENSE_KEY_CACHE
+    assert KID not in ContentKeyResolver.LICENSE_KEY_CACHE
     assert not (tmp_path / "video.mp4.enc").exists()
 
     # a sibling track that still carries the poisoned key is checked too and takes the cached good key
     sibling = tmp_path / "audio.mp4"
     sibling.write_bytes(b"cipher")
     drm2 = FakeDRM({KID: BAD})
-    cmd.decrypt_verified(drm2, sibling, lambda drm, track_kid: drm.content_keys.update({KID: GOOD}), KID)
+    keys.decrypt_verified(drm2, sibling, lambda drm, track_kid: drm.content_keys.update({KID: GOOD}), KID)
     assert sibling.read_bytes() == b"plain:" + GOOD.encode()
 
 
@@ -143,7 +158,7 @@ def test_no_local_vault_raises_instead_of_reusing_the_poison(tmp_path: Path, mon
     vaults = Vaults("SVC")
     vaults.vaults = [poisoned]
     assert vaults.get_key(KID) == (BAD, poisoned)
-    cmd = make_cmd(monkeypatch, vaults)
+    keys = make_resolver(monkeypatch, vaults)
     path = tmp_path / "video.mp4"
     path.write_bytes(b"cipher")
     drm = FakeDRM({KID: BAD})
@@ -153,7 +168,7 @@ def test_no_local_vault_raises_instead_of_reusing_the_poison(tmp_path: Path, mon
         drm.content_keys[KID] = key
 
     with pytest.raises(ValueError, match="no other source"):
-        cmd.decrypt_verified(drm, path, licence, KID)
+        keys.decrypt_verified(drm, path, licence, KID)
     assert path.read_bytes() == b"cipher"  # ciphertext restored, nothing written with the poison
     assert not (tmp_path / "video.mp4.enc").exists()
 
@@ -165,11 +180,11 @@ def test_segment_decrypted_track_flags_and_raises(tmp_path: Path, monkeypatch: p
     vaults = Vaults("SVC")
     vaults.vaults = [local, poisoned]
     vaults.get_key(KID)
-    cmd = make_cmd(monkeypatch, vaults)
+    keys = make_resolver(monkeypatch, vaults)
     path = tmp_path / "video.mp4"
     path.write_bytes(b"plain:" + BAD.encode())
     with pytest.raises(ValueError, match="run again"):
-        cmd.decrypt_verified(FakeDRM({KID: BAD}), path, lambda *a, **k: None, KID, decrypt=False)
+        keys.decrypt_verified(FakeDRM({KID: BAD}), path, lambda *a, **k: None, KID, decrypt=False)
     assert local.is_bad_key(KID, BAD)
 
 
@@ -197,7 +212,7 @@ def test_every_poisoned_vault_is_burned_then_the_cdm_answers(tmp_path: Path, mon
         vault.add_key("SVC", KID, f"{i + 1:02x}" * 16)
     vaults = Vaults("SVC")
     vaults.vaults = [local, *poisoned]
-    cmd = make_cmd(monkeypatch, vaults)
+    keys = make_resolver(monkeypatch, vaults)
     path = tmp_path / "video.mp4"
     path.write_bytes(b"cipher")
     drm = FakeDRM({KID: vaults.get_key(KID)[0]})
@@ -211,7 +226,7 @@ def test_every_poisoned_vault_is_burned_then_the_cdm_answers(tmp_path: Path, mon
             key = GOOD
         drm.content_keys[KID] = key
 
-    cmd.decrypt_verified(drm, path, licence, KID)
+    keys.decrypt_verified(drm, path, licence, KID)
     assert path.read_bytes() == b"plain:" + GOOD.encode()
     assert cdm_calls == 1
     assert len(drm.decrypted_with) == 4  # three vault keys burned, then the CDM key
@@ -280,8 +295,8 @@ def test_cdm_returning_the_flagged_key_clears_the_flag(
     poisoned.add_key("SVC", KID, BAD)
     vaults = Vaults("SVC")
     vaults.vaults = [local, poisoned]
-    cmd = make_cmd(monkeypatch, vaults)
-    monkeypatch.setattr(dl_module, "ffmpeg_decodes", lambda path, start=None, seconds=3, video=None: False)
+    keys = make_resolver(monkeypatch, vaults)
+    monkeypatch.setattr(key_resolution, "ffmpeg_decodes", lambda path, start=None, seconds=3, video=None: False)
     path = tmp_path / "video.mp4"
     path.write_bytes(b"cipher")
     drm = FakeDRM({KID: vaults.get_key(KID)[0]})
@@ -293,7 +308,7 @@ def test_cdm_returning_the_flagged_key_clears_the_flag(
         else:
             drm.content_keys[KID] = BAD  # the CDM answers with the same key
 
-    cmd.decrypt_verified(drm, path, licence, KID)
+    keys.decrypt_verified(drm, path, licence, KID)
     assert path.read_bytes() == b"plain:" + BAD.encode()
     assert not local.is_bad_key(KID, BAD)
 
@@ -305,7 +320,7 @@ def test_a_replacement_key_in_a_new_dict_is_checked_and_stored(tmp_path: Path, m
     vaults = Vaults("SVC")
     vaults.vaults = [local, poisoned]
     assert vaults.get_key(KID) == (BAD, poisoned)
-    cmd = make_cmd(monkeypatch, vaults)
+    keys = make_resolver(monkeypatch, vaults)
     path = tmp_path / "video.mp4"
     path.write_bytes(b"cipher")
     drm = FakeDRM({KID: BAD})
@@ -316,8 +331,8 @@ def test_a_replacement_key_in_a_new_dict_is_checked_and_stored(tmp_path: Path, m
         vaults.vaults.append(other)
         drm.content_keys = {KID: vaults.get_key(KID)[0]}
 
-    cmd.decrypt_verified(drm, path, licence, KID)
-    cmd.wait_vault_writes()
+    keys.decrypt_verified(drm, path, licence, KID)
+    keys.wait_vault_writes()
     assert path.read_bytes() == b"plain:" + GOOD.encode()
     assert local.get_key(KID, "SVC") == GOOD
 
@@ -330,7 +345,7 @@ def test_a_cdm_that_confirms_a_key_flagged_on_entry_clears_the_flag(
     local = SQLite("local", tmp_path / "local.db")
     vaults = Vaults("SVC")
     vaults.vaults = [local]
-    cmd = make_cmd(monkeypatch, vaults)
+    keys = make_resolver(monkeypatch, vaults)
     vaults.flag_bad_key(KID, BAD)
     path = tmp_path / "video.mp4"
     path.write_bytes(b"cipher")
@@ -342,8 +357,8 @@ def test_a_cdm_that_confirms_a_key_flagged_on_entry_clears_the_flag(
         else:
             drm.content_keys[KID] = BAD
 
-    cmd.decrypt_verified(drm, path, licence, KID)
-    cmd.wait_vault_writes()
+    keys.decrypt_verified(drm, path, licence, KID)
+    keys.wait_vault_writes()
     assert path.read_bytes() == b"plain:" + BAD.encode()
     assert not local.is_bad_key(KID, BAD)
     assert local.get_key(KID, "SVC") == BAD
@@ -357,14 +372,14 @@ def test_a_licence_key_that_replaces_a_bad_local_pair_is_stored(
     local.add_key("SVC", KID, BAD)
     vaults = Vaults("SVC")
     vaults.vaults = [local]
-    cmd = make_cmd(monkeypatch, vaults)
+    keys = make_resolver(monkeypatch, vaults)
     drm = FakeDRM({KID: vaults.get_key(KID)[0]})
     path = tmp_path / "video.mp4"
     path.write_bytes(b"cipher")
     assert local.add_keys("SVC", {KID: GOOD}) == 0
 
-    cmd.decrypt_verified(drm, path, lambda drm, track_kid: drm.content_keys.update({KID: GOOD}), KID)
-    cmd.wait_vault_writes()
+    keys.decrypt_verified(drm, path, lambda drm, track_kid: drm.content_keys.update({KID: GOOD}), KID)
+    keys.wait_vault_writes()
     assert local.is_bad_key(KID, BAD)
     assert local.get_key(KID, "SVC") == GOOD
 
@@ -375,7 +390,7 @@ def test_stale_backup_from_a_killed_run_is_not_restored(tmp_path: Path, monkeypa
     vaults = Vaults("SVC")
     vaults.vaults = [poisoned]
     vaults.get_key(KID)
-    cmd = make_cmd(monkeypatch, vaults)
+    keys = make_resolver(monkeypatch, vaults)
     path = tmp_path / "video.mp4"
     path.write_bytes(b"cipher")
     (tmp_path / "video.mp4.enc").write_bytes(b"stale")
@@ -384,7 +399,7 @@ def test_stale_backup_from_a_killed_run_is_not_restored(tmp_path: Path, monkeypa
         drm.content_keys[KID] = vaults.get_key(KID)[0]
 
     with pytest.raises(ValueError, match="no other source"):
-        cmd.decrypt_verified(FakeDRM({KID: BAD}), path, licence, KID)
+        keys.decrypt_verified(FakeDRM({KID: BAD}), path, licence, KID)
     assert path.read_bytes() == b"cipher"
 
 
@@ -396,19 +411,19 @@ def test_stale_backup_from_a_killed_run_is_not_restored(tmp_path: Path, monkeypa
 def test_an_unkeyed_kid_the_file_uses_is_licensed_before_the_decrypt(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, windows: Optional[dict], licensed: list[UUID]
 ) -> None:
-    cmd = make_cmd(monkeypatch, Vaults("SVC"))
+    keys = make_resolver(monkeypatch, Vaults("SVC"))
     drm = FakeDRM({KID: GOOD})
     drm.kids = [KID, SIBLING]
     monkeypatch.setattr(
-        dl_module.verify,
+        key_resolution.verify,
         "kid_windows",
-        lambda path: None if windows is None else dl_module.verify.KidMap(windows, True),
+        lambda path: None if windows is None else key_resolution.verify.KidMap(windows, True),
     )
     path = tmp_path / "video.mp4"
     path.write_bytes(b"cipher")
     licences: list[UUID] = []
 
-    cmd.decrypt_verified(drm, path, lambda drm, track_kid: licences.append(track_kid), KID)
+    keys.decrypt_verified(drm, path, lambda drm, track_kid: licences.append(track_kid), KID)
 
     assert licences == licensed
     assert drm.decrypted_with == [{KID: GOOD}]
@@ -416,11 +431,11 @@ def test_an_unkeyed_kid_the_file_uses_is_licensed_before_the_decrypt(
 
 def test_drm_without_content_keys_still_decrypts(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """HLS AES-128 ClearKey has no KID:KEY map; the hook must pass it straight through."""
-    cmd = make_cmd(monkeypatch, Vaults("SVC"))
+    keys = make_resolver(monkeypatch, Vaults("SVC"))
     path = tmp_path / "video.ts"
     path.write_bytes(b"cipher")
     calls: list[Path] = []
-    cmd.decrypt_verified(SimpleNamespace(decrypt=calls.append), path)
+    keys.decrypt_verified(SimpleNamespace(decrypt=calls.append), path)
     assert calls == [path]
 
 
@@ -451,38 +466,61 @@ def test_a_licence_key_clears_a_flag_from_an_earlier_run(tmp_path: Path, monkeyp
     local.flag_bad_key("SVC", KID, GOOD, "poisoned")
     vaults = Vaults("SVC")
     vaults.vaults = [local]
-    cmd = make_cmd(monkeypatch, vaults)
-    cmd.vault_cache_tally = None
-    cmd.cache_keys_to_vaults({KID: GOOD})
+    keys = resolver(vaults, source=SERVER)
+    keys.take_server_keys(batch_title({KID: GOOD}))
+    keys.wait_vault_writes()
     assert not local.is_bad_key(KID, GOOD)
     assert local.get_key(KID, "SVC") == GOOD
 
 
 def test_a_licence_with_no_new_keys_sends_no_vault_write(monkeypatch: pytest.MonkeyPatch) -> None:
     """A PSSH KID the licence never answers forces a licence on every run; the vaults must not get an empty push."""
-    vault = SimpleNamespace(no_push=False, add_keys=lambda *_: pytest.fail("empty push reached a vault"))
-    vaults = Vaults("SVC")
-    vaults.vaults = [vault]  # type: ignore[list-item]
-    cmd = make_cmd(monkeypatch, vaults)
-    cmd.cache_keys_to_vaults({})
-    assert cmd.vault_cache_tally is None
+    from unshackle.core.drm import ClearKeyCENC
+
+    pushes: list[dict] = []
+
+    class PushVaults(NoVaults):
+        def __bool__(self) -> bool:
+            return True
+
+        def clear_licensed_flags(self, content_keys: dict) -> None:
+            pass
+
+        def add_keys(self, kid_keys: dict) -> int:
+            pushes.append(kid_keys)
+            return 1
+
+    monkeypatch.setattr(ClearKeyCENC, "get_content_keys", lambda self, **_: None)
+    keys = resolver(PushVaults())
+    drm = ClearKeyCENC(kids=[KID])
+
+    keys.licence_for(SimpleNamespace(drm=[drm]), None, key_table())(drm, track_kid=None)
+    keys.wait_vault_writes()
+
+    assert pushes == []
 
 
 def test_the_cached_key_count_is_unique_and_skipped_without_vaults(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
     """Two tracks licensed in parallel can return the same key; --cdm-only loads no vaults at all."""
     other = UUID(int=9)
     vaults = Vaults("SVC")
     vaults.vaults = [SQLite("local", tmp_path / "local.db")]
-    cmd = make_cmd(monkeypatch, vaults)
-    cmd.cache_keys_to_vaults({KID: GOOD})
-    cmd.cache_keys_to_vaults({KID: GOOD, other: GOOD})
-    assert cmd.vault_cache_tally == ({KID, other}, 1)
+    keys = resolver(vaults, source=SERVER)
+    keys.take_server_keys(batch_title({KID: GOOD}))
+    ContentKeyResolver.LICENSE_KEY_CACHE.clear()
+    keys.take_server_keys(batch_title({KID: GOOD, other: GOOD}))
+    with caplog.at_level(logging.INFO, logger="download"):
+        keys.wait_vault_writes()
+    assert [r.getMessage() for r in caplog.records if r.name == "download"] == ["Cached 2 Keys to 1/1 Vaults"]
 
-    cmd = make_cmd(monkeypatch, Vaults("SVC"))
-    cmd.cache_keys_to_vaults({KID: GOOD})
-    assert cmd.vault_cache_tally is None
+    caplog.clear()
+    keys = resolver(Vaults("SVC"), source=SERVER)
+    keys.take_server_keys(batch_title({KID: GOOD}))
+    with caplog.at_level(logging.INFO, logger="download"):
+        keys.wait_vault_writes()
+    assert not [r for r in caplog.records if r.name == "download"]
 
 
 def test_bulk_add_refuses_a_flagged_pair_in_any_case_or_kid_form(tmp_path: Path) -> None:
@@ -504,16 +542,16 @@ def test_only_the_kid_whose_window_fails_is_flagged(tmp_path: Path, monkeypatch:
     other.add_key("SVC", KID, GOOD)
     vaults = Vaults("SVC")
     vaults.vaults = [local, poisoned]
-    cmd = make_cmd(monkeypatch, vaults)
+    keys = make_resolver(monkeypatch, vaults)
     drm = FakeDRM({lead: vaults.get_key(lead)[0], KID: vaults.get_key(KID)[0]})
     right = {lead: BAD, KID: GOOD}
     monkeypatch.setattr(
-        dl_module.verify,
+        key_resolution.verify,
         "kid_windows",
-        lambda path: dl_module.verify.KidMap({lead: [(0.0, 2.0)], KID: [(120.0, 122.0)]}, True),
+        lambda path: key_resolution.verify.KidMap({lead: [(0.0, 2.0)], KID: [(120.0, 122.0)]}, True),
     )
     monkeypatch.setattr(
-        dl_module,
+        key_resolution,
         "ffmpeg_decodes",
         lambda path, start=None, seconds=3, video=None: (
             drm.decrypted_with[-1][lead if start == 0.0 else KID] == right[lead if start == 0.0 else KID]
@@ -526,8 +564,8 @@ def test_only_the_kid_whose_window_fails_is_flagged(tmp_path: Path, monkeypatch:
         vaults.vaults.append(other)
         drm.content_keys[KID] = vaults.get_key(KID)[0]
 
-    cmd.decrypt_verified(drm, path, licence, KID)
-    cmd.wait_vault_writes()
+    keys.decrypt_verified(drm, path, licence, KID)
+    keys.wait_vault_writes()
     assert drm.content_keys == right
     assert local.is_bad_key(KID, BAD)
     assert not local.is_bad_key(lead, BAD)
@@ -545,7 +583,7 @@ def test_a_kid_absent_from_the_map_is_judged_by_the_fallback(tmp_path: Path, mon
     other.add_key("SVC", KID, GOOD)
     vaults = Vaults("SVC")
     vaults.vaults = [local, poisoned]
-    cmd = make_cmd(monkeypatch, vaults)
+    keys = make_resolver(monkeypatch, vaults)
     drm = FakeDRM({lead: vaults.get_key(lead)[0], KID: vaults.get_key(KID)[0]})
     calls: list[tuple] = []
 
@@ -554,11 +592,11 @@ def test_a_kid_absent_from_the_map_is_judged_by_the_fallback(tmp_path: Path, mon
         return drm.decrypted_with[-1][lead if start is not None else KID] == GOOD
 
     monkeypatch.setattr(
-        dl_module.verify,
+        key_resolution.verify,
         "kid_windows",
-        lambda path: dl_module.verify.KidMap({lead: [(4.0, 6.0)], UUID(int=0): [(8.0, 10.0)]}, True),
+        lambda path: key_resolution.verify.KidMap({lead: [(4.0, 6.0)], UUID(int=0): [(8.0, 10.0)]}, True),
     )
-    monkeypatch.setattr(dl_module, "ffmpeg_decodes", decodes)
+    monkeypatch.setattr(key_resolution, "ffmpeg_decodes", decodes)
     path = tmp_path / "video.mp4"
     path.write_bytes(b"cipher")
 
@@ -566,8 +604,8 @@ def test_a_kid_absent_from_the_map_is_judged_by_the_fallback(tmp_path: Path, mon
         vaults.vaults.append(other)
         drm.content_keys[KID] = vaults.get_key(KID)[0]
 
-    cmd.decrypt_verified(drm, path, licence, KID)
-    cmd.wait_vault_writes()
+    keys.decrypt_verified(drm, path, licence, KID)
+    keys.wait_vault_writes()
     assert drm.content_keys == {lead: GOOD, KID: GOOD}
     assert local.is_bad_key(KID, BAD)
     assert not local.is_bad_key(lead, GOOD)
@@ -589,13 +627,13 @@ def test_a_wrong_mapped_key_does_not_flag_a_kid_the_file_does_not_carry(
     other.add_key("SVC", KID, GOOD)
     vaults = Vaults("SVC")
     vaults.vaults = [local, poisoned]
-    cmd = make_cmd(monkeypatch, vaults)
+    keys = make_resolver(monkeypatch, vaults)
     drm = FakeDRM({audio: vaults.get_key(audio)[0], KID: vaults.get_key(KID)[0]})
     monkeypatch.setattr(
-        dl_module.verify, "kid_windows", lambda path: dl_module.verify.KidMap({KID: [(4.0, 6.0)]}, True)
+        key_resolution.verify, "kid_windows", lambda path: key_resolution.verify.KidMap({KID: [(4.0, 6.0)]}, True)
     )
     monkeypatch.setattr(
-        dl_module,
+        key_resolution,
         "ffmpeg_decodes",
         lambda path, start=None, seconds=3, video=None: drm.decrypted_with[-1][KID] == GOOD,
     )
@@ -606,8 +644,8 @@ def test_a_wrong_mapped_key_does_not_flag_a_kid_the_file_does_not_carry(
         vaults.vaults.append(other)
         drm.content_keys[KID] = vaults.get_key(KID)[0]
 
-    cmd.decrypt_verified(drm, path, licence, KID)
-    cmd.wait_vault_writes()
+    keys.decrypt_verified(drm, path, licence, KID)
+    keys.wait_vault_writes()
     assert drm.content_keys == {audio: GOOD, KID: GOOD}
     assert local.is_bad_key(KID, BAD)
     assert not local.is_bad_key(audio, GOOD)
@@ -623,18 +661,18 @@ def test_a_kid_the_file_does_not_carry_is_not_judged_by_it(tmp_path: Path, monke
     remote.add_key("SVC", audio, GOOD)
     vaults = Vaults("SVC")
     vaults.vaults = [local, remote]
-    cmd = make_cmd(monkeypatch, vaults)
+    keys = make_resolver(monkeypatch, vaults)
     drm = FakeDRM({audio: vaults.get_key(audio)[0], KID: GOOD})
     monkeypatch.setattr(
-        dl_module.verify, "kid_windows", lambda path: dl_module.verify.KidMap({KID: [(4.0, 6.0)]}, True)
+        key_resolution.verify, "kid_windows", lambda path: key_resolution.verify.KidMap({KID: [(4.0, 6.0)]}, True)
     )
-    monkeypatch.setattr(dl_module, "ffmpeg_decodes", lambda path, start=None, seconds=3, video=None: False)
+    monkeypatch.setattr(key_resolution, "ffmpeg_decodes", lambda path, start=None, seconds=3, video=None: False)
     path = tmp_path / "video.mp4"
     path.write_bytes(b"cipher")
     licences: list[UUID] = []
 
-    cmd.decrypt_verified(drm, path, lambda drm, track_kid: licences.append(track_kid), KID)
-    cmd.wait_vault_writes()
+    keys.decrypt_verified(drm, path, lambda drm, track_kid: licences.append(track_kid), KID)
+    keys.wait_vault_writes()
     assert drm.content_keys == {audio: GOOD, KID: GOOD}
     assert not licences
     assert not local.is_bad_key(audio, GOOD)
@@ -655,9 +693,9 @@ def test_a_remote_vault_is_told_only_when_another_key_replaces_its_pair(
     remote.add_key("SVC", KID, served)
     vaults = Vaults("SVC")
     vaults.vaults = [SQLite("local", tmp_path / "local.db"), remote]
-    cmd = make_cmd(monkeypatch, vaults)
+    keys = make_resolver(monkeypatch, vaults)
     if not decodes:
-        monkeypatch.setattr(dl_module, "ffmpeg_decodes", lambda path, start=None, seconds=3, video=None: False)
+        monkeypatch.setattr(key_resolution, "ffmpeg_decodes", lambda path, start=None, seconds=3, video=None: False)
     drm = FakeDRM({KID: vaults.get_key(KID)[0]})
     path = tmp_path / "video.mp4"
     path.write_bytes(b"cipher")
@@ -666,7 +704,7 @@ def test_a_remote_vault_is_told_only_when_another_key_replaces_its_pair(
         assert not remote.is_bad_key(KID, served)
         drm.content_keys[KID] = GOOD
 
-    cmd.decrypt_verified(drm, path, licence, KID)
+    keys.decrypt_verified(drm, path, licence, KID)
     assert drm.content_keys == {KID: GOOD}
     assert remote.is_bad_key(KID, served) is told
 
@@ -683,7 +721,7 @@ def test_the_server_vault_is_told_at_once(tmp_path: Path, monkeypatch: pytest.Mo
     vaults = Vaults("SVC")
     vaults.vaults = [SQLite("local", tmp_path / "local.db")]
     vaults.sources[KID] = (BAD, server)
-    cmd = make_cmd(monkeypatch, vaults)
+    keys = make_resolver(monkeypatch, vaults)
     drm = FakeDRM({KID: BAD})
     path = tmp_path / "video.mp4"
     path.write_bytes(b"cipher")
@@ -692,7 +730,7 @@ def test_the_server_vault_is_told_at_once(tmp_path: Path, monkeypatch: pytest.Mo
         assert reports == [(KID, BAD)]
         drm.content_keys[KID] = GOOD
 
-    cmd.decrypt_verified(drm, path, licence, KID)
+    keys.decrypt_verified(drm, path, licence, KID)
     assert drm.content_keys == {KID: GOOD}
 
 
@@ -705,7 +743,7 @@ def test_only_checked_kids_are_copied_to_other_vaults(tmp_path: Path, monkeypatc
     remote.add_key("SVC", KID, GOOD)
     vaults = Vaults("SVC")
     vaults.vaults = [local, remote]
-    cmd = make_cmd(monkeypatch, vaults)
+    keys = make_resolver(monkeypatch, vaults)
     drm = FakeDRM({lead: vaults.get_key(lead)[0], KID: vaults.get_key(KID)[0]})
     starts: list = []
 
@@ -714,14 +752,14 @@ def test_only_checked_kids_are_copied_to_other_vaults(tmp_path: Path, monkeypatc
         return True
 
     monkeypatch.setattr(
-        dl_module.verify, "kid_windows", lambda path: dl_module.verify.KidMap({lead: [(4.0, 6.0)]}, True)
+        key_resolution.verify, "kid_windows", lambda path: key_resolution.verify.KidMap({lead: [(4.0, 6.0)]}, True)
     )
-    monkeypatch.setattr(dl_module, "ffmpeg_decodes", decodes)
+    monkeypatch.setattr(key_resolution, "ffmpeg_decodes", decodes)
     path = tmp_path / "video.mp4"
     path.write_bytes(b"cipher")
 
-    cmd.decrypt_verified(drm, path, None, KID)
-    cmd.wait_vault_writes()
+    keys.decrypt_verified(drm, path, None, KID)
+    keys.wait_vault_writes()
     assert None not in starts
     assert local.get_key(lead, "SVC") == GOOD
     assert local.get_key(KID, "SVC") is None
@@ -733,7 +771,7 @@ def test_a_clear_file_judges_and_copies_no_vault_key(tmp_path: Path, monkeypatch
     remote.add_key("SVC", KID, BAD)
     vaults = Vaults("SVC")
     vaults.vaults = [local, remote]
-    cmd = make_cmd(monkeypatch, vaults)
+    keys = make_resolver(monkeypatch, vaults)
     drm = FakeDRM({KID: vaults.get_key(KID)[0]})
     checks: list = []
 
@@ -741,13 +779,13 @@ def test_a_clear_file_judges_and_copies_no_vault_key(tmp_path: Path, monkeypatch
         checks.append(start)
         return True
 
-    monkeypatch.setattr(dl_module.verify, "kid_windows", lambda path: dl_module.verify.KidMap({}, False))
-    monkeypatch.setattr(dl_module, "ffmpeg_decodes", decodes)
+    monkeypatch.setattr(key_resolution.verify, "kid_windows", lambda path: key_resolution.verify.KidMap({}, False))
+    monkeypatch.setattr(key_resolution, "ffmpeg_decodes", decodes)
     path = tmp_path / "audio.mp4"
     path.write_bytes(b"clear")
 
-    cmd.decrypt_verified(drm, path, None, KID)
-    cmd.wait_vault_writes()
+    keys.decrypt_verified(drm, path, None, KID)
+    keys.wait_vault_writes()
     assert checks == []
     assert local.get_key(KID, "SVC") is None
     assert not local.is_bad_key(KID, BAD)
@@ -783,8 +821,8 @@ def test_a_sibling_verdict_during_the_decrypt_still_triggers_the_retry(
     vaults = Vaults("SVC")
     vaults.vaults = [local]
     vaults.sources[KID] = (BAD, local)
-    cmd = make_cmd(monkeypatch, vaults)
-    dl.LICENSE_KEY_CACHE[KID] = GOOD  # the sibling's retry already licensed the good key
+    keys = make_resolver(monkeypatch, vaults)
+    ContentKeyResolver.LICENSE_KEY_CACHE[KID] = GOOD  # the sibling's retry already licensed the good key
 
     path = tmp_path / "audio.mp4"
     path.write_bytes(b"cipher")
@@ -799,10 +837,10 @@ def test_a_sibling_verdict_during_the_decrypt_still_triggers_the_retry(
     licences: list = []
 
     def licence(drm: FakeDRM, track_kid: UUID) -> None:
-        licences.append(dl.LICENSE_KEY_CACHE.get(KID))
-        drm.content_keys[KID] = dl.LICENSE_KEY_CACHE[KID]
+        licences.append(ContentKeyResolver.LICENSE_KEY_CACHE.get(KID))
+        drm.content_keys[KID] = ContentKeyResolver.LICENSE_KEY_CACHE[KID]
 
-    cmd.decrypt_verified(drm, path, licence, KID)
+    keys.decrypt_verified(drm, path, licence, KID)
 
     assert path.read_bytes() == b"plain:" + GOOD.encode()
     assert drm.decrypted_with == [{KID: BAD}, {KID: GOOD}]
@@ -860,31 +898,34 @@ def test_api_vault_reports_the_pair_upstream(monkeypatch: pytest.MonkeyPatch, ca
 
 def test_prefer_vault_keys_queries_each_named_kid_once() -> None:
     asked: list[UUID] = []
-    cmd = dl.__new__(dl)
-    cmd.vaults = SimpleNamespace(get_key=lambda kid: asked.append(kid) or (None, None))
-    video, audio = (SimpleNamespace(kids=[KID], content_keys={KID: GOOD, SIBLING: BAD}) for _ in range(2))
 
-    cmd.prefer_vault_keys(
-        remote_keys(), SimpleNamespace(tracks=[SimpleNamespace(drm=[video]), SimpleNamespace(drm=[audio])])
-    )
+    class AskedVaults(NoVaults):
+        def get_key(self, kid: UUID) -> tuple[None, None]:
+            asked.append(kid)
+            return None, None
+
+        def held_locally(self, kid: UUID, key: str) -> bool:
+            return False
+
+    keys = resolver(AskedVaults(), source=SERVER)
+    keys.take_server_keys(batch_title({KID: GOOD, SIBLING: BAD}, {KID: GOOD, SIBLING: BAD}, kids=[KID]))
 
     assert asked == [KID]
 
 
-def test_cache_resolved_keys_skips_a_key_a_local_vault_holds(tmp_path: Path) -> None:
+def test_cache_resolved_keys_skips_a_key_a_local_vault_holds(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
     local = SQLite("local", tmp_path / "local.db")
     local.add_key("SVC", SIBLING, BAD)
-    cmd = dl.__new__(dl)
-    cmd.vaults = Vaults("SVC")
-    cmd.vaults.vaults = [local]
-    pushed: list[dict] = []
-    cmd.flush_vault_writes = lambda writes: pushed.extend(w.args[0] for w in writes)
-    dl.LICENSE_KEY_CACHE.clear()
-    drm = SimpleNamespace(kids=[KID], content_keys={KID: GOOD, SIBLING: BAD})
+    vaults = Vaults("SVC")
+    vaults.vaults = [local]
+    keys = resolver(vaults, source=SERVER)
 
-    cmd.cache_resolved_keys(remote_keys(), SimpleNamespace(tracks=[SimpleNamespace(drm=[drm])]))
+    keys.take_server_keys(batch_title({KID: GOOD, SIBLING: BAD}, kids=[KID]))
+    with caplog.at_level(logging.INFO, logger="download"):
+        keys.wait_vault_writes()
 
-    assert pushed == [{KID: GOOD}]
+    assert local.get_key(KID, "SVC") == GOOD
+    assert [r.getMessage() for r in caplog.records if r.name == "download"] == ["Cached 1 Key to 1/1 Vaults"]
 
 
 def test_api_vault_does_not_shrink_the_batch_on_429(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import logging
 import threading
-import time
 from types import SimpleNamespace
 from typing import Any, Callable, Optional
 from uuid import UUID
@@ -15,89 +13,72 @@ from pywidevine.pssh import PSSH
 from rich.table import Table
 from rich.tree import Tree
 
+from tests.core.key_resolver import NoVaults, key_table, resolver
 from tests.core.test_all_drm import playready
-from unshackle.commands.dl import dl
 from unshackle.core.cdm.detect import cdm_type_stub
 from unshackle.core.constants import DOWNLOAD_CANCELLED, DownloadCancelled
 from unshackle.core.drm import ClearKeyCENC, PlayReady, Widevine
+from unshackle.core.drm.key_resolution import ContentKeyResolver
 
 pytestmark = pytest.mark.unit
 
 KID_A, KID_B, KID_C = (UUID(c * 32) for c in "abc")
 KEYS = {KID_A: "aa" * 16, KID_B: "bb" * 16, KID_C: "cc" * 16}
+DEADLINE = 10
 
 
-class NoVaults:
-    sources: dict = {}
+class Licences(list):
+    """The thread name of each licence. A licence returns every content key of the title."""
 
-    def __bool__(self) -> bool:
-        return False
-
-    def get_key(self, kid: UUID) -> tuple[None, None]:
-        return None, None
+    def __init__(self) -> None:
+        super().__init__()
+        self.second_track_looked_up = threading.Event()
 
 
 @pytest.fixture
-def licences(monkeypatch: pytest.MonkeyPatch) -> list[str]:
-    """Each licence returns every content key of the title, after a delay that lets the tracks overlap."""
-    calls: list[str] = []
+def licences(monkeypatch: pytest.MonkeyPatch) -> Licences:
+    """The first licence returns only once the other track has asked the vaults, so the tracks overlap."""
+    calls = Licences()
 
     def get_content_keys(self: Widevine, **_: Any) -> None:
         calls.append(threading.current_thread().name)
-        time.sleep(0.2)
+        if threading.current_thread().name == "track-0":
+            calls.second_track_looked_up.wait(DEADLINE)
         self.content_keys = dict(KEYS)
 
     monkeypatch.setattr(Widevine, "get_content_keys", get_content_keys)
-    monkeypatch.setattr(dl, "LICENSE_KEY_CACHE", {})
-    monkeypatch.setattr(dl, "DRM_LOCKS", {})
     DOWNLOAD_CANCELLED.clear()
     yield calls
     DOWNLOAD_CANCELLED.clear()
 
 
-@pytest.fixture
-def cmd() -> dl:
-    cmd = dl.__new__(dl)
-    cmd.log = logging.getLogger(__name__)
-    cmd.service = "TEST"
-    cmd.vaults = NoVaults()
-    cmd.vault_cache_tally = None
-    cmd._remote_service = None
-    cmd.debug_logger = None
-    cmd.cdm = cdm_type_stub("widevine")
-    return cmd
+class TrackVaults(NoVaults):
+    """No key vault, but a lookup by the second track sets ``looked_up``."""
+
+    def __init__(self, looked_up: threading.Event) -> None:
+        self.looked_up = looked_up
+
+    def get_key(self, kid: UUID) -> tuple[None, None]:
+        if threading.current_thread().name == "track-1":
+            self.looked_up.set()
+        return None, None
 
 
 def widevine(*kids: UUID) -> Widevine:
     return Widevine(pssh=PSSH.new(system_id=PSSH.SystemId.Widevine, key_ids=list(kids)))
 
 
-def prepare(cmd: dl, drm: Widevine, track_kid: Optional[UUID], table: Table, **kwargs: Any) -> None:
-    cmd.prepare_drm(
-        drm,
-        track=SimpleNamespace(drm=[drm]),
-        title=None,
-        certificate=lambda **_: None,
-        licence=lambda **_: None,
-        table=table,
-        track_kid=track_kid,
-        **kwargs,
-    )
+def prepare(keys: ContentKeyResolver, drm: Any, track_kid: Optional[UUID], table: Table, all_drm: bool = False) -> None:
+    keys.licence_for(SimpleNamespace(drm=[drm]), None, table, all_drm)(drm, track_kid=track_kid)
 
 
-def new_table() -> Table:
-    table = Table.grid()
-    table.add_row("")
-    return table
-
-
-def run_together(cmd: dl, *jobs: tuple[Widevine, UUID]) -> tuple[Table, list[BaseException]]:
-    table = new_table()
+def run_together(keys: ContentKeyResolver, *jobs: tuple[Widevine, UUID]) -> tuple[Table, list[BaseException]]:
+    table = key_table()
     errors: list[BaseException] = []
 
     def run(drm: Widevine, kid: UUID) -> None:
         try:
-            prepare(cmd, drm, kid, table)
+            prepare(keys, drm, kid, table)
         except BaseException as e:
             errors.append(e)
 
@@ -114,10 +95,11 @@ def tree_labels(table: Table, kid: UUID) -> list[str]:
     return [str(child.label) for tree in trees for child in tree.children if kid.hex in str(child.label)]
 
 
-def test_one_licence_for_two_pssh_with_different_kids(cmd: dl, licences: list[str]) -> None:
+def test_one_licence_for_two_pssh_with_different_kids(licences: Licences) -> None:
+    keys = resolver(TrackVaults(licences.second_track_looked_up))
     first, second = widevine(KID_A, KID_B), widevine(KID_C)
 
-    table, errors = run_together(cmd, (first, KID_A), (second, KID_C))
+    table, errors = run_together(keys, (first, KID_A), (second, KID_C))
 
     assert not errors
     assert len(licences) == 1
@@ -125,33 +107,36 @@ def test_one_licence_for_two_pssh_with_different_kids(cmd: dl, licences: list[st
     assert any(label.endswith(" from cache") for kid in (KID_A, KID_C) for label in tree_labels(table, kid))
 
 
-def test_a_track_waiting_for_its_turn_sends_no_licence_after_a_failure(cmd: dl, licences: list[str]) -> None:
+def test_a_track_waiting_for_its_turn_sends_no_licence_after_a_failure(licences: Licences) -> None:
     DOWNLOAD_CANCELLED.set()
 
     with pytest.raises(DownloadCancelled):
-        prepare(cmd, widevine(KID_C), KID_C, new_table())
+        prepare(resolver(), widevine(KID_C), KID_C, key_table())
 
     assert licences == []
 
 
-def test_force_licenses_again_although_the_keys_are_cached(cmd: dl, licences: list[str]) -> None:
-    dl.LICENSE_KEY_CACHE.update(KEYS)
+def test_force_licenses_again_although_the_keys_are_cached(licences: Licences) -> None:
+    keys = resolver(cdm_only=True)
+    ContentKeyResolver.LICENSE_KEY_CACHE.update(KEYS)
 
-    prepare(cmd, widevine(KID_C), KID_C, new_table(), force=True)
+    prepare(keys, widevine(KID_C), KID_C, key_table(), all_drm=True)
 
     assert len(licences) == 1
 
 
-def test_a_key_label_is_added_once_with_its_marker_and_source() -> None:
-    tree = Tree("Widevine")
+def test_a_key_label_is_added_once_with_its_marker_and_source(licences: Licences) -> None:
+    keys = resolver()
+    ContentKeyResolver.LICENSE_KEY_CACHE[KID_A] = KEYS[KID_A]
+    table = key_table()
 
-    dl.add_key_label(tree, KID_A, KEYS[KID_A], KID_A, "from cache")
-    dl.add_key_label(tree, KID_A, KEYS[KID_A])
-    dl.add_key_label(tree, KID_B, KEYS[KID_B], KID_A)
+    prepare(keys, widevine(KID_A, KID_B), KID_B, table)
 
+    tree = list(table.columns[0].cells)[-1]
     assert [str(child.label) for child in tree.children] == [
-        f"[text2]{KID_A.hex}:{KEYS[KID_A]}* from cache",
-        f"[text2]{KID_B.hex}:{KEYS[KID_B]}",
+        f"[text2]{KID_A.hex}:{KEYS[KID_A]} from cache",
+        f"[text2]{KID_B.hex}:{KEYS[KID_B]}*",
+        f"[text2]{KID_C.hex}:{KEYS[KID_C]}",
     ]
 
 
@@ -165,25 +150,22 @@ def test_a_key_label_is_added_once_with_its_marker_and_source() -> None:
     ids=["widevine", "playready", "clearkey"],
 )
 def test_an_all_zero_licence_key_is_dropped(
-    cmd: dl, monkeypatch: pytest.MonkeyPatch, drm_class: type, build: Callable[[], Any], cdm: Optional[str]
+    monkeypatch: pytest.MonkeyPatch, drm_class: type, build: Callable[[], Any], cdm: Optional[str]
 ) -> None:
     def get_content_keys(self: Any, **_: Any) -> None:
         self.content_keys.update({KID_A: KEYS[KID_A], KID_C: "0" * 32})
 
     monkeypatch.setattr(drm_class, "get_content_keys", get_content_keys)
-    monkeypatch.setattr(dl, "LICENSE_KEY_CACHE", {})
-    monkeypatch.setattr(dl, "DRM_LOCKS", {})
+    keys = resolver(cdm=cdm_type_stub(cdm or "widevine"))
     drm = build()
-    if cdm:
-        cmd.cdm = cdm_type_stub(cdm)
 
-    prepare(cmd, drm, KID_A, new_table())
+    prepare(keys, drm, KID_A, key_table())
 
     assert drm.content_keys == {KID_A: KEYS[KID_A]}
-    assert dl.LICENSE_KEY_CACHE == {KID_A: KEYS[KID_A]}
+    assert ContentKeyResolver.LICENSE_KEY_CACHE == {KID_A: KEYS[KID_A]}
 
 
-def test_vaults_only_stops_at_the_first_kid_no_vault_holds(cmd: dl, licences: list[str]) -> None:
+def test_vaults_only_stops_at_the_first_kid_no_vault_holds(licences: Licences) -> None:
     asked: list[UUID] = []
 
     class EmptyVaults(NoVaults):
@@ -191,10 +173,8 @@ def test_vaults_only_stops_at_the_first_kid_no_vault_holds(cmd: dl, licences: li
             asked.append(kid)
             return None, None
 
-    cmd.vaults = EmptyVaults()
-
     with pytest.raises(Widevine.Exceptions.CEKNotFound, match=KID_A.hex):
-        prepare(cmd, widevine(KID_A, KID_B), KID_A, new_table(), vaults_only=True)
+        prepare(resolver(EmptyVaults(), vaults_only=True), widevine(KID_A, KID_B), KID_A, key_table())
 
     assert asked == [KID_A]
     assert licences == []
@@ -205,48 +185,50 @@ def refuse_licence(self: Widevine, **_: Any) -> None:
 
 
 def test_a_refused_licence_without_the_track_key_reports_the_licence_error(
-    cmd: dl, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
     monkeypatch.setattr(Widevine, "get_content_keys", refuse_licence)
-    monkeypatch.setattr(dl, "LICENSE_KEY_CACHE", {KID_B: KEYS[KID_B]})
-    monkeypatch.setattr(dl, "DRM_LOCKS", {})
-    table = new_table()
+    keys = resolver()
+    ContentKeyResolver.LICENSE_KEY_CACHE[KID_B] = KEYS[KID_B]
+    table = key_table()
 
     with pytest.raises(click.ClickException, match="^Licence request failed$"):
-        prepare(cmd, widevine(KID_A, KID_B), KID_A, table)
+        prepare(keys, widevine(KID_A, KID_B), KID_A, table)
 
     assert not [r for r in caplog.records if r.levelname == "WARNING"]
     tree = list(table.columns[0].cells)[-1]
     assert "Licence request failed" in str(tree.children[-1].label)
 
 
-def test_a_held_track_key_needs_no_licence(cmd: dl, licences: list[str], monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(dl, "LICENSE_KEY_CACHE", {KID_A: KEYS[KID_A]})
+def test_a_held_track_key_needs_no_licence(licences: Licences) -> None:
+    keys = resolver()
+    ContentKeyResolver.LICENSE_KEY_CACHE[KID_A] = KEYS[KID_A]
     drm = widevine(KID_A, KID_B)
 
-    prepare(cmd, drm, KID_A, new_table())
+    prepare(keys, drm, KID_A, key_table())
 
     assert licences == []
     assert drm.content_keys == {KID_A: KEYS[KID_A]}
 
 
-def test_force_licenses_a_held_track_key_again(cmd: dl, licences: list[str], monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(dl, "LICENSE_KEY_CACHE", {KID_A: KEYS[KID_A]})
+def test_force_licenses_a_held_track_key_again(licences: Licences) -> None:
+    keys = resolver(cdm_only=True)
+    ContentKeyResolver.LICENSE_KEY_CACHE[KID_A] = KEYS[KID_A]
 
-    prepare(cmd, widevine(KID_A, KID_B), KID_A, new_table(), force=True)
+    prepare(keys, widevine(KID_A, KID_B), KID_A, key_table(), all_drm=True)
 
     assert len(licences) == 1
 
 
 def test_a_refused_licence_keeps_the_known_keys_when_the_track_kid_is_unknown(
-    cmd: dl, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
     monkeypatch.setattr(Widevine, "get_content_keys", refuse_licence)
-    monkeypatch.setattr(dl, "LICENSE_KEY_CACHE", {KID_A: KEYS[KID_A]})
-    monkeypatch.setattr(dl, "DRM_LOCKS", {})
+    keys = resolver()
+    ContentKeyResolver.LICENSE_KEY_CACHE[KID_A] = KEYS[KID_A]
     drm = widevine(KID_A, KID_B)
 
-    prepare(cmd, drm, None, new_table())
+    prepare(keys, drm, None, key_table())
 
     assert drm.content_keys == {KID_A: KEYS[KID_A]}
     assert [r.getMessage() for r in caplog.records if r.levelname == "WARNING"] == [
