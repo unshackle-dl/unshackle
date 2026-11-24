@@ -15,8 +15,9 @@ from lxml import etree
 from unshackle.core.config import config
 from unshackle.core.manifests import DASH, HLS
 from unshackle.core.manifests.dash import PeriodRebase, mdhd_timescale, tfdt_fields
-from unshackle.core.manifests.ism_init import box, full_box
+from unshackle.core.manifests.ism_init import box, build_sinf, full_box
 from unshackle.core.manifests.snapshot import fragments, unpack
+from unshackle.core.manifests.trim import trim_overlaps
 from unshackle.core.tracks import Tracks
 from unshackle.core.tracks.track import DownloadContext, Track
 
@@ -305,3 +306,195 @@ def test_download_track_rebases_webvtt_periods(server: ThreadingHTTPServer, tmp_
         "00:00:02.100",
         "00:00:03.100",
     ]
+
+
+def audio_fragment(
+    decode_time: int,
+    samples: int,
+    duration: int = 1024,
+    encrypted: bool = False,
+    per_sample_durations: bool = True,
+    roll: bool = False,
+    extra: bytes = b"",
+) -> bytes:
+    """A moof of one-byte samples, then an mdat holding each sample's index.
+
+    encrypted adds senc, saiz and saio; roll adds an sbgp that puts the samples in two roll groups; extra goes in
+    the traf as it is.
+    """
+    tfhd_flags, defaults = (0x020000, b"") if per_sample_durations else (0x020008, struct.pack(">I", duration))
+    tfhd = full_box(b"tfhd", 0, tfhd_flags, struct.pack(">I", 1) + defaults)
+    tfdt = full_box(b"tfdt", 1, 0, struct.pack(">Q", decode_time))
+    entry = struct.pack(">II", duration, 1) if per_sample_durations else struct.pack(">I", 1)
+    trun_size = 8 + 4 + 8 + len(entry) * samples
+    half = samples // 2
+    sbgp = full_box(b"sbgp", 0, 0, b"roll" + struct.pack(">IIIII", 2, half, 1, samples - half, 2)) if roll else b""
+    head = 8 + 16 + 8 + len(tfhd) + len(tfdt) + trun_size + len(sbgp) + len(extra)
+    senc = saiz = saio = b""
+    if encrypted:
+        ivs = b"".join(struct.pack(">QHHI", n, 1, 0, 1) for n in range(samples))
+        senc = full_box(b"senc", 0, 0x2, struct.pack(">I", samples) + ivs)
+        saiz = full_box(b"saiz", 0, 0, struct.pack(">BI", 16, samples))
+        saio = full_box(b"saio", 0, 0, struct.pack(">II", 1, head + 16))
+    moof_size = head + len(senc) + len(saiz) + len(saio)
+    flags = 0x301 if per_sample_durations else 0x201
+    trun = full_box(b"trun", 0, flags, struct.pack(">II", samples, moof_size + 8) + entry * samples)
+    traf = box(b"traf", tfhd + tfdt + trun + sbgp + extra + senc + saiz + saio)
+    return box(b"moof", box(b"mfhd", b"\0" * 8) + traf) + box(b"mdat", bytes(range(samples)))
+
+
+def encrypted_init(timescale: int) -> bytes:
+    mdhd = full_box(b"mdhd", 0, 0, struct.pack(">III", 0, 0, timescale) + b"\0" * 8)
+    enca = box(b"enca", b"\0" * 28 + build_sinf(b"mp4a", b"\1" * 16, 8))
+    stsd = full_box(b"stsd", 0, 0, struct.pack(">I", 1) + enca)
+    return box(b"ftyp", b"iso6") + box(b"moov", box(b"trak", box(b"mdia", mdhd + box(b"minf", box(b"stbl", stsd)))))
+
+
+def box_at(data: bytes, kind: bytes) -> int:
+    return data.index(kind) - 4
+
+
+JOIN = 3 * 1024 + 100
+
+
+def overlapping(**kwargs: Any) -> bytes:
+    """Five samples, then a period join two samples before they end."""
+    return audio_fragment(0, 5, **kwargs) + audio_fragment(JOIN, 2, **kwargs)
+
+
+def test_trim_overlaps_drops_the_audio_past_the_next_period(tmp_path: Path) -> None:
+    path = tmp_path / "audio.mp4"
+    path.write_bytes(init_segment(48000) + box(b"sidx", b"\0" * 24) + overlapping())
+
+    assert trim_overlaps(path, {JOIN}) == 2
+
+    data = path.read_bytes()
+    assert b"sidx" not in data and b"free" in data
+    assert tfdts(data) == [0, JOIN]
+    mdat = box_at(data, b"mdat")
+    assert data[mdat : mdat + 11] == struct.pack(">I", 11) + b"mdat" + bytes(range(3))
+    assert trim_overlaps(path, {JOIN}) == 0
+
+
+def test_download_track_trims_audio_that_overlaps_the_next_period(server: ThreadingHTTPServer, tmp_path: Path) -> None:
+    # period 0 is 2 s in the manifest but its audio runs to 2.5 s; period 1 restarts at 0
+    for path, data in {
+        "/a0/init.mp4": init_segment(1000),
+        "/a0/1.m4s": audio_fragment(0, 3, 500),
+        "/a0/2.m4s": audio_fragment(1500, 2, 500),
+        "/a1/init.mp4": init_segment(1000),
+        "/a1/1.m4s": audio_fragment(0, 2, 500),
+        "/a1/2.m4s": audio_fragment(1000, 2, 500),
+    }.items():
+        server.routes[path] = data  # type: ignore[attr-defined]
+    periods = "".join(
+        f"""<Period id="{p}" duration="PT2S"><AdaptationSet contentType="audio" mimeType="audio/mp4" lang="en">
+  <Representation id="a0" codecs="mp4a.40.2" bandwidth="128000" audioSamplingRate="48000">
+    <SegmentTemplate timescale="1000" startNumber="1" initialization="a{p}/init.mp4" media="a{p}/$Number$.m4s">
+      <SegmentTimeline><S t="0" d="1000" r="1"/></SegmentTimeline>
+    </SegmentTemplate>
+  </Representation></AdaptationSet></Period>"""
+        for p in (0, 1)
+    )
+    mpd = f"""<?xml version="1.0"?>
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011" type="static" mediaPresentationDuration="PT4S">
+  <BaseURL>http://127.0.0.1:{server.server_address[1]}/</BaseURL>{periods}</MPD>"""
+    audio = DASH.from_text(mpd, "http://127.0.0.1/manifest.mpd").to_tracks(language="en").audio[0]
+    ctx = DownloadContext(
+        save_path=tmp_path / "out.mp4", save_dir=tmp_path / "a0_segments", progress=partial(lambda **kw: None)
+    )
+
+    DASH.download_track(audio, ctx)
+
+    data = (tmp_path / "out.mp4").read_bytes()
+    assert tfdts(data) == [0, 1500, 2000, 3000]
+    counts = [int.from_bytes(data[m.start() + 8 : m.start() + 12], "big") for m in re.finditer(b"trun", data)]
+    assert counts == [3, 1, 2, 2]
+
+
+def test_trim_overlaps_cuts_the_encryption_boxes_with_the_samples(tmp_path: Path) -> None:
+    path = tmp_path / "audio.mp4"
+    second = audio_fragment(JOIN, 2, encrypted=True, roll=True)
+    path.write_bytes(encrypted_init(48000) + audio_fragment(0, 5, encrypted=True, roll=True) + second)
+
+    assert trim_overlaps(path, {JOIN}) == 2
+
+    data = path.read_bytes()
+    moof, senc, saiz, saio, trun, sbgp, mdat = (
+        box_at(data, k) for k in (b"moof", b"senc", b"saiz", b"saio", b"trun", b"sbgp", b"mdat")
+    )
+    assert int.from_bytes(data[senc + 12 : senc + 16], "big") == 3
+    assert int.from_bytes(data[senc : senc + 4], "big") == 16 + 3 * 16
+    assert int.from_bytes(data[saiz + 13 : saiz + 17], "big") == 3
+    assert int.from_bytes(data[saio + 16 : saio + 20], "big") == senc + 16 - moof
+    assert struct.unpack_from(">IIIII", data, sbgp + 16) == (2, 2, 1, 1, 2)
+    assert int.from_bytes(data[trun + 16 : trun + 20], "big") == mdat + 8 - moof
+    assert data[mdat + 8 : mdat + 11] == bytes(range(3))
+    assert data.endswith(second)
+
+
+def test_trim_overlaps_reads_default_durations(tmp_path: Path) -> None:
+    path = tmp_path / "audio.mp4"
+    path.write_bytes(init_segment(48000) + overlapping(per_sample_durations=False))
+    assert trim_overlaps(path, {JOIN}) == 2
+
+
+def test_trim_overlaps_drops_a_fragment_wholly_past_the_next_one(tmp_path: Path) -> None:
+    path = tmp_path / "audio.mp4"
+    path.write_bytes(
+        init_segment(48000) + audio_fragment(0, 3) + audio_fragment(3 * 1024, 3) + audio_fragment(3 * 1024 + 400, 2)
+    )
+    assert trim_overlaps(path, {3 * 1024 + 400}) == 3
+    data = path.read_bytes()
+    assert tfdts(data) == [0, 3 * 1024 + 400]
+    assert data.count(b"mdat") == 2
+
+
+@pytest.mark.parametrize(
+    ("fragments", "joins"),
+    [
+        pytest.param([(0, 3), (3 * 1024, 3)], {3 * 1024}, id="continuous"),
+        pytest.param([(0, 5), (JOIN, 2)], {0}, id="overlap-away-from-a-join"),
+        pytest.param([(0, 4), (4096, 4), (8192, 4), (100, 4)], {4096}, id="backwards-tfdt"),
+    ],
+)
+def test_trim_overlaps_cuts_only_at_a_join(tmp_path: Path, fragments: list, joins: set) -> None:
+    path = tmp_path / "audio.mp4"
+    original = init_segment(48000) + b"".join(audio_fragment(t, n) for t, n in fragments)
+    path.write_bytes(original)
+    assert trim_overlaps(path, joins) == 0
+    assert path.read_bytes() == original
+
+
+@pytest.mark.parametrize(
+    "tail",
+    [
+        pytest.param(struct.pack(">I", 0) + b"mdat" + b"\0" * 8, id="size-0"),
+        pytest.param(struct.pack(">I", 1) + b"mdat" + struct.pack(">Q", 24) + b"\0" * 8, id="64-bit-size"),
+        pytest.param(box(b"mdat", b"\0" * 8)[:-2], id="truncated"),
+    ],
+)
+def test_trim_overlaps_leaves_a_file_it_cannot_read_to_the_end(tmp_path: Path, tail: bytes) -> None:
+    path = tmp_path / "audio.mp4"
+    original = init_segment(48000) + overlapping() + tail
+    path.write_bytes(original)
+    assert trim_overlaps(path, {JOIN}) == 0
+    assert path.read_bytes() == original
+
+
+def test_trim_overlaps_bounds_the_sample_count(tmp_path: Path) -> None:
+    tfhd = full_box(b"tfhd", 0, 0x020018, struct.pack(">III", 1, 1024, 1))
+    tfdt = full_box(b"tfdt", 1, 0, struct.pack(">Q", 0))
+    trun = full_box(b"trun", 0, 0x001, struct.pack(">II", 0xFFFFFFFF, 0))
+    huge = box(b"moof", box(b"traf", tfhd + tfdt + trun)) + box(b"mdat", b"\0" * 4)
+    path = tmp_path / "audio.mp4"
+    path.write_bytes(init_segment(48000) + huge + audio_fragment(100, 2))
+    assert trim_overlaps(path, {100}) == 0
+
+
+def test_trim_overlaps_logs_a_fragment_it_cannot_rewrite(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    path = tmp_path / "audio.mp4"
+    path.write_bytes(init_segment(48000) + overlapping(extra=box(b"sdtp", b"\0" * 4)))
+    with caplog.at_level("DEBUG", logger="DASH"):
+        assert trim_overlaps(path, {JOIN}) == 0
+    assert "1 overlapping audio fragments" in caplog.text

@@ -373,7 +373,8 @@ A typical `get_tracks` therefore looks like fetching the manifest text with
   When a period's fragment timeline starts again near 0, as in a stitched ad stream that
   packages each part of the title on its own, the merge moves that period to follow the
   periods it keeps before it. A timeline that continues is not changed, so the gaps of filtered ad
-  periods stay in it. Plain WebVTT periods and HLS subtitles across `EXT-X-DISCONTINUITY` blocks
+  periods stay in it. Audio that runs past a period join is cut where the next period
+  starts. Plain WebVTT periods and HLS subtitles across `EXT-X-DISCONTINUITY` blocks
   get the same treatment: fVTT through its tfdt, and WebVTT through its cue times, which move to
   the block's playlist start when that puts more cues inside the block.
 - **HLS** re-fetches the media playlist at download time, recovers `SUPPLEMENTAL-CODECS`

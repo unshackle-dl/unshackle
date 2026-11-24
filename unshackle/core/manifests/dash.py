@@ -35,6 +35,7 @@ from unshackle.core.drm import DRM_T, ClearKeyCENC, PlayReady, Widevine
 from unshackle.core.drm.segment_decrypt import SEGMENT_DRM_T, SegmentDecrypter, can_use
 from unshackle.core.drm.verify import decrypt_track, walk
 from unshackle.core.events import events
+from unshackle.core.manifests.trim import trim_overlaps
 from unshackle.core.session import RnetSession
 from unshackle.core.tracks import Audio, DownloadContext, Subtitle, Tracks, Video, resume
 from unshackle.core.tracks.track import (
@@ -191,7 +192,8 @@ class PeriodRebase:
     that is later. Any other period keeps the shift before it, or drops it when its own timeline is
     nearer its output start, so a continuous timeline keeps its decode times and gaps. A track whose
     first period starts later in the output but whose timeline starts near 0 is placed at that start.
-    Only tfdt moves; sidx, emsg and prft stay as they are.
+    Only tfdt moves; sidx, emsg and prft stay as they are. ``joins`` collects the output decode time of
+    each period after the first.
     """
 
     def __init__(self, periods: dict[int, tuple[float, float, float]], timescale: int) -> None:
@@ -200,6 +202,7 @@ class PeriodRebase:
         self.offset = 0
         self.base: Optional[int] = None
         self.previous: Optional[tuple[int, int, int]] = None
+        self.joins: set[int] = set()
 
     def append(self, dst: BinaryIO, segment_file: Path) -> None:
         period = self.periods.get(int(segment_file.stem))
@@ -245,6 +248,8 @@ class PeriodRebase:
                 self.offset = max(target, previous_end) - media_start
             elif self.offset and abs(media_start - target) < abs(media_start + self.offset - target):
                 self.offset = max(0, previous_end - media_start)
+        if self.previous:
+            self.joins.add(first + self.offset)
         self.previous = (first + self.offset, length, media_start + self.offset + length)
 
 
@@ -961,6 +966,13 @@ class DASH:
                     with suppress(OSError):
                         segment_file.unlink()
                     progress(advance=1)
+
+        if rebase and rebase.joins and isinstance(track, Audio):
+            try:
+                if dropped := trim_overlaps(save_path, rebase.joins):
+                    log.debug(f"Dropped {dropped} audio samples that overlap the next period: {save_path.name}")
+            except Exception as e:
+                log.warning(f"Could not trim the audio overlaps of {save_path.name}: {e}")
 
         track.path = save_path
         events.emit(events.Types.TRACK_DOWNLOADED, track=track)
