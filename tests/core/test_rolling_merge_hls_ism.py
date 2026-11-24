@@ -4,8 +4,8 @@ Same localhost-server shape as the DASH collapse test. Each parser downloads one
 track twice, with ``merge_segments`` off and on, and the two output files must be byte
 identical with no segment directory left behind, and the rolling run must report no Merging
 phase (the post-download run must). A second HLS case with a discontinuity checks that an
-ineligible playlist keeps the post-download merge and still produces the same bytes. A stalled
-drain must raise and leave no output file.
+ineligible playlist keeps the post-download merge and still produces the same bytes. The shared
+download, rolling merge and decrypt hand-off are tested on their own in test_segment_pipeline.
 """
 
 from __future__ import annotations
@@ -14,6 +14,7 @@ import threading
 from concurrent.futures import Future
 from functools import partial
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from uuid import UUID
 
 import pytest
@@ -25,11 +26,11 @@ from tests.core.test_hls_kid_from_init import KEY_LINE, no_kid_pssh
 from tests.core.test_ism_init import piff_fragment
 from unshackle.core.config import config
 from unshackle.core.constants import DOWNLOAD_CANCELLED
-from unshackle.core.drm import Widevine
-from unshackle.core.manifests import HLS, ISM
+from unshackle.core.drm import MonaLisa, Widevine
+from unshackle.core.manifests import DASH, HLS, ISM
+from unshackle.core.manifests import dash as dash_module
 from unshackle.core.manifests import hls as hls_module
-from unshackle.core.manifests import ism as ism_module
-from unshackle.core.manifests.dash import RollingMerge
+from unshackle.core.manifests import segment_pipeline
 from unshackle.core.manifests.ism_init import PIFF_SENC_UUID
 from unshackle.core.tracks.track import DownloadContext
 
@@ -126,6 +127,29 @@ def ism_track(srv):
     return ISM.from_text(manifest, f"{base(srv)}x.ism/manifest").to_tracks().audio[0]
 
 
+def dash_track(srv):
+    segment_urls = "\n".join(f'          <SegmentURL media="part{i}.m4s"/>' for i in range(len(PARTS)))
+    mpd = f"""<?xml version="1.0"?>
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011" type="static" profiles="urn:mpeg:dash:profile:isoff-on-demand:2011">
+  <BaseURL>{base(srv)}</BaseURL>
+  <Period id="0">
+    <AdaptationSet contentType="video" mimeType="video/mp4" lang="en">
+      <Representation id="v0" codecs="avc1.640028" bandwidth="1000000" width="1920" height="1080">
+        <SegmentList timescale="1">
+          <Initialization sourceURL="init.mp4"/>
+{segment_urls}
+        </SegmentList>
+      </Representation>
+    </AdaptationSet>
+  </Period>
+</MPD>"""
+    return DASH.from_text(mpd, url=f"{base(srv)}manifest.mpd").to_tracks(language="en").videos[0]
+
+
+def widevine() -> Widevine:
+    return Widevine(pssh=PSSH.new(system_id=PSSH.SystemId.Widevine, key_ids=[KID]))
+
+
 def download_both_ways(parser, make, tmp_path, monkeypatch, expect_rolling: bool) -> tuple[bytes, bytes]:
     monkeypatch.setattr(config, "merge_segments", False)
     plain = make_ctx(tmp_path, "plain.mp4")
@@ -159,14 +183,18 @@ def test_ism_rolling_matches_post_merge(server, tmp_path, monkeypatch):
     assert len(rolling) > len(b"".join(PARTS))
 
 
-@pytest.mark.parametrize("parser, make", [(HLS, hls_track), (ISM, lambda srv, _d=None: ism_track(srv))])
+@pytest.mark.parametrize(
+    "parser, make",
+    [(HLS, lambda srv: hls_track(srv, False)), (ISM, ism_track), (DASH, dash_track)],
+    ids=["hls", "ism", "dash"],
+)
 def test_incomplete_rolling_merge_raises_and_leaves_no_output(server, tmp_path, monkeypatch, parser, make):
     monkeypatch.setattr(config, "merge_segments", True)
     # a drain that never reaches the end must not ship a short file as a finished track
-    monkeypatch.setattr(RollingMerge, "add", lambda self, *a, **kw: None)
+    monkeypatch.setattr(segment_pipeline.RollingMerge, "add", lambda self, *a, **kw: None)
     ctx = make_ctx(tmp_path, "short.mp4")
     with pytest.raises(FileNotFoundError, match="Rolling merge appended 0 of"):
-        parser.download_track(make(server, False), ctx)
+        parser.download_track(make(server), ctx)
     assert not ctx.save_path.exists()
 
 
@@ -198,23 +226,38 @@ class FakeSegmentDecrypter:
         pass
 
 
-def no_decrypt(monkeypatch, module):
-    # the merged file is compared byte for byte, so the decrypt step and its check are stubbed
-    monkeypatch.setattr(module, "decrypt_track", lambda *a, **kw: None)
-    monkeypatch.setattr(module, "assert_fragments_decrypted", lambda *a, **kw: None)
+def no_decrypt(monkeypatch) -> list[tuple[object, bool]]:
+    """Stub the decrypt step and its check, and return the (drm, decrypt) of each decrypt call.
+
+    The merged file is compared byte for byte. The pipeline decrypts a merged track; HLS itself
+    decrypts each key range of a post-download merge.
+    """
+    calls: list[tuple[object, bool]] = []
+
+    def decrypt_track(drm, path, licence=None, track_kid=None, decrypt=True):
+        calls.append((drm, decrypt))
+
+    for module in (segment_pipeline, hls_module):
+        monkeypatch.setattr(module, "decrypt_track", decrypt_track)
+        monkeypatch.setattr(module, "assert_fragments_decrypted", lambda *a, **kw: None)
+    return calls
 
 
 def test_ism_encrypted_rolling_matches_post_merge(server, tmp_path, monkeypatch):
     for i, part in enumerate(PIFF_PARTS):
         server.routes[f"/x.ism/part{i}.m4s"] = part
-    no_decrypt(monkeypatch, ism_module)
+    decrypted = no_decrypt(monkeypatch)
+    drms: list[FakeDRM] = []
 
     def make():
         track = ism_track(server)
-        track.drm = [FakeDRM()]
+        drms.append(FakeDRM())
+        track.drm = [drms[-1]]
         return track
 
     plain, rolling = download_both_ways(ISM, make, tmp_path, monkeypatch, True)
+    # each run hands its licensed DRM to the decrypt step
+    assert decrypted == [(drms[0], True), (drms[1], True)]
     assert rolling == plain
     # every fragment went through the PIFF to CENC rewrite, and the head carries the KID
     assert PIFF_SENC_UUID not in rolling
@@ -228,11 +271,11 @@ def test_ism_encrypted_rolling_matches_post_merge(server, tmp_path, monkeypatch)
 def test_hls_segment_decrypt_rolling_writes_decrypted_init(server, tmp_path, monkeypatch):
     monkeypatch.setattr(hls_module, "can_use", lambda *a, **kw: True)
     monkeypatch.setattr(hls_module, "SegmentDecrypter", FakeSegmentDecrypter)
-    no_decrypt(monkeypatch, hls_module)
+    decrypted = no_decrypt(monkeypatch)
 
     def make():
         track = hls_track(server, False)
-        track.drm = [Widevine(pssh=PSSH.new(system_id=PSSH.SystemId.Widevine, key_ids=[KID]))]
+        track.drm = [widevine()]
         return track
 
     def download(name, merge_segments):
@@ -248,6 +291,61 @@ def test_hls_segment_decrypt_rolling_writes_decrypted_init(server, tmp_path, mon
     assert "Decrypting" in rolling.statuses
     assert rolling.save_path.read_bytes() == plain.save_path.read_bytes() == DECRYPTED_INIT + b"".join(PARTS)
     assert not rolling.save_dir.exists() or not list(rolling.save_dir.glob("*"))
+    # the segments are already clear, so the decrypt step only checks them
+    assert [decrypt for _, decrypt in decrypted] == [False, False]
+
+
+def test_dash_hands_the_drm_to_the_decrypt_step(server, tmp_path, monkeypatch):
+    decrypted = no_decrypt(monkeypatch)
+    drm = FakeDRM()
+    track = dash_track(server)
+    track.drm = [drm]
+    monkeypatch.setattr(config, "merge_segments", False)
+    ctx = make_ctx(tmp_path, "dash.mp4")
+    DASH.download_track(track, ctx)
+    assert decrypted == [(drm, True)]
+    assert ctx.save_path.read_bytes() == INIT + b"".join(PARTS)
+    assert track.drm is None
+
+
+@pytest.mark.parametrize("merge_segments", [False, True], ids=["post-merge", "rolling"])
+def test_dash_segment_decrypt_writes_decrypted_init_and_only_checks(server, tmp_path, monkeypatch, merge_segments):
+    monkeypatch.setattr(dash_module, "can_use", lambda *a, **kw: True)
+    monkeypatch.setattr(dash_module, "SegmentDecrypter", FakeSegmentDecrypter)
+    monkeypatch.setattr(config, "merge_segments", merge_segments)
+    decrypted = no_decrypt(monkeypatch)
+    track = dash_track(server)
+    track.drm = [widevine()]
+    ctx = make_ctx(tmp_path, "dash.mp4")
+    ctx.license_widevine = lambda *a, **kw: None
+    DASH.download_track(track, ctx)
+    assert ctx.save_path.read_bytes() == DECRYPTED_INIT + b"".join(PARTS)
+    assert [decrypt for _, decrypt in decrypted] == [False]
+
+
+@pytest.mark.parametrize("site", ["session-drm", "monalisa"])
+def test_hls_licence_failure_cancels_the_other_tracks(server, tmp_path, monkeypatch, site):
+    if site == "monalisa":
+        # extract_keys needs a real device file
+        monkeypatch.setattr(MonaLisa, "extract_keys", lambda self: None)
+        drm = MonaLisa("ticket", Path("unused.mld"))
+    else:
+        drm = widevine()
+    track = hls_track(server, False)
+    track.drm = [drm]
+    licensed: list[object] = []
+
+    def refuse(drm, **kw):
+        licensed.append(drm)
+        raise PermissionError("EXAMPLE licence refused")
+
+    ctx = make_ctx(tmp_path, "refused.mp4")
+    ctx.license_widevine = refuse
+    with pytest.raises(PermissionError, match="EXAMPLE licence refused"):
+        HLS.download_track(track, ctx)
+    assert licensed == [drm]
+    assert DOWNLOAD_CANCELLED.is_set()
+    assert ctx.statuses[-2:] == ["LICENSING", "[red]FAILED"]
 
 
 def test_hls_aes128_keeps_post_merge(server, tmp_path, monkeypatch):
@@ -272,7 +370,7 @@ def test_hls_rekey_takes_the_kid_from_the_init_segment_of_the_new_key(server, tm
     later_kid = UUID(hex="22222222222222222222222222222222")
     later_init = bytes(range(100, 200))
     server.routes["/init2.mp4"] = later_init
-    no_decrypt(monkeypatch, hls_module)
+    no_decrypt(monkeypatch)
     monkeypatch.setattr(config, "merge_segments", False)
 
     def key_line(content_id: bytes) -> str:

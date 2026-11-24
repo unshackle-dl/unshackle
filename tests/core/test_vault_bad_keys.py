@@ -177,12 +177,16 @@ def test_downloaders_route_through_the_hook(monkeypatch: pytest.MonkeyPatch) -> 
     """Every real decrypt site calls decrypt_track, so the dl hook sees it."""
     import inspect
 
-    from unshackle.core.manifests import dash, hls, ism
+    from unshackle.core.manifests import dash, hls, ism, segment_pipeline
     from unshackle.core.tracks import track
 
-    for module in (dash, hls, ism, track):
+    for module in (segment_pipeline, hls, track):
+        assert "decrypt_track(" in inspect.getsource(module), module.__name__
+    # DASH and ISM decrypt through the pipeline's complete_track, which calls decrypt_track
+    for module in (dash, ism):
+        assert "complete_track(" in inspect.getsource(module), module.__name__
+    for module in (dash, hls, ism, segment_pipeline, track):
         src = inspect.getsource(module)
-        assert "decrypt_track(" in src, module.__name__
         assert "drm.decrypt(save_path)" not in src and "drm.decrypt(merged_path)" not in src, module.__name__
 
 

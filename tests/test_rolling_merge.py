@@ -3,7 +3,7 @@ import random
 from concurrent.futures import Future
 from pathlib import Path
 
-from unshackle.core.manifests.dash import RollingMerge, append_segment
+from unshackle.core.manifests.segment_pipeline import RollingMerge, append_segment
 
 
 def write_segments(save_dir: Path, payloads: list[bytes]) -> int:

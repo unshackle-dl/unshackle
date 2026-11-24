@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import logging
 from collections import defaultdict
 from functools import partial
 from types import SimpleNamespace
@@ -282,10 +283,61 @@ def test_the_init_segment_adds_the_drm_system_the_track_does_not_have(monkeypatc
         Widevine, "from_init_data", classmethod(lambda cls, data: pytest.fail("the track has Widevine already"))
     )
     track = SimpleNamespace(drm=[wv], prefers_playready=lambda cdm: True)
+    track.pssh_order = lambda cdm: Track.pssh_order(track, cdm)
 
     Track.add_init_drm(track, b"init", None)
 
     assert track.drm == [wv, pr]
+
+
+@pytest.mark.parametrize(
+    ("preference", "found", "read", "expected"),
+    [
+        ("pr", {PlayReady, Widevine}, [PlayReady], PlayReady),
+        ("pr", {Widevine}, [PlayReady, Widevine], Widevine),
+        ("wv", {PlayReady, Widevine}, [Widevine], Widevine),
+        ("wv", {PlayReady}, [Widevine, PlayReady], PlayReady),
+    ],
+)
+def test_drm_from_pssh_reads_the_preferred_system_first(
+    preference: str, found: set, read: list, expected: type, caplog: pytest.LogCaptureFixture
+) -> None:
+    from unshackle.core.tracks import Video
+
+    track = Video("https://cdn.example/v.mp4", language="en")
+    track.drm_preference = preference
+    tried: list[type] = []
+
+    def read_pssh(system: Any) -> Any:
+        tried.append(system)
+        if system not in found:
+            raise system.Exceptions.PSSHNotFound()
+        return system
+
+    with caplog.at_level(logging.DEBUG, logger="EXAMPLE"):
+        track.drm_from_pssh(None, read_pssh, logging.getLogger("EXAMPLE"))
+
+    assert tried == read
+    assert track.drm == [expected]
+    assert not caplog.records
+
+
+def test_drm_from_pssh_without_a_pssh_logs_once_and_keeps_the_drm(caplog: pytest.LogCaptureFixture) -> None:
+    from unshackle.core.tracks import Video
+
+    track = Video("https://cdn.example/v.mp4", language="en")
+    track.drm_preference = "pr"
+
+    def read_pssh(system: Any) -> Any:
+        raise system.Exceptions.PSSHNotFound()
+
+    with caplog.at_level(logging.DEBUG, logger="EXAMPLE"):
+        track.drm_from_pssh(None, read_pssh, logging.getLogger("EXAMPLE"))
+
+    assert track.drm is None
+    assert [r.getMessage() for r in caplog.records] == [
+        "No PlayReady or Widevine PSSH was found for this track, is it DRM free?"
+    ]
 
 
 @pytest.mark.parametrize(

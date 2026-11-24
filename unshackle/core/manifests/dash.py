@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import base64
-import html
 import logging
 import math
 import mmap
@@ -9,8 +8,7 @@ import os
 import re
 import shutil
 from bisect import bisect_right
-from concurrent.futures import Future
-from contextlib import ExitStack, closing, suppress
+from contextlib import suppress
 from copy import deepcopy
 from functools import lru_cache, partial
 from pathlib import Path
@@ -29,21 +27,23 @@ from requests import Session
 
 from unshackle.core import binaries
 from unshackle.core.config import config
-from unshackle.core.constants import DOWNLOAD_ALL_DRM, DOWNLOAD_CANCELLED, DOWNLOAD_LICENCE_ONLY, AnyTrack
+from unshackle.core.constants import DOWNLOAD_ALL_DRM, DOWNLOAD_LICENCE_ONLY, AnyTrack
 from unshackle.core.downloaders.requests import parse_content_range
 from unshackle.core.drm import DRM_T, ClearKeyCENC, PlayReady, Widevine
 from unshackle.core.drm.segment_decrypt import SEGMENT_DRM_T, SegmentDecrypter, can_use
-from unshackle.core.drm.verify import decrypt_track, walk
-from unshackle.core.events import events
+from unshackle.core.drm.verify import walk
+from unshackle.core.manifests.segment_pipeline import (
+    append_segment,
+    check_merged,
+    complete_track,
+    fetch_segments,
+    license_drm,
+    licensing,
+)
 from unshackle.core.manifests.trim import trim_overlaps
 from unshackle.core.session import RnetSession
 from unshackle.core.tracks import Audio, DownloadContext, Subtitle, Tracks, Video, resume
-from unshackle.core.tracks.track import (
-    DRM_PREFERENCE_TYPES,
-    Track,
-    assert_fragments_decrypted,
-    parse_sidx,
-)
+from unshackle.core.tracks.track import DRM_PREFERENCE_TYPES, Track, parse_sidx
 from unshackle.core.utilities import is_close_match, log_event, try_ensure_utf8
 from unshackle.core.utils import run_proxy
 from unshackle.core.utils.bitrate import ranged_get
@@ -103,63 +103,6 @@ def rebase_webvtt_files(groups: list[list[Path]], bounds_ms: list[int]) -> None:
             continue
         for path, text in zip(group, parts):
             path.write_bytes(shift_webvtt(text, offset).encode("utf8"))
-
-
-def append_segment(dst: BinaryIO, segment_file: Path, is_text_subtitle: bool) -> None:
-    """Append one segment file to the output, with the text subtitle fixups when they apply."""
-    if is_text_subtitle:
-        segment_data = try_ensure_utf8(segment_file.read_bytes())
-        segment_data = (
-            segment_data.decode("utf8")
-            .replace("&lrm;", html.unescape("&lrm;"))
-            .replace("&rlm;", html.unescape("&rlm;"))
-            .encode("utf8")
-        )
-        dst.write(segment_data)
-    else:
-        with open(segment_file, "rb") as src:
-            shutil.copyfileobj(src, dst, 1024 * 1024)
-
-
-class RollingMerge:
-    """Appends segments to the output in index order as they arrive, out of order, and unlinks them.
-
-    A cursor holds the next expected index; every `add` records one ready segment and then drains
-    every contiguous ready segment from the cursor onward. A segment that carries a future (per-segment
-    decryption) waits for that future before the append, so the output never holds raw bytes.
-
-    `append(dst, segment_file)` writes one segment; the default is a plain byte copy. A parser
-    whose merge needs a per-segment transform, or a head that only exists once segment 0 has
-    landed (ISM), passes its own.
-    """
-
-    def __init__(self, dst: BinaryIO, append: Optional[Callable[[BinaryIO, Path], None]] = None) -> None:
-        self.dst = dst
-        self.append = append or (lambda dst, path: append_segment(dst, path, is_text_subtitle=False))
-        self.cursor = 0
-        self.ready: dict[int, tuple[Path, Optional[Future]]] = {}
-
-    def add(self, index: int, segment_file: Path, future: Optional[Future] = None) -> None:
-        # runs on the downloader's own loop, so a decrypt wait or a catch-up burst
-        # delays new submissions; move the drain to a writer thread if throughput measurably drops
-        self.ready[index] = (segment_file, future)
-        while self.cursor in self.ready:
-            path, pending = self.ready.pop(self.cursor)
-            if pending is not None:
-                pending.result()
-            self.append(self.dst, path)
-            self.cursor += 1
-            # the bytes are already in the output; a handle another process still holds on
-            # the just-replaced file (Windows) must not fail the track, the segment dir sweep
-            # after the download removes any leftover
-            try:
-                path.unlink()
-            except OSError:
-                pass
-
-    @property
-    def merged(self) -> int:
-        return self.cursor
 
 
 def mdhd_timescale(init_data: bytes) -> Optional[int]:
@@ -534,15 +477,10 @@ class DASH:
         save_path = ctx.save_path
         save_dir = ctx.save_dir
         progress = ctx.progress
-        proxy = ctx.proxy
-        max_workers = ctx.max_workers
-        adaptive = ctx.adaptive_workers
-        processes = ctx.download_processes
-        license_widevine = ctx.license_widevine
         cdm = ctx.cdm
 
-        if proxy:
-            session.proxies.update({"all": proxy})
+        if ctx.proxy:
+            session.proxies.update({"all": ctx.proxy})
 
         log = logging.getLogger("DASH")
         assert isinstance(track.url, str)
@@ -700,39 +638,16 @@ class DASH:
         elif DOWNLOAD_ALL_DRM.is_set() and init_data and binaries.FFProbe and isinstance(track, (Video, Audio)):
             track.add_init_drm(init_data, cdm)
         elif not track.drm and init_data and isinstance(track, (Video, Audio)):
-            prefers_playready = track.prefers_playready(cdm)
-            if prefers_playready:
-                try:
-                    track.drm = [PlayReady.from_init_data(init_data)]
-                except PlayReady.Exceptions.PSSHNotFound:
-                    try:
-                        track.drm = [Widevine.from_init_data(init_data)]
-                    except Widevine.Exceptions.PSSHNotFound:
-                        log.debug("No PlayReady or Widevine PSSH was found for this track, is it DRM free?")
-            else:
-                try:
-                    track.drm = [Widevine.from_init_data(init_data)]
-                except Widevine.Exceptions.PSSHNotFound:
-                    try:
-                        track.drm = [PlayReady.from_init_data(init_data)]
-                    except PlayReady.Exceptions.PSSHNotFound:
-                        log.debug("No Widevine or PlayReady PSSH was found for this track, is it DRM free?")
+            pssh_init = init_data
+            track.drm_from_pssh(cdm, lambda system: system.from_init_data(pssh_init), log)
 
         if track.drm:
             track_kid = track_kid or track.get_key_id(url=segments[0][0], session=session)
             drm = track.get_drm_for_cdm(cdm)
             if isinstance(drm, (Widevine, PlayReady, ClearKeyCENC)):
                 # license and grab content keys (ClearKeyCENC uses no CDM)
-                try:
-                    if not license_widevine:
-                        raise ValueError("license_widevine func must be supplied to use DRM")
-                    progress(downloaded="LICENSING")
-                    license_widevine(drm, track_kid=track_kid)
-                    progress(downloaded="[yellow]LICENSED")
-                except Exception:  # noqa
-                    DOWNLOAD_CANCELLED.set()  # skip pending track downloads
-                    progress(downloaded="[red]FAILED")
-                    raise
+                with licensing(ctx):
+                    license_drm(drm, ctx, track_kid=track_kid)
         else:
             drm = None
 
@@ -741,8 +656,6 @@ class DASH:
             return
 
         progress(total=len(segments))
-
-        downloader = track.downloader
 
         # A parent resource that is itself a valid MP4 downloads in one pass to save_path,
         # replacing the per-segment files, init write and merge pass.
@@ -773,37 +686,16 @@ class DASH:
             if can_resume:
                 resume.write_sidecar(save_dir, digest)
 
-        downloader_args: dict[str, Any]
+        urls: list[dict[str, Any]]
         if collapse_single_url:
             # must carry no Range header, or the downloader would skip its ranged-parallel path
-            downloader_args = dict(
-                urls=[{"url": segments[0][0]}],
-                output_dir=save_path.parent,
-                filename=save_path.name,
-                headers=session.headers,
-                cookies=session.cookies,
-                proxy=proxy,
-                max_workers=max_workers,
-                session=session,
-                adaptive=adaptive,
-                processes=processes,
-            )
+            urls, output_dir, filename = [{"url": segments[0][0]}], save_path.parent, save_path.name
         else:
-            downloader_args = dict(
-                urls=[
-                    {"url": url, "headers": {"Range": f"bytes={bytes_range}"} if bytes_range else {}}
-                    for url, bytes_range in segments
-                ],
-                output_dir=save_dir,
-                filename="{i:0%d}.mp4" % (len(str(len(segments)))),
-                headers=session.headers,
-                cookies=session.cookies,
-                proxy=proxy,
-                max_workers=max_workers,
-                session=session,
-                adaptive=adaptive,
-                processes=processes,
-            )
+            urls = [
+                {"url": url, "headers": {"Range": f"bytes={bytes_range}"} if bytes_range else {}}
+                for url, bytes_range in segments
+            ]
+            output_dir, filename = save_dir, "{i:0%d}.mp4" % (len(str(len(segments))))
 
         log_event(
             "manifest_dash_download_start",
@@ -826,7 +718,7 @@ class DASH:
 
         decrypter: Optional[SegmentDecrypter] = None
         if use_segment_decrypt and init_data:
-            decrypter = SegmentDecrypter(cast(SEGMENT_DRM_T, drm), init_data, save_dir.parent, max_workers)
+            decrypter = SegmentDecrypter(cast(SEGMENT_DRM_T, drm), init_data, save_dir.parent, ctx.max_workers)
 
         rebase: Optional[PeriodRebase] = None
         known = timed and len(period_starts) > 1
@@ -835,41 +727,19 @@ class DASH:
             rebase = PeriodRebase(period_starts, timescale)
         append = rebase.append if rebase else partial(append_segment, is_text_subtitle=is_text_subtitle)
 
-        merger: Optional[RollingMerge] = None
-        try:
-            with ExitStack() as stack:
-                if use_rolling_merge:
-                    output = stack.enter_context(open(save_path, "wb"))
-                    head = decrypter.init_bytes() if decrypter else init_data
-                    if head:
-                        output.write(head)
-                    merger = RollingMerge(output, append)
-
-                # an exception raised in this body (a decrypt failure re-raised by the merge)
-                # must close the generator now, so its finally aborts the workers
-                stream = stack.enter_context(closing(downloader(**downloader_args)))
-                for status_update in stream:
-                    file_downloaded = status_update.get("file_downloaded")
-                    if file_downloaded:
-                        future = decrypter.submit(file_downloaded) if decrypter else None
-                        # listeners get the segment while it still exists; the merge unlinks it
-                        events.emit(events.Types.SEGMENT_DOWNLOADED, track=track, segment=file_downloaded)
-                        if merger:
-                            merger.add(int(file_downloaded.stem), file_downloaded, future)
-                    else:
-                        downloaded = status_update.get("downloaded")
-                        if downloaded and downloaded.endswith("/s"):
-                            status_update["downloaded"] = f"DASH {downloaded}"
-                        progress(**status_update)
-
-            if decrypter:
-                init_data = decrypter.finish()
-        except BaseException:
-            if decrypter:
-                decrypter.close()
-            if merger:
-                save_path.unlink(missing_ok=True)
-            raise
+        merger, init_data = fetch_segments(
+            track,
+            ctx,
+            session,
+            "DASH",
+            urls,
+            output_dir,
+            filename,
+            rolling=use_rolling_merge,
+            init=init_data,
+            append=append,
+            decrypter=decrypter,
+        )
 
         if collapse_span:
             with open(save_path, "r+b") as collapsed:
@@ -877,22 +747,7 @@ class DASH:
         elif merger:
             for control_file in save_dir.glob("*.!dev"):
                 control_file.unlink(missing_ok=True)
-            if merger.merged != len(segments):
-                error_msg = f"Rolling merge appended {merger.merged} of {len(segments)} segments: {save_dir}"
-                log_event(
-                    "manifest_dash_rolling_merge_incomplete",
-                    level="ERROR",
-                    message=error_msg,
-                    context={
-                        "track_id": getattr(track, "id", None),
-                        "track_type": track.__class__.__name__,
-                        "save_dir": str(save_dir),
-                        "merged": merger.merged,
-                        "total_segments": len(segments),
-                        "downloader": "requests",
-                    },
-                )
-                raise FileNotFoundError(error_msg)
+            check_merged(merger, len(segments), track, ctx, "DASH")
         else:
             if not save_dir.exists():
                 error_msg = f"Output directory does not exist: {save_dir}"
@@ -974,26 +829,7 @@ class DASH:
             except Exception as e:
                 log.warning(f"Could not trim the audio overlaps of {save_path.name}: {e}")
 
-        track.path = save_path
-        events.emit(events.Types.TRACK_DOWNLOADED, track=track)
-
-        if drm:
-            progress(downloaded="Decrypting", completed=0, total=None)
-            decrypt_track(drm, save_path, license_widevine, decrypt=not decrypter)
-            assert_fragments_decrypted(save_path)
-            track.drm = None
-            events.emit(events.Types.TRACK_DECRYPTED, track=track, drm=drm, segment=None)
-            progress(downloaded="Decrypted", completed=100, total=100)
-
-        if save_dir.exists() and save_dir.name.endswith("_segments"):
-            try:
-                save_dir.rmdir()
-            except OSError:
-                # Directory might not be empty, try removing recursively
-                shutil.rmtree(save_dir, ignore_errors=True)
-        resume.clear_sidecar(save_dir)
-
-        progress(downloaded="Downloaded")
+        complete_track(track, ctx, drm, decrypt=not decrypter)
 
     @staticmethod
     def find_segment_element(name: str, adaptation_set: Element, representation: Element) -> Optional[Element]:

@@ -8,7 +8,7 @@ import re
 import shutil
 import struct
 import urllib.parse
-from contextlib import ExitStack, closing, suppress
+from contextlib import suppress
 from pathlib import Path
 from typing import Any, BinaryIO, Optional, Union
 
@@ -19,11 +19,9 @@ from pywidevine.pssh import PSSH
 from requests import Session
 
 from unshackle.core.config import config
-from unshackle.core.constants import DOWNLOAD_CANCELLED, DOWNLOAD_LICENCE_ONLY, AnyTrack
+from unshackle.core.constants import DOWNLOAD_LICENCE_ONLY, AnyTrack
 from unshackle.core.drm import DRM_T, PlayReady, Widevine
-from unshackle.core.drm.verify import decrypt_track
-from unshackle.core.events import events
-from unshackle.core.manifests.dash import RollingMerge, append_segment, missing_language
+from unshackle.core.manifests.dash import missing_language
 from unshackle.core.manifests.ism_init import (
     build_init_segment,
     parse_codec_private_data_vui,
@@ -31,9 +29,16 @@ from unshackle.core.manifests.ism_init import (
     read_per_sample_iv_size,
     read_track_id,
 )
+from unshackle.core.manifests.segment_pipeline import (
+    append_segment,
+    check_merged,
+    complete_track,
+    fetch_segments,
+    license_drm,
+    licensing,
+)
 from unshackle.core.session import RnetSession
 from unshackle.core.tracks import Audio, DownloadContext, Subtitle, Track, Tracks, Video, resume
-from unshackle.core.tracks.track import assert_fragments_decrypted
 from unshackle.core.utilities import log_event, try_ensure_utf8
 from unshackle.core.utils import run_proxy
 from unshackle.core.utils.redact import safe_display_url
@@ -403,15 +408,9 @@ class ISM:
         save_path = ctx.save_path
         save_dir = ctx.save_dir
         progress = ctx.progress
-        proxy = ctx.proxy
-        max_workers = ctx.max_workers
-        adaptive = ctx.adaptive_workers
-        processes = ctx.download_processes
-        license_widevine = ctx.license_widevine
-        cdm = ctx.cdm
 
-        if proxy:
-            session.proxies.update({"all": proxy})
+        if ctx.proxy:
+            session.proxies.update({"all": ctx.proxy})
 
         segments: list[str] = track.data["ism"]["segments"]
         segment_times: list[int] = track.data["ism"].get("segment_times") or []
@@ -424,26 +423,16 @@ class ISM:
         if track.drm:
             # Mirror HLS.download_track: pick the DRM matching the provided CDM
             # (or the first available) and license it if supported.
-            session_drm = track.get_drm_for_cdm(cdm)
+            session_drm = track.get_drm_for_cdm(ctx.cdm)
             if isinstance(session_drm, (Widevine, PlayReady)):
-                try:
-                    if not license_widevine:
-                        raise ValueError("license_widevine func must be supplied to use DRM")
-                    progress(downloaded="LICENSING")
-                    license_widevine(session_drm)
-                    progress(downloaded="[yellow]LICENSED")
-                except Exception:
-                    DOWNLOAD_CANCELLED.set()
-                    progress(downloaded="[red]FAILED")
-                    raise
+                with licensing(ctx):
+                    license_drm(session_drm, ctx)
 
         if DOWNLOAD_LICENCE_ONLY.is_set():
             progress(downloaded="[yellow]SKIPPED")
             return
 
         progress(total=len(segments))
-
-        downloader = track.downloader
 
         use_rolling_merge = config.merge_segments and not isinstance(track, Subtitle)
         can_resume = config.continue_downloads and not use_rolling_merge
@@ -455,19 +444,6 @@ class ISM:
         save_dir.mkdir(parents=True, exist_ok=True)
         if can_resume:
             resume.write_sidecar(save_dir, digest)
-
-        downloader_args: dict[str, Any] = dict(
-            urls=[{"url": url} for url in segments],
-            output_dir=save_dir,
-            filename="{i:0%d}.mp4" % len(str(len(segments))),
-            headers=session.headers,
-            cookies=session.cookies,
-            proxy=proxy,
-            max_workers=max_workers,
-            session=session,
-            adaptive=adaptive,
-            processes=processes,
-        )
 
         log_event(
             "manifest_ism_download_start",
@@ -501,28 +477,17 @@ class ISM:
             else:
                 append_segment(dst, segment_file, is_text_subtitle=False)
 
-        merger: Optional[RollingMerge] = None
-        try:
-            with ExitStack() as stack:
-                if use_rolling_merge:
-                    output = stack.enter_context(open(save_path, "wb"))
-                    merger = RollingMerge(output, append_ism)
-                stream = stack.enter_context(closing(downloader(**downloader_args)))
-                for status_update in stream:
-                    file_downloaded = status_update.get("file_downloaded")
-                    if file_downloaded:
-                        events.emit(events.Types.SEGMENT_DOWNLOADED, track=track, segment=file_downloaded)
-                        if merger:
-                            merger.add(int(file_downloaded.stem), file_downloaded)
-                    else:
-                        downloaded = status_update.get("downloaded")
-                        if downloaded and downloaded.endswith("/s"):
-                            status_update["downloaded"] = f"ISM {downloaded}"
-                        progress(**status_update)
-        except BaseException:
-            if merger:
-                save_path.unlink(missing_ok=True)
-            raise
+        merger, _ = fetch_segments(
+            track,
+            ctx,
+            session,
+            "ISM",
+            [{"url": url} for url in segments],
+            save_dir,
+            "{i:0%d}.mp4" % len(str(len(segments))),
+            rolling=use_rolling_merge,
+            append=append_ism,
+        )
 
         if not save_dir.exists():
             error_msg = f"Output directory does not exist: {save_dir}"
@@ -543,23 +508,8 @@ class ISM:
         for control_file in save_dir.glob("*.!dev"):
             control_file.unlink(missing_ok=True)
 
-        if merger and merger.merged != len(segments):
-            error_msg = f"Rolling merge appended {merger.merged} of {len(segments)} segments: {save_dir}"
-            log_event(
-                "manifest_ism_rolling_merge_incomplete",
-                level="ERROR",
-                message=error_msg,
-                context={
-                    "track_id": getattr(track, "id", None),
-                    "track_type": track.__class__.__name__,
-                    "save_dir": str(save_dir),
-                    "merged": merger.merged,
-                    "total_segments": len(segments),
-                    "downloader": "requests",
-                },
-            )
-            save_path.unlink(missing_ok=True)
-            raise FileNotFoundError(error_msg)
+        if merger:
+            check_merged(merger, len(segments), track, ctx, "ISM")
 
         segments_to_merge = [] if merger else [x for x in sorted(save_dir.iterdir()) if x.is_file()]
 
@@ -633,24 +583,7 @@ class ISM:
                         segment_file.unlink()
                     progress(advance=1)
 
-        track.path = save_path
-        events.emit(events.Types.TRACK_DOWNLOADED, track=track)
-
-        if session_drm:
-            progress(downloaded="Decrypting", completed=0, total=None)
-            decrypt_track(session_drm, save_path, license_widevine)
-            assert_fragments_decrypted(save_path)
-            track.drm = None
-            events.emit(events.Types.TRACK_DECRYPTED, track=track, drm=session_drm, segment=None)
-            progress(downloaded="Decrypted", completed=100, total=100)
-
-        try:
-            save_dir.rmdir()
-        except OSError:
-            # a superseded hedge download may still drop a .!dev file here
-            shutil.rmtree(save_dir, ignore_errors=True)
-        resume.clear_sidecar(save_dir)
-        progress(downloaded="Downloaded")
+        complete_track(track, ctx, session_drm)
 
 
 __all__ = ("ISM",)
