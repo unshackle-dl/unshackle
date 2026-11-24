@@ -376,8 +376,11 @@ def test_trim_overlaps_drops_the_audio_past_the_next_period(tmp_path: Path) -> N
     assert trim_overlaps(path, {JOIN}) == 0
 
 
-def test_download_track_trims_audio_that_overlaps_the_next_period(server: ThreadingHTTPServer, tmp_path: Path) -> None:
+def test_download_track_trims_audio_that_overlaps_the_next_period(
+    server: ThreadingHTTPServer, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     # period 0 is 2 s in the manifest but its audio runs to 2.5 s; period 1 restarts at 0
+    monkeypatch.setattr(Track, "get_key_id", lambda self, *args, **kwargs: None)
     for path, data in {
         "/a0/init.mp4": init_segment(1000),
         "/a0/1.m4s": audio_fragment(0, 3, 500),
