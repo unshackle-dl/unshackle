@@ -1,0 +1,4044 @@
+{
+ "DELETE /api/dashboard/drain no key": {
+  "body": {
+   "message": "Dashboard key is invalid.",
+   "status": 401
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [],
+  "stats": {
+   "error": null,
+   "late_status": null
+  },
+  "status": 401
+ },
+ "DELETE /api/download/jobs/{job_id} no key": {
+  "body": {
+   "message": "Secret Key is Empty.",
+   "status": 401
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [],
+  "stats": {
+   "error": null,
+   "late_status": null
+  },
+  "status": 401
+ },
+ "DELETE /api/history/{job_id} no key": {
+  "body": {
+   "message": "Secret Key is Empty.",
+   "status": 401
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [],
+  "stats": {
+   "error": null,
+   "late_status": null
+  },
+  "status": 401
+ },
+ "DELETE /api/session/{session_id} no key": {
+  "body": {
+   "message": "Secret Key is Empty.",
+   "status": 401
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [],
+  "stats": {
+   "error": null,
+   "late_status": null
+  },
+  "status": 401
+ },
+ "DELETE /api/session/{session_id} plain before the handler's try": {
+  "body": {
+   "error_code": "INTERNAL_ERROR",
+   "message": "Internal server error (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [],
+  "stats": {
+   "raised": true
+  },
+  "status": 422
+ },
+ "DELETE /api/session/{session_id} unknown session": {
+  "body": {
+   "details": {
+    "session_id": "pinned-session"
+   },
+   "error_code": "SESSION_NOT_FOUND",
+   "message": "Session not found or expired: pinned-session (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: SESSION_NOT_FOUND 404 DELETE /api/session/pinned-session service=- user=test\u2026: Session not found or expired: pinned-session"
+  ],
+  "stats": {
+   "error": {
+    "code": "SESSION_NOT_FOUND",
+    "message": "Session not found or expired: pinned-session",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 404
+ },
+ "DELETE /api/session/{session_id} wrong owner": {
+  "body": {
+   "error_code": "FORBIDDEN",
+   "message": "Session access denied (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: FORBIDDEN 403 DELETE /api/session/pinned-session service=EXAMPLE user=test\u2026: Session access denied"
+  ],
+  "stats": {
+   "error": {
+    "code": "FORBIDDEN",
+    "message": "Session access denied",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 403
+ },
+ "GET /api/config no key": {
+  "body": {
+   "message": "Secret Key is Empty.",
+   "status": 401
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [],
+  "stats": {
+   "error": null,
+   "late_status": null
+  },
+  "status": 401
+ },
+ "GET /api/dashboard/cdm-logs no key": {
+  "body": {
+   "message": "Dashboard key is invalid.",
+   "status": 401
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [],
+  "stats": {
+   "error": null,
+   "late_status": null
+  },
+  "status": 401
+ },
+ "GET /api/dashboard/events no key": {
+  "body": {
+   "message": "Dashboard key is invalid.",
+   "status": 401
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [],
+  "stats": {
+   "error": null,
+   "late_status": null
+  },
+  "status": 401
+ },
+ "GET /api/dashboard/health no key": {
+  "body": {
+   "message": "Dashboard key is invalid.",
+   "status": 401
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [],
+  "stats": {
+   "error": null,
+   "late_status": null
+  },
+  "status": 401
+ },
+ "GET /api/dashboard/jobs no key": {
+  "body": {
+   "message": "Dashboard key is invalid.",
+   "status": 401
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [],
+  "stats": {
+   "error": null,
+   "late_status": null
+  },
+  "status": 401
+ },
+ "GET /api/dashboard/keys no key": {
+  "body": {
+   "message": "Dashboard key is invalid.",
+   "status": 401
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [],
+  "stats": {
+   "error": null,
+   "late_status": null
+  },
+  "status": 401
+ },
+ "GET /api/dashboard/logs no key": {
+  "body": {
+   "message": "Dashboard key is invalid.",
+   "status": 401
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [],
+  "stats": {
+   "error": null,
+   "late_status": null
+  },
+  "status": 401
+ },
+ "GET /api/dashboard/services no key": {
+  "body": {
+   "message": "Dashboard key is invalid.",
+   "status": 401
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [],
+  "stats": {
+   "error": null,
+   "late_status": null
+  },
+  "status": 401
+ },
+ "GET /api/dashboard/sessions no key": {
+  "body": {
+   "message": "Dashboard key is invalid.",
+   "status": 401
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [],
+  "stats": {
+   "error": null,
+   "late_status": null
+  },
+  "status": 401
+ },
+ "GET /api/dashboard/sessions/{session_id}/logs no key": {
+  "body": {
+   "message": "Dashboard key is invalid.",
+   "status": 401
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [],
+  "stats": {
+   "error": null,
+   "late_status": null
+  },
+  "status": 401
+ },
+ "GET /api/dashboard/status no key": {
+  "body": {
+   "message": "Dashboard key is invalid.",
+   "status": 401
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [],
+  "stats": {
+   "error": null,
+   "late_status": null
+  },
+  "status": 401
+ },
+ "GET /api/download/jobs no key": {
+  "body": {
+   "message": "Secret Key is Empty.",
+   "status": 401
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [],
+  "stats": {
+   "error": null,
+   "late_status": null
+  },
+  "status": 401
+ },
+ "GET /api/download/jobs/{job_id} no key": {
+  "body": {
+   "message": "Secret Key is Empty.",
+   "status": 401
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [],
+  "stats": {
+   "error": null,
+   "late_status": null
+  },
+  "status": 401
+ },
+ "GET /api/download/jobs/{job_id}/events no key": {
+  "body": {
+   "message": "Secret Key is Empty.",
+   "status": 401
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [],
+  "stats": {
+   "error": null,
+   "late_status": null
+  },
+  "status": 401
+ },
+ "GET /api/env/check no key": {
+  "body": {
+   "message": "Secret Key is Empty.",
+   "status": 401
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [],
+  "stats": {
+   "error": null,
+   "late_status": null
+  },
+  "status": 401
+ },
+ "GET /api/health no key": {
+  "body": {
+   "message": "Secret Key is Empty.",
+   "status": 401
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [],
+  "stats": {
+   "error": null,
+   "late_status": null
+  },
+  "status": 401
+ },
+ "GET /api/history no key": {
+  "body": {
+   "message": "Secret Key is Empty.",
+   "status": 401
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [],
+  "stats": {
+   "error": null,
+   "late_status": null
+  },
+  "status": 401
+ },
+ "GET /api/profiles no key": {
+  "body": {
+   "message": "Secret Key is Empty.",
+   "status": 401
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [],
+  "stats": {
+   "error": null,
+   "late_status": null
+  },
+  "status": 401
+ },
+ "GET /api/remote/logins no key": {
+  "body": {
+   "message": "Secret Key is Empty.",
+   "status": 401
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [],
+  "stats": {
+   "error": null,
+   "late_status": null
+  },
+  "status": 401
+ },
+ "GET /api/services no key": {
+  "body": {
+   "message": "Secret Key is Empty.",
+   "status": 401
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [],
+  "stats": {
+   "error": null,
+   "late_status": null
+  },
+  "status": 401
+ },
+ "GET /api/session/{session_id} no key": {
+  "body": {
+   "message": "Secret Key is Empty.",
+   "status": 401
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [],
+  "stats": {
+   "error": null,
+   "late_status": null
+  },
+  "status": 401
+ },
+ "GET /api/session/{session_id} plain before the handler's try": {
+  "body": {
+   "error_code": "INTERNAL_ERROR",
+   "message": "Internal server error (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [],
+  "stats": {
+   "raised": true
+  },
+  "status": 422
+ },
+ "GET /api/session/{session_id} unknown session": {
+  "body": {
+   "details": {
+    "session_id": "pinned-session"
+   },
+   "error_code": "SESSION_NOT_FOUND",
+   "message": "Session not found or expired: pinned-session (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: SESSION_NOT_FOUND 404 GET /api/session/pinned-session service=- user=test\u2026: Session not found or expired: pinned-session"
+  ],
+  "stats": {
+   "error": {
+    "code": "SESSION_NOT_FOUND",
+    "message": "Session not found or expired: pinned-session",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 404
+ },
+ "GET /api/session/{session_id} wrong owner": {
+  "body": {
+   "error_code": "FORBIDDEN",
+   "message": "Session access denied (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: FORBIDDEN 403 GET /api/session/pinned-session service=EXAMPLE user=test\u2026: Session access denied"
+  ],
+  "stats": {
+   "error": {
+    "code": "FORBIDDEN",
+    "message": "Session access denied",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 403
+ },
+ "GET /api/session/{session_id}/channel no key": {
+  "body": {
+   "message": "Secret Key is Empty.",
+   "status": 401
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [],
+  "stats": {
+   "error": null,
+   "late_status": null
+  },
+  "status": 401
+ },
+ "GET /api/session/{session_id}/channel plain before the handler's try": {
+  "body": {
+   "error_code": "INTERNAL_ERROR",
+   "message": "Internal server error (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [],
+  "stats": {
+   "raised": true
+  },
+  "status": 422
+ },
+ "GET /api/session/{session_id}/channel unknown session": {
+  "body": {
+   "details": {
+    "session_id": "pinned-session"
+   },
+   "error_code": "SESSION_NOT_FOUND",
+   "message": "Session not found or expired: pinned-session (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: SESSION_NOT_FOUND 404 GET /api/session/pinned-session/channel service=- user=test\u2026: Session not found or expired: pinned-session"
+  ],
+  "stats": {
+   "error": {
+    "code": "SESSION_NOT_FOUND",
+    "message": "Session not found or expired: pinned-session",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 404
+ },
+ "GET /api/session/{session_id}/channel wrong owner": {
+  "body": {
+   "error_code": "FORBIDDEN",
+   "message": "Session access denied (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: FORBIDDEN 403 GET /api/session/pinned-session/channel service=EXAMPLE user=test\u2026: Session access denied"
+  ],
+  "stats": {
+   "error": {
+    "code": "FORBIDDEN",
+    "message": "Session access denied",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 403
+ },
+ "GET /api/session/{session_id}/logs no key": {
+  "body": {
+   "message": "Secret Key is Empty.",
+   "status": 401
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [],
+  "stats": {
+   "error": null,
+   "late_status": null
+  },
+  "status": 401
+ },
+ "GET /api/session/{session_id}/logs plain before the handler's try": {
+  "body": {
+   "details": {
+    "operation": "session_logs"
+   },
+   "error_code": "INTERNAL_ERROR",
+   "message": "An unexpected error occurred: pinned failure (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: INTERNAL_ERROR 422 GET /api/session/pinned-session/logs service=- user=test\u2026: An unexpected error occurred: pinned failure"
+  ],
+  "stats": {
+   "error": {
+    "code": "INTERNAL_ERROR",
+    "message": "An unexpected error occurred: pinned failure",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 422
+ },
+ "GET /api/session/{session_id}/logs unknown session": {
+  "body": {
+   "details": {
+    "session_id": "pinned-session"
+   },
+   "error_code": "SESSION_NOT_FOUND",
+   "message": "Session not found or expired: pinned-session (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: SESSION_NOT_FOUND 404 GET /api/session/pinned-session/logs service=- user=test\u2026: Session not found or expired: pinned-session"
+  ],
+  "stats": {
+   "error": {
+    "code": "SESSION_NOT_FOUND",
+    "message": "Session not found or expired: pinned-session",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 404
+ },
+ "GET /api/session/{session_id}/logs wrong owner": {
+  "body": {
+   "error_code": "FORBIDDEN",
+   "message": "Session access denied (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: FORBIDDEN 403 GET /api/session/pinned-session/logs service=EXAMPLE user=test\u2026: Session access denied"
+  ],
+  "stats": {
+   "error": {
+    "code": "FORBIDDEN",
+    "message": "Session access denied",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 403
+ },
+ "GET /api/session/{session_id}/prompt no key": {
+  "body": {
+   "message": "Secret Key is Empty.",
+   "status": 401
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [],
+  "stats": {
+   "error": null,
+   "late_status": null
+  },
+  "status": 401
+ },
+ "GET /api/session/{session_id}/prompt plain before the handler's try": {
+  "body": {
+   "details": {
+    "operation": "session_prompt_get"
+   },
+   "error_code": "INTERNAL_ERROR",
+   "message": "An unexpected error occurred: pinned failure (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: INTERNAL_ERROR 422 GET /api/session/pinned-session/prompt service=- user=test\u2026: An unexpected error occurred: pinned failure"
+  ],
+  "stats": {
+   "error": {
+    "code": "INTERNAL_ERROR",
+    "message": "An unexpected error occurred: pinned failure",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 422
+ },
+ "GET /api/session/{session_id}/prompt unknown session": {
+  "body": {
+   "details": {
+    "session_id": "pinned-session"
+   },
+   "error_code": "SESSION_NOT_FOUND",
+   "message": "Session not found or expired: pinned-session (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: SESSION_NOT_FOUND 404 GET /api/session/pinned-session/prompt service=- user=test\u2026: Session not found or expired: pinned-session"
+  ],
+  "stats": {
+   "error": {
+    "code": "SESSION_NOT_FOUND",
+    "message": "Session not found or expired: pinned-session",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 404
+ },
+ "GET /api/session/{session_id}/prompt wrong owner": {
+  "body": {
+   "error_code": "FORBIDDEN",
+   "message": "Session access denied (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: FORBIDDEN 403 GET /api/session/pinned-session/prompt service=EXAMPLE user=test\u2026: Session access denied"
+  ],
+  "stats": {
+   "error": {
+    "code": "FORBIDDEN",
+    "message": "Session access denied",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 403
+ },
+ "GET /api/session/{session_id}/titles no key": {
+  "body": {
+   "message": "Secret Key is Empty.",
+   "status": 401
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [],
+  "stats": {
+   "error": null,
+   "late_status": null
+  },
+  "status": 401
+ },
+ "GET /api/session/{session_id}/titles not authenticated": {
+  "body": {
+   "details": {
+    "auth_status": "authenticating"
+   },
+   "error_code": "INVALID_INPUT",
+   "message": "Session authentication not complete (status: authenticating) (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: INVALID_INPUT 400 GET /api/session/pinned-session/titles service=EXAMPLE user=test\u2026: Session authentication not complete (status: authenticating)"
+  ],
+  "stats": {
+   "error": {
+    "code": "INVALID_INPUT",
+    "message": "Session authentication not complete (status: authenticating)",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 400
+ },
+ "GET /api/session/{session_id}/titles plain before the handler's try": {
+  "body": {
+   "details": {
+    "operation": "session_titles"
+   },
+   "error_code": "INTERNAL_ERROR",
+   "message": "An unexpected error occurred: pinned failure (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: INTERNAL_ERROR 422 GET /api/session/pinned-session/titles service=- user=test\u2026: An unexpected error occurred: pinned failure"
+  ],
+  "stats": {
+   "error": {
+    "code": "INTERNAL_ERROR",
+    "message": "An unexpected error occurred: pinned failure",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 422
+ },
+ "GET /api/session/{session_id}/titles unknown session": {
+  "body": {
+   "details": {
+    "session_id": "pinned-session"
+   },
+   "error_code": "SESSION_NOT_FOUND",
+   "message": "Session not found or expired: pinned-session (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: SESSION_NOT_FOUND 404 GET /api/session/pinned-session/titles service=- user=test\u2026: Session not found or expired: pinned-session"
+  ],
+  "stats": {
+   "error": {
+    "code": "SESSION_NOT_FOUND",
+    "message": "Session not found or expired: pinned-session",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 404
+ },
+ "GET /api/session/{session_id}/titles wrong owner": {
+  "body": {
+   "error_code": "FORBIDDEN",
+   "message": "Session access denied (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: FORBIDDEN 403 GET /api/session/pinned-session/titles service=EXAMPLE user=test\u2026: Session access denied"
+  ],
+  "stats": {
+   "error": {
+    "code": "FORBIDDEN",
+    "message": "Session access denied",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 403
+ },
+ "GET /api/tunnel no key": {
+  "body": {
+   "message": "Secret Key is Empty.",
+   "status": 401
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [],
+  "stats": {
+   "error": null,
+   "late_status": null
+  },
+  "status": 401
+ },
+ "GET /api/tunnel/check no key": {
+  "body": {
+   "message": "Secret Key is Empty.",
+   "status": 401
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [],
+  "stats": {
+   "error": null,
+   "late_status": null
+  },
+  "status": 401
+ },
+ "POST /api/dashboard/drain no key": {
+  "body": {
+   "message": "Dashboard key is invalid.",
+   "status": 401
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [],
+  "stats": {
+   "error": null,
+   "late_status": null
+  },
+  "status": 401
+ },
+ "POST /api/download no key": {
+  "body": {
+   "message": "Secret Key is Empty.",
+   "status": 401
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [],
+  "stats": {
+   "error": null,
+   "late_status": null
+  },
+  "status": 401
+ },
+ "POST /api/download not an object": {
+  "body": {
+   "error_code": "INVALID_INPUT",
+   "message": "The request body must be a JSON object (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: INVALID_INPUT 400 POST /api/download service=- user=test\u2026: The request body must be a JSON object"
+  ],
+  "stats": {
+   "error": {
+    "code": "INVALID_INPUT",
+    "message": "The request body must be a JSON object",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 400
+ },
+ "POST /api/download not json": {
+  "body": {
+   "details": {
+    "error": "Expecting property name enclosed in double quotes: line 1 column 2 (char 1)"
+   },
+   "error_code": "INVALID_INPUT",
+   "message": "Invalid JSON request body (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: INVALID_INPUT 400 POST /api/download service=- user=test\u2026: Invalid JSON request body"
+  ],
+  "stats": {
+   "error": {
+    "code": "INVALID_INPUT",
+    "message": "Invalid JSON request body",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 400
+ },
+ "POST /api/download/jobs/clear-finished no key": {
+  "body": {
+   "message": "Secret Key is Empty.",
+   "status": 401
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [],
+  "stats": {
+   "error": null,
+   "late_status": null
+  },
+  "status": 401
+ },
+ "POST /api/download/jobs/{job_id}/input no key": {
+  "body": {
+   "message": "Secret Key is Empty.",
+   "status": 401
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [],
+  "stats": {
+   "error": null,
+   "late_status": null
+  },
+  "status": 401
+ },
+ "POST /api/download/jobs/{job_id}/input not an object": {
+  "body": {
+   "error_code": "INVALID_INPUT",
+   "message": "The request body must be a JSON object (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: INVALID_INPUT 400 POST /api/download/jobs/no-such-job/input service=- user=test\u2026: The request body must be a JSON object"
+  ],
+  "stats": {
+   "error": {
+    "code": "INVALID_INPUT",
+    "message": "The request body must be a JSON object",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 400
+ },
+ "POST /api/download/jobs/{job_id}/input not json": {
+  "body": {
+   "details": {
+    "error": "Expecting property name enclosed in double quotes: line 1 column 2 (char 1)"
+   },
+   "error_code": "INVALID_INPUT",
+   "message": "Invalid JSON request body (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: INVALID_INPUT 400 POST /api/download/jobs/no-such-job/input service=- user=test\u2026: Invalid JSON request body"
+  ],
+  "stats": {
+   "error": {
+    "code": "INVALID_INPUT",
+    "message": "Invalid JSON request body",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 400
+ },
+ "POST /api/download/jobs/{job_id}/priority no key": {
+  "body": {
+   "message": "Secret Key is Empty.",
+   "status": 401
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [],
+  "stats": {
+   "error": null,
+   "late_status": null
+  },
+  "status": 401
+ },
+ "POST /api/download/jobs/{job_id}/retry no key": {
+  "body": {
+   "message": "Secret Key is Empty.",
+   "status": 401
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [],
+  "stats": {
+   "error": null,
+   "late_status": null
+  },
+  "status": 401
+ },
+ "POST /api/list-titles no key": {
+  "body": {
+   "message": "Secret Key is Empty.",
+   "status": 401
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [],
+  "stats": {
+   "error": null,
+   "late_status": null
+  },
+  "status": 401
+ },
+ "POST /api/list-titles not an object": {
+  "body": {
+   "error_code": "INVALID_INPUT",
+   "message": "The request body must be a JSON object (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: INVALID_INPUT 400 POST /api/list-titles service=- user=test\u2026: The request body must be a JSON object"
+  ],
+  "stats": {
+   "error": {
+    "code": "INVALID_INPUT",
+    "message": "The request body must be a JSON object",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 400
+ },
+ "POST /api/list-titles not json": {
+  "body": {
+   "details": {
+    "error": "Expecting property name enclosed in double quotes: line 1 column 2 (char 1)"
+   },
+   "error_code": "INVALID_INPUT",
+   "message": "Invalid JSON request body (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: INVALID_INPUT 400 POST /api/list-titles service=- user=test\u2026: Invalid JSON request body"
+  ],
+  "stats": {
+   "error": {
+    "code": "INVALID_INPUT",
+    "message": "Invalid JSON request body",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 400
+ },
+ "POST /api/list-tracks no key": {
+  "body": {
+   "message": "Secret Key is Empty.",
+   "status": 401
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [],
+  "stats": {
+   "error": null,
+   "late_status": null
+  },
+  "status": 401
+ },
+ "POST /api/list-tracks not an object": {
+  "body": {
+   "error_code": "INVALID_INPUT",
+   "message": "The request body must be a JSON object (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: INVALID_INPUT 400 POST /api/list-tracks service=- user=test\u2026: The request body must be a JSON object"
+  ],
+  "stats": {
+   "error": {
+    "code": "INVALID_INPUT",
+    "message": "The request body must be a JSON object",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 400
+ },
+ "POST /api/list-tracks not json": {
+  "body": {
+   "details": {
+    "error": "Expecting property name enclosed in double quotes: line 1 column 2 (char 1)"
+   },
+   "error_code": "INVALID_INPUT",
+   "message": "Invalid JSON request body (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: INVALID_INPUT 400 POST /api/list-tracks service=- user=test\u2026: Invalid JSON request body"
+  ],
+  "stats": {
+   "error": {
+    "code": "INVALID_INPUT",
+    "message": "Invalid JSON request body",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 400
+ },
+ "POST /api/maintenance/clear-cache no key": {
+  "body": {
+   "message": "Secret Key is Empty.",
+   "status": 401
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [],
+  "stats": {
+   "error": null,
+   "late_status": null
+  },
+  "status": 401
+ },
+ "POST /api/maintenance/clear-temp no key": {
+  "body": {
+   "message": "Secret Key is Empty.",
+   "status": 401
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [],
+  "stats": {
+   "error": null,
+   "late_status": null
+  },
+  "status": 401
+ },
+ "POST /api/maintenance/refresh-services no key": {
+  "body": {
+   "message": "Secret Key is Empty.",
+   "status": 401
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [],
+  "stats": {
+   "error": null,
+   "late_status": null
+  },
+  "status": 401
+ },
+ "POST /api/remote/logins/{login_id}/input no key": {
+  "body": {
+   "message": "Secret Key is Empty.",
+   "status": 401
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [],
+  "stats": {
+   "error": null,
+   "late_status": null
+  },
+  "status": 401
+ },
+ "POST /api/remote/logins/{login_id}/input not an object": {
+  "body": {
+   "error_code": "INVALID_INPUT",
+   "message": "The request body must be a JSON object (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: INVALID_INPUT 400 POST /api/remote/logins/no-such-login/input service=- user=test\u2026: The request body must be a JSON object"
+  ],
+  "stats": {
+   "error": {
+    "code": "INVALID_INPUT",
+    "message": "The request body must be a JSON object",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 400
+ },
+ "POST /api/remote/logins/{login_id}/input not json": {
+  "body": {
+   "details": {
+    "error": "Expecting property name enclosed in double quotes: line 1 column 2 (char 1)"
+   },
+   "error_code": "INVALID_INPUT",
+   "message": "Invalid JSON request body (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: INVALID_INPUT 400 POST /api/remote/logins/no-such-login/input service=- user=test\u2026: Invalid JSON request body"
+  ],
+  "stats": {
+   "error": {
+    "code": "INVALID_INPUT",
+    "message": "Invalid JSON request body",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 400
+ },
+ "POST /api/search no key": {
+  "body": {
+   "message": "Secret Key is Empty.",
+   "status": 401
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [],
+  "stats": {
+   "error": null,
+   "late_status": null
+  },
+  "status": 401
+ },
+ "POST /api/search not an object": {
+  "body": {
+   "error_code": "INVALID_INPUT",
+   "message": "The request body must be a JSON object (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: INVALID_INPUT 400 POST /api/search service=- user=test\u2026: The request body must be a JSON object"
+  ],
+  "stats": {
+   "error": {
+    "code": "INVALID_INPUT",
+    "message": "The request body must be a JSON object",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 400
+ },
+ "POST /api/search not json": {
+  "body": {
+   "details": {
+    "error": "Expecting property name enclosed in double quotes: line 1 column 2 (char 1)"
+   },
+   "error_code": "INVALID_INPUT",
+   "message": "Invalid JSON request body (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: INVALID_INPUT 400 POST /api/search service=- user=test\u2026: Invalid JSON request body"
+  ],
+  "stats": {
+   "error": {
+    "code": "INVALID_INPUT",
+    "message": "Invalid JSON request body",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 400
+ },
+ "POST /api/search plain before the handler's try": {
+  "body": {
+   "details": {
+    "operation": "search"
+   },
+   "error_code": "INTERNAL_ERROR",
+   "message": "An unexpected error occurred: pinned failure (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: INTERNAL_ERROR 422 POST /api/search service=EXAMPLE user=test\u2026: An unexpected error occurred: pinned failure"
+  ],
+  "stats": {
+   "error": {
+    "code": "INTERNAL_ERROR",
+    "message": "An unexpected error occurred: pinned failure",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 422
+ },
+ "POST /api/session/create no key": {
+  "body": {
+   "message": "Secret Key is Empty.",
+   "status": 401
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [],
+  "stats": {
+   "error": null,
+   "late_status": null
+  },
+  "status": 401
+ },
+ "POST /api/session/create not an object": {
+  "body": {
+   "error_code": "INVALID_INPUT",
+   "message": "The request body must be a JSON object (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: INVALID_INPUT 400 POST /api/session/create service=- user=test\u2026: The request body must be a JSON object"
+  ],
+  "stats": {
+   "error": {
+    "code": "INVALID_INPUT",
+    "message": "The request body must be a JSON object",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 400
+ },
+ "POST /api/session/create not json": {
+  "body": {
+   "details": {
+    "error": "Expecting property name enclosed in double quotes: line 1 column 2 (char 1)"
+   },
+   "error_code": "INVALID_INPUT",
+   "message": "Invalid JSON request body (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: INVALID_INPUT 400 POST /api/session/create service=- user=test\u2026: Invalid JSON request body"
+  ],
+  "stats": {
+   "error": {
+    "code": "INVALID_INPUT",
+    "message": "Invalid JSON request body",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 400
+ },
+ "POST /api/session/create plain before the handler's try": {
+  "body": {
+   "details": {
+    "operation": "session_create"
+   },
+   "error_code": "INTERNAL_ERROR",
+   "message": "An unexpected error occurred: pinned failure (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: INTERNAL_ERROR 422 POST /api/session/create service=EXAMPLE user=test\u2026: An unexpected error occurred: pinned failure"
+  ],
+  "stats": {
+   "error": {
+    "code": "INTERNAL_ERROR",
+    "message": "An unexpected error occurred: pinned failure",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 422
+ },
+ "POST /api/session/{session_id}/keys/bad no key": {
+  "body": {
+   "message": "Secret Key is Empty.",
+   "status": 401
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [],
+  "stats": {
+   "error": null,
+   "late_status": null
+  },
+  "status": 401
+ },
+ "POST /api/session/{session_id}/keys/bad not an object": {
+  "body": {
+   "error_code": "INVALID_INPUT",
+   "message": "The request body must be a JSON object (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: INVALID_INPUT 400 POST /api/session/pinned-session/keys/bad service=- user=test\u2026: The request body must be a JSON object"
+  ],
+  "stats": {
+   "error": {
+    "code": "INVALID_INPUT",
+    "message": "The request body must be a JSON object",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 400
+ },
+ "POST /api/session/{session_id}/keys/bad not authenticated": {
+  "body": {
+   "details": {
+    "auth_status": "authenticating"
+   },
+   "error_code": "INVALID_INPUT",
+   "message": "Session authentication not complete (status: authenticating) (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: INVALID_INPUT 400 POST /api/session/pinned-session/keys/bad service=EXAMPLE user=test\u2026: Session authentication not complete (status: authenticating)"
+  ],
+  "stats": {
+   "error": {
+    "code": "INVALID_INPUT",
+    "message": "Session authentication not complete (status: authenticating)",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 400
+ },
+ "POST /api/session/{session_id}/keys/bad not json": {
+  "body": {
+   "details": {
+    "error": "Expecting property name enclosed in double quotes: line 1 column 2 (char 1)"
+   },
+   "error_code": "INVALID_INPUT",
+   "message": "Invalid JSON request body (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: INVALID_INPUT 400 POST /api/session/pinned-session/keys/bad service=- user=test\u2026: Invalid JSON request body"
+  ],
+  "stats": {
+   "error": {
+    "code": "INVALID_INPUT",
+    "message": "Invalid JSON request body",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 400
+ },
+ "POST /api/session/{session_id}/keys/bad plain before the handler's try": {
+  "body": {
+   "error_code": "INTERNAL_ERROR",
+   "message": "Internal server error (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [],
+  "stats": {
+   "raised": true
+  },
+  "status": 422
+ },
+ "POST /api/session/{session_id}/keys/bad unknown session": {
+  "body": {
+   "details": {
+    "session_id": "pinned-session"
+   },
+   "error_code": "SESSION_NOT_FOUND",
+   "message": "Session not found or expired: pinned-session (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: SESSION_NOT_FOUND 404 POST /api/session/pinned-session/keys/bad service=- user=test\u2026: Session not found or expired: pinned-session"
+  ],
+  "stats": {
+   "error": {
+    "code": "SESSION_NOT_FOUND",
+    "message": "Session not found or expired: pinned-session",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 404
+ },
+ "POST /api/session/{session_id}/keys/bad wrong owner": {
+  "body": {
+   "error_code": "FORBIDDEN",
+   "message": "Session access denied (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: FORBIDDEN 403 POST /api/session/pinned-session/keys/bad service=EXAMPLE user=test\u2026: Session access denied"
+  ],
+  "stats": {
+   "error": {
+    "code": "FORBIDDEN",
+    "message": "Session access denied",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 403
+ },
+ "POST /api/session/{session_id}/license no key": {
+  "body": {
+   "message": "Secret Key is Empty.",
+   "status": 401
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [],
+  "stats": {
+   "error": null,
+   "late_status": null
+  },
+  "status": 401
+ },
+ "POST /api/session/{session_id}/license not an object": {
+  "body": {
+   "error_code": "INVALID_INPUT",
+   "message": "The request body must be a JSON object (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: INVALID_INPUT 400 POST /api/session/pinned-session/license service=- user=test\u2026: The request body must be a JSON object"
+  ],
+  "stats": {
+   "error": {
+    "code": "INVALID_INPUT",
+    "message": "The request body must be a JSON object",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 400
+ },
+ "POST /api/session/{session_id}/license not authenticated": {
+  "body": {
+   "details": {
+    "auth_status": "authenticating"
+   },
+   "error_code": "INVALID_INPUT",
+   "message": "Session authentication not complete (status: authenticating) (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: INVALID_INPUT 400 POST /api/session/pinned-session/license service=EXAMPLE user=test\u2026: Session authentication not complete (status: authenticating)"
+  ],
+  "stats": {
+   "error": {
+    "code": "INVALID_INPUT",
+    "message": "Session authentication not complete (status: authenticating)",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 400
+ },
+ "POST /api/session/{session_id}/license not json": {
+  "body": {
+   "details": {
+    "error": "Expecting property name enclosed in double quotes: line 1 column 2 (char 1)"
+   },
+   "error_code": "INVALID_INPUT",
+   "message": "Invalid JSON request body (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: INVALID_INPUT 400 POST /api/session/pinned-session/license service=- user=test\u2026: Invalid JSON request body"
+  ],
+  "stats": {
+   "error": {
+    "code": "INVALID_INPUT",
+    "message": "Invalid JSON request body",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 400
+ },
+ "POST /api/session/{session_id}/license plain before the handler's try": {
+  "body": {
+   "details": {
+    "operation": "session_license"
+   },
+   "error_code": "INTERNAL_ERROR",
+   "message": "An unexpected error occurred: pinned failure (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: INTERNAL_ERROR 422 POST /api/session/pinned-session/license service=- user=test\u2026: An unexpected error occurred: pinned failure"
+  ],
+  "stats": {
+   "error": {
+    "code": "INTERNAL_ERROR",
+    "message": "An unexpected error occurred: pinned failure",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 422
+ },
+ "POST /api/session/{session_id}/license unknown session": {
+  "body": {
+   "details": {
+    "session_id": "pinned-session"
+   },
+   "error_code": "SESSION_NOT_FOUND",
+   "message": "Session not found or expired: pinned-session (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: SESSION_NOT_FOUND 404 POST /api/session/pinned-session/license service=- user=test\u2026: Session not found or expired: pinned-session"
+  ],
+  "stats": {
+   "error": {
+    "code": "SESSION_NOT_FOUND",
+    "message": "Session not found or expired: pinned-session",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 404
+ },
+ "POST /api/session/{session_id}/license wrong owner": {
+  "body": {
+   "error_code": "FORBIDDEN",
+   "message": "Session access denied (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: FORBIDDEN 403 POST /api/session/pinned-session/license service=EXAMPLE user=test\u2026: Session access denied"
+  ],
+  "stats": {
+   "error": {
+    "code": "FORBIDDEN",
+    "message": "Session access denied",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 403
+ },
+ "POST /api/session/{session_id}/prompt no key": {
+  "body": {
+   "message": "Secret Key is Empty.",
+   "status": 401
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [],
+  "stats": {
+   "error": null,
+   "late_status": null
+  },
+  "status": 401
+ },
+ "POST /api/session/{session_id}/prompt not an object": {
+  "body": {
+   "error_code": "INVALID_INPUT",
+   "message": "The request body must be a JSON object (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: INVALID_INPUT 400 POST /api/session/pinned-session/prompt service=- user=test\u2026: The request body must be a JSON object"
+  ],
+  "stats": {
+   "error": {
+    "code": "INVALID_INPUT",
+    "message": "The request body must be a JSON object",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 400
+ },
+ "POST /api/session/{session_id}/prompt not json": {
+  "body": {
+   "details": {
+    "error": "Expecting property name enclosed in double quotes: line 1 column 2 (char 1)"
+   },
+   "error_code": "INVALID_INPUT",
+   "message": "Invalid JSON request body (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: INVALID_INPUT 400 POST /api/session/pinned-session/prompt service=- user=test\u2026: Invalid JSON request body"
+  ],
+  "stats": {
+   "error": {
+    "code": "INVALID_INPUT",
+    "message": "Invalid JSON request body",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 400
+ },
+ "POST /api/session/{session_id}/prompt plain before the handler's try": {
+  "body": {
+   "details": {
+    "operation": "session_prompt_submit"
+   },
+   "error_code": "INTERNAL_ERROR",
+   "message": "An unexpected error occurred: pinned failure (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: INTERNAL_ERROR 422 POST /api/session/pinned-session/prompt service=- user=test\u2026: An unexpected error occurred: pinned failure"
+  ],
+  "stats": {
+   "error": {
+    "code": "INTERNAL_ERROR",
+    "message": "An unexpected error occurred: pinned failure",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 422
+ },
+ "POST /api/session/{session_id}/prompt unknown session": {
+  "body": {
+   "details": {
+    "session_id": "pinned-session"
+   },
+   "error_code": "SESSION_NOT_FOUND",
+   "message": "Session not found or expired: pinned-session (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: SESSION_NOT_FOUND 404 POST /api/session/pinned-session/prompt service=- user=test\u2026: Session not found or expired: pinned-session"
+  ],
+  "stats": {
+   "error": {
+    "code": "SESSION_NOT_FOUND",
+    "message": "Session not found or expired: pinned-session",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 404
+ },
+ "POST /api/session/{session_id}/prompt wrong owner": {
+  "body": {
+   "error_code": "FORBIDDEN",
+   "message": "Session access denied (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: FORBIDDEN 403 POST /api/session/pinned-session/prompt service=EXAMPLE user=test\u2026: Session access denied"
+  ],
+  "stats": {
+   "error": {
+    "code": "FORBIDDEN",
+    "message": "Session access denied",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 403
+ },
+ "POST /api/session/{session_id}/samples no key": {
+  "body": {
+   "message": "Secret Key is Empty.",
+   "status": 401
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [],
+  "stats": {
+   "error": null,
+   "late_status": null
+  },
+  "status": 401
+ },
+ "POST /api/session/{session_id}/samples not authenticated": {
+  "body": {
+   "details": {
+    "auth_status": "authenticating"
+   },
+   "error_code": "INVALID_INPUT",
+   "message": "Session authentication not complete (status: authenticating) (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: INVALID_INPUT 400 POST /api/session/pinned-session/samples service=EXAMPLE user=test\u2026: Session authentication not complete (status: authenticating)"
+  ],
+  "stats": {
+   "error": {
+    "code": "INVALID_INPUT",
+    "message": "Session authentication not complete (status: authenticating)",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 400
+ },
+ "POST /api/session/{session_id}/samples plain before the handler's try": {
+  "body": {
+   "error_code": "INTERNAL_ERROR",
+   "message": "Internal server error (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [],
+  "stats": {
+   "raised": true
+  },
+  "status": 422
+ },
+ "POST /api/session/{session_id}/samples unknown session": {
+  "body": {
+   "details": {
+    "session_id": "pinned-session"
+   },
+   "error_code": "SESSION_NOT_FOUND",
+   "message": "Session not found or expired: pinned-session (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: SESSION_NOT_FOUND 404 POST /api/session/pinned-session/samples service=- user=test\u2026: Session not found or expired: pinned-session"
+  ],
+  "stats": {
+   "error": {
+    "code": "SESSION_NOT_FOUND",
+    "message": "Session not found or expired: pinned-session",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 404
+ },
+ "POST /api/session/{session_id}/samples wrong owner": {
+  "body": {
+   "error_code": "FORBIDDEN",
+   "message": "Session access denied (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: FORBIDDEN 403 POST /api/session/pinned-session/samples service=EXAMPLE user=test\u2026: Session access denied"
+  ],
+  "stats": {
+   "error": {
+    "code": "FORBIDDEN",
+    "message": "Session access denied",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 403
+ },
+ "POST /api/session/{session_id}/segment_filter no key": {
+  "body": {
+   "message": "Secret Key is Empty.",
+   "status": 401
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [],
+  "stats": {
+   "error": null,
+   "late_status": null
+  },
+  "status": 401
+ },
+ "POST /api/session/{session_id}/segment_filter not an object": {
+  "body": {
+   "error_code": "INVALID_INPUT",
+   "message": "The request body must be a JSON object (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: INVALID_INPUT 400 POST /api/session/pinned-session/segment_filter service=- user=test\u2026: The request body must be a JSON object"
+  ],
+  "stats": {
+   "error": {
+    "code": "INVALID_INPUT",
+    "message": "The request body must be a JSON object",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 400
+ },
+ "POST /api/session/{session_id}/segment_filter not authenticated": {
+  "body": {
+   "details": {
+    "auth_status": "authenticating"
+   },
+   "error_code": "INVALID_INPUT",
+   "message": "Session authentication not complete (status: authenticating) (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: INVALID_INPUT 400 POST /api/session/pinned-session/segment_filter service=EXAMPLE user=test\u2026: Session authentication not complete (status: authenticating)"
+  ],
+  "stats": {
+   "error": {
+    "code": "INVALID_INPUT",
+    "message": "Session authentication not complete (status: authenticating)",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 400
+ },
+ "POST /api/session/{session_id}/segment_filter not json": {
+  "body": {
+   "details": {
+    "error": "Expecting property name enclosed in double quotes: line 1 column 2 (char 1)"
+   },
+   "error_code": "INVALID_INPUT",
+   "message": "Invalid JSON request body (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: INVALID_INPUT 400 POST /api/session/pinned-session/segment_filter service=- user=test\u2026: Invalid JSON request body"
+  ],
+  "stats": {
+   "error": {
+    "code": "INVALID_INPUT",
+    "message": "Invalid JSON request body",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 400
+ },
+ "POST /api/session/{session_id}/segment_filter plain before the handler's try": {
+  "body": {
+   "details": {
+    "operation": "session_segment_filter"
+   },
+   "error_code": "INTERNAL_ERROR",
+   "message": "An unexpected error occurred: pinned failure (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: INTERNAL_ERROR 422 POST /api/session/pinned-session/segment_filter service=- user=test\u2026: An unexpected error occurred: pinned failure"
+  ],
+  "stats": {
+   "error": {
+    "code": "INTERNAL_ERROR",
+    "message": "An unexpected error occurred: pinned failure",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 422
+ },
+ "POST /api/session/{session_id}/segment_filter unknown session": {
+  "body": {
+   "details": {
+    "session_id": "pinned-session"
+   },
+   "error_code": "SESSION_NOT_FOUND",
+   "message": "Session not found or expired: pinned-session (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: SESSION_NOT_FOUND 404 POST /api/session/pinned-session/segment_filter service=- user=test\u2026: Session not found or expired: pinned-session"
+  ],
+  "stats": {
+   "error": {
+    "code": "SESSION_NOT_FOUND",
+    "message": "Session not found or expired: pinned-session",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 404
+ },
+ "POST /api/session/{session_id}/segment_filter wrong owner": {
+  "body": {
+   "error_code": "FORBIDDEN",
+   "message": "Session access denied (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: FORBIDDEN 403 POST /api/session/pinned-session/segment_filter service=EXAMPLE user=test\u2026: Session access denied"
+  ],
+  "stats": {
+   "error": {
+    "code": "FORBIDDEN",
+    "message": "Session access denied",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 403
+ },
+ "POST /api/session/{session_id}/segments no key": {
+  "body": {
+   "message": "Secret Key is Empty.",
+   "status": 401
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [],
+  "stats": {
+   "error": null,
+   "late_status": null
+  },
+  "status": 401
+ },
+ "POST /api/session/{session_id}/segments not an object": {
+  "body": {
+   "error_code": "INVALID_INPUT",
+   "message": "The request body must be a JSON object (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: INVALID_INPUT 400 POST /api/session/pinned-session/segments service=- user=test\u2026: The request body must be a JSON object"
+  ],
+  "stats": {
+   "error": {
+    "code": "INVALID_INPUT",
+    "message": "The request body must be a JSON object",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 400
+ },
+ "POST /api/session/{session_id}/segments not authenticated": {
+  "body": {
+   "details": {
+    "auth_status": "authenticating"
+   },
+   "error_code": "INVALID_INPUT",
+   "message": "Session authentication not complete (status: authenticating) (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: INVALID_INPUT 400 POST /api/session/pinned-session/segments service=EXAMPLE user=test\u2026: Session authentication not complete (status: authenticating)"
+  ],
+  "stats": {
+   "error": {
+    "code": "INVALID_INPUT",
+    "message": "Session authentication not complete (status: authenticating)",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 400
+ },
+ "POST /api/session/{session_id}/segments not json": {
+  "body": {
+   "details": {
+    "error": "Expecting property name enclosed in double quotes: line 1 column 2 (char 1)"
+   },
+   "error_code": "INVALID_INPUT",
+   "message": "Invalid JSON request body (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: INVALID_INPUT 400 POST /api/session/pinned-session/segments service=- user=test\u2026: Invalid JSON request body"
+  ],
+  "stats": {
+   "error": {
+    "code": "INVALID_INPUT",
+    "message": "Invalid JSON request body",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 400
+ },
+ "POST /api/session/{session_id}/segments plain before the handler's try": {
+  "body": {
+   "details": {
+    "operation": "session_segments"
+   },
+   "error_code": "INTERNAL_ERROR",
+   "message": "An unexpected error occurred: pinned failure (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: INTERNAL_ERROR 422 POST /api/session/pinned-session/segments service=- user=test\u2026: An unexpected error occurred: pinned failure"
+  ],
+  "stats": {
+   "error": {
+    "code": "INTERNAL_ERROR",
+    "message": "An unexpected error occurred: pinned failure",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 422
+ },
+ "POST /api/session/{session_id}/segments unknown session": {
+  "body": {
+   "details": {
+    "session_id": "pinned-session"
+   },
+   "error_code": "SESSION_NOT_FOUND",
+   "message": "Session not found or expired: pinned-session (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: SESSION_NOT_FOUND 404 POST /api/session/pinned-session/segments service=- user=test\u2026: Session not found or expired: pinned-session"
+  ],
+  "stats": {
+   "error": {
+    "code": "SESSION_NOT_FOUND",
+    "message": "Session not found or expired: pinned-session",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 404
+ },
+ "POST /api/session/{session_id}/segments wrong owner": {
+  "body": {
+   "error_code": "FORBIDDEN",
+   "message": "Session access denied (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: FORBIDDEN 403 POST /api/session/pinned-session/segments service=EXAMPLE user=test\u2026: Session access denied"
+  ],
+  "stats": {
+   "error": {
+    "code": "FORBIDDEN",
+    "message": "Session access denied",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 403
+ },
+ "POST /api/session/{session_id}/tracks no key": {
+  "body": {
+   "message": "Secret Key is Empty.",
+   "status": 401
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [],
+  "stats": {
+   "error": null,
+   "late_status": null
+  },
+  "status": 401
+ },
+ "POST /api/session/{session_id}/tracks not an object": {
+  "body": {
+   "error_code": "INVALID_INPUT",
+   "message": "The request body must be a JSON object (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: INVALID_INPUT 400 POST /api/session/pinned-session/tracks service=- user=test\u2026: The request body must be a JSON object"
+  ],
+  "stats": {
+   "error": {
+    "code": "INVALID_INPUT",
+    "message": "The request body must be a JSON object",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 400
+ },
+ "POST /api/session/{session_id}/tracks not authenticated": {
+  "body": {
+   "details": {
+    "auth_status": "authenticating"
+   },
+   "error_code": "INVALID_INPUT",
+   "message": "Session authentication not complete (status: authenticating) (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: INVALID_INPUT 400 POST /api/session/pinned-session/tracks service=EXAMPLE user=test\u2026: Session authentication not complete (status: authenticating)"
+  ],
+  "stats": {
+   "error": {
+    "code": "INVALID_INPUT",
+    "message": "Session authentication not complete (status: authenticating)",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 400
+ },
+ "POST /api/session/{session_id}/tracks not json": {
+  "body": {
+   "details": {
+    "error": "Expecting property name enclosed in double quotes: line 1 column 2 (char 1)"
+   },
+   "error_code": "INVALID_INPUT",
+   "message": "Invalid JSON request body (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: INVALID_INPUT 400 POST /api/session/pinned-session/tracks service=- user=test\u2026: Invalid JSON request body"
+  ],
+  "stats": {
+   "error": {
+    "code": "INVALID_INPUT",
+    "message": "Invalid JSON request body",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 400
+ },
+ "POST /api/session/{session_id}/tracks plain before the handler's try": {
+  "body": {
+   "details": {
+    "operation": "session_tracks"
+   },
+   "error_code": "INTERNAL_ERROR",
+   "message": "An unexpected error occurred: pinned failure (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: INTERNAL_ERROR 422 POST /api/session/pinned-session/tracks service=- user=test\u2026: An unexpected error occurred: pinned failure"
+  ],
+  "stats": {
+   "error": {
+    "code": "INTERNAL_ERROR",
+    "message": "An unexpected error occurred: pinned failure",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 422
+ },
+ "POST /api/session/{session_id}/tracks unknown session": {
+  "body": {
+   "details": {
+    "session_id": "pinned-session"
+   },
+   "error_code": "SESSION_NOT_FOUND",
+   "message": "Session not found or expired: pinned-session (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: SESSION_NOT_FOUND 404 POST /api/session/pinned-session/tracks service=- user=test\u2026: Session not found or expired: pinned-session"
+  ],
+  "stats": {
+   "error": {
+    "code": "SESSION_NOT_FOUND",
+    "message": "Session not found or expired: pinned-session",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 404
+ },
+ "POST /api/session/{session_id}/tracks wrong owner": {
+  "body": {
+   "error_code": "FORBIDDEN",
+   "message": "Session access denied (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: FORBIDDEN 403 POST /api/session/pinned-session/tracks service=EXAMPLE user=test\u2026: Session access denied"
+  ],
+  "stats": {
+   "error": {
+    "code": "FORBIDDEN",
+    "message": "Session access denied",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 403
+ },
+ "bad key api": {
+  "body": {
+   "details": {
+    "pinned": true
+   },
+   "error_code": "SERVICE_ERROR",
+   "message": "pinned refusal (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: SERVICE_ERROR 422 POST /api/session/pinned-session/keys/bad service=EXAMPLE user=test\u2026: pinned refusal"
+  ],
+  "stats": {
+   "error": {
+    "code": "SERVICE_ERROR",
+    "message": "pinned refusal",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 422
+ },
+ "bad key exit": {
+  "body": {
+   "details": {
+    "reason": "service_exit"
+   },
+   "error_code": "SERVICE_ERROR",
+   "message": "Service exited (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [],
+  "stats": {
+   "raised": true
+  },
+  "status": 422
+ },
+ "bad key plain": {
+  "body": {
+   "error_code": "INTERNAL_ERROR",
+   "message": "Internal server error (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [],
+  "stats": {
+   "raised": true
+  },
+  "status": 422
+ },
+ "license batch api": {
+  "body": {
+   "details": {
+    "pinned": true
+   },
+   "error_code": "SERVICE_ERROR",
+   "message": "pinned refusal (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: SERVICE_ERROR 422 POST /api/session/pinned-session/license service=EXAMPLE user=test\u2026: pinned refusal"
+  ],
+  "stats": {
+   "error": {
+    "code": "SERVICE_ERROR",
+    "message": "pinned refusal",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 422
+ },
+ "license batch api late": {
+  "body": {
+   "details": {
+    "pinned": true
+   },
+   "error_code": "SERVICE_ERROR",
+   "message": "pinned refusal (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": true,
+  "log": [
+   "Error ref REF: SERVICE_ERROR 422 POST /api/session/pinned-session/license service=EXAMPLE user=test\u2026: pinned refusal"
+  ],
+  "stats": {
+   "error": {
+    "code": "SERVICE_ERROR",
+    "message": "pinned refusal",
+    "ref": "REF"
+   },
+   "late_status": 422
+  },
+  "status": 200
+ },
+ "license batch exit": {
+  "body": {
+   "details": {
+    "reason": "service_exit"
+   },
+   "error_code": "SERVICE_ERROR",
+   "message": "Service exited (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: SERVICE_ERROR 422 POST /api/session/pinned-session/license service=EXAMPLE user=test\u2026: Service exited"
+  ],
+  "stats": {
+   "error": {
+    "code": "SERVICE_ERROR",
+    "message": "Service exited",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 422
+ },
+ "license batch exit late": {
+  "body": {
+   "details": {
+    "reason": "service_exit"
+   },
+   "error_code": "SERVICE_ERROR",
+   "message": "Service exited (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": true,
+  "log": [
+   "Error ref REF: SERVICE_ERROR 422 POST /api/session/pinned-session/license service=EXAMPLE user=test\u2026: Service exited"
+  ],
+  "stats": {
+   "error": {
+    "code": "SERVICE_ERROR",
+    "message": "Service exited",
+    "ref": "REF"
+   },
+   "late_status": 422
+  },
+  "status": 200
+ },
+ "license batch plain": {
+  "body": {
+   "details": {
+    "operation": "session_license"
+   },
+   "error_code": "INTERNAL_ERROR",
+   "message": "An unexpected error occurred: pinned failure (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: INTERNAL_ERROR 422 POST /api/session/pinned-session/license service=EXAMPLE user=test\u2026: An unexpected error occurred: pinned failure"
+  ],
+  "stats": {
+   "error": {
+    "code": "INTERNAL_ERROR",
+    "message": "An unexpected error occurred: pinned failure",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 422
+ },
+ "license batch plain late": {
+  "body": {
+   "details": {
+    "operation": "session_license"
+   },
+   "error_code": "INTERNAL_ERROR",
+   "message": "An unexpected error occurred: pinned failure (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": true,
+  "log": [
+   "Error ref REF: INTERNAL_ERROR 422 POST /api/session/pinned-session/license service=EXAMPLE user=test\u2026: An unexpected error occurred: pinned failure"
+  ],
+  "stats": {
+   "error": {
+    "code": "INTERNAL_ERROR",
+    "message": "An unexpected error occurred: pinned failure",
+    "ref": "REF"
+   },
+   "late_status": 422
+  },
+  "status": 200
+ },
+ "license proxy api": {
+  "body": {
+   "details": {
+    "pinned": true
+   },
+   "error_code": "SERVICE_ERROR",
+   "message": "pinned refusal (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: SERVICE_ERROR 422 POST /api/session/pinned-session/license service=EXAMPLE user=test\u2026: pinned refusal"
+  ],
+  "stats": {
+   "error": {
+    "code": "SERVICE_ERROR",
+    "message": "pinned refusal",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 422
+ },
+ "license proxy exit": {
+  "body": {
+   "error_code": "SERVICE_ERROR",
+   "message": "Licence request failed: 1 (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: SERVICE_ERROR 422 POST /api/session/pinned-session/license service=EXAMPLE user=test\u2026: Licence request failed: 1"
+  ],
+  "stats": {
+   "error": {
+    "code": "SERVICE_ERROR",
+    "message": "Licence request failed: 1",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 422
+ },
+ "license proxy plain": {
+  "body": {
+   "error_code": "SERVICE_ERROR",
+   "message": "Licence request failed: pinned failure (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: SERVICE_ERROR 422 POST /api/session/pinned-session/license service=EXAMPLE user=test\u2026: Licence request failed: pinned failure"
+  ],
+  "stats": {
+   "error": {
+    "code": "SERVICE_ERROR",
+    "message": "Licence request failed: pinned failure",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 422
+ },
+ "license unhashable track": {
+  "body": {
+   "details": {
+    "operation": "session_license"
+   },
+   "error_code": "INTERNAL_ERROR",
+   "message": "An unexpected error occurred: unhashable type: 'list' (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: INTERNAL_ERROR 422 POST /api/session/pinned-session/license service=EXAMPLE user=test\u2026: An unexpected error occurred: unhashable type: 'list'"
+  ],
+  "stats": {
+   "error": {
+    "code": "INTERNAL_ERROR",
+    "message": "An unexpected error occurred: unhashable type: 'list'",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 422
+ },
+ "logs api": {
+  "body": {
+   "details": {
+    "pinned": true
+   },
+   "error_code": "SERVICE_ERROR",
+   "message": "pinned refusal (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: SERVICE_ERROR 422 GET /api/session/pinned-session/logs service=EXAMPLE user=test\u2026: pinned refusal"
+  ],
+  "stats": {
+   "error": {
+    "code": "SERVICE_ERROR",
+    "message": "pinned refusal",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 422
+ },
+ "logs exit": {
+  "body": {
+   "details": {
+    "reason": "service_exit"
+   },
+   "error_code": "SERVICE_ERROR",
+   "message": "Service exited (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [],
+  "stats": {
+   "raised": true
+  },
+  "status": 422
+ },
+ "logs plain": {
+  "body": {
+   "details": {
+    "operation": "session_logs"
+   },
+   "error_code": "INTERNAL_ERROR",
+   "message": "An unexpected error occurred: pinned failure (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: INTERNAL_ERROR 422 GET /api/session/pinned-session/logs service=EXAMPLE user=test\u2026: An unexpected error occurred: pinned failure"
+  ],
+  "stats": {
+   "error": {
+    "code": "INTERNAL_ERROR",
+    "message": "An unexpected error occurred: pinned failure",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 422
+ },
+ "prompt get api": {
+  "body": {
+   "details": {
+    "pinned": true
+   },
+   "error_code": "SERVICE_ERROR",
+   "message": "pinned refusal (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: SERVICE_ERROR 422 GET /api/session/pinned-session/prompt service=EXAMPLE user=test\u2026: pinned refusal"
+  ],
+  "stats": {
+   "error": {
+    "code": "SERVICE_ERROR",
+    "message": "pinned refusal",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 422
+ },
+ "prompt get exit": {
+  "body": {
+   "details": {
+    "reason": "service_exit"
+   },
+   "error_code": "SERVICE_ERROR",
+   "message": "Service exited (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [],
+  "stats": {
+   "raised": true
+  },
+  "status": 422
+ },
+ "prompt get plain": {
+  "body": {
+   "details": {
+    "operation": "session_prompt_get"
+   },
+   "error_code": "INTERNAL_ERROR",
+   "message": "An unexpected error occurred: pinned failure (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: INTERNAL_ERROR 422 GET /api/session/pinned-session/prompt service=EXAMPLE user=test\u2026: An unexpected error occurred: pinned failure"
+  ],
+  "stats": {
+   "error": {
+    "code": "INTERNAL_ERROR",
+    "message": "An unexpected error occurred: pinned failure",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 422
+ },
+ "prompt submit api": {
+  "body": {
+   "details": {
+    "pinned": true
+   },
+   "error_code": "SERVICE_ERROR",
+   "message": "pinned refusal (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: SERVICE_ERROR 422 POST /api/session/pinned-session/prompt service=EXAMPLE user=test\u2026: pinned refusal"
+  ],
+  "stats": {
+   "error": {
+    "code": "SERVICE_ERROR",
+    "message": "pinned refusal",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 422
+ },
+ "prompt submit exit": {
+  "body": {
+   "details": {
+    "reason": "service_exit"
+   },
+   "error_code": "SERVICE_ERROR",
+   "message": "Service exited (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [],
+  "stats": {
+   "raised": true
+  },
+  "status": 422
+ },
+ "prompt submit plain": {
+  "body": {
+   "details": {
+    "operation": "session_prompt_submit"
+   },
+   "error_code": "INTERNAL_ERROR",
+   "message": "An unexpected error occurred: pinned failure (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: INTERNAL_ERROR 422 POST /api/session/pinned-session/prompt service=EXAMPLE user=test\u2026: An unexpected error occurred: pinned failure"
+  ],
+  "stats": {
+   "error": {
+    "code": "INTERNAL_ERROR",
+    "message": "An unexpected error occurred: pinned failure",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 422
+ },
+ "samples api": {
+  "body": {
+   "details": {
+    "pinned": true
+   },
+   "error_code": "SERVICE_ERROR",
+   "message": "pinned refusal (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: SERVICE_ERROR 422 POST /api/session/pinned-session/samples service=EXAMPLE user=test\u2026: pinned refusal"
+  ],
+  "stats": {
+   "error": {
+    "code": "SERVICE_ERROR",
+    "message": "pinned refusal",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 422
+ },
+ "samples exit": {
+  "body": {
+   "error_code": "SERVICE_ERROR",
+   "message": "Could not decrypt the samples of this track (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: SERVICE_ERROR 422 POST /api/session/pinned-session/samples service=EXAMPLE user=test\u2026: Could not decrypt the samples of this track"
+  ],
+  "stats": {
+   "error": {
+    "code": "SERVICE_ERROR",
+    "message": "Could not decrypt the samples of this track",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 422
+ },
+ "samples plain": {
+  "body": {
+   "error_code": "SERVICE_ERROR",
+   "message": "Could not decrypt the samples of this track (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: SERVICE_ERROR 422 POST /api/session/pinned-session/samples service=EXAMPLE user=test\u2026: Could not decrypt the samples of this track"
+  ],
+  "stats": {
+   "error": {
+    "code": "SERVICE_ERROR",
+    "message": "Could not decrypt the samples of this track",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 422
+ },
+ "search api": {
+  "body": {
+   "details": {
+    "pinned": true
+   },
+   "error_code": "SERVICE_ERROR",
+   "message": "pinned refusal (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: SERVICE_ERROR 422 POST /api/search service=EXAMPLE user=test\u2026: pinned refusal"
+  ],
+  "stats": {
+   "error": {
+    "code": "SERVICE_ERROR",
+    "message": "pinned refusal",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 422
+ },
+ "search exit": {
+  "body": {
+   "details": {
+    "operation": "search",
+    "reason": "service_exit",
+    "service": "EXAMPLE"
+   },
+   "error_code": "SERVICE_ERROR",
+   "message": "Service EXAMPLE exited (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: SERVICE_ERROR 422 POST /api/search service=EXAMPLE user=test\u2026: Service EXAMPLE exited"
+  ],
+  "stats": {
+   "error": {
+    "code": "SERVICE_ERROR",
+    "message": "Service EXAMPLE exited",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 422
+ },
+ "search no query": {
+  "body": {
+   "error_code": "INVALID_PARAMETERS",
+   "message": "Missing required 'query' field (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: INVALID_PARAMETERS 400 POST /api/search service=EXAMPLE user=test\u2026: Missing required 'query' field"
+  ],
+  "stats": {
+   "error": {
+    "code": "INVALID_PARAMETERS",
+    "message": "Missing required 'query' field",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 400
+ },
+ "search plain": {
+  "body": {
+   "details": {
+    "operation": "search",
+    "service": "EXAMPLE"
+   },
+   "error_code": "INTERNAL_ERROR",
+   "message": "An unexpected error occurred: pinned failure (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: INTERNAL_ERROR 422 POST /api/search service=EXAMPLE user=test\u2026: An unexpected error occurred: pinned failure"
+  ],
+  "stats": {
+   "error": {
+    "code": "INTERNAL_ERROR",
+    "message": "An unexpected error occurred: pinned failure",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 422
+ },
+ "search remote api": {
+  "body": {
+   "details": {
+    "pinned": true
+   },
+   "error_code": "SERVICE_ERROR",
+   "message": "pinned refusal (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: SERVICE_ERROR 422 POST /api/search service=EXAMPLE user=test\u2026: pinned refusal"
+  ],
+  "stats": {
+   "error": {
+    "code": "SERVICE_ERROR",
+    "message": "pinned refusal",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 422
+ },
+ "search remote exit": {
+  "body": {
+   "details": {
+    "reason": "service_exit"
+   },
+   "error_code": "SERVICE_ERROR",
+   "message": "Service exited (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [],
+  "stats": {
+   "raised": true
+  },
+  "status": 422
+ },
+ "search remote plain": {
+  "body": {
+   "details": {
+    "operation": "search"
+   },
+   "error_code": "INTERNAL_ERROR",
+   "message": "An unexpected error occurred: pinned failure (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: INTERNAL_ERROR 422 POST /api/search service=EXAMPLE user=test\u2026: An unexpected error occurred: pinned failure"
+  ],
+  "stats": {
+   "error": {
+    "code": "INTERNAL_ERROR",
+    "message": "An unexpected error occurred: pinned failure",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 422
+ },
+ "search unknown service": {
+  "body": {
+   "details": {
+    "service": "NOPE"
+   },
+   "error_code": "INVALID_SERVICE",
+   "message": "Service 'NOPE' not found (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: INVALID_SERVICE 400 POST /api/search service=- user=test\u2026: Service 'NOPE' not found"
+  ],
+  "stats": {
+   "error": {
+    "code": "INVALID_SERVICE",
+    "message": "Service 'NOPE' not found",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 400
+ },
+ "segment filter api": {
+  "body": {
+   "error_code": "SERVICE_ERROR",
+   "message": "Could not run the segment filter for this track (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: SERVICE_ERROR 422 POST /api/session/pinned-session/segment_filter service=EXAMPLE user=test\u2026: Could not run the segment filter for this track"
+  ],
+  "stats": {
+   "error": {
+    "code": "SERVICE_ERROR",
+    "message": "Could not run the segment filter for this track",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 422
+ },
+ "segment filter exit": {
+  "body": {
+   "error_code": "SERVICE_ERROR",
+   "message": "Could not run the segment filter for this track (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: SERVICE_ERROR 422 POST /api/session/pinned-session/segment_filter service=EXAMPLE user=test\u2026: Could not run the segment filter for this track"
+  ],
+  "stats": {
+   "error": {
+    "code": "SERVICE_ERROR",
+    "message": "Could not run the segment filter for this track",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 422
+ },
+ "segment filter plain": {
+  "body": {
+   "error_code": "SERVICE_ERROR",
+   "message": "Could not run the segment filter for this track (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: SERVICE_ERROR 422 POST /api/session/pinned-session/segment_filter service=EXAMPLE user=test\u2026: Could not run the segment filter for this track"
+  ],
+  "stats": {
+   "error": {
+    "code": "SERVICE_ERROR",
+    "message": "Could not run the segment filter for this track",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 422
+ },
+ "segment filter unhashable track": {
+  "body": {
+   "details": {
+    "operation": "session_segment_filter"
+   },
+   "error_code": "INTERNAL_ERROR",
+   "message": "An unexpected error occurred: unhashable type: 'list' (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: INTERNAL_ERROR 422 POST /api/session/pinned-session/segment_filter service=EXAMPLE user=test\u2026: An unexpected error occurred: unhashable type: 'list'"
+  ],
+  "stats": {
+   "error": {
+    "code": "INTERNAL_ERROR",
+    "message": "An unexpected error occurred: unhashable type: 'list'",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 422
+ },
+ "segments api": {
+  "body": {
+   "details": {
+    "session_id": "pinned-session",
+    "track_id": "no-such-track"
+   },
+   "error_code": "TRACK_NOT_FOUND",
+   "message": "Track not found in session: no-such-track (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: TRACK_NOT_FOUND 404 POST /api/session/pinned-session/segments service=EXAMPLE user=test\u2026: Track not found in session: no-such-track"
+  ],
+  "stats": {
+   "error": {
+    "code": "TRACK_NOT_FOUND",
+    "message": "Track not found in session: no-such-track",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 404
+ },
+ "segments exit": {
+  "body": {
+   "details": {
+    "operation": "session_segments",
+    "reason": "service_exit",
+    "session_id": "pinned-session"
+   },
+   "error_code": "SERVICE_ERROR",
+   "message": "Service exited (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: SERVICE_ERROR 422 POST /api/session/pinned-session/segments service=EXAMPLE user=test\u2026: Service exited"
+  ],
+  "stats": {
+   "error": {
+    "code": "SERVICE_ERROR",
+    "message": "Service exited",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 422
+ },
+ "segments plain": {
+  "body": {
+   "details": {
+    "operation": "session_segments",
+    "session_id": "pinned-session"
+   },
+   "error_code": "INTERNAL_ERROR",
+   "message": "An unexpected error occurred: pinned failure (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: INTERNAL_ERROR 422 POST /api/session/pinned-session/segments service=EXAMPLE user=test\u2026: An unexpected error occurred: pinned failure"
+  ],
+  "stats": {
+   "error": {
+    "code": "INTERNAL_ERROR",
+    "message": "An unexpected error occurred: pinned failure",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 422
+ },
+ "services plain": {
+  "body": {
+   "details": {
+    "operation": "list_services"
+   },
+   "error_code": "INTERNAL_ERROR",
+   "message": "An unexpected error occurred: pinned failure (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: INTERNAL_ERROR 422 GET /api/services service=- user=test\u2026: An unexpected error occurred: pinned failure"
+  ],
+  "stats": {
+   "error": {
+    "code": "INTERNAL_ERROR",
+    "message": "An unexpected error occurred: pinned failure",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 422
+ },
+ "session create api": {
+  "body": {
+   "details": {
+    "pinned": true
+   },
+   "error_code": "SERVICE_ERROR",
+   "message": "pinned refusal (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: SERVICE_ERROR 422 POST /api/session/create service=EXAMPLE user=test\u2026: pinned refusal"
+  ],
+  "stats": {
+   "error": {
+    "code": "SERVICE_ERROR",
+    "message": "pinned refusal",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 422
+ },
+ "session create exit": {
+  "body": {
+   "details": {
+    "operation": "session_create",
+    "reason": "service_exit",
+    "service": "EXAMPLE",
+    "title_id": "title-0001"
+   },
+   "error_code": "SERVICE_ERROR",
+   "message": "Service EXAMPLE exited (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: SERVICE_ERROR 422 POST /api/session/create service=EXAMPLE user=test\u2026: Service EXAMPLE exited"
+  ],
+  "stats": {
+   "error": {
+    "code": "SERVICE_ERROR",
+    "message": "Service EXAMPLE exited",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 422
+ },
+ "session create no title": {
+  "body": {
+   "error_code": "INVALID_INPUT",
+   "message": "Missing required parameter: title_id (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: INVALID_INPUT 400 POST /api/session/create service=EXAMPLE user=test\u2026: Missing required parameter: title_id"
+  ],
+  "stats": {
+   "error": {
+    "code": "INVALID_INPUT",
+    "message": "Missing required parameter: title_id",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 400
+ },
+ "session create plain": {
+  "body": {
+   "details": {
+    "operation": "session_create",
+    "service": "EXAMPLE",
+    "title_id": "title-0001"
+   },
+   "error_code": "INTERNAL_ERROR",
+   "message": "An unexpected error occurred: pinned failure (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: INTERNAL_ERROR 422 POST /api/session/create service=EXAMPLE user=test\u2026: An unexpected error occurred: pinned failure"
+  ],
+  "stats": {
+   "error": {
+    "code": "INTERNAL_ERROR",
+    "message": "An unexpected error occurred: pinned failure",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 422
+ },
+ "session create proxy failed": {
+  "body": {
+   "details": {
+    "operation": "session_create",
+    "service": "EXAMPLE",
+    "title_id": "title-0001"
+   },
+   "error_code": "INTERNAL_ERROR",
+   "message": "An unexpected error occurred: pinned failure (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: INTERNAL_ERROR 422 POST /api/session/create service=EXAMPLE user=test\u2026: An unexpected error occurred: pinned failure"
+  ],
+  "stats": {
+   "error": {
+    "code": "INTERNAL_ERROR",
+    "message": "An unexpected error occurred: pinned failure",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 422
+ },
+ "session create proxy refused": {
+  "body": {
+   "details": {
+    "pinned": true
+   },
+   "error_code": "SERVICE_ERROR",
+   "message": "pinned refusal (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: SERVICE_ERROR 422 POST /api/session/create service=EXAMPLE user=test\u2026: pinned refusal"
+  ],
+  "stats": {
+   "error": {
+    "code": "SERVICE_ERROR",
+    "message": "pinned refusal",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 422
+ },
+ "session create unknown service": {
+  "body": {
+   "details": {
+    "service": "NOPE"
+   },
+   "error_code": "INVALID_SERVICE",
+   "message": "Invalid or unavailable service: NOPE (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: INVALID_SERVICE 400 POST /api/session/create service=- user=test\u2026: Invalid or unavailable service: NOPE"
+  ],
+  "stats": {
+   "error": {
+    "code": "INVALID_SERVICE",
+    "message": "Invalid or unavailable service: NOPE",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 400
+ },
+ "titles api": {
+  "body": {
+   "details": {
+    "pinned": true
+   },
+   "error_code": "SERVICE_ERROR",
+   "message": "pinned refusal (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: SERVICE_ERROR 422 GET /api/session/pinned-session/titles service=EXAMPLE user=test\u2026: pinned refusal"
+  ],
+  "stats": {
+   "error": {
+    "code": "SERVICE_ERROR",
+    "message": "pinned refusal",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 422
+ },
+ "titles api late": {
+  "body": {
+   "details": {
+    "pinned": true
+   },
+   "error_code": "SERVICE_ERROR",
+   "message": "pinned refusal (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": true,
+  "log": [
+   "Error ref REF: SERVICE_ERROR 422 GET /api/session/pinned-session/titles service=EXAMPLE user=test\u2026: pinned refusal"
+  ],
+  "stats": {
+   "error": {
+    "code": "SERVICE_ERROR",
+    "message": "pinned refusal",
+    "ref": "REF"
+   },
+   "late_status": 422
+  },
+  "status": 200
+ },
+ "titles exit": {
+  "body": {
+   "details": {
+    "operation": "session_titles",
+    "reason": "service_exit",
+    "session_id": "pinned-session"
+   },
+   "error_code": "SERVICE_ERROR",
+   "message": "Service exited (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: SERVICE_ERROR 422 GET /api/session/pinned-session/titles service=EXAMPLE user=test\u2026: Service exited"
+  ],
+  "stats": {
+   "error": {
+    "code": "SERVICE_ERROR",
+    "message": "Service exited",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 422
+ },
+ "titles exit late": {
+  "body": {
+   "details": {
+    "operation": "session_titles",
+    "reason": "service_exit",
+    "session_id": "pinned-session"
+   },
+   "error_code": "SERVICE_ERROR",
+   "message": "Service exited (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": true,
+  "log": [
+   "Error ref REF: SERVICE_ERROR 422 GET /api/session/pinned-session/titles service=EXAMPLE user=test\u2026: Service exited"
+  ],
+  "stats": {
+   "error": {
+    "code": "SERVICE_ERROR",
+    "message": "Service exited",
+    "ref": "REF"
+   },
+   "late_status": 422
+  },
+  "status": 200
+ },
+ "titles plain": {
+  "body": {
+   "details": {
+    "operation": "session_titles",
+    "session_id": "pinned-session"
+   },
+   "error_code": "INTERNAL_ERROR",
+   "message": "An unexpected error occurred: pinned failure (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: INTERNAL_ERROR 422 GET /api/session/pinned-session/titles service=EXAMPLE user=test\u2026: An unexpected error occurred: pinned failure"
+  ],
+  "stats": {
+   "error": {
+    "code": "INTERNAL_ERROR",
+    "message": "An unexpected error occurred: pinned failure",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 422
+ },
+ "titles plain late": {
+  "body": {
+   "details": {
+    "operation": "session_titles",
+    "session_id": "pinned-session"
+   },
+   "error_code": "INTERNAL_ERROR",
+   "message": "An unexpected error occurred: pinned failure (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": true,
+  "log": [
+   "Error ref REF: INTERNAL_ERROR 422 GET /api/session/pinned-session/titles service=EXAMPLE user=test\u2026: An unexpected error occurred: pinned failure"
+  ],
+  "stats": {
+   "error": {
+    "code": "INTERNAL_ERROR",
+    "message": "An unexpected error occurred: pinned failure",
+    "ref": "REF"
+   },
+   "late_status": 422
+  },
+  "status": 200
+ },
+ "tracks api": {
+  "body": {
+   "details": {
+    "pinned": true
+   },
+   "error_code": "SERVICE_ERROR",
+   "message": "pinned refusal (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: SERVICE_ERROR 422 POST /api/session/pinned-session/tracks service=EXAMPLE user=test\u2026: pinned refusal"
+  ],
+  "stats": {
+   "error": {
+    "code": "SERVICE_ERROR",
+    "message": "pinned refusal",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 422
+ },
+ "tracks api late": {
+  "body": {
+   "details": {
+    "pinned": true
+   },
+   "error_code": "SERVICE_ERROR",
+   "message": "pinned refusal (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": true,
+  "log": [
+   "Error ref REF: SERVICE_ERROR 422 POST /api/session/pinned-session/tracks service=EXAMPLE user=test\u2026: pinned refusal"
+  ],
+  "stats": {
+   "error": {
+    "code": "SERVICE_ERROR",
+    "message": "pinned refusal",
+    "ref": "REF"
+   },
+   "late_status": 422
+  },
+  "status": 200
+ },
+ "tracks exit": {
+  "body": {
+   "details": {
+    "operation": "session_tracks",
+    "reason": "service_exit",
+    "session_id": "pinned-session",
+    "title_id": "title-0001"
+   },
+   "error_code": "SERVICE_ERROR",
+   "message": "Service exited (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: SERVICE_ERROR 422 POST /api/session/pinned-session/tracks service=EXAMPLE user=test\u2026: Service exited"
+  ],
+  "stats": {
+   "error": {
+    "code": "SERVICE_ERROR",
+    "message": "Service exited",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 422
+ },
+ "tracks exit late": {
+  "body": {
+   "details": {
+    "operation": "session_tracks",
+    "reason": "service_exit",
+    "session_id": "pinned-session",
+    "title_id": "title-0001"
+   },
+   "error_code": "SERVICE_ERROR",
+   "message": "Service exited (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": true,
+  "log": [
+   "Error ref REF: SERVICE_ERROR 422 POST /api/session/pinned-session/tracks service=EXAMPLE user=test\u2026: Service exited"
+  ],
+  "stats": {
+   "error": {
+    "code": "SERVICE_ERROR",
+    "message": "Service exited",
+    "ref": "REF"
+   },
+   "late_status": 422
+  },
+  "status": 200
+ },
+ "tracks plain": {
+  "body": {
+   "details": {
+    "operation": "session_tracks",
+    "session_id": "pinned-session",
+    "title_id": "title-0001"
+   },
+   "error_code": "INTERNAL_ERROR",
+   "message": "An unexpected error occurred: pinned failure (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: INTERNAL_ERROR 422 POST /api/session/pinned-session/tracks service=EXAMPLE user=test\u2026: An unexpected error occurred: pinned failure"
+  ],
+  "stats": {
+   "error": {
+    "code": "INTERNAL_ERROR",
+    "message": "An unexpected error occurred: pinned failure",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 422
+ },
+ "tracks plain late": {
+  "body": {
+   "details": {
+    "operation": "session_tracks",
+    "session_id": "pinned-session",
+    "title_id": "title-0001"
+   },
+   "error_code": "INTERNAL_ERROR",
+   "message": "An unexpected error occurred: pinned failure (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": true,
+  "log": [
+   "Error ref REF: INTERNAL_ERROR 422 POST /api/session/pinned-session/tracks service=EXAMPLE user=test\u2026: An unexpected error occurred: pinned failure"
+  ],
+  "stats": {
+   "error": {
+    "code": "INTERNAL_ERROR",
+    "message": "An unexpected error occurred: pinned failure",
+    "ref": "REF"
+   },
+   "late_status": 422
+  },
+  "status": 200
+ }
+}

@@ -159,6 +159,26 @@ def api_handler(handler: Handler) -> Handler:
     return wrapper
 
 
+def categorized(handler: Handler) -> Handler:
+    """Answer an exception that is not an APIError as its category, with the route name as the operation."""
+    operation = handler.__name__
+    label = f"Error in {operation.replace('_', ' ')}"
+
+    @functools.wraps(handler)
+    async def wrapper(request: web.Request) -> web.StreamResponse:
+        try:
+            return await handler(request)
+        except APIError:
+            raise
+        except Exception as e:
+            log.exception(label)
+            return handle_api_exception(
+                e, context={"operation": operation}, debug_mode=request.app.get("debug_api", False)
+            )
+
+    return wrapper
+
+
 async def json_body(request: web.Request) -> Any:
     """The request's JSON object; raises INVALID_INPUT when it does not parse or is not an object."""
     try:
@@ -571,6 +591,7 @@ async def services(request: web.Request) -> web.Response:
 
 
 @api_handler
+@categorized
 async def search(request: web.Request) -> web.Response:
     """
     Find titles from a service.
@@ -668,13 +689,7 @@ async def search(request: web.Request) -> web.Response:
         description: Invalid request
     """
     data = await json_body(request)
-
-    try:
-        return await search_handler(data, request)
-    except Exception as e:
-        log.exception("Error in search")
-        debug_mode = request.app.get("debug_api", False)
-        return handle_api_exception(e, context={"operation": "search"}, debug_mode=debug_mode)
+    return await search_handler(data, request)
 
 
 @api_handler
@@ -1925,6 +1940,7 @@ async def env_check(request: web.Request) -> web.Response:
 
 
 @api_handler
+@categorized
 async def session_create(request: web.Request) -> web.Response:
     """
     Make a remote session.
@@ -2097,13 +2113,7 @@ async def session_create(request: web.Request) -> web.Response:
         description: Authentication failed
     """
     data = await json_body(request)
-    try:
-        return await session_create_handler(data, request)
-    except Exception as e:
-        log.exception("Error in session create")
-        return handle_api_exception(
-            e, context={"operation": "session_create"}, debug_mode=request.app.get("debug_api", False)
-        )
+    return await session_create_handler(data, request)
 
 
 @api_handler
@@ -2163,6 +2173,7 @@ async def tunnel_check(request: web.Request) -> web.Response:
 
 @api_handler
 @heartbeat
+@categorized
 async def session_titles(request: web.Request) -> web.Response:
     """
     Get titles for an authenticated remote session.
@@ -2185,17 +2196,12 @@ async def session_titles(request: web.Request) -> web.Response:
         description: Remote session not found
     """
     session_id = request.match_info["session_id"]
-    try:
-        return await session_titles_handler(session_id, request)
-    except Exception as e:
-        log.exception("Error in session titles")
-        return handle_api_exception(
-            e, context={"operation": "session_titles"}, debug_mode=request.app.get("debug_api", False)
-        )
+    return await session_titles_handler(session_id, request)
 
 
 @api_handler
 @heartbeat
+@categorized
 async def session_tracks(request: web.Request) -> web.Response:
     """
     Get tracks and chapters for a specific title.
@@ -2231,16 +2237,11 @@ async def session_tracks(request: web.Request) -> web.Response:
     """
     session_id = request.match_info["session_id"]
     data = await json_body(request)
-    try:
-        return await session_tracks_handler(data, session_id, request)
-    except Exception as e:
-        log.exception("Error in session tracks")
-        return handle_api_exception(
-            e, context={"operation": "session_tracks"}, debug_mode=request.app.get("debug_api", False)
-        )
+    return await session_tracks_handler(data, session_id, request)
 
 
 @api_handler
+@categorized
 async def session_segments(request: web.Request) -> web.Response:
     """
     Get segment URLs for selected tracks.
@@ -2275,16 +2276,11 @@ async def session_segments(request: web.Request) -> web.Response:
     """
     session_id = request.match_info["session_id"]
     data = await json_body(request)
-    try:
-        return await session_segments_handler(data, session_id, request)
-    except Exception as e:
-        log.exception("Error in session segments")
-        return handle_api_exception(
-            e, context={"operation": "session_segments"}, debug_mode=request.app.get("debug_api", False)
-        )
+    return await session_segments_handler(data, session_id, request)
 
 
 @api_handler
+@categorized
 async def session_segment_filter(request: web.Request) -> web.Response:
     """
     Get the unwanted HLS segments for one track.
@@ -2320,13 +2316,7 @@ async def session_segment_filter(request: web.Request) -> web.Response:
     """
     session_id = request.match_info["session_id"]
     data = await json_body(request)
-    try:
-        return await session_segment_filter_handler(data, session_id, request)
-    except Exception as e:
-        log.exception("Error in session segment filter")
-        return handle_api_exception(
-            e, context={"operation": "session_segment_filter"}, debug_mode=request.app.get("debug_api", False)
-        )
+    return await session_segment_filter_handler(data, session_id, request)
 
 
 @api_handler
@@ -2379,6 +2369,7 @@ async def session_samples(request: web.Request) -> web.Response:
 
 @api_handler
 @heartbeat
+@categorized
 async def session_license(request: web.Request) -> web.Response:
     """
     Proxy DRM license through authenticated service.
@@ -2436,16 +2427,7 @@ async def session_license(request: web.Request) -> web.Response:
     """
     session_id = request.match_info["session_id"]
     data = await json_body(request)
-    try:
-        return await session_license_handler(data, session_id, request)
-    except Exception as e:
-        if isinstance(e, APIError) and e.error_code is APIErrorCode.SERVER_CDM_CAPPED:
-            log.info(f"Session licence refused: {e.message}")
-        else:
-            log.exception("Error in session license")
-        return handle_api_exception(
-            e, context={"operation": "session_license"}, debug_mode=request.app.get("debug_api", False)
-        )
+    return await session_license_handler(data, session_id, request)
 
 
 @api_handler
@@ -2578,6 +2560,7 @@ async def session_channel(request: web.Request) -> web.StreamResponse:
 
 
 @api_handler
+@categorized
 async def session_prompt_get(request: web.Request) -> web.Response:
     """
     Poll for pending interactive prompts during authentication.
@@ -2619,16 +2602,11 @@ async def session_prompt_get(request: web.Request) -> web.Response:
         description: Remote session not found
     """
     session_id = request.match_info["session_id"]
-    try:
-        return await session_prompt_get_handler(session_id, request)
-    except Exception as e:
-        log.exception("Error in session prompt get")
-        return handle_api_exception(
-            e, context={"operation": "session_prompt_get"}, debug_mode=request.app.get("debug_api", False)
-        )
+    return await session_prompt_get_handler(session_id, request)
 
 
 @api_handler
+@categorized
 async def session_logs(request: web.Request) -> web.Response:
     """
     Drain the remote session's service log records.
@@ -2679,16 +2657,11 @@ async def session_logs(request: web.Request) -> web.Response:
         since = int(request.query.get("since", 0))
     except ValueError:
         since = 0
-    try:
-        return await session_logs_handler(session_id, since, request)
-    except Exception as e:
-        log.exception("Error in session logs")
-        return handle_api_exception(
-            e, context={"operation": "session_logs"}, debug_mode=request.app.get("debug_api", False)
-        )
+    return await session_logs_handler(session_id, since, request)
 
 
 @api_handler
+@categorized
 async def session_prompt_submit(request: web.Request) -> web.Response:
     """
     Submit a response to a pending interactive prompt.
@@ -2731,13 +2704,7 @@ async def session_prompt_submit(request: web.Request) -> web.Response:
     """
     session_id = request.match_info["session_id"]
     data = await json_body(request)
-    try:
-        return await session_prompt_post_handler(data, session_id, request)
-    except Exception as e:
-        log.exception("Error in session prompt submit")
-        return handle_api_exception(
-            e, context={"operation": "session_prompt_submit"}, debug_mode=request.app.get("debug_api", False)
-        )
+    return await session_prompt_post_handler(data, session_id, request)
 
 
 @api_handler
