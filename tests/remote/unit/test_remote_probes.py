@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from threading import Event, Thread
+from types import SimpleNamespace
 from typing import Any, Callable
 
 import pytest
@@ -11,7 +13,7 @@ import responses
 
 from tests.remote.unit.test_session_reopen import SERVER, make_service
 from unshackle.core import remote_channel, remote_service
-from unshackle.core.remote_channel import PollingChannel, ServerMessages
+from unshackle.core.remote_channel import PollingChannel, ServerMessages, WebSocketChannel
 from unshackle.core.remote_protocol import ClientErrorKind
 from unshackle.core.remote_service import RemoteClient
 
@@ -136,3 +138,17 @@ def test_a_tunnel_copies_the_auth_header_the_server_reads(monkeypatch: pytest.Mo
     remote_service.start_tunnel(client)
 
     assert sent[0].get("X-Api-Key") == KEY and "X-Secret-Key" not in sent[0]
+
+
+def test_a_channel_closes_after_its_loop_has_closed() -> None:
+    """A refused upgrade closes the loop of the channel thread before the thread ends."""
+    service = make_service()
+    service.ctx = SimpleNamespace(obj=None)
+    messages = ServerMessages(service)
+    channel = WebSocketChannel(messages, PollingChannel(messages))
+    loop = asyncio.new_event_loop()
+    loop.close()
+    channel.loop, channel.task = loop, SimpleNamespace(cancel=lambda: None)
+    channel.thread = SimpleNamespace(is_alive=lambda: True, join=lambda timeout=None: None)
+
+    channel.close()

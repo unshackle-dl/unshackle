@@ -468,7 +468,8 @@ class WebSocketChannel:
 
     def close(self) -> None:
         if self.loop and self.task and self.thread.is_alive():
-            self.loop.call_soon_threadsafe(self.task.cancel)
+            with contextlib.suppress(RuntimeError):  # the loop closes before its thread ends
+                self.loop.call_soon_threadsafe(self.task.cancel)
             self.thread.join(5)
         self.fallback.close()
         self.messages.close_cdm_sessions()
