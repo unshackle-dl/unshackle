@@ -1261,7 +1261,7 @@ def test_an_attachment_over_the_inline_limit_is_skipped(tmp_path: Path, monkeypa
 
 
 def test_an_export_track_of_an_unhashable_type_is_refused_as_before() -> None:
-    with pytest.raises(TypeError, match=re.escape("cannot use 'dict' as a dict key")):
+    with pytest.raises(TypeError, match="unhashable type|as a dict key"):
         track_from_dict({**EXPORT_VIDEO, "type": {"a": 1}})
 
 
