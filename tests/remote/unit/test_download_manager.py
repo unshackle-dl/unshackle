@@ -711,3 +711,48 @@ def test_job_history_keeps_the_skipped_titles(tmp_path: Path, manager: DownloadQ
     record_job_history(job)
     entry = json.loads((tmp_path / "api_history.jsonl").read_text(encoding="utf-8").splitlines()[-1])
     assert entry["skipped_titles"] == job.skipped_titles
+
+
+@pytest.mark.parametrize("carrier", ["error", "cause", "none"])
+def test_a_download_error_keeps_the_code_its_raiser_named(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, carrier: str
+) -> None:
+    import click
+
+    import unshackle.commands.dl as dl_module
+    from unshackle.core.api import download_manager, handlers
+    from unshackle.core.api.errors import APIError
+    from unshackle.core.remote_protocol import APIErrorCode, coded
+    from unshackle.core.run_plan import RunOutcome
+    from unshackle.core.services import Services
+
+    error = ValueError("no key for the track")
+    if carrier == "error":
+        coded(error, APIErrorCode.DRM_ERROR)
+    elif carrier == "cause":
+        error.__cause__ = coded(KeyError("kid"), APIErrorCode.DRM_ERROR)
+
+    class FakeDl:
+        cli = dl_module.dl.cli
+
+        def __init__(self, ctx: click.Context, **kwargs: object) -> None:
+            pass
+
+        def result(self, **kwargs: object) -> RunOutcome:
+            return RunOutcome(error=error)
+
+        def failure_lines(self, error: BaseException) -> tuple[str, str]:
+            return "", str(error)
+
+    class FakeService:
+        cli = click.Command("svc", callback=lambda title: object())
+
+    monkeypatch.setattr(dl_module, "dl", FakeDl)
+    monkeypatch.setattr(Services, "get_path", staticmethod(lambda s: tmp_path))
+    monkeypatch.setattr(Services, "load", staticmethod(lambda s: FakeService))
+    monkeypatch.setattr(handlers, "load_full_cdm", lambda *a: None)
+
+    with pytest.raises(APIError, match="^download worker failed: no key for the track$") as exc:
+        download_manager.perform_download("job-1", "EXAMPLE1", "t1", {})
+
+    assert exc.value.error_code == (APIErrorCode.WORKER_ERROR if carrier == "none" else APIErrorCode.DRM_ERROR)

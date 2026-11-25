@@ -474,7 +474,9 @@ def perform_download(
     if outcome.error is not None:
         # segment URLs carry signed CDN tokens (hmac, session IDs) that redact_text does not match
         detail = redact_all(dl_instance.failure_lines(outcome.error)[1].strip())
-        raise APIError(APIErrorCode.WORKER_ERROR, f"download worker failed: {detail}")
+        named = (getattr(e, "error_code", None) for e in (outcome.error, outcome.error.__cause__))
+        code = next((c for c in named if isinstance(c, APIErrorCode)), APIErrorCode.WORKER_ERROR)
+        raise APIError(code, f"download worker failed: {detail}")
 
     if progress_callback and outcome.skipped_subtitles:
         progress_callback({"skipped_subtitles": outcome.skipped_subtitles})
