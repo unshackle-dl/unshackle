@@ -1,10 +1,14 @@
 """The launch context of a Service: ``ctx.obj`` and the launch keys in ``ctx.parent.params``."""
 
+import copy
+from pathlib import Path
 from typing import Any, Dict, Optional, TypedDict, cast
 
 import click
 
+from unshackle.core.config import config, load_yaml
 from unshackle.core.utils.click_types import ContextData
+from unshackle.core.utils.collections import ci_get, merge_dict
 
 
 class LaunchKeys(TypedDict, total=False):
@@ -44,6 +48,34 @@ def served_context(obj: ContextData, params: Dict[str, Any], keys: LaunchKeys) -
     ctx.params = {**params, "quality": params.get("quality") or []}
     launch(ctx, {**keys, "served": True}, obj)
     return ctx
+
+
+SERVICE_YAML: Dict[Path, tuple[tuple[int, int], dict]] = {}
+
+
+def load_service_config(tag: str, local: bool = True) -> dict:
+    """The service's ``config.yaml`` with the user's ``services.<TAG>`` block merged over it.
+
+    *local* False leaves out the file, for a service that runs on a remote server. The parsed file is kept
+    until its mtime or size changes; each caller gets its own copy to change.
+    """
+    from unshackle.core.services import Services
+
+    service_config: dict = {}
+    if local:
+        try:
+            path = Services.get_path(tag) / config.filenames.config
+            stat = path.stat()
+        except (KeyError, FileNotFoundError):
+            pass
+        else:
+            stamp = (stat.st_mtime_ns, stat.st_size)
+            hit = SERVICE_YAML.get(path)
+            if not hit or hit[0] != stamp:
+                hit = SERVICE_YAML[path] = (stamp, load_yaml(path) or {})
+            service_config = copy.deepcopy(hit[1])
+    merge_dict(copy.deepcopy(ci_get(config.services, tag) or {}), service_config)
+    return service_config
 
 
 def launch_keys(ctx: click.Context) -> LaunchKeys:

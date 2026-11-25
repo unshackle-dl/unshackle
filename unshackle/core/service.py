@@ -45,6 +45,7 @@ from unshackle.core.tracks import Chapters, Tracks
 from unshackle.core.tracks.video import Video
 from unshackle.core.utilities import declared_kwargs
 from unshackle.core.utils import run_proxy
+from unshackle.core.utils.collections import ci_get
 from unshackle.core.utils.ip_info import get_ip_info, verify_proxy_exit
 from unshackle.core.utils.redact import mask_proxy
 
@@ -216,7 +217,7 @@ class Service(metaclass=ABCMeta):
             proxy_provider_name = keys.get("proxy_provider")
 
             service_name = self.__class__.__name__
-            service_config_dict = config.services.get(service_name, {})
+            service_config_dict = ci_get(config.services, service_name) or {}
             proxy_map = service_config_dict.get("proxy_map", {})
 
             if proxy_map and proxy_query:

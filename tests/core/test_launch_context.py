@@ -62,7 +62,7 @@ def rest_handlers(monkeypatch: pytest.MonkeyPatch) -> tuple[Any, dict]:
         seen["ctx"] = parent_ctx
         return SimpleNamespace(authenticate=lambda cookies, credential: None)
 
-    monkeypatch.setattr(handlers, "load_service_yaml", lambda tag: {})
+    monkeypatch.setattr(handlers, "load_service_config", lambda tag: {})
     monkeypatch.setattr(handlers, "resolve_handler_proxy", lambda *a: (None, []))
     monkeypatch.setattr(handlers, "load_full_cdm", lambda *a: None)
     monkeypatch.setattr(handlers.Services, "load", lambda tag: SimpleNamespace())

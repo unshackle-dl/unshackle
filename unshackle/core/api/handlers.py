@@ -37,7 +37,7 @@ from unshackle.core.cacher import Cacher
 from unshackle.core.cdm.choice import choose_cdm, drm_system
 from unshackle.core.cdm.detect import cdm_system, cdm_type_stub
 from unshackle.core.cdm.loader import device_system
-from unshackle.core.config import config, load_yaml
+from unshackle.core.config import config
 from unshackle.core.dl_options import (
     DEFAULT_DOWNLOAD_PARAMS,
     DL_OPTION_API_NAMES,
@@ -45,7 +45,7 @@ from unshackle.core.dl_options import (
     forwarded_dl_params,
 )
 from unshackle.core.drm import BlowfishStripe, cbcs, is_null_key, real_kids
-from unshackle.core.launch import served_context
+from unshackle.core.launch import load_service_config, served_context
 from unshackle.core.manifests.snapshot import capture
 from unshackle.core.providers.anilist import parse_anilist_ref
 from unshackle.core.proxies.resolve import initialize_proxy_providers, is_loopback, resolve_proxy
@@ -153,28 +153,6 @@ def load_full_cdm(
             f"load_cdm({sanitize_log(cdm_name)!r}) failed for {sanitize_log(service)}: {exc}; using lightweight stub"
         )
         return resolve_server_cdm(service, profile, cdm_type, app_config)
-
-
-SERVICE_YAML: Dict[Path, tuple[int, dict]] = {}
-
-
-def load_service_yaml(normalized_service: str) -> dict:
-    """Load a service's config.yaml and merge it with the global override block.
-
-    The parsed file is kept until its mtime changes; each caller gets its own copy to change.
-    """
-    service_config_path = Services.get_path(normalized_service) / config.filenames.config
-    try:
-        mtime = service_config_path.stat().st_mtime_ns
-    except OSError:
-        service_config: dict = {}
-    else:
-        hit = SERVICE_YAML.get(service_config_path)
-        if not hit or hit[0] != mtime:
-            hit = SERVICE_YAML[service_config_path] = (mtime, load_yaml(service_config_path) or {})
-        service_config = copy.deepcopy(hit[1])
-    merge_dict(config.services.get(normalized_service) or {}, service_config)
-    return service_config
 
 
 def cast_or_refuse(params: Iterable[click.Parameter], ctx: Any, options: Dict[str, Any]) -> Dict[str, Any]:
@@ -952,12 +930,12 @@ def key_owns_identity(user_config: Optional[Dict[str, Any]], service: str) -> bo
 
 
 def key_service_yaml(normalized_service: str, user_config: Optional[Dict[str, Any]]) -> dict:
-    """:func:`load_service_yaml` with the API key's own block merged over it.
+    """:func:`load_service_config` with the API key's own block merged over it.
 
     A top-level section that sets one of the block's plain values (a profile section with its own identity) takes
     the key's value too, so a client cannot pick the server's identity back through the profile it names.
     """
-    service_config = load_service_yaml(normalized_service)
+    service_config = load_service_config(normalized_service)
     block = key_service_config(user_config, normalized_service)
     if block:
         merge_dict(copy.deepcopy(block), service_config)

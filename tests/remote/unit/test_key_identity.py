@@ -44,7 +44,7 @@ def test_a_session_keeps_the_user_config_it_was_created_with(server, monkeypatch
 
 def test_the_key_block_beats_the_server_config_and_profile_sections(server, monkeypatch):
     base = {"device_id": "server", "device_key": "server", "p1": {"device_id": "p1", "other": 1}, "urls": {"a": "b"}}
-    monkeypatch.setattr(handlers, "load_service_yaml", lambda service: json.loads(json.dumps(base)))
+    monkeypatch.setattr(handlers, "load_service_config", lambda service: json.loads(json.dumps(base)))
     user = {"service_config": {"example": {"device_id": "key", "device_key": "key"}}}
 
     merged = handlers.key_service_yaml("EXAMPLE", user)
@@ -172,7 +172,7 @@ def test_a_reload_checks_key_devices_against_the_new_config(server, monkeypatch)
 
 def test_a_block_value_reaches_only_plain_values_of_other_sections(server, monkeypatch):
     base = {"p1": {"device_id": "p1", "headers": {"a": "b"}}, "device_key": "server"}
-    monkeypatch.setattr(handlers, "load_service_yaml", lambda service: json.loads(json.dumps(base)))
+    monkeypatch.setattr(handlers, "load_service_config", lambda service: json.loads(json.dumps(base)))
     block = {"device_id": "key", "headers": {"c": "d"}, "device_key": {"nested": 1}}
 
     merged = handlers.key_service_yaml("EXAMPLE", {"service_config": {"EXAMPLE": block}})

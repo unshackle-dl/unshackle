@@ -35,7 +35,7 @@ from rich.table import Table
 from unshackle.core import __version__, binaries, login, providers
 from unshackle.core.cdm.choice import choose_cdm
 from unshackle.core.cdm.detect import cdm_system, cdm_type_stub, is_playready_cdm, is_remote_cdm
-from unshackle.core.config import cdm_entry_names_device, config, load_yaml, resolve_cdm_name, resolve_decryption
+from unshackle.core.config import cdm_entry_names_device, config, resolve_cdm_name, resolve_decryption
 from unshackle.core.console import SyncLive, console, listing_panel, print_listing
 from unshackle.core.constants import (
     DEFAULT_SAMPLE,
@@ -62,7 +62,7 @@ from unshackle.core.drm import (
 from unshackle.core.drm.key_resolution import ContentKeyResolver
 from unshackle.core.events import events
 from unshackle.core.export_name import ExportNamer, move_export, plural, season_episodes, title_label
-from unshackle.core.launch import LaunchKeys, launch
+from unshackle.core.launch import LaunchKeys, launch, load_service_config
 from unshackle.core.manifests.snapshot import capture
 from unshackle.core.mux_step import mux_title
 from unshackle.core.placement import SAMPLE_DIR, Placement, sample_name
@@ -1343,27 +1343,17 @@ class dl:
         self.is_remote = bool(ctx.params.get("remote"))
 
         with console.status("Loading Service Config...", spinner="dots"):
-            self.service_config = {}
+            self.service_config = load_service_config(self.service, local=not self.is_remote)
             if not self.is_remote:
-                try:
-                    service_config_path = Services.get_path(self.service) / config.filenames.config
-                    if service_config_path.exists():
-                        self.service_config = load_yaml(service_config_path)
-                        self.log.info("Service Config loaded")
-                        # log key names only: the full config carries service certificates,
-                        # device fingerprints and endpoints that bloat the log and may be sensitive
-                        log_event(
-                            "load_service_config",
-                            level="DEBUG",
-                            service=self.service,
-                            context={
-                                "config_path": str(service_config_path),
-                                "config_keys": sorted(self.service_config or []),
-                            },
-                        )
-                except KeyError:
-                    pass
-            merge_dict(ci_get(config.services, self.service), self.service_config)
+                self.log.info("Service Config loaded")
+                # log key names only: the full config carries service certificates,
+                # device fingerprints and endpoints that bloat the log and may be sensitive
+                log_event(
+                    "load_service_config",
+                    level="DEBUG",
+                    service=self.service,
+                    context={"config_keys": sorted(map(str, self.service_config))},
+                )
 
         service_config = ci_get(config.services, self.service, {})
         if service_config:

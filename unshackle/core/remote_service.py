@@ -973,7 +973,7 @@ class RemoteService:
         self._server_accounts: Optional[dict] = services_config.get("_server_accounts")
         self._anonymous_search = bool(services_config.get("_anonymous_search"))
         # read before apply_service_config merges the server's values into the same section
-        own = config.services.get(service_tag) or {}
+        own = ci_get(config.services, service_tag) or {}
         self._client_config = {k: own[k] for k in services_config.get("_client_config") or [] if k in own}
         self.apply_service_config(svc_config)
 
@@ -997,7 +997,7 @@ class RemoteService:
 
         extra = {k: v for k, v in svc_config.items() if k not in config_maps}
         if extra:
-            existing = config.services.get(self.service_tag, {})
+            existing = ci_get(config.services, self.service_tag) or {}
             for key, value in extra.items():
                 if key in existing and isinstance(existing[key], dict) and isinstance(value, dict):
                     existing[key].update(value)
@@ -1457,7 +1457,7 @@ class RemoteService:
         Lets users rename titles for remote services they do not have installed locally.
         The server sends raw titles. The client's own ``services.<TAG>.title_map`` wins.
         """
-        title_map = (config.services.get(self.service_tag) or {}).get("title_map") or {}
+        title_map = (ci_get(config.services, self.service_tag) or {}).get("title_map") or {}
         return remap_titles(self.get_titles(), title_map)
 
     def get_tracks(self, title: Title_T) -> Tracks:

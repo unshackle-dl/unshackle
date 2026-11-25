@@ -11,10 +11,9 @@ from rich.rule import Rule
 from rich.tree import Tree
 
 from unshackle.core import login
-from unshackle.core.config import config, load_yaml
 from unshackle.core.console import console
 from unshackle.core.constants import context_settings
-from unshackle.core.launch import LaunchKeys, launch
+from unshackle.core.launch import LaunchKeys, launch, load_service_config
 from unshackle.core.proxies.proxy import Proxy
 from unshackle.core.proxies.resolve import (
     REGION,
@@ -28,7 +27,6 @@ from unshackle.core.proxies.resolve import (
 from unshackle.core.service import Service
 from unshackle.core.services import Services
 from unshackle.core.utils.click_types import ContextData
-from unshackle.core.utils.collections import ci_get, merge_dict
 
 
 @click.command(
@@ -86,14 +84,10 @@ def search(
     if profile:
         log.info(f"Using profile: '{profile}'")
 
-    service_config: dict = {}
+    with console.status("Loading Service Config...", spinner="dots"):
+        service_config = load_service_config(service, local=not remote)
     if not remote:
-        with console.status("Loading Service Config...", spinner="dots"):
-            service_config_path = Services.get_path(service) / config.filenames.config
-            if service_config_path.exists():
-                service_config = load_yaml(service_config_path)
-                log.info("Service Config loaded")
-    merge_dict(ci_get(config.services, service), service_config)
+        log.info("Service Config loaded")
 
     if ctx.params.get("local_proxy"):
         require_alone_local_proxy(ctx)

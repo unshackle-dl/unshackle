@@ -58,7 +58,7 @@ def session_params(monkeypatch: pytest.MonkeyPatch, data: dict) -> dict:
         seen["params"] = parent_ctx.params
         return object()
 
-    monkeypatch.setattr(handlers, "load_service_yaml", lambda service: {})
+    monkeypatch.setattr(handlers, "load_service_config", lambda service: {})
     monkeypatch.setattr(handlers, "load_full_cdm", lambda *args: None)
     monkeypatch.setattr(handlers.Services, "load", lambda service: None)
     monkeypatch.setattr(handlers, "instantiate_service", fake_instantiate)

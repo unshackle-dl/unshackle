@@ -4,7 +4,7 @@
 
 - **Type:** `dict` keyed by service tag &nbsp;·&nbsp; **Default:** `{}`
 
-Per-service configuration, keyed by the canonical service tag (for example `EXAMPLE1`, `EXAMPLE2`,
+Per-service configuration, keyed by the service tag in any case (for example `EXAMPLE1`, `EXAMPLE2`,
 `EXAMPLE3`). unshackle reads several well-known sub-keys out of each service's block:
 
 - **`proxy_map`**: remaps the region query you passed to `-p/--proxy` for this service.

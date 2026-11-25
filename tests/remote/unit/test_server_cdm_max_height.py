@@ -478,7 +478,7 @@ def test_a_client_device_session_builds_the_service_on_a_stub_of_that_device(mon
     def no_server_device(*a, **k):
         raise AssertionError("a client-device session must not load the server's device")
 
-    monkeypatch.setattr(handlers, "load_service_yaml", lambda tag: {})
+    monkeypatch.setattr(handlers, "load_service_config", lambda tag: {})
     monkeypatch.setattr(handlers, "load_full_cdm", no_server_device)
     monkeypatch.setattr(handlers, "served_context", lambda obj, *a: built.update(cdm=obj.cdm))
     monkeypatch.setattr(handlers.Services, "load", lambda tag: object)

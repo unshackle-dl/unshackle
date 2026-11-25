@@ -170,7 +170,7 @@ def test_a_relaying_client_gets_a_stand_in_with_its_device_facts(monkeypatch: py
     class Declares:
         CLIENT_CONFIG = ("esn",)
 
-    monkeypatch.setattr(handlers, "load_service_yaml", lambda tag: {"esn": "SERVER"})
+    monkeypatch.setattr(handlers, "load_service_config", lambda tag: {"esn": "SERVER"})
     monkeypatch.setattr(
         handlers,
         "served_context",
@@ -331,7 +331,7 @@ def test_a_lent_device_gives_the_service_the_server_config_back(monkeypatch: pyt
         CLIENT_CONFIG = ("esn", "esn_map")
 
     monkeypatch.setattr(
-        handlers, "load_service_yaml", lambda tag: {"esn": "SERVER", "esn_map": {7000: "s"}, "other": 1}
+        handlers, "load_service_config", lambda tag: {"esn": "SERVER", "esn_map": {7000: "s"}, "other": 1}
     )
     monkeypatch.setattr(handlers, "load_full_cdm", lambda *a: server_device)
     monkeypatch.setattr(handlers, "served_context", lambda obj, *a: built.update(cdm=obj.cdm, config=obj.config))

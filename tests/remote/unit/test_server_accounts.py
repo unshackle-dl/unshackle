@@ -71,7 +71,7 @@ def test_single_account_always_same(accounts):
 
 
 def test_client_managed_gets_nothing(monkeypatch, accounts):
-    monkeypatch.setattr(handlers, "load_service_yaml", lambda s: {})
+    monkeypatch.setattr(handlers, "load_service_config", lambda s: {})
     monkeypatch.setattr(handlers, "load_full_cdm", lambda *a: None)
     monkeypatch.setattr(handlers.Services, "load", staticmethod(lambda s: object()))
     monkeypatch.setattr(handlers, "instantiate_service", lambda *a: "svc")
@@ -101,7 +101,7 @@ def test_rotation_per_region_pool(accounts):
 
 
 def test_server_account_ignores_client_credentials(monkeypatch, accounts):
-    monkeypatch.setattr(handlers, "load_service_yaml", lambda s: {})
+    monkeypatch.setattr(handlers, "load_service_config", lambda s: {})
     monkeypatch.setattr(handlers, "load_full_cdm", lambda *a: None)
     monkeypatch.setattr(handlers.Services, "load", staticmethod(lambda s: object()))
     monkeypatch.setattr(handlers, "instantiate_service", lambda *a: "svc")
@@ -125,7 +125,7 @@ def test_server_cdm_ignores_client_cdm_type(monkeypatch):
     """A server_cdm tier licenses with the server's own device, so the client's CDM type must
     not swap it for a stub of the other DRM system."""
     seen = []
-    monkeypatch.setattr(handlers, "load_service_yaml", lambda s: {})
+    monkeypatch.setattr(handlers, "load_service_config", lambda s: {})
     monkeypatch.setattr(handlers, "load_full_cdm", lambda s, p, t=None, app_config=None: seen.append(t))
     monkeypatch.setattr(handlers.Services, "load", staticmethod(lambda s: object()))
     monkeypatch.setattr(handlers, "instantiate_service", lambda *a: "svc")
@@ -155,7 +155,7 @@ def _lang_option_module():
 
 
 def _create_with_real_ctx(monkeypatch, data):
-    monkeypatch.setattr(handlers, "load_service_yaml", lambda s: {})
+    monkeypatch.setattr(handlers, "load_service_config", lambda s: {})
     monkeypatch.setattr(handlers, "load_full_cdm", lambda *a: None)
     monkeypatch.setattr(handlers.Services, "load", staticmethod(lambda s: _lang_option_module()))
     svc, _, _ = handlers.create_service_instance("OTHER", "t", data, None, [], None)
@@ -230,7 +230,7 @@ def test_malformed_dl_params_are_ignored(monkeypatch, dl_params):
 
 
 def test_profile_reaches_the_parent_ctx_params(monkeypatch):
-    monkeypatch.setattr(handlers, "load_service_yaml", lambda s: {})
+    monkeypatch.setattr(handlers, "load_service_config", lambda s: {})
     monkeypatch.setattr(handlers, "load_full_cdm", lambda *a: None)
     monkeypatch.setattr(handlers.Services, "load", staticmethod(lambda s: _lang_option_module()))
     svc, _, _ = handlers.create_service_instance("OTHER", "t", {}, None, [], "work")

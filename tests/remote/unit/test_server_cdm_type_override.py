@@ -237,7 +237,7 @@ def test_the_server_device_follows_the_client_only_when_both_systems_are_mapped(
 ):
     asked: list = []
     monkeypatch.setattr(handlers.config, "cdm", mapping, raising=False)
-    monkeypatch.setattr(handlers, "load_service_yaml", lambda tag: {})
+    monkeypatch.setattr(handlers, "load_service_config", lambda tag: {})
     monkeypatch.setattr(
         handlers, "load_full_cdm", lambda service, profile, cdm_type, app_config=None: asked.append(cdm_type)
     )

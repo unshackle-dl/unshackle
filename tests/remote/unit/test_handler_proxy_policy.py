@@ -181,7 +181,7 @@ def test_setup_list_service_threads_request(monkeypatch):
         def authenticate(self, cookies, credential):
             seen["authenticated"] = True
 
-    monkeypatch.setattr(handlers, "load_service_yaml", lambda service: {})
+    monkeypatch.setattr(handlers, "load_service_config", lambda service: {})
     monkeypatch.setattr(handlers, "resolve_handler_proxy", fake_resolve)
     monkeypatch.setattr(handlers, "load_full_cdm", lambda *args: None)
     monkeypatch.setattr(handlers.Services, "load", lambda service: None)
@@ -199,7 +199,7 @@ def test_search_reports_failed_proxy_check_as_invalid_proxy(monkeypatch):
     def failed_check(*args):
         raise ConnectionError("Proxy check failed: no IP lookup got through the proxy.")
 
-    monkeypatch.setattr(handlers, "load_service_yaml", lambda service: {})
+    monkeypatch.setattr(handlers, "load_service_config", lambda service: {})
     monkeypatch.setattr(handlers, "resolve_handler_proxy", lambda *args: ("http://127.0.0.1:9", []))
     monkeypatch.setattr(handlers, "load_full_cdm", lambda *args: None)
     monkeypatch.setattr(handlers.Services, "load", lambda service: None)

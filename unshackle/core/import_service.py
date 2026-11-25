@@ -26,6 +26,7 @@ from unshackle.core.tracks import Audio, Chapter, Chapters, Subtitle, Tracks, Vi
 from unshackle.core.tracks.attachment import Attachment
 from unshackle.core.tracks.track import Track
 from unshackle.core.utils import run_proxy
+from unshackle.core.utils.collections import ci_get
 from unshackle.core.wire import build_title, drm_from_dict, track_from_dict
 
 log = logging.getLogger("import")
@@ -386,7 +387,7 @@ class ImportService:
 
     def get_titles_cached(self, title_id: Optional[str] = None) -> Titles_T:
         """Apply the service's title_map to titles reconstructed from the export sidecar."""
-        title_map = (config.services.get(self.service_tag) or {}).get("title_map") or {}
+        title_map = (ci_get(config.services, self.service_tag) or {}).get("title_map") or {}
         return remap_titles(self.get_titles(), title_map)
 
     def get_tracks(self, title: Title_T) -> Tracks:

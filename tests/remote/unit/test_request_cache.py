@@ -59,7 +59,7 @@ def seen(tmp_path, monkeypatch):
     monkeypatch.setattr(config.directories, "cache", tmp_path)
     monkeypatch.setattr(stats, "mode", "remote_only")
     monkeypatch.setattr(handlers, "validate_service", lambda tag, request=None: tag)
-    monkeypatch.setattr(handlers, "load_service_yaml", lambda service: {})
+    monkeypatch.setattr(handlers, "load_service_config", lambda service: {})
     monkeypatch.setattr(handlers, "resolve_handler_proxy", lambda *args: (None, []))
     monkeypatch.setattr(handlers, "resolve_server_account", lambda *args: None)
     monkeypatch.setattr(handlers, "load_full_cdm", lambda *args: None)
