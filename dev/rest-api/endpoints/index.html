@@ -4022,7 +4022,7 @@ ignore it safely. See <a href="../../creating-a-service/#split-episodes">Split e
 <td><code>video_only</code> / <code>audio_only</code> / <code>subs_only</code> / <code>chapters_only</code></td>
 <td>boolean</td>
 <td><code>false</code></td>
-<td>Track-type restriction (at most one).</td>
+<td>Track-type restriction. Two or more combine, as on the CLI.</td>
 </tr>
 <tr>
 <td><code>no_subs</code> / <code>no_audio</code> / <code>no_chapters</code> / <code>no_video</code> / <code>no_attachments</code></td>
@@ -4050,9 +4050,9 @@ ignore it safely. See <a href="../../creating-a-service/#split-episodes">Split e
 </tr>
 <tr>
 <td><code>slow</code></td>
-<td>boolean/string</td>
+<td>boolean/string/array</td>
 <td><code>null</code></td>
-<td>Randomized delay between downloads.</td>
+<td>Randomized delay between downloads: <code>true</code> (60-120 seconds), <code>"MIN-MAX"</code>, or <code>[MIN, MAX]</code>.</td>
 </tr>
 <tr>
 <td><code>split_audio</code></td>
@@ -4166,7 +4166,7 @@ ignore it safely. See <a href="../../creating-a-service/#split-episodes">Split e
 <td><code>tmdb_id</code> / <code>imdb_id</code> / <code>tvdb_id</code> / <code>anilist_id</code></td>
 <td>-</td>
 <td><code>null</code></td>
-<td>External ID overrides. Each resolves its metadata directly instead of by a title search, and is used for tagging. Set <code>enrich</code> to also take the title, year and original language. Give at most one of <code>tmdb_id</code>, <code>imdb_id</code> and <code>tvdb_id</code>, since unshackle resolves the others from it. Sending two returns <code>400</code>. <code>anilist_id</code> still combines with one of them. <code>tmdb_id</code> and <code>tvdb_id</code> must be positive integers, <code>imdb_id</code> must look like <code>tt1375666</code>, and <code>anilist_id</code> must be a positive integer or a string like <code>mal:12345</code>, or the request returns <code>400</code>. An ID whose provider is unconfigured, such as <code>tmdb_id</code> with no <code>tmdb_api_key</code>, fails the job rather than returning <code>400</code>. <code>anilist_id</code> needs no API key.</td>
+<td>External ID overrides. Each resolves its metadata directly instead of by a title search, and is used for tagging. Set <code>enrich</code> to also take the title, year and original language. Give at most one of <code>tmdb_id</code>, <code>imdb_id</code> and <code>tvdb_id</code>, since unshackle resolves the others from it. Sending two returns <code>400</code>. <code>anilist_id</code> still combines with one of them. <code>tmdb_id</code> and <code>tvdb_id</code> must be positive integers, <code>imdb_id</code> must look like <code>tt1375666</code>, and <code>anilist_id</code> must be a positive integer or a string like <code>mal:12345</code>, or the request returns <code>400</code>. An ID whose provider is unconfigured, such as <code>tmdb_id</code> with no <code>tmdb_api_key</code>, returns <code>400</code>. <code>anilist_id</code> needs no API key.</td>
 </tr>
 <tr>
 <td><code>tvdb_order</code></td>
@@ -4184,7 +4184,7 @@ ignore it safely. See <a href="../../creating-a-service/#split-episodes">Split e
 <td><code>enrich</code></td>
 <td>boolean</td>
 <td><code>false</code></td>
-<td>Overwrite title, year and original language with the external source's. Needs one of <code>tmdb_id</code>, <code>imdb_id</code>, <code>tvdb_id</code> or <code>anilist_id</code>. Without one the job fails instead of returning <code>400</code>.</td>
+<td>Overwrite title, year and original language with the external source's. Needs one of <code>tmdb_id</code>, <code>imdb_id</code>, <code>tvdb_id</code> or <code>anilist_id</code>. Without one the request returns <code>400</code>.</td>
 </tr>
 <tr>
 <td><code>daily</code></td>
@@ -4206,7 +4206,7 @@ ignore it safely. See <a href="../../creating-a-service/#split-episodes">Split e
 </tr>
 </tbody>
 </table>
-<p><strong>Validation.</strong> Invalid values return <code>400 INVALID_PARAMETERS</code>. <code>vcodec</code>, <code>acodec</code> and <code>sub_format</code> take the same spellings as the CLI options of the same name (<code>unshackle dl --help</code> prints each list). The API and the CLI read one list, so they cannot disagree. <code>range</code> must be one of SDR/HDR10/HDR10P/VIVID/DV/HLG/HYBRID, and <code>HDR10+</code> and <code>HDR Vivid</code> are also valid. The bitrate, download worker, and download counts must be positive integers. You may set at most one of the <code>*_only</code> flags. You cannot combine <code>no_subs</code> with <code>subs_only</code>, or <code>no_audio</code> with <code>audio_only</code>. The language fields (<code>lang</code>, <code>v_lang</code>, <code>a_lang</code>, <code>s_lang</code>, <code>forced_s_lang</code> and the <code>require_*</code> fields) must be arrays of strings: a single string such as <code>"en"</code> returns <code>400</code>. The server checks every other field with the type of its <code>dl</code> option. A <code>null</code> or an empty string gets the default from the table.</p>
+<p><strong>Validation.</strong> Invalid values return <code>400 INVALID_PARAMETERS</code>. <code>vcodec</code>, <code>acodec</code> and <code>sub_format</code> take the same spellings as the CLI options of the same name (<code>unshackle dl --help</code> prints each list). The API and the CLI read one list, so they cannot disagree. <code>range</code> must be one of SDR/HDR10/HDR10P/VIVID/DV/HLG/HYBRID, and <code>HDR10+</code> and <code>HDR Vivid</code> are also valid. The bitrate, download worker, and download counts must be positive integers. You cannot combine <code>no_subs</code> with <code>subs_only</code>, or <code>no_audio</code> with <code>audio_only</code>. The server runs the same option checks as <code>unshackle dl</code>, so a request that <code>dl</code> would refuse returns <code>400</code> when you submit it, and the message names the <code>dl</code> option. The language fields (<code>lang</code>, <code>v_lang</code>, <code>a_lang</code>, <code>s_lang</code>, <code>forced_s_lang</code> and the <code>require_*</code> fields) must be arrays of strings: a single string such as <code>"en"</code> returns <code>400</code>. The server checks every other field with the type of its <code>dl</code> option. A <code>null</code> or an empty string gets the default from the table.</p>
 <p><strong>Service options.</strong> A service's own CLI options travel in the same body. Send them in a nested
 <code>service_params</code> object, or as flat top-level keys. When the body has <code>service_params</code>, the server
 reads service options only from it, and every flat key is a <code>dl</code> value. Without it, a flat key that

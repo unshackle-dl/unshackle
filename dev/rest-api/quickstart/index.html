@@ -2545,7 +2545,7 @@
 </tr>
 </tbody>
 </table>
-<p>Validation is strict: invalid codecs, subtitle formats, dynamic-range names, non-positive counts, or mutually exclusive flags (for example both <code>video_only</code> and <code>audio_only</code>) come back as <code>400</code> with error code <code>INVALID_PARAMETERS</code>. See the full reference on the <a href="../endpoints/">download reference page</a> for every accepted field.</p>
+<p>Validation is strict: invalid codecs, subtitle formats, dynamic-range names, non-positive counts, or flags that conflict (for example both <code>no_subs</code> and <code>subs_only</code>) come back as <code>400</code> with error code <code>INVALID_PARAMETERS</code>. See the full reference on the <a href="../endpoints/">download reference page</a> for every accepted field.</p>
 <div class="admonition note">
 <p class="admonition-title">Gated fields</p>
 <p>The server refuses a per-request CDM (<code>cdm</code>) or inline credentials (<code>credential</code> / <code>credentials</code>) with <code>403 FORBIDDEN</code>, unless the server operator has explicitly opted in with <code>serve.cdm_overrides</code> and <code>serve.allow_job_credentials</code>. Both are off by default.</p>

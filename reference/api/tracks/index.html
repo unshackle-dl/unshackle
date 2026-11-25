@@ -5221,7 +5221,7 @@ If mime_type is not provided, it will try to guess it.</p>
                 <code>path</code>
             </td>
             <td>
-                  <code><span title="typing.Union">Union</span>[<span title="pathlib.Path">Path</span>, <span title="str">str</span>, None]</code>
+                  <code><span title="pathlib.Path">Path</span> | <span title="str">str</span> | None</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -5237,7 +5237,7 @@ If mime_type is not provided, it will try to guess it.</p>
                 <code>url</code>
             </td>
             <td>
-                  <code><span title="typing.Optional">Optional</span>[<span title="str">str</span>]</code>
+                  <code><span title="str">str</span> | None</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -5253,7 +5253,7 @@ If mime_type is not provided, it will try to guess it.</p>
                 <code>name</code>
             </td>
             <td>
-                  <code><span title="typing.Optional">Optional</span>[<span title="str">str</span>]</code>
+                  <code><span title="str">str</span> | None</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -5269,7 +5269,7 @@ If mime_type is not provided, it will try to guess it.</p>
                 <code>mime_type</code>
             </td>
             <td>
-                  <code><span title="typing.Optional">Optional</span>[<span title="str">str</span>]</code>
+                  <code><span title="str">str</span> | None</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -5285,7 +5285,7 @@ If mime_type is not provided, it will try to guess it.</p>
                 <code>description</code>
             </td>
             <td>
-                  <code><span title="typing.Optional">Optional</span>[<span title="str">str</span>]</code>
+                  <code><span title="str">str</span> | None</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -5301,7 +5301,7 @@ If mime_type is not provided, it will try to guess it.</p>
                 <code>session</code>
             </td>
             <td>
-                  <code><span title="typing.Optional">Optional</span>[<span title="unshackle.core.session.AnySession">AnySession</span>]</code>
+                  <code><span title="unshackle.core.session.AnySession">AnySession</span> | None</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -5483,7 +5483,7 @@ If mime_type is not provided, it will try to guess it.</p>
                 <code>name</code>
             </td>
             <td>
-                  <code><span title="typing.Optional">Optional</span>[<span title="str">str</span>]</code>
+                  <code><span title="str">str</span> | None</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -5499,7 +5499,7 @@ If mime_type is not provided, it will try to guess it.</p>
                 <code>mime_type</code>
             </td>
             <td>
-                  <code><span title="typing.Optional">Optional</span>[<span title="str">str</span>]</code>
+                  <code><span title="str">str</span> | None</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -5515,7 +5515,7 @@ If mime_type is not provided, it will try to guess it.</p>
                 <code>description</code>
             </td>
             <td>
-                  <code><span title="typing.Optional">Optional</span>[<span title="str">str</span>]</code>
+                  <code><span title="str">str</span> | None</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -5531,7 +5531,7 @@ If mime_type is not provided, it will try to guess it.</p>
                 <code>session</code>
             </td>
             <td>
-                  <code><span title="typing.Optional">Optional</span>[<span title="unshackle.core.session.AnySession">AnySession</span>]</code>
+                  <code><span title="unshackle.core.session.AnySession">AnySession</span> | None</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -5557,7 +5557,7 @@ If mime_type is not provided, it will try to guess it.</p>
       <tbody>
           <tr class="doc-section-item">
 <td><code>Attachment</code></td>            <td>
-                  <code>&#39;Attachment&#39;</code>
+                  <code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-class&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-class-name&quot;&gt;Attachment&lt;/span&gt; (&lt;code&gt;unshackle.core.tracks.attachment.Attachment&lt;/code&gt;)" href="#unshackle.core.tracks.Attachment">Attachment</a></code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -5626,7 +5626,7 @@ If mime_type is not provided, it will try to guess it.</p>
                 <code>codec</code>
             </td>
             <td>
-                  <code><span title="typing.Optional">Optional</span>[<a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-class&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-class-name&quot;&gt;Codec&lt;/span&gt; (&lt;code&gt;unshackle.core.tracks.audio.Audio.Codec&lt;/code&gt;)" href="#unshackle.core.tracks.Audio.Codec">Codec</a>]</code>
+                  <code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-class&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-class-name&quot;&gt;Codec&lt;/span&gt; (&lt;code&gt;unshackle.core.tracks.audio.Audio.Codec&lt;/code&gt;)" href="#unshackle.core.tracks.Audio.Codec">Codec</a> | None</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -5643,7 +5643,7 @@ replaces it with the codec FFprobe reads from the downloaded file.</p>
                 <code>bitrate</code>
             </td>
             <td>
-                  <code><span title="typing.Optional">Optional</span>[<span title="typing.Union">Union</span>[<span title="str">str</span>, <span title="int">int</span>, <span title="float">float</span>]]</code>
+                  <code><span title="str">str</span> | <span title="int">int</span> | <span title="float">float</span> | None</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -5660,7 +5660,7 @@ unshackle rounds float values up to the nearest integer.</p>
                 <code>channels</code>
             </td>
             <td>
-                  <code><span title="typing.Optional">Optional</span>[<span title="typing.Union">Union</span>[<span title="str">str</span>, <span title="int">int</span>, <span title="float">float</span>]]</code>
+                  <code><span title="str">str</span> | <span title="int">int</span> | <span title="float">float</span> | None</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -5678,7 +5678,7 @@ not supported. All numbers and strings will be cast to float.</p>
                 <code>joc</code>
             </td>
             <td>
-                  <code><span title="typing.Optional">Optional</span>[<span title="int">int</span>]</code>
+                  <code><span title="int">int</span> | None</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -5694,7 +5694,7 @@ not supported. All numbers and strings will be cast to float.</p>
                 <code>descriptive</code>
             </td>
             <td>
-                  <code><span title="typing.Union">Union</span>[<span title="bool">bool</span>, <span title="int">int</span>]</code>
+                  <code><span title="bool">bool</span> | <span title="int">int</span></code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -6378,7 +6378,7 @@ For example, <code>"Chapter {i:02}"</code> will result in <code>"Chapter 01"</co
                 <code>path</code>
             </td>
             <td>
-                  <code><span title="typing.Union">Union</span>[<span title="pathlib.Path">Path</span>, <span title="str">str</span>]</code>
+                  <code><span title="pathlib.Path">Path</span> | <span title="str">str</span></code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -6789,7 +6789,7 @@ shot takes the leading frames that the decoder drops.</p>
                 <code>codec</code>
             </td>
             <td>
-                  <code><span title="typing.Optional">Optional</span>[<span title="unshackle.core.tracks.subtitle.Subtitle.Codec">Codec</span>]</code>
+                  <code><span title="unshackle.core.tracks.subtitle.Subtitle.Codec">Codec</span> | None</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -8665,7 +8665,7 @@ of <code>get_init_segment</code> to find the Key ID.</p>
       <tbody>
           <tr class="doc-section-item">
             <td>
-                  <code><span title="typing.Optional">Optional</span>[<span title="uuid.UUID">UUID</span>]</code>
+                  <code><span title="uuid.UUID">UUID</span> | None</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -8838,7 +8838,7 @@ is larger than it. Use a value of 20000 (20KB) or higher.</p>
                 <code>url</code>
             </td>
             <td>
-                  <code><span title="typing.Optional">Optional</span>[<span title="str">str</span>]</code>
+                  <code><span title="str">str</span> | None</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -8854,7 +8854,7 @@ is larger than it. Use a value of 20000 (20KB) or higher.</p>
                 <code>byte_range</code>
             </td>
             <td>
-                  <code><span title="typing.Optional">Optional</span>[<span title="str">str</span>]</code>
+                  <code><span title="str">str</span> | None</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -8870,7 +8870,7 @@ is larger than it. Use a value of 20000 (20KB) or higher.</p>
                 <code>session</code>
             </td>
             <td>
-                  <code><span title="typing.Optional">Optional</span>[<span title="unshackle.core.session.AnySession">AnySession</span>]</code>
+                  <code><span title="unshackle.core.session.AnySession">AnySession</span> | None</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -9450,7 +9450,7 @@ instead of the filename if set.</p>
                 <code>progress</code>
             </td>
             <td>
-                  <code><span title="typing.Optional">Optional</span>[<span title="functools.partial">partial</span>]</code>
+                  <code><span title="functools.partial">partial</span> | None</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -9484,7 +9484,7 @@ decide if it adds embedded audio metadata.</p>
                 <code>title_language</code>
             </td>
             <td>
-                  <code><span title="typing.Optional">Optional</span>[<span title="langcodes.Language">Language</span>]</code>
+                  <code><span title="langcodes.Language">Language</span> | None</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -9517,7 +9517,7 @@ for audio metadata when multiple video tracks exist.</p>
                 <code>output_path</code>
             </td>
             <td>
-                  <code><span title="typing.Optional">Optional</span>[<span title="pathlib.Path">Path</span>]</code>
+                  <code><span title="pathlib.Path">Path</span> | None</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -9598,7 +9598,7 @@ share a video list must pass distinct paths to avoid clobbering each other.</p>
                 <code>codec</code>
             </td>
             <td>
-                  <code><span title="typing.Optional">Optional</span>[<span title="unshackle.core.tracks.video.Video.Codec">Codec</span>]</code>
+                  <code><span title="unshackle.core.tracks.video.Video.Codec">Codec</span> | None</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -9616,7 +9616,7 @@ after it downloads the track.</p>
                 <code>range_</code>
             </td>
             <td>
-                  <code><span title="typing.Optional">Optional</span>[<a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-class&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-class-name&quot;&gt;Range&lt;/span&gt; (&lt;code&gt;unshackle.core.tracks.video.Video.Range&lt;/code&gt;)" href="#unshackle.core.tracks.Video.Range">Range</a>]</code>
+                  <code><a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-class&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-class-name&quot;&gt;Range&lt;/span&gt; (&lt;code&gt;unshackle.core.tracks.video.Video.Range&lt;/code&gt;)" href="#unshackle.core.tracks.Video.Range">Range</a> | None</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -9633,7 +9633,7 @@ Defaults to SDR if not specified.</p>
                 <code>bitrate</code>
             </td>
             <td>
-                  <code><span title="typing.Optional">Optional</span>[<span title="typing.Union">Union</span>[<span title="str">str</span>, <span title="int">int</span>, <span title="float">float</span>]]</code>
+                  <code><span title="str">str</span> | <span title="int">int</span> | <span title="float">float</span> | None</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -9650,7 +9650,7 @@ unshackle rounds float values up to the nearest integer.</p>
                 <code>width</code>
             </td>
             <td>
-                  <code><span title="typing.Optional">Optional</span>[<span title="int">int</span>]</code>
+                  <code><span title="int">int</span> | None</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -9666,7 +9666,7 @@ unshackle rounds float values up to the nearest integer.</p>
                 <code>height</code>
             </td>
             <td>
-                  <code><span title="typing.Optional">Optional</span>[<span title="int">int</span>]</code>
+                  <code><span title="int">int</span> | None</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -9682,7 +9682,7 @@ unshackle rounds float values up to the nearest integer.</p>
                 <code>fps</code>
             </td>
             <td>
-                  <code><span title="typing.Optional">Optional</span>[<span title="typing.Union">Union</span>[<span title="str">str</span>, <span title="int">int</span>, <span title="float">float</span>]]</code>
+                  <code><span title="str">str</span> | <span title="int">int</span> | <span title="float">float</span> | None</code>
             </td>
             <td>
               <div class="doc-md-description">

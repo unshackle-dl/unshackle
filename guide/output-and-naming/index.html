@@ -3458,6 +3458,7 @@ wrong colours.</p>
 <li>unshackle writes the chapters from the title's chapter list (see <a href="#chapters-naming">Chapters</a> below).</li>
 </ul>
 <p>The <code>--no-mux</code> flag skips muxing entirely and writes the individual track files, each with a track-type suffix, into the same output/folder structure. An audio track in an MP4 container gets the <code>.m4a</code> extension. A track that shaka-packager decrypts has its date set to 1970-01-01; other tracks keep the date of the source file.</p>
+<p>Two output files of one title never get the same name. When a name is already in use, the second file gets the separator of the output template and a number, starting at 2. For example, an audio-description track in the same language and codec as the main audio is saved as <code>&lt;name&gt;.en.AAC.2.m4a</code>. With <code>--split-audio</code>, a muxed file whose name is already on disk first gets the name of its audio codec.</p>
 <h2 id="sample-files">Sample files<a class="headerlink" href="#sample-files" title="Permanent link">&para;</a></h2>
 <p><a href="../cli-reference/#output-muxing-files"><code>--sample</code></a> and <code>--include-sample</code> write a sample into a
 <code>Sample</code> folder inside the output folder of the title. The sample keeps the filename of the

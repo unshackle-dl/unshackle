@@ -3355,6 +3355,12 @@ Give <code>--remote</code> a proxy the server can reach, or run the service loca
 machine (a <code>remote_services</code> URL on <code>127.0.0.1</code>) can reach a local proxy, so it is exempt.</p>
 </div>
 <div class="admonition warning">
+<p class="admonition-title">Not available on a server</p>
+<p><code>unshackle serve</code> does not load Gluetun. A REST API request, a download job and a
+remote session cannot use a <code>gluetun:</code> proxy, also for an API key with <code>server_proxy</code>.
+Use Gluetun with <code>dl</code> or <code>search</code> on your own machine.</p>
+</div>
+<div class="admonition warning">
 <p class="admonition-title">Docker is required</p>
 <p>Gluetun needs a working <a href="https://docs.docker.com/get-docker/">Docker</a> installation on
 your <code>PATH</code>. If Docker is not found, the proxy provider fails to load. The container also needs the <code>NET_ADMIN</code> capability and access
@@ -3944,20 +3950,12 @@ sure that a username and a password are present (there is no 48-character rule).
 </tbody>
 </table>
 <p>The returned proxy is HTTPS on <strong>port 443</strong>.</p>
-<div class="admonition warning">
-<p class="admonition-title">Windscribe is not loaded by the REST API resolver</p>
-<p>The <code>dl</code> command loads the standalone Windscribe proxy provider (and Gluetun), but
-the proxy resolver that the REST API and the remote-download client use does <strong>not</strong>.
-If you drive downloads through the API and need Windscribe or Gluetun exits, get the
-proxy on the CLI side, or use a different proxy provider for API jobs. See the
-developer note below.</p>
-</div>
 <h2 id="developer-notes">Developer notes<a class="headerlink" href="#developer-notes" title="Permanent link">&para;</a></h2>
 <div class="admonition note">
 <p class="admonition-title">One resolution path (developers)</p>
 <p><code>dl</code>, <code>search</code>, the REST API handlers and the remote-service client all load proxy
 providers through <code>load_proxy_providers()</code> in <code>unshackle/core/proxies/resolve.py</code>.
-The REST API and the remote-service client call it through
+The REST API, its download jobs and the remote-service client call it through
 <code>initialize_proxy_providers()</code>, which leaves out Gluetun because Gluetun starts a
 local Docker container. All paths accept the same query grammar: a direct URI, a
 <code>provider:query</code>, a bare query tried against providers in order, or a <code>controld://</code>

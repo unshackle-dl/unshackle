@@ -2350,8 +2350,9 @@ providers and their exit ports:</p>
 </table>
 <div class="admonition note">
 <p class="admonition-title">Provider loading differs between CLI and REST server</p>
-<p>The <code>dl</code> CLI loads all providers, including <code>gluetun</code>. The REST API / remote-client path
-does <strong>not</strong> load <code>gluetun</code>, because it starts a local Docker container. ExpressVPN and ProtonVPN also auto-load when their cached session exists, and Hola
+<p>The <code>dl</code> and <code>search</code> commands load all providers, including <code>gluetun</code>. A server (REST API
+requests, download jobs and remote sessions) and the remote client do <strong>not</strong> load <code>gluetun</code>,
+because it starts a local Docker container. ExpressVPN and ProtonVPN also auto-load when their cached session exists, and Hola
 auto-loads whenever the <code>hola-proxy</code> binary is present.</p>
 </div>
 

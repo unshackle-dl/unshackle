@@ -2605,9 +2605,15 @@ For example, a missing <code>service</code> field yields <code>INVALID_INPUT</co
 service yields <code>INVALID_SERVICE</code>. These carry a precise code, message, and often a
 populated <code>details</code> object.</p>
 <p><strong>Categorised exceptions.</strong> When an endpoint calls into a streaming service and an
-uncategorised exception bubbles up, the server runs it through a classifier that
-inspects the exception type and message and maps it to the most appropriate code.
-The classification is keyword-based, checked in order:</p>
+exception that is not an <code>APIError</code> bubbles up, the server gives it a code in two steps:</p>
+<ol>
+<li><strong>The code the failure names.</strong> An unshackle core failure states its own code: a region
+   check gives <code>GEOFENCE</code>, a proxy that fails gives <code>INVALID_PROXY</code>, a login that needs
+   an absent user gives <code>AUTH_FAILED</code>, and a DRM failure gives <code>DRM_ERROR</code>. The server
+   reads this code first, so the wording of the message does not change it.</li>
+<li><strong>The keywords of the message.</strong> A failure that names no code, such as the plain text
+   that a service raises, gets a code from the words in its message, checked in order:</li>
+</ol>
 <table>
 <thead>
 <tr>
@@ -2618,6 +2624,16 @@ The classification is keyword-based, checked in order:</p>
 </thead>
 <tbody>
 <tr>
+<td><code>geofence</code>, <code>geoblock</code>, <code>geo-block</code>, <code>geolocation</code>, <code>region</code>, <code>not available in</code>, <code>territory</code></td>
+<td><code>GEOFENCE</code> (403)</td>
+<td>no</td>
+</tr>
+<tr>
+<td><code>proxy</code></td>
+<td><code>INVALID_PROXY</code> (400)</td>
+<td>no</td>
+</tr>
+<tr>
 <td><code>auth</code>, <code>login</code>, <code>credential</code>, <code>unauthorized</code>, <code>forbidden</code>, <code>token</code></td>
 <td><code>AUTH_FAILED</code> (401)</td>
 <td>no</td>
@@ -2626,11 +2642,6 @@ The classification is keyword-based, checked in order:</p>
 <td><code>connection</code>, <code>timeout</code>, <code>network</code>, <code>unreachable</code>, <code>socket</code>, <code>dns</code>, <code>resolve</code> (or <code>ConnectionError</code>, <code>TimeoutError</code>, <code>URLError</code>, <code>SSLError</code>)</td>
 <td><code>NETWORK_ERROR</code> (424)</td>
 <td>yes</td>
-</tr>
-<tr>
-<td><code>geofence</code>, <code>geoblock</code>, <code>region</code>, <code>not available in</code>, <code>territory</code></td>
-<td><code>GEOFENCE</code> (403)</td>
-<td>no</td>
 </tr>
 <tr>
 <td><code>not found</code>, <code>404</code>, <code>does not exist</code>, <code>invalid id</code></td>
