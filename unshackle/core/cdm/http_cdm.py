@@ -185,11 +185,17 @@ class HttpCdm(ABC):
             raise HttpCdmExceptions.InvalidSession(f"Invalid session ID: {session_id.hex()}")
         return self._sessions[session_id]
 
+    def _default_certificate(self) -> Optional[bytes]:
+        """The common privacy certificate for a Widevine device in ``privacy_cert_devices``, else None."""
+        if not self._is_playready and self.device_name in self.privacy_cert_devices:
+            return base64.b64decode(WidevineCdm.common_privacy_cert)
+        return None
+
     def open(self) -> bytes:
-        """Open a new CDM session and return its ID."""
+        """Open a new CDM session and return its ID; a device in ``privacy_cert_devices`` starts with the common certificate."""
         session_id = self.generate_session_id()
         self._sessions[session_id] = {
-            "service_certificate": None,
+            "service_certificate": self._default_certificate(),
             "keys": [],
             "init_data": None,
             "pssh_b64": None,
@@ -215,11 +221,8 @@ class HttpCdm(ABC):
         """
         session = self._session(session_id)
         if certificate is None:
-            if not self._is_playready and self.device_name in self.privacy_cert_devices:
-                session["service_certificate"] = base64.b64decode(WidevineCdm.common_privacy_cert)
-                return f"Using default Widevine common privacy certificate for {self.device_name}"
-            session["service_certificate"] = None
-            return "No certificate set (not required for this device type)"
+            session["service_certificate"] = self._default_certificate()
+            return "Using the default service certificate"
 
         if isinstance(certificate, str):
             certificate = base64.b64decode(certificate)

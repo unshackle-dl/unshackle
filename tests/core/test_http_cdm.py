@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import base64
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
 import pytest
+from pywidevine.cdm import Cdm as WidevineCdm
 from pywidevine.pssh import PSSH
 
 from unshackle.core.cdm.custom_remote_cdm import CustomRemoteCDM, CustomRemoteCDMExceptions
@@ -140,3 +142,23 @@ def test_only_the_listed_devices_get_the_common_privacy_certificate(cdm: HttpCdm
     session_id = cdm.open()
     cdm.set_service_certificate(session_id, None)
     assert (cdm.get_service_certificate(session_id) is not None) is privacy_cert
+
+
+class L1StubCdm(StubCdm):
+    privacy_cert_devices = ("L3",)
+
+    def __init__(self) -> None:
+        super().__init__(licence=[key(KID_A, KEY_A)])
+        self.sent: List[Dict[str, Any]] = []
+
+    def _request_challenge(self, session: Dict[str, Any], body: Dict[str, Any], *rest: Any) -> bytes:
+        self.sent.append(body)
+        return super()._request_challenge(session, body, *rest)
+
+
+def test_widevine_gives_a_listed_device_the_common_privacy_certificate_when_the_service_has_none() -> None:
+    drm = Widevine(pssh=PSSH.new(system_id=PSSH.SystemId.Widevine, key_ids=[KID_A]), kid=KID_A)
+    cdm = L1StubCdm()
+    drm.get_content_keys(cdm, certificate=lambda **_: None, licence=lambda **_: b"licence")
+    assert base64.b64decode(cdm.sent[0]["service_certificate"]) == base64.b64decode(WidevineCdm.common_privacy_cert)
+    assert drm.content_keys == {KID_A: KEY_A}
