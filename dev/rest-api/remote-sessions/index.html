@@ -1837,6 +1837,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#the-remote-session-channel" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The remote session channel
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#sessionstore-internals" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2342,6 +2353,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#the-remote-session-channel" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The remote session channel
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#sessionstore-internals" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2608,8 +2630,8 @@ runs in the background on the server.</p>
 <div class="tabbed-block">
 <p>Some services need a one-time code, PIN, or device confirmation. When the
 server's auth flow asks for input, the remote session enters <code>pending_input</code>. The
-client polls, displays the prompt to you locally, collects your answer, and
-sends it back. The server's auth thread resumes with your response.</p>
+server sends the prompt to the client, the client shows it to you locally, collects
+your answer, and sends it back. The server's auth thread resumes with your response.</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>Enter the 6-digit code sent to your email: 483920
 </span></code></pre></div>
 <p>A client older than the <code>service_params</code> change sends service options as
@@ -2619,8 +2641,7 @@ profile) no longer reaches the service; the server logs a warning naming
 the dropped key. Update the client to send service options under
 <code>service_params</code>.</p>
 <p>The server also mirrors the service's own log output (<code>self.log</code>) into a
-per-session buffer. The client drains it through
-<code>GET /api/session/{id}/logs</code> after each step and prints the records
+per-session buffer and sends each record to the client, which prints the records
 locally, so you see the server-side reason when a step fails.</p>
 </div>
 <div class="tabbed-block">
@@ -2649,9 +2670,9 @@ and return the content keys directly. See
 <a href="#server-side-vs-proxied-cdm">Server-side vs. proxied CDM</a> below.</p>
 </div>
 <div class="tabbed-block">
-<p>The client downloads, decrypts, and muxes locally. While it works, it sends a
-keep-alive request to the remote session at an interval of one third of
-<code>session_ttl</code>, so a long download does not let the remote session expire. On
+<p>The client downloads, decrypts, and muxes locally. While it works, the open
+<a href="#the-remote-session-channel">remote session channel</a> keeps the remote session alive,
+so a long download does not let the remote session expire. On
 completion, and also when <code>dl</code> exits early (<code>--list</code>, Ctrl+C, an error), it
 deletes the remote session. If the login belongs to the client, the <code>DELETE</code>
 request returns the updated cache files (for example a refreshed token) and the
@@ -2755,8 +2776,9 @@ the wire:</p>
 <li><strong>CDM calls.</strong> When the service calls the CDM, the server sends a <code>cdm_call</code> to the client
   and waits. The client makes the challenge, or parses the licence, on its own CDM. When
   the service closes a CDM session, the server sends a <code>close</code> call, because a CDM holds
-  only a few sessions. The client polls for calls during login and while one of its own
-  requests runs service code, so an idle remote session sends nothing extra.</li>
+  only a few sessions. The server sends each call on the remote session channel. Without
+  the channel, the client polls for calls during login and while one of its own requests
+  runs service code, so an idle remote session sends nothing extra.</li>
 <li><strong>Session keys only.</strong> A <code>keys</code> call returns Widevine <code>OPERATOR_SESSION</code> and <code>SIGNING</code>
   keys. It never returns a content key, and the client refuses a PlayReady <code>keys</code> call.
   So a server cannot use your device to license titles for itself.</li>
@@ -2802,12 +2824,12 @@ generally never touch this directly, but it explains behaviour you might observe
 <tr>
 <td>Idle session TTL</td>
 <td><strong>300s</strong> (5 min) default</td>
-<td>Refreshed on every request to the session and when a <code>titles</code> or <code>tracks</code> request ends. A remote session does not expire while a request works on it</td>
+<td>Refreshed on every request to the session and when a <code>titles</code> or <code>tracks</code> request ends. A remote session does not expire while a request works on it or while its remote session channel is open</td>
 </tr>
 <tr>
 <td>Max concurrent sessions</td>
 <td><strong>100</strong> default</td>
-<td>Oldest (least recently used) is evicted when full. A remote session that a request works on goes last</td>
+<td>When full, the least recently used remote session of the API key that holds the most is evicted. A remote session that a request works on goes last</td>
 </tr>
 <tr>
 <td>Auth/input timeout</td>
@@ -2942,18 +2964,23 @@ from a browser origin, not when you want only the local HTTP API.</p>
 </tr>
 <tr>
 <td><code>GET</code></td>
+<td><code>/api/session/{id}/channel</code></td>
+<td>WebSocket of the <a href="#the-remote-session-channel">remote session channel</a>: the messages the server starts, and the client's answers; <code>?since=</code> is the last log <code>seq</code> the client has</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
 <td><code>/api/session/{id}/logs</code></td>
-<td>Drain the service's server-side log output</td>
+<td>Drain the service's server-side log output (polling fallback)</td>
 </tr>
 <tr>
 <td><code>GET</code></td>
 <td><code>/api/session/{id}/prompt</code></td>
-<td>Poll interactive auth status / pending prompt</td>
+<td>Poll interactive auth status / pending prompt (polling fallback)</td>
 </tr>
 <tr>
 <td><code>POST</code></td>
 <td><code>/api/session/{id}/prompt</code></td>
-<td>Submit an answer to a pending prompt</td>
+<td>Submit an answer to a pending prompt (polling fallback)</td>
 </tr>
 <tr>
 <td><code>GET</code></td>
@@ -3005,8 +3032,9 @@ a per-profile ESN.</p>
 licenses. <code>server_device</code> tells it that the service runs on the server's device, so every
 content key comes from a vault.</p>
 <p>Authentication runs on a background thread (<code>asyncio.to_thread(authenticate, ...)</code>).
-The remote session starts in <code>AUTHENTICATING</code>. The client must poll the prompt
-endpoint until it reaches <code>authenticated</code> (or <code>failed</code>).</p>
+The remote session starts in <code>AUTHENTICATING</code>. The client opens the remote session
+channel and waits on it until the login state is <code>authenticated</code> (or <code>failed</code>). A client
+without the channel polls the prompt endpoint for that state.</p>
 <h3 id="interactive-auth-the-inputbridge">Interactive auth: the <code>InputBridge</code><a class="headerlink" href="#interactive-auth-the-inputbridge" title="Permanent link">&para;</a></h3>
 <p>When the service calls its input function during <code>authenticate()</code> on the server
 thread, an <code>InputBridge</code> pauses that thread and exposes the prompt to the HTTP
@@ -3015,16 +3043,16 @@ layer.</p>
 <li><code>AuthStatus</code> values: <code>authenticating</code>, <code>pending_input</code>, <code>authenticated</code>, <code>failed</code>.</li>
 <li><code>InputBridge.request_input(prompt, timeout=600)</code> blocks the sync auth thread on a
   <code>threading.Event</code> until <code>submit_response()</code> or <code>cancel()</code> fires.</li>
-<li>A timeout raises <code>TimeoutError</code> and marks the remote session <code>FAILED</code>.</li>
-<li>A prompt after authentication (in <code>get_titles()</code>, <code>get_tracks()</code> or licensing) raises
-  <code>RuntimeError</code> at once. The client polls for prompts only during authentication, so
-  no answer can come.</li>
+<li>A timeout raises <code>TimeoutError</code>. The remote session becomes <code>FAILED</code> when that error ends the login.</li>
+<li>A prompt after authentication (in <code>get_titles()</code>, <code>get_tracks()</code> or licensing) goes to
+  the client on an open remote session channel. Without the channel it raises <code>RuntimeError</code>
+  at once: the client polls for prompts only during authentication, so no answer can come.</li>
 <li>A CDM call (<code>InputBridge.request_cdm</code>) works during and after authentication, because the
-  client also polls while its own requests run. A call that no client fetches within 10 seconds
+  channel carries it, or the client polls while its own requests run. A call that no client fetches within 10 seconds
   fails then, because no client is listening. A fetched call waits 60 seconds for its answer.
   The call leaves the auth status as it was. An answer never marks the remote session as client-authenticated.</li>
 <li><code>AUTH_INPUT_TIMEOUT = 600.0</code> seconds. This is also the TTL granted to
-  <code>AUTHENTICATING</code> / <code>PENDING_INPUT</code> sessions in the store.</li>
+  <code>AUTHENTICATING</code> sessions in the store. A remote session that waits on a prompt stays <code>AUTHENTICATING</code>.</li>
 </ul>
 <p><code>GET /api/session/{id}/prompt</code> returns one of:</p>
 <div class="language-json highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="p">{</span><span class="w"> </span><span class="nt">"status"</span><span class="p">:</span><span class="w"> </span><span class="s2">"authenticated"</span><span class="w"> </span><span class="p">}</span>
@@ -3043,6 +3071,74 @@ straight away does not see it twice.</p>
 <code>403 FORBIDDEN</code>. <code>POST /api/session/{id}/prompt</code> takes <code>{ "response": "..." }</code> and
 returns <code>{ "status": "accepted" }</code>. A post with no pending prompt is an
 <code>INVALID_INPUT</code> error.</p>
+<h3 id="the-remote-session-channel">The remote session channel<a class="headerlink" href="#the-remote-session-channel" title="Permanent link">&para;</a></h3>
+<p><code>GET /api/session/{id}/channel</code> is a WebSocket that carries only the messages the server
+starts. Titles, tracks, licences, samples, the segment filter, bad content key reports, create
+and delete stay HTTP requests. The route takes the same API key and ownership checks as the
+other remote session routes.</p>
+<p>Each message is a JSON text frame with a <code>type</code> field:</p>
+<table>
+<thead>
+<tr>
+<th><code>type</code></th>
+<th>From</th>
+<th>Fields</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>prompt</code></td>
+<td>server</td>
+<td><code>id</code>, <code>prompt</code></td>
+<td>The service asks the user for input</td>
+</tr>
+<tr>
+<td><code>cdm_call</code></td>
+<td>server</td>
+<td><code>id</code>, <code>call</code></td>
+<td>The service calls the client's CDM; <code>call</code> has the shape of the prompt route's <code>cdm_call</code></td>
+</tr>
+<tr>
+<td><code>log</code></td>
+<td>server</td>
+<td><code>seq</code>, <code>level</code>, <code>message</code>, <code>ts</code></td>
+<td>One record of the service log, with the same redaction as <code>GET /logs</code></td>
+</tr>
+<tr>
+<td><code>status</code></td>
+<td>server</td>
+<td><code>status</code>, <code>error</code></td>
+<td>The login state, as the <code>status</code> of <code>GET /prompt</code></td>
+</tr>
+<tr>
+<td><code>drain</code></td>
+<td>server</td>
+<td><code>draining</code></td>
+<td>The operator started or stopped a drain before a restart</td>
+</tr>
+<tr>
+<td><code>answer</code></td>
+<td>client</td>
+<td><code>id</code>, <code>response</code>, <code>error</code></td>
+<td>The answer to the <code>prompt</code> or <code>cdm_call</code> with this <code>id</code>; <code>error</code> says why the client cannot answer a prompt, and the service stops at once</td>
+</tr>
+</tbody>
+</table>
+<p>When the client connects, the server first sends the log records after <code>since</code>, the drain
+state, the prompts and CDM calls that the client did not answer, and the login state. A log
+record can arrive twice, after a reconnect; the client skips a <code>seq</code> it already has. Each
+prompt and CDM call goes to one path only: the channel, or the prompt routes.</p>
+<p>The server closes the channel with code <code>4404</code> when the remote session ends: a delete, an
+expiry, an eviction, or a server shutdown. The client then stops reconnecting, and its next
+request finds the remote session gone.</p>
+<p>The client polls the prompt and logs routes, and sends keep-alive requests, in these cases:</p>
+<ul>
+<li>A gateway in front of the server refuses the WebSocket upgrade, or the connection fails, when
+  the client creates the remote session. The client polls for the life of the process and logs
+  the refusal at debug level only.</li>
+<li>The channel drops. The client polls until it reconnects, with a backoff from 1 to 30 seconds.</li>
+</ul>
 <h3 id="sessionstore-internals"><code>SessionStore</code> internals<a class="headerlink" href="#sessionstore-internals" title="Permanent link">&para;</a></h3>
 <p>Source: <code>unshackle/core/api/session_store.py</code>. A singleton you get from
 <code>get_session_store()</code>.</p>
@@ -3050,12 +3146,11 @@ returns <code>{ "status": "accepted" }</code>. A post with no pending prompt is 
 <li><strong>Config-driven limits.</strong> <code>serve.session_ttl</code> (default <code>300</code>) and
   <code>serve.max_sessions</code> (default <code>100</code>) are read as properties, so config changes
   take effect without recreating the store.</li>
-<li><strong><code>create()</code></strong> evicts the least-recently-accessed remote session when at capacity,
-  then stores a new <code>SessionEntry</code>. It defaults <code>auth_status</code> to <code>AUTHENTICATED</code>, and
-  the <code>create</code> handler overrides it to <code>AUTHENTICATING</code>.</li>
+<li><strong><code>create()</code></strong> evicts the least-recently-accessed remote session of the API key that holds the most when at capacity,
+  then stores a complete <code>SessionEntry</code> from the fields of the <code>create</code> handler and publishes the <code>create</code> event.</li>
 <li><strong><code>get()</code></strong> refreshes <code>last_accessed</code> through <code>touch()</code>. It returns <code>None</code> (and
   deletes the entry) if an authenticated remote session has been idle longer than the
-  TTL. Remote sessions in <code>AUTHENTICATING</code> / <code>PENDING_INPUT</code> are exempt from TTL expiry.</li>
+  TTL. Remote sessions in <code>AUTHENTICATING</code> are exempt from TTL expiry.</li>
 <li><strong><code>cleanup_expired()</code></strong> runs every 60s: authenticated remote sessions expire at
   <code>ttl</code>, in-flight-auth remote sessions expire at <code>AUTH_INPUT_TIMEOUT</code>. The removal of
   a remote session cancels its <code>InputBridge</code> and deletes its cache directory (pruning
@@ -3106,7 +3201,7 @@ returns <code>{ "status": "accepted" }</code>. A post with no pending prompt is 
 </tr>
 <tr>
 <td><code>auth_status</code> / <code>auth_error</code></td>
-<td>Current <code>AuthStatus</code> and last error message</td>
+<td>Current <code>AuthStatus</code>, read from <code>input_bridge</code> (<code>AUTHENTICATED</code> without one), and last error message</td>
 </tr>
 <tr>
 <td><code>created_at</code> / <code>last_accessed</code></td>
@@ -3138,7 +3233,7 @@ suffix, which is the <code>Cacher</code> cache key the service reads it with:</p
 <p>Both sides reject a cache key with a drive letter, a root, a <code>..</code> segment, an empty
 segment, or more than 8 segments before it becomes a path, so a peer cannot write
 outside the cache directory. Both sides also refuse a <code>cache</code> map with more than
-64 entries. The server skips a cache key it cannot write, such as one that names an
+256 entries, and the server refuses the request body of a remote session creation or of a search when it is larger than 8 MiB. The client gives a warning when it has more than 256 cache files to send. The server skips a cache key it cannot write, such as one that names an
 existing file as a directory, and logs a warning.</p>
 <h3 id="remote-session-info-response">Remote session info response<a class="headerlink" href="#remote-session-info-response" title="Permanent link">&para;</a></h3>
 <p><code>GET /api/session/{id}</code>:</p>
@@ -3152,8 +3247,9 @@ existing file as a directory, and logs a warning.</p>
 </span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a><span class="w">  </span><span class="nt">"title_count"</span><span class="p">:</span><span class="w"> </span><span class="mi">40</span>
 </span><span id="__span-11-9"><a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a><span class="p">}</span>
 </span></code></pre></div>
-<p><code>draining</code> is <code>true</code> after the operator starts a drain before a restart. The client reads
-it before each title, so it knows of the restart before it occurs.</p>
+<p><code>draining</code> is <code>true</code> after the operator starts a drain before a restart. The client checks
+it before each title, so it knows of the restart before it occurs. With an open remote session
+channel the client reads the <code>drain</code> message and sends no request.</p>
 <div class="admonition warning">
 <p class="admonition-title"><code>expires_in</code> is the configured TTL, not time remaining</p>
 <p>The <code>expires_in</code> value reports the store's configured <code>session_ttl</code>, not the
@@ -3161,7 +3257,9 @@ seconds left before this specific remote session expires.</p>
 </div>
 <h3 id="reference-client-remoteservice">Reference client: <code>RemoteService</code><a class="headerlink" href="#reference-client-remoteservice" title="Permanent link">&para;</a></h3>
 <p>Source: <code>unshackle/core/remote_service.py</code>. This is the canonical consumer of the
-remote session API and a good template for any client.</p>
+remote session API and a good template for any client. The routes, the <code>AuthStatus</code> values,
+the error codes and the request and reply shapes that it shares with the server are in
+<code>unshackle/core/remote_protocol.py</code>.</p>
 <ul>
 <li><strong><code>RemoteClient.request</code></strong> sets <code>X-Secret-Key</code> and <code>User-Agent: unshackle/&lt;version&gt;</code>,
   uses the server's <code>timeout</code> from <code>remote_services</code> (default 120s) as the read timeout,
@@ -3178,8 +3276,8 @@ remote session API and a good template for any client.</p>
   output cannot start before the body is ready.</li>
 <li><strong>Retries.</strong> The download-side HTTP session mounts an adapter with
   <code>Retry(total=5, backoff_factor=0.2, status_forcelist=[429, 500, 502, 503, 504])</code>.</li>
-<li><strong>Flow.</strong> <code>authenticate()</code> → <code>create</code> (+ poll <code>prompt</code> every 2s up to a 600s
-  deadline, answering <code>pending_input</code> prompts. With stdin closed the client logs an
+<li><strong>Flow.</strong> <code>authenticate()</code> → <code>create</code> (+ open the remote session channel, or poll <code>prompt</code>
+  every 2s without it, up to a 600s deadline, answering <code>pending_input</code> prompts. With stdin closed the client logs an
   error and raises <code>SystemExit(1)</code> instead of posting an empty answer) → <code>get_titles()</code> → <code>get_tracks()</code>
   (merging returned <code>session_headers</code>/<code>session_cookie_jar</code>, re-parsing <code>manifests</code>) →
   get the licence in proxy mode or <code>server_cdm</code> mode → <code>close()</code> (<code>DELETE</code>, saving any returned

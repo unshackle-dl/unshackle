@@ -2756,17 +2756,6 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#unshackle.core.drm.drm_from_dict" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;drm_from_dict
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#unshackle.core.drm.drop_null_keys" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3677,17 +3666,6 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#unshackle.core.drm.drm_from_dict" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;drm_from_dict
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#unshackle.core.drm.drop_null_keys" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4166,7 +4144,7 @@ here as a JWK Set keyed by KID, and the media is standard CENC
 
     <div class="doc doc-contents ">
             <p class="doc doc-class-bases">
-              Bases: <code><span title="Exception">Exception</span></code></p>
+              Bases: <code><span title="click.ClickException">ClickException</span></code></p>
 
 
 
@@ -4197,7 +4175,7 @@ here as a JWK Set keyed by KID, and the media is standard CENC
 
     <div class="doc doc-contents ">
             <p class="doc doc-class-bases">
-              Bases: <code><span title="Exception">Exception</span></code></p>
+              Bases: <code><span title="click.ClickException">ClickException</span></code></p>
 
 
 
@@ -4238,9 +4216,7 @@ here as a JWK Set keyed by KID, and the media is standard CENC
 
     <div class="doc doc-contents ">
 
-        <p>Serialise this DRM instance for export/import (KIDs + license URL).</p>
-<p>unshackle stores the content keys once at the export's track level, and does not
-duplicate them here.</p>
+        <p>This DRM in the export form; see <code>wire.drm_to_dict</code>.</p>
 
 
     </div>
@@ -5242,9 +5218,7 @@ the REST API can parse it again.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Serialise this DRM instance for export/import (PSSH + KIDs).</p>
-<p>unshackle stores the content keys once at the export's track level, and does not
-duplicate them here.</p>
+        <p>This DRM in the export form; see <code>wire.drm_to_dict</code>.</p>
 
 
     </div>
@@ -5821,7 +5795,7 @@ track exactly. A PSSH can name the KIDs of other renditions too.</p>
 
     <div class="doc doc-contents ">
             <p class="doc doc-class-bases">
-              Bases: <code><span title="Exception">Exception</span></code></p>
+              Bases: <code><span title="click.ClickException">ClickException</span></code></p>
 
 
 
@@ -5852,7 +5826,7 @@ track exactly. A PSSH can name the KIDs of other renditions too.</p>
 
     <div class="doc doc-contents ">
             <p class="doc doc-class-bases">
-              Bases: <code><span title="Exception">Exception</span></code></p>
+              Bases: <code><span title="click.ClickException">ClickException</span></code></p>
 
 
 
@@ -6041,9 +6015,7 @@ It is <em>rare</em> to need to use this.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Serialise this DRM instance for export/import (PSSH + KIDs).</p>
-<p>unshackle stores the content keys once at the export's track level, and does not
-duplicate them here.</p>
+        <p>This DRM in the export form; see <code>wire.drm_to_dict</code>.</p>
 
 
     </div>
@@ -6197,29 +6169,6 @@ track exactly. A PSSH can name the KIDs of other renditions too.</p>
     <div class="doc doc-contents ">
 
         <p>True for a blank or all-zero content key, the null key that no vault stores.</p>
-
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h2 id="unshackle.core.drm.drm_from_dict" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <span class="doc doc-object-name doc-function-name">drm_from_dict</span>
-
-
-<a href="#unshackle.core.drm.drm_from_dict" class="headerlink" title="Permanent link">&para;</a></h2>
-<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">drm_from_dict</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
-</span></code></pre></div>
-
-    <div class="doc doc-contents ">
-
-        <p>Reconstruct a Widevine/PlayReady/ClearKeyCENC DRM instance from its <code>to_dict()</code> form.</p>
-<p>Rebuilds the PSSH from the stored base64 (KIDs for ClearKey, which has no PSSH)
-and re-injects any saved content keys so the resulting object can decrypt without
-contacting a license server.</p>
 
 
     </div>

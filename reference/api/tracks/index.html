@@ -2862,6 +2862,28 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#unshackle.core.tracks.Track.pssh_order" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;pssh_order
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unshackle.core.tracks.Track.drm_from_pssh" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;drm_from_pssh
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#unshackle.core.tracks.Track.download" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2888,28 +2910,6 @@
     <span class="md-ellipsis">
       
         <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;to_dict
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#unshackle.core.tracks.Track.base_kwargs_from_dict" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;base_kwargs_from_dict
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#unshackle.core.tracks.Track.from_dict" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;from_dict
       
     </span>
   </a>
@@ -4539,6 +4539,28 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#unshackle.core.tracks.Track.pssh_order" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;pssh_order
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unshackle.core.tracks.Track.drm_from_pssh" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;drm_from_pssh
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#unshackle.core.tracks.Track.download" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4565,28 +4587,6 @@
     <span class="md-ellipsis">
       
         <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;to_dict
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#unshackle.core.tracks.Track.base_kwargs_from_dict" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;base_kwargs_from_dict
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#unshackle.core.tracks.Track.from_dict" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;from_dict
       
     </span>
   </a>
@@ -5398,7 +5398,7 @@ If mime_type is not provided, it will try to guess it.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Serialise a URL-backed attachment for export/import.</p>
+        <p>The attachment in the export form; see <code>wire.attachment_to_dict</code>.</p>
 
 
     </div>
@@ -8393,6 +8393,46 @@ the init data, and the byte range of the window. Returns None when the file has 
 <div class="doc doc-object doc-function">
 
 
+<h3 id="unshackle.core.tracks.Track.pssh_order" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">pssh_order</span>
+
+
+<a href="#unshackle.core.tracks.Track.pssh_order" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">pssh_order</span><span class="p">(</span><span class="n">cdm</span><span class="p">)</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Widevine and PlayReady, in the order to look for their PSSH.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="unshackle.core.tracks.Track.drm_from_pssh" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">drm_from_pssh</span>
+
+
+<a href="#unshackle.core.tracks.Track.drm_from_pssh" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">drm_from_pssh</span><span class="p">(</span><span class="n">cdm</span><span class="p">,</span> <span class="n">read</span><span class="p">,</span> <span class="n">log</span><span class="p">)</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Set drm to the first DRM that <code>read</code> finds a PSSH for, in pssh_order.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
 <h3 id="unshackle.core.tracks.Track.download" class="doc doc-heading">
 <code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">download</span>
 
@@ -8501,59 +8541,7 @@ This will overwrite anything at the target path.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Serialise the track for export/import (identity/URL/descriptor/language).</p>
-<p>DRM is not serialised here. The export writer attaches the licensed DRM + keys.
-Subclasses add their own codec/quality fields.</p>
-
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h3 id="unshackle.core.tracks.Track.base_kwargs_from_dict" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">base_kwargs_from_dict</span>
-
-
-  <span class="doc doc-labels">
-      <small class="doc doc-label doc-label-staticmethod"><code>staticmethod</code></small>
-  </span>
-
-<a href="#unshackle.core.tracks.Track.base_kwargs_from_dict" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">base_kwargs_from_dict</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
-</span></code></pre></div>
-
-    <div class="doc doc-contents ">
-
-        <p>Assemble the shared Track constructor kwargs from a <code>to_dict()</code> payload.</p>
-<p>DRM is not reconstructed here: <code>to_dict</code> does not serialise it, and the import
-flow attaches the licensed DRM + content keys separately.</p>
-
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h3 id="unshackle.core.tracks.Track.from_dict" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">from_dict</span>
-
-
-  <span class="doc doc-labels">
-      <small class="doc doc-label doc-label-classmethod"><code>classmethod</code></small>
-  </span>
-
-<a href="#unshackle.core.tracks.Track.from_dict" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">from_dict</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
-</span></code></pre></div>
-
-    <div class="doc doc-contents ">
-
-        <p>Reconstruct the correct Track subclass from a <code>to_dict()</code> payload.</p>
+        <p>The track in the export form; see <code>wire.track_to_dict</code>.</p>
 
 
     </div>

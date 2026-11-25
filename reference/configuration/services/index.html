@@ -2104,7 +2104,8 @@
 <ul>
 <li><strong><code>proxy_map</code></strong>: remaps the region query you passed to <code>-p/--proxy</code> for this service.
   A config key is that query, or <code>"provider:query"</code> when the flag also named a proxy provider. The value is
-  the query asked of the proxy provider instead. It has no effect when you give <code>-p</code> a full proxy URL.</li>
+  the query asked of the proxy provider instead. It has no effect when you give <code>-p</code> a full proxy URL.
+  <code>dl</code>, <code>search</code> and a REST API download job apply it. The other REST API routes and a <code>--remote</code> remote session do not.</li>
 <li><strong><code>title_map</code></strong>: an exact-match rename map applied to fetched titles (source name →
   desired name), so a service that names a title differently from your library still matches.</li>
 <li><strong><code>dl</code></strong>: per-service download defaults, using the same keys as the global
@@ -2210,7 +2211,8 @@ your choice, and with a service option that runs the remote session on the serve
 <p><code>auth_headers</code> lists extra header names to send the API key in, tried before the defaults
 <code>X-Secret-Key</code> and <code>X-Api-Key</code>, which unshackle always appends as fallbacks. It sends the
 first name. If the server answers <code>401</code>, it retries the same request with the next name, and
-keeps the one that works for the rest of the HTTP session. Names you give keep your spelling and
+keeps the one that works for the rest of the HTTP session. After a request succeeds, a <code>401</code>
+no longer moves the API key to another name. Names you give keep your spelling and
 are not repeated in the fallbacks, so unshackle tries
 <code>auth_headers: ["Authorization", "x-secret-key"]</code> as <code>Authorization</code>, <code>x-secret-key</code>, <code>X-Api-Key</code>.</p>
 <p><code>timeout</code> is the time in seconds that the client waits for data from the server. The
@@ -2288,7 +2290,7 @@ is the <a href="../../../dev/rest-api/">REST API</a> section. These are the conf
 <td><code>max_sessions</code></td>
 <td>int or null</td>
 <td><code>100</code></td>
-<td>Maximum concurrent remote sessions; at the cap the server evicts the oldest. Set it to <code>null</code> or <code>0</code> for no limit, which is also what <code>/api/dashboard/status</code> then reports, so a dashboard can tell "no cap" from a cap that happens to sit at the default.</td>
+<td>Maximum concurrent remote sessions; at the cap the server evicts the oldest remote session of the API key that holds the most. Set it to <code>null</code> or <code>0</code> for no limit, which is also what <code>/api/dashboard/status</code> then reports, so a dashboard can tell "no cap" from a cap that happens to sit at the default.</td>
 </tr>
 <tr>
 <td><code>history_limit</code></td>

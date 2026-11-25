@@ -2311,8 +2311,9 @@ reference. Each endpoint lists the specific codes it raises, and this page gives
 meanings of those codes.</p>
 <div class="admonition note">
 <p class="admonition-title">Where this comes from</p>
-<p><code>unshackle/core/api/errors.py</code> defines the error format, and the wrapper
-that turns raised errors into responses lives in <code>unshackle/core/api/routes.py</code>.
+<p><code>unshackle/core/api/errors.py</code> defines the error format, <code>unshackle/core/remote_protocol.py</code>
+defines the error codes, and the wrapper that turns raised errors into responses lives in
+<code>unshackle/core/api/routes.py</code>.
 Nothing on this page is invented. It reflects the actual server behaviour.</p>
 </div>
 <h2 id="the-standard-error-shape">The standard error shape<a class="headerlink" href="#the-standard-error-shape" title="Permanent link">&para;</a></h2>

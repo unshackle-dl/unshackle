@@ -2696,7 +2696,9 @@ The CORS headers expose these headers and <code>Retry-After</code> to a browser 
 </tbody>
 </table>
 <p>A <code>--remote</code> client that gets a <code>429</code> with <code>Retry-After</code> shows a countdown, waits that time
-(one hour at most), and then sends the request again. It stops after 3 waits for one request.</p>
+(one hour at most), and then sends the request again. It stops after 3 waits for one request.
+The keep-alive, the poll for CDM calls, the health check and the drain check do not wait: each
+tries again at its next interval.</p>
 <div class="admonition warning">
 <p class="admonition-title"><code>429</code> is not the <code>RATE_LIMITED</code> error body</p>
 <p><code>RATE_LIMITED</code> in <a href="../errors/">Errors</a> is a <em>service</em> rate limit that a handler raises, and it

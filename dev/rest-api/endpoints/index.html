@@ -1963,6 +1963,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#get-apisessionsession_idchannel" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/session/{session_id}/channel
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#get-apisessionsession_idprompt" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2871,6 +2882,17 @@
     <span class="md-ellipsis">
       
         POST /api/session/create
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apisessionsession_idchannel" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/session/{session_id}/channel
       
     </span>
   </a>
@@ -4896,15 +4918,16 @@ answers the prompt within 10 minutes.</p>
 <p>The server holds remote sessions in memory. They expire after <code>serve.session_ttl</code> (default 300s) without a request, except while awaiting interactive authentication input, which uses a 600s window. A remote session binds to the IP that made it, so the server rejects a request from a different IP with <code>403 FORBIDDEN</code>.</p>
 <h3 id="remote-session-lifecycle-overview">Remote session lifecycle overview<a class="headerlink" href="#remote-session-lifecycle-overview" title="Permanent link">&para;</a></h3>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-30-1"><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a>POST /api/session/create        → returns session_id, status "authenticating"
-</span><span id="__span-30-2"><a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a>GET  /api/session/{id}/prompt   → poll until authenticated (submit answers via POST)
-</span><span id="__span-30-3"><a id="__codelineno-30-3" name="__codelineno-30-3" href="#__codelineno-30-3"></a>GET  /api/session/{id}/titles   → list titles
-</span><span id="__span-30-4"><a id="__codelineno-30-4" name="__codelineno-30-4" href="#__codelineno-30-4"></a>POST /api/session/{id}/tracks   → tracks + chapters (with URLs) for one title
-</span><span id="__span-30-5"><a id="__codelineno-30-5" name="__codelineno-30-5" href="#__codelineno-30-5"></a>POST /api/session/{id}/segments → resolve segment URLs / DRM / headers per track
-</span><span id="__span-30-6"><a id="__codelineno-30-6" name="__codelineno-30-6" href="#__codelineno-30-6"></a>POST /api/session/{id}/segment_filter → HLS segments the service drops (ads, bumpers)
-</span><span id="__span-30-7"><a id="__codelineno-30-7" name="__codelineno-30-7" href="#__codelineno-30-7"></a>POST /api/session/{id}/samples  → decrypt cbcs samples of a track on the server
-</span><span id="__span-30-8"><a id="__codelineno-30-8" name="__codelineno-30-8" href="#__codelineno-30-8"></a>POST /api/session/{id}/license  → proxy or server-CDM DRM licensing
-</span><span id="__span-30-9"><a id="__codelineno-30-9" name="__codelineno-30-9" href="#__codelineno-30-9"></a>POST /api/session/{id}/keys/bad → report a server-vault content key that did not decrypt
-</span><span id="__span-30-10"><a id="__codelineno-30-10" name="__codelineno-30-10" href="#__codelineno-30-10"></a>DELETE /api/session/{id}        → tear down, harvest updated cache
+</span><span id="__span-30-2"><a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a>GET  /api/session/{id}/channel  → WebSocket: prompts, CDM calls, logs, login state, drain
+</span><span id="__span-30-3"><a id="__codelineno-30-3" name="__codelineno-30-3" href="#__codelineno-30-3"></a>GET  /api/session/{id}/prompt   → without the channel: poll until authenticated (submit answers via POST)
+</span><span id="__span-30-4"><a id="__codelineno-30-4" name="__codelineno-30-4" href="#__codelineno-30-4"></a>GET  /api/session/{id}/titles   → list titles
+</span><span id="__span-30-5"><a id="__codelineno-30-5" name="__codelineno-30-5" href="#__codelineno-30-5"></a>POST /api/session/{id}/tracks   → tracks + chapters (with URLs) for one title
+</span><span id="__span-30-6"><a id="__codelineno-30-6" name="__codelineno-30-6" href="#__codelineno-30-6"></a>POST /api/session/{id}/segments → resolve segment URLs / DRM / headers per track
+</span><span id="__span-30-7"><a id="__codelineno-30-7" name="__codelineno-30-7" href="#__codelineno-30-7"></a>POST /api/session/{id}/segment_filter → HLS segments the service drops (ads, bumpers)
+</span><span id="__span-30-8"><a id="__codelineno-30-8" name="__codelineno-30-8" href="#__codelineno-30-8"></a>POST /api/session/{id}/samples  → decrypt cbcs samples of a track on the server
+</span><span id="__span-30-9"><a id="__codelineno-30-9" name="__codelineno-30-9" href="#__codelineno-30-9"></a>POST /api/session/{id}/license  → proxy or server-CDM DRM licensing
+</span><span id="__span-30-10"><a id="__codelineno-30-10" name="__codelineno-30-10" href="#__codelineno-30-10"></a>POST /api/session/{id}/keys/bad → report a server-vault content key that did not decrypt
+</span><span id="__span-30-11"><a id="__codelineno-30-11" name="__codelineno-30-11" href="#__codelineno-30-11"></a>DELETE /api/session/{id}        → tear down, harvest updated cache
 </span></code></pre></div>
 <h3 id="slow-responses">Slow responses<a class="headerlink" href="#slow-responses" title="Permanent link">&para;</a></h3>
 <p>The <code>titles</code>, <code>tracks</code> and <code>license</code> routes can take minutes on a large catalogue. When the
@@ -4965,8 +4988,36 @@ the newlines must go out at once.</p>
 </tr>
 </tbody>
 </table>
+<h3 id="get-apisessionsession_idchannel"><code>GET /api/session/{session_id}/channel</code><a class="headerlink" href="#get-apisessionsession_idchannel" title="Permanent link">&para;</a></h3>
+<p>Open the remote session channel: a WebSocket that carries the prompts, CDM calls, log records, login state and drain state of the remote session, and the client's answers. Pass <code>since=&lt;seq&gt;</code> to get only the log records newer than that sequence number. The server closes the WebSocket with code <code>4404</code> when the remote session ends. See <a href="../remote-sessions/#the-remote-session-channel">The remote session channel</a> for the messages.</p>
+<table>
+<thead>
+<tr>
+<th>Status</th>
+<th>Error code</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>101</code></td>
+<td>-</td>
+<td>WebSocket open.</td>
+</tr>
+<tr>
+<td><code>403</code></td>
+<td><code>FORBIDDEN</code></td>
+<td>Request IP differs from the remote session creator.</td>
+</tr>
+<tr>
+<td><code>404</code></td>
+<td><code>SESSION_NOT_FOUND</code></td>
+<td>No such session.</td>
+</tr>
+</tbody>
+</table>
 <h3 id="get-apisessionsession_idprompt"><code>GET /api/session/{session_id}/prompt</code><a class="headerlink" href="#get-apisessionsession_idprompt" title="Permanent link">&para;</a></h3>
-<p>Poll for the authentication status and any pending interactive prompt (OTP, PIN, device code). Response variants:</p>
+<p>The polling fallback of the remote session channel. Poll for the authentication status and any pending interactive prompt (OTP, PIN, device code). Response variants:</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="21:4"><input checked="checked" id="__tabbed_21_1" name="__tabbed_21" type="radio" /><input id="__tabbed_21_2" name="__tabbed_21" type="radio" /><input id="__tabbed_21_3" name="__tabbed_21" type="radio" /><input id="__tabbed_21_4" name="__tabbed_21" type="radio" /><div class="tabbed-labels"><label for="__tabbed_21_1">Authenticating</label><label for="__tabbed_21_2">Pending input</label><label for="__tabbed_21_3">Authenticated</label><label for="__tabbed_21_4">Failed</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
@@ -5050,7 +5101,7 @@ the newlines must go out at once.</p>
 </tbody>
 </table>
 <h3 id="get-apisessionsession_idlogs"><code>GET /api/session/{session_id}/logs</code><a class="headerlink" href="#get-apisessionsession_idlogs" title="Permanent link">&para;</a></h3>
-<p>Drain the service's server-side log output for this remote session. The server mirrors every log call the service makes (<code>self.log.info</code>, warnings, errors) into a bounded per-session buffer, so a remote client can see why an auth, title, or license step failed. Pass <code>since=&lt;seq&gt;</code> to get only records newer than the last drained sequence number. Works in every auth state, including <code>failed</code>.</p>
+<p>The polling fallback of the remote session channel. Drain the service's server-side log output for this remote session. The server mirrors every log call the service makes (<code>self.log.info</code>, warnings, errors) into a bounded per-session buffer, so a remote client can see why an auth, title, or license step failed. Pass <code>since=&lt;seq&gt;</code> to get only records newer than the last drained sequence number. Works in every auth state, including <code>failed</code>.</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="23:1"><input checked="checked" id="__tabbed_23_1" name="__tabbed_23" type="radio" /><div class="tabbed-labels"><label for="__tabbed_23_1">Response <code>200</code></label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
