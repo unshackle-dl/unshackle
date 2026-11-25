@@ -119,9 +119,9 @@ class ContentKeyResolver:
         It gives the DRM its content keys and adds the key tree to ``table``. With ``all_drm`` it
         licenses each DRM system the track offers.
         """
-        prepare = partial(self.prepare_drm, track=track, title=title, table=table, cdm_only=self.cdm_only)
+        prepare = partial(self._prepare_drm, track=track, title=title, table=table, cdm_only=self.cdm_only)
         if all_drm:
-            return partial(self.licence_all_drm, prepare, track, self.best_available, force=self.cdm_only)
+            return partial(self._licence_all_drm, prepare, track, self.best_available, force=self.cdm_only)
         return prepare
 
     def decrypt_verified(
@@ -153,7 +153,7 @@ class ContentKeyResolver:
         failure can only flag and raise; the next run skips the flagged pair.
 
         Before the decrypt, each KID the DRM names without a content key is licensed when the file
-        uses it, or when the file cannot be mapped, because ``prepare_drm`` licensed only for the track's KID.
+        uses it, or when the file cannot be mapped, because ``_prepare_drm`` licensed only for the track's KID.
         """
         keys: Any = getattr(drm, "content_keys", None)
         if keys is None:
@@ -174,7 +174,7 @@ class ContentKeyResolver:
         def relicense(bad: dict[UUID, str], kids: dict[UUID, Vault]) -> None:
             """Licence again for each dropped KID, then settle each dropped pair against the new key.
 
-            prepare_drm licenses only for a KID it is told to need, so without the second call a
+            _prepare_drm licenses only for a KID it is told to need, so without the second call a
             track that still holds other content keys would decrypt without the dropped one. A
             licence can replace the DRM's dict, so ``keys`` is read from the DRM again afterwards.
             A licence key equal to the dropped one proves the decode check wrong and clears its flag.
@@ -195,9 +195,9 @@ class ContentKeyResolver:
                 if source is None:
                     if new == key:
                         self.vaults.unflag_bad_key(kid, key)
-                        self.flush_vault_writes([partial(self.vaults.add_key, kid, key)])
+                        self._flush_vault_writes([partial(self.vaults.add_key, kid, key)])
                     elif not self.vaults.held_locally(kid, new):
-                        self.flush_vault_writes([partial(self.vaults.add_key, kid, new)])
+                        self._flush_vault_writes([partial(self.vaults.add_key, kid, new)])
                 elif new == key and kid in kids and source[1] is kids[kid]:
                     raise ValueError(f"{key} from {kids[kid].name} was bad and no other source has the key")
 
@@ -279,7 +279,7 @@ class ContentKeyResolver:
                     failed = failed_kids(kids) if checked else set()
                     if not failed:
                         if checked:
-                            self.flush_vault_writes(
+                            self._flush_vault_writes(
                                 [
                                     partial(self.vaults.add_key, kid, keys[kid], excluding=vault)
                                     for kid, vault in kids.items()
@@ -302,13 +302,13 @@ class ContentKeyResolver:
         finally:
             backup.unlink(missing_ok=True)
 
-    def flush_vault_writes(self, pending: list[Callable[[], Any]]) -> None:
+    def _flush_vault_writes(self, pending: list[Callable[[], Any]]) -> None:
         """Hand the queued vault writes to the background writer so the track does not wait on them."""
         for write in pending:
-            self.VAULT_WRITER.submit(write).add_done_callback(self.report_vault_write)
+            self.VAULT_WRITER.submit(write).add_done_callback(self._report_vault_write)
         pending.clear()
 
-    def report_vault_write(self, future: futures.Future[Any]) -> None:
+    def _report_vault_write(self, future: futures.Future[Any]) -> None:
         if exc := future.exception():
             self.log.error(f"Vault write failed: {exc!r}")
 
@@ -333,10 +333,10 @@ class ContentKeyResolver:
             for drm in track.drm or []:
                 drop_null_keys(drm)
         if not self.cdm_only:
-            self.prefer_vault_keys(source, title)
-        self.cache_resolved_keys(source, title)
+            self._prefer_vault_keys(source, title)
+        self._cache_resolved_keys(source, title)
 
-    def prefer_vault_keys(self, source: "ServerKeySource", title: Title_T) -> None:
+    def _prefer_vault_keys(self, source: "ServerKeySource", title: Title_T) -> None:
         """Let the client vaults answer before a content key the server batch licence returned.
 
         The client only learns the KIDs from the batch response, so the server has already
@@ -366,15 +366,15 @@ class ContentKeyResolver:
                         self.vaults.candidates.setdefault(kid, []).append((server_key, server_vault))
                     elif kid not in self.LICENSE_KEY_CACHE:
                         self.LICENSE_KEY_CACHE[kid] = server_key
-                        self.flush_vault_writes([partial(self.cache_keys_to_vaults, {kid: server_key})])
+                        self._flush_vault_writes([partial(self._cache_keys_to_vaults, {kid: server_key})])
                     self.log.debug(
                         f"{vault.name} holds a different key for {kid.hex} than the server, testing it first"
                     )
 
-    def cache_resolved_keys(self, source: "ServerKeySource", title: Title_T) -> None:
+    def _cache_resolved_keys(self, source: "ServerKeySource", title: Title_T) -> None:
         """Cache the keys a batch licence or an import put on the tracks.
 
-        Both fill track.drm before any prepare_drm call, so this is the only point where those
+        Both fill track.drm before any _prepare_drm call, so this is the only point where those
         keys can still reach the local vaults. A content key a local vault already holds is not pushed again.
         """
         resolved = {
@@ -389,9 +389,9 @@ class ContentKeyResolver:
         keys = {kid: key for kid, key in resolved.items() if not self.vaults.held_locally(kid, key)}
         if keys:
             self.LICENSE_KEY_CACHE.update(keys)
-            self.flush_vault_writes([partial(self.cache_keys_to_vaults, keys)])
+            self._flush_vault_writes([partial(self._cache_keys_to_vaults, keys)])
 
-    def cache_keys_to_vaults(self, content_keys: dict[UUID, str]) -> None:
+    def _cache_keys_to_vaults(self, content_keys: dict[UUID, str]) -> None:
         """Store licence keys in every vault. A licence key clears a flag on its pair first: the
         flag came from a decode check that was wrong, and a local vault refuses a flagged pair."""
         if not content_keys or not self.vaults:
@@ -407,7 +407,7 @@ class ContentKeyResolver:
 
         Tracks that share KIDs still take turns, so the second one finds the content keys in
         LICENSE_KEY_CACHE and skips the challenge. Tracks with different KIDs query the key vaults
-        at the same time; their licences take turns under ``take_licence_turn``.
+        at the same time; their licences take turns under ``_take_licence_turn``.
 
         Callers take the lock after get_drm_for_cdm(), which folds a track's sibling PlayReady
         objects into the returned one, so the KID set is complete for that track's DRM list
@@ -421,7 +421,7 @@ class ContentKeyResolver:
         with cls.DRM_LOCKS_GUARD:
             return cls.DRM_LOCKS.setdefault(key or type(drm).__name__, Lock())
 
-    def take_licence_turn(
+    def _take_licence_turn(
         self,
         turn: ExitStack,
         drm: Union[ClearKeyCENC, Widevine, PlayReady, MonaLisa],
@@ -440,9 +440,9 @@ class ContentKeyResolver:
             raise DownloadCancelled()
         for kid in kids:
             if kid not in drm.content_keys:
-                self.take_cached_key(drm, kid, track, track_kid, cek_tree)
+                self._take_cached_key(drm, kid, track, track_kid, cek_tree)
 
-    def take_cached_key(
+    def _take_cached_key(
         self,
         drm: Union[ClearKeyCENC, Widevine, PlayReady, MonaLisa],
         kid: UUID,
@@ -456,7 +456,7 @@ class ContentKeyResolver:
             return False
         drm.content_keys[kid] = key
         if cek_tree is not None:
-            self.add_key_label(cek_tree, kid, key, track_kid, "from cache")
+            self._add_key_label(cek_tree, kid, key, track_kid, "from cache")
         log_event(
             "license_cache_hit",
             level="INFO",
@@ -465,7 +465,7 @@ class ContentKeyResolver:
         )
         return True
 
-    def take_vault_key(
+    def _take_vault_key(
         self,
         drm: Union[ClearKeyCENC, Widevine, PlayReady, MonaLisa],
         kid: UUID,
@@ -480,7 +480,7 @@ class ContentKeyResolver:
         drm.content_keys[kid] = key
         self.LICENSE_KEY_CACHE[kid] = key
         if cek_tree is not None:
-            self.add_key_label(cek_tree, kid, key, track_kid, f"from {vault}")
+            self._add_key_label(cek_tree, kid, key, track_kid, f"from {vault}")
         if self.debug_logger:
             self.debug_logger.log_vault_query(
                 vault_name=str(vault),
@@ -497,14 +497,14 @@ class ContentKeyResolver:
         return True
 
     @staticmethod
-    def with_track_kid(drm: Any, track_kid: Optional[UUID]) -> list[UUID]:
+    def _with_track_kid(drm: Any, track_kid: Optional[UUID]) -> list[UUID]:
         """Return the KIDs the DRM names, plus the track's own KID when the DRM leaves it out."""
         kids = list(getattr(drm, "kids", None) or [])
         if track_kid and track_kid not in kids:
             kids.append(track_kid)
         return kids
 
-    def take_known_keys(
+    def _take_known_keys(
         self,
         drm: Union[ClearKeyCENC, Widevine, PlayReady, MonaLisa],
         kids: list[UUID],
@@ -523,17 +523,17 @@ class ContentKeyResolver:
         for kid in kids:
             if kid in drm.content_keys:
                 if cek_tree is not None:
-                    self.add_key_label(cek_tree, kid, drm.content_keys[kid], track_kid)
+                    self._add_key_label(cek_tree, kid, drm.content_keys[kid], track_kid)
                 continue
-            if use_cache and self.take_cached_key(drm, kid, track, track_kid, cek_tree):
+            if use_cache and self._take_cached_key(drm, kid, track, track_kid, cek_tree):
                 continue
-            if not (use_vaults and self.take_vault_key(drm, kid, track, track_kid, cek_tree)):
+            if not (use_vaults and self._take_vault_key(drm, kid, track, track_kid, cek_tree)):
                 missing.append(kid)
                 if stop_at_miss:
                     break
         return missing
 
-    def license_drm(
+    def _license_drm(
         self,
         drm: Union[ClearKeyCENC, Widevine, PlayReady],
         get_keys: Callable[[], None],
@@ -584,11 +584,11 @@ class ContentKeyResolver:
                 cek_tree.add(f"[logging.level.error]{msg}")
                 if not pre_existing_tree:
                     table.add_row(cek_tree)
-                self.flush_vault_writes(pending_vault_writes)
+                self._flush_vault_writes(pending_vault_writes)
 
-            all_kids = self.with_track_kid(drm, track_kid)
+            all_kids = self._with_track_kid(drm, track_kid)
             stop_at_miss = self.vaults_only and not cdm_only
-            missing = self.take_known_keys(
+            missing = self._take_known_keys(
                 drm, all_kids, track, track_kid, cek_tree, not force, not cdm_only, stop_at_miss
             )
             if missing and stop_at_miss:
@@ -606,7 +606,7 @@ class ContentKeyResolver:
             need_license = bool(missing) and (force or not track_kid or track_kid not in drm.content_keys)
             if need_license:
                 # force licenses again, so the turn takes no cached keys
-                self.take_licence_turn(licence_turn, drm, [] if force else all_kids, track, track_kid, cek_tree)
+                self._take_licence_turn(licence_turn, drm, [] if force else all_kids, track, track_kid, cek_tree)
                 need_license = not all(kid in drm.content_keys for kid in all_kids)
 
             if need_license and not self.vaults_only:
@@ -663,13 +663,13 @@ class ContentKeyResolver:
                     )
 
                 for kid, key in drm.content_keys.items():
-                    self.add_key_label(cek_tree, kid, f"[red]{key}[/]" if is_null_key(key) else key, track_kid)
+                    self._add_key_label(cek_tree, kid, f"[red]{key}[/]" if is_null_key(key) else key, track_kid)
                 drop_null_keys(drm)
                 drm.content_keys.update(from_vaults)
                 self.LICENSE_KEY_CACHE.update(drm.content_keys)
                 pending_vault_writes.append(
                     partial(
-                        self.cache_keys_to_vaults,
+                        self._cache_keys_to_vaults,
                         {k: v for k, v in drm.content_keys.items() if k not in from_vaults},
                     )
                 )
@@ -683,10 +683,10 @@ class ContentKeyResolver:
                 table.add_row()
                 table.add_row(cek_tree)
 
-        self.flush_vault_writes(pending_vault_writes)
+        self._flush_vault_writes(pending_vault_writes)
 
     @staticmethod
-    def add_key_label(tree: Tree, kid: UUID, key: str, track_kid: Optional[UUID] = None, source: str = "") -> None:
+    def _add_key_label(tree: Tree, kid: UUID, key: str, track_kid: Optional[UUID] = None, source: str = "") -> None:
         """Add ``kid:key`` to a content key tree once, with ``*`` on the track's own KID and ``source`` after it."""
         if any(f"{kid.hex}:{key}" in str(x.label) for x in tree.children):
             return
@@ -697,13 +697,13 @@ class ContentKeyResolver:
             label += f" {source}"
         tree.add(label)
 
-    def service_licence(self, drm_system: Optional[str] = None, **kwargs: Any) -> Any:
+    def _service_licence(self, drm_system: Optional[str] = None, **kwargs: Any) -> Any:
         """Call the service's licence function for the track's DRM system.
 
         Arguments go through declared_kwargs, so a service receives only the ones its own
         licence function declares.
 
-        prepare_drm passes drm_system so the choice follows the track, not the loaded CDM:
+        _prepare_drm passes drm_system so the choice follows the track, not the loaded CDM:
         a track downloading at the same time can swap self.cdms.cdm.
         """
         if drm_system is None:
@@ -711,13 +711,13 @@ class ContentKeyResolver:
         fn = self.service.get_playready_license if drm_system == "playready" else self.service.get_widevine_license
         return fn(**declared_kwargs(fn, kwargs))
 
-    def licence_one_drm(self, prepare: Callable, drm: Union[Widevine, PlayReady], track_kid: Optional[UUID]) -> None:
+    def _licence_one_drm(self, prepare: Callable, drm: Union[Widevine, PlayReady], track_kid: Optional[UUID]) -> None:
         """Send one challenge for the KIDs of this DRM, also when the DRM or a vault has the content keys.
 
         This is the ``--cdm-only`` path. The challenge goes out the first time a run sees the KIDs
         for the DRM system.
 
-        prepare_drm asks the CDM only for a KID with no content key, so the content keys the DRM
+        _prepare_drm asks the CDM only for a KID with no content key, so the content keys the DRM
         holds are removed for the call and put back after it.
         """
         kids = {*drm.kids, *([track_kid] if track_kid else [])}
@@ -736,7 +736,7 @@ class ContentKeyResolver:
                 for held_kid, key in held.items():
                     drm.content_keys.setdefault(held_kid, key)
 
-    def licence_all_drm(
+    def _licence_all_drm(
         self,
         prepare: Callable,
         track: AnyTrack,
@@ -776,7 +776,7 @@ class ContentKeyResolver:
                     kid = track_kid if target is drm or track_kid in target.kids else None
                     try:
                         if force:
-                            self.licence_one_drm(prepare, target, kid)
+                            self._licence_one_drm(prepare, target, kid)
                         else:
                             prepare(target, track_kid=kid)
                     except Exception as e:
@@ -797,7 +797,7 @@ class ContentKeyResolver:
         if error and (not track_keys or (track_kid and track_kid not in track_keys)):
             raise error
 
-    def prepare_drm(
+    def _prepare_drm(
         self,
         drm: Union[ClearKeyCENC, Widevine, PlayReady, MonaLisa],
         track: AnyTrack,
@@ -815,7 +815,7 @@ class ContentKeyResolver:
         """
         if not drm:
             return
-        licence: Callable = partial(self.service_licence, title=title, track=track)
+        licence: Callable = partial(self._service_licence, title=title, track=track)
 
         remote = self.source
         server_cdm = bool(remote and remote.server_cdm)
@@ -825,14 +825,14 @@ class ContentKeyResolver:
             assert remote is not None
             with self.drm_lock(drm), ExitStack() as licence_turn:
                 pending_vault_writes: list[Callable[[], Any]] = []
-                vault_kids = self.with_track_kid(drm, track_kid)
-                self.take_known_keys(drm, vault_kids, track, track_kid, None, use_vaults=not cdm_only)
+                vault_kids = self._with_track_kid(drm, track_kid)
+                self._take_known_keys(drm, vault_kids, track, track_kid, None, use_vaults=not cdm_only)
 
                 def missing_track_key() -> bool:
                     return not drm.content_keys or bool(track_kid and track_kid not in drm.content_keys)
 
                 if missing_track_key():
-                    self.take_licence_turn(licence_turn, drm, vault_kids, track, track_kid, None)
+                    self._take_licence_turn(licence_turn, drm, vault_kids, track, track_kid, None)
                 known_keys = set(drm.content_keys)
 
                 if missing_track_key():
@@ -859,8 +859,8 @@ class ContentKeyResolver:
                         new_keys[kid] = key
                 if new_keys:
                     self.LICENSE_KEY_CACHE.update(new_keys)
-                    pending_vault_writes.append(partial(self.cache_keys_to_vaults, new_keys))
-                self.flush_vault_writes(pending_vault_writes)
+                    pending_vault_writes.append(partial(self._cache_keys_to_vaults, new_keys))
+                self._flush_vault_writes(pending_vault_writes)
 
             # the server can refuse the licence above its cap and hand the track to this machine
             licensed_locally = bool(remote and remote.licenses_locally(track))
@@ -902,13 +902,13 @@ class ContentKeyResolver:
                     cek_tree = Tree(Text.assemble((drm_name, "cyan"), (f"({pssh_str})", "text"), overflow="fold"))
                 else:
                     cek_tree = Tree(Text.assemble((drm_name, "cyan"), overflow="fold"))
-                all_kids = self.with_track_kid(drm, track_kid)
+                all_kids = self._with_track_kid(drm, track_kid)
                 for kid in all_kids:
                     if kid in drm.content_keys:
-                        self.add_key_label(cek_tree, kid, drm.content_keys[kid], track_kid)
+                        self._add_key_label(cek_tree, kid, drm.content_keys[kid], track_kid)
                 for kid, key in drm.content_keys.items():
                     if kid not in all_kids:
-                        self.add_key_label(cek_tree, kid, key)
+                        self._add_key_label(cek_tree, kid, key)
                 if not any(isinstance(x, Tree) and x.label == cek_tree.label for x in table.columns[0].cells):
                     table.add_row(cek_tree)
             if self.export:
@@ -935,7 +935,7 @@ class ContentKeyResolver:
             if local_drm is not None and local_drm is not drm:
                 assert not isinstance(local_drm, ClearKey)
                 # a mid-download handover leaves drm on the server's DRM system, and the caller decrypts with it
-                self.prepare_drm(local_drm, track, title, table, track_kid, cdm_only)
+                self._prepare_drm(local_drm, track, title, table, track_kid, cdm_only)
                 with self.drm_lock(drm):
                     drm.content_keys.update(local_drm.content_keys)
                 return
@@ -964,7 +964,7 @@ class ContentKeyResolver:
             else:
                 certificate = partial(self.service.get_widevine_service_certificate, title=title, track=track)
                 get_keys = partial(drm.get_content_keys, cdm=track_cdm, licence=licence, certificate=certificate)
-            self.license_drm(drm, get_keys, track, title, track_kid, table, cdm_only, force)
+            self._license_drm(drm, get_keys, track, title, track_kid, table, cdm_only, force)
             if self.export:
                 self.export(title, track, drm)
 
@@ -980,7 +980,7 @@ class ContentKeyResolver:
                     cek_tree = pre_existing_tree
 
                 for kid_, key in drm.content_keys.items():
-                    self.add_key_label(cek_tree, kid_, key, track_kid=kid_)  # every MonaLisa key is the track's own
+                    self._add_key_label(cek_tree, kid_, key, track_kid=kid_)  # every MonaLisa key is the track's own
 
                 if cek_tree.children and not pre_existing_tree:
                     table.add_row()
