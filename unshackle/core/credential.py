@@ -4,7 +4,7 @@ import base64
 import hashlib
 import re
 from pathlib import Path
-from typing import Optional, Union
+from typing import Any, Optional, Union
 
 
 class Credential:
@@ -53,6 +53,11 @@ class Credential:
             else:
                 value += f":{self.extra}"
         return base64.b64encode(value.encode()).decode()
+
+    @classmethod
+    def from_config(cls, value: Any) -> Credential:
+        """Load a credential from its config form: a ``username:password`` text or a list."""
+        return cls(*value) if isinstance(value, list) else cls.loads(value)
 
     @classmethod
     def loads(cls, text: str) -> Credential:

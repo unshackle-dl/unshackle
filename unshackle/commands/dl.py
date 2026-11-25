@@ -4081,9 +4081,7 @@ class dl:
                 else:
                     credentials = credentials.get("default")
             if credentials:
-                if isinstance(credentials, list):
-                    return Credential(*credentials)
-                return Credential.loads(credentials)  # type: ignore
+                return Credential.from_config(credentials)
         return None
 
     def cdm_from_service_entry(self) -> bool:

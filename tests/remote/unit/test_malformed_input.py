@@ -173,6 +173,46 @@ def test_a_job_error_hides_the_configured_credential(monkeypatch: pytest.MonkeyP
     assert "EXAMPLE-pass-123" not in job.to_dict(include_full_details=True)["error_message"]
 
 
+@pytest.mark.parametrize(
+    "configured, secret",
+    [
+        ({"default": ["user", "EXAMPLE-pass-123"]}, "EXAMPLE-pass-123"),
+        (["user", "EXAMPLE-pass-123", "EXAMPLE-extra-456"], "EXAMPLE-extra-456"),
+        ("user:EXAMPLE-pass-123:EXAMPLE-extra-456", "EXAMPLE-extra-456"),
+        ({"default": "user\n:EXAMPLE-pass-123\n"}, "EXAMPLE-pass-123"),
+    ],
+)
+def test_a_job_error_hides_every_form_of_configured_credential(
+    monkeypatch: pytest.MonkeyPatch, configured: Any, secret: str
+) -> None:
+    from datetime import datetime
+
+    from unshackle.core.api.download_manager import DownloadJob, JobStatus
+
+    monkeypatch.setattr(handlers.config, "credentials", {"EXAMPLE": configured})
+    job = DownloadJob("j1", JobStatus.FAILED, datetime(2026, 1, 1), "EXAMPLE", "t", {})
+    job.error_message = f"login failed with {secret}"
+    assert secret not in job.to_dict(include_full_details=True)["error_message"]
+
+
+def test_a_job_error_hides_the_parts_of_a_per_request_credential() -> None:
+    from datetime import datetime
+
+    from unshackle.core.api.download_manager import DownloadJob, JobStatus
+
+    job = DownloadJob(
+        "j1",
+        JobStatus.FAILED,
+        datetime(2026, 1, 1),
+        "EXAMPLE",
+        "t",
+        {"credential": "user:EXAMPLE-pass-123:EXAMPLE-extra-456"},
+    )
+    job.error_message = "login failed with EXAMPLE-pass-123 and EXAMPLE-extra-456"
+    shown = job.to_dict(include_full_details=True)["error_message"]
+    assert "EXAMPLE-pass-123" not in shown and "EXAMPLE-extra-456" not in shown
+
+
 def test_decrypting_without_content_keys_is_one_line(tmp_path: Any) -> None:
     import click
 

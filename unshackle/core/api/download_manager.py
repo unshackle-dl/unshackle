@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, cast
 
 from unshackle.core.api.events import bus, publish_service_event
 from unshackle.core.api.sanitize import sanitize_log
+from unshackle.core.credential import Credential
 from unshackle.core.utils.redact import REDACTED, URL_USERINFO_RE, redact_all, redact_path, redact_text
 from unshackle.core.utils.service_params import cast_service_options, service_options
 
@@ -49,6 +50,21 @@ def redact_parameters(parameters: Dict[str, Any]) -> Dict[str, Any]:
     return redacted
 
 
+def credential_secrets(value: Any) -> List[str]:
+    """The secret parts of one credential in any form ``Credential.from_config`` loads."""
+    try:
+        credential = Credential.from_config(value)
+    except (AttributeError, TypeError, ValueError):
+        return []
+    parts = [
+        value if isinstance(value, str) else "",
+        credential.dumps(),
+        str(credential.password),
+        str(credential.extra or ""),
+    ]
+    return [part for part in parts if len(part) >= 4]  # short parts would blanket-replace and garble the text
+
+
 def secret_values(parameters: Dict[str, Any], service: Optional[str] = None) -> List[str]:
     """Raw secret strings carried in job parameters and the credentials configured for ``service``, longest first."""
     if not isinstance(parameters, dict):
@@ -59,12 +75,13 @@ def secret_values(parameters: Dict[str, Any], service: Optional[str] = None) -> 
 
         configured = (config.credentials or {}).get(service)
         for value in configured.values() if isinstance(configured, dict) else [configured]:
-            if isinstance(value, str):
-                secrets.extend(secret_values({"credential": value}))
+            secrets.extend(credential_secrets(value))
     for key in ("credential", "password", "token", "api_key"):
         value = parameters.get(key)
         if isinstance(value, str) and value:
             secrets.append(value)
+            if key == "credential":
+                secrets.extend(credential_secrets(value))
             if key == "credential" and ":" in value:
                 password = value.split(":", 1)[1]
                 if len(password) >= 4:  # short passwords would blanket-replace and garble the text
