@@ -673,6 +673,10 @@ class ImportService:
         """Always False: an import licenses nothing."""
         return False
 
+    def license_track(self, track: AnyTrack, drm: Any, kid: Optional[UUID] = None) -> Optional[dict[UUID, str]]:
+        """Raise the error that names the KIDs of ``track`` neither the export nor a vault holds."""
+        raise self.missing_key(track)
+
     def vault_source(self, kid: UUID, key: str) -> None:
         """Always None: no server vault serves an import."""
         return None
@@ -799,14 +803,6 @@ class ImportService:
 
     def get_widevine_service_certificate(self, **_: Any) -> Optional[str]:
         return None
-
-    def get_widevine_license(self, *, challenge: bytes, title: Title_T, track: AnyTrack) -> Optional[Union[bytes, str]]:
-        raise self.missing_key(track)
-
-    def get_playready_license(
-        self, *, challenge: bytes, title: Title_T, track: AnyTrack
-    ) -> Optional[Union[bytes, str]]:
-        raise self.missing_key(track)
 
     def get_clearkey_license(
         self, *, challenge: bytes, title: Title_T, track: AnyTrack

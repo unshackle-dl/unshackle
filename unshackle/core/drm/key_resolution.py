@@ -830,8 +830,6 @@ class ContentKeyResolver:
         """
         if not drm:
             return
-        licence: Callable = partial(self._service_licence, title=title, track=track)
-
         remote = self.source
         server_cdm = bool(remote and remote.server_cdm)
         licensed_locally = bool(remote and remote.licenses_locally(track))
@@ -851,18 +849,11 @@ class ContentKeyResolver:
                 known_keys = set(drm.content_keys)
 
                 if missing_track_key():
-                    from unshackle.core.remote_service import RemoteError
-
-                    try:
-                        licence(
-                            drm_system="playready" if drm.__class__.__name__ == "PlayReady" else "widevine",
-                            challenge=b"",
-                            kid=track_kid,
-                        )
-                    except click.ClickException:
-                        raise
-                    except (Exception, RemoteError) as e:
-                        self.log.debug(f"Server CDM licence with an empty challenge failed: {e!r}")
+                    server_keys = remote.license_track(track, drm, track_kid)
+                    if server_keys is None:
+                        licensed_locally = True
+                    else:
+                        drm.content_keys.update(server_keys)
                 drop_null_keys(drm)
 
                 new_keys = {}
@@ -877,8 +868,6 @@ class ContentKeyResolver:
                     pending_vault_writes.append(partial(self._cache_keys_to_vaults, new_keys))
                 self._flush_vault_writes(pending_vault_writes)
 
-            # the server can refuse the licence above its cap and hand the track to this machine
-            licensed_locally = bool(remote and remote.licenses_locally(track))
         if server_cdm and not licensed_locally:
             if not drm.content_keys:
                 self.log.warning("Server CDM did not resolve any keys for this track")
@@ -956,7 +945,7 @@ class ContentKeyResolver:
                 return
 
         drm_system = "playready" if isinstance(drm, PlayReady) else "widevine"
-        licence = partial(licence, drm_system=drm_system)
+        licence = partial(self._service_licence, title=title, track=track, drm_system=drm_system)
 
         if not server_cdm and isinstance(drm, (Widevine, PlayReady)):
             if cdm_system(self.cdms.cdm) != drm_system:

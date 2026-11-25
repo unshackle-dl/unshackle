@@ -422,7 +422,7 @@ def test_a_lent_device_without_the_vault_grant_asks_the_server_for_no_key() -> N
 
     svc.resolve_server_keys(SimpleNamespace(tracks=SimpleNamespace(videos=[track], audio=[])))
     with pytest.raises(click.ClickException, match="cannot read the server vault"):
-        svc.proxy_license(b"challenge", track, "widevine")
+        svc.license_track(track, None)
 
 
 @pytest.mark.parametrize("params", [{}, {"quality": None}])

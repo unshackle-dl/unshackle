@@ -415,9 +415,9 @@ def sample_batches(samples: list[bytes]) -> Iterator[list[bytes]]:
         yield batch
 
 
-def track_pssh(track: Any, drm_type: str) -> Optional[str]:
-    """The base64 PSSH of the track's header for one DRM system; None when the track has none of it."""
-    for drm_obj in track.drm or []:
+def track_pssh(track: Any, drm_type: str, drm: Any = None) -> Optional[str]:
+    """The base64 PSSH of one DRM system's header: ``drm``'s own when it is of that system, else the track's first."""
+    for drm_obj in [drm, *(track.drm or [])]:
         drm_class = drm_obj.__class__.__name__
         if drm_type == "playready" and drm_class == "PlayReady":
             return drm_obj.data["pssh_b64"]
@@ -825,6 +825,14 @@ class ServerKeySource(Protocol):
 
     def licenses_locally(self, track: AnyTrack) -> bool:
         """True when this machine's own CDM licenses ``track`` instead of the server."""
+
+    def license_track(self, track: AnyTrack, drm: Any, kid: Optional[UUID] = None) -> Optional[dict[UUID, str]]:
+        """The content keys the server licenses for ``drm`` of ``track``, or None when it hands ``track`` to this machine's CDM.
+
+        Call it only for a track ``licenses_locally`` does not name; after None, it names the track. ``kid`` is
+        the KID the answer must hold. A failed request returns no keys. A refusal this machine cannot take over
+        raises ClickException.
+        """
 
     def vault_source(self, kid: UUID, key: str) -> Optional[Vault]:
         """The server vault when it served ``key`` for ``kid``, else None. That content key must pass a decrypt check."""
@@ -1564,7 +1572,7 @@ class RemoteService:
         decides which CDM device to use and tells the client through
         server_cdm_type. We send track IDs and the server does the full
         CDM flow, returning KID:KEY pairs. A capped track this machine's device cannot license
-        waits in ``deferred_refusals``, so dl reads the local vaults before ``proxy_license`` raises it.
+        waits in ``deferred_refusals``, so dl reads the local vaults before ``license_track`` raises it.
         """
         # track ids can repeat across titles, so a refusal for the last title must not carry over
         self.client_licensed.clear()
@@ -1787,15 +1795,13 @@ class RemoteService:
         raw = self._chapters_by_title.get(title_id, [])
         return Chapters([Chapter(ch["timestamp"], ch.get("name")) for ch in raw])
 
-    def get_widevine_license(
-        self, *, challenge: bytes, title: Title_T, track: AnyTrack, kid: Optional[UUID] = None
-    ) -> Optional[Union[bytes, str]]:
-        return self.proxy_license(challenge, track, "widevine", kid)
+    def get_widevine_license(self, *, challenge: bytes, title: Title_T, track: AnyTrack) -> Optional[Union[bytes, str]]:
+        return self.proxy_license(challenge, track, "widevine")
 
     def get_playready_license(
-        self, *, challenge: bytes, title: Title_T, track: AnyTrack, kid: Optional[UUID] = None
+        self, *, challenge: bytes, title: Title_T, track: AnyTrack
     ) -> Optional[Union[bytes, str]]:
-        return self.proxy_license(challenge, track, "playready", kid)
+        return self.proxy_license(challenge, track, "playready")
 
     def get_clearkey_license(
         self, *, challenge: bytes, title: Title_T, track: AnyTrack
@@ -1826,61 +1832,52 @@ class RemoteService:
         )
         return base64.b64decode(certificate) if (certificate := resp.get("license")) else None
 
-    def proxy_license(
-        self, challenge: Union[bytes, str], track: AnyTrack, drm_type: str, kid: Optional[UUID] = None
-    ) -> bytes:
-        """Relay a licence challenge to the server. A failed relay raises ClickException, so dl's licence fallbacks see it.
+    def license_track(self, track: AnyTrack, drm: Any, kid: Optional[UUID] = None) -> Optional[dict[UUID, str]]:
+        """The content keys the server CDM licenses for ``drm`` of ``track``, or None when the server hands it to this machine.
 
-        ``kid`` is the KID the server CDM must answer; a server vault key for it stands in for the licence.
+        The request sends the header of ``drm`` when it is of a system the server licenses, as a playlist can name a
+        KID that ``track.drm`` does not hold. ``kid`` is the KID the server CDM must answer; a content key for it
+        from a server vault stands in for the licence. A failed request logs one warning and returns no keys.
         """
-        if isinstance(challenge, str):
-            challenge = challenge.encode("utf-8")
-
         if self.local_vaults_only:
             self.license_locally(track, {"reason": "server_device"})
-        if self._server_cdm and str(track.id) not in self.client_licensed:
-            if deferred := self.deferred_refusals.get(str(track.id)):
-                raise click.ClickException(deferred)
-            from uuid import UUID
+        if deferred := self.deferred_refusals.get(str(track.id)):
+            raise click.ClickException(deferred)
+        server_type = self.server_cdm_type
+        other_type = "playready" if server_type == "widevine" else "widevine"
+        drm_type, pssh_b64 = server_type, track_pssh(track, server_type, drm)
+        if not pssh_b64:
+            drm_type, pssh_b64 = other_type, track_pssh(track, other_type, drm)
+        if not pssh_b64:
+            self.log.warning(f"Track {track.id} has no PSSH to send to the server CDM")
+            return {}
+        request = LicenseRequest(drm_type=drm_type, mode="server_cdm", pssh=pssh_b64)
+        if kid:
+            request["kid"] = kid.hex
+        try:
+            with quiet():
+                resp = self.session_call(
+                    lambda sid: self.client.post(
+                        LICENSE_ROUTE.format(session_id=sid),
+                        LicenseRequest(**request, track_id=self.server_track_id(track.id)),
+                        expect=(APIErrorCode.SERVER_CDM_CAPPED,),
+                    )
+                )
+            if resp.get("error_code") != APIErrorCode.SERVER_CDM_CAPPED:
+                self.server_cdm_type = resp.get("drm_type", server_type)
+                keys = resp.get("keys", {})
+                self.note_vault_keys(keys, set(resp.get("vault_keys", [])))
+                return {UUID(hex=kid_hex): key for kid_hex, key in keys.items()}
+        except (Exception, RemoteError) as e:
+            self.log.warning("server_cdm license failed: %s", e)
+            return {}
+        self.license_locally(track, resp.get("details") or {})
+        return None
 
-            server_type = self.server_cdm_type
-            other_type = "playready" if server_type == "widevine" else "widevine"
-            drm_type, pssh_b64 = server_type, track_pssh(track, server_type)
-            if not pssh_b64:
-                drm_type, pssh_b64 = other_type, track_pssh(track, other_type)
-            refusal: Optional[Dict[str, Any]] = None
-            if pssh_b64:
-                try:
-                    request = LicenseRequest(drm_type=drm_type, mode="server_cdm", pssh=pssh_b64)
-                    if kid:
-                        request["kid"] = kid.hex
-                    with quiet():
-                        resp = self.session_call(
-                            lambda sid: self.client.post(
-                                LICENSE_ROUTE.format(session_id=sid),
-                                LicenseRequest(**request, track_id=self.server_track_id(track.id)),
-                                expect=(APIErrorCode.SERVER_CDM_CAPPED,),
-                            )
-                        )
-                    if resp.get("error_code") == APIErrorCode.SERVER_CDM_CAPPED:
-                        refusal = resp.get("details") or {}
-                    self.server_cdm_type = resp.get("drm_type", server_type)
-                    keys = resp.get("keys", {})
-                    self.note_vault_keys(keys, set(resp.get("vault_keys", [])))
-                    if keys and track.drm:
-                        for drm_obj in track.drm:
-                            if hasattr(drm_obj, "content_keys"):
-                                for kid_hex, key_hex in keys.items():
-                                    drm_obj.content_keys[UUID(hex=kid_hex)] = key_hex
-                        return challenge
-                except (Exception, RemoteError) as e:
-                    self.log.warning("server_cdm license failed: %s", e)
-            else:
-                self.log.warning(f"Track {track.id} has no PSSH to send to the server CDM")
-            if refusal is not None:
-                # dl sees the track in client_licensed and calls again with this device's challenge
-                self.license_locally(track, refusal)
-            return challenge
+    def proxy_license(self, challenge: Union[bytes, str], track: AnyTrack, drm_type: str) -> bytes:
+        """Relay a licence challenge to the server. A failed relay raises ClickException, so dl's licence fallbacks see it."""
+        if isinstance(challenge, str):
+            challenge = challenge.encode("utf-8")
 
         pssh_b64 = track_pssh(track, drm_type)
 

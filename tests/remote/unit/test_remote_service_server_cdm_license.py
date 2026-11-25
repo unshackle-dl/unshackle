@@ -1,8 +1,8 @@
-"""The client's single-track server_cdm licence follows the server's DRM system.
+"""The client's single-track server_cdm licence returns the content keys and follows the server's DRM system.
 
 The server's config.cdm mapping decides the system, so the client sends the header of the
 system the server reported at session create, not the one its local device asked for, and
-takes the system the server answered with for the next call.
+takes the system the server answered with for the next call. The relay keeps the caller's system.
 """
 
 import logging
@@ -59,10 +59,10 @@ def test_server_type_picks_the_header_and_the_posted_type():
     svc = _service("widevine", {"keys": {KID.hex: "k"}, "drm_type": "widevine"})
     track = SimpleNamespace(id="vid", drm=[_PlayReady(), _Widevine()])
 
-    svc.proxy_license(b"", track, "playready")
+    assert svc.license_track(track, None) == {KID: "k"}
 
     assert svc.client.posts == [{"track_id": "vid", "drm_type": "widevine", "mode": "server_cdm", "pssh": "WV"}]
-    assert all(drm.content_keys == {KID: "k"} for drm in track.drm)
+    assert all(drm.content_keys == {} for drm in track.drm)
 
 
 def test_missing_header_of_the_server_type_sends_the_other_one():
@@ -70,7 +70,7 @@ def test_missing_header_of_the_server_type_sends_the_other_one():
     svc = _service("widevine", {"keys": {KID.hex: "k"}, "drm_type": "widevine"})
     track = SimpleNamespace(id="vid", drm=[_PlayReady()])
 
-    svc.proxy_license(b"", track, "widevine")
+    svc.license_track(track, None)
 
     assert svc.client.posts[0]["drm_type"] == "playready"
     assert svc.client.posts[0]["pssh"] == "PR"
@@ -80,7 +80,7 @@ def test_response_type_refreshes_the_server_type():
     svc = _service("widevine", {"keys": {KID.hex: "k"}, "drm_type": "playready"})
     track = SimpleNamespace(id="vid", drm=[_PlayReady(), _Widevine()])
 
-    svc.proxy_license(b"", track, "widevine")
+    svc.license_track(track, None)
 
     assert svc.server_cdm_type == "playready"
 
@@ -130,7 +130,7 @@ def test_a_refused_server_cdm_licence_logs_one_warning(caplog):
     svc.client.post = refuse
     track = SimpleNamespace(id="vid", drm=[_Widevine()])
 
-    assert svc.proxy_license(b"chal", track, "widevine") == b"chal"
+    assert svc.license_track(track, None) == {}
     assert [r.levelname for r in caplog.records if r.levelname in ("WARNING", "ERROR")] == ["WARNING"]
 
 
@@ -138,6 +138,35 @@ def test_the_kid_dl_needs_goes_to_the_server():
     svc = _service("widevine", {"keys": {KID.hex: "k"}, "drm_type": "widevine"})
     track = SimpleNamespace(id="vid", drm=[_Widevine()])
 
-    svc.get_widevine_license(challenge=b"", title=None, track=track, kid=KID)
+    svc.license_track(track, None, KID)
 
     assert svc.client.posts[0]["kid"] == KID.hex
+
+
+def test_the_header_of_the_drm_dl_licenses_goes_before_the_tracks():
+    svc = _service("widevine", {"keys": {}})
+    later = _Widevine()
+    later.pssh = SimpleNamespace(dumps=lambda: "LATER")
+
+    svc.license_track(SimpleNamespace(id="vid", drm=[_Widevine()]), later)
+
+    assert svc.client.posts[0]["pssh"] == "LATER"
+
+
+def test_a_track_with_no_header_sends_nothing_and_gets_no_keys():
+    svc = _service("widevine", {})
+    track = SimpleNamespace(id="vid", drm=[])
+
+    assert svc.license_track(track, None) == {}
+    assert svc.client.posts == []
+
+
+def test_a_deferred_refusal_raises_before_any_request():
+    import click
+
+    svc = _service("widevine", {})
+    svc.deferred_refusals["vid"] = "capped"
+
+    with pytest.raises(click.ClickException, match="^capped$"):
+        svc.license_track(SimpleNamespace(id="vid", drm=[_Widevine()]), None)
+    assert svc.client.posts == []

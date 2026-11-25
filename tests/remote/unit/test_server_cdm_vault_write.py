@@ -12,7 +12,7 @@ from uuid import UUID
 import pytest
 
 from tests.core.key_resolver import key_table, resolver
-from tests.remote.key_source import CAPPED, PR_DEVICE, one_title, remote_keys, remote_session
+from tests.remote.key_source import CAPPED, PR_DEVICE, MemoryKeySource, one_title, remote_keys, remote_session
 from unshackle.core.drm.key_resolution import ContentKeyResolver
 
 pytestmark = pytest.mark.unit
@@ -61,8 +61,8 @@ class FakeWidevine:
         self.content_keys: dict = {}
 
 
-def make_resolver(vaults, licence=None, source=None, **flags):
-    return resolver(vaults, licence=licence, source=source or remote_keys(), **flags)
+def make_resolver(vaults, source=None, **flags):
+    return resolver(vaults, source=source or MemoryKeySource(), **flags)
 
 
 def prepare(keys, drm, track_kid, track=None):
@@ -72,7 +72,7 @@ def prepare(keys, drm, track_kid, track=None):
 
 def run_prepare(vaults, kids, licence_keys, track_kid):
     drm = FakeWidevine(kids)
-    keys = make_resolver(vaults, licence=lambda **kwargs: drm.content_keys.update(licence_keys))
+    keys = make_resolver(vaults, MemoryKeySource(licence_keys))
     prepare(keys, drm, track_kid)
     keys.wait_vault_writes()
     return drm
@@ -102,11 +102,27 @@ def capped_run(vaults):
     svc = remote_session(PR_DEVICE, CAPPED)
     drm = type("Widevine", (FakeWidevine,), {})([CACHED])
     track = SimpleNamespace(id="vid", height=2160, drm=[drm], drm_preference=None)
-    keys = make_resolver(vaults, licence=lambda **kwargs: svc.proxy_license(b"", track, "widevine"), source=svc)
+    keys = make_resolver(vaults, svc)
     svc.resolve_server_keys(one_title(track))
 
     prepare(keys, drm, CACHED, track)
     return drm
+
+
+def test_a_drm_the_track_does_not_hold_gets_the_server_keys():
+    """A key a playlist names part-way is a DRM outside track.drm: the server licenses its header and the keys reach it."""
+    svc = remote_session(PR_DEVICE, {})
+    svc.client.post = lambda endpoint, payload, expect=(): {
+        "keys": {NEW.hex: "k_new"} if payload["pssh"] == "LATER" else {}
+    }
+    header = type("Widevine", (FakeWidevine,), {})
+    manifest_drm, later_drm = header([CACHED]), header([NEW])
+    manifest_drm.pssh, later_drm.pssh = SimpleNamespace(dumps=lambda: "OLD"), SimpleNamespace(dumps=lambda: "LATER")
+    track = SimpleNamespace(id="vid", drm=[manifest_drm])
+
+    prepare(make_resolver(FakeVaults(), svc), later_drm, NEW, track)
+
+    assert later_drm.content_keys == {NEW: "k_new"}
 
 
 def test_a_capped_track_takes_a_local_vault_key_before_the_refusal():
@@ -123,8 +139,8 @@ def test_a_capped_track_no_vault_holds_raises_the_refusal():
 def test_batch_resolved_keys_are_cached_before_download():
     """The batch licence fills track.drm before prepare_drm, so dl caches it at the call site."""
     vaults = FakeVaults()
-    source = remote_keys()
-    keys = make_resolver(vaults, source=source)
+    source = MemoryKeySource()
+    keys = make_resolver(vaults, source)
 
     drm = FakeWidevine([NEW])
     drm.content_keys = {NEW: "k_new"}
@@ -145,18 +161,14 @@ def test_vault_hits_wait_for_the_decrypt_before_replicating():
 
 def test_server_vault_keys_are_held_back_until_verified():
     """A key the server took from its vault is sourced like a local vault hit and not pushed yet."""
-    from unshackle.core.remote_service import ServerVault
-
     vaults = FakeVaults()
-    remote = remote_keys()
+    remote = MemoryKeySource({CACHED: "k_cached", NEW: "k_new"})
     remote.server_vault_keys = {CACHED: "k_cached"}
-    stub = ServerVault(remote)
+    stub = object()
     remote.server_vault = stub
 
     drm = FakeWidevine([CACHED, NEW])
-    keys = make_resolver(
-        vaults, licence=lambda **kwargs: drm.content_keys.update({CACHED: "k_cached", NEW: "k_new"}), source=remote
-    )
+    keys = make_resolver(vaults, remote)
 
     prepare(keys, drm, NEW)
     keys.wait_vault_writes()
@@ -176,13 +188,8 @@ def test_tracks_sharing_one_drm_licence_and_push_once():
     """Two tracks on the same DRM run at the same time; the second must find the first one's keys."""
     vaults = FakeVaults()
     drm = FakeWidevine([NEW])
-    calls = []
-
-    def licence(**kwargs):
-        calls.append(1)
-        drm.content_keys.update({NEW: "k_new"})
-
-    keys = make_resolver(vaults, licence=licence)
+    source = MemoryKeySource({NEW: "k_new"})
+    keys = make_resolver(vaults, source)
     both_started = threading.Barrier(2)
 
     def track():
@@ -196,42 +203,32 @@ def test_tracks_sharing_one_drm_licence_and_push_once():
         t.join()
     keys.wait_vault_writes()
 
-    assert len(calls) == 1
+    assert len(source.asked) == 1
     assert vaults.pushes == [{NEW: "k_new"}]
 
 
 def test_cdm_only_still_reuses_keys_from_the_run_cache():
     """--cdm-only skips the vaults, not LICENSE_KEY_CACHE, so a second track with the same KID does not licence twice."""
     vaults = FakeVaults()
-    calls = []
-    drms = [FakeWidevine([NEW]) for _ in range(2)]
-
-    def licence(**kwargs):
-        calls.append(1)
-        drms[len(calls) - 1].content_keys.update({NEW: "k_new"})
-
-    keys = make_resolver(vaults, licence=licence, cdm_only=True)
-    for drm in drms:
+    source = MemoryKeySource({NEW: "k_new"})
+    keys = make_resolver(vaults, source, cdm_only=True)
+    for drm in [FakeWidevine([NEW]) for _ in range(2)]:
         prepare(keys, drm, NEW)
     keys.wait_vault_writes()
 
-    assert len(calls) == 1
+    assert len(source.asked) == 1
     assert vaults.pushes == [{NEW: "k_new"}]
 
 
 def test_a_forced_licence_trusts_server_vault_keys():
     """A forced licence (cdm_only=True, as --all-drm passes) does not name the server vault as a source, so no decode check."""
-    from unshackle.core.remote_service import ServerVault
-
     vaults = FakeVaults()
-    remote = remote_keys()
+    remote = MemoryKeySource({CACHED: "k_cached"})
     remote.server_vault_keys = {CACHED: "k_cached"}
-    remote.server_vault = ServerVault(remote)
+    remote.server_vault = object()
 
     drm = FakeWidevine([CACHED])
-    keys = make_resolver(
-        vaults, licence=lambda **kw: drm.content_keys.update({CACHED: "k_cached"}), source=remote, cdm_only=True
-    )
+    keys = make_resolver(vaults, remote, cdm_only=True)
     prepare(keys, drm, CACHED)
     keys.wait_vault_writes()
 
@@ -269,8 +266,8 @@ def test_a_null_key_from_the_server_licence_is_dropped():
 
 def test_a_null_key_from_the_batch_licence_is_dropped(monkeypatch):
     vaults = FakeVaults()
-    source = remote_keys()
-    keys = make_resolver(vaults, source=source)
+    source = MemoryKeySource()
+    keys = make_resolver(vaults, source)
     drm = FakeWidevine([NEW])
     title = SimpleNamespace(tracks=[SimpleNamespace(drm=[drm])])
     monkeypatch.setattr(

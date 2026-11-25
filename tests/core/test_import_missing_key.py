@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, Optional
 from uuid import UUID
 
 import click
@@ -17,7 +17,6 @@ import pytest
 from pywidevine.pssh import PSSH
 
 from tests.core.key_resolver import NoVaults, key_table, resolver
-from tests.remote.key_source import remote_keys
 from unshackle.commands.dl import dl
 from unshackle.core.drm import Widevine, key_resolution
 from unshackle.core.drm.key_resolution import ContentKeyResolver
@@ -57,17 +56,19 @@ def make_resolver(monkeypatch: pytest.MonkeyPatch, vaults: Any, track: Any, call
     """Content-key resolution in server-CDM mode, the mode an import runs in, with a decoder that fails every file."""
     monkeypatch.setattr(key_resolution.binaries, "FFMPEG", "ffmpeg")
     monkeypatch.setattr(key_resolution, "ffmpeg_decodes", lambda path, start=None, seconds=3, video=None: False)
-    return resolver(vaults, licence=import_licence(track, calls), source=remote_keys(), tag="EXAMPLE")
+    return resolver(vaults, source=CountedImport(calls), tag="EXAMPLE")
 
 
-def import_licence(track: Any, calls: list[str]) -> Any:
-    """The licence function of an import: the ImportService method, which names the missing KIDs."""
+class CountedImport(ImportService):
+    """An import that records each licence dl asks it for."""
 
-    def licence(**kwargs: Any) -> None:
-        calls.append("licence")
-        raise ImportService.missing_key(track)
+    def __init__(self, calls: list[str]) -> None:
+        self.calls = calls
+        self.server_cdm_type = "widevine"
 
-    return licence
+    def license_track(self, track: Any, drm: Any, kid: Optional[UUID] = None) -> Optional[dict[UUID, str]]:
+        self.calls.append("licence")
+        return super().license_track(track, drm, kid)
 
 
 def test_the_error_names_the_kids_without_a_content_key() -> None:

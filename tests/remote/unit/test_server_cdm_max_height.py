@@ -13,7 +13,7 @@ import pywidevine.pssh as wv_pssh_mod
 
 import unshackle.core.drm as drm_mod
 from tests.core.key_resolver import key_table, resolver
-from tests.remote.key_source import CAPPED, PR_DEVICE, one_title, remote_keys, remote_session
+from tests.remote.key_source import CAPPED, PR_DEVICE, MemoryKeySource, one_title, remote_session
 from tests.remote.sessions import session_entry
 from unshackle.commands.dl import dl
 from unshackle.core import remote_channel
@@ -234,7 +234,7 @@ def fails_at_the_track_licence(local_cdm, match):
 
     svc.client.post = None
     with pytest.raises(click.ClickException, match=match):
-        svc.proxy_license(b"", track, "widevine")
+        svc.license_track(track, None)
 
 
 def test_a_capped_track_without_a_local_device_fails_clearly():
@@ -539,13 +539,13 @@ class _LocalWidevine(Widevine):
         raise self.Used(cdm)
 
 
-def server_stub_resolver(svc, licence, cdm_for=None):
+def server_stub_resolver(svc, cdm_for=None):
     """Content-key resolution for a --cdm-only remote run, whose loaded CDM is the server stub."""
-    return resolver(cdm="server stub", licence=licence, cdm_for=cdm_for, tag="EXAMPLE1", source=svc, cdm_only=True)
+    return resolver(cdm="server stub", cdm_for=cdm_for, tag="EXAMPLE1", source=svc, cdm_only=True)
 
 
-def prepare(svc, licence, drm=None, track=None, cdm_for=None):
-    keys = server_stub_resolver(svc, licence, cdm_for)
+def prepare(svc, drm=None, track=None, cdm_for=None):
+    keys = server_stub_resolver(svc, cdm_for)
     drm = drm or _LocalWidevine()
     track = track or SimpleNamespace(id="vid", drm=None, get_drm_for_cdm=lambda cdm: None)
     with pytest.raises(_LocalWidevine.Used) as ei:
@@ -554,17 +554,16 @@ def prepare(svc, licence, drm=None, track=None, cdm_for=None):
 
 
 def test_dl_licenses_a_client_licensed_track_with_the_local_device():
-    svc = remote_keys(client_licensed={"vid"}, local_cdm="local device")
+    svc = MemoryKeySource(local_cdm="local device", client_licensed={"vid"})
 
-    server_calls: list = []
-
-    assert prepare(svc, lambda **kwargs: server_calls.append(kwargs)) == "local device"
-    assert server_calls == []
+    assert prepare(svc) == "local device"
+    assert svc.asked == []
 
 
 def test_dl_takes_the_local_path_when_the_server_hands_the_track_over():
-    svc = remote_keys(local_cdm="local device")
-    assert prepare(svc, lambda **kwargs: svc.client_licensed.add("vid")) == "local device"
+    svc = MemoryKeySource(None, local_cdm="local device")
+    assert prepare(svc) == "local device"
+    assert svc.asked == [("vid", None)]
 
 
 class _KeyedWidevine(_LocalWidevine):
@@ -583,8 +582,8 @@ class PlayReady:
 
 def test_a_mid_download_handover_puts_the_keys_on_the_callers_drm():
     """The caller decrypts with the DRM object it passed in, so the local licence must fill that one."""
-    svc = remote_keys(local_cdm="local device")
-    keys = server_stub_resolver(svc, lambda **k: svc.client_licensed.add("vid"))
+    svc = MemoryKeySource(None, local_cdm="local device")
+    keys = server_stub_resolver(svc)
     server_drm, local_drm = PlayReady(), _KeyedWidevine()
     track = SimpleNamespace(id="vid", drm=[server_drm, local_drm], get_drm_for_cdm=lambda cdm: local_drm)
 
@@ -592,6 +591,17 @@ def test_a_mid_download_handover_puts_the_keys_on_the_callers_drm():
     keys.wait_vault_writes()
 
     assert server_drm.content_keys == {UUID(int=0xCA9): "ab" * 16}
+
+
+def test_a_capped_answer_to_the_track_licence_moves_dl_to_the_local_device():
+    refusal = {"status": "error", "error_code": "SERVER_CDM_CAPPED", "details": CAP_DETAILS}
+    local_device = SimpleNamespace(is_playready=False, security_level=1)
+    svc = remote_session(local_device, refusal)
+    drm = _LocalWidevine()
+    track = SimpleNamespace(id="vid", drm=[_WV()], drm_preference=None, get_drm_for_cdm=lambda cdm: drm)
+
+    assert prepare(svc, drm, track) is local_device
+    assert svc.client_licensed == {"vid"}
 
 
 def test_a_capped_hls_track_with_no_drm_yet_moves_to_the_local_device():
@@ -615,7 +625,7 @@ def test_a_single_licence_refusal_hands_the_track_to_the_local_device():
     refusal = {"status": "error", "error_code": "SERVER_CDM_CAPPED", "details": CAP_DETAILS}
     svc = remote_session(SimpleNamespace(is_playready=False, security_level=1), refusal)
 
-    assert svc.proxy_license(b"", track, "widevine") == b""
+    assert svc.license_track(track, None) is None
     assert svc.client_licensed == {"vid"}
     assert track.drm_preference == "widevine"
 
@@ -906,11 +916,11 @@ def test_a_capped_track_keeps_the_refusal_when_the_client_has_no_device_for_its_
 
 
 def test_dl_licenses_a_handed_over_track_with_the_device_of_its_drm_system():
-    svc = remote_keys(client_licensed={"vid"}, local_cdm=PR_DEVICE)
+    svc = MemoryKeySource(local_cdm=PR_DEVICE, client_licensed={"vid"})
     widevine_device = SimpleNamespace(is_playready=False)
     drm = _LocalWidevine()
     track = SimpleNamespace(id="vid", drm=[drm], get_drm_for_cdm=lambda cdm: drm)
 
-    used = prepare(svc, lambda **k: None, drm, track, lambda system, quality: widevine_device)
+    used = prepare(svc, drm, track, lambda system, quality: widevine_device)
 
     assert used is widevine_device
