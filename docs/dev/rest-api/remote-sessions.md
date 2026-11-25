@@ -663,7 +663,7 @@ suffix, which is the `Cacher` cache key the service reads it with:
 Both sides reject a cache key with a drive letter, a root, a `..` segment, an empty
 segment, or more than 8 segments before it becomes a path, so a peer cannot write
 outside the cache directory. Both sides also refuse a `cache` map with more than
-256 entries, and the server refuses the request body of a remote session creation or of a search when it is larger than 8 MiB. The server skips a cache key it cannot write, such as one that names an
+256 entries, and the server refuses the request body of a remote session creation or of a search when it is larger than 8 MiB. The client gives a warning when it has more than 256 cache files to send. The server skips a cache key it cannot write, such as one that names an
 existing file as a directory, and logs a warning.
 
 ### Remote session info response

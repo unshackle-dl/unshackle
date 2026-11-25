@@ -358,6 +358,31 @@ def test_load_cache_files_wiring(tmp_path, monkeypatch) -> None:
     assert set(sent) == {"tokens_default", "session_guid"}
 
 
+@pytest.mark.parametrize("extra, warned", [(0, False), (1, True)])
+def test_load_cache_files_warns_above_the_server_limit(tmp_path, monkeypatch, caplog, extra, warned) -> None:
+    import logging
+    from types import SimpleNamespace
+
+    from unshackle.core.api.sanitize import MAX_SESSION_CACHE_KEYS
+    from unshackle.core.config import config
+    from unshackle.core.remote_service import RemoteService
+
+    cache_dir = tmp_path / "TESTSVC"
+    cache_dir.mkdir()
+    count = MAX_SESSION_CACHE_KEYS + extra
+    for i in range(count):
+        (cache_dir / f"state{i}.json").write_text("{}")
+    monkeypatch.setattr(config.directories, "cache", tmp_path)
+    monkeypatch.setattr(config, "credentials", {})
+    stub = SimpleNamespace(service_tag="TESTSVC", log=logging.getLogger("test"))
+
+    with caplog.at_level(logging.WARNING, logger="test"):
+        sent = RemoteService.load_cache_files(stub, None)
+
+    assert len(sent) == count
+    assert (f"has {count} files to send" in caplog.text) is warned
+
+
 def test_load_cache_files_forwards_nested_keys(tmp_path, monkeypatch) -> None:
     """A service that keeps its cache in subfolders (session_web/<sha1>.json) must have
     those files forwarded under the Cacher key, and the credential filter must still apply

@@ -1963,7 +1963,7 @@ class RemoteService:
         """
         import zlib
 
-        from unshackle.core.api.sanitize import safe_cache_key
+        from unshackle.core.api.sanitize import MAX_SESSION_CACHE_KEYS, safe_cache_key
 
         cache_dir = config.directories.cache / self.service_tag
         if not cache_dir.is_dir():
@@ -1979,6 +1979,11 @@ class RemoteService:
                 self.log.debug(f"Withholding cache file from the remote server: {key}")
                 continue
             files[key] = base64.b64encode(zlib.compress(f.read_bytes())).decode("ascii")
+        if len(files) > MAX_SESSION_CACHE_KEYS:
+            self.log.warning(
+                f"The {self.service_tag} cache has {len(files)} files to send and a remote server takes "
+                f"{MAX_SESSION_CACHE_KEYS}: remove old files from {cache_dir}"
+            )
         return files
 
 
