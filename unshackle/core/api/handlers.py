@@ -33,6 +33,7 @@ from unshackle.core.api.session_log import SessionLogBuffer, SessionLogMirror, c
 from unshackle.core.api.session_store import SessionStore
 from unshackle.core.binaries import binary_version
 from unshackle.core.cacher import Cacher
+from unshackle.core.cdm.choice import choose_cdm, drm_system
 from unshackle.core.cdm.detect import cdm_type_stub, is_playready_cdm
 from unshackle.core.config import config, load_yaml
 from unshackle.core.constants import AnyTrack
@@ -123,8 +124,8 @@ def load_full_cdm(
 
     Services often touch ``ctx.obj.cdm.security_level`` / ``.device_type`` / ``.system_id``
     inside ``__init__``, so the lightweight ``resolve_server_cdm`` stub is not enough
-    for list_titles / list_tracks / search. Mirrors ``dl.get_cdm`` selection logic but
-    skips the quality-tier shortcuts (no track context yet) and falls back to the stub
+    for list_titles / list_tracks / search. :func:`choose_cdm` picks the device as for
+    ``dl.get_cdm``, without the quality tiers (no track context yet). It falls back to the stub
     if the configuration has no device, or if loading fails. ``app_config`` is an API key's
     view from :func:`key_cdm_config`; None reads the server's own ``cdm``.
     """
@@ -133,29 +134,14 @@ def load_full_cdm(
     app_config = app_config or config
     if not isinstance(cdm_type, str):
         cdm_type = None
-    cdm_name = ci_get(app_config.cdm, service) or ci_get(app_config.cdm, "default")
-    if isinstance(cdm_name, dict):
-        lower_keys = {k.lower(): v for k, v in cdm_name.items()}
-        if {"widevine", "playready"} & lower_keys.keys():
-            drm_key = None
-            if cdm_type:
-                drm_key = {"wv": "widevine", "widevine": "widevine", "pr": "playready", "playready": "playready"}.get(
-                    cdm_type.lower()
-                )
-            first = next(key for key in lower_keys if key in ("widevine", "playready"))
-            cdm_name = lower_keys.get(drm_key or first) or lower_keys.get("playready")
-        else:
-            cdm_name = cdm_name.get(profile) or cdm_name.get("default") or ci_get(app_config.cdm, "default")
+    cdm_name = choose_cdm(app_config.cdm, service, profile, cdm_type).name
 
-    if not cdm_name or not isinstance(cdm_name, str):
+    if not cdm_name:
         return resolve_server_cdm(service, profile, cdm_type, app_config)
 
-    if cdm_type:
-        wanted = {"wv": "widevine", "widevine": "widevine", "pr": "playready", "playready": "playready"}.get(
-            cdm_type.lower()
-        )
-        if wanted and detect_cdm_type(cdm_name, app_config) not in (None, wanted):
-            return cdm_type_stub(wanted)
+    wanted = drm_system(cdm_type)
+    if wanted and detect_cdm_type(cdm_name, app_config) not in (None, wanted):
+        return cdm_type_stub(wanted)
 
     try:
         return load_cdm(cdm_name, service_name=service)
@@ -3476,7 +3462,7 @@ def create_service_instance(
 
         cdm = client_device_cdm(data, input_bridge, lend_server_device)
     else:
-        follows_client = not server_cdm or lists_both_systems(normalized_service, key_config)
+        follows_client = not server_cdm or choose_cdm(key_config.cdm, normalized_service).both
         cdm = load_full_cdm(normalized_service, profile, data.get("cdm_type") if follows_client else None, key_config)
 
     # Reconstruct enum track-selection params from client data so service code that reads
@@ -3888,7 +3874,7 @@ async def session_tracks_handler(
 
         service_tag = session.service_tag
         config_cdm_type = detect_cdm_type_for_service(service_tag, app_config)
-        if not config_cdm_type and session.server_cdm and lists_both_systems(service_tag, app_config):
+        if not config_cdm_type and session.server_cdm and choose_cdm(app_config.cdm, service_tag).both:
             loaded = getattr(getattr(getattr(service_instance, "ctx", None), "obj", None), "cdm", None)
             config_cdm_type = "playready" if is_playready_cdm(loaded) else "widevine"
 
@@ -4036,50 +4022,15 @@ def resolve_server_cdm(
     has no server CDM for the service.
     """
     app_config = app_config or config
-    cdm_name = ci_get(app_config.cdm, service)
+    cdm_name = choose_cdm(app_config.cdm, service, view="stub").name
     if cdm_name:
-        if isinstance(cdm_name, dict):
-            lower_keys = {k.lower(): v for k, v in cdm_name.items()}
-            if {"widevine", "playready"} & lower_keys.keys():
-                systems = [lower_keys[key] for key in lower_keys if key in ("widevine", "playready")]
-                cdm_name = next(filter(None, systems), None)
-            else:
-                cdm_name = cdm_name.get("default") or next(iter(cdm_name.values()), None)
-
-        if cdm_name and isinstance(cdm_name, str):
-            detected_type = detect_cdm_type(cdm_name, app_config)
-            if detected_type:
-                return cdm_type_stub(detected_type)
+        detected_type = detect_cdm_type(cdm_name, app_config)
+        if detected_type:
+            return cdm_type_stub(detected_type)
 
     if cdm_type:
         return cdm_type_stub(cdm_type)
     return None
-
-
-def configured_cdm_name(service: str, drm_type: str, app_config: Any) -> Optional[str]:
-    """The device name config.cdm maps a service to for one DRM system; None when the tier decides.
-
-    A dict names a device per system (``widevine`` / ``playready`` keys) or a ``default``.
-    Any other dict shape, such as the quality tiers ``dl`` reads, falls through to the
-    global ``cdm.default``: the server has no track context to pick a tier with.
-    """
-    cdm_name = ci_get(app_config.cdm, service) if service else None
-    if isinstance(cdm_name, dict):
-        lower_keys = {k.lower(): v for k, v in cdm_name.items()}
-        drm_key = drm_type if drm_type in ("widevine", "playready") else None
-        cdm_name = lower_keys.get(drm_key) or lower_keys.get("default") or ci_get(app_config.cdm, "default")
-    if cdm_name and isinstance(cdm_name, str):
-        return cdm_name
-    return None
-
-
-def lists_both_systems(service: str, app_config: Any) -> bool:
-    """True when config.cdm names a device for both Widevine and PlayReady for ``service``.
-
-    The server CDM then loads the device of the client's DRM system, so the manifest suits the client's vaults.
-    """
-    entry = ci_get(app_config.cdm, service) or ci_get(app_config.cdm, "default")
-    return isinstance(entry, dict) and {"widevine", "playready"} <= {key.lower() for key, name in entry.items() if name}
 
 
 def detect_cdm_type_for_service(service: str, app_config: Any) -> Optional[str]:
@@ -4089,14 +4040,11 @@ def detect_cdm_type_for_service(service: str, app_config: Any) -> Optional[str]:
     device ``resolve_device_name`` returns for it, so the routes plan with the device they
     load. A mapping that names a device for both systems settles nothing.
     """
-    cdm_name = ci_get(app_config.cdm, service)
-    if isinstance(cdm_name, dict):
-        named = [system for system in ("widevine", "playready") if system in {k.lower() for k in cdm_name}]
-        if named:
-            return named[0] if len(named) == 1 else None
-    device_name = configured_cdm_name(service, "widevine", app_config)
-    if device_name:
-        return detect_cdm_type(device_name, app_config)
+    choice = choose_cdm(app_config.cdm, service, view="licence")
+    if choice.systems:
+        return choice.system
+    if choice.name:
+        return detect_cdm_type(choice.name, app_config)
     return None
 
 
@@ -4524,7 +4472,7 @@ def resolve_device_name(user_config: dict, drm_type: str, service_tag: str = "")
     1. the key's own ``cdm`` entry for the service, else ``config.cdm[service_tag]``
     2. serve.users.{key}.devices / playready_devices (user device list)
     """
-    cdm_name = configured_cdm_name(service_tag, drm_type, key_cdm_config(user_config))
+    cdm_name = choose_cdm(key_cdm_config(user_config).cdm, service_tag, drm=drm_type, view="licence").name
     if cdm_name:
         return cdm_name
 

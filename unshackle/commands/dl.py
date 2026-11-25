@@ -38,6 +38,7 @@ from rich.table import Table
 
 from unshackle.core import __version__, binaries, providers
 from unshackle.core.cdm import DecryptLabsRemoteCDM
+from unshackle.core.cdm.choice import choose_cdm
 from unshackle.core.cdm.detect import cdm_type_stub, is_playready_cdm, is_remote_cdm, is_widevine_cdm
 from unshackle.core.config import cdm_entry_names_device, config, load_yaml, resolve_cdm_name, resolve_decryption
 from unshackle.core.console import GradientPulseBarColumn, SyncLive, console, listing_panel, print_listing
@@ -4173,20 +4174,7 @@ class dl:
                     cdm_name = quality_match
 
             if isinstance(cdm_name, dict):
-                lower_keys = {k.lower(): v for k, v in cdm_name.items()}
-                if {"widevine", "playready"} & lower_keys.keys():
-                    drm_key = None
-                    if drm:
-                        drm_key = {
-                            "wv": "widevine",
-                            "widevine": "widevine",
-                            "pr": "playready",
-                            "playready": "playready",
-                        }.get(drm.lower())
-                    first = next(key for key in lower_keys if key in ("widevine", "playready"))
-                    cdm_name = lower_keys.get(drm_key or first) or lower_keys.get("playready")
-                else:
-                    cdm_name = cdm_name.get(profile) or cdm_name.get("default") or ci_get(config.cdm, "default")
+                cdm_name = choose_cdm(config.cdm, service, profile, drm, entry=cdm_name).device
                 if not cdm_name:
                     return None
 

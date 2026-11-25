@@ -22,6 +22,7 @@ import unshackle.core.cdm.detect as detect_mod
 import unshackle.core.drm as drm_mod
 from unshackle.core.api import handlers
 from unshackle.core.api.errors import APIError
+from unshackle.core.cdm.choice import choose_cdm
 
 pytestmark = pytest.mark.unit
 
@@ -118,8 +119,7 @@ async def _license(monkeypatch, track, body):
 
 
 async def test_server_type_wins_over_client_request(env, monkeypatch):
-    monkeypatch.setattr(handlers, "detect_cdm_type_for_service", lambda tag, cfg: "widevine")
-    monkeypatch.setattr(handlers, "resolve_device_name", lambda *a, **k: "wv_dev")
+    monkeypatch.setattr(handlers.config, "cdm", {"EXAMPLE": "wv_dev"}, raising=False)
     monkeypatch.setattr(handlers, "require_track_pssh", lambda track, pssh, drm_type: None)
 
     track = SimpleNamespace(id="vid", drm=[_pr_drm(), _wv_drm()])
@@ -132,8 +132,7 @@ async def test_server_type_wins_over_client_request(env, monkeypatch):
 
 async def test_playready_only_track_licenses_with_widevine_server(env, monkeypatch):
     """The batch route licenses a PlayReady-only header with the Widevine device; so must this one."""
-    monkeypatch.setattr(handlers, "detect_cdm_type_for_service", lambda tag, cfg: "widevine")
-    monkeypatch.setattr(handlers, "resolve_device_name", lambda *a, **k: "wv_dev")
+    monkeypatch.setattr(handlers.config, "cdm", {"EXAMPLE": "wv_dev"}, raising=False)
 
     track = SimpleNamespace(id="vid", drm=[_pr_drm()])
     body = await _license(monkeypatch, track, {"drm_type": "playready"})
@@ -302,9 +301,9 @@ def test_the_tracks_response_names_the_system_of_the_loaded_device(monkeypatch, 
         ({"EXAMPLE1": "wv_device"}, False),
     ],
 )
-def test_lists_both_systems_needs_a_device_for_each(monkeypatch, mapping, both):
+def test_both_systems_need_a_device_each(monkeypatch, mapping, both):
     monkeypatch.setattr(handlers.config, "cdm", mapping, raising=False)
-    assert handlers.lists_both_systems("EXAMPLE1", handlers.config) is both
+    assert choose_cdm(handlers.config.cdm, "EXAMPLE1").both is both
 
 
 @pytest.mark.parametrize("cdm_type", [5, ["playready"], {"a": 1}])

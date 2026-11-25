@@ -26,7 +26,7 @@ def server(monkeypatch, tmp_path):
 def test_a_key_entry_replaces_the_whole_server_entry(server):
     user = {"cdm": {"example": "own_pr"}}
     assert handlers.key_cdm_config(user).cdm == {"OTHER": "x", "example": "own_pr"}
-    assert handlers.configured_cdm_name("EXAMPLE", "widevine", handlers.key_cdm_config(user)) == "own_pr"
+    assert handlers.resolve_device_name(user, "widevine", "EXAMPLE") == "own_pr"
     assert handlers.key_cdm_config({}) is config
 
 
