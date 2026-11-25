@@ -9,7 +9,7 @@ older peer.
 from __future__ import annotations
 
 from enum import Enum, StrEnum
-from typing import Any, Optional, TypedDict
+from typing import Any, NotRequired, Optional, TypedDict
 
 HEALTH_ROUTE = "/api/health"
 SERVICES_ROUTE = "/api/services"
@@ -25,6 +25,10 @@ LICENSE_ROUTE = SESSION_ROUTE + "/license"
 BAD_KEY_ROUTE = SESSION_ROUTE + "/keys/bad"
 LOGS_ROUTE = SESSION_ROUTE + "/logs"
 PROMPT_ROUTE = SESSION_ROUTE + "/prompt"
+CHANNEL_ROUTE = SESSION_ROUTE + "/channel"
+
+CHANNEL_SESSION_GONE = 4404
+"""The close code of a session channel whose remote session the server removed: deleted, expired, evicted or stopped."""
 
 
 class AuthStatus(StrEnum):
@@ -241,6 +245,66 @@ class SessionClosed(TypedDict, total=False):
 
     status: str
     cache: dict[str, str]
+
+
+class ChannelMessage(StrEnum):
+    """The ``type`` of a remote session channel message. The server sends each type except ``answer``, which the client sends."""
+
+    PROMPT = "prompt"
+    CDM_CALL = "cdm_call"
+    LOG = "log"
+    STATUS = "status"
+    DRAIN = "drain"
+    ANSWER = "answer"
+
+
+class ChannelPrompt(TypedDict):
+    """A prompt for the user; the answer names its ``id``."""
+
+    type: str
+    id: str
+    prompt: str
+
+
+class ChannelCdmCall(TypedDict):
+    """A call the service makes on the client's CDM, in the shape of the prompt route's ``cdm_call``."""
+
+    type: str
+    id: str
+    call: dict[str, Any]
+
+
+class ChannelLog(LogRecord):
+    """One service log record, as the logs route gives it."""
+
+    type: str
+
+
+class ChannelStatus(TypedDict):
+    """The login state of the remote session: on attach, and each time it changes."""
+
+    type: str
+    status: str
+    error: NotRequired[str]
+
+
+class ChannelDrain(TypedDict):
+    """Whether the server restarts after its open sessions finish: on attach, at a drain, and when a drain stops."""
+
+    type: str
+    draining: bool
+
+
+class ChannelAnswer(TypedDict):
+    """The client's answer to a prompt or CDM call. A CDM call's answer is the JSON object as a string.
+
+    ``error`` says why the client could not answer a prompt, so the service stops at once.
+    """
+
+    type: str
+    id: str
+    response: str
+    error: NotRequired[str]
 
 
 class SessionInfo(TypedDict, total=False):

@@ -15,6 +15,7 @@ import unshackle.core.drm as drm_mod
 from tests.core.key_resolver import key_table, resolver
 from tests.remote.key_source import CAPPED, PR_DEVICE, one_title, remote_keys, remote_session
 from unshackle.commands.dl import dl
+from unshackle.core import remote_channel
 from unshackle.core.api import handlers
 from unshackle.core.api.errors import APIError
 from unshackle.core.api.session_store import SessionEntry
@@ -756,26 +757,28 @@ def test_a_client_with_no_device_does_not_decline():
     assert "server_cdm" not in data
 
 
-def created(answer):
+def created(answer, monkeypatch):
     """Run ``authenticate()`` to its end for a device the service's cdm entry loaded."""
     svc, _ = sent_create(None, cdm_entry=True, cdm_map={"EXAMPLE1": "my_device"})
     svc._server_cdm = None
     svc.client = SimpleNamespace(post=lambda path, data: {"session_id": "sess", **answer})
-    svc.close = svc.start_keepalive = lambda: None
+    svc.close = lambda: None
+    channel = SimpleNamespace(keep_alive=lambda: None, drain_logs=lambda: None, in_flight=None)
+    monkeypatch.setattr(remote_channel, "open_channel", lambda service: channel)
     svc.authenticate()
     return svc
 
 
-def test_the_client_says_when_a_cdm_entry_gave_the_licensing_to_its_device(caplog):
+def test_the_client_says_when_a_cdm_entry_gave_the_licensing_to_its_device(caplog, monkeypatch):
     with caplog.at_level(logging.INFO):
-        svc = created({"server_cdm": False})
+        svc = created({"server_cdm": False}, monkeypatch)
     assert svc._server_cdm is False
     assert "cdm config has an entry for EXAMPLE1" in caplog.text
 
 
-def test_the_client_does_not_claim_its_device_when_the_server_keeps_the_server_cdm(caplog):
+def test_the_client_does_not_claim_its_device_when_the_server_keeps_the_server_cdm(caplog, monkeypatch):
     with caplog.at_level(logging.INFO):
-        svc = created({"server_cdm": True, "server_cdm_max_height": 1080})
+        svc = created({"server_cdm": True, "server_cdm_max_height": 1080}, monkeypatch)
     assert svc._server_cdm is True
     assert "your own device is not used" in caplog.text
     assert "cdm config has an entry" not in caplog.text

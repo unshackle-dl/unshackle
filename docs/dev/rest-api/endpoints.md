@@ -948,7 +948,8 @@ The server holds remote sessions in memory. They expire after `serve.session_ttl
 
 ```text
 POST /api/session/create        → returns session_id, status "authenticating"
-GET  /api/session/{id}/prompt   → poll until authenticated (submit answers via POST)
+GET  /api/session/{id}/channel  → WebSocket: prompts, CDM calls, logs, login state, drain
+GET  /api/session/{id}/prompt   → without the channel: poll until authenticated (submit answers via POST)
 GET  /api/session/{id}/titles   → list titles
 POST /api/session/{id}/tracks   → tracks + chapters (with URLs) for one title
 POST /api/session/{id}/segments → resolve segment URLs / DRM / headers per track
@@ -1004,9 +1005,19 @@ The `proxy` value must be a full proxy URI, unless the operator gives your API k
 | `400` | `INVALID_INPUT` | Missing `service` or `title_id`. |
 | `400` | `INVALID_SERVICE` | Unknown or disallowed service. |
 
+### `GET /api/session/{session_id}/channel`
+
+Open the remote session channel: a WebSocket that carries the prompts, CDM calls, log records, login state and drain state of the remote session, and the client's answers. Pass `since=<seq>` to get only the log records newer than that sequence number. The server closes the WebSocket with code `4404` when the remote session ends. See [The remote session channel](remote-sessions.md#the-remote-session-channel) for the messages.
+
+| Status | Error code | Meaning |
+| --- | --- | --- |
+| `101` | - | WebSocket open. |
+| `403` | `FORBIDDEN` | Request IP differs from the remote session creator. |
+| `404` | `SESSION_NOT_FOUND` | No such session. |
+
 ### `GET /api/session/{session_id}/prompt`
 
-Poll for the authentication status and any pending interactive prompt (OTP, PIN, device code). Response variants:
+The polling fallback of the remote session channel. Poll for the authentication status and any pending interactive prompt (OTP, PIN, device code). Response variants:
 
 === "Authenticating"
 
@@ -1056,7 +1067,7 @@ Submit a response to a pending prompt. Body: `{ "response": "..." }` (required).
 
 ### `GET /api/session/{session_id}/logs`
 
-Drain the service's server-side log output for this remote session. The server mirrors every log call the service makes (`self.log.info`, warnings, errors) into a bounded per-session buffer, so a remote client can see why an auth, title, or license step failed. Pass `since=<seq>` to get only records newer than the last drained sequence number. Works in every auth state, including `failed`.
+The polling fallback of the remote session channel. Drain the service's server-side log output for this remote session. The server mirrors every log call the service makes (`self.log.info`, warnings, errors) into a bounded per-session buffer, so a remote client can see why an auth, title, or license step failed. Pass `since=<seq>` to get only records newer than the last drained sequence number. Works in every auth state, including `failed`.
 
 === "Response `200`"
 

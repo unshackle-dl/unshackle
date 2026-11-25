@@ -1,20 +1,23 @@
-"""Thread-safe bridge for interactive input during remote authentication.
+"""Thread-safe bridge for the prompts and CDM calls that service code on the server sends to the remote client.
 
-When a service calls ``request_input()`` during ``authenticate()`` on the
-server, the InputBridge pauses the auth thread and exposes the prompt to
-the HTTP layer so a remote client can poll for it, collect the user's
-response, and submit it back.  The auth thread then resumes with the
-response value.
+When a service calls ``request_input()`` or its client-device CDM makes a call, the InputBridge blocks the
+service thread on an *ask* until the remote client answers it. The remote session channel carries an ask when one is
+attached; otherwise the prompt routes serve it, one at a time. Each ask belongs to the path that carried it
+first, and only that path can answer it.
 """
 
 from __future__ import annotations
 
 import json
 import threading
+import uuid
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from unshackle.core.remote_protocol import AuthStatus
+
+if TYPE_CHECKING:
+    from unshackle.core.api.session_channel import SessionChannel
 
 # Seconds the server waits for a remote client to answer an input prompt before
 # giving up; also the TTL SessionStore grants AUTHENTICATING/PENDING_INPUT sessions.
@@ -27,63 +30,81 @@ CDM_CALL_FALLBACK_PROMPT = (
     "This service needs your local CDM during login, and your unshackle cannot answer it. Update unshackle"
 )
 
+CHANNEL = "channel"
+POLL = "poll"
+
+
+@dataclass(eq=False)
+class Ask:
+    """One prompt or CDM call that service code waits on."""
+
+    id: str
+    prompt: str
+    cdm_call: Optional[dict[str, Any]] = None
+    owner: Optional[str] = None  # CHANNEL or POLL: the path that carried the ask, and the only one that answers it
+    response: Optional[str] = None
+    error: Optional[str] = None  # the client could not answer, and says why
+    picked_up: threading.Event = field(default_factory=threading.Event)
+    answered: threading.Event = field(default_factory=threading.Event)
+
 
 @dataclass
 class InputBridge:
-    """Thread-safe bridge between a sync auth thread and the async HTTP layer.
+    """Thread-safe bridge between the service threads and the async HTTP layer.
 
-    The auth thread calls :meth:`request_input` which blocks until the
-    remote client submits a response through the HTTP prompt endpoints.
+    A service thread calls :meth:`request_input` or :meth:`request_cdm`, which block until the remote client
+    answers through the remote session channel or the prompt routes.
     """
 
-    _prompt: Optional[str] = field(default=None, init=False, repr=False)
-    _response: Optional[str] = field(default=None, init=False, repr=False)
+    channel: Optional[SessionChannel] = field(default=None, init=False, repr=False)
+    _asks: dict[str, Ask] = field(default_factory=dict, init=False, repr=False)
     _status: AuthStatus = field(default=AuthStatus.AUTHENTICATING, init=False)
     _cancelled: bool = field(default=False, init=False, repr=False)
-    _cdm_call: Optional[dict[str, Any]] = field(default=None, init=False, repr=False)
-    _response_ready: threading.Event = field(default_factory=threading.Event, init=False, repr=False)
-    _picked_up: threading.Event = field(default_factory=threading.Event, init=False, repr=False)
     _lock: threading.Lock = field(default_factory=threading.Lock, init=False, repr=False)
+
+    def _open(self, prompt: str, cdm_call: Optional[dict[str, Any]] = None) -> Ask:
+        """Register an ask and offer it to the attached channel; call it with the lock held."""
+        if self._cancelled:
+            raise RuntimeError("Session was cancelled")
+        ask = Ask(uuid.uuid4().hex, prompt, cdm_call)
+        if self.channel is not None and self.channel.offer(ask):
+            ask.owner = CHANNEL
+            ask.picked_up.set()
+        self._asks[ask.id] = ask
+        return ask
 
     def request_input(self, prompt: str, timeout: float = AUTH_INPUT_TIMEOUT) -> str:
         """Block until the remote client submits a response for *prompt*.
 
-        Args:
-            prompt: The message to display to the remote user.
-            timeout: Maximum seconds to wait for a response.
-
-        Returns:
-            The string response from the remote client.
+        After authentication only an attached session channel can carry a prompt, as a polling client stops
+        asking for prompts once it is logged in.
 
         Raises:
             TimeoutError: If the bridge gets no response within *timeout*.
-            RuntimeError: If the server cancelled the bridge, or authentication is complete.
+            RuntimeError: If the server cancelled the bridge, or authentication is complete and no channel is attached.
         """
         with self._lock:
-            if self._cancelled:
-                raise RuntimeError("Session was cancelled")
-            if self._status == AuthStatus.AUTHENTICATED:
+            if self._status == AuthStatus.AUTHENTICATED and not (self.channel and self.channel.attached):
+                if self._cancelled:
+                    raise RuntimeError("Session was cancelled")
                 raise RuntimeError(f"Remote mode cannot relay a prompt after authentication: {prompt}")
-            self._prompt = prompt
-            self._response = None
-            self._status = AuthStatus.PENDING_INPUT
-            self._response_ready.clear()
-
-        # cancel() and submit_response() both .set() the event, so a single wait
-        # returns on signal-or-cancel; no poll loop needed.
-        if not self._response_ready.wait(timeout=timeout):
+            ask = self._open(prompt)
+        try:
+            # cancel() and an answer both set the event, so a single wait returns on signal-or-cancel
+            if not ask.answered.wait(timeout=timeout):
+                with self._lock:
+                    if self._status != AuthStatus.AUTHENTICATED:
+                        self._status = AuthStatus.FAILED
+                raise TimeoutError(f"No client response for prompt within {timeout}s")
             with self._lock:
-                self._status = AuthStatus.FAILED
-            raise TimeoutError(f"No client response for prompt within {timeout}s")
-
-        with self._lock:
-            if self._cancelled:
-                raise RuntimeError("Session was cancelled")
-            response = self._response or ""
-            self._prompt = None
-            self._response = None
-            self._status = AuthStatus.AUTHENTICATING
-            return response
+                if self._cancelled:
+                    raise RuntimeError("Session was cancelled")
+                if ask.error is not None:
+                    raise RuntimeError(f"The client could not answer the prompt: {ask.error}")
+                return ask.response or ""
+        finally:
+            with self._lock:
+                self._asks.pop(ask.id, None)
 
     def request_cdm(
         self, call: dict[str, Any], timeout: float = CDM_CALL_TIMEOUT, pickup: float = CDM_PICKUP_TIMEOUT
@@ -95,25 +116,16 @@ class InputBridge:
         service thread for seconds, not for the full ``timeout``.
         """
         with self._lock:
-            if self._cancelled:
-                raise RuntimeError("Session was cancelled")
-            previous = self._status
-            self._prompt = CDM_CALL_FALLBACK_PROMPT
-            self._cdm_call = call
-            self._response = None
-            self._status = AuthStatus.PENDING_INPUT
-            self._response_ready.clear()
-            self._picked_up.clear()
-
-        picked_up = self._picked_up.wait(timeout=pickup)
-        answered = picked_up and self._response_ready.wait(timeout=timeout)
-
-        with self._lock:
-            answer = self._response
-            self._prompt = self._response = self._cdm_call = None
-            cancelled = self._cancelled
-            if not cancelled:
-                self._status = previous
+            ask = self._open(CDM_CALL_FALLBACK_PROMPT, call)
+        try:
+            picked_up = ask.picked_up.wait(timeout=pickup)
+            answered = picked_up and ask.answered.wait(timeout=timeout)
+            with self._lock:
+                answer = ask.response
+                cancelled = self._cancelled
+        finally:
+            with self._lock:
+                self._asks.pop(ask.id, None)
         if cancelled:
             raise RuntimeError("Session was cancelled")
         if not picked_up:
@@ -130,51 +142,92 @@ class InputBridge:
             raise RuntimeError(f"The client's CDM refused the call: {result['error']}")
         return result
 
+    def _pollable(self) -> list[Ask]:
+        """The asks the prompt routes can serve: unanswered, and not carried by the channel; call it under the lock.
+
+        An answered ask stops being pending at once, before the waiting thread wakes, so a client that polls again
+        straight away never sees it twice.
+        """
+        return [a for a in self._asks.values() if not a.answered.is_set() and a.owner != CHANNEL]
+
     def get_pending_cdm_call(self) -> Optional[dict[str, Any]]:
         """Return the CDM call that service code waits on, if any, and mark it as fetched by a client."""
         with self._lock:
-            if self._awaiting_answer() and self._cdm_call is not None:
-                self._picked_up.set()
-                return self._cdm_call
-            return None
+            ask = next((a for a in self._pollable() if a.cdm_call is not None), None)
+            if ask is None:
+                return None
+            ask.owner = POLL
+            ask.picked_up.set()
+            return ask.cdm_call
 
     def get_pending_prompt(self) -> Optional[str]:
-        """Return the current prompt when the auth thread waits for input."""
+        """Return the prompt of the first ask the prompt routes can serve, and keep that ask on them."""
         with self._lock:
-            if self._awaiting_answer():
-                return self._prompt
-            return None
+            ask = next(iter(self._pollable()), None)
+            if ask is None:
+                return None
+            ask.owner = POLL
+            return ask.prompt
 
     def submit_response(self, response: str) -> bool:
-        """Deliver the client's response and unblock the auth thread.
+        """Answer the oldest ask that the prompt routes served, else the oldest one they can serve.
 
         Returns:
-            ``True`` if a prompt was pending and the bridge accepted the response,
-            ``False`` otherwise.
+            ``True`` if an ask was pending and the bridge accepted the response, ``False`` otherwise.
         """
         with self._lock:
-            if not self._awaiting_answer():
+            pending = self._pollable()
+            ask = next((a for a in pending if a.owner == POLL), pending[0] if pending else None)
+            if ask is None:
                 return False
-            self._response = response
-        self._picked_up.set()
-        self._response_ready.set()
+            self._answer(ask, response)
         return True
 
-    def _awaiting_answer(self) -> bool:
-        """True while a prompt or CDM call waits and no answer has arrived; call it under the lock.
+    def answer(self, ask_id: str, response: str, error: Optional[str] = None) -> bool:
+        """Answer the ask with this id that the remote session channel carried; False when no such ask waits."""
+        with self._lock:
+            ask = self._asks.get(ask_id)
+            if ask is None or ask.owner != CHANNEL or ask.answered.is_set():
+                return False
+            ask.error = error
+            self._answer(ask, response)
+        return True
 
-        An answered call stops being pending at once, before the waiting thread wakes, so a client
-        that polls again straight away never sees it twice.
+    @staticmethod
+    def _answer(ask: Ask, response: str) -> None:
+        ask.response = response
+        ask.picked_up.set()
+        ask.answered.set()
+
+    def claim_for_channel(self) -> list[Ask]:
+        """Give every unanswered ask that the prompt routes did not serve to a newly attached session channel."""
+        with self._lock:
+            asks = [a for a in self._asks.values() if not a.answered.is_set() and a.owner != POLL]
+            for ask in asks:
+                ask.owner = CHANNEL
+                ask.picked_up.set()
+            return asks
+
+    def release_channel_asks(self) -> None:
+        """Hand the unanswered asks of a detached channel back to the prompt routes, so none waits on a dead socket.
+
+        A prompt after login stays with the channel, as a polling client asks for prompts only while it logs in.
         """
-        return self._status == AuthStatus.PENDING_INPUT and not self._response_ready.is_set()
+        with self._lock:
+            for ask in self._asks.values():
+                pollable = ask.cdm_call is not None or self._status != AuthStatus.AUTHENTICATED
+                if ask.owner == CHANNEL and pollable and not ask.answered.is_set():
+                    ask.owner = None
 
     def cancel(self) -> None:
-        """Cancel the bridge, unblocking any waiting auth thread."""
+        """Cancel the bridge, unblocking any waiting service thread."""
         with self._lock:
             self._cancelled = True
             self._status = AuthStatus.FAILED
-        self._picked_up.set()
-        self._response_ready.set()
+            asks = list(self._asks.values())
+        for ask in asks:
+            ask.picked_up.set()
+            ask.answered.set()
 
     def ensure_active(self) -> None:
         """Raise RuntimeError once the server cancelled the bridge, so a login loop stops."""
@@ -184,7 +237,10 @@ class InputBridge:
 
     @property
     def status(self) -> AuthStatus:
+        """``pending_input`` while an ask waits for its answer, else the login state."""
         with self._lock:
+            if self._status != AuthStatus.FAILED and any(not a.answered.is_set() for a in self._asks.values()):
+                return AuthStatus.PENDING_INPUT
             return self._status
 
     @status.setter

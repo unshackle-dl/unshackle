@@ -1,7 +1,6 @@
 """Session log forwarding: buffer semantics, mirror wrapping, handler drain."""
 
 import logging
-import threading
 
 import pytest
 
@@ -166,12 +165,12 @@ def test_service_params_keyed_by_flag_reach_an_option_with_another_name() -> Non
 
 def test_drain_server_logs_survives_client_systemexit() -> None:
     """RemoteClient raises SystemExit on transport errors; the drain must swallow it."""
+    from unshackle.core.remote_channel import PollingChannel, ServerMessages
     from unshackle.core.remote_service import RemoteService
 
     svc = RemoteService.__new__(RemoteService)
     svc._session_id = "abc"
-    svc._log_seq = 0
-    svc._log_drain_lock = threading.Lock()
+    svc.channel = PollingChannel(ServerMessages(svc))
 
     class ExitingClient:
         def get_optional(self, endpoint: str) -> dict:
@@ -179,17 +178,16 @@ def test_drain_server_logs_survives_client_systemexit() -> None:
 
     svc.client = ExitingClient()
     svc.drain_server_logs()  # must not raise
-    assert svc._log_seq == 0
+    assert svc.channel.messages.log_seq == 0
 
 
 def test_drain_server_logs_reemits_and_advances_seq() -> None:
+    from unshackle.core.remote_channel import PollingChannel, ServerMessages
     from unshackle.core.remote_service import RemoteService
 
     svc = RemoteService.__new__(RemoteService)
     svc._session_id = "abc"
-    svc._log_seq = 0
-    svc._log_drain_lock = threading.Lock()
-    svc._recent_logs = []
+    svc.channel = PollingChannel(ServerMessages(svc))
     svc.log = logging.getLogger("test-drain-reemit")
 
     class StubClient:
@@ -210,7 +208,7 @@ def test_drain_server_logs_reemits_and_advances_seq() -> None:
         svc.drain_server_logs()
     finally:
         svc.log.removeHandler(handler)
-    assert svc._log_seq == 1
+    assert svc.channel.messages.log_seq == 1
     assert [(r.levelno, r.getMessage()) for r in records] == [(logging.WARNING, "server says")]
 
 

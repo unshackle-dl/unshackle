@@ -59,6 +59,7 @@ from unshackle.core.api.handlers import (
     server_accounts_allowed,
     server_config_handler,
     session_bad_key_handler,
+    session_channel_handler,
     session_create_handler,
     session_delete_handler,
     session_info_handler,
@@ -75,9 +76,11 @@ from unshackle.core.api.handlers import (
     tunnel_handler,
 )
 from unshackle.core.api.sanitize import sanitize_log
+from unshackle.core.api.session_channel import close_channels
 from unshackle.core.drm import cbcs
 from unshackle.core.remote_protocol import (
     BAD_KEY_ROUTE,
+    CHANNEL_ROUTE,
     HEALTH_ROUTE,
     LICENSE_ROUTE,
     LOGS_ROUTE,
@@ -2538,6 +2541,43 @@ async def session_delete(request: web.Request) -> web.Response:
 
 
 @api_handler
+async def session_channel(request: web.Request) -> web.StreamResponse:
+    """
+    Open the remote session channel.
+    ---
+    summary: Open session channel
+    description: >-
+      A WebSocket that a --remote client holds open for its remote session. The server sends each message it
+      starts as a JSON text frame with a type field - prompt and cdm_call (each with an id), log, status, and drain
+      (with draining true or false).
+      The client answers a prompt or a CDM call with {"type": "answer", "id": <id>, "response": <text>}.
+      On attach the server first sends the log records after since, the drain state, the waiting prompts and
+      CDM calls, then the login state. The remote session does not expire while the channel is open. When the
+      server removes the remote session, it closes the channel with code 4404.
+    parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: since
+        in: query
+        required: false
+        description: Send the log records after this sequence number first (default - 0)
+        schema:
+          type: integer
+    responses:
+      '101':
+        description: WebSocket open
+      '403':
+        description: The remote session belongs to another API key
+      '404':
+        description: Remote session not found
+    """
+    return await session_channel_handler(request.match_info["session_id"], request)
+
+
+@api_handler
 async def session_prompt_get(request: web.Request) -> web.Response:
     """
     Poll for pending interactive prompts during authentication.
@@ -3450,6 +3490,7 @@ ROUTES: list[tuple[str, str, Handler, bool]] = [
     ("GET", LOGS_ROUTE, session_logs, True),
     ("GET", PROMPT_ROUTE, session_prompt_get, True),
     ("POST", PROMPT_ROUTE, session_prompt_submit, True),
+    ("GET", CHANNEL_ROUTE, session_channel, True),
     ("GET", SESSION_ROUTE, session_info, True),
     ("DELETE", SESSION_ROUTE, session_delete, True),
 ]
@@ -3494,6 +3535,7 @@ def setup_routes(
         add[method](path, handler)
     app.on_response_prepare.append(generic_server_header)
     app.on_shutdown.append(close_tunnels)
+    app.on_shutdown.append(close_channels)
 
 
 async def generic_server_header(request: web.Request, response: web.StreamResponse) -> None:

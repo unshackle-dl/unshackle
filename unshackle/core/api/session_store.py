@@ -19,6 +19,7 @@ from typing import Any, Deque, Dict, List, Optional
 from unshackle.core.api.events import bus
 from unshackle.core.api.input_bridge import AUTH_INPUT_TIMEOUT, InputBridge
 from unshackle.core.api.sanitize import sanitize_log
+from unshackle.core.api.session_channel import SessionChannel, drain_message
 from unshackle.core.config import config
 from unshackle.core.remote_protocol import AuthStatus
 from unshackle.core.tracks import Track
@@ -57,6 +58,7 @@ class SessionEntry:
     user_config: Optional[Dict[str, Any]] = None  # the serve.users entry the session was created with
     input_bridge: Optional[InputBridge] = None
     log_buffer: Optional[Any] = None  # SessionLogBuffer mirroring the service's self.log
+    channel: SessionChannel = field(default_factory=SessionChannel, repr=False, compare=False)
     auth_status: AuthStatus = AuthStatus.AUTHENTICATED
     auth_error: Optional[str] = None
     client: Dict[str, Any] = field(default_factory=dict)  # version/argv/platform the client reported
@@ -70,12 +72,18 @@ class SessionEntry:
 
     @property
     def in_use(self) -> bool:
-        """True while a request holds the lock for service work; the store does not expire such a remote session.
+        """True while a request holds the lock for service work, or the client holds its remote session channel open.
 
-        A request can run for longer than the TTL, and expiry would remove the cache directory
-        that the worker thread still writes to.
+        The store does not expire such a remote session. A request can run for longer than the TTL, and expiry
+        would remove the cache directory that the worker thread still writes to.
         """
-        return self.lock.locked()
+        return self.lock.locked() or self.channel.attached
+
+    def end(self) -> None:
+        """Unblock the service threads that wait on the client, and close the remote session channel."""
+        if self.input_bridge:
+            self.input_bridge.cancel()
+        self.channel.end()
 
     def summary(self, include_actions: bool = True) -> Dict[str, Any]:
         """Dashboard view of the session: no service instance, no raw owner key."""
@@ -177,8 +185,7 @@ class SessionStore:
                 )
                 log.warning(f"Max sessions reached ({max_sessions}), evicting oldest of the busiest key: {oldest_id}")
                 evicted = self._sessions.pop(oldest_id)
-                if evicted.input_bridge:
-                    evicted.input_bridge.cancel()
+                evicted.end()
                 evicted_tag = evicted.cache_tag
                 _publish("delete", evicted, "evicted")
                 _schedule_pending_reload(evicted.service_tag)
@@ -211,6 +218,7 @@ class SessionStore:
                 if elapsed > self.ttl:
                     log.info(f"Session {sanitize_log(session_id)} expired (elapsed={elapsed:.0f}s, ttl={self.ttl}s)")
                     _publish("delete", self._sessions.pop(session_id), "expired")
+                    entry.end()
                     _schedule_pending_reload(entry.service_tag)
                     expired = True
             if not expired:
@@ -233,8 +241,7 @@ class SessionStore:
             entry = self._sessions.pop(session_id, None)
             if not entry:
                 return False
-            if entry.input_bridge:
-                entry.input_bridge.cancel()
+            entry.end()
             _publish("delete", entry, "closed")
             log.info(f"Deleted session {sanitize_log(session_id)}")
             _schedule_pending_reload(entry.service_tag)
@@ -259,8 +266,7 @@ class SessionStore:
             cache_tags: list[Optional[str]] = []
             for sid in expired:
                 entry = self._sessions.pop(sid)
-                if entry.input_bridge:
-                    entry.input_bridge.cancel()
+                entry.end()
                 cache_tags.append(entry.cache_tag)
                 _publish("delete", entry, "expired")
                 ended_tags.add(entry.service_tag)
@@ -294,11 +300,10 @@ class SessionStore:
             self._cleanup_task = None
 
     async def cancel_all_bridges(self) -> None:
-        """Cancel all active input bridges (called on server shutdown)."""
+        """Cancel all active input bridges and close every remote session channel (called on server shutdown)."""
         async with self._lock:
             for entry in self._sessions.values():
-                if entry.input_bridge:
-                    entry.input_bridge.cancel()
+                entry.end()
             count = len(self._sessions)
         if count:
             log.info(f"Cancelled bridges for {count} active session(s)")
@@ -357,11 +362,14 @@ class SessionStore:
         for entry in self._sessions.values():
             if entry.log_buffer is not None:
                 entry.log_buffer.append(logging.WARNING, DRAIN_WARNING)
+            entry.channel.send(drain_message(True))
 
     def stop_drain(self) -> None:
         if self.draining:
             self.draining = False
             log.warning("Drain cancelled: new sessions and jobs are accepted again")
+            for entry in self._sessions.values():
+                entry.channel.send(drain_message(False))
 
     @property
     def session_count(self) -> int:

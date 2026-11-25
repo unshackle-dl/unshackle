@@ -211,11 +211,12 @@ def test_a_geofenced_remote_service_gets_its_first_allowed_region_as_proxy(monke
 
 def test_a_quiet_remote_login_shows_its_last_server_lines_as_a_notice(monkeypatch):
     import logging
-    from threading import Lock
+
+    from unshackle.core import remote_channel
 
     shown = []
-    monkeypatch.setattr(remote_service, "show_notice", shown.append)
-    monkeypatch.setattr(remote_service.time, "sleep", lambda s: None)
+    monkeypatch.setattr(remote_channel, "show_notice", shown.append)
+    monkeypatch.setattr(remote_channel, "AUTH_POLL_INTERVAL", 0)
     logs = iter([["+ IP Region: CA"], ["+ Open URL: https://example.test/start\n+ Enter pair code: 9835-2503"], []])
     statuses = iter(["authenticating", "authenticating", "authenticating", "authenticated"])
 
@@ -225,17 +226,18 @@ def test_a_quiet_remote_login_shows_its_last_server_lines_as_a_notice(monkeypatc
 
         def get_optional(self, endpoint):
             batch = next(logs, [])
+            first = remote.seq + 1
             remote.seq += len(batch)
-            return {"logs": [{"level": "INFO", "message": m} for m in batch], "last_seq": remote.seq}
+            records = [{"seq": first + i, "level": "INFO", "message": m} for i, m in enumerate(batch)]
+            return {"logs": records, "last_seq": remote.seq}
 
     remote = object.__new__(remote_service.RemoteService)
     remote.seq = 0
-    remote.client, remote._session_id, remote._log_seq = Client(), "sid", 0
-    remote._recent_logs, remote.auth_notice, remote._log_drain_lock = [], None, Lock()
-    remote.log, remote._cdm_sessions = logging.getLogger("test"), {}
+    remote.client, remote._session_id, remote.auth_notice = Client(), "sid", None
+    remote.log = logging.getLogger("test")
     monkeypatch.setattr(remote_service.RemoteService, "local_cdm", None)
 
-    remote.poll_auth_completion(poll_interval=0)
+    remote_channel.PollingChannel(remote_channel.ServerMessages(remote)).wait_auth()
     # silent while the remote was still logging; the pair code once it went quiet; cleared when done
     assert shown == ["+ IP Region: CA\n+ Open URL: https://example.test/start\n+ Enter pair code: 9835-2503", None]
     assert remote.auth_notice is None

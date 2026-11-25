@@ -11,7 +11,6 @@ import atexit
 import base64
 import contextlib
 import hashlib
-import json
 import logging
 import math
 import random
@@ -19,10 +18,22 @@ import re
 import shlex
 import sys
 import time
-from collections import deque
 from http.cookiejar import CookieJar
-from threading import Event, Lock, Thread, local
-from typing import Any, Callable, Dict, Iterable, Iterator, Mapping, Optional, Protocol, TypeVar, Union, cast
+from threading import Lock, local
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Dict,
+    Iterable,
+    Iterator,
+    Mapping,
+    Optional,
+    Protocol,
+    TypeVar,
+    Union,
+    cast,
+)
 from urllib.parse import urlencode, urlsplit
 from uuid import UUID
 
@@ -35,7 +46,7 @@ from rich.rule import Rule
 from rich.spinner import Spinner
 
 from unshackle.core.config import config
-from unshackle.core.console import SyncLive, console, prompt_user, show_notice
+from unshackle.core.console import SyncLive, console
 from unshackle.core.constants import AnyTrack
 from unshackle.core.credential import Credential
 from unshackle.core.dl_options import remote_dl_params
@@ -46,8 +57,6 @@ from unshackle.core.remote_protocol import (
     BAD_KEY_ROUTE,
     HEALTH_ROUTE,
     LICENSE_ROUTE,
-    LOGS_ROUTE,
-    PROMPT_ROUTE,
     SAMPLES_ROUTE,
     SEARCH_ROUTE,
     SEGMENT_FILTER_ROUTE,
@@ -63,15 +72,11 @@ from unshackle.core.remote_protocol import (
     ClientLogin,
     LicenseReply,
     LicenseRequest,
-    LogsReply,
-    PromptAnswer,
-    PromptReply,
     SegmentFilterReply,
     SegmentFilterRequest,
     SessionClosed,
     SessionCreate,
     SessionCreated,
-    SessionInfo,
     TitlesReply,
     TracksReply,
     TracksRequest,
@@ -91,6 +96,9 @@ from unshackle.core.utils.redact import redact_path, redact_text, safe_display_u
 from unshackle.core.utils.service_params import service_options
 from unshackle.core.vault import Vault
 from unshackle.core.wire import apply_title_fields, build_title, build_tracks
+
+if TYPE_CHECKING:
+    from unshackle.core.remote_channel import Channel
 
 log = logging.getLogger("remote_service")
 
@@ -112,7 +120,6 @@ RETRY_AFTER_LOCK = Lock()
 RATE_LIMIT_TRIES = 3
 TUNNEL_SLOT_POLL = 15
 PROBE_TIMEOUT = 30.0
-KEEPALIVE_MIN_INTERVAL = 5.0
 REOPEN_WAIT = 1800.0  # seconds a lost session waits for its server to come back; covers a deploy's whole drain
 
 
@@ -226,6 +233,7 @@ class RemoteClient:
         self._auth_header_found = False
         self._session: Optional[requests.Session] = None
         self.tunnel: Optional[TunnelClient] = None
+        self.no_channel = False  # this server or a gateway in front of it refused the remote session channel
         # wraps every request, so the service's CDM calls get answered while the server runs its code
         self.in_flight: Callable[[str], contextlib.AbstractContextManager[Any]] = lambda _: contextlib.nullcontext()
 
@@ -682,6 +690,11 @@ def resolve_remote_proxy_arg(proxy_arg: str, providers: Optional[list] = None) -
         raise click.ClickException(str(e))
 
 
+def ws_headers(client: RemoteClient) -> dict[str, str]:
+    """The headers of a WebSocket to the server, the API key under the header that the server reads among them."""
+    return {k: str(v) for k, v in client.session.headers.items() if k.lower() != "connection"}
+
+
 def start_tunnel(client: RemoteClient, proxy: Optional[str] = None) -> TunnelClient:
     """Open a tunnel that sends the server's requests out through this machine's own connection, or through
     ``proxy`` from this machine.
@@ -692,7 +705,7 @@ def start_tunnel(client: RemoteClient, proxy: Optional[str] = None) -> TunnelCli
         raise click.ClickException(f"--local-proxy cannot use a {scheme} proxy")
     if not client._auth_header_found:
         client.probe(HEALTH_ROUTE)
-    headers = {k: str(v) for k, v in client.session.headers.items() if k.lower() != "connection"}
+    headers = ws_headers(client)
     slot_deadline = time.monotonic() + RETRY_AFTER_MAX
     rate_waits = 0
     while True:
@@ -861,6 +874,7 @@ class RemoteService:
     ANIME: bool = False
     DAILY: bool = False
     server_cdm_type: str = "widevine"
+    channel: Optional[Channel] = None
 
     def __init__(
         self,
@@ -896,13 +910,9 @@ class RemoteService:
         self.server_vault = ServerVault(self)
         self._segment_filters: Dict[str, Callable[[Any], bool]] = {}
         self._sample_decrypt_tracks: set[str] = set()
-        self._log_seq = 0
-        self._recent_logs: deque[str] = deque(maxlen=3)
         self._input_bridge: Any = None  # a serve relaying for a REST client sets one, as it does for a Service
         # what a login waiting on the user (a pair code, an approval link) last showed; None otherwise
         self.auth_notice: Optional[str] = None
-        self._log_drain_lock = Lock()
-        self._keepalive_stop = Event()
         self._reopen_lock = Lock()
         self._current_title: Optional[Title_T] = None
         # client title and track id -> the id a reopened session gave the same title or track
@@ -936,10 +946,6 @@ class RemoteService:
         # read before apply_service_config merges the server's values into the same section
         own = config.services.get(service_tag) or {}
         self._client_config = {k: own[k] for k in services_config.get("_client_config") or [] if k in own}
-        self._cdm_sessions: Dict[str, bytes] = {}
-        self._cdm_lock = Lock()
-        self._cdm_requests = 0
-        self._cdm_stop = Event()
         self.apply_service_config(svc_config)
 
     def apply_service_config(self, svc_config: dict) -> None:
@@ -1202,13 +1208,15 @@ class RemoteService:
         # without the server vault grant the server refuses every key request, so none is sent
         self._local_vaults_only = self._server_device and not vault
 
-        status = result.get("status", AuthStatus.AUTHENTICATED)
-        if status == AuthStatus.AUTHENTICATING:
-            self.poll_auth_completion()
+        from unshackle.core.remote_channel import open_channel
+
+        self.channel = open_channel(self)
+        if result.get("status", AuthStatus.AUTHENTICATED) == AuthStatus.AUTHENTICATING:
+            self.channel.wait_auth()
         if create_data.get("cdm_relay"):
-            self.client.in_flight = self.answering_cdm_calls
+            self.client.in_flight = self.channel.in_flight
         self.drain_server_logs()
-        self.start_keepalive()
+        self.channel.keep_alive()
 
     @property
     def local_cdm(self) -> Any:
@@ -1256,24 +1264,6 @@ class RemoteService:
         elif self.local_cdm is not None:
             message += "; pass a higher -q to license above it with your own device"
         self.log.info(message)
-
-    def start_keepalive(self) -> None:
-        """Send keep-alive requests so that a long download or mux operation does not outlive the server's idle TTL.
-
-        ``GET /api/session/{session_id}`` refreshes the idle timer and reports the TTL, so the thread sends
-        a request at an interval of one third of it. The thread stops when ``close()`` or a reopen runs. A client
-        that dies stops sending requests, so the server still expires an abandoned remote session.
-        """
-        info = cast(SessionInfo, self.client.get_optional(SESSION_ROUTE.format(session_id=self._session_id)))
-        interval = max(float(info.get("expires_in") or 300) / 3, KEEPALIVE_MIN_INTERVAL)
-        endpoint = SESSION_ROUTE.format(session_id=self._session_id)
-        stop = self._keepalive_stop = Event()
-
-        def ping() -> None:
-            while not stop.wait(interval):
-                self.client.probe(endpoint)
-
-        Thread(target=ping, name=f"{self.service_tag}-keepalive", daemon=True).start()
 
     def session_call(self, call: Callable[[Optional[str]], T]) -> T:
         """Run ``call`` with the session id, and once more on a new session when the server lost the old one."""
@@ -1335,12 +1325,11 @@ class RemoteService:
         A track the new remote session gives another id keeps its old one here, and calls translate it.
         """
         grants = (self._server_cdm, self._server_device, self._server_vault)
-        self._keepalive_stop.set()
+        self.close_channel()
         self._session_id = None
         if self.client.tunnel:  # the server forgot the tunnel too
             self.client.tunnel.stop()
             self.client.tunnel = None
-        self._log_seq = 0
         self._segment_filters.clear()
         if not self.wait_for_server(accepting=True):
             return False
@@ -1390,162 +1379,21 @@ class RemoteService:
 
     def server_draining(self) -> bool:
         """Whether the server announced a restart; asked once per title, as an episode can be shorter than the keepalive."""
-        if not self._session_id:
-            return False
-        info = cast(SessionInfo, self.client.probe(SESSION_ROUTE.format(session_id=self._session_id)))
-        return bool(info.get("draining"))
+        return bool(self._session_id and self.channel and self.channel.draining())
 
     def server_track_id(self, track_id: Any) -> str:
         """The id the current remote session knows the track with this client id by."""
         return self._track_alias.get(str(track_id), str(track_id))
 
     def drain_server_logs(self) -> None:
-        """Fetch the service's server-side log records for this remote session and re-emit them locally.
+        """Show the service's server-side log records that the remote session channel has not brought already."""
+        if self.channel:
+            self.channel.drain_logs()
 
-        The server mirrors every ``self.log`` call the service makes into a
-        per-session buffer. Draining after each remote call shows the client
-        why a step failed. A relay failure must never break the operation
-        itself, so this method swallows every error.
-        """
-        if not self._session_id:
-            return
-        with self._log_drain_lock:
-            try:
-                with quiet():
-                    endpoint = LOGS_ROUTE.format(session_id=self._session_id) + f"?since={self._log_seq}"
-                    resp = cast(LogsReply, self.client.get_optional(endpoint))
-            except (Exception, SystemExit):
-                return
-            if not resp:
-                return
-            from unshackle.core.api.sanitize import sanitize_log
-
-            level_names = logging.getLevelNamesMapping()
-            for record in resp.get("logs", []):
-                level = level_names.get(str(record.get("level", "INFO")), logging.INFO)
-                message = sanitize_log(record.get("message", ""), keep_lines=True)
-                self.log.log(level, message)
-                self._recent_logs.append(message.strip())
-            self._log_seq = int(resp.get("last_seq", self._log_seq))
-
-    def poll_auth_completion(self, poll_interval: float = 2.0, timeout: float = 600.0) -> None:
-        """Poll the server until authentication completes, handling interactive prompts.
-
-        When the server needs user input (OTP, device code, PIN), it returns
-        ``pending_input`` with a prompt. We display it locally, collect the
-        response, and POST it back. The server resumes its auth flow.
-        """
-        deadline = time.monotonic() + timeout
-        try:
-            self.poll_auth(deadline, poll_interval)
-        finally:
-            self.close_cdm_sessions()
-            if self.auth_notice is not None:
-                self.auth_notice = None
-                show_notice(None)
-
-    def poll_auth(self, deadline: float, poll_interval: float) -> None:
-        while time.monotonic() < deadline:
-            resp = cast(PromptReply, self.client.get(PROMPT_ROUTE.format(session_id=self._session_id)))
-            status = resp.get("status")
-            seen = self._log_seq
-            self.drain_server_logs()
-
-            if status == AuthStatus.AUTHENTICATED:
-                return
-
-            if status == AuthStatus.AUTHENTICATING and self._log_seq == seen and self._recent_logs:
-                notice = "\n".join(self._recent_logs)
-                if notice != self.auth_notice:
-                    self.auth_notice = notice
-                    show_notice(notice)
-
-            if status == AuthStatus.FAILED:
-                raise RemoteError(
-                    f"Remote auth failed: {resp.get('error', 'Authentication failed on server')}", ClientErrorKind.AUTH
-                )
-
-            if status == AuthStatus.PENDING_INPUT and isinstance(resp.get("cdm_call"), dict):
-                self.answer_cdm_call(resp["cdm_call"], self._cdm_sessions)
-                continue
-
-            if status == AuthStatus.PENDING_INPUT:
-                from unshackle.core.api.sanitize import sanitize_log
-
-                prompt = sanitize_log(resp.get("prompt") or "Enter input: ", keep_lines=True)
-                bridge = self._input_bridge
-                try:
-                    user_response = bridge.request_input(prompt) if bridge else prompt_user(prompt)
-                except EOFError:
-                    raise RemoteError(
-                        "Remote auth needs interactive input but stdin is closed", ClientErrorKind.AUTH
-                    ) from None
-                self.client.post(
-                    PROMPT_ROUTE.format(session_id=self._session_id),
-                    PromptAnswer(response=user_response),
-                )
-                continue
-
-            time.sleep(poll_interval)
-
-        raise RemoteError("Remote authentication timed out", ClientErrorKind.AUTH)
-
-    def answer_cdm_call(self, call: Dict[str, Any], sessions: Dict[str, bytes]) -> None:
-        """Run one of the server's CDM calls on this machine's device and post the answer."""
-        from unshackle.core.cdm.client_relay import answer_cdm_call
-
-        answer = answer_cdm_call(self.local_cdm, call, sessions)
-        self.log.debug(f"Answered a server CDM call: {call.get('op')} ({'refused' if 'error' in answer else 'ok'})")
-        self.client.post(PROMPT_ROUTE.format(session_id=self._session_id), PromptAnswer(response=json.dumps(answer)))
-
-    @contextlib.contextmanager
-    def answering_cdm_calls(self, endpoint: str) -> Iterator[None]:
-        """Answer the server's CDM calls while a remote session request runs service code.
-
-        One poller serves every concurrent request, and the local CDM sessions close when the last one ends.
-        """
-        own = {route.format(session_id=self._session_id) for route in (PROMPT_ROUTE, LOGS_ROUTE, SAMPLES_ROUTE)}
-        if not endpoint.startswith(SESSION_ROUTE.format(session_id=self._session_id) + "/") or (
-            endpoint.partition("?")[0] in own
-        ):
-            yield
-            return
-        with self._cdm_lock:
-            self._cdm_requests += 1
-            if self._cdm_requests == 1:
-                self._cdm_stop = Event()
-                Thread(
-                    target=self.poll_cdm_calls, args=(self._cdm_stop,), name=f"{self.service_tag}-cdm", daemon=True
-                ).start()
-        try:
-            yield
-        finally:
-            with self._cdm_lock:
-                self._cdm_requests -= 1
-                if self._cdm_requests == 0:
-                    self._cdm_stop.set()
-
-    def poll_cdm_calls(self, stop: Event, interval: float = 0.5) -> None:
-        endpoint = PROMPT_ROUTE.format(session_id=self._session_id)
-        sessions: Dict[str, bytes] = {}
-        while not stop.wait(interval):
-            try:
-                call = cast(PromptReply, self.client.probe(endpoint)).get("cdm_call")
-                if isinstance(call, dict):
-                    with quiet():
-                        self.answer_cdm_call(call, sessions)
-            except (requests.RequestException, ValueError, SystemExit) as e:
-                self.log.debug(f"CDM call poll failed: {e}")
-        self.close_cdm_sessions(sessions)
-
-    def close_cdm_sessions(self, sessions: Optional[Dict[str, bytes]] = None) -> None:
-        """Close the local CDM sessions that the server's calls opened; best effort."""
-        sessions = self._cdm_sessions if sessions is None else sessions
-        cdm = self.local_cdm
-        for session_id in sessions.values():
-            with contextlib.suppress(Exception):
-                cdm.close(session_id)
-        sessions.clear()
+    def close_channel(self) -> None:
+        channel, self.channel = self.channel, None
+        if channel:
+            channel.close()
 
     def get_titles(self) -> Titles_T:
         if self._titles is not None:
@@ -2036,7 +1884,7 @@ class RemoteService:
     def close(self) -> None:
         # a long-lived serve opens many of these; the atexit hook would keep every one alive
         atexit.unregister(self.close)
-        self._keepalive_stop.set()
+        self.close_channel()
         session_id, self._session_id = self._session_id, None
         if session_id:
             try:

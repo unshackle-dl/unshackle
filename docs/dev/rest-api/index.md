@@ -208,6 +208,7 @@ request and response in full.
 | `POST` | `/api/session/{session_id}/samples` | Server-side cbcs sample decryption for one track. |
 | `POST` | `/api/session/{session_id}/license` | Proxy or server-side DRM licensing. |
 | `POST` | `/api/session/{session_id}/keys/bad` | Report a server-vault content key that did not decrypt. |
+| `GET` | `/api/session/{session_id}/channel` | WebSocket of the remote session channel: prompts, CDM calls, logs, login state. |
 | `GET` | `/api/session/{session_id}/logs` | Drain the service's server-side log output. |
 | `GET` | `/api/session/{session_id}/prompt` | Poll for interactive auth status/prompt. |
 | `POST` | `/api/session/{session_id}/prompt` | Submit an answer to an auth prompt. |

@@ -188,8 +188,8 @@ hood the client walks a remote session through its lifecycle.
 
     Some services need a one-time code, PIN, or device confirmation. When the
     server's auth flow asks for input, the remote session enters `pending_input`. The
-    client polls, displays the prompt to you locally, collects your answer, and
-    sends it back. The server's auth thread resumes with your response.
+    server sends the prompt to the client, the client shows it to you locally, collects
+    your answer, and sends it back. The server's auth thread resumes with your response.
 
     ```text
     Enter the 6-digit code sent to your email: 483920
@@ -203,8 +203,7 @@ hood the client walks a remote session through its lifecycle.
     `service_params`.
 
     The server also mirrors the service's own log output (`self.log`) into a
-    per-session buffer. The client drains it through
-    `GET /api/session/{id}/logs` after each step and prints the records
+    per-session buffer and sends each record to the client, which prints the records
     locally, so you see the server-side reason when a step fails.
 
 === "3. Titles + tracks"
@@ -237,9 +236,9 @@ hood the client walks a remote session through its lifecycle.
 
 === "5. Download + close"
 
-    The client downloads, decrypts, and muxes locally. While it works, it sends a
-    keep-alive request to the remote session at an interval of one third of
-    `session_ttl`, so a long download does not let the remote session expire. On
+    The client downloads, decrypts, and muxes locally. While it works, the open
+    [remote session channel](#the-remote-session-channel) keeps the remote session alive,
+    so a long download does not let the remote session expire. On
     completion, and also when `dl` exits early (`--list`, Ctrl+C, an error), it
     deletes the remote session. If the login belongs to the client, the `DELETE`
     request returns the updated cache files (for example a refreshed token) and the
@@ -340,8 +339,9 @@ the wire:
 - **CDM calls.** When the service calls the CDM, the server sends a `cdm_call` to the client
   and waits. The client makes the challenge, or parses the licence, on its own CDM. When
   the service closes a CDM session, the server sends a `close` call, because a CDM holds
-  only a few sessions. The client polls for calls during login and while one of its own
-  requests runs service code, so an idle remote session sends nothing extra.
+  only a few sessions. The server sends each call on the remote session channel. Without
+  the channel, the client polls for calls during login and while one of its own requests
+  runs service code, so an idle remote session sends nothing extra.
 - **Session keys only.** A `keys` call returns Widevine `OPERATOR_SESSION` and `SIGNING`
   keys. It never returns a content key, and the client refuses a PlayReady `keys` call.
   So a server cannot use your device to license titles for itself.
@@ -380,7 +380,7 @@ generally never touch this directly, but it explains behaviour you might observe
 
 | Behavior | Value | Notes |
 |---|---|---|
-| Idle session TTL | **300s** (5 min) default | Refreshed on every request to the session and when a `titles` or `tracks` request ends. A remote session does not expire while a request works on it |
+| Idle session TTL | **300s** (5 min) default | Refreshed on every request to the session and when a `titles` or `tracks` request ends. A remote session does not expire while a request works on it or while its remote session channel is open |
 | Max concurrent sessions | **100** default | When full, the least recently used remote session of the API key that holds the most is evicted. A remote session that a request works on goes last |
 | Auth/input timeout | **600s** (10 min) | Sessions still authenticating or awaiting a prompt use this longer window instead of the TTL |
 | Cleanup sweep | every 60s | Expired sessions are removed and their input prompts cancelled |
@@ -462,9 +462,10 @@ The server mounts all these routes, even in `--remote-only` mode. Paths use the
 | `POST` | `/api/session/{id}/samples` | Decrypt the cbcs samples of a track the service decrypts itself |
 | `POST` | `/api/session/{id}/license` | DRM licensing (proxy or server CDM) |
 | `POST` | `/api/session/{id}/keys/bad` | Report a server-vault content key that did not decrypt |
-| `GET` | `/api/session/{id}/logs` | Drain the service's server-side log output |
-| `GET` | `/api/session/{id}/prompt` | Poll interactive auth status / pending prompt |
-| `POST` | `/api/session/{id}/prompt` | Submit an answer to a pending prompt |
+| `GET` | `/api/session/{id}/channel` | WebSocket of the [remote session channel](#the-remote-session-channel): the messages the server starts, and the client's answers; `?since=` is the last log `seq` the client has |
+| `GET` | `/api/session/{id}/logs` | Drain the service's server-side log output (polling fallback) |
+| `GET` | `/api/session/{id}/prompt` | Poll interactive auth status / pending prompt (polling fallback) |
+| `POST` | `/api/session/{id}/prompt` | Submit an answer to a pending prompt (polling fallback) |
 | `GET` | `/api/session/{id}` | Session info (validity, TTL, counts) |
 | `DELETE` | `/api/session/{id}` | Close the remote session, return updated cache, clean up |
 
@@ -515,8 +516,9 @@ licenses. `server_device` tells it that the service runs on the server's device,
 content key comes from a vault.
 
 Authentication runs on a background thread (`asyncio.to_thread(authenticate, ...)`).
-The remote session starts in `AUTHENTICATING`. The client must poll the prompt
-endpoint until it reaches `authenticated` (or `failed`).
+The remote session starts in `AUTHENTICATING`. The client opens the remote session
+channel and waits on it until the login state is `authenticated` (or `failed`). A client
+without the channel polls the prompt endpoint for that state.
 
 ### Interactive auth: the `InputBridge`
 
@@ -528,11 +530,11 @@ layer.
 - `InputBridge.request_input(prompt, timeout=600)` blocks the sync auth thread on a
   `threading.Event` until `submit_response()` or `cancel()` fires.
 - A timeout raises `TimeoutError` and marks the remote session `FAILED`.
-- A prompt after authentication (in `get_titles()`, `get_tracks()` or licensing) raises
-  `RuntimeError` at once. The client polls for prompts only during authentication, so
-  no answer can come.
+- A prompt after authentication (in `get_titles()`, `get_tracks()` or licensing) goes to
+  the client on an open remote session channel. Without the channel it raises `RuntimeError`
+  at once: the client polls for prompts only during authentication, so no answer can come.
 - A CDM call (`InputBridge.request_cdm`) works during and after authentication, because the
-  client also polls while its own requests run. A call that no client fetches within 10 seconds
+  channel carries it, or the client polls while its own requests run. A call that no client fetches within 10 seconds
   fails then, because no client is listening. A fetched call waits 60 seconds for its answer.
   The call leaves the auth status as it was. An answer never marks the remote session as client-authenticated.
 - `AUTH_INPUT_TIMEOUT = 600.0` seconds. This is also the TTL granted to
@@ -559,6 +561,40 @@ A missing remote session returns `404 SESSION_NOT_FOUND`. An IP mismatch returns
 `403 FORBIDDEN`. `POST /api/session/{id}/prompt` takes `{ "response": "..." }` and
 returns `{ "status": "accepted" }`. A post with no pending prompt is an
 `INVALID_INPUT` error.
+
+### The remote session channel
+
+`GET /api/session/{id}/channel` is a WebSocket that carries only the messages the server
+starts. Titles, tracks, licences, samples, the segment filter, bad content key reports, create
+and delete stay HTTP requests. The route takes the same API key and ownership checks as the
+other remote session routes.
+
+Each message is a JSON text frame with a `type` field:
+
+| `type` | From | Fields | Meaning |
+|---|---|---|---|
+| `prompt` | server | `id`, `prompt` | The service asks the user for input |
+| `cdm_call` | server | `id`, `call` | The service calls the client's CDM; `call` has the shape of the prompt route's `cdm_call` |
+| `log` | server | `seq`, `level`, `message`, `ts` | One record of the service log, with the same redaction as `GET /logs` |
+| `status` | server | `status`, `error` | The login state, as the `status` of `GET /prompt` |
+| `drain` | server | `draining` | The operator started or stopped a drain before a restart |
+| `answer` | client | `id`, `response`, `error` | The answer to the `prompt` or `cdm_call` with this `id`; `error` says why the client cannot answer a prompt, and the service stops at once |
+
+When the client connects, the server first sends the log records after `since`, the drain
+state, the prompts and CDM calls that the client did not answer, and the login state. A log
+record can arrive twice, after a reconnect; the client skips a `seq` it already has. Each
+prompt and CDM call goes to one path only: the channel, or the prompt routes.
+
+The server closes the channel with code `4404` when the remote session ends: a delete, an
+expiry, an eviction, or a server shutdown. The client then stops reconnecting, and its next
+request finds the remote session gone.
+
+The client polls the prompt and logs routes, and sends keep-alive requests, in these cases:
+
+- A gateway in front of the server refuses the WebSocket upgrade, or the connection fails, when
+  the client creates the remote session. The client polls for the life of the process and logs
+  the refusal at debug level only.
+- The channel drops. The client polls until it reconnects, with a backoff from 1 to 30 seconds.
 
 ### `SessionStore` internals
 
@@ -646,8 +682,9 @@ existing file as a directory, and logs a warning.
 }
 ```
 
-`draining` is `true` after the operator starts a drain before a restart. The client reads
-it before each title, so it knows of the restart before it occurs.
+`draining` is `true` after the operator starts a drain before a restart. The client checks
+it before each title, so it knows of the restart before it occurs. With an open remote session
+channel the client reads the `drain` message and sends no request.
 
 !!! warning "`expires_in` is the configured TTL, not time remaining"
     The `expires_in` value reports the store's configured `session_ttl`, not the
@@ -675,8 +712,8 @@ the error codes and the request and reply shapes that it shares with the server 
   output cannot start before the body is ready.
 - **Retries.** The download-side HTTP session mounts an adapter with
   `Retry(total=5, backoff_factor=0.2, status_forcelist=[429, 500, 502, 503, 504])`.
-- **Flow.** `authenticate()` → `create` (+ poll `prompt` every 2s up to a 600s
-  deadline, answering `pending_input` prompts. With stdin closed the client logs an
+- **Flow.** `authenticate()` → `create` (+ open the remote session channel, or poll `prompt`
+  every 2s without it, up to a 600s deadline, answering `pending_input` prompts. With stdin closed the client logs an
   error and raises `SystemExit(1)` instead of posting an empty answer) → `get_titles()` → `get_tracks()`
   (merging returned `session_headers`/`session_cookie_jar`, re-parsing `manifests`) →
   get the licence in proxy mode or `server_cdm` mode → `close()` (`DELETE`, saving any returned

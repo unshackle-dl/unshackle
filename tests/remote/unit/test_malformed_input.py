@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import base64
 import logging
-from collections import deque
-from threading import Lock
 from types import SimpleNamespace
 from typing import Any
 
@@ -18,6 +16,7 @@ from unshackle.core import remote_service
 from unshackle.core.api import handlers
 from unshackle.core.api.errors import APIError, APIErrorCode
 from unshackle.core.api.routes import setup_routes
+from unshackle.core.remote_channel import PollingChannel, ServerMessages
 from unshackle.core.remote_service import RemoteClient, RemoteError, RemoteService
 
 pytestmark = pytest.mark.unit
@@ -236,13 +235,18 @@ def test_server_text_loses_its_control_characters() -> None:
 def test_relayed_server_logs_lose_their_control_characters(monkeypatch: pytest.MonkeyPatch) -> None:
     service = RemoteService.__new__(RemoteService)
     service._session_id = "sid"
-    service._log_seq = 0
-    service._recent_logs = deque(maxlen=5)
-    service._log_drain_lock = Lock()
     seen: list[str] = []
     service.log = SimpleNamespace(log=lambda level, message: seen.append(message))  # type: ignore[assignment]
     service.client = SimpleNamespace(
-        get_optional=lambda _: {"logs": [{"level": "INFO", "message": "a\x1b[2Jb\nc"}], "last_seq": 1}
+        get_optional=lambda _: {"logs": [{"seq": 1, "level": "INFO", "message": "a\x1b[2Jb\nc"}], "last_seq": 1}
     )
-    service.drain_server_logs()
+    PollingChannel(ServerMessages(service)).drain_logs()
     assert seen == ["a[2Jb\nc"]
+
+
+def test_a_relayed_login_prompt_loses_its_control_characters() -> None:
+    service = RemoteService.__new__(RemoteService)
+    asked: list[str] = []
+    service._input_bridge = SimpleNamespace(request_input=lambda prompt: asked.append(prompt) or "1234")
+    assert ServerMessages(service).ask_user("Code\x1b[2J:\n") == "1234"
+    assert asked == ["Code[2J:\n"]

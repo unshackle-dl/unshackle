@@ -10,6 +10,7 @@ from typing import Any, Optional
 import pytest
 import yaml
 
+from unshackle.core import remote_channel
 from unshackle.core import remote_protocol as protocol
 from unshackle.core import remote_service
 from unshackle.core.api import routes
@@ -23,13 +24,16 @@ CLIENT_METHODS = {
     "post": "POST",
     "post_optional": "POST",
     "delete": "DELETE",
+    "ws_connect": "GET",
 }
 SERVED = {(method, path): handler for method, path, handler, _ in routes.ROUTES}
 
 
 @functools.cache
 def client_tree() -> ast.Module:
-    return ast.parse(Path(remote_service.__file__).read_text(encoding="utf-8"))
+    """The client modules as one tree: the remote service and the session channel adapters."""
+    modules = [ast.parse(Path(m.__file__).read_text(encoding="utf-8")) for m in (remote_service, remote_channel)]
+    return ast.Module(body=[node for module in modules for node in module.body], type_ignores=[])
 
 
 def client_calls() -> tuple[set[tuple[str, str]], set[str]]:
@@ -41,7 +45,7 @@ def client_calls() -> tuple[set[tuple[str, str]], set[str]]:
     referenced = {n.id for n in ast.walk(tree) if isinstance(n, ast.Name) and n.id in ROUTE_NAMES}
     calls: set[tuple[str, str]] = set()
     for function in ast.walk(tree):
-        if not isinstance(function, ast.FunctionDef):
+        if not isinstance(function, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
         local = {
             target.id: node.value
@@ -114,7 +118,10 @@ def test_the_wire_values_stay_what_older_peers_send():
         "BAD_KEY_ROUTE": "/api/session/{session_id}/keys/bad",
         "LOGS_ROUTE": "/api/session/{session_id}/logs",
         "PROMPT_ROUTE": "/api/session/{session_id}/prompt",
+        "CHANNEL_ROUTE": "/api/session/{session_id}/channel",
     }
+    assert [m.value for m in protocol.ChannelMessage] == ["prompt", "cdm_call", "log", "status", "drain", "answer"]
+    assert protocol.CHANNEL_SESSION_GONE == 4404
     assert [s.value for s in protocol.AuthStatus] == ["authenticating", "pending_input", "authenticated", "failed"]
     assert {c.name for c in protocol.APIErrorCode} >= {"SESSION_NOT_FOUND", "SERVER_CDM_CAPPED", "SERVER_DRAINING"}
     assert [k.value for k in protocol.ClientErrorKind] == [
@@ -159,6 +166,22 @@ def test_session_transport_keys_are_the_create_body():
         "generate_dv",
         "dl_params",
     }
+
+
+@pytest.mark.parametrize(
+    "shape,fields",
+    [
+        (protocol.ChannelPrompt, {"type", "id", "prompt"}),
+        (protocol.ChannelCdmCall, {"type", "id", "call"}),
+        (protocol.ChannelLog, {"type", "seq", "level", "message", "ts"}),
+        (protocol.ChannelStatus, {"type", "status", "error"}),
+        (protocol.ChannelDrain, {"type", "draining"}),
+        (protocol.ChannelAnswer, {"type", "id", "response", "error"}),
+    ],
+)
+def test_the_channel_messages_keep_their_fields(shape, fields):
+    """A session channel message is a JSON text frame; an older peer reads these keys."""
+    assert keys(shape) == fields
 
 
 def test_a_client_error_kind_is_never_a_server_error_code():

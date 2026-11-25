@@ -200,16 +200,23 @@ def test_a_relaying_client_gets_a_stand_in_with_its_device_facts(monkeypatch: py
     assert built["params"]["client_identity"] is True
 
 
-def test_an_answered_call_is_no_longer_pending_before_the_service_wakes() -> None:
+def test_an_answered_call_is_no_longer_pending_before_the_service_wakes(monkeypatch: pytest.MonkeyPatch) -> None:
     bridge = InputBridge()
     release = threading.Event()
-    real_wait = bridge._response_ready.wait
+    real_open = bridge._open
 
-    def slow_wait(timeout: float) -> bool:
-        release.wait(5)  # hold the service thread asleep after the answer arrives
-        return real_wait(timeout)
+    def open_slowly(prompt: str, cdm_call: Any = None) -> Any:
+        ask = real_open(prompt, cdm_call)
+        real_wait = ask.answered.wait
 
-    bridge._response_ready.wait = slow_wait  # type: ignore[method-assign]
+        def slow_wait(timeout: float) -> bool:
+            release.wait(5)  # hold the service thread asleep after the answer arrives
+            return real_wait(timeout)
+
+        ask.answered.wait = slow_wait  # type: ignore[method-assign]
+        return ask
+
+    monkeypatch.setattr(bridge, "_open", open_slowly)
     worker = threading.Thread(target=lambda: bridge.request_cdm({"op": "challenge"}, timeout=5))
     worker.start()
     for _ in range(100):

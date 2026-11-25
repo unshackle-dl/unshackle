@@ -28,6 +28,7 @@ from unshackle.core.api.errors import APIError, categorize_exception, handle_api
 from unshackle.core.api.input_bridge import InputBridge, NoUserBridge
 from unshackle.core.api.progress import track_log_label
 from unshackle.core.api.sanitize import MAX_SESSION_CACHE_KEYS, safe_cache_key, safe_cache_payload, sanitize_log
+from unshackle.core.api.session_channel import status_message
 from unshackle.core.api.session_log import SessionLogBuffer, SessionLogMirror, capture_service_logs
 from unshackle.core.api.session_store import SessionStore
 from unshackle.core.binaries import binary_version
@@ -535,6 +536,7 @@ def setup_remote_service(
         raise
     finally:
         _remote_logins.pop(login.id, None)
+        service_instance._input_bridge = NoUserBridge()  # nobody can answer a prompt once the login is gone
     return service_instance
 
 
@@ -3657,6 +3659,9 @@ async def session_create_handler(data: Dict[str, Any], request: Optional[web.Req
         session.input_bridge = bridge
         session.log_buffer = log_buffer
         session.auth_status = AuthStatus.AUTHENTICATING
+        bridge.channel = session.channel
+        if log_buffer:
+            log_buffer.listener = session.channel.log
 
         async def run_auth() -> None:
             try:
@@ -3671,6 +3676,7 @@ async def session_create_handler(data: Dict[str, Any], request: Optional[web.Req
                 session.auth_error = redact_secrets(str(e))
                 bridge.status = AuthStatus.FAILED
             finally:
+                session.channel.send(status_message(session))
                 if store.peek(session_id) is not session:
                     SessionStore.cleanup_cache_dir(session_cache_tag)
 
@@ -5452,6 +5458,17 @@ async def session_delete_handler(session_id: str, request: Optional[web.Request]
     if cache_data:
         response["cache"] = cache_data
     return web.json_response(response)
+
+
+async def session_channel_handler(session_id: str, request: web.Request) -> web.StreamResponse:
+    """Attach the caller's session channel, which carries the messages the server starts for the remote session."""
+    from unshackle.core.api.session_store import get_session_store
+
+    session = await get_validated_session(session_id, request)
+    ws = web.WebSocketResponse(heartbeat=HEARTBEAT)
+    await ws.prepare(request)  # a request that is not a WebSocket upgrade fails here
+    await session.channel.serve(ws, session, _since(request), get_session_store().draining)
+    return ws
 
 
 def shared_key_client(request: web.Request) -> Optional[str]:
