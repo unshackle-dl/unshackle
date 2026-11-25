@@ -6,7 +6,6 @@ instead of short-circuiting on a vault hit for the PSSH KID alone, and the batch
 path must give each track the full bundle without borrowing another PSSH's keys.
 """
 
-import asyncio
 import base64
 import json
 from types import SimpleNamespace
@@ -19,6 +18,7 @@ import pywidevine.pssh as wv_pssh_mod
 import unshackle.core.cdm as cdm_mod
 import unshackle.core.cdm.detect as detect_mod
 import unshackle.core.drm as drm_mod
+from tests.remote.sessions import session_entry
 from unshackle.core.api import handlers
 
 pytestmark = pytest.mark.unit
@@ -118,13 +118,7 @@ async def test_batch_shares_full_bundle_per_pssh(monkeypatch):
     track_pssh = {"vid": pssh_a, "aud": pssh_a, "vid2": pssh_b}
 
     tracks = {tid: SimpleNamespace(id=tid, drm=[object()]) for tid in track_pssh}
-    session = SimpleNamespace(
-        lock=asyncio.Lock(),
-        service_tag="EXAMPLE",
-        service_instance=SimpleNamespace(),
-        served_keys={},
-        tracks=SimpleNamespace(get=tracks.get),
-    )
+    session = session_entry(tracks=tracks)
 
     async def fake_get_session(session_id, request):
         return session

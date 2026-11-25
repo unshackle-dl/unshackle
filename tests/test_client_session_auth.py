@@ -3,6 +3,7 @@ from types import SimpleNamespace
 import pytest
 import requests
 
+from tests.remote.sessions import session_entry
 from unshackle.core.api.errors import APIError
 from unshackle.core.api.handlers import client_session_auth, resolve_handler_proxy, scrub_track_data
 from unshackle.core.remote_service import apply_session_cookies
@@ -11,7 +12,7 @@ from unshackle.core.remote_service import apply_session_cookies
 def _session(client_auth):
     cookie = SimpleNamespace(name="sid", value="secret", domain=".example.com", path="/")
     svc = SimpleNamespace(headers={"Authorization": "Bearer x", "User-Agent": "ua"}, cookies=[cookie])
-    return SimpleNamespace(service_instance=SimpleNamespace(session=svc), client_auth=client_auth)
+    return session_entry(service_instance=SimpleNamespace(session=svc), client_auth=client_auth)
 
 
 def test_client_login_keeps_auth():
@@ -65,7 +66,7 @@ def test_rnet_session_sends_client_and_set_cookies():
     svc.cookies.set("sid", "stale", domain=".example.com")
     svc.cookies.set("cdn", "c", domain="cdn.other.net")
     svc.export_origin_cookies = lambda: {"https://www.example.com": "sid=live; cf=1"}
-    _, cookies = client_session_auth(SimpleNamespace(service_instance=SimpleNamespace(session=svc), client_auth=True))
+    _, cookies = client_session_auth(session_entry(service_instance=SimpleNamespace(session=svc), client_auth=True))
     assert {(c["name"], c["value"], c["domain"]) for c in cookies} == {
         ("sid", "live", "www.example.com"),
         ("cf", "1", "www.example.com"),
@@ -228,7 +229,7 @@ def test_dashboard_logs_redact_path():
 
 def test_server_login_strips_nested_and_unlisted_secrets():
     headers, _ = client_session_auth(
-        SimpleNamespace(
+        session_entry(
             service_instance=SimpleNamespace(
                 session=SimpleNamespace(headers={"X-Api-Key": "k", "Accept": "*"}, cookies=[])
             ),
@@ -351,6 +352,13 @@ def _run_session(monkeypatch, tmp_path, data, answer, server_account=False, fail
 def test_client_auth_follows_login_provenance(monkeypatch, tmp_path, data, answer, server_account, fail, expected):
     session = _run_session(monkeypatch, tmp_path, dict(data), answer, server_account, fail)
     assert session.client_auth is expected
+
+
+def test_a_failed_login_reports_its_error(monkeypatch, tmp_path):
+    from unshackle.core.remote_protocol import AuthStatus
+
+    session = _run_session(monkeypatch, tmp_path, {}, "CODE", fail=True)
+    assert (session.auth_status, session.auth_error) == (AuthStatus.FAILED, "bad code")
 
 
 def test_prompt_post_rejects_response_the_bridge_refused(monkeypatch):

@@ -14,11 +14,12 @@ import pytest
 from pywidevine import DeviceTypes
 from pywidevine.pssh import PSSH
 
+from tests.remote.sessions import session_entry
 from unshackle.core.api import handlers
 from unshackle.core.api.errors import APIError
 from unshackle.core.api.input_bridge import InputBridge
 from unshackle.core.cdm.client_relay import ClientDeviceCdm, answer_cdm_call
-from unshackle.core.remote_protocol import AuthStatus
+from unshackle.core.remote_protocol import APIErrorCode, AuthStatus
 
 pytestmark = pytest.mark.unit
 
@@ -104,7 +105,7 @@ def test_the_client_refuses_a_challenge_for_the_other_drm_system() -> None:
 
 def test_a_cdm_call_after_authentication_leaves_the_status_alone() -> None:
     bridge = InputBridge()
-    bridge.status = AuthStatus.AUTHENTICATED
+    bridge.login_status = AuthStatus.AUTHENTICATED
     result: list[dict] = []
     worker = threading.Thread(target=lambda: result.append(bridge.request_cdm({"op": "challenge"}, timeout=5)))
     worker.start()
@@ -240,7 +241,7 @@ def test_a_lent_server_device_marks_the_stand_in() -> None:
 
 
 def test_a_lent_device_session_never_licenses_live() -> None:
-    refusal = handlers.live_licence_refusal(SimpleNamespace(server_device=True, server_cdm=False), object())
+    refusal = handlers.live_licence_refusal(session_entry(server_device=True, server_cdm=False), object())
     assert refusal is not None
     assert refusal.details == {"reason": "server_device"}
 
@@ -248,7 +249,7 @@ def test_a_lent_device_session_never_licenses_live() -> None:
 def test_a_vault_only_miss_raises_the_refusal(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(handlers, "check_vaults", lambda kids, service, **_: None)
     monkeypatch.setattr(handlers, "ensure_track_drm", lambda *a, **k: None)
-    refusal = handlers.live_licence_refusal(SimpleNamespace(server_device=True), object())
+    refusal = handlers.live_licence_refusal(session_entry(server_device=True), object())
     with pytest.raises(APIError) as caught:
         handlers.handle_single_server_cdm(
             SimpleNamespace(),
@@ -354,11 +355,11 @@ def test_a_client_map_entry_replaces_the_server_entry_of_the_same_number() -> No
 
 
 def lent_device_session() -> Any:
-    return SimpleNamespace(
+    return session_entry(
+        server_cdm=False,
         server_device=True,
         client_auth=True,
         cache_tag="_sessions/abc/sid/EXAMPLE1",
-        input_bridge=None,
         service_instance=SimpleNamespace(
             session=SimpleNamespace(
                 headers={"Authorization": "Bearer server", "User-Agent": "ua"},
@@ -430,7 +431,7 @@ def test_every_service_context_defaults_quality_to_a_list(extra: Any) -> None:
 
 def test_a_call_no_client_fetches_fails_fast_and_restores_the_status() -> None:
     bridge = InputBridge()
-    bridge.status = AuthStatus.AUTHENTICATED
+    bridge.login_status = AuthStatus.AUTHENTICATED
     started = time.monotonic()
     with pytest.raises(TimeoutError, match="none is listening"):
         bridge.request_cdm({"op": "challenge"}, timeout=30, pickup=0.2)
@@ -461,3 +462,17 @@ def test_cancel_wakes_a_call_waiting_for_a_client() -> None:
     with pytest.raises(RuntimeError, match="cancelled"):
         bridge.request_cdm({"op": "challenge"}, timeout=30, pickup=20)
     assert time.monotonic() - started < 5
+
+
+@pytest.mark.parametrize(
+    ("fields", "forbidden"),
+    [({"server_cdm": False}, True), ({"server_cdm": False, "server_vault": True}, False), ({}, False)],
+)
+def test_the_server_licence_route_follows_the_licensing_mode(
+    monkeypatch: pytest.MonkeyPatch, fields: dict, forbidden: bool
+) -> None:
+    """A session that the client's device licenses reaches the server licence route only for the server vault."""
+    monkeypatch.setattr(handlers, "server_cdm_allowed", lambda request, service: True)
+    with pytest.raises(APIError) as caught:
+        handlers.license_response({"mode": "server_cdm", "track_id": "none"}, session_entry(**fields), "sess", None)
+    assert (caught.value.error_code is APIErrorCode.FORBIDDEN) is forbidden

@@ -529,7 +529,7 @@ layer.
 - `AuthStatus` values: `authenticating`, `pending_input`, `authenticated`, `failed`.
 - `InputBridge.request_input(prompt, timeout=600)` blocks the sync auth thread on a
   `threading.Event` until `submit_response()` or `cancel()` fires.
-- A timeout raises `TimeoutError` and marks the remote session `FAILED`.
+- A timeout raises `TimeoutError`. The remote session becomes `FAILED` when that error ends the login.
 - A prompt after authentication (in `get_titles()`, `get_tracks()` or licensing) goes to
   the client on an open remote session channel. Without the channel it raises `RuntimeError`
   at once: the client polls for prompts only during authentication, so no answer can come.
@@ -538,7 +538,7 @@ layer.
   fails then, because no client is listening. A fetched call waits 60 seconds for its answer.
   The call leaves the auth status as it was. An answer never marks the remote session as client-authenticated.
 - `AUTH_INPUT_TIMEOUT = 600.0` seconds. This is also the TTL granted to
-  `AUTHENTICATING` / `PENDING_INPUT` sessions in the store.
+  `AUTHENTICATING` sessions in the store. A remote session that waits on a prompt stays `AUTHENTICATING`.
 
 `GET /api/session/{id}/prompt` returns one of:
 
@@ -605,11 +605,10 @@ Source: `unshackle/core/api/session_store.py`. A singleton you get from
   `serve.max_sessions` (default `100`) are read as properties, so config changes
   take effect without recreating the store.
 - **`create()`** evicts the least-recently-accessed remote session of the API key that holds the most when at capacity,
-  then stores a new `SessionEntry`. It defaults `auth_status` to `AUTHENTICATED`, and
-  the `create` handler overrides it to `AUTHENTICATING`.
+  then stores a complete `SessionEntry` from the fields of the `create` handler and publishes the `create` event.
 - **`get()`** refreshes `last_accessed` through `touch()`. It returns `None` (and
   deletes the entry) if an authenticated remote session has been idle longer than the
-  TTL. Remote sessions in `AUTHENTICATING` / `PENDING_INPUT` are exempt from TTL expiry.
+  TTL. Remote sessions in `AUTHENTICATING` are exempt from TTL expiry.
 - **`cleanup_expired()`** runs every 60s: authenticated remote sessions expire at
   `ttl`, in-flight-auth remote sessions expire at `AUTH_INPUT_TIMEOUT`. The removal of
   a remote session cancels its `InputBridge` and deletes its cache directory (pruning
@@ -629,7 +628,7 @@ Source: `unshackle/core/api/session_store.py`. A singleton you get from
 | `creator_ip` | IP recorded at create time for IP-binding checks |
 | `cache_tag` | Per-session cache directory tag |
 | `input_bridge` | `InputBridge` for interactive auth, if any |
-| `auth_status` / `auth_error` | Current `AuthStatus` and last error message |
+| `auth_status` / `auth_error` | Current `AuthStatus`, read from `input_bridge` (`AUTHENTICATED` without one), and last error message |
 | `created_at` / `last_accessed` | Timestamps; `last_accessed` drives TTL and LRU eviction |
 
 ### Per-session cache namespacing

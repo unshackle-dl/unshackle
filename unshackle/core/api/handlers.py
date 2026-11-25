@@ -30,13 +30,12 @@ from unshackle.core.api.progress import track_log_label
 from unshackle.core.api.sanitize import MAX_SESSION_CACHE_KEYS, safe_cache_key, safe_cache_payload, sanitize_log
 from unshackle.core.api.session_channel import status_message
 from unshackle.core.api.session_log import SessionLogBuffer, SessionLogMirror, capture_service_logs
-from unshackle.core.api.session_store import SessionStore
+from unshackle.core.api.session_store import SessionEntry, SessionStore
 from unshackle.core.binaries import binary_version
 from unshackle.core.cacher import Cacher
 from unshackle.core.cdm.choice import choose_cdm, drm_system
 from unshackle.core.cdm.detect import cdm_type_stub, is_playready_cdm
 from unshackle.core.config import config, load_yaml
-from unshackle.core.constants import AnyTrack
 from unshackle.core.dl_options import (
     DEFAULT_DOWNLOAD_PARAMS,
     DL_OPTION_API_NAMES,
@@ -1217,21 +1216,21 @@ def choose_session_cdm(
     )
 
 
-def live_licence_refusal(session: Any, track: Any) -> Optional[APIError]:
+def live_licence_refusal(session: SessionEntry, track: Any) -> Optional[APIError]:
     """Why the server CDM must not make a live licence for ``track`` in ``session``; None when it may.
 
     Only a live licence spends the server's device, so a vault hit always passes. A track measures as the
     smallest ``-q`` that selects it: the lower of its height and the 16:9 height of its width.
     """
-    if getattr(session, "server_device", False):
+    if session.server_device:
         return APIError(
             APIErrorCode.SERVER_CDM_CAPPED,
             "This session runs on the server's device, so its keys come only from a vault.",
             details={"reason": "server_device"},
         )
-    if getattr(session, "server_cdm", None) is False:
+    if not session.server_cdm:
         return capped_error("This session licenses with your own device, so the server CDM makes no licence for it.")
-    cap = getattr(session, "server_cdm_max_height", None)
+    cap = session.server_cdm_max_height
     height = getattr(track, "height", None) if isinstance(track, Video) else None
     width = getattr(track, "width", None) if isinstance(track, Video) else None
     measures = [m for m in (height, int(width * 9 / 16) if width else None) if m]
@@ -3621,6 +3620,7 @@ async def session_create_handler(data: Dict[str, Any], request: Optional[web.Req
 
         service_instance._input_bridge = bridge
 
+        client = data.get("client")
         store = get_session_store()
         session = await store.create(
             normalized_service,
@@ -3629,38 +3629,30 @@ async def session_create_handler(data: Dict[str, Any], request: Optional[web.Req
             owner_key=api_key,
             creator_ip=request.remote if request else None,
             server_account=(profile or "default") if server_account else None,
+            cache_tag=session_cache_tag,
+            user_config=user_config,
+            server_cdm=use_server_cdm,
+            server_cdm_max_height=max_height,
+            server_vault=client_device and server_vault_allowed(request, normalized_service),
+            server_device=server_device,
+            client_auth=not server_account
+            and (cookies is not None or credential is not None or bool(cache_data and session_cache_tag)),
+            # Echoed to every dashboard viewer, so cap what an arbitrary client can push into it.
+            client=client if isinstance(client, dict) and len(json.dumps(client, default=str)) <= 4096 else {},
+            input_bridge=bridge,
+            log_buffer=log_buffer,
         )
-        session.cache_tag = session_cache_tag
-        session.user_config = user_config
-        session.server_cdm = use_server_cdm
-        session.server_cdm_max_height = max_height
-        session.server_vault = client_device and server_vault_allowed(request, normalized_service)
-        session.server_device = server_device
-        session.client_auth = not server_account and (
-            cookies is not None or credential is not None or bool(cache_data and session_cache_tag)
-        )
-        # Echoed to every dashboard viewer, so cap what an arbitrary client can push into it.
-        if isinstance(data.get("client"), dict) and len(json.dumps(data["client"], default=str)) <= 4096:
-            session.client = data["client"]
-        session.input_bridge = bridge
-        session.log_buffer = log_buffer
-        session.auth_status = AuthStatus.AUTHENTICATING
-        bridge.channel = session.channel
-        if log_buffer:
-            log_buffer.listener = session.channel.log
 
         async def run_auth() -> None:
             try:
                 await asyncio.to_thread(service_instance.authenticate, cookies, credential)
                 if not server_account:
                     session.client_auth = True
-                session.auth_status = AuthStatus.AUTHENTICATED
-                bridge.status = AuthStatus.AUTHENTICATED
+                bridge.login_status = AuthStatus.AUTHENTICATED
             except (Exception, SystemExit) as e:
                 log.exception("Auth failed for session %s", session_id)
-                session.auth_status = AuthStatus.FAILED
                 session.auth_error = redact_secrets(str(e))
-                bridge.status = AuthStatus.FAILED
+                bridge.login_status = AuthStatus.FAILED
             finally:
                 session.channel.send(status_message(session))
                 if store.peek(session_id) is not session:
@@ -3779,12 +3771,12 @@ def session_user_config(session: Any, request: Optional[web.Request]) -> Dict[st
     return pinned if isinstance(pinned, dict) else serve_user_config(caller_key(request))
 
 
-def client_owns_login(session: Any) -> bool:
+def client_owns_login(session: SessionEntry) -> bool:
     """Whether the login state of ``session`` is the client's to take back.
 
     A remote session on the server's lent device logs in with the server's device identity, so its tokens stay there.
     """
-    return bool(session.client_auth) and not getattr(session, "server_device", False)
+    return bool(session.client_auth) and not session.server_device
 
 
 def scrub_secret_keys(value: Any) -> Any:
@@ -3842,18 +3834,7 @@ async def session_tracks_handler(
             finally:
                 session.touch()
 
-            title_tracks: Dict[str, Any] = {}
-            track: AnyTrack
-            for track in tracks.videos:
-                title_tracks[str(track.id)] = track
-                session.tracks[str(track.id)] = track
-            for track in tracks.audio:
-                title_tracks[str(track.id)] = track
-                session.tracks[str(track.id)] = track
-            for track in tracks.subtitles:
-                title_tracks[str(track.id)] = track
-                session.tracks[str(track.id)] = track
-            session.tracks_by_title[str(title_id)] = title_tracks
+            session.add_tracks(str(title_id), tracks)
             SessionStore.publish_update(session)
 
             try:
@@ -4071,15 +4052,15 @@ def detect_cdm_type(cdm_name: str, app_config: Any) -> Optional[str]:
     return None
 
 
-def require_authenticated(session: Any) -> None:
+def require_authenticated(session: SessionEntry) -> None:
     """Raise if the remote session has not finished authenticating."""
-    status = getattr(session, "auth_status", None)
+    status = session.auth_status
     if status == AuthStatus.FAILED:
         raise APIError(
             APIErrorCode.AUTH_FAILED,
             f"Authentication failed: {session.auth_error or 'unknown error'}",
         )
-    if status in (AuthStatus.AUTHENTICATING, AuthStatus.PENDING_INPUT):
+    if status == AuthStatus.AUTHENTICATING:
         raise APIError(
             APIErrorCode.INVALID_INPUT,
             f"Session authentication not complete (status: {status.value})",
@@ -5044,9 +5025,9 @@ def license_response(
     mode = data.get("mode", "proxy")
 
     # a session the client's device licenses reaches the server vault only; its live licences stay client-side
-    vault_only = getattr(session, "server_cdm", None) is False
+    vault_only = not session.server_cdm
     if mode == "server_cdm" and not (
-        getattr(session, "server_vault", False) if vault_only else server_cdm_allowed(request, session.service_tag)
+        session.server_vault if vault_only else server_cdm_allowed(request, session.service_tag)
     ):
         raise APIError(
             APIErrorCode.FORBIDDEN,
@@ -5287,7 +5268,7 @@ def license_response(
                 track.pr_pssh = pssh_b64
 
         certificate = data.get("is_certificate") is True
-        if getattr(session, "server_device", False) and not certificate:
+        if session.server_device and not certificate:
             denied = live_licence_refusal(session, track)
             if denied:
                 raise denied
@@ -5394,9 +5375,7 @@ async def session_delete_handler(session_id: str, request: Optional[web.Request]
     session = await get_validated_session(session_id, request)
     store = get_session_store()
 
-    if session.input_bridge:
-        session.input_bridge.cancel()
-
+    session.end()
     cache_tag = session.cache_tag
     cache_data = collect_cache_files(cache_tag) if cache_tag and client_owns_login(session) else {}
 

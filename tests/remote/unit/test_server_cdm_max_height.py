@@ -14,11 +14,11 @@ import pywidevine.pssh as wv_pssh_mod
 import unshackle.core.drm as drm_mod
 from tests.core.key_resolver import key_table, resolver
 from tests.remote.key_source import CAPPED, PR_DEVICE, one_title, remote_keys, remote_session
+from tests.remote.sessions import session_entry
 from unshackle.commands.dl import dl
 from unshackle.core import remote_channel
 from unshackle.core.api import handlers
 from unshackle.core.api.errors import APIError
-from unshackle.core.api.session_store import SessionEntry
 from unshackle.core.config import cdm_entry_names_device
 from unshackle.core.drm import Widevine
 from unshackle.core.remote_protocol import APIErrorCode
@@ -122,13 +122,13 @@ def test_bad_quality_is_invalid_input():
 @pytest.mark.parametrize(
     ("session", "track", "refused"),
     [
-        (SimpleNamespace(server_cdm=True, server_cdm_max_height=1080), video(2160), True),
-        (SimpleNamespace(server_cdm=True, server_cdm_max_height=1080), video(1080), False),
-        (SimpleNamespace(server_cdm=True, server_cdm_max_height=1080), video(None), False),
-        (SimpleNamespace(server_cdm=True, server_cdm_max_height=1080), Audio.__new__(Audio), False),
-        (SimpleNamespace(server_cdm=True, server_cdm_max_height=None), video(2160), False),
-        (SimpleNamespace(server_cdm=False, server_cdm_max_height=1080), video(720), True),
-        (SimpleNamespace(), video(2160), False),  # a session from before the cap existed
+        (session_entry(server_cdm_max_height=1080), video(2160), True),
+        (session_entry(server_cdm_max_height=1080), video(1080), False),
+        (session_entry(server_cdm_max_height=1080), video(None), False),
+        (session_entry(server_cdm_max_height=1080), Audio.__new__(Audio), False),
+        (session_entry(server_cdm_max_height=None), video(2160), False),
+        (session_entry(server_cdm=False, server_cdm_max_height=1080), video(720), True),
+        (session_entry(), video(2160), False),
     ],
 )
 def test_live_licence_refusal(session, track, refused):
@@ -160,13 +160,13 @@ def single(refusal):
 
 def test_a_vault_hit_is_served_above_the_cap(widevine_env, monkeypatch):
     monkeypatch.setattr(handlers, "check_vaults", lambda kids, name, **_: ({"11" * 16: "key"}, {"11" * 16: "sqlite"}))
-    refusal = handlers.live_licence_refusal(SimpleNamespace(server_cdm_max_height=1080), video(2160))
+    refusal = handlers.live_licence_refusal(session_entry(server_cdm_max_height=1080), video(2160))
     assert single(refusal) == {"11" * 16: "key"}
 
 
 def test_a_vault_miss_raises_the_refusal_before_the_device_loads(widevine_env, monkeypatch):
     monkeypatch.setattr(handlers, "check_vaults", lambda kids, name, **_: None)
-    refusal = handlers.live_licence_refusal(SimpleNamespace(server_cdm_max_height=1080), video(2160))
+    refusal = handlers.live_licence_refusal(session_entry(server_cdm_max_height=1080), video(2160))
     with pytest.raises(APIError) as ei:
         single(refusal)
     assert ei.value is refusal
@@ -267,7 +267,7 @@ def test_a_null_service_in_the_cap_map_falls_through_to_the_default(monkeypatch)
 
 def test_an_ultrawide_track_is_measured_as_the_smallest_quality_that_selects_it():
     """-q matches a height or a 16:9 width, so a track passes the cap when either one is inside it."""
-    session = SimpleNamespace(server_cdm=True, server_cdm_max_height=1080)
+    session = session_entry(server_cdm_max_height=1080)
     assert handlers.live_licence_refusal(session, video(1600, 3840)) is not None
     assert handlers.live_licence_refusal(session, video(None, 3840)) is not None
     assert handlers.live_licence_refusal(session, video(1080, 2560)) is None  # -q 1080 selects it
@@ -357,7 +357,7 @@ def playready_env(monkeypatch):
 
 
 def test_playready_raises_the_refusal_before_the_device_loads(playready_env):
-    refusal = handlers.live_licence_refusal(SimpleNamespace(server_cdm_max_height=1080), video(2160))
+    refusal = handlers.live_licence_refusal(session_entry(server_cdm_max_height=1080), video(2160))
     with pytest.raises(APIError) as ei:
         handlers.handle_single_server_cdm(
             SimpleNamespace(), SimpleNamespace(), video(2160), "cHNzaA==", "playready", None, {}, refusal
@@ -392,9 +392,7 @@ def media(kind, tid, drm, **attrs):
 @pytest.fixture
 def licence_env(monkeypatch):
     """A capped remote session and a stand-in server licence that honours the refusal like the real one."""
-    session = SessionEntry(session_id="sess", service_tag="EXAMPLE1", service_instance=SimpleNamespace())
-    session.server_cdm = True
-    session.server_cdm_max_height = 1080
+    session = session_entry(service_tag="EXAMPLE1", server_cdm_max_height=1080)
     calls: list = []
     vault = {}
 

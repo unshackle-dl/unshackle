@@ -143,3 +143,43 @@ def test_tracks_handler_marks_the_title_live_before_it_fetches(monkeypatch: pyte
         await store.delete("live")
 
     asyncio.run(run())
+
+
+def test_the_create_event_carries_the_session_as_created(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> None:
+    """The dashboard learns a new session with its licensing mode, client and login state, not the defaults."""
+    import json
+
+    from unshackle.core.api import handlers
+    from unshackle.core.api.events import bus
+    from unshackle.core.config import config
+
+    class Service:
+        _input_bridge = None
+        log = None
+        cache = None
+
+        def authenticate(self, cookies: Any, credential: Any) -> None:
+            pass
+
+    monkeypatch.setattr(config.directories, "cache", tmp_path)
+    monkeypatch.setattr(handlers, "validate_service", lambda service, request=None: service)
+    monkeypatch.setattr(handlers, "resolve_handler_proxy", lambda *args: (None, []))
+    monkeypatch.setattr(handlers, "server_account_for", lambda *args: False)
+    monkeypatch.setattr(handlers, "choose_session_cdm", lambda *args: (True, 1080))
+    monkeypatch.setattr(handlers.Services, "load", lambda service: Service)
+    monkeypatch.setattr(handlers, "create_service_instance", lambda *a, **k: (Service(), None, None))
+
+    async def run() -> list:
+        mark = bus.seq
+        body = {"service": "EXAMPLE", "title_id": "t", "client": {"version": "1.0"}}
+        resp = await handlers.session_create_handler(body)
+        await store_mod.get_session_store().delete(json.loads(resp.body)["session_id"])
+        return [e["data"] for e in bus.since(mark) if e["event"] == "session" and e["data"]["action"] == "create"]
+
+    (created,) = asyncio.run(run())
+    assert {k: created[k] for k in ("auth_status", "server_cdm", "server_cdm_max_height", "client")} == {
+        "auth_status": "authenticating",
+        "server_cdm": True,
+        "server_cdm_max_height": 1080,
+        "client": {"version": "1.0"},
+    }

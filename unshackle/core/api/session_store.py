@@ -22,7 +22,7 @@ from unshackle.core.api.sanitize import sanitize_log
 from unshackle.core.api.session_channel import SessionChannel, drain_message
 from unshackle.core.config import config
 from unshackle.core.remote_protocol import AuthStatus
-from unshackle.core.tracks import Track
+from unshackle.core.tracks import Track, Tracks
 
 log = logging.getLogger("api.session")
 
@@ -50,7 +50,7 @@ class SessionEntry:
     owner_key: Optional[str] = None  # X-Secret-Key that owns this session
     cache_tag: Optional[str] = None
     server_account: Optional[str] = None  # profile name when the server lent its own account
-    server_cdm: Optional[bool] = None  # False: the client's own device licenses this session
+    server_cdm: bool = False  # False: the client's own device licenses this session
     server_cdm_max_height: Optional[int] = None
     server_vault: bool = False  # a session the client's device licenses may still take keys from the server vault
     server_device: bool = False  # its service runs on the server's lent device, so keys come only from a vault
@@ -59,12 +59,28 @@ class SessionEntry:
     input_bridge: Optional[InputBridge] = None
     log_buffer: Optional[Any] = None  # SessionLogBuffer mirroring the service's self.log
     channel: SessionChannel = field(default_factory=SessionChannel, repr=False, compare=False)
-    auth_status: AuthStatus = AuthStatus.AUTHENTICATED
     auth_error: Optional[str] = None
     client: Dict[str, Any] = field(default_factory=dict)  # version/argv/platform the client reported
     actions: Deque[Dict[str, Any]] = field(default_factory=lambda: deque(maxlen=500))
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     last_accessed: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+
+    def __post_init__(self) -> None:
+        if self.input_bridge is not None:
+            self.input_bridge.channel = self.channel
+        if self.log_buffer is not None:
+            self.log_buffer.listener = self.channel.log
+
+    @property
+    def auth_status(self) -> AuthStatus:
+        """The login state, which the input bridge holds; a remote session with no bridge has no login to wait on."""
+        return self.input_bridge.login_status if self.input_bridge else AuthStatus.AUTHENTICATED
+
+    def add_tracks(self, title_id: str, tracks: Tracks) -> None:
+        """Register the video, audio and subtitle tracks of a title, so the later routes find each one by its id."""
+        title_tracks: Dict[str, Track] = {str(t.id): t for t in [*tracks.videos, *tracks.audio, *tracks.subtitles]}
+        self.tracks.update(title_tracks)
+        self.tracks_by_title[title_id] = title_tracks
 
     def touch(self) -> None:
         """Update last_accessed timestamp."""
@@ -168,11 +184,22 @@ class SessionStore:
         service_tag: str,
         service_instance: Any,
         session_id: Optional[str] = None,
+        *,
         owner_key: Optional[str] = None,
         creator_ip: Optional[str] = None,
         server_account: Optional[str] = None,
+        cache_tag: Optional[str] = None,
+        user_config: Optional[Dict[str, Any]] = None,
+        server_cdm: bool = False,
+        server_cdm_max_height: Optional[int] = None,
+        server_vault: bool = False,
+        server_device: bool = False,
+        client_auth: bool = False,
+        client: Optional[Dict[str, Any]] = None,
+        input_bridge: Optional[InputBridge] = None,
+        log_buffer: Optional[Any] = None,
     ) -> SessionEntry:
-        """Make a new remote session with an authenticated service instance."""
+        """Make a new remote session, complete with every field the dashboard shows, and announce it."""
         evicted_tag: Optional[str] = None
         async with self._lock:
             max_sessions = self.max_sessions
@@ -198,6 +225,16 @@ class SessionStore:
                 owner_key=owner_key,
                 creator_ip=creator_ip,
                 server_account=server_account,
+                cache_tag=cache_tag,
+                user_config=user_config,
+                server_cdm=server_cdm,
+                server_cdm_max_height=server_cdm_max_height,
+                server_vault=server_vault,
+                server_device=server_device,
+                client_auth=client_auth,
+                client=client or {},
+                input_bridge=input_bridge,
+                log_buffer=log_buffer,
             )
             self._sessions[session_id] = entry
             _publish("create", entry)
@@ -213,7 +250,7 @@ class SessionStore:
                 return None
 
             expired = False
-            if not entry.in_use and entry.auth_status not in (AuthStatus.AUTHENTICATING, AuthStatus.PENDING_INPUT):
+            if not entry.in_use and entry.auth_status != AuthStatus.AUTHENTICATING:
                 elapsed = (datetime.now(timezone.utc) - entry.last_accessed).total_seconds()
                 if elapsed > self.ttl:
                     log.info(f"Session {sanitize_log(session_id)} expired (elapsed={elapsed:.0f}s, ttl={self.ttl}s)")
@@ -257,7 +294,7 @@ class SessionStore:
                 if entry.in_use:
                     continue
                 elapsed = (now - entry.last_accessed).total_seconds()
-                if entry.auth_status in (AuthStatus.AUTHENTICATING, AuthStatus.PENDING_INPUT):
+                if entry.auth_status == AuthStatus.AUTHENTICATING:
                     if elapsed > AUTH_INPUT_TIMEOUT:
                         expired.append(sid)
                 elif elapsed > self.ttl:

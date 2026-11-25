@@ -20,6 +20,7 @@ import pywidevine.pssh as wv_pssh_mod
 import unshackle.core.cdm as cdm_mod
 import unshackle.core.cdm.detect as detect_mod
 import unshackle.core.drm as drm_mod
+from tests.remote.sessions import session_entry
 from unshackle.core.api import handlers
 from unshackle.core.api.errors import APIError
 from unshackle.core.cdm.choice import choose_cdm
@@ -75,14 +76,7 @@ def _session(track):
         get_widevine_license=lambda **k: b"",
         get_playready_license=lambda **k: b"",
     )
-    return SimpleNamespace(
-        lock=asyncio.Lock(),
-        service_tag="EXAMPLE",
-        service_instance=service,
-        served_keys={},
-        tracks=SimpleNamespace(get={"vid": track}.get),
-        log_buffer=None,
-    )
+    return session_entry(service_instance=service, tracks={"vid": track})
 
 
 @pytest.fixture

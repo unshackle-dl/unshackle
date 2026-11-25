@@ -40,11 +40,7 @@ class FakeSocket:
 
 
 def entry_with_logs(count: int) -> SessionEntry:
-    entry = SessionEntry("s", "EXAMPLE", None)
-    entry.log_buffer = SessionLogBuffer()
-    entry.log_buffer.listener = entry.channel.log
-    entry.input_bridge = InputBridge()
-    entry.input_bridge.channel = entry.channel
+    entry = SessionEntry("s", "EXAMPLE", None, log_buffer=SessionLogBuffer(), input_bridge=InputBridge())
     for n in range(count):
         entry.log_buffer.append(logging.INFO, f"EXAMPLE line {n + 1}")
     return entry
@@ -73,7 +69,7 @@ async def test_the_backlog_goes_before_a_record_logged_while_the_old_socket_clos
             break
         await asyncio.sleep(0.01)
     assert log_seqs(new) == [3, 4, 5]
-    assert {"type": "status", "status": "authenticated"} in new.sent
+    assert {"type": "status", "status": "authenticating"} in new.sent
     await new.close()
     await serving
     assert not entry.channel.attached

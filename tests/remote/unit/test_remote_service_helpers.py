@@ -6,6 +6,7 @@ from enum import Enum
 
 import pytest
 
+from tests.remote.sessions import session_entry
 from unshackle.core.manifests.snapshot import match_track
 from unshackle.core.remote_service import RemoteService
 from unshackle.core.titles.episode import Episode
@@ -517,7 +518,6 @@ async def test_session_delete_returns_nested_cache_keys(tmp_path, monkeypatch) -
     import base64
     import json
     import zlib
-    from types import SimpleNamespace
 
     from unshackle.core.api import handlers, session_store
 
@@ -529,7 +529,7 @@ async def test_session_delete_returns_nested_cache_keys(tmp_path, monkeypatch) -
         path.write_text(rel)
     monkeypatch.setattr(handlers.config.directories, "cache", tmp_path)
 
-    session = SimpleNamespace(cache_tag=cache_tag, client_auth=True, input_bridge=None)
+    session = session_entry(service_tag="TESTSVC", cache_tag=cache_tag, client_auth=True)
 
     async def fake_validated(session_id, request):
         return session
@@ -545,6 +545,7 @@ async def test_session_delete_returns_nested_cache_keys(tmp_path, monkeypatch) -
     body = json.loads(response.body)
     assert set(body["cache"]) == {"tokens", "session_web/abc", "MSL/web/keys", "MSL/keys.v2"}
     assert zlib.decompress(base64.b64decode(body["cache"]["session_web/abc"])) == b"session_web/abc"
+    assert session.channel.ended
 
 
 def test_resolve_manifest_data_matches_across_per_range_manifests() -> None:

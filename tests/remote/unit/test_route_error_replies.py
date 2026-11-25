@@ -23,6 +23,7 @@ from unshackle.core.api import handlers, routes
 from unshackle.core.api.compression import compression_middleware
 from unshackle.core.api.errors import APIError
 from unshackle.core.api.handlers import api_key_authentication, dashboard_authentication
+from unshackle.core.api.input_bridge import InputBridge
 from unshackle.core.api.routes import DASHBOARD_ROUTES, ROUTES, cors_middleware, no_5xx_middleware, setup_routes
 from unshackle.core.api.session_store import get_session_store
 from unshackle.core.api.stats import stats, stats_middleware
@@ -248,8 +249,17 @@ def fault_cases() -> dict[str, Case]:
 
 
 async def open_session(stand_in: Faulty, owner: str, status: AuthStatus) -> None:
-    session = await get_session_store().create("EXAMPLE", stand_in, session_id=SESSION, owner_key=owner)
-    session.auth_status = status
+    bridge = getattr(stand_in, "input_bridge", None) or InputBridge()
+    bridge.login_status = status
+    session = await get_session_store().create(
+        "EXAMPLE",
+        stand_in,
+        session_id=SESSION,
+        owner_key=owner,
+        server_cdm=True,
+        input_bridge=bridge,
+        log_buffer=getattr(stand_in, "log_buffer", None),
+    )
     session.title_map["title-0001"] = Movie(id_="title-0001", service=object, name="Film", year=2024, language=None)
     track = SimpleNamespace(
         id="v1",
@@ -262,8 +272,6 @@ async def open_session(stand_in: Faulty, owner: str, status: AuthStatus) -> None
     session.tracks["v1"] = track  # type: ignore[assignment]
     session.tracks_by_title["title-0001"] = {"v1": track}  # type: ignore[dict-item]
     session.served_keys["00" * 16] = ("11" * 16, "pinned-vault")
-    session.input_bridge = getattr(stand_in, "input_bridge", None)
-    session.log_buffer = getattr(stand_in, "log_buffer", None)
 
 
 def masked(value: Any, ref: Optional[str]) -> Any:

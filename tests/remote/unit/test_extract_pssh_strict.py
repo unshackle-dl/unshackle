@@ -5,12 +5,12 @@ loop licensed a PlayReady-only track as Widevine by accident. A Widevine device 
 license PlayReady-only content, but only as a deliberate step in the batch loop.
 """
 
-import asyncio
 import json
 from types import SimpleNamespace
 
 import pytest
 
+from tests.remote.sessions import session_entry
 from unshackle.core.api import handlers
 
 pytestmark = pytest.mark.unit
@@ -44,13 +44,7 @@ def test_extractor_is_type_strict():
 
 
 async def _run_batch(monkeypatch, tracks, cdm_type, calls):
-    session = SimpleNamespace(
-        lock=asyncio.Lock(),
-        service_tag="EXAMPLE",
-        service_instance=SimpleNamespace(),
-        served_keys={},
-        tracks=SimpleNamespace(get=tracks.get),
-    )
+    session = session_entry(tracks=tracks)
 
     async def fake_get_session(session_id, request):
         return session

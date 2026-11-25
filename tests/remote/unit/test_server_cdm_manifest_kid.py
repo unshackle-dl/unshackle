@@ -8,7 +8,6 @@ named different KIDs got one licence; and a KID the licence did not cover was lo
 server alone.
 """
 
-import asyncio
 import base64
 import json
 from types import SimpleNamespace
@@ -21,6 +20,7 @@ from pyplayready.system.pssh import PSSH as RealPSSH
 import unshackle.core.cdm as cdm_mod
 import unshackle.core.cdm.detect as detect_mod
 import unshackle.core.drm as drm_mod
+from tests.remote.sessions import session_entry
 from unshackle.core.api import handlers
 from unshackle.core.api.session_log import SessionLogBuffer
 from unshackle.core.drm import PlayReady
@@ -102,14 +102,7 @@ def fake_playready(monkeypatch):
 
 
 def _session(tracks: dict, buf=None):
-    session = SimpleNamespace(
-        lock=asyncio.Lock(),
-        service_tag="EX",
-        service_instance=SimpleNamespace(),
-        served_keys={},
-        tracks=SimpleNamespace(get=tracks.get),
-        log_buffer=buf,
-    )
+    session = session_entry(service_tag="EX", tracks=tracks, log_buffer=buf)
 
     async def fake_get_session(sid, req):
         return session

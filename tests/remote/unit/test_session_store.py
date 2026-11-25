@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import threading
 import time
+from types import SimpleNamespace
 
 import pytest
 
@@ -53,13 +55,14 @@ async def test_get_touches_last_accessed(store: SessionStore) -> None:
 
 
 async def test_delete_removes_and_cancels_bridge(store: SessionStore) -> None:
-    entry = await store.create("CRAV", _FakeService())
-    entry.input_bridge = InputBridge()
-    assert entry.input_bridge.status is AuthStatus.AUTHENTICATING
+    entry = await store.create("EXAMPLE", _FakeService(), input_bridge=InputBridge())
 
     deleted = await store.delete(entry.session_id)
     assert deleted is True
-    assert entry.input_bridge.status is AuthStatus.FAILED  # cancelled
+    with pytest.raises(RuntimeError, match="cancelled"):
+        entry.input_bridge.ensure_active()
+    assert entry.channel.ended
+    assert entry.auth_status is AuthStatus.AUTHENTICATING  # the delete event reports the login state as it was
     assert store.session_count == 0
 
 
@@ -88,25 +91,32 @@ async def test_session_with_work_in_progress_does_not_expire(store: SessionStore
         assert await store.get("busy") is entry
 
 
-async def test_cleanup_expired_keeps_pending_input_under_grace(store: SessionStore) -> None:
-    """Sessions awaiting user input get a longer grace period (10 min) than authenticated TTL."""
-    entry = await store.create("EXAMPLE", _FakeService())
-    entry.input_bridge = InputBridge()
-    entry.auth_status = AuthStatus.PENDING_INPUT
+async def test_cleanup_expired_keeps_a_login_under_grace(store: SessionStore) -> None:
+    """A session that still logs in, a prompt included, gets a longer grace period (10 min) than authenticated TTL."""
+    from datetime import datetime, timedelta, timezone
+
+    entry = await store.create("EXAMPLE", _FakeService(), input_bridge=InputBridge())
+    entry.last_accessed = datetime.now(timezone.utc) - timedelta(seconds=store.ttl + 1)
     removed = await store.cleanup_expired()
     assert removed == 0
     assert store.session_count == 1
 
 
-async def test_cleanup_expired_drops_pending_input_past_grace(store: SessionStore) -> None:
+async def test_get_keeps_a_login_past_the_ttl(store: SessionStore) -> None:
+    from datetime import datetime, timedelta, timezone
+
+    entry = await store.create("EXAMPLE", _FakeService(), input_bridge=InputBridge())
+    entry.last_accessed = datetime.now(timezone.utc) - timedelta(seconds=store.ttl + 1)
+    assert await store.get(entry.session_id) is entry
+
+
+async def test_cleanup_expired_drops_a_login_past_grace(store: SessionStore) -> None:
     """The auth-state grace is the single AUTH_INPUT_TIMEOUT rule, not a separate magic number."""
     from datetime import datetime, timedelta, timezone
 
     from unshackle.core.api.input_bridge import AUTH_INPUT_TIMEOUT
 
-    entry = await store.create("EXAMPLE", _FakeService())
-    entry.input_bridge = InputBridge()
-    entry.auth_status = AuthStatus.PENDING_INPUT
+    entry = await store.create("EXAMPLE", _FakeService(), input_bridge=InputBridge())
     entry.last_accessed = datetime.now(timezone.utc) - timedelta(seconds=AUTH_INPUT_TIMEOUT + 1)
     removed = await store.cleanup_expired()
     assert removed == 1
@@ -114,14 +124,13 @@ async def test_cleanup_expired_drops_pending_input_past_grace(store: SessionStor
 
 
 async def test_cancel_all_bridges(store: SessionStore) -> None:
-    a = await store.create("EXAMPLE", _FakeService())
-    b = await store.create("DEMO", _FakeService())
-    a.input_bridge = InputBridge()
-    b.input_bridge = InputBridge()
+    a = await store.create("EXAMPLE", _FakeService(), input_bridge=InputBridge())
+    b = await store.create("DEMO", _FakeService(), input_bridge=InputBridge())
 
     await store.cancel_all_bridges()
-    assert a.input_bridge.status is AuthStatus.FAILED
-    assert b.input_bridge.status is AuthStatus.FAILED
+    for entry in (a, b):
+        with pytest.raises(RuntimeError, match="cancelled"):
+            entry.input_bridge.ensure_active()
 
 
 async def test_get_session_store_returns_singleton() -> None:
@@ -287,3 +296,36 @@ async def test_live_session_on_same_tag_keeps_it_busy(store: SessionStore, monke
     assert await store.delete(second.session_id)
     await asyncio.sleep(0.05)
     assert applied == [{"EXAMPLE"}, set()]
+
+
+def test_the_login_state_is_the_one_its_bridge_holds(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A waiting prompt keeps the session authenticating; the bridge alone moves it to authenticated or failed."""
+    entry = SessionEntry("s", "EXAMPLE", None, input_bridge=InputBridge())
+    bridge = entry.input_bridge
+    assert bridge.channel is entry.channel
+    offered = threading.Event()
+    monkeypatch.setattr(entry.channel, "offer", lambda ask: offered.set() or False)
+    answers: list[str] = []
+    worker = threading.Thread(target=lambda: answers.append(bridge.request_input("Code?")))
+    worker.start()
+    assert offered.wait(5)
+    assert bridge.status is AuthStatus.PENDING_INPUT
+    assert entry.auth_status is AuthStatus.AUTHENTICATING
+    assert bridge.submit_response("1234")
+    worker.join(5)
+    assert answers == ["1234"]
+
+    bridge.login_status = AuthStatus.AUTHENTICATED
+    assert entry.summary()["auth_status"] == "authenticated"
+    bridge.login_status = AuthStatus.FAILED
+    assert entry.summary()["auth_status"] == "failed"
+    assert SessionEntry("s", "EXAMPLE", None).auth_status is AuthStatus.AUTHENTICATED
+
+
+def test_add_tracks_registers_every_track_of_a_title() -> None:
+    entry = SessionEntry("s", "EXAMPLE", None)
+    video, audio, subtitle, other = (SimpleNamespace(id=i) for i in ("v", "a", "s", "o"))
+    entry.add_tracks("t1", SimpleNamespace(videos=[video], audio=[audio], subtitles=[subtitle]))  # type: ignore[arg-type]
+    entry.add_tracks("t2", SimpleNamespace(videos=[other], audio=[], subtitles=[]))  # type: ignore[arg-type]
+    assert entry.tracks == {"v": video, "a": audio, "s": subtitle, "o": other}
+    assert entry.tracks_by_title == {"t1": {"v": video, "a": audio, "s": subtitle}, "t2": {"o": other}}

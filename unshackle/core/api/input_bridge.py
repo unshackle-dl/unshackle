@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     from unshackle.core.api.session_channel import SessionChannel
 
 # Seconds the server waits for a remote client to answer an input prompt before
-# giving up; also the TTL SessionStore grants AUTHENTICATING/PENDING_INPUT sessions.
+# giving up; also the TTL SessionStore grants AUTHENTICATING sessions.
 AUTH_INPUT_TIMEOUT = 600.0
 CDM_CALL_TIMEOUT = 60.0
 # A listening client polls every few seconds, so a CDM call nobody fetches in this time has no client behind it.
@@ -92,9 +92,6 @@ class InputBridge:
         try:
             # cancel() and an answer both set the event, so a single wait returns on signal-or-cancel
             if not ask.answered.wait(timeout=timeout):
-                with self._lock:
-                    if self._status != AuthStatus.AUTHENTICATED:
-                        self._status = AuthStatus.FAILED
                 raise TimeoutError(f"No client response for prompt within {timeout}s")
             with self._lock:
                 if self._cancelled:
@@ -223,7 +220,6 @@ class InputBridge:
         """Cancel the bridge, unblocking any waiting service thread."""
         with self._lock:
             self._cancelled = True
-            self._status = AuthStatus.FAILED
             asks = list(self._asks.values())
         for ask in asks:
             ask.picked_up.set()
@@ -243,8 +239,14 @@ class InputBridge:
                 return AuthStatus.PENDING_INPUT
             return self._status
 
-    @status.setter
-    def status(self, value: AuthStatus) -> None:
+    @property
+    def login_status(self) -> AuthStatus:
+        """The login state alone: a waiting ask does not make it ``pending_input``."""
+        with self._lock:
+            return self._status
+
+    @login_status.setter
+    def login_status(self, value: AuthStatus) -> None:
         with self._lock:
             self._status = value
 

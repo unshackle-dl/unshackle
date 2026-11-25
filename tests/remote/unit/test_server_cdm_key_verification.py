@@ -13,9 +13,9 @@ from uuid import UUID
 import pytest
 
 from tests.remote.key_source import remote_keys
+from tests.remote.sessions import session_entry
 from unshackle.core.api import handlers
 from unshackle.core.api.errors import APIError
-from unshackle.core.api.session_store import SessionEntry
 from unshackle.core.drm import BlowfishStripe
 from unshackle.core.remote_service import RemoteService
 
@@ -65,7 +65,7 @@ class _Vault:
 
 @pytest.fixture
 def session(monkeypatch):
-    entry = SessionEntry(session_id="sess", service_tag="SVC", service_instance=SimpleNamespace())
+    entry = session_entry(service_tag="SVC")
     handlers.note_served_keys(entry, {KID.hex: "v", CDM_KID.hex: "c"}, {KID.hex: "sqlite"})
     assert entry.served_keys == {KID.hex: ("v", "sqlite"), CDM_KID.hex: ("c", "cdm")}
 
@@ -112,8 +112,7 @@ _WV.__name__ = "Widevine"
 async def test_batch_reports_vault_keys_from_the_init_segment_pssh(monkeypatch):
     """A vault hit on the init-segment PSSH retry must reach `vault_keys` like a manifest one."""
     track = SimpleNamespace(id="vid", drm=[_WV("manifest", [KID])], get_key_id=lambda init: CDM_KID)
-    session = SessionEntry(session_id="sess", service_tag="SVC", service_instance=SimpleNamespace())
-    session.tracks = {"vid": track}
+    session = session_entry(service_tag="SVC", tracks={"vid": track})
 
     probed: list = []
 
@@ -167,11 +166,13 @@ async def test_batch_reports_vault_keys_from_the_init_segment_pssh(monkeypatch):
 async def test_batch_asks_again_when_a_cached_vault_answer_lacks_the_track_kid(monkeypatch):
     """Renditions that share a header: a vault answer for one track's KID does not serve a track with another KID."""
     kids = {"a": KID, "b": CDM_KID, "c": CDM_KID}
-    session = SessionEntry(session_id="sess", service_tag="SVC", service_instance=SimpleNamespace())
-    session.tracks = {
-        tid: SimpleNamespace(id=tid, drm=[_WV("shared", [KID, CDM_KID])], get_key_id=lambda init, k=kid: k)
-        for tid, kid in kids.items()
-    }
+    session = session_entry(
+        service_tag="SVC",
+        tracks={
+            tid: SimpleNamespace(id=tid, drm=[_WV("shared", [KID, CDM_KID])], get_key_id=lambda init, k=kid: k)
+            for tid, kid in kids.items()
+        },
+    )
     asked: list = []
 
     async def validated(sid, req):
@@ -327,8 +328,7 @@ def test_a_cdm_licence_unflags_a_pair_a_client_reported(monkeypatch, tmp_path):
 async def test_a_stripe_cipher_track_is_clear_and_never_licensed(monkeypatch):
     """A track whose only DRM needs no licence goes to clear_tracks and keeps its DRM for the client."""
     track = SimpleNamespace(id="aud", drm=[BlowfishStripe(bytes(16))])
-    session = SessionEntry(session_id="sess", service_tag="SVC", service_instance=SimpleNamespace())
-    session.tracks = {"aud": track}
+    session = session_entry(service_tag="SVC", tracks={"aud": track})
 
     async def validated(sid, req):
         return session
