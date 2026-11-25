@@ -51,6 +51,7 @@ from unshackle.core.constants import AnyTrack
 from unshackle.core.credential import Credential
 from unshackle.core.dl_options import remote_dl_params
 from unshackle.core.drm import cbcs, real_kids
+from unshackle.core.launch import launch_keys
 from unshackle.core.manifests.snapshot import match_track, restore
 from unshackle.core.proxies.resolve import is_loopback
 from unshackle.core.remote_protocol import (
@@ -1094,7 +1095,7 @@ class RemoteService:
             resolved_proxy = resolve_remote_proxy_arg(server_proxy_arg(self.ctx.parent.params), providers)
             if resolved_proxy:
                 create_data["proxy"] = resolved_proxy
-                query = (self.ctx.parent.params.get("proxy_query") if self.ctx.parent else None) or proxy
+                query = launch_keys(self.ctx).get("proxy_query") or proxy
                 country = re.match(r"^(?:[a-z]+:)?([a-z]{2})\d*(?:@.*)?$", query, re.IGNORECASE)
                 if country:
                     create_data["proxy_region"] = country.group(1).lower()
@@ -1171,7 +1172,7 @@ class RemoteService:
 
         secrets = [v for v in (create_data.get("credentials") or {}).values() if isinstance(v, str) and len(v) >= 4]
         # a serve relaying for a REST client names itself; its own argv is just the serve command
-        client_argv = self.ctx.parent.params.get("client_argv") if self.ctx.parent else None
+        client_argv = launch_keys(self.ctx).get("client_argv")
         argv = (redact_path(redact_text(client_argv or shlex.join(sys.argv[1:]), secrets)) or "")[:3000]
         create_data["client"] = {
             "version": __version__,

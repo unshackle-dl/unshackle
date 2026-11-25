@@ -68,6 +68,7 @@ from unshackle.core.drm import (
 from unshackle.core.drm.key_resolution import ContentKeyResolver
 from unshackle.core.events import events
 from unshackle.core.export_name import ExportNamer, move_export, plural, season_episodes, title_label
+from unshackle.core.launch import LaunchKeys, launch
 from unshackle.core.manifests.snapshot import capture
 from unshackle.core.providers.anilist import parse_anilist_ref
 from unshackle.core.providers.tvdb import SEASON_TYPES, parse_int
@@ -1596,6 +1597,7 @@ class dl:
         )
 
         self.proxy_providers = []
+        keys: LaunchKeys = {}
         if no_proxy:
             ctx.params["proxy"] = None
         else:
@@ -1607,7 +1609,7 @@ class dl:
                 with console.status("Loading Proxy Providers...", spinner="dots"):
                     self.proxy_providers = load_proxy_providers()
 
-            ctx.params["proxy_arg"] = proxy
+            keys["proxy_arg"] = proxy
             if proxy and proxy.startswith("controld://"):
                 proxy = ctx.params["proxy"] = resolve_proxy(proxy, [])
             if proxy:
@@ -1635,20 +1637,24 @@ class dl:
                             sys.exit(1)
                         ctx.params["proxy"] = proxy_uri
                         self.log.info(describe_proxy(proxy_provider, proxy_uri, proxy_query))
-                    ctx.params["proxy_query"] = proxy_query
-                    ctx.params["proxy_provider"] = requested_provider
+                    keys["proxy_query"] = proxy_query
+                    keys["proxy_provider"] = requested_provider
                 else:
                     self.log.info(describe_explicit_proxy(ctx.params["proxy"]))
-                    ctx.params["proxy_query"] = None
-                    ctx.params["proxy_provider"] = None
+                    keys["proxy_query"] = None
+                    keys["proxy_provider"] = None
 
-        ctx.obj = ContextData(
-            config=self.service_config,
-            cdm=self.cdm,
-            proxy_providers=self.proxy_providers,
-            profile=self.profile,
-            cdm_entry=self.cdm_from_service_entry(),
-            cdm_for=self.cdm_for,
+        launch(
+            ctx,
+            keys,
+            ContextData(
+                config=self.service_config,
+                cdm=self.cdm,
+                proxy_providers=self.proxy_providers,
+                profile=self.profile,
+                cdm_entry=self.cdm_from_service_entry(),
+                cdm_for=self.cdm_for,
+            ),
         )
 
         if repack:

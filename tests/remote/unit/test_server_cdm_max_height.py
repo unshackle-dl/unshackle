@@ -480,7 +480,7 @@ def test_a_client_device_session_builds_the_service_on_a_stub_of_that_device(mon
 
     monkeypatch.setattr(handlers, "load_service_yaml", lambda tag: {})
     monkeypatch.setattr(handlers, "load_full_cdm", no_server_device)
-    monkeypatch.setattr(handlers, "build_parent_ctx", lambda profile, cdm, *a, **k: built.update(cdm=cdm))
+    monkeypatch.setattr(handlers, "served_context", lambda obj, *a: built.update(cdm=obj.cdm))
     monkeypatch.setattr(handlers.Services, "load", lambda tag: object)
     monkeypatch.setattr(handlers, "instantiate_service", lambda *a, **k: "service")
 

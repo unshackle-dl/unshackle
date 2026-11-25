@@ -24,6 +24,7 @@ from unshackle.core.console import console, prompt_user, show_notice
 from unshackle.core.constants import AnyTrack
 from unshackle.core.credential import Credential
 from unshackle.core.drm import DRM_T
+from unshackle.core.launch import launch_keys
 from unshackle.core.proxies.basic import Basic
 from unshackle.core.proxies.resolve import pick_proxy
 from unshackle.core.search_result import SearchResult
@@ -206,16 +207,12 @@ class Service(metaclass=ABCMeta):
             generate_dv=bool(generate_dv),
         )
 
-        whose = "the server's" if ctx.parent and ctx.parent.params.get("served") else "your"
+        keys = launch_keys(ctx)
+        whose = "the server's" if keys.get("served") else "your"
         if not ctx.parent or not ctx.parent.params.get("no_proxy"):
-            if ctx.parent:
-                proxy = ctx.parent.params["proxy"]
-                proxy_query = ctx.parent.params.get("proxy_query")
-                proxy_provider_name = ctx.parent.params.get("proxy_provider")
-            else:
-                proxy = None
-                proxy_query = None
-                proxy_provider_name = None
+            proxy = ctx.parent.params["proxy"] if ctx.parent else None
+            proxy_query = keys.get("proxy_query")
+            proxy_provider_name = keys.get("proxy_provider")
 
             service_name = self.__class__.__name__
             service_config_dict = config.services.get(service_name, {})

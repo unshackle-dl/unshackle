@@ -14,6 +14,7 @@ from unshackle.commands.dl import dl
 from unshackle.core.config import config, load_yaml
 from unshackle.core.console import console
 from unshackle.core.constants import context_settings
+from unshackle.core.launch import LaunchKeys, launch
 from unshackle.core.proxies.proxy import Proxy
 from unshackle.core.proxies.resolve import (
     REGION,
@@ -99,13 +100,14 @@ def search(
         proxy, no_proxy = ctx.params.get("proxy"), bool(ctx.params.get("no_proxy"))
 
     proxy_providers: list[Proxy] = []
+    keys: LaunchKeys = {}
     if no_proxy:
         ctx.params["proxy"] = None
     else:
         with console.status("Loading Proxy Providers...", spinner="dots"):
             proxy_providers = load_proxy_providers()
 
-        ctx.params["proxy_arg"] = proxy
+        keys["proxy_arg"] = proxy
         if proxy:
             try:
                 requested_provider, query = split_proxy_query(proxy, proxy_providers)
@@ -122,10 +124,12 @@ def search(
                         sys.exit(1)
                     ctx.params["proxy"] = proxy_uri
                     log.info(describe_proxy(proxy_provider, proxy_uri, query))
+                keys["proxy_query"] = query
+                keys["proxy_provider"] = requested_provider
             else:
                 log.info(describe_explicit_proxy(ctx.params["proxy"]))
 
-    ctx.obj = ContextData(config=service_config, cdm=None, proxy_providers=proxy_providers, profile=profile)
+    launch(ctx, keys, ContextData(config=service_config, cdm=None, proxy_providers=proxy_providers, profile=profile))
 
 
 @search.result_callback()

@@ -43,6 +43,7 @@ from unshackle.core.dl_options import (
     forwarded_dl_params,
 )
 from unshackle.core.drm import BlowfishStripe, cbcs, is_null_key
+from unshackle.core.launch import served_context
 from unshackle.core.manifests.snapshot import capture
 from unshackle.core.providers.anilist import parse_anilist_ref
 from unshackle.core.proxies.resolve import initialize_proxy_providers, is_loopback, resolve_proxy
@@ -81,7 +82,7 @@ from unshackle.core.tunnel import (
     tunnel_proxy,
 )
 from unshackle.core.utilities import declared_kwargs, kind_only_conflict
-from unshackle.core.utils.click_types import QUALITY_LIST, VIDEO_CODEC_LIST
+from unshackle.core.utils.click_types import QUALITY_LIST, VIDEO_CODEC_LIST, ContextData
 from unshackle.core.utils.collections import ci_get, merge_dict
 from unshackle.core.utils.hdr10plus import probed_tracks
 from unshackle.core.utils.redact import REDACTED, URL_USERINFO_RE, redact_all, redact_secrets, redact_text
@@ -171,45 +172,6 @@ def load_service_yaml(normalized_service: str) -> dict:
         service_config = copy.deepcopy(hit[1])
     merge_dict(config.services.get(normalized_service) or {}, service_config)
     return service_config
-
-
-def build_parent_ctx(
-    profile: Optional[str],
-    cdm: Any,
-    proxy_param: Optional[str],
-    no_proxy: bool,
-    proxy_providers: list,
-    service_config: dict,
-    extra_params: Optional[Dict[str, Any]] = None,
-) -> Any:
-    """Assemble a parent click Context for invoking a service.cli through ctx.invoke().
-
-    The service's CLI callback uses ``ctx.parent.params`` (proxy, range_, vcodec, and the
-    other dl options) and ``ctx.obj`` (ContextData). Both flow through Click's parent chain.
-
-    ``extra_params`` carries ``cookies_supplied``: True when a cookie jar goes to
-    ``authenticate()`` later in this request. A service that picks an authentication path in
-    ``__init__`` must read that flag, because a client-sent jar is in the request body, not in
-    the server's ``cookies/`` directory, so a file check answers False for it.
-    """
-    import click
-
-    from unshackle.core.utils.click_types import ContextData
-
-    @click.command()
-    @click.pass_context
-    def dummy(ctx: click.Context) -> None:
-        pass
-
-    parent = click.Context(dummy)
-    parent.obj = ContextData(config=service_config, cdm=cdm, proxy_providers=proxy_providers, profile=profile)
-    params: Dict[str, Any] = {"proxy": proxy_param, "no_proxy": no_proxy, "served": True}
-    if extra_params:
-        params.update(extra_params)
-    # dl defaults -q to [], and services iterate it
-    params["quality"] = params.get("quality") or []
-    parent.params = params
-    return parent
 
 
 def cast_or_refuse(params: Iterable[click.Parameter], ctx: Any, options: Dict[str, Any]) -> Dict[str, Any]:
@@ -487,14 +449,10 @@ def relay_service(
 
     # the same server_proxy gate a local service gets: without it the providers stay empty
     proxy_param, providers = resolve_handler_proxy(data, data["service"], request)
-    parent_ctx = build_parent_ctx(
-        profile,
-        None,
-        proxy_param,
-        data.get("no_proxy", False),
-        providers,
-        {},
-        extra_params={"profile": profile, "client_argv": relay_label(data)},
+    parent_ctx = served_context(
+        ContextData(config={}, cdm=None, proxy_providers=providers, profile=profile),
+        {"proxy": proxy_param, "no_proxy": data.get("no_proxy", False), "profile": profile},
+        {"client_argv": relay_label(data)},
     )
     ctx = click.Context(click.Command(data["service"]), parent=parent_ctx, obj=parent_ctx.obj)
     # this process is long-lived and serves local services too, so the remote's overrides stay out of config
@@ -790,14 +748,10 @@ def setup_list_service(
     cdm = load_full_cdm(normalized_service, profile, data.get("cdm_type"), key_cdm_config(user_config))
     cookies, credential = server_login_material(data, normalized_service, account, profile)
 
-    parent_ctx = build_parent_ctx(
-        profile,
-        cdm,
-        proxy_param,
-        no_proxy,
-        proxy_providers,
-        service_config,
-        extra_params={"cookies_supplied": cookies is not None, **forwarded_dl_params(data)},
+    parent_ctx = served_context(
+        ContextData(config=service_config, cdm=cdm, proxy_providers=proxy_providers, profile=profile),
+        {"proxy": proxy_param, "no_proxy": no_proxy, **forwarded_dl_params(data)},
+        {"cookies_supplied": cookies is not None},
     )
     service_module = Services.load(normalized_service)
     service_instance = instantiate_service(parent_ctx, service_module, title_id, data, LIST_HANDLER_TRANSPORT_KEYS)
@@ -848,14 +802,10 @@ def run_service_search(
         (None, None) if anonymous else server_login_material(data, normalized_service, account, profile)
     )
 
-    parent_ctx = build_parent_ctx(
-        profile,
-        cdm,
-        proxy_param,
-        no_proxy,
-        proxy_providers,
-        service_config,
-        extra_params={"cookies_supplied": cookies is not None},
+    parent_ctx = served_context(
+        ContextData(config=service_config, cdm=cdm, proxy_providers=proxy_providers, profile=profile),
+        {"proxy": proxy_param, "no_proxy": no_proxy},
+        {"cookies_supplied": cookies is not None},
     )
 
     from click import ClickException
@@ -3479,15 +3429,6 @@ def create_service_instance(
 
     vcodec_values = resolve_vcodec(data.get("vcodec"))
 
-    extra_params = {
-        "range_": range_values,
-        "vcodec": vcodec_values,
-        "quality": requested_heights(data.get("quality")),
-        "best_available": data.get("best_available", False),
-        "generate_dv": data.get("generate_dv", False),
-        **forwarded_dl_params(data),
-    }
-
     if server_account:
         cookies = server_account_cookies(normalized_service, profile)
         credential = dl.get_credentials(normalized_service, profile)
@@ -3495,23 +3436,24 @@ def create_service_instance(
         credential = client_credential(data)
         cookies = load_client_cookies(data.get("cookies"))
 
-    extra_params["cookies_supplied"] = cookies is not None
-    # A service with CLIENT_CONFIG reads these: with client_identity it uses only what the client sent,
-    # and without it the server's identity, whose keys then come only from a vault.
-    extra_params["client_device"] = client_device
-    extra_params["client_identity"] = client_identity
-    # Services key their token caches on this. Only sessions get it: they run on a cache
-    # directory of their own, where the list and search handlers share the server's cache.
-    extra_params["profile"] = profile
-
-    parent_ctx = build_parent_ctx(
-        profile,
-        cdm,
-        proxy_param,
-        data.get("no_proxy", False),
-        proxy_providers,
-        service_config,
-        extra_params=extra_params,
+    parent_ctx = served_context(
+        ContextData(config=service_config, cdm=cdm, proxy_providers=proxy_providers, profile=profile),
+        {
+            "proxy": proxy_param,
+            "no_proxy": data.get("no_proxy", False),
+            "range_": range_values,
+            "vcodec": vcodec_values,
+            "quality": requested_heights(data.get("quality")),
+            "best_available": data.get("best_available", False),
+            "generate_dv": data.get("generate_dv", False),
+            **forwarded_dl_params(data),
+            # Services key their token caches on this. Only sessions get it: they run on a cache
+            # directory of their own, where the list and search handlers share the server's cache.
+            "profile": profile,
+        },
+        # A service with CLIENT_CONFIG reads client_device and client_identity: with client_identity it uses
+        # only what the client sent, and without it the server's identity, whose keys then come only from a vault.
+        {"cookies_supplied": cookies is not None, "client_device": client_device, "client_identity": client_identity},
     )
 
     service_instance = instantiate_service(parent_ctx, service_module, title_id, data, SESSION_TRANSPORT_KEYS)

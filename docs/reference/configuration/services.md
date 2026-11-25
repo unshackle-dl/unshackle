@@ -10,6 +10,7 @@ Per-service configuration, keyed by the canonical service tag (for example `EXAM
 - **`proxy_map`**: remaps the region query you passed to `-p/--proxy` for this service.
   A config key is that query, or `"provider:query"` when the flag also named a proxy provider. The value is
   the query asked of the proxy provider instead. It has no effect when you give `-p` a full proxy URL.
+  `dl`, `search` and a REST API download job apply it. The other REST API routes and a `--remote` remote session do not.
 - **`title_map`**: an exact-match rename map applied to fetched titles (source name →
   desired name), so a service that names a title differently from your library still matches.
 - **`dl`**: per-service download defaults, using the same keys as the global

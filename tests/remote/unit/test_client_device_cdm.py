@@ -19,7 +19,9 @@ from unshackle.core.api import handlers
 from unshackle.core.api.errors import APIError
 from unshackle.core.api.input_bridge import InputBridge
 from unshackle.core.cdm.client_relay import ClientDeviceCdm, answer_cdm_call
+from unshackle.core.launch import served_context
 from unshackle.core.remote_protocol import APIErrorCode, AuthStatus
+from unshackle.core.utils.click_types import ContextData
 
 pytestmark = pytest.mark.unit
 
@@ -171,8 +173,8 @@ def test_a_relaying_client_gets_a_stand_in_with_its_device_facts(monkeypatch: py
     monkeypatch.setattr(handlers, "load_service_yaml", lambda tag: {"esn": "SERVER"})
     monkeypatch.setattr(
         handlers,
-        "build_parent_ctx",
-        lambda profile, cdm, *a, **k: built.update(cdm=cdm, config=a[3], params=k["extra_params"]),
+        "served_context",
+        lambda obj, params, keys: built.update(cdm=obj.cdm, config=obj.config, params={**params, **keys}),
     )
     monkeypatch.setattr(handlers.Services, "load", lambda tag: Declares)
     monkeypatch.setattr(handlers, "instantiate_service", lambda *a, **k: "service")
@@ -332,7 +334,7 @@ def test_a_lent_device_gives_the_service_the_server_config_back(monkeypatch: pyt
         handlers, "load_service_yaml", lambda tag: {"esn": "SERVER", "esn_map": {7000: "s"}, "other": 1}
     )
     monkeypatch.setattr(handlers, "load_full_cdm", lambda *a: server_device)
-    monkeypatch.setattr(handlers, "build_parent_ctx", lambda profile, cdm, *a, **k: built.update(cdm=cdm, config=a[3]))
+    monkeypatch.setattr(handlers, "served_context", lambda obj, *a: built.update(cdm=obj.cdm, config=obj.config))
     monkeypatch.setattr(handlers.Services, "load", lambda tag: Declares)
     monkeypatch.setattr(handlers, "instantiate_service", lambda *a, **k: "service")
 
@@ -423,9 +425,9 @@ def test_a_lent_device_without_the_vault_grant_asks_the_server_for_no_key() -> N
         svc.proxy_license(b"challenge", track, "widevine")
 
 
-@pytest.mark.parametrize("extra", [None, {"quality": None}])
-def test_every_service_context_defaults_quality_to_a_list(extra: Any) -> None:
-    parent = handlers.build_parent_ctx(None, None, None, False, [], {}, extra_params=extra)
+@pytest.mark.parametrize("params", [{}, {"quality": None}])
+def test_every_service_context_defaults_quality_to_a_list(params: Any) -> None:
+    parent = served_context(ContextData(config={}, cdm=None, proxy_providers=[]), params, {})
     assert parent.params["quality"] == []
 
 

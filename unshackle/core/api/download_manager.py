@@ -393,11 +393,9 @@ def perform_download(
 
     from unshackle.commands.dl import dl
     from unshackle.core.api.errors import APIError
-    from unshackle.core.config import config, load_yaml
+    from unshackle.core.config import config
     from unshackle.core.remote_protocol import APIErrorCode
     from unshackle.core.services import Services
-    from unshackle.core.utils.click_types import ContextData
-    from unshackle.core.utils.collections import merge_dict
 
     log.info(f"Starting sync download for job {job_id}")
 
@@ -447,22 +445,15 @@ def perform_download(
             params["wanted"] = season_range.parse_tokens(*wanted_raw)
 
     remote = params.get("remote")
-    service_config_path = None if remote else Services.get_path(service) / config.filenames.config
-    if service_config_path and service_config_path.exists():
-        service_config = load_yaml(service_config_path)
-    else:
-        service_config = {}
-    merge_dict(config.services.get(service) or {}, service_config)
 
     from unshackle.commands.dl import dl as dl_command
 
     ctx = click.Context(dl_command.cli)
     ctx.invoked_subcommand = service
-    from unshackle.core.api.handlers import load_full_cdm, relay_label
+    from unshackle.core.api.handlers import relay_label
     from unshackle.core.dl_options import DL_OPTION_API_NAMES, cast_dl_params
+    from unshackle.core.launch import launch
 
-    cdm = load_full_cdm(service, params.get("profile"), params.get("cdm_type"))
-    ctx.obj = ContextData(config=service_config, cdm=cdm, proxy_providers=[], profile=params.get("profile"))
     try:
         dl_params = cast_dl_params(dl_command.cli, params)
     except click.BadParameter as exc:
@@ -473,8 +464,8 @@ def perform_download(
         # dl skips the local service config and guards the proxy for a remote_services server
         "remote": bool(remote),
         "server": remote,
-        "client_argv": f"{relay_label(params)} download job {job_id}",
     }
+    launch(ctx, {"client_argv": f"{relay_label(params)} download job {job_id}"})
     # Hand-built context: record parameter sources so service dl overrides
     # apply to defaults but never clobber client-sent values.
     from click.core import ParameterSource
