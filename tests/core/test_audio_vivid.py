@@ -6,7 +6,8 @@ from typing import Any
 from pymediainfo import MediaInfo
 
 from tests.core.test_hdr10plus_probe import ts
-from unshackle.commands.dl import no_mux_extension, take_unmuxable_audio, track_file_suffix
+from unshackle.commands.dl import take_unmuxable_audio
+from unshackle.core.placement import no_mux_extension, track_file_suffix
 from unshackle.core.tracks import Audio, Tracks, Video
 
 

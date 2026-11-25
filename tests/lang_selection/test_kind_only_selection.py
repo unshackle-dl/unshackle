@@ -333,7 +333,7 @@ def test_a_failed_hybrid_muxes_the_ranges_it_falls_back_to(
         raise Muxed()
 
     stub_hybrid(monkeypatch)
-    monkeypatch.setattr("unshackle.commands.dl.hybrid_plan", hybrid_step)
+    monkeypatch.setattr("unshackle.core.mux_step.hybrid_plan", hybrid_step)
     monkeypatch.setattr(Tracks, "mux", mux)
     ranges = [Video.Range.HYBRID, Video.Range.SDR]
     with pytest.raises(Muxed):

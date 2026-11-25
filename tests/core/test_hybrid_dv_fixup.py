@@ -9,7 +9,7 @@ from typing import Any
 
 import pytest
 
-from unshackle.commands.dl import hybrid_source_tracks
+from unshackle.core.mux_step import hybrid_source_tracks
 from unshackle.core.tracks import Video
 from unshackle.core.tracks import dv_fixup as dv_fixup_mod
 from unshackle.core.tracks.dv_fixup import apply_dv_fixup

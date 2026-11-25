@@ -28,7 +28,6 @@ from langcodes import Language, tag_is_valid
 from pymediainfo import MediaInfo
 from rich.console import Group
 from rich.padding import Padding
-from rich.progress import Progress, SpinnerColumn, TaskID, TextColumn, TimeRemainingColumn
 from rich.rule import Rule
 from rich.spinner import Spinner
 from rich.table import Table
@@ -37,7 +36,7 @@ from unshackle.core import __version__, binaries, login, providers
 from unshackle.core.cdm.choice import choose_cdm
 from unshackle.core.cdm.detect import cdm_system, cdm_type_stub, is_playready_cdm, is_remote_cdm
 from unshackle.core.config import cdm_entry_names_device, config, load_yaml, resolve_cdm_name, resolve_decryption
-from unshackle.core.console import GradientPulseBarColumn, SyncLive, console, listing_panel, print_listing
+from unshackle.core.console import SyncLive, console, listing_panel, print_listing
 from unshackle.core.constants import (
     DEFAULT_SAMPLE,
     DOWNLOAD_ALL_DRM,
@@ -65,6 +64,8 @@ from unshackle.core.events import events
 from unshackle.core.export_name import ExportNamer, move_export, plural, season_episodes, title_label
 from unshackle.core.launch import LaunchKeys, launch
 from unshackle.core.manifests.snapshot import capture
+from unshackle.core.mux_step import mux_title
+from unshackle.core.placement import SAMPLE_DIR, Placement, sample_name
 from unshackle.core.providers.anilist import parse_anilist_ref
 from unshackle.core.providers.tvdb import SEASON_TYPES, parse_int
 from unshackle.core.proxies.resolve import (
@@ -86,9 +87,7 @@ from unshackle.core.titles import Movie, Movies, Series, Song, Title_T
 from unshackle.core.titles.episode import Episode
 from unshackle.core.tracks import Audio, Subtitle, Tracks, Video
 from unshackle.core.tracks.attachment import Attachment
-from unshackle.core.tracks.dv_fixup import apply_dv_fixup
-from unshackle.core.tracks.hybrid import Hybrid
-from unshackle.core.tracks.selection import HYBRID_BASE_RANGES, Skip, TrackSelection, select_hybrid_bases
+from unshackle.core.tracks.selection import HYBRID_BASE_RANGES, Skip, TrackSelection
 from unshackle.core.tracks.subtitle_convert import PYCAPTION_WRITERS, SUBSTATION, build_ass_style
 from unshackle.core.tracks.track import (
     Track,
@@ -107,7 +106,6 @@ from unshackle.core.utilities import (
     matching_languages,
     partition_exclusions,
     resolve_sort_langs,
-    standard_resolution,
     suggest_font_packages,
     time_elapsed_since,
 )
@@ -209,22 +207,6 @@ def validate_metadata_ids(
     )
 
 
-def group_videos_by_variant(videos: list[Video], *, merge: bool) -> list[list[Video]]:
-    """Group video tracks for muxing.
-
-    When ``merge`` is True, this function groups tracks that share ``(height, range, codec)``
-    into one file, so only language varies within a group. Different resolutions, ranges and
-    codecs stay in separate groups (separate files). When False, each track is its own group
-    (one file per track, the default behaviour). Group order follows first-seen track order.
-    """
-    if not merge:
-        return [[video] for video in videos]
-    groups: dict[tuple[Any, ...], list[Video]] = {}
-    for video in videos:
-        groups.setdefault((video.height, video.range, video.codec), []).append(video)
-    return list(groups.values())
-
-
 def convert_scc(subtitle: Subtitle, sub_format: Optional[Union[Subtitle.Codec, str]]) -> Subtitle.Codec:
     """
     Convert an SCC subtitle to sub_format when pycaption can write it, else to SRT, and return the new codec.
@@ -289,51 +271,6 @@ def set_subtitle_look(
         subtitle.ass_video_size = size
 
 
-def hybrid_plan(videos: Sequence[Video], generate_dv: bool) -> tuple[list[Video], Optional[Video]]:
-    """The hybrid bases and the 2D DV track to pair with them.
-
-    With no DV track, a base qualifies only with ``--generate-dv``. A resolution with a
-    finished hybrid (``native_hybrid``) gets no base: that track is its hybrid.
-    """
-    dv_tracks = [v for v in videos if v.range == Video.Range.DV and not v.stereo]
-    native_heights = {v.height for v in videos if v.native_hybrid}
-    base_pool = [v for v in videos if v.height not in native_heights and (dv_tracks or generate_dv)]
-    matching_dv = min(dv_tracks, key=lambda v: v.height or 0) if dv_tracks else None
-    return select_hybrid_bases(base_pool), matching_dv
-
-
-def hybrid_source_tracks(base: Video, dv: Optional[Video], base_container: Optional[Path] = None) -> list[Video]:
-    """Copies of the base and DV tracks for the hybrid step, with the base on its container file.
-
-    The hybrid step reads the duration and seeks, and the raw stream from the DV fixup
-    permits neither. With no DV track, the hybrid step makes Dolby Vision for the base.
-    """
-    tracks = [deepcopy(track) for track in (base, dv) if track]
-    tracks[0].path = base_container or base.path
-    return tracks
-
-
-def hybrid_step_error(tracks: list[Video], source: str, output_name: str) -> Optional[str]:
-    """Run the hybrid step for one resolution; the error that failed it, or None.
-
-    A failure here is this resolution's alone: the title goes on with its other resolutions.
-    """
-    try:
-        Hybrid(tracks, source, output_name=output_name)
-    except (ValueError, KeyError, OSError, RuntimeError) as e:
-        return str(e) or type(e).__name__
-    return None
-
-
-def missing_hybrid_error(bases: Sequence[Video], made: int) -> Optional[str]:
-    """Why the title has no hybrid file, or None when at least one was made."""
-    if made:
-        return None
-    if not bases:
-        return "No HEVC HDR10 or HDR10+ track to make a hybrid from"
-    return f"Every hybrid failed ({', '.join(f'{v.height or 0}p' for v in bases)}), so the title has no hybrid file"
-
-
 def title_wanted(candidate: Any, wanted: Collection[str]) -> bool:
     """Whether ``-w`` selects this title. A title type without selection keys is always kept.
 
@@ -355,19 +292,6 @@ def latest_episode_keys(titles: Any, latest_episode: bool, latest_episodes: Opti
         return []
     # a Series keeps itself sorted, so the newest episodes are last
     return list(dict.fromkeys((ep.season, ep.number) for ep in titles))[-count:]
-
-
-SAMPLE_DIR = "Sample"
-
-
-def template_type(title: Any) -> str:
-    """Return the output template key of a title: ``series``, ``songs`` or ``movies``."""
-    return "series" if isinstance(title, Episode) else "songs" if isinstance(title, Song) else "movies"
-
-
-def sample_name(name: str, title: Any) -> str:
-    """Return ``name`` with a SAMPLE tag, joined with the separator of the output template of the title."""
-    return f"{name.rstrip()}{config.get_template_separator(template_type(title))}SAMPLE"
 
 
 def apply_enrich(title: Title_T, name: Optional[str], year: Optional[int], language: Optional[Language]) -> None:
@@ -448,26 +372,6 @@ def take_unmuxable_audio(tracks: Tracks) -> list[Audio]:
     kept = [a for a in tracks.audio if a.codec == Audio.Codec.AV3A]
     tracks.audio = [a for a in tracks.audio if a.codec != Audio.Codec.AV3A]
     return kept
-
-
-def track_file_suffix(track: Any) -> str:
-    """The name part a track file saved on its own adds after the title: language and codec, or subtitle flags."""
-    if isinstance(track, Video):
-        return f".{track.codec.name if track.codec is not None else 'video'}"
-    lang_suffix = f".{track.language}" if track.language else ""
-    if isinstance(track, Audio):
-        return f"{lang_suffix}.{track.codec.name if track.codec is not None else 'audio'}"
-    if isinstance(track, Subtitle):
-        return f"{lang_suffix}{'.forced' if track.forced else ''}{'.sdh' if track.sdh else ''}"
-    return ""
-
-
-def no_mux_extension(track: Any, path: Path, media_info: MediaInfo) -> str:
-    """The extension of a track file saved on its own: .ts for MPEG-TS, .m4a for an audio track in MPEG-4."""
-    container = media_info.general_tracks[0].format if media_info.general_tracks else None
-    if container == "MPEG-TS":
-        return ".ts"
-    return ".m4a" if isinstance(track, Audio) and path.suffix == ".mp4" and container == "MPEG-4" else path.suffix
 
 
 def cdm_summary(cdm: Any) -> dict[str, Any]:
@@ -1709,7 +1613,6 @@ class dl:
         config.sample = sample
         if sample and include_sample:
             raise click.ClickException("--sample and --include-sample cannot be used together.")
-        sample_dir = SAMPLE_DIR if sample else ""
         self.tmdb_searched = False
         self.search_source = None
         self.service_anime = bool(getattr(service, "ANIME", False))
@@ -2880,10 +2783,13 @@ class dl:
 
                 remux_music_tracks(title, self.log, sample)
 
-                muxed_paths = []
-                muxed_audio_codecs: dict[Path, Optional[Audio.Codec]] = {}
-                tagged_paths: set[Path] = set()
-                append_audio_codec_suffix = True
+                placement = Placement(
+                    title,
+                    root=self.output_dir or config.directories.downloads,
+                    no_folder=no_folder,
+                    no_source=no_source,
+                    sample=bool(sample),
+                )
                 skip_mux = mux_skipped(no_mux, title)
                 kept_audio = [] if skip_mux else take_unmuxable_audio(title.tracks)
                 if kept_audio and not title.tracks:
@@ -2892,432 +2798,86 @@ class dl:
                     skip_mux = True
 
                 if skip_mux:
+                    sample_track = next(iter(title.tracks.videos or title.tracks.audio or title.tracks.subtitles), None)
+                    final_dir = placement.folder(
+                        MediaInfo.parse(sample_track.path)
+                        if placement.has_title_folder
+                        and sample_track
+                        and sample_track.path
+                        and sample_track.path.exists()
+                        else None
+                    )
                     for track in title.tracks:
-                        if track.path and track.path.exists():
-                            muxed_paths.append(track.path)
-                elif isinstance(title, (Movie, Episode)):
-                    progress = Progress(
-                        TextColumn("[progress.description]{task.description}"),
-                        SpinnerColumn(finished_text=""),
-                        GradientPulseBarColumn(),
-                        "•",
-                        TimeRemainingColumn(compact=True, elapsed_when_finished=True),
-                        "•",
-                        TextColumn("{task.fields[downloaded]}"),
-                        console=console,
-                    )
-
-                    merge_audio = (
-                        (not split_audio) if split_audio is not None else config.muxing.get("merge_audio", True)
-                    )
-                    # When we split audio (merge_audio=False), multiple outputs may exist per title, so suffix codec.
-                    append_audio_codec_suffix = not merge_audio
-
-                    merge_video = merge_video if merge_video is not None else config.muxing.get("merge_video", False)
-
-                    multiplex_tasks: list[tuple[TaskID, Tracks, Optional[Audio.Codec]]] = []
-                    mux_futures: list[futures.Future[tuple[Path, int, list[str]]]] = []
-                    # Track hybrid-processing outputs explicitly so we can always clean them up,
-                    # even if muxing fails early (e.g. SystemExit) before the normal delete loop.
-                    hybrid_temp_paths: list[Path] = []
-                    hybrid_base_ids: set[str] = set()
-                    container_paths: dict[str, Path] = {}
-
-                    def clone_tracks_for_audio(base_tracks: Tracks, audio_tracks: list[Audio]) -> Tracks:
-                        task_tracks = Tracks()
-                        task_tracks.videos = list(base_tracks.videos)
-                        task_tracks.audio = audio_tracks
-                        task_tracks.subtitles = list(base_tracks.subtitles)
-                        task_tracks.chapters = base_tracks.chapters
-                        task_tracks.attachments = list(base_tracks.attachments)
-                        return task_tracks
-
-                    audio_expected = not video_only and not no_audio
-
-                    def unique_mux_output(task_tracks: Tracks, index: int) -> Optional[Path]:
-                        src: Optional[Path] = None
-                        ext = ".muxed.mkv"
-                        if task_tracks.videos:
-                            src = task_tracks.videos[0].path
-                        elif task_tracks.audio:
-                            src, ext = task_tracks.audio[0].path, ".muxed.mka"
-                        elif task_tracks.subtitles:
-                            src, ext = task_tracks.subtitles[0].path, ".muxed.mks"
-                        if src is None:
-                            return None
-                        base = src.with_suffix(ext)
-                        return base.with_name(f"{base.stem}.{index}{base.suffix}")
-
-                    def mux_one(mux_index: int, task_id: TaskID, task_tracks: Tracks) -> tuple[Path, int, list[str]]:
-                        progress.start_task(task_id)
-                        muxed_path, return_code, errors = task_tracks.mux(
-                            str(title),
-                            progress=partial(progress.update, task_id=task_id),
-                            delete=False,
-                            audio_expected=audio_expected,
-                            title_language=title.language,
-                            skip_subtitles=skip_subtitle_mux,
-                            output_path=unique_mux_output(task_tracks, mux_index),
-                        )
-                        if return_code < 2:
-                            tags.tag_file(
-                                muxed_path,
-                                title,
-                                self.tmdb_id,
-                                self.imdb_id,
-                                self.tvdb_id,
-                                self.anilist_id,
-                                self.anime_hint(title),
-                                session=service.session,
-                            )
-                            tagged_paths.add(muxed_path)
-                        return muxed_path, return_code, errors
-
-                    def enqueue_mux_tasks(task_description: str, base_tracks: Tracks, hybrid: bool = False) -> None:
-                        pool = hybrid_mux_pool if hybrid else mux_pool
-                        if merge_audio or not base_tracks.audio:
-                            task_id = progress.add_task(
-                                f"{task_description}...", total=None, start=False, downloaded=""
-                            )
-                            multiplex_tasks.append((task_id, base_tracks, None))
-                            mux_futures.append(pool.submit(mux_one, len(multiplex_tasks), task_id, base_tracks))
-                            return
-
-                        audio_by_codec: dict[Optional[Audio.Codec], list[Audio]] = {}
-                        for audio_track in base_tracks.audio:
-                            audio_by_codec.setdefault(audio_track.codec, []).append(audio_track)
-
-                        for audio_codec, codec_audio_tracks in audio_by_codec.items():
-                            description = task_description
-                            if audio_codec:
-                                description = f"{task_description} {audio_codec.name}"
-
-                            task_id = progress.add_task(f"{description}...", total=None, start=False, downloaded="")
-                            task_tracks = clone_tracks_for_audio(base_tracks, codec_audio_tracks)
-                            multiplex_tasks.append((task_id, task_tracks, audio_codec))
-                            mux_futures.append(pool.submit(mux_one, len(multiplex_tasks), task_id, task_tracks))
-
-                    def mux_video_group(video_tracks: list[Optional[Video]]) -> None:
-                        for video_track in video_tracks:
-                            if video_track and video_track.dv_compatible_bitstream:
-                                container = apply_dv_fixup(video_track, keep_source=video_track.id in hybrid_base_ids)
-                                if container:
-                                    container_paths[video_track.id] = container
-                                    hybrid_temp_paths.append(container)
-
-                        task_description = "Multiplexing"
-                        # All tracks in a merged group share height/range/codec, so describe from the first.
-                        head = next((v for v in video_tracks if v), None)
-                        if head:
-                            if len(quality) > 1:
-                                task_description += f" {standard_resolution(head.width, head.height)}p"
-                            if len(range_) > 1:
-                                task_description += f" {head.range.name}"
-                            if len(vcodec) > 1:
-                                assert head.codec is not None
-                                task_description += f" {head.codec.name}"
-
-                        task_tracks = Tracks(title.tracks) + title.tracks.chapters + title.tracks.attachments
-                        if head:
-                            task_tracks.videos = [v for v in video_tracks if v]
-
-                        enqueue_mux_tasks(task_description, task_tracks)
-
-                    def group_file_size(video_tracks: Sequence[Optional[Video]]) -> int:
-                        return sum(v.path.stat().st_size for v in video_tracks if v and v.path and v.path.exists())
-
-                    if progress_sink:
-                        progress_sink(
-                            {"phase": "muxing", "progress": 96.0, "status": "downloading", "active_tracks": []}
-                        )
-
-                    try:
-                        with SyncLive(Padding(progress, (0, 5, 1, 5)), console=console, refresh_per_second=20):
-                            mux_failed = False
-                            mux_concurrency = max(1, int(config.muxing.get("concurrency", 4)))
-
-                            with (
-                                ThreadPoolExecutor(mux_concurrency) as mux_pool,
-                                ThreadPoolExecutor(mux_concurrency) as extra_mux_pool,
-                            ):
-                                hybrid_mux_pool = mux_pool if mux_concurrency == 1 else extra_mux_pool
-
-                                if any(r == Video.Range.HYBRID for r in range_) and title.tracks.videos:
-                                    self.log.info("Processing Hybrid HDR10+DV tracks...")
-
-                                    original_videos = list(title.tracks.videos)
-
-                                    standalone_videos = [v for v in original_videos if not v.hybrid_base_only]
-                                    standalone_groups: list[list[Optional[Video]]] = [
-                                        list(g) for g in group_videos_by_variant(standalone_videos, merge=merge_video)
-                                    ]
-                                    hybrid_bases, matching_dv = hybrid_plan(
-                                        [v for v in original_videos if v.hybrid_ingredient], generate_dv
-                                    )
-                                    hybrid_base_ids.update(v.id for v in hybrid_bases)
-                                    hybrids_made = 0
-                                    for video in (v for v in original_videos if v.native_hybrid):
-                                        self.log.info(
-                                            f"The {video.height}p {video.range_label} track is already the hybrid"
-                                        )
-                                        hybrids_made += 1
-
-                                    for group in sorted(standalone_groups, key=group_file_size, reverse=True):
-                                        mux_video_group(group)
-
-                                    for hdr10_track in hybrid_bases:
-                                        resolution = hdr10_track.height or 0
-                                        container = container_paths.get(hdr10_track.id)
-                                        resolution_tracks = hybrid_source_tracks(hdr10_track, matching_dv, container)
-
-                                        hybrid_filename = f"HDR10-DV-{resolution}p.hevc"
-                                        hybrid_output_path = config.directories.temp / hybrid_filename
-                                        hybrid_temp_paths.append(hybrid_output_path)
-
-                                        step_error = hybrid_step_error(resolution_tracks, self.service, hybrid_filename)
-                                        if step_error:
-                                            # the other files of the title are already queued for muxing
-                                            self.log.error(f"Hybrid {resolution}p failed, skipping it: {step_error}")
-                                            continue
-                                        hybrids_made += 1
-
-                                        if container:
-                                            try:
-                                                container.unlink(missing_ok=True)
-                                            except PermissionError:
-                                                pass  # still in hybrid_temp_paths, so the final cleanup tries again
-
-                                        task_description = f"Multiplexing Hybrid HDR10+DV {resolution}p"
-                                        task_tracks = (
-                                            Tracks(title.tracks) + title.tracks.chapters + title.tracks.attachments
-                                        )
-
-                                        hybrid_track = deepcopy(hdr10_track)
-                                        hybrid_track.id = f"hybrid_{hdr10_track.id}_{resolution}"
-                                        hybrid_track.path = hybrid_output_path
-                                        hybrid_track.range = Video.Range.DV
-                                        hybrid_track.needs_duration_fix = True
-                                        title.tracks.add(hybrid_track)
-                                        task_tracks.videos = [hybrid_track]
-
-                                        enqueue_mux_tasks(task_description, task_tracks, hybrid=True)
-
-                                    no_hybrid = missing_hybrid_error(hybrid_bases, hybrids_made)
-                                    if no_hybrid:
-                                        raise click.ClickException(no_hybrid)
-
-                                    console.print()
-                                else:
-                                    groups: list[list[Optional[Video]]] = [
-                                        list(g) for g in group_videos_by_variant(title.tracks.videos, merge=merge_video)
-                                    ] or [[None]]
-                                    for group in sorted(groups, key=group_file_size, reverse=True):
-                                        mux_video_group(group)
-
-                            mux_results = [f.result() for f in mux_futures]
-                            for (task_id, task_tracks, audio_codec), (muxed_path, return_code, errors) in zip(
-                                multiplex_tasks, mux_results
-                            ):
-                                muxed_paths.append(muxed_path)
-                                muxed_audio_codecs[muxed_path] = audio_codec
-                                if return_code >= 2:
-                                    self.log.error(f"Failed to Mux video to Matroska file ({return_code}):")
-                                elif return_code == 1 or errors:
-                                    self.log.warning("mkvmerge had at least one warning or error, continuing anyway...")
-                                for line in errors:
-                                    if line.startswith("#GUI#error"):
-                                        self.log.error(line)
-                                    else:
-                                        self.log.warning(line)
-                                if return_code >= 2:
-                                    mux_failed = True
-                            if mux_failed:
-                                sys.exit(1)
-
-                            if sidecar_subtitles and not no_mux:
-                                sidecar_targets: list[tuple[Optional[Path], str, Path]] = []
-                                for muxed_path in muxed_paths or [None]:
-                                    media_info = MediaInfo.parse(muxed_path) if muxed_path else None
-                                    if media_info:
-                                        base_filename = title.get_filename(media_info, show_service=not no_source)
-                                        if sample:
-                                            base_filename = sample_name(base_filename, title)
-                                    else:
-                                        base_filename = str(title)
-
-                                    sidecar_dir = self.output_dir or config.directories.downloads
-                                    if (
-                                        not no_folder
-                                        and media_info
-                                        and (
-                                            isinstance(title, (Episode, Song))
-                                            or (isinstance(title, Movie) and config.get_folder_template("movies"))
-                                        )
-                                    ):
-                                        sidecar_dir /= title.get_filename(
-                                            media_info, show_service=not no_source, folder=True
-                                        )
-                                    sidecar_dir /= sample_dir
-                                    sidecar_targets.append((muxed_path, base_filename, sidecar_dir))
-
-                                with console.status("Saving subtitle sidecar files..."):
-                                    first_path, first_base, first_dir = sidecar_targets[0]
-                                    first_dir.mkdir(parents=True, exist_ok=True)
-                                    created = self.output_subtitle_sidecars(
-                                        sidecar_subtitles,
-                                        first_base,
-                                        first_dir,
-                                        sidecar_format,
-                                        original_paths=sidecar_original_paths or None,
-                                    )
-                                    if created:
-                                        sidecar_files[first_path] = list(created)
-                                        self.log.info(f"Saved {len(created)} sidecar subtitle files")
-
-                                    for sidecar_path, base_filename, sidecar_dir in sidecar_targets[1:]:
-                                        sidecar_dir.mkdir(parents=True, exist_ok=True)
-                                        copies = []
-                                        for source in created:
-                                            target = sidecar_dir / f"{base_filename}{source.name[len(first_base) :]}"
-                                            if target != source:
-                                                shutil.copy2(source, target)
-                                            copies.append(target)
-                                        if copies:
-                                            sidecar_files[sidecar_path] = copies
-                                            self.log.info(f"Saved {len(copies)} sidecar subtitle files")
-
-                            for track in title.tracks:
-                                track.delete()
-
-                            for attachment in title.tracks.attachments:
-                                attachment.delete()
-                            for temp_path in sidecar_original_paths.values():
-                                temp_path.unlink(missing_ok=True)
-                    finally:
-                        # Hybrid() writes a temp HEVC per resolution, so delete each one here.
-                        for temp_path in hybrid_temp_paths:
-                            try:
-                                temp_path.unlink(missing_ok=True)
-                            except PermissionError:
-                                self.log.warning(f"Failed to delete temp file (in use?): {temp_path}")
-                        for leftover in (
-                            "HDR10-DV.hevc",
-                            "HDR10.hevc",
-                            "DV.hevc",
-                            "RPU.bin",
-                            "RPU_UNT.bin",
-                            "RPU_L5.bin",
-                            "RPU_L6.bin",
-                            "L5.json",
-                            "HDR10Plus.json",
-                        ):
-                            leftover_path = config.directories.temp / leftover
-                            try:
-                                leftover_path.unlink(missing_ok=True)
-                            except PermissionError:
-                                self.log.warning(f"Failed to delete temp file (in use?): {leftover_path}")
-
-                else:
-                    muxed_paths.extend(track.path for track in title.tracks.audio if track.path and track.path.exists())
-
-                if skip_mux:
-                    final_dir = self.output_dir or config.directories.downloads
-                    if not no_folder and (
-                        isinstance(title, (Episode, Song))
-                        or (isinstance(title, Movie) and config.get_folder_template("movies"))
-                    ):
-                        sample_track = (
-                            title.tracks.videos[0]
-                            if title.tracks.videos
-                            else (
-                                title.tracks.audio[0]
-                                if title.tracks.audio
-                                else (title.tracks.subtitles[0] if title.tracks.subtitles else None)
-                            )
-                        )
-                        if sample_track and sample_track.path:
-                            media_info = MediaInfo.parse(sample_track.path)
-                            final_dir /= title.get_filename(media_info, show_service=not no_source, folder=True)
-
-                    final_dir /= sample_dir
-                    final_dir.mkdir(parents=True, exist_ok=True)
-
-                    for track_path in muxed_paths:
-                        fix_data_reference_indexes(track_path)
-                        media_info = MediaInfo.parse(track_path)
-                        base_filename = title.get_filename(media_info, show_service=not no_source)
-                        if sample:
-                            base_filename = sample_name(base_filename, title)
-
-                        track = next((t for t in title.tracks if t.path == track_path), None)
-                        if track:
-                            ext = no_mux_extension(track, track_path, media_info)
-                            final_path = final_dir / f"{base_filename}{track_file_suffix(track)}{ext}"
-                        else:
-                            final_path = final_dir / f"{base_filename}{track_path.suffix}"
-
-                        shutil.move(track_path, final_path)
+                        if not (track.path and track.path.exists()):
+                            continue
+                        fix_data_reference_indexes(track.path)
+                        final_path = placement.track_file(final_dir, track, MediaInfo.parse(track.path))
+                        shutil.move(track.path, final_path)
                         self.completed_files.append(final_path)
                         self.log.debug(f"Saved: {final_path.name}")
+                elif isinstance(title, (Movie, Episode)):
+                    outputs, mux_sidecars = mux_title(
+                        title,
+                        placement,
+                        log=self.log,
+                        service_tag=self.service,
+                        split_audio=split_audio,
+                        merge_video=merge_video,
+                        audio_expected=not video_only and not no_audio,
+                        skip_subtitles=bool(skip_subtitle_mux),
+                        quality=quality,
+                        range_=range_,
+                        vcodec=vcodec,
+                        generate_dv=generate_dv,
+                        progress_sink=progress_sink,
+                        write_sidecars=partial(
+                            self.output_subtitle_sidecars,
+                            sidecar_subtitles,
+                            sidecar_format=sidecar_format,
+                            original_paths=sidecar_original_paths or None,
+                        )
+                        if sidecar_subtitles
+                        else None,
+                    )
+                    sidecar_files.update(mux_sidecars)
+                    for temp_path in sidecar_original_paths.values():
+                        temp_path.unlink(missing_ok=True)
                 else:
-                    used_final_paths: set[Path] = set()
-                    for muxed_path in muxed_paths:
+                    outputs = [(track.path, None) for track in title.tracks.audio if track.path and track.path.exists()]
+
+                if not skip_mux:
+                    for muxed_path, audio_codec in outputs:
                         media_info = MediaInfo.parse(muxed_path)
-                        final_dir = self.output_dir or config.directories.downloads
-                        final_filename = title.get_filename(media_info, show_service=not no_source)
-                        if sample:
-                            final_filename = sample_name(final_filename, title)
-                        audio_codec_suffix = muxed_audio_codecs.get(muxed_path)
-
-                        if not no_folder and (
-                            isinstance(title, (Episode, Song))
-                            or (isinstance(title, Movie) and config.get_folder_template("movies"))
-                        ):
-                            final_dir /= title.get_filename(media_info, show_service=not no_source, folder=True)
-                        final_dir /= sample_dir
-
-                        final_dir.mkdir(parents=True, exist_ok=True)
-                        final_path = final_dir / f"{final_filename}{muxed_path.suffix}"
-                        sep = config.get_template_separator(template_type(title))
-
-                        if final_path.exists() and audio_codec_suffix and append_audio_codec_suffix:
-                            final_filename = f"{final_filename.rstrip()}{sep}{audio_codec_suffix.name}"
-                            final_path = final_dir / f"{final_filename}{muxed_path.suffix}"
-
-                        if final_path in used_final_paths:
-                            i = 2
-                            while final_path in used_final_paths:
-                                final_path = final_dir / f"{final_filename.rstrip()}{sep}{i}{muxed_path.suffix}"
-                                i += 1
-
+                        final_path = placement.claim(
+                            placement.folder(media_info), placement.name(media_info), muxed_path.suffix, audio_codec
+                        )
                         try:
                             os.replace(muxed_path, final_path)
                         except OSError:
                             if final_path.exists():
                                 final_path.unlink()
                             shutil.move(muxed_path, final_path)
-                        used_final_paths.add(final_path)
                         self.completed_files.append(final_path)
                         for kept in kept_audio:
                             assert kept.path is not None
-                            ext = no_mux_extension(kept, kept.path, MediaInfo.parse(kept.path))
-                            kept_path = final_path.with_name(f"{final_path.stem}{track_file_suffix(kept)}{ext}")
+                            kept_path = placement.track_file(
+                                final_path.parent, kept, MediaInfo.parse(kept.path), stem=final_path.stem
+                            )
                             shutil.move(kept.path, kept_path)
                             self.completed_files.append(kept_path)
                             sidecar_files.setdefault(muxed_path, []).append(kept_path)
                             self.log.info(f"Saved {kept_path.name}: no muxer carries Audio Vivid")
                         kept_audio = []
-                        if muxed_path not in tagged_paths:
-                            tags.tag_file(
-                                final_path,
-                                title,
-                                self.tmdb_id,
-                                self.imdb_id,
-                                self.tvdb_id,
-                                self.anilist_id,
-                                self.anime_hint(title),
-                                session=service.session,
-                            )
+                        tags.tag_file(
+                            final_path,
+                            title,
+                            self.tmdb_id,
+                            self.imdb_id,
+                            self.tvdb_id,
+                            self.anilist_id,
+                            self.anime_hint(title),
+                            session=service.session,
+                        )
                         if include_sample:
                             self.write_sample(final_path, title, media_info)
                         if isinstance(title, Song) and title.synced_lyrics and title.lyrics_suffix:
@@ -3341,8 +2901,6 @@ class dl:
                         post_script_sample = post_script_context
                         if final_path.parent not in post_script_folders:
                             post_script_folders.append(final_path.parent)
-
-                if not skip_mux:
                     settle_post_script_group(title)
 
                 title_dl_time = time_elapsed_since(dl_start_time)

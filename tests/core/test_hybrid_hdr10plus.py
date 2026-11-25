@@ -18,16 +18,12 @@ import pytest
 
 import unshackle.commands.dl as dl_module
 from tests.remote.unit.test_remote_service_helpers import _sent_create_data
-from unshackle.commands.dl import (
-    generated_dv_ranges,
-    hybrid_plan,
-    hybrid_source_tracks,
-    hybrid_step_error,
-    missing_hybrid_error,
-)
+from unshackle.commands.dl import generated_dv_ranges
+from unshackle.core import mux_step
 from unshackle.core.api import download_manager, handlers
 from unshackle.core.api.handlers import validate_download_parameters
 from unshackle.core.config import config
+from unshackle.core.mux_step import hybrid_plan, hybrid_source_tracks, hybrid_step_error, missing_hybrid_error
 from unshackle.core.service import Service, TrackRequest
 from unshackle.core.services import Services
 from unshackle.core.tracks import Audio, Chapter, Subtitle, Tracks, Video
@@ -702,20 +698,20 @@ def test_a_hybrid_failure_is_reported_so_the_title_goes_on(monkeypatch: pytest.M
     def failed_hybrid(*args: Any, **kwargs: Any) -> None:
         raise error
 
-    monkeypatch.setattr(dl_module, "Hybrid", failed_hybrid)
+    monkeypatch.setattr(mux_step, "Hybrid", failed_hybrid)
 
     assert hybrid_step_error([], "TEST", "HDR10-DV-2160p.hevc") == str(error)
 
 
 def test_a_working_hybrid_reports_no_error_and_an_exit_passes_through(monkeypatch: pytest.MonkeyPatch) -> None:
     seen: dict[str, Any] = {}
-    monkeypatch.setattr(dl_module, "Hybrid", lambda tracks, source, output_name: seen.update(name=output_name))
+    monkeypatch.setattr(mux_step, "Hybrid", lambda tracks, source, output_name: seen.update(name=output_name))
     assert hybrid_step_error([], "TEST", "HDR10-DV-2160p.hevc") is None and seen == {"name": "HDR10-DV-2160p.hevc"}
 
     def exiting(*args: Any, **kwargs: Any) -> None:
         raise SystemExit(1)
 
-    monkeypatch.setattr(dl_module, "Hybrid", exiting)
+    monkeypatch.setattr(mux_step, "Hybrid", exiting)
     with pytest.raises(SystemExit):
         hybrid_step_error([], "TEST", "HDR10-DV-2160p.hevc")
 

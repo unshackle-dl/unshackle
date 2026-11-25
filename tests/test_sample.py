@@ -15,10 +15,10 @@ import click
 import pytest
 from requests import Session
 
-from unshackle.commands.dl import sample_name
 from unshackle.core.api.handlers import validate_download_parameters
 from unshackle.core.config import config
 from unshackle.core.manifests.dash import DASH
+from unshackle.core.placement import sample_name
 from unshackle.core.services import Services
 from unshackle.core.titles import Episode, Movie
 from unshackle.core.tracks import Audio, Chapter, Subtitle, Tracks, Video

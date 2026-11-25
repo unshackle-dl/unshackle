@@ -8,7 +8,7 @@ import pytest
 from langcodes import Language
 
 from tests.lang_selection import test_kind_only_selection as harness
-from unshackle.commands.dl import hybrid_plan
+from unshackle.core.mux_step import hybrid_plan
 from unshackle.core.titles import Episode
 from unshackle.core.tracks import Audio, Subtitle, Tracks, Video
 
@@ -368,7 +368,7 @@ def test_a_standalone_range_beside_hybrid_does_not_add_a_hybrid_base(
     def stop_at_plan(videos: list[Video], generate_dv: bool) -> None:
         raise Planned(videos, generate_dv)
 
-    monkeypatch.setattr("unshackle.commands.dl.hybrid_plan", stop_at_plan)
+    monkeypatch.setattr("unshackle.core.mux_step.hybrid_plan", stop_at_plan)
     monkeypatch.setattr(Video, "normalize_vui", lambda self: None)
     with pytest.raises(Planned) as planned:
         run_hdr(monkeypatch, caplog, videos, ["HYBRID", "HDR10"], to_end=True, video_only=True)

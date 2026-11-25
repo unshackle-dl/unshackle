@@ -20,8 +20,9 @@ from pymediainfo import MediaInfo
 
 from tests.core.test_music_container import fragmented_mp4, header_length
 from tests.core.test_music_tagger_roundtrip import make_song
-from unshackle.commands.dl import mux_skipped, no_mux_extension, remux_music_tracks
+from unshackle.commands.dl import mux_skipped, remux_music_tracks
 from unshackle.core.config import config
+from unshackle.core.placement import no_mux_extension
 from unshackle.core.titles.movie import Movie
 from unshackle.core.tracks import Audio, Tracks, Video
 from unshackle.core.utils import tags

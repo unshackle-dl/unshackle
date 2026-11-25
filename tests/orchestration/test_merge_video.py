@@ -1,6 +1,6 @@
 """Tests for ``--merge-video`` track grouping.
 
-``group_videos_by_variant`` (``unshackle/commands/dl.py``) decides which selected video
+``group_videos_by_variant`` (``unshackle/core/mux_step.py``) decides which selected video
 tracks share one MKV when merge mode is on. The rule: group by ``(resolution, range,
 codec)`` so only language varies within a file; resolutions, ranges and codecs stay
 separate. With ``merge=False`` every track is its own group (one file per track).
@@ -10,7 +10,7 @@ These lock the pure grouping unit; the surrounding mux loop is Click-command orc
 
 from __future__ import annotations
 
-from unshackle.commands.dl import group_videos_by_variant
+from unshackle.core.mux_step import group_videos_by_variant
 from unshackle.core.tracks import Video
 
 

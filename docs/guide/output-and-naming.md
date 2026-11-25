@@ -517,6 +517,8 @@ A few muxing behaviors are automatic and not configurable:
 
 The `--no-mux` flag skips muxing entirely and writes the individual track files, each with a track-type suffix, into the same output/folder structure. An audio track in an MP4 container gets the `.m4a` extension. A track that shaka-packager decrypts has its date set to 1970-01-01; other tracks keep the date of the source file.
 
+Two output files of one title never get the same name. When a name is already in use, the second file gets the separator of the output template and a number, starting at 2. For example, an audio-description track in the same language and codec as the main audio is saved as `<name>.en.AAC.2.m4a`. With `--split-audio`, a muxed file whose name is already on disk first gets the name of its audio codec.
+
 ## Sample files
 
 [`--sample`](cli-reference.md#output-muxing-files) and `--include-sample` write a sample into a
