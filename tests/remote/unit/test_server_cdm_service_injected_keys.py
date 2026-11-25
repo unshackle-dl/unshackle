@@ -37,9 +37,6 @@ class _BypassCdm:
     def close(self, session_id):
         pass
 
-    def set_pssh_b64(self, *a, **k):
-        pass
-
     def get_license_challenge(self, session_id, pssh):
         return b"challenge"
 

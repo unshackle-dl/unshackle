@@ -1,85 +1,19 @@
 from __future__ import annotations
 
 import base64
-import secrets
-from typing import Any, Dict, List, Optional, Union
-from uuid import UUID
+from typing import Any, Dict, List, Optional
 
 import requests
-from pywidevine.cdm import Cdm as WidevineCdm
-from pywidevine.device import DeviceTypes
 from requests import Session
 
 from unshackle.core import __version__
-from unshackle.core.cdm.loader import system_of
-from unshackle.core.vault import is_null_key
+from unshackle.core.cdm.http_cdm import HttpCdm, HttpCdmExceptions, b64_or_utf8
 from unshackle.core.vaults import Vaults
 
-
-class MockCertificateChain:
-    """Mock certificate chain for PlayReady compatibility."""
-
-    def __init__(self, name: str) -> None:
-        self._name = name
-
-    def get_name(self) -> str:
-        return self._name
+CustomRemoteCDMExceptions = HttpCdmExceptions
 
 
-class Key:
-    """`Key` object compatible with pywidevine."""
-
-    def __init__(
-        self,
-        kid: Union[str, UUID],
-        key: Union[str, bytes],
-        type_: str = "CONTENT",
-        permissions: Optional[List[str]] = None,
-    ) -> None:
-        if isinstance(kid, str):
-            clean_kid = kid.replace("-", "")
-            if len(clean_kid) == 32:
-                self.kid = UUID(hex=clean_kid)
-            else:
-                self.kid = UUID(hex=clean_kid.ljust(32, "0"))
-        else:
-            self.kid = kid
-
-        if isinstance(key, str):
-            self.key = bytes.fromhex(key)
-        else:
-            self.key = key
-
-        self.type = type_
-        self.permissions = permissions or []
-
-
-class CustomRemoteCDMExceptions:
-    """Exception classes for compatibility with pywidevine CDM."""
-
-    class InvalidSession(Exception):
-        """Raised when session ID is invalid."""
-
-    class TooManySessions(Exception):
-        """Raised when the CDM sessions reach the limit."""
-
-    class InvalidInitData(Exception):
-        """Raised when PSSH/init data is invalid."""
-
-    class InvalidLicenseType(Exception):
-        """Raised when license type is invalid."""
-
-    class InvalidLicenseMessage(Exception):
-        """Raised when license message is invalid."""
-
-    class InvalidContext(Exception):
-        """Raised when the CDM session has no context data."""
-
-    class SignatureMismatch(Exception):
-        """Raised when signature verification fails."""
-
-
-class CustomRemoteCDM:
+class CustomRemoteCDM(HttpCdm):
     """
     Highly Configurable Custom Remote CDM implementation.
 
@@ -114,9 +48,7 @@ class CustomRemoteCDM:
     - Conditional parameters based on device type or other factors
     """
 
-    service_certificate_challenge = b"\x08\x04"
-
-    is_remote_cdm = True
+    chain_suffix = "Custom_Remote"
 
     def __init__(
         self,
@@ -150,23 +82,20 @@ class CustomRemoteCDM:
             timeout: Default request timeout in seconds
             **kwargs: Additional configuration options for future extensibility
         """
-        self.host = host.rstrip("/")
-        self.service_name = service_name or ""
-        self.vaults = vaults
-        self.timeout = timeout
-
         device = device or {}
-        self.device_name = device.get("name", "ChromeCDM")
         self.device_type_str = device.get("type", "CHROME")
+        self.auth_config = auth or {"type": "header", "header_name": "Authorization", "key": ""}
+        super().__init__(
+            host,
+            device.get("name", "ChromeCDM"),
+            self.device_type_str,
+            service_name,
+            vaults,
+            {"User-Agent": f"unshackle-custom-cdm/{__version__}", **self.auth_config.get("custom_headers", {})},
+        )
+        self.timeout = timeout
         self.system_id = device.get("system_id", 26830)
         self.security_level = device.get("security_level", 3)
-
-        self._is_playready = system_of(self.device_type_str, self.device_name) == "playready"
-
-        if self.device_type_str:
-            self.device_type = self.get_device_type_enum(self.device_type_str)
-
-        self.auth_config = auth or {"type": "header", "header_name": "Authorization", "key": ""}
 
         endpoints = endpoints or {}
         self.endpoints = {
@@ -207,110 +136,8 @@ class CustomRemoteCDM:
         self.response_mapping = response_mapping or {}
 
         caching = caching or {}
-        self.caching_enabled = caching.get("enabled", True)
         self.use_vaults = caching.get("use_vaults", True) and self.vaults is not None
-        self.check_cached_first = caching.get("check_cached_first", True)
-
-        self.legacy_config = legacy or {"enabled": False}
-
-        self._sessions: Dict[bytes, Dict[str, Any]] = {}
-        self._pssh_b64: Optional[str] = None
-        self._required_kids: Optional[List[str]] = None
-
-        self._http_session = Session()
-        self._http_session.headers.update(
-            {"Content-Type": "application/json", "User-Agent": f"unshackle-custom-cdm/{__version__}"}
-        )
-
-        custom_headers = self.auth_config.get("custom_headers", {})
-        if custom_headers:
-            self._http_session.headers.update(custom_headers)
-
-    def get_device_type_enum(self, device_type: str) -> DeviceTypes:
-        """Convert device type string to enum for compatibility."""
-        device_type_upper = device_type.upper()
-        if device_type_upper == "ANDROID":
-            return DeviceTypes.ANDROID
-        elif device_type_upper == "CHROME":
-            return DeviceTypes.CHROME
-        else:
-            return DeviceTypes.CHROME
-
-    @property
-    def is_playready(self) -> bool:
-        """Return True if this CDM is in PlayReady mode."""
-        return self._is_playready
-
-    @property
-    def certificate_chain(self) -> MockCertificateChain:
-        """Mock certificate chain for PlayReady compatibility."""
-        return MockCertificateChain(f"{self.device_name}_Custom_Remote")
-
-    def set_pssh_b64(self, pssh_b64: str, session_id: Optional[bytes] = None) -> None:
-        """Store base64-encoded PSSH data for PlayReady compatibility."""
-        if session_id is not None and session_id in self._sessions:
-            self._sessions[session_id]["pssh_b64"] = pssh_b64
-        self._pssh_b64 = pssh_b64
-
-    def set_required_kids(self, kids: List[Union[str, UUID]], session_id: Optional[bytes] = None) -> None:
-        """
-        Set the required Key IDs for intelligent caching decisions.
-
-        This method enables the CDM to make smart decisions about when to request
-        additional keys through license challenges. When cached keys are available,
-        the CDM will compare them against the required KIDs to determine if a
-        license request is still needed for missing keys.
-
-        Args:
-            kids: List of required Key IDs as UUIDs or hex strings
-
-        Note:
-            Call this method from the DRM classes (PlayReady/Widevine) before a
-            license challenge request, to enable optimal caching behaviour.
-        """
-        required = [str(kid).replace("-", "").lower() for kid in kids]
-        if session_id is not None and session_id in self._sessions:
-            self._sessions[session_id]["required_kids"] = required
-        self._required_kids = required
-
-    def generate_session_id(self) -> bytes:
-        """Make a unique session ID."""
-        return secrets.token_bytes(16)
-
-    def get_init_data_from_pssh(self, pssh: Any, pssh_b64: Optional[str] = None) -> str:
-        """Extract init data from various PSSH formats."""
-        effective_pssh_b64 = pssh_b64 or self._pssh_b64
-        if self.is_playready and effective_pssh_b64:
-            return effective_pssh_b64
-
-        if hasattr(pssh, "dumps"):
-            dumps_result = pssh.dumps()
-
-            if isinstance(dumps_result, str):
-                try:
-                    base64.b64decode(dumps_result)
-                    return dumps_result
-                except ValueError:
-                    return base64.b64encode(dumps_result.encode("utf-8")).decode("utf-8")
-            else:
-                return base64.b64encode(dumps_result).decode("utf-8")
-        elif hasattr(pssh, "raw"):
-            raw_data = pssh.raw
-            if isinstance(raw_data, str):
-                raw_data = raw_data.encode("utf-8")
-            return base64.b64encode(raw_data).decode("utf-8")
-        elif hasattr(pssh, "__class__") and "WrmHeader" in pssh.__class__.__name__:
-            if self.is_playready:
-                raise ValueError("PlayReady WRM header received but no PSSH B64 was set via set_pssh_b64()")
-
-            if hasattr(pssh, "raw_bytes"):
-                return base64.b64encode(pssh.raw_bytes).decode("utf-8")
-            elif hasattr(pssh, "bytes"):
-                return base64.b64encode(pssh.bytes).decode("utf-8")
-            else:
-                raise ValueError(f"Cannot extract PSSH data from WRM header type: {type(pssh)}")
-        else:
-            raise ValueError(f"Unsupported PSSH type: {type(pssh)}")
+        self.apply_authentication(self._http_session)
 
     def get_nested_field(self, data: Dict[str, Any], field_path: str, default: Any = None) -> Any:
         """
@@ -664,233 +491,31 @@ class CustomRemoteCDM:
 
         return keys
 
-    def open(self) -> bytes:
-        """
-        Open a new CDM session.
+    def _call(self, endpoint_name: str, params: Dict[str, Any], failure: str) -> Dict[str, Any]:
+        """POST to a configured endpoint and return its JSON body; raises on a status other than 200."""
+        endpoint = self.endpoints[endpoint_name]
+        return self._post(endpoint["path"], params, failure, endpoint["timeout"])
 
-        Returns:
-            Session identifier as bytes
-        """
-        session_id = self.generate_session_id()
-        self._pssh_b64 = None
-        self._sessions[session_id] = {
-            "service_certificate": None,
-            "keys": [],
-            "pssh": None,
-            "pssh_b64": None,
-            "challenge": None,
-            "remote_session_id": None,
-            "tried_cache": False,
-            "cached_keys": None,
-        }
-        return session_id
-
-    def close(self, session_id: bytes) -> None:
-        """
-        Close a CDM session and do comprehensive cleanup.
-
-        Args:
-            session_id: Session identifier
-
-        Raises:
-            ValueError: If session ID is invalid
-        """
-        if session_id not in self._sessions:
-            raise CustomRemoteCDMExceptions.InvalidSession(f"Invalid session ID: {session_id.hex()}")
-
-        session = self._sessions[session_id]
-        session.clear()
-        del self._sessions[session_id]
-
-    def get_service_certificate(self, session_id: bytes) -> Optional[bytes]:
-        """
-        Get the service certificate for a CDM session.
-
-        Args:
-            session_id: Session identifier
-
-        Returns:
-            Service certificate if set, None otherwise
-
-        Raises:
-            ValueError: If session ID is invalid
-        """
-        if session_id not in self._sessions:
-            raise CustomRemoteCDMExceptions.InvalidSession(f"Invalid session ID: {session_id.hex()}")
-
-        return self._sessions[session_id]["service_certificate"]
-
-    def set_service_certificate(self, session_id: bytes, certificate: Optional[Union[bytes, str]]) -> str:
-        """
-        Set the service certificate for a CDM session.
-
-        Args:
-            session_id: Session identifier
-            certificate: Service certificate (bytes or base64 string)
-
-        Returns:
-            Certificate status message
-
-        Raises:
-            ValueError: If session ID is invalid
-        """
-        if session_id not in self._sessions:
-            raise CustomRemoteCDMExceptions.InvalidSession(f"Invalid session ID: {session_id.hex()}")
-
-        if certificate is None:
-            if not self._is_playready and self.device_name == "L1":
-                certificate = WidevineCdm.common_privacy_cert
-                self._sessions[session_id]["service_certificate"] = base64.b64decode(certificate)
-                return "Using default Widevine common privacy certificate for L1"
-            else:
-                self._sessions[session_id]["service_certificate"] = None
-                return "No certificate set (not required for this device type)"
-
-        if isinstance(certificate, str):
-            certificate = base64.b64decode(certificate)
-
-        self._sessions[session_id]["service_certificate"] = certificate
-        return "Successfully set Service Certificate"
-
-    def has_cached_keys(self, session_id: bytes) -> bool:
-        """
-        Return True if cached keys are available for the CDM session.
-
-        Args:
-            session_id: Session identifier
-
-        Returns:
-            True if cached keys are available
-
-        Raises:
-            ValueError: If session ID is invalid
-        """
-        if session_id not in self._sessions:
-            raise CustomRemoteCDMExceptions.InvalidSession(f"Invalid session ID: {session_id.hex()}")
-
-        session = self._sessions[session_id]
-        session_keys = session.get("keys", [])
-        return len(session_keys) > 0
-
-    def get_license_challenge(
-        self, session_id: bytes, pssh_or_wrm: Any, license_type: str = "STREAMING", privacy_mode: bool = True
+    def _request_challenge(
+        self,
+        session: Dict[str, Any],
+        body: Dict[str, Any],
+        license_type: str,
+        privacy_mode: bool,
     ) -> bytes:
-        """
-        Make a license challenge with the custom CDM API.
-
-        This method implements intelligent caching logic that checks vaults first,
-        then attempts to retrieve cached keys from the API, and only makes a
-        license request if keys are missing.
-
-        Args:
-            session_id: Session identifier
-            pssh_or_wrm: PSSH object or WRM header (for PlayReady compatibility)
-            license_type: Type of license (STREAMING, OFFLINE, AUTOMATIC) - for compatibility only
-            privacy_mode: Whether to use privacy mode - for compatibility only
-
-        Returns:
-            License challenge as bytes, or empty bytes if available keys satisfy requirements
-
-        Raises:
-            InvalidSession: If session ID is invalid
-            requests.RequestException: If API request fails
-        """
-        if session_id not in self._sessions:
-            raise CustomRemoteCDMExceptions.InvalidSession(f"Invalid session ID: {session_id.hex()}")
-
-        session = self._sessions[session_id]
-        session["pssh"] = pssh_or_wrm
-        init_data = self.get_init_data_from_pssh(pssh_or_wrm, session.get("pssh_b64"))
-
-        required_kids_list = session.get("required_kids") or self._required_kids
-
-        if self.use_vaults and self.vaults is not None and required_kids_list:
-            vault_keys = []
-            for kid_str in required_kids_list:
-                try:
-                    clean_kid = kid_str.replace("-", "")
-                    if len(clean_kid) == 32:
-                        kid_uuid = UUID(hex=clean_kid)
-                    else:
-                        kid_uuid = UUID(hex=clean_kid.ljust(32, "0"))
-                    key, _ = self.vaults.get_key(kid_uuid)
-                    if not is_null_key(key):
-                        vault_keys.append({"kid": kid_str, "key": key, "type": "CONTENT"})
-                except (ValueError, TypeError):
-                    continue
-
-            if vault_keys:
-                vault_kids = set(k["kid"] for k in vault_keys)
-                required_kids = set(required_kids_list)
-
-                if required_kids.issubset(vault_kids):
-                    session["keys"] = vault_keys
-                    return b""
-                else:
-                    session["vault_keys"] = vault_keys
-
-        base_params = {
-            "scheme": self.device_name,
-            "init_data": init_data,
-            "license_type": license_type,
-            "privacy_mode": privacy_mode,
-        }
-
-        if self.service_name:
-            base_params["service"] = self.service_name
-
-        if session["service_certificate"]:
-            base_params["service_certificate"] = base64.b64encode(session["service_certificate"]).decode("utf-8")
-
+        base_params = {**body, "license_type": license_type, "privacy_mode": privacy_mode}
         request_params = self.build_request_params("get_request", base_params, session)
-
-        self.apply_authentication(self._http_session)
-
-        endpoint_config = self.endpoints["get_request"]
-        url = f"{self.host}{endpoint_config['path']}"
-        timeout = endpoint_config["timeout"]
-
-        response = self._http_session.post(url, json=request_params, timeout=timeout)
-
-        if response.status_code != 200:
-            raise requests.RequestException(f"API request failed: {response.status_code} {response.text}")
-
-        response_data = response.json()
-        parsed_response = self.parse_response_data("get_request", response_data)
+        parsed_response = self.parse_response_data(
+            "get_request", self._call("get_request", request_params, "API request failed")
+        )
 
         if not parsed_response.get("_is_success", False):
             error_msg = parsed_response.get("_error_message", "Unknown error")
             raise requests.RequestException(f"API error: {error_msg}")
 
-        response_type = parsed_response.get("_response_type")
-
-        if response_type == "cached_keys" or "cached_keys" in parsed_response:
+        if parsed_response.get("_response_type") == "cached_keys" or "cached_keys" in parsed_response:
             cached_keys = self.parse_keys_from_response("get_request", parsed_response)
-
-            all_available_keys = list(cached_keys)
-            if "vault_keys" in session:
-                all_available_keys.extend(session["vault_keys"])
-
-            session["tried_cache"] = True
-
-            if required_kids_list:
-                available_kids: set[str] = set()
-                for cached_key in all_available_keys:
-                    if isinstance(cached_key, dict) and "kid" in cached_key:
-                        available_kids.add(cached_key["kid"].replace("-", "").lower())
-
-                required_kids = set(required_kids_list)
-                missing_kids = required_kids - available_kids
-
-                if missing_kids:
-                    # Store cached keys separately - don't populate session["keys"] yet
-                    # This allows parse_license() to properly combine cached + license keys
-                    session["cached_keys"] = cached_keys
-                else:
-                    session["keys"] = all_available_keys
-                    return b""
-            else:
-                session["keys"] = all_available_keys
+            if self._take_cached_keys(session, cached_keys):
                 return b""
 
         challenge = parsed_response.get("challenge")
@@ -898,178 +523,24 @@ class CustomRemoteCDM:
 
         if challenge and remote_session_id:
             if isinstance(challenge, str):
-                challenge_text = challenge
-                try:
-                    challenge = base64.b64decode(challenge_text)
-                except ValueError:
-                    challenge = challenge_text.encode("utf-8")
-
-            session["challenge"] = challenge
-            session["remote_session_id"] = remote_session_id
-            return challenge
+                challenge = b64_or_utf8(challenge)
+            return self._keep_challenge(session, challenge, remote_session_id)
 
         if session.get("keys"):
             return b""
 
         raise requests.RequestException("API response did not contain challenge or cached keys")
 
-    def parse_license(self, session_id: bytes, license_message: Union[bytes, str]) -> None:
-        """
-        Parse license response using the custom CDM API.
-
-        The method collects vault keys and cached keys first, then appends any license key whose
-        key ID is not already present. It matches key IDs with dashes stripped and case ignored, so
-        an existing content key wins over a license key for the same ID. If the CDM session already
-        holds final keys and has no cached keys left to combine, the call is a no-op.
-
-        Args:
-            session_id: Session identifier
-            license_message: License response from license server
-
-        Raises:
-            ValueError: If session ID is invalid or no challenge available
-            requests.RequestException: If API request fails
-        """
-        if session_id not in self._sessions:
-            raise CustomRemoteCDMExceptions.InvalidSession(f"Invalid session ID: {session_id.hex()}")
-
-        session = self._sessions[session_id]
-
-        # If cached_keys exist (Widevine or PlayReady), we need to combine them with license keys
-        if session["keys"] and "cached_keys" not in session:
-            return
-
-        if not session.get("challenge") or not session.get("remote_session_id"):
-            raise ValueError("No challenge available - call get_license_challenge first")
-
-        if isinstance(license_message, str):
-            if self.is_playready and license_message.lstrip().startswith("<"):
-                license_message = license_message.encode("utf-8")
-            else:
-                license_text = license_message
-                try:
-                    license_message = base64.b64decode(license_text)
-                except ValueError:
-                    license_message = license_text.encode("utf-8")
-
-        pssh = session["pssh"]
-        init_data = self.get_init_data_from_pssh(pssh, session.get("pssh_b64"))
-        license_request_b64 = base64.b64encode(session["challenge"]).decode("utf-8")
-        license_response_b64 = base64.b64encode(license_message).decode("utf-8")
-
-        base_params = {
-            "scheme": self.device_name,
-            "session_id": session["remote_session_id"],
-            "init_data": init_data,
-            "license_request": license_request_b64,
-            "license_response": license_response_b64,
-        }
-
-        request_params = self.build_request_params("decrypt_response", base_params, session)
-
-        self.apply_authentication(self._http_session)
-
-        endpoint_config = self.endpoints["decrypt_response"]
-        url = f"{self.host}{endpoint_config['path']}"
-        timeout = endpoint_config["timeout"]
-
-        response = self._http_session.post(url, json=request_params, timeout=timeout)
-
-        if response.status_code != 200:
-            raise requests.RequestException(f"License decrypt failed: {response.status_code} {response.text}")
-
-        response_data = response.json()
+    def _request_keys(self, session: Dict[str, Any], body: Dict[str, Any]) -> List[Dict[str, Any]]:
+        request_params = self.build_request_params("decrypt_response", body, session)
+        response_data = self._call("decrypt_response", request_params, "License decrypt failed")
         parsed_response = self.parse_response_data("decrypt_response", response_data)
 
         if not parsed_response.get("_is_success", False):
             error_msg = parsed_response.get("_error_message", "Unknown error")
             raise requests.RequestException(f"License decrypt error: {error_msg}")
 
-        license_keys = self.parse_keys_from_response("decrypt_response", parsed_response)
-
-        all_keys = []
-
-        if "vault_keys" in session:
-            all_keys.extend(session["vault_keys"])
-
-        if session.get("cached_keys"):
-            all_keys.extend(session["cached_keys"])
-
-        for license_key in license_keys:
-            license_kid = license_key["kid"].replace("-", "").lower()
-            already_exists = False
-
-            for existing_key in all_keys:
-                existing_kid = existing_key["kid"].replace("-", "").lower()
-                if existing_kid == license_kid:
-                    already_exists = True
-                    break
-
-            if not already_exists:
-                all_keys.append(license_key)
-
-        session["keys"] = all_keys
-        session.pop("cached_keys", None)
-        session.pop("vault_keys", None)
-
-        if self.use_vaults and self.vaults is not None and session["keys"]:
-            key_dict: dict[UUID | str, str] = {}
-            for key in session["keys"]:
-                if key["type"] == "CONTENT":
-                    try:
-                        clean_kid = key["kid"].replace("-", "")
-                        if len(clean_kid) == 32:
-                            kid_uuid = UUID(hex=clean_kid)
-                        else:
-                            kid_uuid = UUID(hex=clean_kid.ljust(32, "0"))
-                        key_dict[kid_uuid] = key["key"]
-                    except (ValueError, TypeError):
-                        continue
-            if key_dict:
-                self.vaults.add_keys(key_dict)
-
-    def get_keys(self, session_id: bytes, type_: Optional[str] = None) -> List[Key]:
-        """
-        Get keys from the CDM session.
-
-        Args:
-            session_id: Session identifier
-            type_: Optional type filter (CONTENT, SIGNING, and the other types)
-
-        Returns:
-            List of `Key` objects
-
-        Raises:
-            InvalidSession: If session ID is invalid
-        """
-        if session_id not in self._sessions:
-            raise CustomRemoteCDMExceptions.InvalidSession(f"Invalid session ID: {session_id.hex()}")
-
-        key_dicts = self._sessions[session_id]["keys"]
-        keys = []
-        for k in key_dicts:
-            kid_val = k["kid"]
-            if isinstance(kid_val, str):
-                clean_kid = kid_val.replace("-", "")
-                kid_obj = UUID(hex=clean_kid) if len(clean_kid) == 32 else UUID(hex=clean_kid.ljust(32, "0"))
-            else:
-                kid_obj = kid_val
-
-            key_bytes = bytes.fromhex(k["key"].replace(":", "")) if isinstance(k["key"], str) else k["key"]
-
-            keys.append(
-                Key(
-                    type_=k.get("type", "CONTENT"),
-                    kid=kid_obj,
-                    key=key_bytes,
-                    permissions=k.get("permissions", []),
-                )
-            )
-
-        if type_:
-            keys = [key for key in keys if key.type == type_]
-
-        return keys
+        return self.parse_keys_from_response("decrypt_response", parsed_response)
 
 
-__all__ = ["CustomRemoteCDM"]
+__all__ = ["CustomRemoteCDM", "CustomRemoteCDMExceptions"]

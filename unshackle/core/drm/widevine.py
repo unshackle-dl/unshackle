@@ -12,6 +12,7 @@ from pymp4.parser import Box
 from pywidevine.cdm import Cdm as WidevineCdm
 from pywidevine.pssh import PSSH
 
+from unshackle.core.cdm.http_cdm import HttpCdm
 from unshackle.core.config import config
 from unshackle.core.constants import AnyTrack
 from unshackle.core.drm import key_args as drm_key_args
@@ -223,15 +224,12 @@ class Widevine:
                 if cert and hasattr(cdm, "set_service_certificate"):
                     cdm.set_service_certificate(session_id, cert)
 
-                if hasattr(cdm, "set_required_kids"):
-                    try:
-                        cdm.set_required_kids(self.kids, session_id=session_id)
-                    except TypeError:  # CDM predating the per-session signature
-                        cdm.set_required_kids(self.kids)
+                if isinstance(cdm, HttpCdm):
+                    cdm.set_required_kids(self.kids, session_id=session_id)
 
                 challenge = cdm.get_license_challenge(session_id, self.pssh)
 
-                if hasattr(cdm, "has_cached_keys") and cdm.has_cached_keys(session_id):
+                if isinstance(cdm, HttpCdm) and cdm.has_cached_keys(session_id):
                     pass
                 elif not challenge:
                     raise Widevine.Exceptions.EmptyLicense(

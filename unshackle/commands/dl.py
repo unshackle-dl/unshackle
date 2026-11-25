@@ -37,7 +37,6 @@ from rich.spinner import Spinner
 from rich.table import Table
 
 from unshackle.core import __version__, binaries, providers
-from unshackle.core.cdm import DecryptLabsRemoteCDM
 from unshackle.core.cdm.choice import choose_cdm
 from unshackle.core.cdm.detect import cdm_system, cdm_type_stub, is_playready_cdm, is_remote_cdm
 from unshackle.core.config import cdm_entry_names_device, config, load_yaml, resolve_cdm_name, resolve_decryption
@@ -479,10 +478,8 @@ def cdm_summary(cdm: Any) -> dict[str, Any]:
     """The loaded CDM's DRM system, whether it is remote, its device and its security level, for the load log."""
     drm_type = "PlayReady" if is_playready_cdm(cdm) else "Widevine"
     remote = is_remote_cdm(cdm)
-    if isinstance(cdm, DecryptLabsRemoteCDM):
-        device = "DecryptLabs"
-    elif remote:
-        device = cdm.device_name
+    if remote:
+        device = getattr(cdm, "label", None) or cdm.device_name
     elif drm_type == "Widevine":
         device = str(cdm.system_id)
     else:

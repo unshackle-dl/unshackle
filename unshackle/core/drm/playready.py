@@ -16,6 +16,7 @@ from pyplayready.misc.exceptions import InvalidPssh
 from pyplayready.system.pssh import PSSH
 from pyplayready.system.wrmheader import WRMHeader
 
+from unshackle.core.cdm.http_cdm import HttpCdm
 from unshackle.core.config import config
 from unshackle.core.constants import AnyTrack
 from unshackle.core.drm import key_args as drm_key_args
@@ -455,17 +456,10 @@ class PlayReady:
         """Run one challenge/response round for a single header and return the keys it yielded."""
         session_id = cdm.open()
         try:
-            if hasattr(cdm, "set_pssh_b64") and pssh_b64:
-                try:
+            if isinstance(cdm, HttpCdm):
+                if pssh_b64:
                     cdm.set_pssh_b64(pssh_b64, session_id=session_id)
-                except TypeError:  # CDM predating the per-session signature
-                    cdm.set_pssh_b64(pssh_b64)
-
-            if hasattr(cdm, "set_required_kids"):
-                try:
-                    cdm.set_required_kids(required_kids, session_id=session_id)
-                except TypeError:  # CDM predating the per-session signature
-                    cdm.set_required_kids(required_kids)
+                cdm.set_required_kids(required_kids, session_id=session_id)
 
             challenge = cdm.get_license_challenge(session_id, header)
 

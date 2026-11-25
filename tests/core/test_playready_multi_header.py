@@ -10,6 +10,7 @@ from pyplayready.misc.exceptions import InvalidLicense, InvalidXmrLicense
 from pyplayready.system.pssh import PSSH
 from pyplayready.system.wrmheader import WRMHeader
 
+from unshackle.core.cdm.http_cdm import HttpCdm
 from unshackle.core.drm import PlayReady
 
 KID_A = UUID("00112233-4455-6677-8899-aabbccddeeff")
@@ -45,7 +46,7 @@ class FakeKey:
         self.key = bytes.fromhex(key)
 
 
-class FakeCdm:
+class FakeCdm(HttpCdm):
     """Answers each challenge with the keys mapped for the header's KIDs; records what it saw."""
 
     def __init__(self, answers: dict[UUID, str], fail_on: set[UUID] | None = None) -> None:
@@ -85,6 +86,12 @@ class FakeCdm:
 
     def get_keys(self, session_id: str) -> list[FakeKey]:
         return [FakeKey(kid, self.answers[kid]) for kid in self._by_session[session_id] if kid in self.answers]
+
+    def _request_challenge(self, *_: Any) -> bytes:
+        raise NotImplementedError
+
+    def _request_keys(self, *_: Any) -> list[dict[str, Any]]:
+        raise NotImplementedError
 
 
 def _licence(**_: Any) -> str:

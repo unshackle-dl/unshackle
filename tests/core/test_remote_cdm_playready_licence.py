@@ -28,20 +28,20 @@ class Sent(Exception):
     """Stops ``parse_license`` after the request body has been captured."""
 
 
-def decrypt_labs_cdm() -> tuple[Any, str]:
-    return DecryptLabsRemoteCDM(secret="x", host="https://cdm.test", device_name="SL3"), "decrypt_labs_session_id"
+def decrypt_labs_cdm() -> Any:
+    return DecryptLabsRemoteCDM(secret="x", host="https://cdm.test", device_name="SL3")
 
 
-def custom_cdm() -> tuple[Any, str]:
-    cdm = CustomRemoteCDM(host="https://cdm.test", device={"name": "SL3000", "type": "PLAYREADY"})
-    return cdm, "remote_session_id"
+def custom_cdm() -> Any:
+    return CustomRemoteCDM(host="https://cdm.test", device={"name": "SL3000", "type": "PLAYREADY"})
 
 
-def licence_sent(cdm: Any, remote_id_key: str, licence: str) -> bytes:
+def licence_sent(cdm: Any, licence: str) -> bytes:
     """Run ``parse_license`` on a session that has a challenge, and return the licence bytes it posts."""
     session_id = cdm.open()
-    cdm.set_pssh_b64("UFNTSA==", session_id=session_id)
-    cdm._sessions[session_id].update({"challenge": b"challenge", remote_id_key: "remote", "pssh": object()})
+    cdm._sessions[session_id].update(
+        {"challenge": b"challenge", "remote_session_id": "remote", "init_data": "UFNTSA=="}
+    )
 
     body: dict[str, Any] = {}
 
@@ -67,11 +67,9 @@ def licence_sent(cdm: Any, remote_id_key: str, licence: str) -> bytes:
     ],
 )
 def test_a_playready_xml_licence_is_sent_as_it_is(make_cdm: Any, licence: str) -> None:
-    cdm, remote_id_key = make_cdm()
-    assert licence_sent(cdm, remote_id_key, licence) == licence.encode("utf-8")
+    assert licence_sent(make_cdm(), licence) == licence.encode("utf-8")
 
 
 @pytest.mark.parametrize("make_cdm", [decrypt_labs_cdm, custom_cdm])
 def test_a_base64_licence_is_still_decoded(make_cdm: Any) -> None:
-    cdm, remote_id_key = make_cdm()
-    assert licence_sent(cdm, remote_id_key, base64.b64encode(b"binary licence").decode()) == b"binary licence"
+    assert licence_sent(make_cdm(), base64.b64encode(b"binary licence").decode()) == b"binary licence"
