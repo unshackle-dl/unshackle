@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Optional
+from typing import Any
 
 import pytest
 
@@ -21,7 +21,7 @@ class _Response:
 def node(
     imdb_id: str = "tt3581920",
     text: str = "The Last of Us",
-    year: Optional[int] = 2023,
+    year: int | None = 2023,
     title_type: str = "tvSeries",
     languages: Any = ({"id": "en", "text": "English"}, {"id": "id", "text": "Indonesian"}),
 ) -> dict:

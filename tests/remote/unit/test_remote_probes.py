@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import json
+from collections.abc import Callable
 from threading import Event, Thread
 from types import SimpleNamespace
-from typing import Any, Callable
+from typing import Any
 
 import pytest
 import responses

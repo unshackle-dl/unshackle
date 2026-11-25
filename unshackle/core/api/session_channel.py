@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-from typing import TYPE_CHECKING, Any, Optional, Union, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from aiohttp import WSMsgType, web
 
@@ -32,7 +32,7 @@ if TYPE_CHECKING:
     from unshackle.core.api.input_bridge import Ask
     from unshackle.core.api.session_store import SessionEntry
 
-Message = Union[ChannelPrompt, ChannelCdmCall, ChannelLog, ChannelStatus, ChannelDrain]
+Message = ChannelPrompt | ChannelCdmCall | ChannelLog | ChannelStatus | ChannelDrain
 GONE = object()
 
 
@@ -56,9 +56,9 @@ class SessionChannel:
     """
 
     def __init__(self) -> None:
-        self.ws: Optional[web.WebSocketResponse] = None
-        self.queue: Optional[asyncio.Queue[Any]] = None
-        self.loop: Optional[asyncio.AbstractEventLoop] = None
+        self.ws: web.WebSocketResponse | None = None
+        self.queue: asyncio.Queue[Any] | None = None
+        self.loop: asyncio.AbstractEventLoop | None = None
         self.ended = False
 
     @property
@@ -134,7 +134,7 @@ class SessionChannel:
             while True:
                 try:
                     message = await asyncio.wait_for(queue.get(), HEARTBEAT)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     session.touch()
                     continue
                 if message is GONE:
@@ -150,7 +150,7 @@ def log_message(record: LogRecord) -> ChannelLog:
     return cast(ChannelLog, {"type": ChannelMessage.LOG, **record})
 
 
-def ask_message(ask: Ask) -> Union[ChannelPrompt, ChannelCdmCall]:
+def ask_message(ask: Ask) -> ChannelPrompt | ChannelCdmCall:
     if ask.cdm_call is not None:
         return ChannelCdmCall(type=ChannelMessage.CDM_CALL, id=ask.id, call=ask.cdm_call)
     return ChannelPrompt(type=ChannelMessage.PROMPT, id=ask.id, prompt=ask.prompt)

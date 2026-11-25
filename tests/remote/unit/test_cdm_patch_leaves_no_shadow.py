@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import List
 
 import pytest
 
@@ -29,7 +28,7 @@ PACKAGE_SETATTR = re.compile(r"""setattr\(\s*(?!loader\b)[\w.]+\s*,\s*["']load_c
 
 
 def test_no_test_patches_load_cdm_on_the_package() -> None:
-    offenders: List[str] = []
+    offenders: list[str] = []
     for path in sorted(TESTS_ROOT.rglob("test_*.py")):
         if path == Path(__file__).resolve():
             continue

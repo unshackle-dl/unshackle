@@ -1,5 +1,4 @@
 import logging
-from typing import Optional
 
 import click
 import requests
@@ -19,7 +18,7 @@ from unshackle.core.utils.redact import safe_display_url
 @click.option(
     "--proxy", type=str, default=None, help="Check the tunnel through this proxy, as --local-proxy --proxy does."
 )
-def tunnel_test(server: Optional[str], proxy: Optional[str]) -> None:
+def tunnel_test(server: str | None, proxy: str | None) -> None:
     """Check --local-proxy before a real --remote run.
 
     The command finds the exit IP of this machine (through --proxy when given), opens a tunnel to the server,

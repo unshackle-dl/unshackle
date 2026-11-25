@@ -1,15 +1,16 @@
 import logging
 import os
 import struct
+from collections.abc import Callable, Iterator
 from pathlib import Path
-from typing import Any, BinaryIO, Callable, Iterator, NamedTuple, Optional
+from typing import Any, BinaryIO, NamedTuple
 from uuid import UUID
 
 from unshackle.core.config import config
 
 log = logging.getLogger(__name__)
 
-DECRYPT_HOOK: Optional[Callable[..., None]] = None
+DECRYPT_HOOK: Callable[..., None] | None = None
 
 CONTAINERS = {b"moov", b"trak", b"mdia", b"minf", b"stbl", b"mvex", b"moof", b"traf", b"sinf", b"schi"}
 PIFF_TENC = bytes.fromhex("8974dbce7be74c5184f97148f9882554")
@@ -35,8 +36,8 @@ class KidMap(NamedTuple):
 def decrypt_track(
     drm: Any,
     path: Path,
-    licence: Optional[Callable] = None,
-    track_kid: Optional[UUID] = None,
+    licence: Callable | None = None,
+    track_kid: UUID | None = None,
     decrypt: bool = True,
     track: Any = None,
 ) -> None:
@@ -51,7 +52,7 @@ def decrypt_track(
         drm.decrypt(path)
 
 
-def children(data: bytes, start: int = 0, end: Optional[int] = None) -> Iterator[tuple[bytes, int, int]]:
+def children(data: bytes, start: int = 0, end: int | None = None) -> Iterator[tuple[bytes, int, int]]:
     """Yield (type, body start, box end) for each box in ``data[start:end]``."""
     end = len(data) if end is None else end
     while start + 8 <= end:
@@ -69,7 +70,7 @@ def children(data: bytes, start: int = 0, end: Optional[int] = None) -> Iterator
         start += size
 
 
-def walk(data: bytes, start: int = 0, end: Optional[int] = None) -> Iterator[tuple[bytes, int, int]]:
+def walk(data: bytes, start: int = 0, end: int | None = None) -> Iterator[tuple[bytes, int, int]]:
     """Yield every box below ``data[start:end]``, descending into the container boxes."""
     for kind, body, box_end in children(data, start, end):
         yield kind, body, box_end
@@ -77,7 +78,7 @@ def walk(data: bytes, start: int = 0, end: Optional[int] = None) -> Iterator[tup
             yield from walk(data, body, box_end)
 
 
-def seig_entries(data: bytes, body: int) -> Optional[list[Seig]]:
+def seig_entries(data: bytes, body: int) -> list[Seig] | None:
     """Parse an ``sgpd`` box. Returns its seig entries as (protected, KID), or None for another grouping."""
     version = data[body]
     if data[body + 4 : body + 8] != b"seig":
@@ -105,7 +106,7 @@ def seig_entries(data: bytes, body: int) -> Optional[list[Seig]]:
     return entries
 
 
-def sbgp_runs(data: bytes, body: int) -> Optional[list[tuple[int, int]]]:
+def sbgp_runs(data: bytes, body: int) -> list[tuple[int, int]] | None:
     """Parse an ``sbgp`` box. Returns its seig runs as (sample count, group index), or None for another grouping."""
     version = data[body]
     if data[body + 4 : body + 8] != b"seig":
@@ -115,10 +116,10 @@ def sbgp_runs(data: bytes, body: int) -> Optional[list[tuple[int, int]]]:
     if count * 8 > len(data) - pos - 4:
         raise ValueError("sbgp entry count is larger than the box")
     runs = struct.unpack_from(f">{count * 2}I", data, pos + 4)
-    return list(zip(runs[::2], runs[1::2]))
+    return list(zip(runs[::2], runs[1::2], strict=True))
 
 
-def entry_kid(data: bytes, kind: bytes, entry: int, end: int) -> Optional[UUID]:
+def entry_kid(data: bytes, kind: bytes, entry: int, end: int) -> UUID | None:
     """Return the default KID of an encrypted sample entry, or None for a clear one."""
     for fields in ENTRY_FIELDS.get(kind, ()):
         boxes = list(walk(data, entry + fields, end))
@@ -132,7 +133,7 @@ def entry_kid(data: bytes, kind: bytes, entry: int, end: int) -> Optional[UUID]:
     return None
 
 
-def sample_entries(data: bytes, body: int, end: int) -> tuple[list[Optional[UUID]], bool]:
+def sample_entries(data: bytes, body: int, end: int) -> tuple[list[UUID | None], bool]:
     """Parse an ``stsd`` box. Returns the default KID of each sample entry (None for a clear one), and
     whether any entry is encrypted."""
     found = list(children(data, body + 8, end))
@@ -148,7 +149,7 @@ def has_encrypted_entry(moov: bytes) -> bool:
     )
 
 
-def read_top_level_box(path: Path, box_type: bytes) -> Optional[bytes]:
+def read_top_level_box(path: Path, box_type: bytes) -> bytes | None:
     """Read a single top-level box from an MP4 file.
 
     This function walks only the box headers, so the wanted box is the only payload it reads into memory.
@@ -195,7 +196,7 @@ def has_encrypted_sample_entry(path: Path) -> bool:
         return False
 
 
-def kidless_kid(data: bytes, kind: bytes, entry: int, end: int) -> Optional[UUID]:
+def kidless_kid(data: bytes, kind: bytes, entry: int, end: int) -> UUID | None:
     """Return the KID of an encrypted sample entry whose first sinf holds no CENC tenc (a PIFF sinf, say)."""
     for fields in ENTRY_FIELDS.get(kind, ()):
         sinfs = [(body, box_end) for box, body, box_end in children(data, entry + fields, end) if box == b"sinf"]
@@ -224,7 +225,7 @@ def kidless_track_kids(data: bytes) -> dict[int, UUID]:
     return kids
 
 
-def find_child_box(buf: bytes, box_type: bytes) -> Optional[bytes]:
+def find_child_box(buf: bytes, box_type: bytes) -> bytes | None:
     """Return the first box of the given type nested anywhere in buf, header included."""
     i = buf.find(box_type, 4)
     while i != -1:
@@ -269,7 +270,7 @@ def senc_protects_samples(buf: bytes, body: int, end: int) -> bool:
     return int.from_bytes(buf[pos : pos + 4], "big") > 0
 
 
-def read_top_boxes(f: BinaryIO) -> Iterator[tuple[bytes, Optional[bytes]]]:
+def read_top_boxes(f: BinaryIO) -> Iterator[tuple[bytes, bytes | None]]:
     """Yield each top-level box type, with the body of a moov or moof. Every other body is skipped.
 
     Raises ValueError when a moov or moof claims more bytes than the file has left.
@@ -296,7 +297,7 @@ def read_top_boxes(f: BinaryIO) -> Iterator[tuple[bytes, Optional[bytes]]]:
             yield kind, None
 
 
-def kid_windows(path: Path) -> Optional[KidMap]:
+def kid_windows(path: Path) -> KidMap | None:
     """Map each KID that encrypts part of a fragmented MP4 to a few fragment time windows, in seconds.
 
     Reads only the moov and moof boxes of the ciphertext and skips every mdat, so a large
@@ -312,7 +313,7 @@ def kid_windows(path: Path) -> Optional[KidMap]:
     """
     timescales: dict[int, int] = {}
     handlers: dict[int, bytes] = {}
-    entries: dict[int, list[Optional[UUID]]] = {}
+    entries: dict[int, list[UUID | None]] = {}
     defaults: dict[int, tuple[int, int]] = {}
     moov_groups: dict[int, list[Seig]] = {}
     fragments: list[Fragment] = []
@@ -426,7 +427,7 @@ def trun_totals(moof: bytes, truns: list[int], default_duration: int) -> tuple[i
 
 def read_fragment(
     moof: bytes,
-    entries: dict[int, list[Optional[UUID]]],
+    entries: dict[int, list[UUID | None]],
     defaults: dict[int, tuple[int, int]],
     moov_groups: dict[int, list[Seig]],
     clock: dict[int, int],
@@ -443,7 +444,7 @@ def read_fragment(
             continue
         track, time, entry, default_duration = 0, None, 0, 0
         groups: list[Seig] = []
-        runs: Optional[list[tuple[int, int]]] = None
+        runs: list[tuple[int, int]] | None = None
         truns: list[int] = []
         for kind_, body, box_end in children(moof, traf, traf_end):
             if kind_ == b"tfhd":

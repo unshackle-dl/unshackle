@@ -9,7 +9,7 @@ import time
 from enum import Enum
 from fractions import Fraction
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import Any
 
 from langcodes import Language
 
@@ -199,7 +199,7 @@ class Video(Track):
                 return Video.Range.SDR
 
         @staticmethod
-        def from_m3u_range_tag(tag: str) -> Optional[Video.Range]:
+        def from_m3u_range_tag(tag: str) -> Video.Range | None:
             tag = (tag or "").upper().replace('"', "").strip()
             if not tag:
                 return None
@@ -219,14 +219,14 @@ class Video(Track):
     def __init__(
         self,
         *args: Any,
-        codec: Optional[Video.Codec] = None,
-        range_: Optional[Video.Range] = None,
-        bitrate: Optional[Union[str, int, float]] = None,
-        width: Optional[int] = None,
-        height: Optional[int] = None,
-        fps: Optional[Union[str, int, float]] = None,
-        scan_type: Optional[Video.ScanType] = None,
-        closed_captions: Optional[list[dict[str, Any]]] = None,
+        codec: Video.Codec | None = None,
+        range_: Video.Range | None = None,
+        bitrate: str | int | float | None = None,
+        width: int | None = None,
+        height: int | None = None,
+        fps: str | int | float | None = None,
+        scan_type: Video.ScanType | None = None,
+        closed_captions: list[dict[str, Any]] | None = None,
         dv_compatible_bitstream: bool = False,
         hdr10plus: bool = False,
         hdr10_base: bool = False,
@@ -279,22 +279,24 @@ class Video(Track):
         try:
             self.bitrate = int(math.ceil(float(bitrate))) if bitrate else None
         except (ValueError, TypeError) as e:
-            raise ValueError(f"Expected bitrate to be a number or float, {e}")
+            raise ValueError(f"Expected bitrate to be a number or float, {e}") from None
 
         try:
             self.width = int(width or 0) or None
         except ValueError as e:
-            raise ValueError(f"Expected width to be a number, not {width!r}, {e}")
+            raise ValueError(f"Expected width to be a number, not {width!r}, {e}") from None
 
         try:
             self.height = int(height or 0) or None
         except ValueError as e:
-            raise ValueError(f"Expected height to be a number, not {height!r}, {e}")
+            raise ValueError(f"Expected height to be a number, not {height!r}, {e}") from None
 
         try:
             self.fps = (FPS.parse(str(fps)) or None) if fps else None
         except Exception as e:
-            raise ValueError("Expected fps to be a number, float, or a string as numerator/denominator form, " + str(e))
+            raise ValueError(  # noqa: B904
+                "Expected fps to be a number, float, or a string as numerator/denominator form, " + str(e)
+            )
 
         self.scan_type = scan_type
         self.closed_captions: list[dict[str, Any]] = closed_captions or []
@@ -308,20 +310,18 @@ class Video(Track):
         self.native_hybrid = False
 
     @staticmethod
-    def dv_fourccs(codecs: Optional[str]) -> set[str]:
+    def dv_fourccs(codecs: str | None) -> set[str]:
         """The Dolby Vision fourccs in a codecs list (comma or space separated, ``/brand`` suffixes allowed)."""
         fourccs = {token.split("/")[0].split(".")[0] for token in re.split(r"[\s,]+", (codecs or "").lower())}
         return fourccs & {"dva1", "dvav", "dvhe", "dvh1"}
 
     @staticmethod
-    def has_dv_codec(codecs: Optional[str]) -> bool:
+    def has_dv_codec(codecs: str | None) -> bool:
         """Whether a codecs list names a Dolby Vision codec."""
         return bool(Video.dv_fourccs(codecs))
 
     @staticmethod
-    def is_stereo(
-        codecs: Optional[str], supplemental_codecs: Optional[str] = None, video_layout: Optional[str] = None
-    ) -> bool:
+    def is_stereo(codecs: str | None, supplemental_codecs: str | None = None, video_layout: str | None = None) -> bool:
         """Whether a track is stereoscopic 3D: the HLS REQ-VIDEO-LAYOUT names CH-STEREO, or a codec is DV profile 20."""
         tokens = re.split(r"[\s,]+", f"{codecs or ''},{supplemental_codecs or ''}".lower())
         return "CH-STEREO" in (video_layout or "").upper() or any(
@@ -329,9 +329,7 @@ class Video(Track):
         )
 
     @staticmethod
-    def is_dv_composite(
-        codec: Optional[Video.Codec], codecs: Optional[str], supplemental_codecs: Optional[str]
-    ) -> bool:
+    def is_dv_composite(codec: Video.Codec | None, codecs: str | None, supplemental_codecs: str | None) -> bool:
         """Whether an HEVC track names DV only in its supplemental codecs: DV profile 8 on an HDR10, SDR or HLG base."""
         return (
             codec == Video.Codec.HEVC
@@ -404,7 +402,7 @@ class Video(Track):
             )
 
         if not binaries.FFMPEG:
-            raise EnvironmentError('FFmpeg executable "ffmpeg" was not found but is required for this call.')
+            raise OSError('FFmpeg executable "ffmpeg" was not found but is required for this call.')
 
         filter_key = {Video.Codec.AVC: "h264_metadata", Video.Codec.HEVC: "hevc_metadata"}[self.codec]
 
@@ -451,7 +449,7 @@ class Video(Track):
         if self.stereo:
             self.needs_repack = False
 
-    def repackage(self, bsf_v: Optional[str] = None) -> bool:
+    def repackage(self, bsf_v: str | None = None) -> bool:
         """Remux with FFmpeg, except a 3D track: an FFmpeg remux rewrites its stereo and DV boxes."""
         if self.stereo:
             logging.getLogger("Video").warning(
@@ -460,7 +458,7 @@ class Video(Track):
             return False
         return super().repackage(bsf_v)
 
-    def vui_bsf(self) -> Optional[str]:
+    def vui_bsf(self) -> str | None:
         """Return the ``-bsf:v`` value that rewrites SPS VUI colour metadata to match ``self.range``.
 
         Returns None when a rewrite is not necessary or not safe: SDR/DV/HYBRID ranges, non-AVC/HEVC
@@ -528,7 +526,7 @@ class Video(Track):
         assert self.path is not None  # vui_bsf() returns None when path is unset
 
         if not binaries.FFMPEG:
-            raise EnvironmentError('FFmpeg executable "ffmpeg" was not found but is required for this call.')
+            raise OSError('FFmpeg executable "ffmpeg" was not found but is required for this call.')
 
         original_path = self.path
         output_path = original_path.with_stem(f"{original_path.stem}_vui")
@@ -587,7 +585,11 @@ class Video(Track):
             return []
 
         opts: dict[str, object] = dict(
-            zip(("--colour-primaries", "--colour-transfer-characteristics", "--colour-matrix-coefficients"), codes)
+            zip(
+                ("--colour-primaries", "--colour-transfer-characteristics", "--colour-matrix-coefficients"),
+                codes,
+                strict=False,
+            )
         )
         for data in stream.get("side_data_list", []):
             # ffprobe leaves out the fields a source does not carry, so a partial entry adds nothing
@@ -647,14 +649,14 @@ class Video(Track):
         return stream
 
     def ccextractor(
-        self, track_id: Any, out_path: Union[Path, str], language: Language, original: bool = False
-    ) -> Optional[Subtitle]:
+        self, track_id: Any, out_path: Path | str, language: Language, original: bool = False
+    ) -> Subtitle | None:
         """Return a TextTrack object representing CC track extracted by CCExtractor."""
         if not self.path:
             raise ValueError("You must download the track first.")
 
         if not binaries.CCExtractor:
-            raise EnvironmentError("ccextractor executable was not found.")
+            raise OSError("ccextractor executable was not found.")
 
         out_path = Path(out_path)
         ccextractor = binaries.CCExtractor
@@ -665,8 +667,7 @@ class Video(Track):
                 subprocess.run(
                     [ccextractor, "-trim", "-nobom", "-noru", "-ru1", "-o", out_path, video_path],
                     check=True,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
+                    capture_output=True,
                 )
             except subprocess.CalledProcessError as e:
                 out_path.unlink(missing_ok=True)
@@ -766,7 +767,7 @@ class Video(Track):
             raise ValueError("Cannot clean a Track that has not been downloaded.")
 
         if not binaries.FFMPEG:
-            raise EnvironmentError('FFmpeg executable "ffmpeg" was not found but is required for this call.')
+            raise OSError('FFmpeg executable "ffmpeg" was not found but is required for this call.')
 
         log = logging.getLogger("x264-clean")
         log.info("Removing EIA-CC from Video Track with FFMPEG")

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, Optional
+from typing import Any
 from uuid import UUID
 
 import click
@@ -66,7 +66,7 @@ class CountedImport(ImportService):
         self.calls = calls
         self.server_cdm_type = "widevine"
 
-    def license_track(self, track: Any, drm: Any, kid: Optional[UUID] = None) -> Optional[dict[UUID, str]]:
+    def license_track(self, track: Any, drm: Any, kid: UUID | None = None) -> dict[UUID, str] | None:
         self.calls.append("licence")
         return super().license_track(track, drm, kid)
 

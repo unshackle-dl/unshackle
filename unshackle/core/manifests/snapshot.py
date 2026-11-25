@@ -11,7 +11,7 @@ import base64
 import logging
 import zlib
 from copy import deepcopy
-from typing import Any, Optional
+from typing import Any
 
 from lxml import etree
 
@@ -45,7 +45,7 @@ def restore(tracks: Tracks, snapshot: Any, language: Any = None) -> None:
     restore_manifests(tracks, entries(snapshot, "manifests"), budget, language)
 
 
-def parse(snapshot: Any, url: str, language: Any = None) -> Optional[Tracks]:
+def parse(snapshot: Any, url: str, language: Any = None) -> Tracks | None:
     """Every track of the saved whole manifest for ``url``, with its filtered periods, else None.
 
     The URL also matches without its query, since a service can sign the URL it fetches. A saved
@@ -112,11 +112,11 @@ def whole_manifests(tracks: Tracks, level: int, counts: dict[int, int]) -> list[
         for kind, tag in (("dash", ".//Representation"), ("ism", ".//QualityLevel")):
             data = track.data.get(kind) or {}
             if data.get("manifest") is not None:
+                size = counted(data["manifest"], tag, counts)
                 break
         else:
             continue
         url = str(track.url)
-        size = counted(data["manifest"], tag, counts)
         if url not in best or size > best[url][0]:
             best[url] = (size, kind, data)
 
@@ -169,9 +169,11 @@ def fragments(tracks: Tracks, level: int, counts: dict[int, int]) -> list[dict[s
         period = dash.get("period")
         representation = dash.get("representation")
         periods = manifest.findall("Period")
-        durations = dict(zip(map(id, periods), DASH.period_durations(manifest)))
+        durations = dict(zip(map(id, periods), DASH.period_durations(manifest), strict=True))
 
-        def kept(source: Any, new_period: Any) -> None:
+        def kept(
+            source: Any, new_period: Any, durations: dict[int, float | None] = durations, root: Any = root
+        ) -> None:
             """Append a fragment period with its duration written out, as the periods dropped beside it are gone."""
             duration = durations.get(id(source))
             if duration is not None and not new_period.get("duration"):
@@ -229,7 +231,7 @@ def restore_fragments(tracks: Tracks, saved: list[dict[str, Any]], budget: list[
         track.descriptor = Track.Descriptor.DASH
 
 
-def to_tracks(entry: dict[str, Any], language: Any, budget: list[int]) -> Optional[Tracks]:
+def to_tracks(entry: dict[str, Any], language: Any, budget: list[int]) -> Tracks | None:
     """The tracks of one whole-manifest entry, with the service's filtered periods dropped again."""
     root = unpack(entry["data"], budget)
     if entry.get("type") == "dash":
@@ -273,14 +275,14 @@ def restore_manifests(tracks: Tracks, saved: list[dict[str, Any]], budget: list[
                 track.drm = matched.drm
 
 
-def same_bitrate(local: Optional[int], remote: Optional[int]) -> bool:
+def same_bitrate(local: int | None, remote: int | None) -> bool:
     """Equal to the nearest kb/s. A server that predates ``bitrate_bps`` rounds to kb/s in transit."""
     if not local or not remote:
         return not local and not remote
     return round(local / 1000) == round(remote / 1000)
 
 
-def match_track(remote_track: Track, local_tracks: list) -> Optional[Track]:
+def match_track(remote_track: Track, local_tracks: list) -> Track | None:
     """Find the locally-parsed track that matches a remote track by ID or by attributes.
 
     A range matches the ones ``PROBED_RANGES`` lets the server's probe relabel it to, because the local

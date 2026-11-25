@@ -9,8 +9,9 @@ import contextlib
 import json
 import logging
 import subprocess
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Any, Iterator, Optional
+from typing import Any
 
 import pytest
 
@@ -128,7 +129,7 @@ def rpu_info(max_cll: int, max_fall: int, max_mdl: int, min_mdl: int) -> dict:
 def patch_level6(
     monkeypatch: pytest.MonkeyPatch,
     info: dict,
-    probe: Optional[tuple[int, int, int, int]],
+    probe: tuple[int, int, int, int] | None,
 ) -> list[Path]:
     """Mock the RPU read, the HDR10 probe, and the editor. Returns the editor call log."""
     edits: list[Path] = []

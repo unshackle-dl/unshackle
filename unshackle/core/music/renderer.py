@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from typing import Any, Optional
+from typing import Any
 
 from rich.console import Group, RenderableType
 from rich.panel import Panel
@@ -29,7 +29,7 @@ class MusicRenderer:
             return Group(header, Text(""), tracks)
         return tracks
 
-    def render_header(self, music: Music) -> Optional[Table]:
+    def render_header(self, music: Music) -> Table | None:
         if not music:
             return None
 

@@ -61,7 +61,7 @@ def test_writer_skips_unsafe_entry(tmp_path, monkeypatch, write) -> None:
 
 @pytest.mark.parametrize(
     "expiration",
-    [None, dt.datetime(2030, 1, 1, 12, 0, 0), dt.datetime(2030, 1, 1, 12, 0, 0, tzinfo=dt.timezone.utc)],
+    [None, dt.datetime(2030, 1, 1, 12, 0, 0), dt.datetime(2030, 1, 1, 12, 0, 0, tzinfo=dt.UTC)],
     ids=["none", "naive", "aware"],
 )
 def test_real_cacher_file_round_trips(tmp_path, monkeypatch, expiration) -> None:

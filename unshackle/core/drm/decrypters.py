@@ -4,9 +4,10 @@ import logging
 import shutil
 import subprocess
 import textwrap
+from collections.abc import Callable
 from pathlib import Path
 from time import monotonic
-from typing import Any, Callable
+from typing import Any
 from uuid import UUID
 
 import click
@@ -82,7 +83,7 @@ def decrypt_cenc(drm: Any, path: Path, drm_type: str) -> None:
 def mp4decrypt(path: Path, key_args_for: Callable[[dict[int, UUID]], list[str]]) -> None:
     """Decrypt ``path`` in place with mp4decrypt, taking the ``--key`` arguments from ``key_args_for(track_kids)``."""
     if not binaries.Mp4decrypt:
-        raise coded(EnvironmentError("mp4decrypt executable not found but is required."), APIErrorCode.DRM_ERROR)
+        raise coded(OSError("mp4decrypt executable not found but is required."), APIErrorCode.DRM_ERROR)
 
     output_path = path.with_stem(f"{path.stem}_decrypted")
     key_args = key_args_for(kidless_track_kids(read_top_level_box(path, b"moov") or b""))
@@ -92,15 +93,14 @@ def mp4decrypt(path: Path, key_args_for: Callable[[dict[int, UUID]], list[str]])
         subprocess.run(
             cmd,
             check=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            capture_output=True,
             text=True,
             encoding="utf-8",
             errors="replace",
         )
     except subprocess.CalledProcessError as e:
         error_msg = e.stderr if e.stderr else f"mp4decrypt failed with exit code {e.returncode}"
-        raise subprocess.CalledProcessError(e.returncode, cmd, output=e.stdout, stderr=error_msg)
+        raise subprocess.CalledProcessError(e.returncode, cmd, output=e.stdout, stderr=error_msg) from None
 
     if not output_path.exists():
         raise RuntimeError(f"mp4decrypt failed: output file {output_path} was not created")
@@ -117,7 +117,7 @@ def shaka_decrypt(path: Path, keys: str, label: str) -> None:
     Only a non-zero exit is a failure; its non-noise log lines go to the console under ``[label]``.
     """
     if not binaries.ShakaPackager:
-        raise coded(EnvironmentError("Shaka Packager executable not found but is required."), APIErrorCode.DRM_ERROR)
+        raise coded(OSError("Shaka Packager executable not found but is required."), APIErrorCode.DRM_ERROR)
 
     output_path = path.with_stem(f"{path.stem}_decrypted")
     config.directories.temp.mkdir(parents=True, exist_ok=True)
@@ -170,5 +170,5 @@ def shaka_decrypt(path: Path, keys: str, label: str) -> None:
             shutil.move(output_path, path)
     except subprocess.CalledProcessError as e:
         if e.returncode == 0xC000013A:  # STATUS_CONTROL_C_EXIT
-            raise KeyboardInterrupt()
+            raise KeyboardInterrupt() from None
         raise

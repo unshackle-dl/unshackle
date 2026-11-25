@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 from unittest.mock import patch
 from uuid import UUID
 
@@ -56,9 +56,9 @@ URL_SUBTITLE = {
 
 def make_service(
     tmp_path: Path,
-    language: Optional[str],
-    tracks: Optional[dict[str, Any]] = None,
-    manifest_url: Optional[str] = "https://example.invalid/m.mpd",
+    language: str | None,
+    tracks: dict[str, Any] | None = None,
+    manifest_url: str | None = "https://example.invalid/m.mpd",
 ) -> ImportService:
     entry: dict[str, Any] = {
         "meta": {"type": "movie", "id": "movie-1", "name": "Example Movie", "year": 2024, "language": language},
@@ -86,9 +86,7 @@ def test_manifest_supplies_language_without_title_language(tmp_path: Path, mpd: 
 
 
 @pytest.mark.parametrize("language", [None, "und"], ids=["missing", "und"])
-def test_unlabelled_manifest_without_usable_language_blames_the_service(
-    tmp_path: Path, language: Optional[str]
-) -> None:
+def test_unlabelled_manifest_without_usable_language_blames_the_service(tmp_path: Path, language: str | None) -> None:
     """`und` is truthy and a valid tag, so it must be rejected as firmly as no language at all."""
     with pytest.raises(click.ClickException) as error:
         get_tracks(make_service(tmp_path, language=language), MPD_NO_LANG)
@@ -111,7 +109,7 @@ def exported_video(language: str = "ja") -> dict[str, Any]:
 
 
 @pytest.mark.parametrize("manifest_url", ["https://example.invalid/m.mpd", None], ids=["manifest-url", "per-track-url"])
-def test_unlabelled_manifest_takes_the_exported_track_language(tmp_path: Path, manifest_url: Optional[str]) -> None:
+def test_unlabelled_manifest_takes_the_exported_track_language(tmp_path: Path, manifest_url: str | None) -> None:
     """A title with no language takes it from its exported tracks, for either import branch."""
     service = make_service(tmp_path, language=None, tracks={"v1": exported_video()}, manifest_url=manifest_url)
     tracks = get_tracks(service, MPD_NO_LANG)

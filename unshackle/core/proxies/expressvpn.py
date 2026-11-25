@@ -9,7 +9,7 @@ import re
 import sys
 import time
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import requests
 
@@ -45,13 +45,13 @@ class ExpressVPN(Proxy):
 
     def __init__(
         self,
-        region_map: Optional[dict[str, str]] = None,
-        server_map: Optional[dict[str, str]] = None,
-        refresh_token: Optional[str] = None,
-        access_token: Optional[str] = None,
-        connection_token: Optional[str] = None,
-        account_json: Optional[str] = None,
-        cache_path: Optional[str] = None,
+        region_map: dict[str, str] | None = None,
+        server_map: dict[str, str] | None = None,
+        refresh_token: str | None = None,
+        access_token: str | None = None,
+        connection_token: str | None = None,
+        account_json: str | None = None,
+        cache_path: str | None = None,
         timeout: float = 10.0,
         enable: bool = False,
     ) -> None:
@@ -81,13 +81,13 @@ class ExpressVPN(Proxy):
         self.timeout = timeout
         self.enable = enable
 
-        self.tokens: Optional[dict] = None
-        self.srt: Optional[str] = None
-        self.locations: Optional[list[dict]] = None
-        self.last_name: Optional[str] = None
-        self.last_index: Optional[int] = None
-        self.last_total: Optional[int] = None
-        self.last_host: Optional[str] = None
+        self.tokens: dict | None = None
+        self.srt: str | None = None
+        self.locations: list[dict] | None = None
+        self.last_name: str | None = None
+        self.last_index: int | None = None
+        self.last_total: int | None = None
+        self.last_host: str | None = None
 
         self.cache_path = Path(cache_path).expanduser() if cache_path else self.default_cache_path()
 
@@ -120,7 +120,7 @@ class ExpressVPN(Proxy):
             or self.load_cache()
         )
 
-    def get_proxy(self, query: str) -> Optional[str]:
+    def get_proxy(self, query: str) -> str | None:
         endpoint = self.resolve_endpoint(query.strip().lower())
         if not endpoint:
             return None
@@ -133,7 +133,7 @@ class ExpressVPN(Proxy):
         log.debug("ExpressVPN proxy ready: %s", self.last_connection_display() or endpoint)
         return f"https://cat:{connection_token}@{endpoint}:443"
 
-    def last_connection_display(self) -> Optional[str]:
+    def last_connection_display(self) -> str | None:
         if not self.last_name or not self.last_host:
             return None
         parts = [self.last_name]
@@ -141,7 +141,7 @@ class ExpressVPN(Proxy):
             parts.append(f"#{self.last_index} of {self.last_total}")
         return f"({', '.join(parts)}): {self.last_host.replace('.expressprovider.com', '')}"
 
-    def resolve_endpoint(self, query: str) -> Optional[str]:
+    def resolve_endpoint(self, query: str) -> str | None:
         self.last_name = self.last_index = self.last_total = self.last_host = None
         query = self.server_map.get(query) or query
 
@@ -168,7 +168,7 @@ class ExpressVPN(Proxy):
             return None
         return self.pick_endpoint(endpoints, server_num)
 
-    def parse_query(self, query: str) -> tuple[Optional[str], Optional[str], Optional[int]]:
+    def parse_query(self, query: str) -> tuple[str | None, str | None, int | None]:
         """Parse "us", "us-ny", "us-ny-2"/"us-ny2" into (country, city, server number)."""
         server_num = None
         num_match = re.match(r"^(.+?)[-]?(\d+)$", query)
@@ -185,7 +185,7 @@ class ExpressVPN(Proxy):
         # not a country[-city] pattern; caller falls back to slug resolution
         return None, None, None
 
-    def resolve_location(self, country_code: str, city_query: Optional[str] = None) -> Optional[dict]:
+    def resolve_location(self, country_code: str, city_query: str | None = None) -> dict | None:
         pool = [x for x in self.get_locations() if str(x.get("country_code") or "").lower() == country_code]
         if not pool:
             log.warning("ExpressVPN: no locations found for country '%s'", country_code.upper())
@@ -194,7 +194,7 @@ class ExpressVPN(Proxy):
             return random.choice(pool)
         return self.match_city(pool, city_query)
 
-    def match_city(self, locations: list[dict], city_query: str) -> Optional[dict]:
+    def match_city(self, locations: list[dict], city_query: str) -> dict | None:
         """Find the city that matches the query by abbreviation ("ny"), exact slug, slug prefix, then substring."""
         city_query = city_query.strip().lower()
         abbrev, exact, prefix, substring = [], [], [], []
@@ -220,7 +220,7 @@ class ExpressVPN(Proxy):
             log.debug("ExpressVPN: city '%s' matched %d locations", city_query, len(candidates))
         return candidates[0]
 
-    def resolve_slug(self, query: str) -> Optional[dict]:
+    def resolve_slug(self, query: str) -> dict | None:
         for loc in self.get_locations():
             name = str(loc.get("name") or "").lower()
             keys = (str(loc.get("id") or "").lower(), name, str(loc.get("country_code") or "").lower(), slugify(name))
@@ -228,7 +228,7 @@ class ExpressVPN(Proxy):
                 return loc
         return None
 
-    def pick_endpoint(self, endpoints: list[dict], server_num: Optional[int] = None) -> Optional[str]:
+    def pick_endpoint(self, endpoints: list[dict], server_num: int | None = None) -> str | None:
         hosts = [str(x.get("host") or "").lower() for x in endpoints if x.get("host")]
         if not hosts:
             return None
@@ -328,7 +328,7 @@ class ExpressVPN(Proxy):
         self.tokens = {k: v for k, v in tokens.items() if v}
         return self.tokens
 
-    def refresh_access_token(self, refresh_token: str) -> Optional[dict]:
+    def refresh_access_token(self, refresh_token: str) -> dict | None:
         response = self.request(
             "POST",
             f"{self.AUTH_BASE}/token",
@@ -341,7 +341,7 @@ class ExpressVPN(Proxy):
             return None
         return response.json()
 
-    def device_login(self) -> Optional[dict]:
+    def device_login(self) -> dict | None:
         """One-time interactive bootstrap through the OAuth 2.0 device authorization grant (RFC 8628)."""
         response = self.request(
             "POST",
@@ -387,7 +387,7 @@ class ExpressVPN(Proxy):
         log.error("ExpressVPN: device authorization timed out before approval")
         return None
 
-    def get_srt(self) -> Optional[str]:
+    def get_srt(self) -> str | None:
         if self.srt and not jwt_expired(self.srt):
             return self.srt
 
@@ -413,7 +413,7 @@ class ExpressVPN(Proxy):
         self.save_cache(tokens)
         return srt
 
-    def get_connection_token(self) -> Optional[str]:
+    def get_connection_token(self) -> str | None:
         tokens = self.get_tokens()
         connection_token = tokens.get("connection_token")
         if connection_token and not jwt_expired(connection_token):
@@ -434,7 +434,7 @@ class ExpressVPN(Proxy):
             self.save_cache(tokens)
         return connection_token
 
-    def select_srt(self, receipts: list[dict], subscription_id: Optional[str]) -> Optional[str]:
+    def select_srt(self, receipts: list[dict], subscription_id: str | None) -> str | None:
         for receipt in receipts:
             srt = receipt.get("srt")
             if "xv.vpn" in jwt_payload(srt).get("entitlements", {}):
@@ -496,7 +496,7 @@ def slugify(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
 
 
-def jwt_payload(token: Optional[str]) -> dict:
+def jwt_payload(token: str | None) -> dict:
     if not token:
         return {}
     try:
@@ -509,7 +509,7 @@ def jwt_payload(token: Optional[str]) -> dict:
         return {}
 
 
-def jwt_expired(token: Optional[str]) -> bool:
+def jwt_expired(token: str | None) -> bool:
     """Treat tokens without an exp claim (proprietary SRT/connection tokens) as non-expiring."""
     if not token:
         return True

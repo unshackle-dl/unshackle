@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import threading
-from typing import Any, Iterator, Optional, Union
+from collections.abc import Iterator
+from typing import Any
 from uuid import UUID
 
 import pymysql
@@ -32,7 +33,7 @@ class MySQL(Vault):
         if not self.has_permission("SELECT"):
             raise PermissionError(f"MySQL vault {self.slug} has no SELECT permission.")
 
-    def get_key(self, kid: Union[UUID, str], service: str) -> Optional[str]:
+    def get_key(self, kid: UUID | str, service: str) -> str | None:
         if isinstance(kid, UUID):
             kid = kid.hex
 
@@ -73,7 +74,7 @@ class MySQL(Vault):
         finally:
             cursor.close()
 
-    def add_key(self, service: str, kid: Union[UUID, str], key: str) -> bool:
+    def add_key(self, service: str, kid: UUID | str, key: str) -> bool:
         if is_null_key(key):
             raise ValueError("You cannot add a NULL Content Key to a Vault.")
 
@@ -113,8 +114,8 @@ class MySQL(Vault):
 
         return True
 
-    def add_keys(self, service: str, kid_keys: dict[Union[UUID, str], str]) -> int:
-        for kid, key in kid_keys.items():
+    def add_keys(self, service: str, kid_keys: dict[UUID | str, str]) -> int:
+        for key in kid_keys.values():
             if is_null_key(key):
                 raise ValueError("You cannot add a NULL Content Key to a Vault.")
 
@@ -178,7 +179,7 @@ class MySQL(Vault):
         finally:
             cursor.close()
 
-    def resolve_table(self, name: str) -> Optional[str]:
+    def resolve_table(self, name: str) -> str | None:
         """
         Get the actual Table name matching `name` case-insensitively, if it exists.
 
@@ -266,7 +267,7 @@ class MySQL(Vault):
             conn.commit()
             cursor.close()
 
-    def has_permission(self, operation: str, database: Optional[str] = None, table: Optional[str] = None) -> bool:
+    def has_permission(self, operation: str, database: str | None = None, table: str | None = None) -> bool:
         """Return True if the current connection has a specific permission."""
         grants = [x for x in self.permissions if x[0] == ["*"] or operation.upper() in x[0]]
         if grants and database:

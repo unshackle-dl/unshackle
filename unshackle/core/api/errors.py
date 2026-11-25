@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import secrets
 import traceback
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from aiohttp import web
@@ -118,7 +118,7 @@ def build_error_response(
         "error_code": error_code,
         "message": f"{message} (ref {ref})",
         "ref": ref,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
     }
 
     if details:

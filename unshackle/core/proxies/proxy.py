@@ -1,7 +1,8 @@
 import functools
 import time
 from abc import abstractmethod
-from typing import Any, Callable, Optional, TypeVar
+from collections.abc import Callable
+from typing import Any, TypeVar
 
 CATALOGUE_TTL = 600.0
 CATALOGUES: dict[str, tuple[float, Any]] = {}
@@ -47,7 +48,7 @@ class Proxy:
         return f"{countries} Countr{['ies', 'y'][countries == 1]} ({servers} Server{['s', ''][servers == 1]})"
 
     @abstractmethod
-    def get_proxy(self, query: str) -> Optional[str]:
+    def get_proxy(self, query: str) -> str | None:
         """
         Get a proxy URI from the proxy provider.
 

@@ -7,9 +7,10 @@ import re
 import sys
 import threading
 import time
+from collections.abc import Iterable
 from importlib.machinery import EXTENSION_SUFFIXES
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 import click
 from click.core import ParameterSource
@@ -437,8 +438,8 @@ class Services(click.Group):
             if not available_services:
                 raise click.ClickException(
                     f"There are no Services added yet, therefore the '{name}' Service could not be found."
-                )
-            raise click.ClickException(f"{e}, available: {', '.join(available_services)}")
+                ) from None
+            raise click.ClickException(f"{e}, available: {', '.join(available_services)}") from e
 
         if hasattr(service, "cli"):
             cli = service.cli

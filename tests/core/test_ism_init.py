@@ -470,7 +470,7 @@ def test_avcc_requires_sps_and_pps():
 
 def test_read_track_id_from_fragment():
     # Minimal moof/traf/tfhd carrying track_ID = 7.
-    tfhd = full_box("tfhd".encode(), 0, 0, struct.pack(">I", 7) + b"\x00" * 4)
+    tfhd = full_box(b"tfhd", 0, 0, struct.pack(">I", 7) + b"\x00" * 4)
     traf = box(b"traf", tfhd)
     moof = box(b"moof", traf)
     mdat = box(b"mdat", b"\x00\x00")

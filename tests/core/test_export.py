@@ -12,7 +12,7 @@ import json
 import logging
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, Optional, cast
+from typing import Any, cast
 from uuid import UUID
 
 import click
@@ -396,7 +396,7 @@ def ad_mpd(ad_id: str) -> str:
 {period(ad_id, "PRE_ROLL")}{period("main", "")}</MPD>"""
 
 
-def export_service_filtered_title(tmp_path: Path, manifest_url: Optional[str]) -> Path:
+def export_service_filtered_title(tmp_path: Path, manifest_url: str | None) -> Path:
     """Export a DASH title as a service would, its own period_filter dropping the pre-roll, with no manifest snapshot.
 
     Without a snapshot the import re-fetches the manifest, the path ``content_periods`` serves.
@@ -423,7 +423,7 @@ def export_service_filtered_title(tmp_path: Path, manifest_url: Optional[str]) -
 @pytest.mark.parametrize("manifest_url", [AD_MPD_URL, None])
 @pytest.mark.parametrize("ad_id_on_refetch", ["ad-1", "ad-9"])
 def test_import_keeps_out_the_periods_the_service_filtered(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, manifest_url: Optional[str], ad_id_on_refetch: str
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, manifest_url: str | None, ad_id_on_refetch: str
 ) -> None:
     """The import re-fetches the MPD without the service, so its filter must travel in the export.
 

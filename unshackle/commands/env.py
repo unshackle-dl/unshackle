@@ -3,7 +3,6 @@ import os
 import shutil
 import sys
 from pathlib import Path
-from typing import Optional
 
 import click
 from rich.padding import Padding
@@ -419,7 +418,7 @@ def clear() -> None:
 
 @clear.command()
 @click.argument("service", type=str, required=False)
-def cache(service: Optional[str]) -> None:
+def cache(service: str | None) -> None:
     """Clear the environment cache directory."""
     log = logging.getLogger("env")
     cache_dir = config.directories.cache

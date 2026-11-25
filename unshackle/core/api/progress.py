@@ -7,7 +7,8 @@ a bitrate-weighted percentage, track counts, and the labels of the tracks downlo
 from __future__ import annotations
 
 import time
-from typing import Any, Callable, Optional
+from collections.abc import Callable
+from typing import Any
 
 from unshackle.core.api.sanitize import sanitize_log
 from unshackle.core.constants import AnyTrack
@@ -85,15 +86,17 @@ def build_job_progress_callables(
     started = [False] * total
     seg_done = [0.0] * total
     seg_total = [0.0] * total
-    speeds: list[Optional[str]] = [None] * total
+    speeds: list[str | None] = [None] * total
     last_emit = 0.0
-    last_shape: Optional[tuple[Any, ...]] = None
+    last_shape: tuple[Any, ...] | None = None
 
     def emit() -> None:
         nonlocal last_emit, last_shape
         completed = sum(done)
         # Downloads fill 0..DOWNLOAD_PROGRESS_CEILING; dl.result drives muxing up to 100.
-        progress = sum(w * f for w, f in zip(weights, fractions)) * DOWNLOAD_PROGRESS_CEILING / total_weight
+        progress = (
+            sum(w * f for w, f in zip(weights, fractions, strict=False)) * DOWNLOAD_PROGRESS_CEILING / total_weight
+        )
         active = [labels[i] for i in range(total) if started[i] and not done[i]]
         if active:
             phase = "downloading " + ", ".join(active[:3])

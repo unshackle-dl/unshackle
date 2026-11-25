@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import inspect
 from functools import partial
+from itertools import pairwise
 from pathlib import Path
 
 import pytest
@@ -252,7 +253,7 @@ def test_plan_tail_parts_full_coverage_no_gaps() -> None:
     assert parts, "expected a split for a large segment with spare capacity"
     assert parts[0][0] == 0
     assert parts[-1][1] == size - 1
-    for (_, prev_end), (start, _) in zip(parts, parts[1:]):
+    for (_, prev_end), (start, _) in pairwise(parts):
         assert start == prev_end + 1  # each part begins exactly where the previous one ended
     covered = sum(end - start + 1 for start, end in parts)
     assert covered == size
@@ -282,7 +283,7 @@ def test_split_ranges_covers_exactly_no_gaps_no_overlaps() -> None:
     for size in (1, 100, 4 * 1024 * 1024, 16 * 1024 * 1024 + 7, 64 * 1024 * 1024):
         parts = split_ranges(size, max_parts=8, part_target=4 * 1024 * 1024)
         assert parts[0][0] == 0 and parts[-1][1] == size - 1
-        for (_, prev_end), (start, _) in zip(parts, parts[1:]):
+        for (_, prev_end), (start, _) in pairwise(parts):
             assert start == prev_end + 1
         assert all(start <= end for start, end in parts)
         assert sum(end - start + 1 for start, end in parts) == size

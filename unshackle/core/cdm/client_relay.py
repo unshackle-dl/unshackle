@@ -12,7 +12,8 @@ import base64
 import binascii
 import contextlib
 import uuid
-from typing import Any, Callable, Optional, Protocol, Union
+from collections.abc import Callable
+from typing import Any, Protocol
 from uuid import UUID
 
 from pywidevine import DeviceTypes
@@ -39,10 +40,10 @@ class ClientDeviceCdm:
         self,
         bridge: CdmCallBridge,
         is_playready: bool,
-        server_device: Optional[Callable[[], Any]] = None,
-        security_level: Optional[int] = None,
-        system_id: Optional[int] = None,
-        device_type: Optional[DeviceTypes] = None,
+        server_device: Callable[[], Any] | None = None,
+        security_level: int | None = None,
+        system_id: int | None = None,
+        device_type: DeviceTypes | None = None,
     ) -> None:
         self.bridge = bridge
         self.is_playready = is_playready
@@ -54,7 +55,7 @@ class ClientDeviceCdm:
             self.system_id = system_id
         if device_type is not None:
             self.device_type = device_type
-        self._certificates: dict[bytes, Optional[str]] = {}
+        self._certificates: dict[bytes, str | None] = {}
         self._client_sessions: dict[bytes, str] = {}
         self._keys: dict[bytes, list[Key]] = {}
 
@@ -86,7 +87,7 @@ class ClientDeviceCdm:
             with contextlib.suppress(Exception):
                 self.bridge.request_cdm({"op": "close", "session": client_session})
 
-    def set_service_certificate(self, session_id: bytes, certificate: Optional[Union[bytes, str]]) -> None:
+    def set_service_certificate(self, session_id: bytes, certificate: bytes | str | None) -> None:
         if isinstance(certificate, bytes):
             certificate = base64.b64encode(certificate).decode()
         self._certificates[session_id] = certificate
@@ -99,7 +100,7 @@ class ClientDeviceCdm:
         privacy_mode: bool = True,
         *_: Any,
         **__: Any,
-    ) -> Union[bytes, str]:
+    ) -> bytes | str:
         """Have the client's CDM make a challenge. Widevine returns bytes, PlayReady the challenge XML."""
         if self.is_playready:
             init_data = pssh_or_wrm if isinstance(pssh_or_wrm, str) else pssh_or_wrm.dumps()
@@ -119,7 +120,7 @@ class ClientDeviceCdm:
         challenge = base64.b64decode(answer["challenge"])
         return challenge.decode("utf-8") if self.is_playready else challenge
 
-    def parse_license(self, session_id: bytes, license_message: Union[bytes, str]) -> None:
+    def parse_license(self, session_id: bytes, license_message: bytes | str) -> None:
         client_session = self._client_sessions.get(session_id)
         if client_session is None:
             raise ValueError("No client CDM challenge was made in this session")
@@ -135,7 +136,7 @@ class ClientDeviceCdm:
             for k in answer.get("keys") or []
         ]
 
-    def get_keys(self, session_id: bytes, type_: Optional[str] = None) -> list[Key]:
+    def get_keys(self, session_id: bytes, type_: str | None = None) -> list[Key]:
         keys = self._keys.get(session_id, [])
         return [k for k in keys if type_ is None or k.type == type_]
 
@@ -158,7 +159,7 @@ def answer_cdm_call(cdm: Any, call: dict[str, Any], sessions: dict[str, bytes]) 
             ref = uuid.uuid4().hex
             sessions[ref] = session_id
             if playready:
-                challenge: Union[bytes, str] = cdm.get_license_challenge(session_id, str(call["init_data"]))
+                challenge: bytes | str = cdm.get_license_challenge(session_id, str(call["init_data"]))
                 challenge_bytes = challenge.encode("utf-8") if isinstance(challenge, str) else challenge
             else:
                 if call.get("service_certificate"):

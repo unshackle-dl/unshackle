@@ -1,5 +1,5 @@
 from abc import ABCMeta, abstractmethod
-from typing import Iterator, Optional, Union
+from collections.abc import Iterator
 from uuid import UUID
 
 from requests import ConnectionError as RequestsConnectionError
@@ -23,7 +23,7 @@ class RateLimited(Exception):
 UNREACHABLE = (RequestsConnectionError, Timeout, ConnectionError, TimeoutError)
 
 
-def is_null_key(key: Optional[str]) -> bool:
+def is_null_key(key: str | None) -> bool:
     """True for a blank or all-zero content key, the null key that no vault stores."""
     return not key or key.count("0") == len(key)
 
@@ -66,7 +66,7 @@ class Vault(metaclass=ABCMeta):
         return f"{self.name} {type(self).__name__}"
 
     @abstractmethod
-    def get_key(self, kid: Union[UUID, str], service: str) -> Optional[str]:
+    def get_key(self, kid: UUID | str, service: str) -> str | None:
         """
         Get the content key from the Vault by KID (Key ID) and Service.
 
@@ -84,11 +84,11 @@ class Vault(metaclass=ABCMeta):
         """Get All Keys from Vault by Service."""
 
     @abstractmethod
-    def add_key(self, service: str, kid: Union[UUID, str], key: str) -> bool:
+    def add_key(self, service: str, kid: UUID | str, key: str) -> bool:
         """Add KID:KEY to the Vault."""
 
     @abstractmethod
-    def add_keys(self, service: str, kid_keys: dict[Union[UUID, str], str]) -> int:
+    def add_keys(self, service: str, kid_keys: dict[UUID | str, str]) -> int:
         """
         Add Multiple Content Keys with Key IDs for Service to the Vault.
         The Vault ignores pre-existing Content Keys.
@@ -104,14 +104,14 @@ class Vault(metaclass=ABCMeta):
         get_key/get_keys/add_key/add_keys reaches the namespace it came from.
         """
 
-    def is_bad_key(self, kid: Union[UUID, str], key: str) -> bool:
+    def is_bad_key(self, kid: UUID | str, key: str) -> bool:
         """Return True if this Vault has flagged the KID:KEY as wrong."""
         return False
 
-    def flag_bad_key(self, service: str, kid: Union[UUID, str], key: str, source: str) -> None:
+    def flag_bad_key(self, service: str, kid: UUID | str, key: str, source: str) -> None:
         """Remember a KID:KEY that failed decryption and where it came from."""
 
-    def unflag_bad_key(self, kid: Union[UUID, str], key: str) -> None:
+    def unflag_bad_key(self, kid: UUID | str, key: str) -> None:
         """Forget a flagged KID:KEY, for example when a CDM licence confirmed it."""
 
 

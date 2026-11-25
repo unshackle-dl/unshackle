@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, Callable, Optional
+from typing import Any
 
 import click
 import pytest
@@ -25,7 +26,7 @@ from unshackle.core.service import Service
 from unshackle.core.utils import ip_info, run_proxy
 
 
-def code_of(call: Callable[[], Any]) -> Optional[APIErrorCode]:
+def code_of(call: Callable[[], Any]) -> APIErrorCode | None:
     """The code the raised exception names itself, not the one its message would give."""
     with pytest.raises(BaseException) as caught:
         call()
@@ -77,7 +78,7 @@ class Blocked(Service):
 
 
 @pytest.mark.parametrize("proxy", [None, "https://u:p@chosen.example:89"], ids=["own-region", "proxy-region"])
-def test_a_blocked_region_is_a_geofence_error(monkeypatch: pytest.MonkeyPatch, proxy: Optional[str]) -> None:
+def test_a_blocked_region_is_a_geofence_error(monkeypatch: pytest.MonkeyPatch, proxy: str | None) -> None:
     monkeypatch.setattr(service_mod, "get_ip_info", lambda *args, **kwargs: {"country": "gb"})
     monkeypatch.setattr(service_mod, "verify_proxy_exit", lambda session: {"country": "gb"})
     monkeypatch.setattr(run_proxy, "watched", {})
@@ -140,7 +141,7 @@ def http_failure(status: Any) -> requests.ConnectionError:
     ids=["404", "410", "429", "503", "403", "not-a-status", "no-answer"],
 )
 def test_a_manifest_fetch_failure_is_coded_from_an_unambiguous_status(
-    failure: Exception, code: Optional[APIErrorCode]
+    failure: Exception, code: APIErrorCode | None
 ) -> None:
     error = manifest_fetch_error("DASH", "Example Movie", failure)
     assert isinstance(error, click.ClickException) and "may have expired" in error.message

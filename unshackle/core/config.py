@@ -4,7 +4,7 @@ import logging
 import re
 import warnings
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import Any
 
 import yaml
 from appdirs import AppDirs
@@ -72,7 +72,7 @@ def resolve_cdm_name(cdm: dict, service: str, override: Any = None) -> Any:
     return override or ci_get(cdm, service) or ci_get(cdm, "default")
 
 
-def cdm_entry_names_device(entry: Any, profile: Optional[str] = None) -> bool:
+def cdm_entry_names_device(entry: Any, profile: str | None = None) -> bool:
     """Whether a per-service ``cdm`` entry names a device when no quality is known.
 
     An entry that selects only by quality, or by a different profile, names none.
@@ -186,7 +186,7 @@ class Config:
         self.tvdb_api_key: str = kwargs.get("tvdb_api_key") or ""
         self.tvdb_pin: str = kwargs.get("tvdb_pin") or ""
         self.tvdb_order: str = (kwargs.get("tvdb_order") or "").lower()
-        self.metadata_providers: Union[list, dict] = kwargs.get("metadata_providers") or []
+        self.metadata_providers: list | dict = kwargs.get("metadata_providers") or []
         self.anilist_title_language: str = (kwargs.get("anilist_title_language") or "english").lower()
         self.disable_metadata: bool = kwargs.get("disable_metadata", False)
         self.simkl_client_id: str = kwargs.get("simkl_client_id") or ""
@@ -198,7 +198,7 @@ class Config:
         # mask local base dirs (install root/venv/home) in logged paths; False shows full paths
         self.redact_paths: bool = kwargs.get("redact_paths", True)
         self.continue_downloads: bool = kwargs.get("continue_downloads", False)
-        self.sample: Optional[tuple[int, int]] = None
+        self.sample: tuple[int, int] | None = None
         self.post_scripts: list = kwargs.get("post_scripts") or []
 
         self.language_tags: dict = kwargs.get("language_tags") or {}
@@ -316,13 +316,17 @@ class Config:
             all_templates["folder"] = self.folder_template
         for kind, tmpl in self.folder_templates.items():
             if kind not in {"movies", "series", "sports", "songs", "albums"}:
-                warnings.warn(f"Unknown folder template kind '{kind}' (expected movies/series/sports/songs/albums)")
+                warnings.warn(
+                    f"Unknown folder template kind '{kind}' (expected movies/series/sports/songs/albums)", stacklevel=1
+                )
                 continue
             all_templates[f"folder.{kind}"] = tmpl
 
         for template_type, template_str in all_templates.items():
             if not isinstance(template_str, str):
-                warnings.warn(f"Template '{template_type}' must be a string, got {type(template_str).__name__}")
+                warnings.warn(
+                    f"Template '{template_type}' must be a string, got {type(template_str).__name__}", stacklevel=1
+                )
                 continue
 
             variables = re.findall(r"\{([^}]+)\}", template_str)
@@ -332,9 +336,11 @@ class Config:
             for var in variables:
                 var_clean = var.rstrip("?")
                 if var_clean not in valid_variables:
-                    warnings.warn(f"Unknown template variable '{var}' in {template_type} template")
+                    warnings.warn(f"Unknown template variable '{var}' in {template_type} template", stacklevel=1)
                 elif var_clean not in allowed:
-                    warnings.warn(f"Template variable '{var}' is not available in the {template_type} template")
+                    warnings.warn(
+                        f"Template variable '{var}' is not available in the {template_type} template", stacklevel=1
+                    )
 
             test_template = re.sub(r"\{[^}]+\}", "TEST", template_str)
             if template_type.startswith("folder"):
@@ -342,10 +348,10 @@ class Config:
             else:
                 unsafe_segment = bool(re.search(unsafe_chars, test_template))
             if unsafe_segment:
-                warnings.warn(f"Template '{template_type}' may contain filesystem-unsafe characters")
+                warnings.warn(f"Template '{template_type}' may contain filesystem-unsafe characters", stacklevel=1)
 
             if not template_str.strip():
-                warnings.warn(f"Template '{template_type}' is empty")
+                warnings.warn(f"Template '{template_type}' is empty", stacklevel=1)
 
     def get_folder_template(self, kind: str) -> str:
         """Find the folder template for the given title kind.
@@ -446,7 +452,7 @@ POSSIBLE_CONFIG_PATHS = (
 )
 
 
-def get_config_path() -> Optional[Path]:
+def get_config_path() -> Path | None:
     """
     Get Path to Config from any one of the possible locations.
 

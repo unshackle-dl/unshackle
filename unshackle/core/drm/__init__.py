@@ -1,4 +1,4 @@
-from typing import Any, Union
+from typing import Any
 from uuid import UUID
 
 from unshackle.core.drm.blowfish_stripe import BlowfishStripe
@@ -10,7 +10,7 @@ from unshackle.core.drm.widevine import Widevine
 from unshackle.core.vault import is_null_key
 
 # BlowfishStripe stays out: the licensing paths typed on DRM_T never receive a DRM that needs no licence
-DRM_T = Union[ClearKey, ClearKeyCENC, Widevine, PlayReady, MonaLisa]
+DRM_T = ClearKey | ClearKeyCENC | Widevine | PlayReady | MonaLisa
 
 
 def drop_null_keys(drm: Any) -> None:

@@ -11,8 +11,8 @@ from __future__ import annotations
 import logging
 import sqlite3
 import threading
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Iterator, Optional, Union
 from uuid import UUID
 
 import pytest
@@ -40,16 +40,16 @@ def tables(path: Path) -> list[str]:
 class UnlistableVault(Vault):
     """Stands in for the API vault, which supports neither listing nor bulk dumps."""
 
-    def get_key(self, kid: Union[UUID, str], service: str) -> Optional[str]:
+    def get_key(self, kid: UUID | str, service: str) -> str | None:
         return None
 
     def get_keys(self, service: str) -> Iterator[tuple[str, str]]:
         raise ValueError("Bulk dump is not supported.")
 
-    def add_key(self, service: str, kid: Union[UUID, str], key: str) -> bool:
+    def add_key(self, service: str, kid: UUID | str, key: str) -> bool:
         return False
 
-    def add_keys(self, service: str, kid_keys: dict[Union[UUID, str], str]) -> int:
+    def add_keys(self, service: str, kid_keys: dict[UUID | str, str]) -> int:
         return 0
 
     def get_services(self) -> Iterator[str]:
@@ -131,7 +131,7 @@ def test_synced_lowercase_table_survives_the_service_being_added_later(tmp_path:
         ("00112233445566778899AABBCCDDEEFF", False),
     ],
 )
-def test_is_null_key(key: Optional[str], expected: bool) -> None:
+def test_is_null_key(key: str | None, expected: bool) -> None:
     assert is_null_key(key) is expected
 
 
@@ -201,7 +201,7 @@ def test_copy_skips_a_vault_that_cannot_list_services() -> None:
 
 def test_lookups_work_from_another_thread(vault: SQLite) -> None:
     """`kv search` probes services in a ThreadPoolExecutor; connections are thread-local."""
-    found: list[Optional[str]] = []
+    found: list[str | None] = []
     thread = threading.Thread(target=lambda: found.append(vault.get_key(KID, "SVCA")))
     thread.start()
     thread.join()

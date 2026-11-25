@@ -5,10 +5,12 @@ import math
 import shutil
 import sys
 import unicodedata
+from collections.abc import Callable, Iterable, Mapping, Sized
 from datetime import datetime
 from functools import lru_cache
+from itertools import pairwise
 from types import ModuleType
-from typing import IO, Any, Callable, Iterable, List, Literal, Mapping, Optional, Sized, TextIO, Union, cast
+from typing import IO, Any, Literal, Optional, TextIO, cast
 
 import rich.cells
 from rich import box
@@ -38,12 +40,12 @@ class ComfyLogRenderer(LogRender):
         self,
         console: "Console",
         renderables: Iterable["ConsoleRenderable"],
-        log_time: Optional[datetime] = None,
-        time_format: Optional[Union[str, FormatTimeCallable]] = None,
+        log_time: datetime | None = None,
+        time_format: str | FormatTimeCallable | None = None,
         level: TextType = "",
-        path: Optional[str] = None,
-        line_no: Optional[int] = None,
-        link_path: Optional[str] = None,
+        path: str | None = None,
+        line_no: int | None = None,
+        link_path: str | None = None,
     ) -> "Table":
         from rich.containers import Renderables
 
@@ -56,7 +58,7 @@ class ComfyLogRenderer(LogRender):
         output.add_column(ratio=1, style="log.message", overflow="fold")
         if self.show_path and path:
             output.add_column(style="log.path")
-        row: List["RenderableType"] = []
+        row: list[RenderableType] = []
         if self.show_time:
             log_time = log_time or console.get_datetime()
             time_format = time_format or self.time_format
@@ -91,28 +93,28 @@ class ComfyLogRenderer(LogRender):
 class ComfyRichHandler(RichHandler):
     def __init__(
         self,
-        level: Union[int, str] = logging.NOTSET,
-        console: Optional[Console] = None,
+        level: int | str = logging.NOTSET,
+        console: Console | None = None,
         *,
         show_time: bool = True,
         omit_repeated_times: bool = True,
         show_level: bool = True,
         show_path: bool = True,
         enable_link_path: bool = True,
-        highlighter: Optional[Highlighter] = None,
+        highlighter: Highlighter | None = None,
         markup: bool = False,
         rich_tracebacks: bool = False,
-        tracebacks_width: Optional[int] = None,
+        tracebacks_width: int | None = None,
         tracebacks_extra_lines: int = 3,
-        tracebacks_theme: Optional[str] = None,
+        tracebacks_theme: str | None = None,
         tracebacks_word_wrap: bool = True,
         tracebacks_show_locals: bool = False,
-        tracebacks_suppress: Iterable[Union[str, ModuleType]] = (),
+        tracebacks_suppress: Iterable[str | ModuleType] = (),
         locals_max_length: int = 10,
         locals_max_string: int = 80,
-        log_time_format: Union[str, FormatTimeCallable] = "[%x %X]",
-        keywords: Optional[List[str]] = None,
-        log_renderer: Optional[LogRender] = None,
+        log_time_format: str | FormatTimeCallable = "[%x %X]",
+        keywords: list[str] | None = None,
+        log_renderer: LogRender | None = None,
     ) -> None:
         super().__init__(
             level=level,
@@ -138,6 +140,9 @@ class ComfyRichHandler(RichHandler):
         )
         if log_renderer:
             self._log_render = log_renderer
+
+
+REPR_HIGHLIGHTER = ReprHighlighter()
 
 
 class ComfyConsole(Console):
@@ -184,35 +189,35 @@ class ComfyConsole(Console):
     def __init__(
         self,
         *,
-        color_system: Optional[Literal["auto", "standard", "256", "truecolor", "windows"]] = "auto",
-        force_terminal: Optional[bool] = None,
-        force_jupyter: Optional[bool] = None,
-        force_interactive: Optional[bool] = None,
+        color_system: Literal["auto", "standard", "256", "truecolor", "windows"] | None = "auto",
+        force_terminal: bool | None = None,
+        force_jupyter: bool | None = None,
+        force_interactive: bool | None = None,
         soft_wrap: bool = False,
-        theme: Optional[Theme] = None,
+        theme: Theme | None = None,
         stderr: bool = False,
-        file: Optional[IO[str]] = None,
+        file: IO[str] | None = None,
         quiet: bool = False,
-        width: Optional[int] = None,
-        height: Optional[int] = None,
-        style: Optional[StyleType] = None,
-        no_color: Optional[bool] = None,
+        width: int | None = None,
+        height: int | None = None,
+        style: StyleType | None = None,
+        no_color: bool | None = None,
         tab_size: int = 8,
         record: bool = False,
         markup: bool = True,
         emoji: bool = True,
-        emoji_variant: Optional[EmojiVariant] = None,
+        emoji_variant: EmojiVariant | None = None,
         highlight: bool = True,
         log_time: bool = True,
         log_path: bool = True,
-        log_time_format: Union[str, FormatTimeCallable] = "[%X]",
-        highlighter: Optional["HighlighterType"] = ReprHighlighter(),
-        legacy_windows: Optional[bool] = None,
+        log_time_format: str | FormatTimeCallable = "[%X]",
+        highlighter: Optional["HighlighterType"] = REPR_HIGHLIGHTER,
+        legacy_windows: bool | None = None,
         safe_box: bool = True,
-        get_datetime: Optional[Callable[[], datetime]] = None,
-        get_time: Optional[Callable[[], float]] = None,
-        _environ: Optional[Mapping[str, str]] = None,
-        log_renderer: Optional[LogRender] = None,
+        get_datetime: Callable[[], datetime] | None = None,
+        get_time: Callable[[], float] | None = None,
+        _environ: Mapping[str, str] | None = None,
+        log_renderer: LogRender | None = None,
     ) -> None:
         super().__init__(
             color_system=color_system,
@@ -256,7 +261,7 @@ class ComfyConsole(Console):
         speed: float = 1.0,
         refresh_per_second: float = 12.5,
         pad: PaddingDimensions = (0, 5),
-    ) -> Union[Live, Status]:
+    ) -> Live | Status:
         """Display a comfy status and spinner.
 
         Args:
@@ -304,7 +309,7 @@ class ComfyConsole(Console):
         markup: bool = True,
         emoji: bool = True,
         password: bool = False,
-        stream: Optional[TextIO] = None,
+        stream: TextIO | None = None,
     ) -> str:
         """Displays a prompt and waits for input from the user, temporarily pausing any active Live displays."""
         # Find active Live displays to prevent overlap / disappearing prompt.
@@ -390,7 +395,7 @@ class GradientPulseBarColumn(BarColumn):
 
 
 class _GradientPulse:
-    def __init__(self, lut: list[Style], offset: float, period: float, width: Optional[int]) -> None:
+    def __init__(self, lut: list[Style], offset: float, period: float, width: int | None) -> None:
         self.lut = lut
         self.offset = offset
         self.period = period
@@ -436,9 +441,7 @@ def _cell_len(text: str, unicode_version: str) -> int:
     width = _rich_cell_len(text, unicode_version)
     if _JOINING_VIRAMAS.isdisjoint(text):
         return width
-    return width - sum(
-        prev in _JOINING_VIRAMAS and unicodedata.category(char) == "Lo" for prev, char in zip(text, text[1:])
-    )
+    return width - sum(prev in _JOINING_VIRAMAS and unicodedata.category(char) == "Lo" for prev, char in pairwise(text))
 
 
 rich.cells.get_character_cell_size = _cell_size
@@ -478,7 +481,7 @@ def listing_panel(renderable: RenderableType, title: str) -> Panel:
     return Panel(renderable, title=title, box=box.SQUARE, border_style="bright_black")
 
 
-def listing_table(title: Optional[str] = None, **kwargs: Any) -> Table:
+def listing_table(title: str | None = None, **kwargs: Any) -> Table:
     """Assemble a table in the style of the rich-click help tables, so listings and help screens match."""
     kwargs.setdefault("box", box.HORIZONTALS)
     kwargs.setdefault("show_edge", False)  # no top or bottom rule, so the title runs straight into the header
@@ -511,10 +514,10 @@ def print_listing(renderable: RenderableType) -> None:
         console.print(Padding(renderable, (0, 5)))
 
 
-_prompt_handler: Optional[Callable[[str], str]] = None
+_prompt_handler: Callable[[str], str] | None = None
 
 
-def set_prompt_handler(handler: Optional[Callable[[str], str]]) -> None:
+def set_prompt_handler(handler: Callable[[str], str] | None) -> None:
     """Route every :func:`prompt_user` call to *handler*, for a process with no terminal to prompt on."""
     global _prompt_handler
     _prompt_handler = handler
@@ -530,16 +533,16 @@ def prompt_user(prompt: str) -> str:
     return console.input(body)
 
 
-_notice_handler: Optional[Callable[[Optional[str]], None]] = None
+_notice_handler: Callable[[str | None], None] | None = None
 
 
-def set_notice_handler(handler: Optional[Callable[[Optional[str]], None]]) -> None:
+def set_notice_handler(handler: Callable[[str | None], None] | None) -> None:
     """Route every :func:`show_notice` call to *handler*, for a process whose log output no user reads."""
     global _notice_handler
     _notice_handler = handler
 
 
-def show_notice(message: Optional[str]) -> None:
+def show_notice(message: str | None) -> None:
     """Give *message* to the notice handler, or None to clear it. Without a handler this does nothing."""
     if _notice_handler is not None:
         _notice_handler(message)

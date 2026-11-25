@@ -95,6 +95,6 @@ def cfg(ctx: click.Context, key: str, value: str, unset: bool, list_: bool) -> N
                 del parent_data[trailing_key]
                 log.info(f"Unset {key}")
         except KeyError:
-            raise click.ClickException(f"Key '{key}' does not exist in the config.")
+            raise click.ClickException(f"Key '{key}' does not exist in the config.") from None
         config_path.parent.mkdir(parents=True, exist_ok=True)
         yaml.dump(data, config_path)

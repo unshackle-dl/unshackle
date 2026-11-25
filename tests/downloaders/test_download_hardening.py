@@ -9,12 +9,13 @@ media requests must ask for identity encoding.
 
 import importlib
 import threading
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from email.utils import format_datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from types import SimpleNamespace
 
 import pytest
+import requests
 
 dl = importlib.import_module("unshackle.core.downloaders.requests")
 
@@ -109,7 +110,7 @@ def test_range_item_ignored_by_server_fails_not_corrupts(server, tmp_path, monke
     server.honor_range = False
     monkeypatch.setattr(dl, "RETRY_WAIT", 0.01)
     urls = [{"url": url(server), "headers": {"Range": f"bytes={SLICE_START}-{SLICE_END}"}}]
-    with pytest.raises(Exception):
+    with pytest.raises(OSError):
         run(server, tmp_path, urls, max_workers=1)
     # nothing finalized: a 200 full-parent body must never become the segment
     assert not list(tmp_path.glob("seg_*.bin"))
@@ -154,7 +155,7 @@ def test_retry_sleep_honors_numeric_retry_after():
 
 
 def test_retry_sleep_honors_http_date_retry_after():
-    when = format_datetime(datetime.now(timezone.utc) + timedelta(seconds=10), usegmt=True)
+    when = format_datetime(datetime.now(UTC) + timedelta(seconds=10), usegmt=True)
     assert 5 <= dl.retry_sleep(exc_with_headers({"Retry-After": when}), 1) <= 10
 
 
@@ -172,7 +173,7 @@ def test_retry_sleep_invalid_retry_after_falls_back():
 
 def test_retry_sleep_naive_http_date_treated_as_utc():
     # "-0000" makes parsedate_to_datetime return a naive datetime; must clamp, not raise
-    when = format_datetime(datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(seconds=10))
+    when = format_datetime(datetime.now(UTC).replace(tzinfo=None) + timedelta(seconds=10))
     assert when.endswith("-0000")
     v = dl.retry_sleep(exc_with_headers({"Retry-After": when}), 1)
     assert 5 <= v <= 10
@@ -219,7 +220,7 @@ def test_session_retry_does_not_nest_inside_an_attempt(server, tmp_path, monkeyp
     session.mount("http://", adapter)
     session.mount("https://", adapter)
 
-    with pytest.raises(Exception):
+    with pytest.raises(requests.HTTPError):
         run(server, tmp_path, [{"url": url(server)}], max_workers=1, session=session)
 
     assert len(server.requests) == dl.MAX_ATTEMPTS

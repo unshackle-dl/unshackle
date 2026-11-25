@@ -9,7 +9,7 @@ import logging
 import threading
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, Optional
+from typing import Any
 from uuid import UUID
 
 import click
@@ -121,7 +121,7 @@ def decrypt(
     ffmpeg: Any,
     decodes: bool = True,
     track: Any = "track",
-    flagged: Optional[dict] = None,
+    flagged: dict | None = None,
     licence: Any = None,
 ) -> list:
     """Decrypt a track that holds a licence key, a vault key and a null key; return what reached the server vault."""

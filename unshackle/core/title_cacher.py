@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import hashlib
 import logging
+from collections.abc import Callable
 from datetime import datetime, timedelta
-from typing import Callable, Optional
 
 from unshackle.core.cacher import Cacher
 from unshackle.core.config import config
@@ -29,9 +29,7 @@ class TitleCacher:
         self.stats = {"hits": 0, "misses": 0, "fallbacks": 0}
         self.no_cache = False
 
-    def generate_cache_key(
-        self, title_id: str, region: Optional[str] = None, account_hash: Optional[str] = None
-    ) -> str:
+    def generate_cache_key(self, title_id: str, region: str | None = None, account_hash: str | None = None) -> str:
         """
         Make a unique cache key for title data.
 
@@ -63,8 +61,8 @@ class TitleCacher:
         self,
         title_id: str,
         fetch_function: Callable[[], Titles_T],
-        region: Optional[str] = None,
-        account_hash: Optional[str] = None,
+        region: str | None = None,
+        account_hash: str | None = None,
         no_cache: bool = False,
         reset_cache: bool = False,
     ) -> Titles_T:
@@ -168,10 +166,10 @@ class TitleCacher:
         self,
         provider_name: str,
         title_id: str,
-        kind: Optional[str] = None,
-        region: Optional[str] = None,
-        account_hash: Optional[str] = None,
-    ) -> Optional[dict]:
+        kind: str | None = None,
+        region: str | None = None,
+        account_hash: str | None = None,
+    ) -> dict | None:
         """Get the cached data of any metadata provider."""
         if not config.title_cache_enabled or self.no_cache:
             return None
@@ -219,9 +217,9 @@ class TitleCacher:
         provider_name: str,
         title_id: str,
         data: dict,
-        kind: Optional[str] = None,
-        region: Optional[str] = None,
-        account_hash: Optional[str] = None,
+        kind: str | None = None,
+        region: str | None = None,
+        account_hash: str | None = None,
         ttl_days: int = 7,
     ) -> None:
         """Cache the data of any metadata provider."""
@@ -266,7 +264,7 @@ class TitleCacher:
         self.log.debug(f"Cached {provider_name} data for {title_id}")
 
 
-def get_account_hash(credential: Optional[Credential]) -> Optional[str]:
+def get_account_hash(credential: Credential | None) -> str | None:
     """
     Make a hash for account identification.
 

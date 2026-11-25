@@ -1,6 +1,6 @@
 import json
+from collections.abc import Iterator
 from enum import Enum
-from typing import Iterator, Optional, Union
 from uuid import UUID
 
 from unshackle.core.vault import RateLimited, Vault, is_null_key, vault_session
@@ -26,9 +26,9 @@ class HTTP(Vault):
         self,
         name: str,
         host: str,
-        password: Optional[str] = None,
-        api_key: Optional[str] = None,
-        username: Optional[str] = None,
+        password: str | None = None,
+        api_key: str | None = None,
+        username: str | None = None,
         api_mode: str = "query",
         no_push: bool = False,
         timeout: float = 10.0,
@@ -55,7 +55,7 @@ class HTTP(Vault):
         self.username = username
         self.api_mode = api_mode.lower()
         self.batch_insert = True
-        self.current_title: Optional[str] = None
+        self.current_title: str | None = None
         self.session = vault_session(timeout)
         self.api_session_id = None
 
@@ -69,7 +69,7 @@ class HTTP(Vault):
         elif self.api_mode not in ["query", "json", "decrypt_labs"]:
             raise ValueError("api_mode must be either 'query', 'json', or 'decrypt_labs'")
 
-    def request(self, method: str, params: Optional[dict] = None) -> dict:
+    def request(self, method: str, params: dict | None = None) -> dict:
         """Make a request to the JSON API vault."""
         if self.api_mode != "json":
             raise ValueError("request method is only available in json mode")
@@ -103,7 +103,7 @@ class HTTP(Vault):
         except json.JSONDecodeError:
             if r.status_code == 404:
                 return {"status": "not_found"}
-            raise ValueError(f"API returned an invalid response: {r.text}")
+            raise ValueError(f"API returned an invalid response: {r.text}") from None
 
         if res.get("status_code") != 200:
             raise ValueError(f"API returned an error: {res['status_code']} - {res['message']}")
@@ -113,7 +113,7 @@ class HTTP(Vault):
 
         return res.get("message", res)
 
-    def get_key(self, kid: Union[UUID, str], service: str) -> Optional[str]:
+    def get_key(self, kid: UUID | str, service: str) -> str | None:
         if isinstance(kid, UUID):
             kid = kid.hex
 
@@ -217,7 +217,7 @@ class HTTP(Vault):
             for key_entry in data["keys"]:
                 yield key_entry["kid"], key_entry["key"]
 
-    def add_key(self, service: str, kid: Union[UUID, str], key: str) -> bool:
+    def add_key(self, service: str, kid: UUID | str, key: str) -> bool:
         if is_null_key(key):
             raise ValueError("You cannot add a NULL Content Key to a Vault.")
 
@@ -263,11 +263,11 @@ class HTTP(Vault):
 
             return data.get("status_code") == 200
 
-    def add_keys(self, service: str, kid_keys: dict[Union[UUID, str], str]) -> int:
+    def add_keys(self, service: str, kid_keys: dict[UUID | str, str]) -> int:
         if self.api_mode == "decrypt_labs":
             return 0
 
-        for kid, key in kid_keys.items():
+        for key in kid_keys.values():
             if is_null_key(key):
                 raise ValueError("You cannot add a NULL Content Key to a Vault.")
 
@@ -366,9 +366,7 @@ class HTTP(Vault):
         """
         self.current_title = title
 
-    def insert_key_with_result(
-        self, service: str, kid: Union[UUID, str], key: str, title: Optional[str] = None
-    ) -> InsertResult:
+    def insert_key_with_result(self, service: str, kid: UUID | str, key: str, title: str | None = None) -> InsertResult:
         """
         Insert a content key and return detailed result information.
         This method provides more granular feedback than the standard add_key method.

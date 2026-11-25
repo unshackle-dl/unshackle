@@ -1,4 +1,4 @@
-from typing import Iterator, Optional, Union
+from collections.abc import Iterator
 from uuid import UUID
 
 from requests import HTTPError, Response
@@ -15,7 +15,7 @@ class API(Vault):
         uri: str,
         token: str,
         no_push: bool = False,
-        headers: Optional[dict[str, str]] = None,
+        headers: dict[str, str] | None = None,
         timeout: float = 10.0,
     ) -> None:
         super().__init__(name, no_push)
@@ -27,7 +27,7 @@ class API(Vault):
         if headers:
             self.session.headers.update(headers)
 
-    def get_key(self, kid: Union[UUID, str], service: str) -> Optional[str]:
+    def get_key(self, kid: UUID | str, service: str) -> str | None:
         if isinstance(kid, UUID):
             kid = kid.hex
 
@@ -96,8 +96,7 @@ class API(Vault):
                 if not isinstance(content_keys, dict):
                     raise ValueError(f"Expected {content_keys} to be {dict}, was {type(content_keys)}")
 
-                for key_id, key in content_keys.items():
-                    yield key_id, key
+                yield from content_keys.items()
 
             pages = int(data["pages"])
             if pages <= page:
@@ -105,7 +104,7 @@ class API(Vault):
 
             page += 1
 
-    def add_key(self, service: str, kid: Union[UUID, str], key: str) -> bool:
+    def add_key(self, service: str, kid: UUID | str, key: str) -> bool:
         if isinstance(kid, UUID):
             kid = kid.hex
 
@@ -138,7 +137,7 @@ class API(Vault):
 
         return added or updated
 
-    def add_keys(self, service: str, kid_keys: dict[Union[UUID, str], str]) -> int:
+    def add_keys(self, service: str, kid_keys: dict[UUID | str, str]) -> int:
         normalized_keys = {str(kid).replace("-", ""): key for kid, key in kid_keys.items()}
         kid_list = list(normalized_keys.keys())
 
@@ -207,7 +206,7 @@ class API(Vault):
 
         return total_added
 
-    def flag_bad_key(self, service: str, kid: Union[UUID, str], key: str, source: str) -> None:
+    def flag_bad_key(self, service: str, kid: UUID | str, key: str, source: str) -> None:
         """Report a pair that failed to decrypt. The vault only accepts pairs it served."""
         if self.no_push:
             return
@@ -222,7 +221,7 @@ class API(Vault):
         )
         self._check(response, ignore=frozenset({1, 4}))
 
-    def unflag_bad_key(self, kid: Union[UUID, str], key: str) -> None:
+    def unflag_bad_key(self, kid: UUID | str, key: str) -> None:
         if self.no_push:
             return
         if isinstance(kid, UUID):
@@ -270,8 +269,7 @@ class API(Vault):
         if not isinstance(service_list, list):
             raise ValueError(f"Expected {service_list} to be {list}, was {type(service_list)}")
 
-        for service in service_list:
-            yield service
+        yield from service_list
 
 
 class Exceptions:

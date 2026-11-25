@@ -14,10 +14,12 @@ import importlib
 import socketserver
 import threading
 import time
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 
 import pytest
+import urllib3
 
 from unshackle.core.constants import DOWNLOAD_CANCELLED, DownloadCancelled
 from unshackle.core.downloaders.requests import requests as download_batch
@@ -111,7 +113,7 @@ def test_failed_batch_frees_handles_even_after_flag_clear(server: _Server, tmp_p
     host, port = str(server.server_address[0]), int(server.server_address[1])
     urls = [f"http://{host}:{port}/stall/0"] + [f"http://{host}:{port}/ok/{i}" for i in range(1, 4)]
 
-    with pytest.raises(Exception):
+    with pytest.raises((OSError, urllib3.exceptions.HTTPError)):
         for _ in download_batch(urls=urls, output_dir=tmp_path, filename="seg_{i}.bin", max_workers=4):
             pass
 

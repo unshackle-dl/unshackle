@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import re
 import sys
-from typing import Any, Optional
+from typing import Any
 
 import click
 from rich.padding import Padding
@@ -67,11 +67,11 @@ from unshackle.core.utils.click_types import ContextData
 def search(
     ctx: click.Context,
     no_proxy: bool,
-    profile: Optional[str] = None,
-    proxy: Optional[str] = None,
+    profile: str | None = None,
+    proxy: str | None = None,
     local_proxy: bool = False,
     remote: bool = False,
-    server: Optional[str] = None,
+    server: str | None = None,
 ) -> None:
     if not ctx.invoked_subcommand:
         raise ValueError("A subcommand to invoke was not specified, the main code cannot continue.")
@@ -127,7 +127,7 @@ def search(
 
 
 @search.result_callback()
-def result(service: Service, profile: Optional[str] = None, remote: bool = False, **_: Any) -> None:
+def result(service: Service, profile: str | None = None, remote: bool = False, **_: Any) -> None:
     log = logging.getLogger("search")
 
     service_tag = service.__class__.__name__

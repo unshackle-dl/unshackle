@@ -1,8 +1,9 @@
 import json
 import subprocess
+from collections.abc import Callable
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, Callable, Optional
+from typing import Any
 
 import pytest
 
@@ -39,7 +40,7 @@ def probe_returns(monkeypatch: pytest.MonkeyPatch, stream: dict[str, Any]) -> No
 
 
 def pairs(args: list[str]) -> dict[str, str]:
-    return dict(zip(args[::2], args[1::2]))
+    return dict(zip(args[::2], args[1::2], strict=False))
 
 
 def test_hdr10_vp9_gets_cicp_and_mastering_display(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -78,7 +79,7 @@ def test_partial_mastering_display_keeps_the_cicp_args(tmp_path: Path, monkeypat
     ],
 )
 def test_the_file_transfer_wins_over_the_range(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, transfer: str, range_: Video.Range, expected: Optional[str]
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, transfer: str, range_: Video.Range, expected: str | None
 ) -> None:
     probe_returns(monkeypatch, {"color_transfer": transfer})
 

@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Optional, Union
-
 import requests
 
 from unshackle.core.config import config
@@ -18,7 +16,7 @@ class SimklProvider(MetadataProvider):
     def is_available(self) -> bool:
         return bool(config.simkl_client_id)
 
-    def search(self, title: str, year: Optional[int], kind: str) -> Optional[MetadataResult]:
+    def search(self, title: str, year: int | None, kind: str) -> MetadataResult | None:
         self.log.debug("Searching Simkl for %r (%s, %s)", title, kind, year)
 
         filename = f"{title}"
@@ -47,13 +45,13 @@ class SimklProvider(MetadataProvider):
 
         return self.parse_response(data, title, year, kind)
 
-    def get_by_id(self, provider_id: Union[int, str], kind: str) -> Optional[MetadataResult]:
+    def get_by_id(self, provider_id: int | str, kind: str) -> MetadataResult | None:
         return None  # SIMKL has no direct ID lookup used here
 
-    def get_external_ids(self, provider_id: Union[int, str], kind: str) -> ExternalIds:
+    def get_external_ids(self, provider_id: int | str, kind: str) -> ExternalIds:
         return ExternalIds()  # IDs come from search() response
 
-    def find_by_imdb_id(self, imdb_id: str, kind: str) -> Optional[ExternalIds]:
+    def find_by_imdb_id(self, imdb_id: str, kind: str) -> ExternalIds | None:
         """Look up TMDB/TVDB IDs from an IMDB ID using SIMKL's /search/id and detail endpoints."""
         self.log.debug("Looking up IMDB ID %s on SIMKL", imdb_id)
         headers = {"simkl-api-key": config.simkl_client_id}
@@ -92,12 +90,12 @@ class SimklProvider(MetadataProvider):
             return None
 
         ids = detail.get("ids", {})
-        tmdb_id: Optional[int] = None
+        tmdb_id: int | None = None
         raw_tmdb = ids.get("tmdb")
         if raw_tmdb:
             tmdb_id = int(raw_tmdb)
 
-        tvdb_id: Optional[int] = None
+        tvdb_id: int | None = None
         raw_tvdb = ids.get("tvdb")
         if raw_tvdb:
             tvdb_id = int(raw_tvdb)
@@ -112,8 +110,8 @@ class SimklProvider(MetadataProvider):
         )
 
     def parse_response(
-        self, data: dict, search_title: str, search_year: Optional[int], kind: str
-    ) -> Optional[MetadataResult]:
+        self, data: dict, search_title: str, search_year: int | None, kind: str
+    ) -> MetadataResult | None:
         """Parse a SIMKL response into a MetadataResult."""
         if data.get("type") == "episode" and "show" in data:
             info = data["show"]
@@ -138,7 +136,7 @@ class SimklProvider(MetadataProvider):
             return None
 
         ids = info.get("ids", {})
-        tmdb_id: Optional[int] = None
+        tmdb_id: int | None = None
         if content_type == "tv":
             raw_tmdb = ids.get("tmdbtv")
         else:
@@ -146,7 +144,7 @@ class SimklProvider(MetadataProvider):
         if raw_tmdb:
             tmdb_id = int(raw_tmdb)
 
-        tvdb_id: Optional[int] = None
+        tvdb_id: int | None = None
         raw_tvdb = ids.get("tvdb")
         if raw_tvdb:
             tvdb_id = int(raw_tvdb)

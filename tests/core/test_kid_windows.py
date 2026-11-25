@@ -1,6 +1,5 @@
 import struct
 from pathlib import Path
-from typing import Optional
 from uuid import UUID
 
 import pytest
@@ -79,7 +78,7 @@ def moof(
     time: int,
     *groups: bytes,
     samples: int = 48,
-    duration: Optional[int] = None,
+    duration: int | None = None,
     tfxd: bool = False,
 ) -> bytes:
     flags = 0x02 | (0x08 if duration is not None else 0)

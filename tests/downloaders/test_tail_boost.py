@@ -210,7 +210,7 @@ def test_tail_boost_permanent_part_failure_still_fails_the_batch(server, tmp_pat
     server.deny_offset_ranges = True  # every part window past the first is a 403
     monkeypatch.setattr(dl, "RETRY_WAIT", 0.01)
 
-    with pytest.raises(Exception):
+    with pytest.raises(dl.TailPartFailed):
         run(server, tmp_path, seg_urls(server))
 
     assert boost_engaged(server), "tail boost never engaged; the permanent-failure rule is untested"

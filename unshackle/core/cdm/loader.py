@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import Any
 
 log = logging.getLogger("cdm")
 
@@ -39,10 +39,10 @@ class Device:
     """A device config names: its DRM system, and its ``remote_cdm`` entry or its local file."""
 
     system: str
-    source: Union[dict[str, Any], Path]
+    source: dict[str, Any] | Path
 
 
-def find_device(name: str, app_config: Any = None) -> Optional[Device]:
+def find_device(name: str, app_config: Any = None) -> Device | None:
     """The device ``name`` names in ``remote_cdm`` or the device folders; None when there is none.
 
     ``app_config`` is an API key's view of the config; None reads the config itself.
@@ -62,7 +62,7 @@ def find_device(name: str, app_config: Any = None) -> Optional[Device]:
     return Device("widevine", path) if path.is_file() else None
 
 
-def device_system(name: str, app_config: Any = None) -> Optional[str]:
+def device_system(name: str, app_config: Any = None) -> str | None:
     """``widevine`` or ``playready`` for the device ``name`` names, without loading it; None when there is none."""
     device = find_device(name, app_config)
     return device.system if device else None
@@ -72,7 +72,7 @@ def load_cdm(
     cdm_name: str,
     *,
     service_name: str = "",
-    vaults: Optional[Any] = None,
+    vaults: Any | None = None,
 ) -> Any:
     """Build the CDM a device name names: a remote CDM for a ``remote_cdm`` entry, else the local device.
 
@@ -86,7 +86,7 @@ def load_cdm(
     return load_local_cdm(cdm_name, device.system, device.source)
 
 
-def load_remote_cdm(name: str, entry: dict[str, Any], system: str, service_name: str, vaults: Optional[Any]) -> Any:
+def load_remote_cdm(name: str, entry: dict[str, Any], system: str, service_name: str, vaults: Any | None) -> Any:
     """Build a remote CDM from its ``remote_cdm`` entry."""
     from unshackle.core.config import config
 
@@ -147,7 +147,7 @@ def load_local_cdm(name: str, system: str, path: Path) -> Any:
         if "expected 2 but parsed 1" in str(e):
             raise ValueError(
                 f"{name}.wvd seems to be a v1 WVD file, use `pywidevine migrate --help` to migrate it to v2."
-            )
-        raise ValueError(f"{name}.wvd is an invalid or corrupt Widevine Device file, {e}")
+            ) from None
+        raise ValueError(f"{name}.wvd is an invalid or corrupt Widevine Device file, {e}") from e
 
     return WidevineCdm.from_device(wvd)

@@ -7,10 +7,10 @@ is known by its class. For a device name in config, see ``loader.find_device``.
 from __future__ import annotations
 
 from types import SimpleNamespace
-from typing import Any, Optional
+from typing import Any
 
 
-def cdm_type_stub(cdm_type: str, security_level: Optional[int] = None) -> SimpleNamespace:
+def cdm_type_stub(cdm_type: str, security_level: int | None = None) -> SimpleNamespace:
     """A CDM stand-in that only carries its DRM system, for when another machine holds the device.
 
     ``security_level`` lets a service pick a robustness tier; the attribute is absent when unknown.
@@ -21,7 +21,7 @@ def cdm_type_stub(cdm_type: str, security_level: Optional[int] = None) -> Simple
     return stub
 
 
-def cdm_system(cdm: Any) -> Optional[str]:
+def cdm_system(cdm: Any) -> str | None:
     """``playready`` or ``widevine`` for a CDM object; None for no CDM or one of neither system."""
     if cdm is None:
         return None

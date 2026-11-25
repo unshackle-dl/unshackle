@@ -6,7 +6,6 @@ import subprocess  # nosec B404
 import sys
 from contextlib import suppress
 from pathlib import Path
-from typing import Optional
 
 from appdirs import user_data_dir
 
@@ -16,7 +15,7 @@ package_binaries_dir = Path(__file__).resolve().parent.parent / "binaries"
 user_binaries_dir = Path(user_data_dir("unshackle", False)) / "binaries"
 
 
-def find(*names: str, search_dirs: Optional[list[Path]] = None) -> Optional[Path]:
+def find(*names: str, search_dirs: list[Path] | None = None) -> Path | None:
     """Find the path of the first found binary name."""
     services_dir = package_binaries_dir.parent / "services"
 
@@ -116,7 +115,7 @@ BARE_VERSION_TOOLS = {"mp4decrypt"}
 PROBE_TIMEOUT = 5.0
 
 
-def parse_version(text: str) -> Optional[str]:
+def parse_version(text: str) -> str | None:
     """Return the version from the first line that says "version" or holds a dotted number.
 
     That line is the tool's own banner; later lines carry library and compiler versions.
@@ -135,7 +134,7 @@ def parse_version(text: str) -> Optional[str]:
     return None
 
 
-def probe_output(path: Path, args: list[str]) -> Optional[str]:
+def probe_output(path: Path, args: list[str]) -> str | None:
     """Run a binary and return its stdout and stderr, or None when it does not start or times out.
 
     A timeout kills the whole tree: on Windows subprocess.run waits with no limit for a grandchild that holds the pipes.
@@ -168,7 +167,7 @@ def probe_output(path: Path, args: list[str]) -> Optional[str]:
     return f"{out}\n{err}"
 
 
-def binary_version(path: Optional[Path]) -> Optional[str]:
+def binary_version(path: Path | None) -> str | None:
     """Best-effort version probe of a binary. Returns None when nothing is parseable.
 
     BARE_VERSION_TOOLS run with no arguments because they print their version only in the usage text.
@@ -188,7 +187,7 @@ def binary_version(path: Optional[Path]) -> Optional[str]:
 _services_loaded = False
 
 
-def __getattr__(name: str) -> Optional[Path]:
+def __getattr__(name: str) -> Path | None:
     global _services_loaded
     candidates = __binaries.get(name)
     if candidates is None and not _services_loaded:

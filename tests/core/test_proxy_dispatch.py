@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Iterator, Optional
+from collections.abc import Iterator
 
 import pytest
 
@@ -31,22 +31,22 @@ class Alpha(Proxy):
     def __repr__(self) -> str:
         return "Alpha"
 
-    def get_proxy(self, query: str) -> Optional[str]:
+    def get_proxy(self, query: str) -> str | None:
         return self.answers.get(query)
 
 
 class Beta(Alpha):
-    def last_connection_display(self) -> Optional[str]:
+    def last_connection_display(self) -> str | None:
         return "via Dallas (server 12)"
 
 
 class Tunnel(Alpha):
-    def __init__(self, info: Optional[dict] = None, **answers: str) -> None:
+    def __init__(self, info: dict | None = None, **answers: str) -> None:
         super().__init__(**answers)
         self.info = info
         self.asked: list[str] = []
 
-    def get_connection_info(self, query: str) -> Optional[dict]:
+    def get_connection_info(self, query: str) -> dict | None:
         self.asked.append(query)
         return self.info
 

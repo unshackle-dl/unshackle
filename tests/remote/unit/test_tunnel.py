@@ -8,7 +8,7 @@ import socket
 import socketserver
 import threading
 import time
-from typing import Callable, Iterator
+from collections.abc import Callable, Iterator
 
 import aiohttp
 import click
@@ -545,7 +545,7 @@ def spy_links(monkeypatch: pytest.MonkeyPatch) -> list:
     return links
 
 
-def wait_until(check: "Callable[[], bool]", seconds: float = 3) -> bool:
+def wait_until(check: Callable[[], bool], seconds: float = 3) -> bool:
     deadline = time.monotonic() + seconds
     while not check() and time.monotonic() < deadline:
         time.sleep(0.05)

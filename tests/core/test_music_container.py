@@ -13,7 +13,6 @@ from __future__ import annotations
 import shutil
 import subprocess
 from pathlib import Path
-from typing import Optional
 
 import mutagen
 import pytest
@@ -148,7 +147,7 @@ def test_a_failed_remux_keeps_the_source_and_removes_its_partial_file(tmp_path: 
     assert not list(tmp_path.glob("track_music*")), "a failed remux must not leave a partial file"
 
 
-def make_track(path: Path, codec: Optional[Audio.Codec]) -> Audio:
+def make_track(path: Path, codec: Audio.Codec | None) -> Audio:
     track = Audio(id_="a1", url="https://example.test/a1.mp4", language="en", codec=codec)
     track.path = path
     return track
@@ -167,7 +166,7 @@ def make_track(path: Path, codec: Optional[Audio.Codec]) -> Audio:
     ],
 )
 def test_the_file_codec_decides_the_container(
-    tmp_path: Path, encoder: str, fmt: str, declared: Optional[Audio.Codec], extension: str, probed: Audio.Codec
+    tmp_path: Path, encoder: str, fmt: str, declared: Audio.Codec | None, extension: str, probed: Audio.Codec
 ) -> None:
     """Every track downloads under a .mp4 name, and a service can declare no codec or the wrong one."""
     track = make_track(encode(tmp_path / "track.mp4", encoder, "-f", fmt), declared)

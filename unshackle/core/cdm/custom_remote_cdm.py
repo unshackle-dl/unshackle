@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import base64
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import requests
 from requests import Session
@@ -53,15 +53,15 @@ class CustomRemoteCDM(HttpCdm):
     def __init__(
         self,
         host: str,
-        service_name: Optional[str] = None,
-        vaults: Optional[Vaults] = None,
-        device: Optional[Dict[str, Any]] = None,
-        auth: Optional[Dict[str, Any]] = None,
-        endpoints: Optional[Dict[str, Any]] = None,
-        request_mapping: Optional[Dict[str, Any]] = None,
-        response_mapping: Optional[Dict[str, Any]] = None,
-        caching: Optional[Dict[str, Any]] = None,
-        legacy: Optional[Dict[str, Any]] = None,
+        service_name: str | None = None,
+        vaults: Vaults | None = None,
+        device: dict[str, Any] | None = None,
+        auth: dict[str, Any] | None = None,
+        endpoints: dict[str, Any] | None = None,
+        request_mapping: dict[str, Any] | None = None,
+        response_mapping: dict[str, Any] | None = None,
+        caching: dict[str, Any] | None = None,
+        legacy: dict[str, Any] | None = None,
         timeout: int = 30,
         **kwargs: Any,
     ) -> None:
@@ -139,7 +139,7 @@ class CustomRemoteCDM(HttpCdm):
         self.use_vaults = caching.get("use_vaults", True) and self.vaults is not None
         self.apply_authentication(self._http_session)
 
-    def get_nested_field(self, data: Dict[str, Any], field_path: str, default: Any = None) -> Any:
+    def get_nested_field(self, data: dict[str, Any], field_path: str, default: Any = None) -> Any:
         """
         Get a nested field from a dictionary using dot notation.
 
@@ -238,7 +238,7 @@ class CustomRemoteCDM(HttpCdm):
 
         return value
 
-    def evaluate_condition(self, condition: str, context: Dict[str, Any]) -> bool:
+    def evaluate_condition(self, condition: str, context: dict[str, Any]) -> bool:
         """
         Evaluate a simple condition against a context.
 
@@ -288,8 +288,8 @@ class CustomRemoteCDM(HttpCdm):
         return False
 
     def build_request_params(
-        self, endpoint_name: str, base_params: Dict[str, Any], session: Optional[Dict[str, Any]] = None
-    ) -> Dict[str, Any]:
+        self, endpoint_name: str, base_params: dict[str, Any], session: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
         """
         Assemble request parameters with mapping and transformations.
 
@@ -397,7 +397,7 @@ class CustomRemoteCDM(HttpCdm):
 
                 session.auth = HTTPBasicAuth(username, password)
 
-    def parse_response_data(self, endpoint_name: str, response_data: Dict[str, Any]) -> Dict[str, Any]:
+    def parse_response_data(self, endpoint_name: str, response_data: dict[str, Any]) -> dict[str, Any]:
         """
         Parse response data based on response mapping configuration.
 
@@ -452,7 +452,7 @@ class CustomRemoteCDM(HttpCdm):
 
         return parsed
 
-    def parse_keys_from_response(self, endpoint_name: str, response_data: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def parse_keys_from_response(self, endpoint_name: str, response_data: dict[str, Any]) -> list[dict[str, Any]]:
         """
         Parse content keys from response data with the key field mapping.
 
@@ -491,15 +491,15 @@ class CustomRemoteCDM(HttpCdm):
 
         return keys
 
-    def _call(self, endpoint_name: str, params: Dict[str, Any], failure: str) -> Dict[str, Any]:
+    def _call(self, endpoint_name: str, params: dict[str, Any], failure: str) -> dict[str, Any]:
         """POST to a configured endpoint and return its JSON body; raises on a status other than 200."""
         endpoint = self.endpoints[endpoint_name]
         return self._post(endpoint["path"], params, failure, endpoint["timeout"])
 
     def _request_challenge(
         self,
-        session: Dict[str, Any],
-        body: Dict[str, Any],
+        session: dict[str, Any],
+        body: dict[str, Any],
         license_type: str,
         privacy_mode: bool,
     ) -> bytes:
@@ -531,7 +531,7 @@ class CustomRemoteCDM(HttpCdm):
 
         raise requests.RequestException("API response did not contain challenge or cached keys")
 
-    def _request_keys(self, session: Dict[str, Any], body: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def _request_keys(self, session: dict[str, Any], body: dict[str, Any]) -> list[dict[str, Any]]:
         request_params = self.build_request_params("decrypt_response", body, session)
         response_data = self._call("decrypt_response", request_params, "License decrypt failed")
         parsed_response = self.parse_response_data("decrypt_response", response_data)

@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 import json
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import pytest
 
@@ -27,8 +27,8 @@ class _FakeSvc:
     pass
 
 
-def ep(season: int = 1, number: int = 1, part: Optional[int] = None, **overrides: Any) -> Episode:
-    base: Dict[str, Any] = dict(
+def ep(season: int = 1, number: int = 1, part: int | None = None, **overrides: Any) -> Episode:
+    base: dict[str, Any] = dict(
         id_=f"ep-{season}-{number}-{part or 0}",
         service=_FakeSvc,
         title="My Show",
@@ -43,23 +43,23 @@ def ep(season: int = 1, number: int = 1, part: Optional[int] = None, **overrides
 
 
 class _FakeTracks:
-    videos: List[Any] = []
-    audio: List[Any] = []
-    subtitles: List[Any] = []
+    videos: list[Any] = []
+    audio: list[Any] = []
+    subtitles: list[Any] = []
 
 
 class _FakeService:
-    def __init__(self, titles: List[Episode]) -> None:
+    def __init__(self, titles: list[Episode]) -> None:
         self._titles = titles
 
-    def get_titles(self) -> List[Episode]:
+    def get_titles(self) -> list[Episode]:
         return self._titles
 
     def get_tracks(self, title: Episode) -> _FakeTracks:
         return _FakeTracks()
 
 
-def run_list_tracks(monkeypatch: pytest.MonkeyPatch, titles: List[Episode], **data: Any) -> Dict[str, Any]:
+def run_list_tracks(monkeypatch: pytest.MonkeyPatch, titles: list[Episode], **data: Any) -> dict[str, Any]:
     """Drive list_tracks_handler end to end with the service layer stubbed out."""
     monkeypatch.setattr(handlers, "validate_service", lambda tag, request=None: "FAKE")
     monkeypatch.setattr(handlers, "setup_list_service", lambda *a, **kw: _FakeService(titles))
@@ -72,7 +72,7 @@ def run_list_tracks(monkeypatch: pytest.MonkeyPatch, titles: List[Episode], **da
     return json.loads(response.body)
 
 
-def selected(result: Dict[str, Any]) -> List[str]:
+def selected(result: dict[str, Any]) -> list[str]:
     """Selection-syntax keys of whatever the handler returned, single or multi."""
     entries = result["episodes"] if "episodes" in result else [{"title": result["title"]}]
     keys = []
@@ -134,7 +134,7 @@ def test_movie_json_unaffected() -> None:
 
 
 @pytest.fixture
-def split_titles() -> List[Episode]:
+def split_titles() -> list[Episode]:
     """E1 split into three parts, E2 unsplit."""
     return [ep(1, 1, 1), ep(1, 1, 2), ep(1, 1, 3), ep(1, 2, None)]
 
@@ -214,7 +214,7 @@ def test_rest_multi_episode_order_is_stable_across_parts(monkeypatch) -> None:
         (["1x01"], ["1x1"]),
     ],
 )
-def test_parsed_keys_pass_unchanged(wanted: Any, parsed: List[str]) -> None:
+def test_parsed_keys_pass_unchanged(wanted: Any, parsed: list[str]) -> None:
     """A pre-parsed part or negative key never reaches parse_tokens, which cannot read it."""
     assert SEASON_RANGE.convert(wanted) == parsed
 

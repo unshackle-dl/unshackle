@@ -40,7 +40,7 @@ class FakeResponse:
     def raise_for_status(self) -> None:
         pass
 
-    def __enter__(self) -> "FakeResponse":
+    def __enter__(self) -> FakeResponse:
         return self
 
     def __exit__(self, *exc_info: Any) -> None:

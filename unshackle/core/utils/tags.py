@@ -5,7 +5,7 @@ import subprocess
 import tempfile
 import time
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import Any
 from xml.sax.saxutils import escape
 
 from unshackle.core import binaries
@@ -87,10 +87,10 @@ def build_tags_from_ids(ids: ExternalIds, kind: str) -> dict[str, str]:
 def tag_file(
     path: Path,
     title: Title,
-    tmdb_id: Optional[int] = None,
-    imdb_id: Optional[str] = None,
-    tvdb_id: Optional[int] = None,
-    anilist_id: Optional[Union[int, str]] = None,
+    tmdb_id: int | None = None,
+    imdb_id: str | None = None,
+    tvdb_id: int | None = None,
+    anilist_id: int | str | None = None,
     anime: bool = False,
     session: Any = None,
 ) -> None:

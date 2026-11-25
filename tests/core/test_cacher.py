@@ -1,5 +1,5 @@
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import jsonpickle
@@ -53,7 +53,7 @@ def test_unix_timestamp_is_absolute_also_when_it_is_in_the_past(offset: int) -> 
 
 
 def test_iso_string_with_utc_offset_becomes_naive_local_time() -> None:
-    moment = datetime.now(timezone.utc).replace(microsecond=0) + timedelta(hours=1)
+    moment = datetime.now(UTC).replace(microsecond=0) + timedelta(hours=1)
     expected = datetime.fromtimestamp(moment.timestamp())
     assert Cacher.resolve_datetime(moment.isoformat()) == expected
     assert Cacher.resolve_datetime(moment.strftime("%Y-%m-%dT%H:%M:%SZ")) == expected

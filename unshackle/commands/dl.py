@@ -9,7 +9,7 @@ import subprocess
 import sys
 import time
 from collections import Counter
-from collections.abc import Iterable
+from collections.abc import Callable, Collection, Iterable, Sequence
 from concurrent import futures
 from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
@@ -19,7 +19,7 @@ from itertools import groupby
 from operator import attrgetter
 from pathlib import Path
 from threading import Lock
-from typing import TYPE_CHECKING, Any, Callable, Collection, Optional, Sequence, TypedDict, Union
+from typing import TYPE_CHECKING, Any, TypedDict
 
 import click
 import mediaexport
@@ -153,7 +153,7 @@ class SkippedSubtitle(TypedDict):
     title: str
 
 
-def parse_language(tag: Optional[str]) -> Optional[Language]:
+def parse_language(tag: str | None) -> Language | None:
     """A provider's original-language tag as a Language, or None if it is absent or not a real tag."""
     tag = (tag or "").strip()
     if not tag or not tag_is_valid(tag) or tag.startswith("und"):
@@ -166,7 +166,7 @@ def normalize_dl_config(dl_config: dict[str, Any]) -> dict[str, Any]:
     return {DL_OPTION_ALIASES.get(key, key): value for key, value in dl_config.items()}
 
 
-def convert_scc(subtitle: Subtitle, sub_format: Optional[Union[Subtitle.Codec, str]]) -> Subtitle.Codec:
+def convert_scc(subtitle: Subtitle, sub_format: Subtitle.Codec | str | None) -> Subtitle.Codec:
     """
     Convert an SCC subtitle to sub_format when pycaption can write it, else to SRT, and return the new codec.
     Only pycaption reads SCC, and nothing later in the pipeline (styling, SDH strip, mux) can.
@@ -181,13 +181,13 @@ def convert_scc(subtitle: Subtitle, sub_format: Optional[Union[Subtitle.Codec, s
 
 
 def subtitle_look(
-    sub_format: Optional[Union[Subtitle.Codec, str]],
-    sub_font: Optional[str],
+    sub_format: Subtitle.Codec | str | None,
+    sub_font: str | None,
     style_fields: Any,
     *,
     typed_font: bool = True,
     typed_format: bool = True,
-) -> tuple[Optional[Union[Subtitle.Codec, str]], Optional[pysubs2.SSAStyle]]:
+) -> tuple[Subtitle.Codec | str | None, pysubs2.SSAStyle | None]:
     """The subtitle format and ASS style for --sub-font and the subtitle.ass_style config.
 
     A style makes ASS the format when none is set. Another format leaves the style unused. A typed --sub-font
@@ -205,9 +205,7 @@ def subtitle_look(
     return sub_format or Subtitle.Codec.SubStationAlphav4, style
 
 
-def set_subtitle_look(
-    subtitles: Iterable[Subtitle], style: Optional[pysubs2.SSAStyle], videos: Iterable[Video]
-) -> None:
+def set_subtitle_look(subtitles: Iterable[Subtitle], style: pysubs2.SSAStyle | None, videos: Iterable[Video]) -> None:
     """Give each subtitle that is not already SSA/ASS the style, and every subtitle the size of the first video."""
     size = next(((v.width, v.height) for v in videos if v.width and v.height), None)
     for subtitle in subtitles:
@@ -226,7 +224,7 @@ def title_wanted(candidate: Any, wanted: Collection[str]) -> bool:
     return bool(candidate.matches_wanted(wanted))
 
 
-def latest_episode_keys(titles: Any, latest_episode: bool, latest_episodes: Optional[int]) -> list[tuple[int, int]]:
+def latest_episode_keys(titles: Any, latest_episode: bool, latest_episodes: int | None) -> list[tuple[int, int]]:
     """The (season, number) of each episode ``--latest-episode(s)`` keeps, oldest first.
 
     Counts distinct episodes, not Series entries, so a split episode takes one slot and all its parts download.
@@ -238,7 +236,7 @@ def latest_episode_keys(titles: Any, latest_episode: bool, latest_episodes: Opti
     return list(dict.fromkeys((ep.season, ep.number) for ep in titles))[-count:]
 
 
-def apply_enrich(title: Title_T, name: Optional[str], year: Optional[int], language: Optional[Language]) -> None:
+def apply_enrich(title: Title_T, name: str | None, year: int | None, language: Language | None) -> None:
     """Set the --enrich name, year and original language on a title. A song takes only the language.
 
     A service can set the title again in get_tracks, so dl applies them after that call too.
@@ -257,11 +255,11 @@ def load_tracks(
     service: Service,
     title: Title_T,
     *,
-    name: Optional[str] = None,
-    year: Optional[int] = None,
-    language: Optional[Language] = None,
-    workers: Optional[int] = None,
-    on_probe: Optional[Callable[[], None]] = None,
+    name: str | None = None,
+    year: int | None = None,
+    language: Language | None = None,
+    workers: int | None = None,
+    on_probe: Callable[[], None] | None = None,
 ) -> None:
     """Load the tracks and chapters of a title, then apply the --enrich name, year and language again."""
     title.tracks.add(probed_tracks(service, title, workers=workers, on_probe=on_probe), warn_only=True)
@@ -269,7 +267,7 @@ def load_tracks(
     apply_enrich(title, name, year, language)
 
 
-def server_url(server_name: Optional[str]) -> str:
+def server_url(server_name: str | None) -> str:
     """The configured URL of a remote server, or an empty string when the config cannot be read."""
     from unshackle.core.remote_service import resolve_server
 
@@ -289,7 +287,7 @@ def post_script_group(candidate: Any) -> Any:
     return ("title", id(candidate))
 
 
-def remux_music_tracks(title: Any, log: logging.Logger, sample: Optional[tuple[int, int]] = None) -> None:
+def remux_music_tracks(title: Any, log: logging.Logger, sample: tuple[int, int] | None = None) -> None:
     """Remux each audio track of a Song into the container of its codec, cut to ``sample`` when given.
 
     A Song never reaches the muxer, so each downloaded audio track is itself a delivered
@@ -404,7 +402,7 @@ def download_tracks_in_passes(
 
 
 class dl:
-    def find_custom_font(self, font_name: str) -> Optional[Path]:
+    def find_custom_font(self, font_name: str) -> Path | None:
         """
         Find font in custom fonts directory.
 
@@ -499,8 +497,8 @@ class dl:
         subtitle: Subtitle,
         base_filename: str,
         output_dir: Path,
-        target_codec: Optional[Subtitle.Codec] = None,
-        source_path: Optional[Path] = None,
+        target_codec: Subtitle.Codec | None = None,
+        source_path: Path | None = None,
     ) -> Path:
         """Make the sidecar path: {base}.{lang}[.forced][.sdh].{ext}"""
         lang_suffix = str(subtitle.language) if subtitle.language else "und"
@@ -520,7 +518,7 @@ class dl:
         base_filename: str,
         output_dir: Path,
         sidecar_format: str,
-        original_paths: Optional[dict[str, Path]] = None,
+        original_paths: dict[str, Path] | None = None,
     ) -> list[Path]:
         """
         Output subtitles as sidecar files, converting if needed.
@@ -1123,29 +1121,29 @@ class dl:
         return dl(ctx, **kwargs)
 
     EXPORT_LOCK = Lock()
-    export_snapshots: dict[str, Optional[dict[str, Any]]]
+    export_snapshots: dict[str, dict[str, Any] | None]
     keys: ContentKeyResolver
-    _remote_service: Optional["ServerKeySource"] = None
+    _remote_service: ServerKeySource | None = None
     typed_params: frozenset[str] = frozenset()
 
     def __init__(
         self,
         ctx: click.Context,
         no_proxy: bool,
-        profile: Optional[str] = None,
-        proxy: Optional[str] = None,
+        profile: str | None = None,
+        proxy: str | None = None,
         repack: bool = False,
-        tag: Optional[str] = None,
-        tmdb_id: Optional[int] = None,
-        imdb_id: Optional[str] = None,
-        tvdb_id: Optional[int] = None,
-        tvdb_order: Optional[str] = None,
+        tag: str | None = None,
+        tmdb_id: int | None = None,
+        imdb_id: str | None = None,
+        tvdb_id: int | None = None,
+        tvdb_order: str | None = None,
         continuous_episodes: bool = False,
-        anilist_id: Optional[Union[int, str]] = None,
+        anilist_id: int | str | None = None,
         enrich: bool = False,
         daily: bool = False,
-        output_dir: Optional[Path] = None,
-        proxy_providers: Optional[list[Any]] = None,
+        output_dir: Path | None = None,
+        proxy_providers: list[Any] | None = None,
         *_: Any,
         **__: Any,
     ) -> None:
@@ -1166,7 +1164,7 @@ class dl:
         # result() catches a download-worker failure, reports it, and returns rather than
         # re-raising (so the CLI still exits cleanly). Keep it so an embedding caller (the API
         # worker) can tell the title did not complete instead of reading it as a success.
-        self.download_error: Optional[BaseException] = None
+        self.download_error: BaseException | None = None
 
         if not config.output_template:
             raise click.ClickException("No 'output_template' in your unshackle.yaml")
@@ -1251,7 +1249,7 @@ class dl:
                     },
                 )
 
-                binary_versions: dict[str, Optional[dict[str, Optional[str]]]] = {}
+                binary_versions: dict[str, dict[str, str | None] | None] = {}
                 for name, binary in [
                     ("shaka_packager", binaries.ShakaPackager),
                     ("mp4decrypt", binaries.Mp4decrypt),
@@ -1457,21 +1455,21 @@ class dl:
         quality: list[int],
         vcodec: list[Video.Codec],
         acodec: list[Audio.Codec],
-        vbitrate: Optional[int],
-        abitrate: Optional[int],
-        vbitrate_range: Optional[str],
-        abitrate_range: Optional[str],
+        vbitrate: int | None,
+        abitrate: int | None,
+        vbitrate_range: str | None,
+        abitrate_range: str | None,
         range_: list[Video.Range],
-        channels: Optional[float],
+        channels: float | None,
         no_atmos: bool,
         select_titles: bool,
         wanted: list[str],
         latest_episode: bool,
-        latest_episodes: Optional[int],
+        latest_episodes: int | None,
         lang: list[str],
-        v_lang: Optional[list[str]],
-        a_lang: Optional[list[str]],
-        s_lang: Optional[list[str]],
+        v_lang: list[str] | None,
+        a_lang: list[str] | None,
+        s_lang: list[str] | None,
         require_audio: list[str],
         require_video: list[str],
         require_subs: list[str],
@@ -1480,8 +1478,8 @@ class dl:
         forced_subs_only: bool,
         forced_s_lang: list[str],
         exact_lang: bool,
-        sub_format: Optional[Union[Subtitle.Codec, str]],
-        sub_font: Optional[str],
+        sub_format: Subtitle.Codec | str | None,
+        sub_font: str | None,
         video_only: bool,
         audio_only: bool,
         subs_only: bool,
@@ -1494,33 +1492,33 @@ class dl:
         no_attachments: bool,
         audio_description: bool,
         audio_description_only: bool,
-        slow: Optional[tuple[int, int]],
+        slow: tuple[int, int] | None,
         list_: bool,
         list_titles: bool,
         skip_dl: bool,
-        export: Optional[bool],
-        cdm_only: Optional[bool],
+        export: bool | None,
+        cdm_only: bool | None,
         no_proxy: bool,
         no_proxy_download: bool,
-        proxy_download: Optional[str],
+        proxy_download: str | None,
         no_folder: bool,
         no_source: bool,
         no_mux: bool,
-        sample: Optional[tuple[int, int]],
+        sample: tuple[int, int] | None,
         include_sample: bool,
-        workers: Optional[int],
+        workers: int | None,
         adaptive_workers: bool,
         download_processes: int,
         continue_downloads: bool,
         downloads: int,
         worst: bool,
         best_available: bool,
-        speed_limit: Optional[str] = None,
-        split_audio: Optional[bool] = None,
-        merge_video: Optional[bool] = None,
+        speed_limit: str | None = None,
+        split_audio: bool | None = None,
+        merge_video: bool | None = None,
         real_video_bitrate: bool = False,
         real_audio_bitrate: bool = False,
-        progress_sink: Optional[Callable[[dict[str, Any]], None]] = None,
+        progress_sink: Callable[[dict[str, Any]], None] | None = None,
         postscript: Sequence[str] = (),
         no_postscript: bool = False,
         all_drm: bool = False,
@@ -1739,9 +1737,9 @@ class dl:
         cache_region = service.current_region if hasattr(service, "current_region") else None
         cache_account_hash = get_account_hash(service.credential) if hasattr(service, "credential") else None
 
-        enrich_lang: Optional[Language] = None
-        enrich_title: Optional[str] = None
-        enrich_year: Optional[int] = None
+        enrich_lang: Language | None = None
+        enrich_title: str | None = None
+        enrich_year: int | None = None
         if self.enrich:
             sample_title = titles[0] if hasattr(titles, "__getitem__") else titles
             kind = "tv" if isinstance(sample_title, Episode) else "movie"
@@ -2003,7 +2001,7 @@ class dl:
 
             if isinstance(title, Episode) and not self.tmdb_searched:
                 kind = "tv"
-                tmdb_title: Optional[str] = None
+                tmdb_title: str | None = None
                 has_ids = bool(self.tmdb_id or self.imdb_id or self.tvdb_id or self.anilist_id)
                 result = providers.resolve_by_ids(
                     self.tmdb_id,
@@ -2099,7 +2097,7 @@ class dl:
                         year=enrich_year,
                         language=enrich_lang,
                         workers=workers,
-                        on_probe=lambda: tracks_spinner.update(text="Probing HDR10 tracks for HDR10+..."),
+                        on_probe=partial(tracks_spinner.update, text="Probing HDR10 tracks for HDR10+..."),
                     )
                 except Exception as e:
                     if self.debug_logger:
@@ -2267,9 +2265,6 @@ class dl:
             download_table = Table.grid()
             download_table.add_row(selected_tracks)
 
-            def prepare_drm_for(track: AnyTrack) -> partial:
-                return self.keys.licence_for(track, title, download_table, title_all_drm)
-
             server_cdm_type = None
             if self._remote_service and self._remote_service.server_cdm:
                 server_cdm_type = self._remote_service.server_cdm_type
@@ -2312,6 +2307,7 @@ class dl:
                         self.keys.all_drm_warned.add(name)
                         self.log.warning(f"The {name} CDM is remote and can answer with cached content keys")
 
+            prepare_drm_for = partial(self.keys.licence_for, title=title, table=download_table, all_drm=title_all_drm)
             self.keys.take_server_keys(title)
 
             if sample and not skip_dl:
@@ -2331,7 +2327,14 @@ class dl:
             try:
                 with SyncLive(Padding(download_table, (1, 5)), console=console, refresh_per_second=20):
 
-                    def download_track(track: AnyTrack, i: int) -> None:
+                    def download_track(
+                        track: AnyTrack,
+                        i: int,
+                        *,
+                        title: Title_T,
+                        prepare_drm_for: Callable[[AnyTrack], partial],
+                        progress_callables: list[partial],
+                    ) -> None:
                         track.download(
                             session=track.session or service.session,
                             no_proxy_download=no_proxy_download,
@@ -2341,7 +2344,7 @@ class dl:
                             max_workers=workers,
                             adaptive_workers=adaptive_workers,
                             download_processes=download_processes,
-                            progress=tracks_progress_callables[i],
+                            progress=progress_callables[i],
                         )
                         if (
                             track.path
@@ -2349,7 +2352,7 @@ class dl:
                             and not DOWNLOAD_CANCELLED.is_set()
                             and not DOWNLOAD_LICENCE_ONLY.is_set()
                         ):
-                            progress = tracks_progress_callables[i]
+                            progress = progress_callables[i]
                             progress(downloaded="Decrypting", completed=0, total=None)
                             cbcs.decrypt_file(
                                 track.path, lambda _l, entry: service.get_sample_decrypter(track, entry.index)
@@ -2362,7 +2365,7 @@ class dl:
                         if export_path:
                             self.write_export(export_path, title, track)
 
-                    def on_subtitle_skipped(track: Subtitle) -> None:
+                    def on_subtitle_skipped(track: Subtitle, *, title: Title_T) -> None:
                         lang = str(track.language)
                         self.log.warning(f"Subtitle {lang} failed to download, skipping it.")
                         self.skipped_subtitles.append(SkippedSubtitle(id=track.id, language=lang, title=str(title)))
@@ -2376,9 +2379,14 @@ class dl:
                     download_tracks_in_passes(
                         title.tracks,
                         downloads,
-                        download_track,
+                        partial(
+                            download_track,
+                            title=title,
+                            prepare_drm_for=prepare_drm_for,
+                            progress_callables=tracks_progress_callables,
+                        ),
                         skip_subtitle_errors=skip_subtitle_errors,
-                        on_subtitle_skipped=on_subtitle_skipped,
+                        on_subtitle_skipped=partial(on_subtitle_skipped, title=title),
                     )
 
                     for attachment in title.tracks.attachments:
@@ -2464,7 +2472,7 @@ class dl:
                 skip_subtitle_mux = subtitle_output_mode == "sidecar" and (title.tracks.videos or title.tracks.audio)
                 sidecar_subtitles: list[Subtitle] = []
                 sidecar_original_paths: dict[str, Path] = {}
-                sidecar_files: dict[Optional[Path], list[Path]] = {}
+                sidecar_files: dict[Path | None, list[Path]] = {}
                 if subtitle_output_mode in ("sidecar", "both") and not no_mux:
                     sidecar_subtitles = [s for s in title.tracks.subtitles if s.path and s.path.exists()]
                     if sidecar_format == "original":
@@ -2586,7 +2594,7 @@ class dl:
                                     self.log.info(f"Extracted a Closed Caption from Video track {video_track_n + 1}")
                                 else:
                                     self.log.info(f"No Closed Captions were found in Video track {video_track_n + 1}")
-                            except EnvironmentError:
+                            except OSError:
                                 self.log.error(
                                     "Cannot extract Closed Captions as the ccextractor executable was not found..."
                                 )
@@ -2816,17 +2824,17 @@ class dl:
         if returncode > 1 or not output.exists():
             self.log.warning(f"mkvmerge wrote no sample for {source.name}")
 
-    def anime_hint(self, title: Optional[Title_T] = None) -> bool:
+    def anime_hint(self, title: Title_T | None = None) -> bool:
         """Whether metadata lookups for this title should prefer AniList."""
         per_title = getattr(title, "anime", None)
         return self.service_anime if per_title is None else bool(per_title)
 
-    def daily_hint(self, title: Optional[Title_T] = None) -> bool:
+    def daily_hint(self, title: Title_T | None = None) -> bool:
         """Whether this title is daily content named by air date."""
         per_title = getattr(title, "daily", None)
         return self.daily or (self.service_daily if per_title is None else bool(per_title))
 
-    def fill_air_dates(self, titles: Series, tvdb_id: Optional[int] = None) -> None:
+    def fill_air_dates(self, titles: Series, tvdb_id: int | None = None) -> None:
         """Fill in missing episode air dates from TVDB.
 
         Additive only: an air date the service already set is kept.
@@ -2882,7 +2890,7 @@ class dl:
         if filled:
             self.log.info("Filled air dates for %d episode(s) from TVDB (ID %s).", filled, tvdb_id)
 
-    def fill_absolute_numbers(self, titles: Series, tvdb_id: Optional[int] = None) -> None:
+    def fill_absolute_numbers(self, titles: Series, tvdb_id: int | None = None) -> None:
         """Fill in missing absolute episode numbers from TVDB's absolute order.
 
         Additive only: season and number are never written, and an absolute number the
@@ -2946,9 +2954,9 @@ class dl:
         self,
         titles: Series,
         title_cacher: Any = None,
-        cache_title_id: Optional[str] = None,
-        cache_region: Optional[str] = None,
-        cache_account_hash: Optional[str] = None,
+        cache_title_id: str | None = None,
+        cache_region: str | None = None,
+        cache_account_hash: str | None = None,
     ) -> Series:
         """Renumber episodes from the service's own numbering into a TVDB season order."""
         tvdb = providers.get_provider("tvdb")
@@ -3041,7 +3049,7 @@ class dl:
         records the track, manifest, chapter and attachment info. unshackle's full track
         dicts, title meta and manifest snapshot go under ``x-unshackle`` for its own importer.
         """
-        namer: Optional[ExportNamer] = getattr(self, "export_namer", None)
+        namer: ExportNamer | None = getattr(self, "export_namer", None)
         snapshots = getattr(self, "export_snapshots", None)
         if snapshots is None:
             snapshots = self.export_snapshots = {}
@@ -3143,7 +3151,7 @@ class dl:
 
     def log_export_title(self, title: Title_T) -> None:
         """Log what the export holds for one title: its track counts and its keys."""
-        namer: Optional[ExportNamer] = getattr(self, "export_namer", None)
+        namer: ExportNamer | None = getattr(self, "export_namer", None)
         entry = None
         if namer and namer.path:
             try:
@@ -3162,7 +3170,7 @@ class dl:
 
     def log_export_summary(self) -> None:
         """Log where the run's export is and what it holds, and that it must stay private."""
-        namer: Optional[ExportNamer] = getattr(self, "export_namer", None)
+        namer: ExportNamer | None = getattr(self, "export_namer", None)
         if not namer or not namer.path:
             self.log.warning("Nothing was exported")
             return
@@ -3302,7 +3310,7 @@ class dl:
         return [":x: Download Failed...", f"   {line}"]
 
     def start_key_resolution(
-        self, service: Service, *, cdm_only: bool, vaults_only: bool, best_available: bool, export: Optional[Path]
+        self, service: Service, *, cdm_only: bool, vaults_only: bool, best_available: bool, export: Path | None
     ) -> None:
         """Build the run's content-key resolution and make its verified decrypt the decrypt hook."""
         self.keys = ContentKeyResolver(
@@ -3319,7 +3327,7 @@ class dl:
         )
         verify.DECRYPT_HOOK = self.keys.decrypt_verified
 
-    def cdm_for(self, system: str, quality: Optional[int] = None) -> Optional[object]:
+    def cdm_for(self, system: str, quality: int | None = None) -> object | None:
         """Get the CDM for one DRM system, ``widevine`` or ``playready``.
 
         A quality key that names one device applies to both DRM systems. When that device is for
@@ -3341,9 +3349,9 @@ class dl:
     def get_cdm(
         self,
         service: str,
-        profile: Optional[str] = None,
-        drm: Optional[str] = None,
-        quality: Optional[int] = None,
+        profile: str | None = None,
+        drm: str | None = None,
+        quality: int | None = None,
     ) -> Any:
         """
         Get CDM for a specified service (either Local or Remote CDM).
@@ -3428,7 +3436,7 @@ class dl:
         if not isinstance(cdm_name, str):
             return load_cdm(cdm_name, service_name=service, vaults=self.vaults)
 
-        cdm_cache: dict[tuple[str, Optional[str], str], Any] = getattr(self, "_cdm_cache", {})
+        cdm_cache: dict[tuple[str, str | None, str], Any] = getattr(self, "_cdm_cache", {})
         self._cdm_cache = cdm_cache
 
         cache_key = (service, profile, cdm_name)

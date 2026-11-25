@@ -11,10 +11,10 @@ import sys
 import time
 from collections.abc import Iterator, MutableMapping
 from copy import copy
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
 from http.cookiejar import Cookie, CookieJar
-from typing import Any, Optional, Union
+from typing import Any
 from urllib.parse import urlencode, urlparse, urlunparse
 
 import rnet
@@ -103,7 +103,7 @@ class RnetResponseHeaders(MutableMapping):
     def __len__(self) -> int:
         return self._map.keys_len()
 
-    def get(self, key: str, default: Optional[str] = None) -> Optional[str]:  # type: ignore[override]
+    def get(self, key: str, default: str | None = None) -> str | None:  # type: ignore[override]
         val = self._map.get(key)
         if val is None:
             return default
@@ -118,9 +118,9 @@ class RnetResponse:
 
     def __init__(self, resp: Any) -> None:
         self._resp = resp
-        self._headers: Optional[RnetResponseHeaders] = None
-        self._content: Optional[bytes] = None
-        self._text: Optional[str] = None
+        self._headers: RnetResponseHeaders | None = None
+        self._content: bytes | None = None
+        self._text: str | None = None
         self._streamed = False
 
     @property
@@ -142,7 +142,7 @@ class RnetResponse:
         return str(self._resp.url)
 
     @property
-    def content_length(self) -> Optional[int]:
+    def content_length(self) -> int | None:
         return self._resp.content_length
 
     @property
@@ -200,7 +200,7 @@ class RnetResponse:
                 response=self,  # type: ignore[arg-type]
             )
 
-    def iter_content(self, chunk_size: Optional[int] = None) -> Iterator[bytes]:
+    def iter_content(self, chunk_size: int | None = None) -> Iterator[bytes]:
         """Re-chunk rnet's variable-size data into fixed-size pieces."""
         self._streamed = True
         if chunk_size is None or chunk_size <= 0:
@@ -243,7 +243,7 @@ def utf8_text(res: Response | RnetResponse) -> str:
 class RnetSessionHeaders(CaseInsensitiveDict):
     """Dict-like headers that write to the rnet client through update()."""
 
-    def __init__(self, session: Optional[RnetSession] = None) -> None:
+    def __init__(self, session: RnetSession | None = None) -> None:
         self._session = session
         self._client: Any = None
         super().__init__()
@@ -296,7 +296,7 @@ class RnetCookieAdapter(MutableMapping):
     answers a lookup by name.
     """
 
-    def __init__(self, client: Any, session: Optional[RnetSession] = None) -> None:
+    def __init__(self, client: Any, session: RnetSession | None = None) -> None:
         self._client = client
         self._session = session
         self._store: dict[tuple[str, str, str], Cookie] = {}
@@ -351,7 +351,7 @@ class RnetCookieAdapter(MutableMapping):
         for cookie in self.snapshot():
             self.push(cookie)
 
-    def client_urls(self, domain: Optional[str] = None, name: Optional[str] = None) -> list[str]:
+    def client_urls(self, domain: str | None = None, name: str | None = None) -> list[str]:
         """URLs the rnet cookie jar could hold a cookie under.
 
         rnet keys its jar by URL, removes a cookie only at its exact path, and cannot list the
@@ -368,7 +368,7 @@ class RnetCookieAdapter(MutableMapping):
         paths = {c.path for c in cookies if c.path and c.path != "/" and (name is None or c.name == name)}
         return sorted(hosts | {url + path for url in hosts for path in paths})
 
-    def remove_cookie_on_client(self, name: str, domain: Optional[str] = None) -> None:
+    def remove_cookie_on_client(self, name: str, domain: str | None = None) -> None:
         """Drop a cookie from the rnet cookie jar; call it before the store forgets the cookie's paths.
 
         The client is built with cookie_store=True, so a cookie the server set lives in that
@@ -394,12 +394,12 @@ class RnetCookieAdapter(MutableMapping):
         parsed = urlparse(response.url)
         host = parsed.hostname or ""
         default_path = (parsed.path[: parsed.path.rfind("/")] or "/") if parsed.path.startswith("/") else "/"
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         for server_cookie in server_cookies:
             path = server_cookie.path if (server_cookie.path or "").startswith("/") else default_path
             expires, max_age = server_cookie.expires, server_cookie.max_age
             if expires is not None and expires.tzinfo is None:
-                expires = expires.replace(tzinfo=timezone.utc)
+                expires = expires.replace(tzinfo=UTC)
             expired = (max_age is not None and max_age.total_seconds() <= 0) or (expires is not None and expires <= now)
             for cookie in self.snapshot():
                 domain = cookie.domain or ""
@@ -440,8 +440,8 @@ class RnetCookieAdapter(MutableMapping):
             self.add(create_cookie(name, str(value)))
 
     def get(  # type: ignore[override]
-        self, name: str, default: Optional[str] = None, domain: Optional[str] = None, path: Optional[str] = None
-    ) -> Optional[str]:
+        self, name: str, default: str | None = None, domain: str | None = None, path: str | None = None
+    ) -> str | None:
         """The latest value of *name*."""
         for cookie in reversed(self.snapshot()):
             if cookie.name == name and domain in (None, cookie.domain) and path in (None, cookie.path):
@@ -476,11 +476,11 @@ class RnetCookieAdapter(MutableMapping):
     def __bool__(self) -> bool:
         return bool(self._store)
 
-    def get_dict(self, domain: Optional[str] = None, path: Optional[str] = None) -> dict[str, str]:
+    def get_dict(self, domain: str | None = None, path: str | None = None) -> dict[str, str]:
         """Return cookies as a plain dict (requests RequestsCookieJar compat), filtered by exact domain and path."""
         return {c.name: c.value or "" for c in self.snapshot() if domain in (None, c.domain) and path in (None, c.path)}
 
-    def clear(self, domain: Optional[str] = None, path: Optional[str] = None, name: Optional[str] = None) -> None:
+    def clear(self, domain: str | None = None, path: str | None = None, name: str | None = None) -> None:
         """Remove cookies (requests RequestsCookieJar compat).
 
         - ``clear()`` removes all cookies.
@@ -524,7 +524,7 @@ class RnetProxyDict(dict):
     Supports both lazy (pre-client) and live (post-client) proxy updates.
     """
 
-    def __init__(self, session: "RnetSession") -> None:
+    def __init__(self, session: RnetSession) -> None:
         super().__init__()
         self._session = session
 
@@ -545,7 +545,7 @@ class RnetProxyDict(dict):
 
 
 class MaxRetriesError(Exception):
-    def __init__(self, message: str, cause: Optional[Exception] = None) -> None:
+    def __init__(self, message: str, cause: Exception | None = None) -> None:
         super().__init__(message)
         self.__cause__ = cause
 
@@ -595,9 +595,9 @@ class RnetSession:
         max_retries: int = MAX_RETRIES,
         backoff_factor: float = BACKOFF_FACTOR,
         max_backoff: float = MAX_BACKOFF,
-        status_forcelist: Optional[list[int]] = None,
-        allowed_methods: Optional[set[str]] = None,
-        catch_exceptions: Optional[tuple[type[Exception], ...]] = None,
+        status_forcelist: list[int] | None = None,
+        allowed_methods: set[str] | None = None,
+        catch_exceptions: tuple[type[Exception], ...] | None = None,
         **session_kwargs: Any,
     ) -> None:
         self.max_retries = max_retries
@@ -643,7 +643,7 @@ class RnetSession:
             client_kwargs["danger_accept_invalid_certs"] = True
 
         self._client_kwargs = dict(client_kwargs)
-        self._client: Optional[rnet.BlockingClient] = None
+        self._client: rnet.BlockingClient | None = None
         self._origins: set[str] = set()
 
         self.headers = RnetSessionHeaders(self)
@@ -661,7 +661,7 @@ class RnetSession:
             self.proxies.update({"all": proxy_url})
 
     @property
-    def impersonate_name(self) -> Optional[str]:
+    def impersonate_name(self) -> str | None:
         """Preset name (e.g. 'Chrome131') for rebuilding this HTTP session in another process.
 
         rnet enums stringify as 'Impersonate.Chrome131'. Return the trailing name, or None
@@ -787,7 +787,7 @@ class RnetSession:
         for origin, header in exported.items():
             self.set_cookie_header(client, origin, header)
 
-    def build_url(self, url: str, params: Optional[Any] = None) -> str:
+    def build_url(self, url: str, params: Any | None = None) -> str:
         """Encode params into the URL (rnet ignores the params kwarg).
 
         Accepts the same shapes as requests: a mapping, a sequence of pairs, or a
@@ -807,19 +807,19 @@ class RnetSession:
         query = parsed.query + separator + extra if parsed.query else extra
         return urlunparse(parsed._replace(query=query))
 
-    def get_sleep_time(self, response: Optional[RnetResponse], attempt: int) -> Optional[float]:
+    def get_sleep_time(self, response: RnetResponse | None, attempt: int) -> float | None:
         if response:
             retry_after = response.headers.get("Retry-After")
             if retry_after:
-                wait: Optional[float] = None
+                wait: float | None = None
                 try:
                     wait = float(retry_after)
                 except ValueError:
                     try:
                         retry_date = parsedate_to_datetime(retry_after)
                         if retry_date.tzinfo is None:
-                            retry_date = retry_date.replace(tzinfo=timezone.utc)
-                        wait = (retry_date - datetime.now(timezone.utc)).total_seconds()
+                            retry_date = retry_date.replace(tzinfo=UTC)
+                        wait = (retry_date - datetime.now(UTC)).total_seconds()
                     except Exception:
                         # parsedate_to_datetime itself raises ValueError on malformed dates
                         # (Python >= 3.10); an unusable header must not escape the retry loop
@@ -898,8 +898,8 @@ class RnetSession:
         if method_upper not in self.allowed_methods:
             return self.absorb_cookies(RnetResponse(client.request(rnet_method, url, **kwargs)))
 
-        last_exception: Optional[Exception] = None
-        response: Optional[RnetResponse] = None
+        last_exception: Exception | None = None
+        response: RnetResponse | None = None
 
         for attempt in range(max_retries + 1):
             try:
@@ -1002,11 +1002,11 @@ class RnetSession:
         pass
 
 
-AnySession = Union[Session, RnetSession]
+AnySession = Session | RnetSession
 
 
 def session(
-    browser: Optional[str] = None,
+    browser: str | None = None,
     **kwargs: Any,
 ) -> RnetSession:
     """

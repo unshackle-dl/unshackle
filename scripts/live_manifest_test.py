@@ -22,7 +22,7 @@ import sys
 import time
 from pathlib import Path
 from tempfile import mkdtemp
-from typing import Any, Optional
+from typing import Any
 
 import click
 from requests import Session
@@ -94,7 +94,7 @@ class Counter:
             self.files += 1
 
 
-def pick_track(tracks: object, which: str) -> Optional[Any]:
+def pick_track(tracks: object, which: str) -> Any | None:
     vids = list(getattr(tracks, "videos", []))
     if not vids:
         auds = list(getattr(tracks, "audio", []))

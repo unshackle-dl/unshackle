@@ -1,6 +1,5 @@
 import logging
 from pathlib import Path
-from typing import Optional
 
 import click
 import requests
@@ -45,9 +44,9 @@ def prd() -> None:
 def new(
     ctx: click.Context,
     paths: tuple[Path, ...],
-    encryption_key: Optional[Path],
-    signing_key: Optional[Path],
-    output: Optional[Path],
+    encryption_key: Path | None,
+    signing_key: Path | None,
+    output: Path | None,
 ) -> None:
     """Make a new .PRD device file.
 
@@ -155,9 +154,9 @@ def new(
 def reprovision_device(
     ctx: click.Context,
     prd_path: Path,
-    encryption_key: Optional[Path],
-    signing_key: Optional[Path],
-    output: Optional[Path] = None,
+    encryption_key: Path | None,
+    signing_key: Path | None,
+    output: Path | None = None,
 ) -> None:
     """Reprovision a PlayReady Device (.prd) file."""
     if not prd_path.is_file():

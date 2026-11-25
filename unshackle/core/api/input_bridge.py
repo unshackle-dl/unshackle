@@ -12,7 +12,7 @@ import json
 import threading
 import uuid
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 from unshackle.core.remote_protocol import APIErrorCode, AuthStatus, coded
 
@@ -40,10 +40,10 @@ class Ask:
 
     id: str
     prompt: str
-    cdm_call: Optional[dict[str, Any]] = None
-    owner: Optional[str] = None  # CHANNEL or POLL: the path that carried the ask, and the only one that answers it
-    response: Optional[str] = None
-    error: Optional[str] = None  # the client could not answer, and says why
+    cdm_call: dict[str, Any] | None = None
+    owner: str | None = None  # CHANNEL or POLL: the path that carried the ask, and the only one that answers it
+    response: str | None = None
+    error: str | None = None  # the client could not answer, and says why
     picked_up: threading.Event = field(default_factory=threading.Event)
     answered: threading.Event = field(default_factory=threading.Event)
 
@@ -56,13 +56,13 @@ class InputBridge:
     answers through the remote session channel or the prompt routes.
     """
 
-    channel: Optional[SessionChannel] = field(default=None, init=False, repr=False)
+    channel: SessionChannel | None = field(default=None, init=False, repr=False)
     _asks: dict[str, Ask] = field(default_factory=dict, init=False, repr=False)
     _status: AuthStatus = field(default=AuthStatus.AUTHENTICATING, init=False)
     _cancelled: bool = field(default=False, init=False, repr=False)
     _lock: threading.Lock = field(default_factory=threading.Lock, init=False, repr=False)
 
-    def _open(self, prompt: str, cdm_call: Optional[dict[str, Any]] = None) -> Ask:
+    def _open(self, prompt: str, cdm_call: dict[str, Any] | None = None) -> Ask:
         """Register an ask and offer it to the attached channel; call it with the lock held."""
         if self._cancelled:
             raise RuntimeError("Session was cancelled")
@@ -147,7 +147,7 @@ class InputBridge:
         """
         return [a for a in self._asks.values() if not a.answered.is_set() and a.owner != CHANNEL]
 
-    def get_pending_cdm_call(self) -> Optional[dict[str, Any]]:
+    def get_pending_cdm_call(self) -> dict[str, Any] | None:
         """Return the CDM call that service code waits on, if any, and mark it as fetched by a client."""
         with self._lock:
             ask = next((a for a in self._pollable() if a.cdm_call is not None), None)
@@ -157,7 +157,7 @@ class InputBridge:
             ask.picked_up.set()
             return ask.cdm_call
 
-    def get_pending_prompt(self) -> Optional[str]:
+    def get_pending_prompt(self) -> str | None:
         """Return the prompt of the first ask the prompt routes can serve, and keep that ask on them."""
         with self._lock:
             ask = next(iter(self._pollable()), None)
@@ -180,7 +180,7 @@ class InputBridge:
             self._answer(ask, response)
         return True
 
-    def answer(self, ask_id: str, response: str, error: Optional[str] = None) -> bool:
+    def answer(self, ask_id: str, response: str, error: str | None = None) -> bool:
         """Answer the ask with this id that the remote session channel carried; False when no such ask waits."""
         with self._lock:
             ask = self._asks.get(ask_id)

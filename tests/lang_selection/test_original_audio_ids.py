@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Optional
-
 import pytest
 
 from unshackle.core.wire import original_audio_ids
@@ -14,7 +12,7 @@ class FakeTrack:
 
 
 class FakeTitle:
-    def __init__(self, language: Optional[str]) -> None:
+    def __init__(self, language: str | None) -> None:
         self.language = language
 
 

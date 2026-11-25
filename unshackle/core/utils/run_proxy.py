@@ -13,7 +13,7 @@ import sys
 import weakref
 from dataclasses import dataclass, field
 from types import FrameType
-from typing import Any, Optional
+from typing import Any
 from urllib.parse import urlsplit
 
 import requests
@@ -46,7 +46,7 @@ def pin(session: requests.Session) -> None:
     session.trust_env = False
 
 
-def proxy_of(session: Any) -> Optional[str]:
+def proxy_of(session: Any) -> str | None:
     proxies = getattr(session, "proxies", None) or {}
     return proxies.get("all") or proxies.get("https") or proxies.get("http")
 
@@ -55,12 +55,12 @@ def hostname(uri: str) -> str:
     return (urlsplit(uri).hostname or "").lower()
 
 
-def service_dir(cls: type) -> Optional[str]:
+def service_dir(cls: type) -> str | None:
     file = getattr(sys.modules.get(cls.__module__), "__file__", None)
     return os.path.dirname(file) + os.sep if file else None
 
 
-def watch(cls: type, proxy: Optional[str]) -> None:
+def watch(cls: type, proxy: str | None) -> None:
     """Watch the requests of the service class ``cls`` in a run with the proxy ``proxy``."""
     global hook_installed
     directory = service_dir(cls)
@@ -77,7 +77,7 @@ def watch(cls: type, proxy: Optional[str]) -> None:
         hook_installed = True
 
 
-def find_service(frame: Optional[FrameType], through_core: bool) -> Optional[tuple[FrameType, Watch]]:
+def find_service(frame: FrameType | None, through_core: bool) -> tuple[FrameType, Watch] | None:
     """Return the innermost frame of watched service code and its watch.
 
     Without ``through_core`` the walk ends at the first unshackle core frame: core sends some requests
@@ -96,7 +96,7 @@ def find_service(frame: Optional[FrameType], through_core: bool) -> Optional[tup
     return None
 
 
-def instance_of(frame: Optional[FrameType], entry: Watch) -> Any:
+def instance_of(frame: FrameType | None, entry: Watch) -> Any:
     """The service instance nearest to ``frame``, which knows the proxy of its own run.
 
     The walk goes on past helper functions of the service, which have no ``self``.
@@ -114,7 +114,7 @@ def instance_of(frame: Optional[FrameType], entry: Watch) -> Any:
     return None
 
 
-def run_proxy_for(frame: Optional[FrameType]) -> Optional[str]:
+def run_proxy_for(frame: FrameType | None) -> str | None:
     """The proxy of the run of the service code that called into core at ``frame``.
 
     A download thread has no service frame. With one watched service, as in a CLI run, its proxy applies.
@@ -182,7 +182,7 @@ def audit(event: str, args: tuple) -> None:
         pass
 
 
-def check(host: Any, frame: Optional[FrameType]) -> None:
+def check(host: Any, frame: FrameType | None) -> None:
     """Warn when the innermost unshackle frame that sends a request to ``host`` is service code.
 
     A method of a service instance knows the proxy of its own run, so a run with no proxy never warns.

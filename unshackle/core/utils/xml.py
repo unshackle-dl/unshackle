@@ -1,10 +1,8 @@
-from typing import Union
-
 from lxml import etree
 from lxml.etree import ElementTree
 
 
-def load_xml(xml: Union[str, bytes]) -> ElementTree:
+def load_xml(xml: str | bytes) -> ElementTree:
     """Safely parse XML data to an ElementTree, without namespaces in tags.
 
     The strip uses string operations, not etree.QName: on a 20 MB manifest the QName walk costs several times the parse.

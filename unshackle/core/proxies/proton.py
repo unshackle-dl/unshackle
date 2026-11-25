@@ -8,7 +8,6 @@ import re
 import sys
 import time
 from pathlib import Path
-from typing import Optional
 from urllib.parse import quote
 
 import requests
@@ -58,9 +57,9 @@ class ProtonVPN(Proxy):
 
     def __init__(
         self,
-        server_map: Optional[dict[str, str]] = None,
-        cookie_path: Optional[str] = None,
-        cache_path: Optional[str] = None,
+        server_map: dict[str, str] | None = None,
+        cookie_path: str | None = None,
+        cache_path: str | None = None,
         timeout: float = 10.0,
         enable: bool = False,
     ) -> None:
@@ -69,14 +68,14 @@ class ProtonVPN(Proxy):
         self.enable = enable
         self.api_base = self.API_BASE
 
-        self.uid: Optional[str] = None
-        self.access_token: Optional[str] = None
-        self.refresh_token: Optional[str] = None
-        self.logicals: Optional[list[dict]] = None
-        self.max_tier: Optional[int] = None
-        self.last_name: Optional[str] = None
-        self.last_city: Optional[str] = None
-        self.last_host: Optional[str] = None
+        self.uid: str | None = None
+        self.access_token: str | None = None
+        self.refresh_token: str | None = None
+        self.logicals: list[dict] | None = None
+        self.max_tier: int | None = None
+        self.last_name: str | None = None
+        self.last_city: str | None = None
+        self.last_host: str | None = None
 
         self.cookie_path = Path(cookie_path).expanduser() if cookie_path else self.default_cookie_path()
         self.cache_path = Path(cache_path).expanduser() if cache_path else self.default_cache_path()
@@ -97,7 +96,7 @@ class ProtonVPN(Proxy):
             f"{countries} Countr{'ies' if countries != 1 else 'y'} ({len(servers)} Server{'s' if servers != 1 else ''})"
         )
 
-    def get_proxy(self, query: str) -> Optional[str]:
+    def get_proxy(self, query: str) -> str | None:
         self.ensure_session()
         server = self.resolve_server(query.strip().lower())
         if not server:
@@ -113,13 +112,13 @@ class ProtonVPN(Proxy):
         user, pwd = (quote(c, safe="") for c in creds)
         return f"https://{user}:{pwd}@{host}:{port}"
 
-    def last_connection_display(self) -> Optional[str]:
+    def last_connection_display(self) -> str | None:
         if not self.last_name or not self.last_host:
             return None
         label = f"{self.last_name} - {self.last_city}" if self.last_city else self.last_name
         return f"({label}): {self.last_host.replace('.protonvpn.net', '')}"
 
-    def resolve_server(self, query: str) -> Optional[dict]:
+    def resolve_server(self, query: str) -> dict | None:
         self.last_name = self.last_city = self.last_host = None
         query = self.server_map.get(query, query)
         country, city, server_num = self.parse_query(query)
@@ -149,7 +148,7 @@ class ProtonVPN(Proxy):
             return None
         return self.select(pool, server_num)
 
-    def parse_query(self, query: str) -> tuple[Optional[str], Optional[str], Optional[int]]:
+    def parse_query(self, query: str) -> tuple[str | None, str | None, int | None]:
         """Parse "us", "us12"/"us-12"/"us#12" (server #12), and "us:ny" (city)."""
         city = None
         if ":" in query:
@@ -180,7 +179,7 @@ class ProtonVPN(Proxy):
                 substring.append(s)
         return exact or prefix or substring
 
-    def select(self, pool: list[dict], server_num: Optional[int]) -> dict:
+    def select(self, pool: list[dict], server_num: int | None) -> dict:
         if server_num is not None:
             matches = [s for s in pool if server_no(s) == server_num]
             if matches:
@@ -218,7 +217,7 @@ class ProtonVPN(Proxy):
         vpn = (response.json().get("VPN") or {}) if response is not None else {}
         return vpn if "MaxTier" in vpn else {}
 
-    def get_browser_token(self) -> Optional[tuple[str, str]]:
+    def get_browser_token(self) -> tuple[str, str] | None:
         response = self.api("GET", f"/vpn/v1/browser/token?Duration={self.TOKEN_DURATION}")
         if response is None:
             return None
@@ -228,7 +227,7 @@ class ProtonVPN(Proxy):
         log.error("Proton: browser/token response missing credentials")
         return None
 
-    def api(self, method: str, path: str) -> Optional[requests.Response]:
+    def api(self, method: str, path: str) -> requests.Response | None:
         """Call the Proton API, and refresh the login session one time on a 401."""
         if not self.access_token:
             self.load_session()
@@ -450,7 +449,7 @@ def slugify(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
 
 
-def server_no(server: dict) -> Optional[int]:
+def server_no(server: dict) -> int | None:
     """Proton's server number from the logical name, e.g. "US#231" -> 231, "US-CO#21" -> 21."""
     match = re.search(r"#(\d+)", str(server.get("Name") or ""))
     return int(match.group(1)) if match else None

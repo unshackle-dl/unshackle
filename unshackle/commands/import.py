@@ -34,7 +34,7 @@ class ImportCommand:
         try:
             doc = mediaexport.read(export_file)
         except mediaexport.ExportError as e:
-            raise click.ClickException(f"{export_file} is not a usable export file: {e}")
+            raise click.ClickException(f"{export_file} is not a usable export file: {e}") from e
 
         service_tag = doc.service_tag
         if not service_tag:

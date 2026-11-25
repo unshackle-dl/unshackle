@@ -191,8 +191,8 @@ def test_history_scoped_by_owner(tmp_path, monkeypatch):
 
     monkeypatch.setattr(dm, "history_path", lambda: tmp_path / "h.jsonl")
     (tmp_path / "h.jsonl").write_text(
-        '{"job_id": "a", "owner": "%s", "service": "X"}\n{"job_id": "b", "owner": "%s", "service": "X"}\n'
-        % (dm.owner_id("k1"), dm.owner_id("k2"))
+        f'{{"job_id": "a", "owner": "{dm.owner_id("k1")}", "service": "X"}}\n'
+        f'{{"job_id": "b", "owner": "{dm.owner_id("k2")}", "service": "X"}}\n'
     )
     assert [e["job_id"] for e in dm.read_job_history(owner=dm.owner_id("k1"))] == ["a"]
     assert not dm.delete_job_history("b", owner=dm.owner_id("k1"))

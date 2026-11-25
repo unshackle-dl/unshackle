@@ -653,9 +653,10 @@ class _SentCreate(Exception):
     pass
 
 
-def sent_create(
-    server_cdm, cdm_name=None, local_cdm=SimpleNamespace(is_playready=False), cdm_entry=False, cdm_map=None
-):
+WIDEVINE_CDM = SimpleNamespace(is_playready=False)
+
+
+def sent_create(server_cdm, cdm_name=None, local_cdm=WIDEVINE_CDM, cdm_entry=False, cdm_map=None):
     def post(path, data):
         raise _SentCreate(data)
 

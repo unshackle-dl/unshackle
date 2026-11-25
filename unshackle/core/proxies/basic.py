@@ -1,6 +1,5 @@
 import random
 import re
-from typing import Optional, Union
 
 from requests.utils import prepend_scheme_if_needed
 from urllib3.util import parse_url
@@ -10,7 +9,7 @@ from unshackle.core.utils.redact import mask_proxy
 
 
 class Basic(Proxy):
-    def __init__(self, **countries: Union[str, list[str]]) -> None:
+    def __init__(self, **countries: str | list[str]) -> None:
         """Basic proxy provider that uses the proxies given in the configuration file."""
         self.countries = {k.lower(): v for k, v in countries.items()}
 
@@ -20,7 +19,7 @@ class Basic(Proxy):
 
         return f"{countries} Countr{['ies', 'y'][countries == 1]} ({servers} Server{['s', ''][servers == 1]})"
 
-    def get_proxy(self, query: str) -> Optional[str]:
+    def get_proxy(self, query: str) -> str | None:
         """Get a proxy URI from the config. A query for a region or an entry number not in the config returns None."""
         query = query.lower()
 
@@ -31,7 +30,7 @@ class Basic(Proxy):
         country_code = match.group(1)
         entry = match.group(2)
 
-        servers: Optional[Union[str, list[str]]] = self.countries.get(country_code)
+        servers: str | list[str] | None = self.countries.get(country_code)
         if not servers:
             return None
 

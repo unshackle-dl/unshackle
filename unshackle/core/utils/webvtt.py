@@ -1,5 +1,5 @@
 import re
-from typing import Optional
+from itertools import pairwise
 
 TIMESTAMP = r"(?:\d+:)?\d{2}:\d{2}\.\d{3}"
 # Timing line: optional hours, verbatim settings tail.
@@ -17,7 +17,7 @@ def timestamp_ms(ts: str) -> int:
     return ((hours * 60 + minutes) * 60 + seconds) * 1000 + int(ms)
 
 
-def merge_segmented_webvtt(vtt_raw: str, segment_durations: Optional[list[int]] = None, timescale: int = 1) -> str:
+def merge_segmented_webvtt(vtt_raw: str, segment_durations: list[int] | None = None, timescale: int = 1) -> str:
     """
     Merge concatenated Segmented WebVTT documents into a single document.
 
@@ -39,7 +39,7 @@ def merge_segmented_webvtt(vtt_raw: str, segment_durations: Optional[list[int]] 
     # each kept cue: [start, end, settings, payload, normalized payload for dedupe]
     cues: list[list[str]] = []
     headers: list[str] = []  # unique STYLE/REGION blocks, first-seen order
-    prev: Optional[list[str]] = None
+    prev: list[str] | None = None
     prev_end_ms = 0
 
     for block in re.split(r"\n[ \t]*\n", vtt_raw.replace("\r\n", "\n").replace("\r", "\n")):
@@ -114,15 +114,16 @@ def webvtt_block_offsets(texts: list[str], bounds_ms: list[int]) -> list[int]:
     This assumes each block's MPEGTS is the first video PTS of the same block.
     """
     offsets, offset = [], 0
-    for text, start, end in zip(texts, bounds_ms, bounds_ms[1:]):
+    for text, (start, end) in zip(texts, pairwise(bounds_ms), strict=False):
         cues = [(timestamp_ms(m[2]), timestamp_ms(m[4])) for m in CUE_TIMES.finditer(text)]
         local = TIMESTAMP_MAP_LOCAL.search(text)
         restart = start - (timestamp_ms(local[1]) if local else 0)
 
-        def inside(shift: int) -> int:
-            return sum(cue_start + shift < end and cue_end + shift > start for cue_start, cue_end in cues)
-
-        if inside(restart) > inside(offset):
+        at_restart, at_offset = (
+            sum(cue_start + shift < end and cue_end + shift > start for cue_start, cue_end in cues)
+            for shift in (restart, offset)
+        )
+        if at_restart > at_offset:
             offset = restart
         offsets.append(offset)
     return offsets

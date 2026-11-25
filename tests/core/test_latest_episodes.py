@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Optional
-
 import pytest
 
 from unshackle.commands.dl import latest_episode_keys
@@ -16,7 +14,7 @@ class Svc:
     pass
 
 
-def episode(season: int, number: int, part: Optional[int] = None) -> Episode:
+def episode(season: int, number: int, part: int | None = None) -> Episode:
     return Episode(id_=f"ep-{season}x{number}.{part}", service=Svc, title="T", season=season, number=number, part=part)
 
 
@@ -36,7 +34,7 @@ def series() -> Series:
     ],
 )
 def test_the_newest_episodes_are_picked_across_seasons(
-    latest_episode: bool, latest_episodes: Optional[int], expected: list[tuple[int, int]]
+    latest_episode: bool, latest_episodes: int | None, expected: list[tuple[int, int]]
 ) -> None:
     assert latest_episode_keys(series(), latest_episode, latest_episodes) == expected
 

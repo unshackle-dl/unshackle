@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Mapping
 from collections.abc import Mapping as MappingABC
-from typing import Any, Mapping, Optional, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 from langcodes import Language
 
@@ -27,7 +29,7 @@ def evaluate_language_tag(
     rules: list[dict[str, Any]],
     audio_languages: Sequence[Language],
     subtitle_languages: Sequence[Language],
-    states: Optional[Mapping[str, bool]] = None,
+    states: Mapping[str, bool] | None = None,
 ) -> str:
     """Evaluate language tag rules against selected tracks.
 
@@ -69,7 +71,7 @@ def rule_matches(
     rule: dict[str, Any],
     audio_languages: Sequence[Language],
     subtitle_languages: Sequence[Language],
-    states: Optional[Mapping[str, bool]] = None,
+    states: Mapping[str, bool] | None = None,
 ) -> bool:
     """Return True when every condition in the rule matches the tracks."""
     unknown = [key for key in rule if key not in (*LANGUAGE_CONDITIONS, *STATE_CONDITIONS, "tag")]

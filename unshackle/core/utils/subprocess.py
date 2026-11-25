@@ -1,8 +1,8 @@
 import json
 import subprocess
 import time
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Optional, Sequence, Union
 
 from unshackle.core import binaries
 from unshackle.core.console import console
@@ -11,10 +11,10 @@ from unshackle.core.utilities import get_debug_logger
 
 def log_tool_run(
     label: str,
-    tool: Optional[str],
-    returncode: Optional[int],
+    tool: str | None,
+    returncode: int | None,
     *,
-    duration_ms: Optional[float] = None,
+    duration_ms: float | None = None,
     **context: object,
 ) -> None:
     """Send a structured ``tool_run`` debug-log entry for an external tool invocation.
@@ -59,7 +59,7 @@ FFMPEG_CHECK_TIMEOUT = 120
 FFMPEG_CHECK_TAIL = 8  # seconds
 
 
-def ffmpeg_decodes(path: Path, start: Optional[float] = None, seconds: float = 3, video: Optional[bool] = None) -> bool:
+def ffmpeg_decodes(path: Path, start: float | None = None, seconds: float = 3, video: bool | None = None) -> bool:
     """Return True when FFmpeg decodes a window of the file without an error.
 
     A wrong content key leaves the container intact and the samples as noise, which the
@@ -81,7 +81,7 @@ def ffmpeg_decodes(path: Path, start: Optional[float] = None, seconds: float = 3
     does a check that does not finish in time.
     """
     if not binaries.FFMPEG:
-        raise EnvironmentError('FFmpeg executable "ffmpeg" not found but is required.')
+        raise OSError('FFmpeg executable "ffmpeg" not found but is required.')
     ffmpeg = str(binaries.FFMPEG)
 
     def decode(window: list[str], keyframes: bool) -> bool:
@@ -140,12 +140,12 @@ def ffmpeg_decodes(path: Path, start: Optional[float] = None, seconds: float = 3
     return decode(["-t", str(seconds)], keyframes=False) and decode(tail, keyframes=False)
 
 
-def ffprobe(uri: Union[bytes, Path]) -> dict:
+def ffprobe(uri: bytes | Path) -> dict:
     """Use FFprobe on the provided data to get its track information (``-show_streams``)."""
     if not binaries.FFProbe:
-        raise EnvironmentError('FFProbe executable "ffprobe" not found but is required.')
+        raise OSError('FFProbe executable "ffprobe" not found but is required.')
 
-    args: list[Union[str, Path]] = [binaries.FFProbe, "-v", "quiet", "-of", "json", "-show_streams"]
+    args: list[str | Path] = [binaries.FFProbe, "-v", "quiet", "-of", "json", "-show_streams"]
     if isinstance(uri, Path):
         args.extend(
             ["-f", "lavfi", "-i", "movie={}[out+subcc]".format(str(uri).replace("\\", "/").replace(":", "\\\\:"))]
@@ -182,12 +182,12 @@ def ffprobe(uri: Union[bytes, Path]) -> dict:
 
 
 def run_step(
-    args: Sequence[Union[str, Path]],
+    args: Sequence[str | Path],
     *,
-    status: Optional[str] = None,
-    output: Optional[Path] = None,
+    status: str | None = None,
+    output: Path | None = None,
     label: str = "subprocess step",
-    timeout: Optional[float] = None,
+    timeout: float | None = None,
 ) -> bytes:
     """Operate a CLI step that writes to `output` (when provided). Returns stderr bytes.
 
@@ -203,9 +203,9 @@ def run_step(
     try:
         if status:
             with console.status(status, spinner="dots"):
-                p = subprocess.run(str_args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=timeout)
+                p = subprocess.run(str_args, capture_output=True, timeout=timeout)
         else:
-            p = subprocess.run(str_args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=timeout)
+            p = subprocess.run(str_args, capture_output=True, timeout=timeout)
     except subprocess.TimeoutExpired:
         if output is not None:
             output.unlink(missing_ok=True)

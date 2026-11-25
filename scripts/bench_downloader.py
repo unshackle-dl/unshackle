@@ -40,7 +40,7 @@ import threading
 import time
 from pathlib import Path
 from shutil import rmtree
-from typing import Any, Optional
+from typing import Any
 
 import click
 import fault_server  # local sibling (scripts/): fault-injection server + payload verifier
@@ -105,7 +105,7 @@ class SegmentHandler(http.server.BaseHTTPRequestHandler):
             server.connections += 1
             self.slow_conn = server.connections <= server.faults["slow_conn"]
 
-    def _parse_range(self, total: int) -> Optional[tuple[int, int]]:
+    def _parse_range(self, total: int) -> tuple[int, int] | None:
         header = self.headers.get("Range")
         if not header or not header.startswith("bytes="):
             return None
@@ -214,8 +214,8 @@ class SegmentHandler(http.server.BaseHTTPRequestHandler):
 
 
 def run_batch(
-    urls: list[str], out_dir: Path, workers: int, session: Optional[Any], adaptive: bool = False, procs: int = 1
-) -> tuple[float, list[float], Optional[BaseException]]:
+    urls: list[str], out_dir: Path, workers: int, session: Any | None, adaptive: bool = False, procs: int = 1
+) -> tuple[float, list[float], BaseException | None]:
     """Download one batch through the real code path.
 
     Returns (wall seconds, completion timestamps relative to start, error-or-None).
@@ -223,7 +223,7 @@ def run_batch(
     """
     DOWNLOAD_CANCELLED.clear()
     completions: list[float] = []
-    err: Optional[BaseException] = None
+    err: BaseException | None = None
     start = time.perf_counter()
     try:
         for event in download_batch(
@@ -258,7 +258,7 @@ def run_batch(
     return wall, completions, err, strays, locked, pool_threads
 
 
-def incomplete_segments(out_dir: Path, expected: int, expected_bytes: Optional[bytes]) -> list[int]:
+def incomplete_segments(out_dir: Path, expected: int, expected_bytes: bytes | None) -> list[int]:
     """Segment indexes that are missing, empty, or (synthetic mode) not byte-identical.
 
     Content compare (not just size) is required: on a mid-body interruption the downloader
@@ -331,9 +331,9 @@ def sweep(
     urls: list[str],
     workers: list[int],
     runs: int,
-    session: Optional[Any],
-    server: Optional[SegmentServer],
-    expected_bytes: Optional[bytes],
+    session: Any | None,
+    server: SegmentServer | None,
+    expected_bytes: bytes | None,
     adaptive: bool = False,
     procs: int = 1,
 ) -> list[Row]:
@@ -468,7 +468,7 @@ def print_fault_report(rows: list[FaultRow], runs: int, segments: int, profile: 
         )
 
 
-def _procs_notice(procs: int, n_urls: int, session: Optional[Any]) -> None:
+def _procs_notice(procs: int, n_urls: int, session: Any | None) -> None:
     """Warn loudly when --procs cannot engage, so a run is never mistaken for a multiprocess test."""
     if procs <= 1:
         return
@@ -490,7 +490,7 @@ def run_fault_mode(
     seg_size: int,
     worker_counts: list[int],
     runs: int,
-    session: Optional[Any],
+    session: Any | None,
     adaptive: bool,
     procs: int,
     seed: int,
@@ -650,12 +650,12 @@ def main(
     fault_slow_conn: int,
     part_size_mib: int,
     fast_timeouts: bool,
-    urls_file: Optional[str],
-    impersonate: Optional[str],
+    urls_file: str | None,
+    impersonate: str | None,
     adaptive: bool,
     procs: int,
     no_read1: bool,
-    fault_profile: Optional[str],
+    fault_profile: str | None,
     seed: int,
 ) -> None:
     """Benchmark downloader throughput vs worker count, with optional fault injection."""
@@ -668,12 +668,12 @@ def main(
         "tail_slow_once": fault_tail_slow_once,
         "slow_conn": fault_slow_conn,
     }
-    server: Optional[SegmentServer] = None
-    session: Optional[Any] = None
+    server: SegmentServer | None = None
+    session: Any | None = None
     saved: dict[str, Any] = {}
-    saved_network: Optional[dict] = None
+    saved_network: dict | None = None
     total = segments
-    expected_bytes: Optional[bytes] = None  # synthetic reference buffer; None in real-URL mode
+    expected_bytes: bytes | None = None  # synthetic reference buffer; None in real-URL mode
 
     if fast_timeouts:  # bench-only: patched globals are read at call time inside download()
         fast = {"READ_TIMEOUT": 2, "RETRY_WAIT": 1, "HEDGE_MIN_WAIT": 1.0}

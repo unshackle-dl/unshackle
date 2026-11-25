@@ -211,7 +211,7 @@ def test_permanent_status_unwraps_causes():
     assert dl.permanent_status(HTTPError(response=_Resp(403))) == 403
     assert dl.permanent_status(HTTPError(response=_Resp(429))) is None
     assert dl.permanent_status(HTTPError(response=_Resp(503))) is None
-    assert dl.permanent_status(IOError("short read")) is None
+    assert dl.permanent_status(OSError("short read")) is None
     # RnetSession wraps the HTTPError one level down as __cause__
     wrapped = RuntimeError("max retries")
     wrapped.__cause__ = HTTPError(response=_Resp(404))

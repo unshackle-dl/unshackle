@@ -11,8 +11,9 @@ import sys
 import threading
 import time
 import traceback
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable, Dict
+from typing import Any
 from uuid import uuid4
 
 from unshackle.core.api.input_bridge import AUTH_INPUT_TIMEOUT
@@ -25,7 +26,7 @@ from .download_manager import perform_download
 log = logging.getLogger("download_worker")
 
 
-def read_payload(path: Path) -> Dict[str, Any]:
+def read_payload(path: Path) -> dict[str, Any]:
     with path.open("r", encoding="utf-8") as handle:
         return json.load(handle)
 
@@ -33,7 +34,7 @@ def read_payload(path: Path) -> Dict[str, Any]:
 _replace_lock = threading.Lock()
 
 
-def write_result(path: Path, payload: Dict[str, Any]) -> None:
+def write_result(path: Path, payload: dict[str, Any]) -> None:
     """Write the payload with an atomic replace, because the parent polls this file during the write.
 
     Each call gets its own temp name, so two threads writing this destination cannot replace away
@@ -60,7 +61,7 @@ def write_result(path: Path, payload: Dict[str, Any]) -> None:
         raise
 
 
-def relay_prompts(progress_callback: Callable[[Dict[str, Any]], None]) -> None:
+def relay_prompts(progress_callback: Callable[[dict[str, Any]], None]) -> None:
     """Send each prompt_user() prompt to the parent as ``input_prompt`` progress, and read the answer from stdin.
 
     The parent writes each answer as one JSON string per line, so an answer can hold a newline. The reader
@@ -97,7 +98,7 @@ def relay_prompts(progress_callback: Callable[[Dict[str, Any]], None]) -> None:
     set_notice_handler(lambda message: progress_callback({"notice": message}))
 
 
-def apply_payload_speed_limit(payload: Dict[str, Any]) -> None:
+def apply_payload_speed_limit(payload: dict[str, Any]) -> None:
     """Lock this worker's share of the server speed limit so the job cannot clear it."""
     limit = payload.get("speed_limit")
     if not limit:
@@ -118,7 +119,7 @@ def main(argv: list[str]) -> int:
     result_path = Path(argv[2])
     progress_path = Path(argv[3]) if len(argv) > 3 else None
 
-    result: Dict[str, Any] = {}
+    result: dict[str, Any] = {}
     exit_code = 0
 
     try:
@@ -132,10 +133,10 @@ def main(argv: list[str]) -> int:
         log.info(f"Worker starting job {job_id} ({service}:{title_id})")
 
         # Merged so sparse keys (current_title, output_files) survive later writes.
-        progress_state: Dict[str, Any] = {}
+        progress_state: dict[str, Any] = {}
         progress_lock = threading.Lock()
 
-        def progress_callback(progress_data: Dict[str, Any]) -> None:
+        def progress_callback(progress_data: dict[str, Any]) -> None:
             """Write progress updates to file for main process to read."""
             if progress_path:
                 try:

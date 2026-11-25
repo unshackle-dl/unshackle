@@ -1,7 +1,7 @@
 import sys
 import time
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, Optional
 
 import pytest
 
@@ -35,8 +35,8 @@ def test_parse_version(text: str, expected: str | None) -> None:
     assert parse_version(text) == expected
 
 
-def fake_probe(outputs: dict[str, Optional[str]], calls: list[list[str]]) -> Callable[[Path, list[str]], Optional[str]]:
-    def probe(path: Path, args: list[str]) -> Optional[str]:
+def fake_probe(outputs: dict[str, str | None], calls: list[list[str]]) -> Callable[[Path, list[str]], str | None]:
+    def probe(path: Path, args: list[str]) -> str | None:
         calls.append(args)
         return outputs.get(" ".join(args), "")
 

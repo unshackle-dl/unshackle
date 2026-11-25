@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Optional
+from typing import Any
 
 import click
 import pytest
@@ -16,7 +16,7 @@ from unshackle.core.utils.click_types import LANGUAGE_RANGE, MultipleChoice
 log = logging.getLogger("test_service_dl_overrides")
 
 
-def make_ctx(args: Optional[list[str]] = None, default_map: Optional[dict[str, Any]] = None) -> click.Context:
+def make_ctx(args: list[str] | None = None, default_map: dict[str, Any] | None = None) -> click.Context:
     """Build a parsed context for a mirror of the dl group's option shapes."""
 
     @click.group("dl", invoke_without_command=True)

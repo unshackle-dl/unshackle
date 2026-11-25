@@ -1,14 +1,11 @@
-from typing import Optional, Union
-
-
 class SearchResult:
     def __init__(
         self,
-        id_: Union[str, int],
+        id_: str | int,
         title: str,
-        description: Optional[str] = None,
-        label: Optional[str] = None,
-        url: Optional[str] = None,
+        description: str | None = None,
+        label: str | None = None,
+        url: str | None = None,
     ) -> None:
         """
         A search result for any title type a service can give.
@@ -40,7 +37,7 @@ class SearchResult:
         self.label = label
         self.url = url
 
-    def to_dict(self) -> dict[str, Union[str, int, None]]:
+    def to_dict(self) -> dict[str, str | int | None]:
         """The result as the REST API returns it."""
         return {
             "id": self.id,

@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import logging
 import math
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any, Optional, Sequence, Union
+from typing import Any
 
 from unshackle.core.console import console
 from unshackle.core.constants import AnyTrack
@@ -74,20 +75,20 @@ class TrackSelection:
     quality: list[int]
     vcodec: list[Video.Codec]
     acodec: list[Audio.Codec]
-    vbitrate: Optional[int]
-    abitrate: Optional[int]
-    vbitrate_min: Optional[int]
-    vbitrate_max: Optional[int]
-    abitrate_min: Optional[int]
-    abitrate_max: Optional[int]
+    vbitrate: int | None
+    abitrate: int | None
+    vbitrate_min: int | None
+    vbitrate_max: int | None
+    abitrate_min: int | None
+    abitrate_max: int | None
     range_: list[Video.Range]
     generated_dv_bases: list[Video.Range]
-    channels: Optional[float]
+    channels: float | None
     no_atmos: bool
     lang: list[str]
-    v_lang: Optional[list[str]]
-    a_lang: Optional[list[str]]
-    s_lang: Optional[list[str]]
+    v_lang: list[str] | None
+    a_lang: list[str] | None
+    s_lang: list[str] | None
     video_excl: list[str]
     audio_excl: list[str]
     s_lang_excl: list[str]
@@ -114,7 +115,7 @@ class TrackSelection:
     best_available: bool
     generate_dv: bool
 
-    def select(self, title: Title_T, subtitles_unsupported: bool) -> Union[Kept, Skip]:
+    def select(self, title: Title_T, subtitles_unsupported: bool) -> Kept | Skip:
         """Narrow title.tracks to the tracks the flags ask for, or return the reason to skip the title.
 
         subtitles_unsupported is the service's NO_SUBTITLES read after get_tracks, which can set it. The
@@ -586,7 +587,7 @@ class TrackSelection:
                         # video carries no audio of its own to fall back on
                         return Skip(f"There's no {as_requested(processed_lang, a_orig_token) or 'orig'} Audio Track...")
 
-            kept_tracks: list[Union[AnyTrack, Chapter, Attachment]] = []
+            kept_tracks: list[AnyTrack | Chapter | Attachment] = []
             if keep_videos:
                 kept_tracks.extend(title.tracks.videos)
             if keep_audio:
@@ -623,7 +624,7 @@ def select_best_audio(
         target_langs: list[Any] = list(dict.fromkeys(t.language for t in audio))
     else:
         target_langs = languages
-    codecs: list[Optional[Audio.Codec]] = list(acodec) if len(acodec) > 1 else [None]
+    codecs: list[Audio.Codec | None] = list(acodec) if len(acodec) > 1 else [None]
 
     selected: list[Audio] = []
     for language in target_langs:
@@ -674,7 +675,7 @@ def keep_generated_dv_bases(videos: Sequence[Video], bases: Sequence[Video.Range
     return [v for v in videos if v.range != Video.Range.DV and (v.range not in HYBRID_BASE_RANGES or v.range in bases)]
 
 
-def hybrid_gate_failure(videos: Sequence[Video], generate_dv: bool) -> Optional[str]:
+def hybrid_gate_failure(videos: Sequence[Video], generate_dv: bool) -> str | None:
     """The message that stops HYBRID for these selected videos, or None when it can go on."""
     if any(v.native_hybrid for v in videos):
         return None

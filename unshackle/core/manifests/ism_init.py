@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import binascii
 import struct
-from typing import Iterator, Optional
+from collections.abc import Iterator
 
 u8 = struct.Struct(">B")
 u16 = struct.Struct(">H")
@@ -221,7 +221,7 @@ def skip_hevc_st_ref_pic_set(r: BitReader, idx: int, num_delta_pocs: list[int]) 
     return num_negative + num_positive
 
 
-def parse_hevc_sps_vui(sps_rbsp: bytes) -> tuple[Optional[tuple[int, int, int]], Optional[float]]:
+def parse_hevc_sps_vui(sps_rbsp: bytes) -> tuple[tuple[int, int, int] | None, float | None]:
     """((colour_primaries, transfer_characteristics, matrix_coeffs), fps) from a
     de-emulated HEVC SPS VUI. Either element is None when absent."""
     r = BitReader(sps_rbsp)
@@ -257,12 +257,12 @@ def parse_hevc_sps_vui(sps_rbsp: bytes) -> tuple[Optional[tuple[int, int, int]],
             r.read_bits(32)  # sar_width + sar_height
     if r.read_bits(1):  # overscan_info_present_flag
         r.read_bits(1)  # overscan_appropriate_flag
-    colour: Optional[tuple[int, int, int]] = None
+    colour: tuple[int, int, int] | None = None
     if r.read_bits(1):  # video_signal_type_present_flag
         r.read_bits(4)  # video_format + video_full_range_flag
         if r.read_bits(1):  # colour_description_present_flag
             colour = (r.read_bits(8), r.read_bits(8), r.read_bits(8))
-    fps: Optional[float] = None
+    fps: float | None = None
     try:
         if r.read_bits(1):  # chroma_loc_info_present_flag
             r.read_ue()  # chroma_sample_loc_type_top_field
@@ -286,7 +286,7 @@ HEVC_FOURCCS = frozenset(("HVC1", "HEV1", "HEVC", "H265", "DVHE", "DVH1"))
 
 def parse_codec_private_data_vui(
     fourcc: str, codec_private_data: bytes
-) -> tuple[Optional[tuple[int, int, int]], Optional[float]]:
+) -> tuple[tuple[int, int, int] | None, float | None]:
     """(colour triple, fps) from the SPS VUI in HEVC CodecPrivateData. Gives
     (None, None) for a codec this parser does not read, and for malformed data.
     This parser excludes H.264 on purpose: its VUI timing is field-based and
@@ -303,14 +303,14 @@ def parse_codec_private_data_vui(
         return None, None
 
 
-def parse_codec_private_data_colour(fourcc: str, codec_private_data: bytes) -> Optional[tuple[int, int, int]]:
+def parse_codec_private_data_colour(fourcc: str, codec_private_data: bytes) -> tuple[int, int, int] | None:
     """SPS VUI colour triple from HEVC CodecPrivateData. Gives None for a codec
     this parser does not read, for data with no colour description, and for
     malformed data."""
     return parse_codec_private_data_vui(fourcc, codec_private_data)[0]
 
 
-def iter_boxes(data: bytes, start: int, end: int) -> Iterator[tuple[bytes, Optional[bytes], int, int]]:
+def iter_boxes(data: bytes, start: int, end: int) -> Iterator[tuple[bytes, bytes | None, int, int]]:
     """Yield (type, uuid_usertype, payload_start, box_end) for each child box.
 
     Stops silently at the first box with a declared size the walk cannot follow.
@@ -338,7 +338,7 @@ def iter_boxes(data: bytes, start: int, end: int) -> Iterator[tuple[bytes, Optio
         offset += size
 
 
-def find_box(data: bytes, start: int, end: int, target: bytes) -> Optional[tuple[int, int]]:
+def find_box(data: bytes, start: int, end: int, target: bytes) -> tuple[int, int] | None:
     """Find the first child box of the given type. Returns (payload_start, end)."""
     for box_type, _, body, box_end in iter_boxes(data, start, end):
         if box_type == target:
@@ -346,7 +346,7 @@ def find_box(data: bytes, start: int, end: int, target: bytes) -> Optional[tuple
     return None
 
 
-def read_track_id(fragment: bytes) -> Optional[int]:
+def read_track_id(fragment: bytes) -> int | None:
     """Read the track_ID from a fragment's moof/traf/tfhd box, if present.
 
     Smooth fragments declare their own track_ID. The synthesized moov must use
@@ -369,7 +369,7 @@ def read_track_id(fragment: bytes) -> Optional[int]:
     return struct.unpack(">I", fragment[body + 4 : body + 8])[0]
 
 
-def read_per_sample_iv_size(fragment: bytes) -> Optional[int]:
+def read_per_sample_iv_size(fragment: bytes) -> int | None:
     """
     Derive the per-sample IV size (8 or 16) from a fragment's sample-encryption
     metadata, for the synthesized tenc default_Per_Sample_IV_Size.
@@ -385,8 +385,8 @@ def read_per_sample_iv_size(fragment: bytes) -> Optional[int]:
     if not traf:
         return None
 
-    senc: Optional[tuple[int, int]] = None
-    saiz_default: Optional[int] = None
+    senc: tuple[int, int] | None = None
+    saiz_default: int | None = None
     senc_has_subsamples = False
     for box_type, usertype, body, box_end in iter_boxes(fragment, *traf):
         if box_type == b"senc" or (box_type == b"uuid" and usertype == PIFF_SENC_UUID):
@@ -453,7 +453,7 @@ def piff_senc_to_cenc(fragment: bytes, iv_size: int = 8) -> bytes:
     override disagrees, since tenc is the only IV width a CENC decrypter consults and a
     mismatch misparses every IV.
     """
-    out: Optional[bytearray] = None
+    out: bytearray | None = None
     limit = len(fragment)
     trafs = [
         (body, min(box_end, limit))
@@ -539,7 +539,7 @@ DV_LEVELS = (
 )
 
 
-def infer_dv_profile(cicp: Optional[tuple[int, int, int]]) -> tuple[int, int]:
+def infer_dv_profile(cicp: tuple[int, int, int] | None) -> tuple[int, int]:
     """Derive (dv_profile, dv_bl_signal_compatibility_id) from the base layer's colour description.
 
     Profile 5 carries no usable description, while profile 8 stays backward compatible
@@ -553,7 +553,7 @@ def infer_dv_profile(cicp: Optional[tuple[int, int, int]]) -> tuple[int, int]:
     return 5, 0
 
 
-def build_dvcc(width: int, height: int, fps: Optional[float], cicp: Optional[tuple[int, int, int]]) -> bytes:
+def build_dvcc(width: int, height: int, fps: float | None, cicp: tuple[int, int, int] | None) -> bytes:
     """
     Assemble the Dolby Vision decoder config box for a single-layer Dolby Vision track:
     dvcC, or dvvC when the profile is cross-compatible.
@@ -666,7 +666,7 @@ def build_esds(codec_private_data: bytes) -> bytes:
     return full_box(b"esds", 0, 0, es)
 
 
-def build_dec3(codec_private_data: bytes) -> Optional[bytes]:
+def build_dec3(codec_private_data: bytes) -> bytes | None:
     """Assemble a dec3 (EC-3 specific) box from Smooth EC-3 CodecPrivateData.
 
     Smooth EC-3 CodecPrivateData ([MS-SSTR] AudioTag 65534) serializes a
@@ -705,7 +705,7 @@ def build_sinf(
     original_format: bytes,
     kid: bytes,
     iv_size: int = 8,
-    constant_iv: Optional[bytes] = None,
+    constant_iv: bytes | None = None,
 ) -> bytes:
     """Assemble a sinf protection box (frma + schm CENC + schi/tenc) for CENC.
 
@@ -743,9 +743,9 @@ def build_init_segment(
     sampling_rate: int = 48000,
     track_id: int = 1,
     nal_length_size: int = 4,
-    kid: Optional[bytes] = None,
+    kid: bytes | None = None,
     iv_size: int = 8,
-    constant_iv: Optional[bytes] = None,
+    constant_iv: bytes | None = None,
 ) -> bytes:
     """
     Assemble a complete ftyp + moov initialization segment.

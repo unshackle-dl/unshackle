@@ -1,6 +1,6 @@
 import threading
 import time
-from typing import Iterator, Optional, Union
+from collections.abc import Iterator
 from uuid import UUID
 
 from unshackle.core.vault import Vault
@@ -8,13 +8,13 @@ from unshackle.core.vaults import Vaults
 
 
 class FakeVault(Vault):
-    def __init__(self, name: str, key: Optional[str], delay: float = 0.0, local: bool = False):
+    def __init__(self, name: str, key: str | None, delay: float = 0.0, local: bool = False):
         super().__init__(name)
         self.key, self.delay, self.local = key, delay, local
         self.calls = 0
         self.threads: set[int] = set()
 
-    def get_key(self, kid: Union[UUID, str], service: str) -> Optional[str]:
+    def get_key(self, kid: UUID | str, service: str) -> str | None:
         self.calls += 1
         self.threads.add(threading.get_ident())
         time.sleep(self.delay)
@@ -23,7 +23,7 @@ class FakeVault(Vault):
     def get_keys(self, service: str) -> Iterator[tuple[str, str]]:
         return iter(())
 
-    def add_key(self, service: str, kid: Union[UUID, str], key: str) -> bool:
+    def add_key(self, service: str, kid: UUID | str, key: str) -> bool:
         return False
 
     def add_keys(self, service: str, kid_keys: dict) -> int:

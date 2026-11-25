@@ -18,7 +18,7 @@ import re
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 from urllib.parse import urlparse
 
 import requests
@@ -56,7 +56,7 @@ EXCLUDED: dict[str, str] = {
     "https://storage.googleapis.com/shaka-demo-assets/heliocentrism-xlink/heliocentrism.mpd": "xlink:href remote Periods are not resolved",
 }
 
-Stream = tuple[str, str, str, Optional[dict[str, Any]]]
+Stream = tuple[str, str, str, dict[str, Any] | None]
 
 
 def dashif_streams() -> list[Stream]:
@@ -128,7 +128,7 @@ def shaka_packager_streams() -> list[Stream]:
     ]
 
 
-def kind_of(head: bytes) -> Optional[str]:
+def kind_of(head: bytes) -> str | None:
     """Tell the manifest type from the first bytes, since many manifest URLs have no telling extension."""
     text = head.lstrip(b"\xef\xbb\xbf").lstrip()
     if text.startswith(b"#EXTM3U"):
@@ -145,7 +145,7 @@ def file_name(source: str, name: str, url: str, kind: str) -> str:
     return f"{kind}/{source}-{slug}-{hashlib.sha1(url.encode()).hexdigest()[:8]}.{EXTENSIONS[kind]}"
 
 
-def fetch(stream: Stream) -> Optional[dict[str, Any]]:
+def fetch(stream: Stream) -> dict[str, Any] | None:
     """Download one manifest into OUT and return its index entry, or None when it is not a manifest."""
     source, name, url, expect = stream
     try:

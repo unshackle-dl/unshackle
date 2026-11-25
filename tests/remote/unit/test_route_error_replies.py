@@ -14,7 +14,7 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, NoReturn, Optional
+from typing import Any, NoReturn
 
 import pytest
 from aiohttp import web
@@ -58,7 +58,7 @@ RELEASE = threading.Event()
 SEEN: list[dict[str, Any]] = []
 
 
-def raise_fault(kind: Optional[str]) -> NoReturn:
+def raise_fault(kind: str | None) -> NoReturn:
     if kind == "api":
         raise APIError(APIErrorCode.SERVICE_ERROR, "pinned refusal", details={"pinned": True})
     if kind == "exit":
@@ -69,7 +69,7 @@ def raise_fault(kind: Optional[str]) -> NoReturn:
 class Faulty:
     """A stand-in whose methods all raise the fault *kind*; a *late* one first waits for RELEASE."""
 
-    def __init__(self, kind: Optional[str] = None, late: bool = False, **attrs: Any) -> None:
+    def __init__(self, kind: str | None = None, late: bool = False, **attrs: Any) -> None:
         self.kind = kind
         self.late = late
         self.session = SimpleNamespace(headers={}, cookies=[], get=self.fail)
@@ -139,11 +139,11 @@ class Case:
     method: str
     path: str
     body: Any = None
-    session: Optional[Faulty] = None
+    session: Faulty | None = None
     owner: str = KEY
     status: AuthStatus = AuthStatus.AUTHENTICATED
     patch: dict[str, Any] = field(default_factory=dict)
-    key: Optional[str] = KEY
+    key: str | None = KEY
 
 
 def generic_cases() -> dict[str, Case]:
@@ -291,7 +291,7 @@ async def open_session(stand_in: Faulty, owner: str, status: AuthStatus) -> None
     session.served_keys["00" * 16] = ("11" * 16, "pinned-vault")
 
 
-def masked(value: Any, ref: Optional[str]) -> Any:
+def masked(value: Any, ref: str | None) -> Any:
     """*value* with the error ref and the timestamp replaced, at any depth.
 
     The longer Python 3.14 text of an unhashable key error reads as the 3.11 text.

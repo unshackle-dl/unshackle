@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Optional
-
 import pytest
 
 from unshackle.core.utilities import as_requested
@@ -20,5 +18,5 @@ from unshackle.core.utilities import as_requested
         ([], "en", ""),
     ],
 )
-def test_as_requested(tokens: list[str], orig_token: Optional[str], expected: str) -> None:
+def test_as_requested(tokens: list[str], orig_token: str | None, expected: str) -> None:
     assert as_requested(tokens, orig_token) == expected

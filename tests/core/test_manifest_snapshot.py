@@ -7,7 +7,7 @@ import json
 import logging
 import zlib
 from copy import deepcopy
-from typing import Any, Optional
+from typing import Any
 
 import pytest
 
@@ -21,7 +21,7 @@ from unshackle.core.wire import track_from_dict, track_to_dict
 URL = "https://cdn.example/title/manifest.mpd"
 
 
-def period(pid: Optional[str], kind: str) -> str:
+def period(pid: str | None, kind: str) -> str:
     attr = f' id="{pid}"' if pid else ""
     name = pid or "noid"
     return f"""
@@ -67,7 +67,7 @@ def service_tracks(text: str = MPD) -> Tracks:
     return DASH.from_text(text, URL).to_tracks(language="en", period_filter=is_ad)
 
 
-def detach_video(tracks: Tracks, track_id: Optional[str] = None) -> Track:
+def detach_video(tracks: Tracks, track_id: str | None = None) -> Track:
     """Give the video an AdaptationSet outside the tree, the way a service that builds its own does."""
     video = tracks.videos[0]
     data = video.data["dash"]

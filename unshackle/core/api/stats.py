@@ -9,8 +9,8 @@ import logging
 import time
 from collections import Counter, defaultdict, deque
 from dataclasses import dataclass, field
-from functools import lru_cache
-from typing import Any, Deque, Dict, List, Optional, Tuple
+from functools import cache
+from typing import Any
 
 from aiohttp import web
 
@@ -36,17 +36,17 @@ CDM_SESSION_ID_LIMIT = 64
 CDM_DEVICE_LIMIT = 255
 
 
-def _users() -> Dict[str, Any]:
+def _users() -> dict[str, Any]:
     users = (config.serve or {}).get("users")
     return users if isinstance(users, dict) else {}
 
 
-def _user_config(key: Optional[str]) -> Optional[Dict[str, Any]]:
+def _user_config(key: str | None) -> dict[str, Any] | None:
     user = _users().get(key) if key else None
     return user if isinstance(user, dict) else None
 
 
-def configured_key(key: Optional[str]) -> Optional[str]:
+def configured_key(key: str | None) -> str | None:
     """``key`` when the config knows it (a user API key, the master secret or the dashboard API key), else None.
 
     Open routes answer 200 to any header value, so attributing by the raw header would let an
@@ -62,7 +62,7 @@ def configured_key(key: Optional[str]) -> Optional[str]:
     return key if key in known else None
 
 
-def mask_key(key: Optional[str]) -> str:
+def mask_key(key: str | None) -> str:
     """A display label for an API key: its configured username, else a truncated prefix."""
     if not key:
         return "anonymous"
@@ -72,7 +72,7 @@ def mask_key(key: Optional[str]) -> str:
     return key[:4] + "…"
 
 
-def key_id(key: Optional[str]) -> str:
+def key_id(key: str | None) -> str:
     """A stable id for an API key. A hash prefix, so two unnamed keys never collide the way
     ``mask_key`` does, and the id carries no key material."""
     if not key:
@@ -80,14 +80,14 @@ def key_id(key: Optional[str]) -> str:
     return hashlib.sha256(key.encode()).hexdigest()[:12]
 
 
-def key_tier(key: Optional[str]) -> Optional[str]:
+def key_tier(key: str | None) -> str | None:
     """The tier name an API key references, when it names one that exists."""
     user = _user_config(key)
     tier = user.get("tier") if user else None
     return str(tier) if tier else None
 
 
-def key_rate_limit(key: Optional[str], serve: Optional[Dict[str, Any]] = None) -> Optional[int]:
+def key_rate_limit(key: str | None, serve: dict[str, Any] | None = None) -> int | None:
     """Requests per hour allowed for a key: its own override, else its tier's, else unlimited.
 
     ``serve`` reads a config block that is not yet the live one, as the reload validator does.
@@ -107,7 +107,7 @@ def key_rate_limit(key: Optional[str], serve: Optional[Dict[str, Any]] = None) -
     return limit if isinstance(limit, int) and limit > 0 else None
 
 
-def rate_limit_error(where: str, value: Any) -> Optional[str]:
+def rate_limit_error(where: str, value: Any) -> str | None:
     """Why *value* cannot serve as a rate limit, or None when it can. Unset is fine.
 
     ``key_rate_limit`` reads anything else as "no limit", so a mistyped value would silently
@@ -142,10 +142,10 @@ class ServerStats:
     mode: str = "full"
     requests_total: int = 0
     requests_rejected: int = 0
-    keys: Dict[str, KeyStats] = field(default_factory=dict)
-    errors: Dict[str, Counter] = field(default_factory=lambda: defaultdict(Counter))  # service -> error_code -> count
+    keys: dict[str, KeyStats] = field(default_factory=dict)
+    errors: dict[str, Counter] = field(default_factory=lambda: defaultdict(Counter))  # service -> error_code -> count
 
-    def key_stats(self, key: Optional[str]) -> KeyStats:
+    def key_stats(self, key: str | None) -> KeyStats:
         """The counters for an API key, created on first sight."""
         kid = key_id(key)
         entry = self.keys.get(kid)
@@ -165,7 +165,7 @@ class ServerStats:
             counter[entry.label] += entry.requests
         return counter
 
-    def check_rate_limit(self, key: str) -> Optional[int]:
+    def check_rate_limit(self, key: str) -> int | None:
         """Seconds to wait when ``key`` is over its hourly limit, else None after counting the request.
 
         A fixed window, not a sliding one: cheap, and an operator cap does not need the precision.
@@ -183,7 +183,7 @@ class ServerStats:
         entry.window_used += 1
         return None
 
-    def rate_limit_headers(self, key: str) -> Dict[str, str]:
+    def rate_limit_headers(self, key: str) -> dict[str, str]:
         """The ``X-RateLimit-*`` headers for ``key``'s current window; none for an API key with no limit."""
         limit = key_rate_limit(key)
         if limit is None:
@@ -195,7 +195,7 @@ class ServerStats:
             "X-RateLimit-Reset": str(max(0, int(entry.window_start + RATE_LIMIT_WINDOW - time.time()))),
         }
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "version": __version__,
             "code_hash": __code_hash__,
@@ -262,7 +262,7 @@ async def stats_middleware(request: web.Request, handler: Any) -> web.StreamResp
     return response
 
 
-async def _request_service(request: web.Request, session_id: Optional[str]) -> str:
+async def _request_service(request: web.Request, session_id: str | None) -> str:
     """The installed service tag a request is for, from its remote session or its JSON body; ``-`` if none.
 
     Only an installed tag counts, so a caller cannot grow ``stats.errors`` with made-up names.
@@ -282,10 +282,10 @@ class SeqRing:
     """Keep the last N records in memory, each with a ``seq`` one above the record before it."""
 
     def __init__(self, maxlen: int) -> None:
-        self.records: Deque[Dict[str, Any]] = deque(maxlen=maxlen)
+        self.records: deque[dict[str, Any]] = deque(maxlen=maxlen)
         self.seq = 0
 
-    def append(self, record: Dict[str, Any]) -> Dict[str, Any]:
+    def append(self, record: dict[str, Any]) -> dict[str, Any]:
         """Buffer one record; ``seq`` moves only after the append, as in ``EventBus``."""
         seq = self.seq + 1
         item = {"seq": seq, **record}
@@ -293,7 +293,7 @@ class SeqRing:
         self.seq = seq
         return item
 
-    def since(self, seq: int = 0) -> List[Dict[str, Any]]:
+    def since(self, seq: int = 0) -> list[dict[str, Any]]:
         """The records after ``seq``, oldest first, from a copy: ``append()`` can run on a worker thread."""
         return [r for r in self.records.copy() if r["seq"] > seq]
 
@@ -317,7 +317,7 @@ class RingLogHandler(SeqRing, logging.Handler):
         )
         bus.publish("log", item)
 
-    def since(self, seq: int = 0, level: Optional[str] = None, logger: Optional[str] = None) -> List[Dict[str, Any]]:
+    def since(self, seq: int = 0, level: str | None = None, logger: str | None = None) -> list[dict[str, Any]]:
         """The records after ``seq`` at or above ``level``, from ``logger`` or one of its children."""
         min_level = logging.getLevelName(level.upper()) if level else 0
         if not isinstance(min_level, int):
@@ -335,8 +335,8 @@ ring = RingLogHandler()
 cdm_calls = SeqRing(maxlen=5000)
 
 
-@lru_cache(maxsize=None)
-def _cdm_op(pattern: str) -> Optional[Tuple[str, str]]:
+@cache
+def _cdm_op(pattern: str) -> tuple[str, str] | None:
     """The ``(drm, op)`` of a route pattern, else None. Cached: the route table does not change."""
     parts = pattern.strip("/").split("/")
     drm = "widevine"
@@ -347,7 +347,7 @@ def _cdm_op(pattern: str) -> Optional[Tuple[str, str]]:
     return drm, parts[1]
 
 
-def _cdm_route(request: web.Request) -> Optional[Tuple[str, str]]:
+def _cdm_route(request: web.Request) -> tuple[str, str] | None:
     """The ``(drm, op)`` of a CDM device route, else None.
 
     Reads the matched route pattern, not the path, so a device name cannot pass for an operation
@@ -357,7 +357,7 @@ def _cdm_route(request: web.Request) -> Optional[Tuple[str, str]]:
     return _cdm_op(resource.canonical) if resource is not None else None
 
 
-def _hex_id(value: Any) -> Optional[str]:
+def _hex_id(value: Any) -> str | None:
     """``value`` in lowercase when it is a hexadecimal string of a plausible length, else None."""
     if not isinstance(value, str) or not value or len(value) > CDM_SESSION_ID_LIMIT:
         return None
@@ -368,13 +368,13 @@ def _hex_id(value: Any) -> Optional[str]:
     return value.lower()
 
 
-def _key_fields(secret_key: Optional[str]) -> Dict[str, str]:
+def _key_fields(secret_key: str | None) -> dict[str, str]:
     """The ``key_id`` and ``user`` of an API key: the ``id`` and ``label`` of its ``stats.keys`` entry."""
     key = configured_key(secret_key)
     return {"key_id": key_id(key), "user": mask_key(key)}
 
 
-def _reply_json(response: Any) -> Dict[str, Any]:
+def _reply_json(response: Any) -> dict[str, Any]:
     """The JSON object a handler answered, or ``{}``. ``compression_middleware`` runs inside the
     CDM log middleware, so the body can arrive as gzip."""
     try:
@@ -387,7 +387,7 @@ def _reply_json(response: Any) -> Dict[str, Any]:
     return data if isinstance(data, dict) else {}
 
 
-async def _consumed_json(request: web.Request) -> Dict[str, Any]:
+async def _consumed_json(request: web.Request) -> dict[str, Any]:
     """The JSON object of the request body when the handler consumed it, else ``{}``.
 
     ``json_body`` keeps the object on the request, and aiohttp caches a direct read.
@@ -407,7 +407,7 @@ async def _consumed_json(request: web.Request) -> Dict[str, Any]:
     return body if isinstance(body, dict) else {}
 
 
-async def _cdm_record(request: web.Request, drm: str, op: str, outcome: Any) -> Dict[str, Any]:
+async def _cdm_record(request: web.Request, drm: str, op: str, outcome: Any) -> dict[str, Any]:
     """The record of one call. ``outcome`` is the response, or the exception the handler raised.
 
     An exception that is not an HTTP one gives its class name only: its text can hold the
@@ -416,7 +416,7 @@ async def _cdm_record(request: web.Request, drm: str, op: str, outcome: Any) -> 
     """
     from unshackle.core.api.handlers import request_secret_key
 
-    reply: Dict[str, Any] = {}
+    reply: dict[str, Any] = {}
     if isinstance(outcome, web.StreamResponse):
         status = outcome.status
         if status >= 400 or op == "open":
@@ -446,7 +446,7 @@ async def _cdm_record(request: web.Request, drm: str, op: str, outcome: Any) -> 
 
 
 async def _record_cdm_call(
-    request: web.Request, route: Tuple[str, str], ts: float, started: float, outcome: Any
+    request: web.Request, route: tuple[str, str], ts: float, started: float, outcome: Any
 ) -> None:
     """Append one call to ``cdm_calls``. Logs a failure and does not raise it: it must never fail the CDM call."""
     ms = round((time.perf_counter() - started) * 1000, 1)
@@ -475,7 +475,7 @@ async def cdm_log_middleware(request: web.Request, handler: Any) -> web.StreamRe
     return response
 
 
-def cdm_sessions(app: web.Application) -> List[Dict[str, Any]]:
+def cdm_sessions(app: web.Application) -> list[dict[str, Any]]:
     """One row per live Cdm object: its open session count and the most it allows.
 
     Both CDM libraries refuse an ``open`` only above ``MAX_NUM_OF_SESSIONS``, so the true limit
@@ -483,7 +483,7 @@ def cdm_sessions(app: web.Application) -> List[Dict[str, Any]]:
     so those do not count as open.
     """
     now = time.time()
-    rows: List[Dict[str, Any]] = []
+    rows: list[dict[str, Any]] = []
     for drm, owner in (("widevine", app), ("playready", app.get("playready_app"))):
         cdms = owner.get("cdms") if owner is not None else None
         for (secret_key, device), cdm in (cdms or {}).items():

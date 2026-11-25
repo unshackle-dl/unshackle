@@ -5,11 +5,12 @@ import re
 import subprocess
 import time
 from collections import defaultdict
+from collections.abc import Callable, Iterable, Sequence
 from enum import Enum
 from functools import partial
 from io import BytesIO
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Iterable, Optional, Sequence, Union
+from typing import TYPE_CHECKING, Any
 
 import click
 import pycaption
@@ -104,7 +105,7 @@ class Subtitle(Track):
     def __init__(
         self,
         *args: Any,
-        codec: Optional[Subtitle.Codec] = None,
+        codec: Subtitle.Codec | None = None,
         cc: bool = False,
         sdh: bool = False,
         forced: bool = False,
@@ -192,12 +193,12 @@ class Subtitle(Track):
         if self.forced and (self.cc or self.sdh):
             raise ValueError("A text track cannot be CC/SDH as well as Forced.")
 
-        self.ass_style: Optional[pysubs2.SSAStyle] = None
-        self.ass_video_size: Optional[tuple[int, int]] = None
+        self.ass_style: pysubs2.SSAStyle | None = None
+        self.ass_video_size: tuple[int, int] | None = None
 
         # TODO: Migrate to new event observer system
         # Called after Track has been converted to another format
-        self.OnConverted: Optional[Callable[[Subtitle.Codec], None]] = None
+        self.OnConverted: Callable[[Subtitle.Codec], None] | None = None
 
     @property
     def mux_language(self) -> Language:
@@ -223,7 +224,7 @@ class Subtitle(Track):
         """The subtitle type that the config names: "forced", "sdh" (CC counts as SDH) or "normal"."""
         return "forced" if self.forced else "sdh" if (self.sdh or self.cc) else "normal"
 
-    def get_track_name(self) -> Optional[str]:
+    def get_track_name(self) -> str | None:
         """Return the base Track Name."""
         track_name = super().get_track_name() or ""
         flag = self.cc and "CC" or self.sdh and "SDH" or self.forced and "Forced"
@@ -237,12 +238,12 @@ class Subtitle(Track):
         self,
         session: AnySession,
         prepare_drm: partial,
-        max_workers: Optional[int] = None,
-        progress: Optional[partial] = None,
+        max_workers: int | None = None,
+        progress: partial | None = None,
         *,
-        cdm: Optional[object] = None,
+        cdm: object | None = None,
         no_proxy_download: bool = False,
-        proxy_download: Optional[str] = None,
+        proxy_download: str | None = None,
         adaptive_workers: bool = False,
         download_processes: int = 1,
     ) -> None:
@@ -376,7 +377,7 @@ class Subtitle(Track):
             kept.append(caption)
 
     @staticmethod
-    def first_cue_start(caption_set: pycaption.CaptionSet) -> Optional[int]:
+    def first_cue_start(caption_set: pycaption.CaptionSet) -> int | None:
         """The start of the first cue, in microseconds, looking past empty languages; None with no cues."""
         return next(
             (c.start for language in caption_set.get_languages() for c in caption_set.get_captions(language)[:1]),
@@ -403,9 +404,9 @@ class Subtitle(Track):
             origin = ism["segment_times"][0] * 1_000_000 // ism["timescale"]
             relative = any(
                 (first := Subtitle.first_cue_start(fragment)) is not None and first < previous
-                for previous, fragment in zip(starts, fragments[1:])
+                for previous, fragment in zip(starts, fragments[1:], strict=False)
             )
-            for start, fragment in zip(starts, fragments):
+            for start, fragment in zip(starts, fragments, strict=True):
                 shift = (start if relative else 0) - origin
                 for language in fragment.get_languages():
                     kept = captions[language]
@@ -828,7 +829,7 @@ class Subtitle(Track):
                 text = try_ensure_utf8(data).decode("utf8")
                 caption_set = pycaption.SRTReader().read(text)
             elif codec == Subtitle.Codec.fTTML:
-                caption_lists: dict[Optional[str], pycaption.CaptionList] = defaultdict(pycaption.CaptionList)
+                caption_lists: dict[str | None, pycaption.CaptionList] = defaultdict(pycaption.CaptionList)
                 for segment in (
                     Subtitle.parse(payload, Subtitle.Codec.TimedTextMarkupLang)
                     for payload in Subtitle.mdat_payloads(data)
@@ -873,7 +874,7 @@ class Subtitle(Track):
             else:
                 raise ValueError(f'Unknown Subtitle format "{codec}"...')
         except pycaption.exceptions.CaptionReadSyntaxError as e:
-            raise SyntaxError(f'A syntax error has occurred when reading the "{codec}" subtitle: {e}')
+            raise SyntaxError(f'A syntax error has occurred when reading the "{codec}" subtitle: {e}') from e
         except pycaption.exceptions.CaptionReadNoCaptions:
             return pycaption.CaptionSet({"en": []})
 
@@ -924,7 +925,7 @@ class Subtitle(Track):
         return "\n".join(sanitized_lines)
 
     @staticmethod
-    def space_webvtt_headers(data: Union[str, bytes]) -> str:
+    def space_webvtt_headers(data: str | bytes) -> str:
         """
         Space out the WEBVTT Headers from Captions.
 
@@ -987,7 +988,7 @@ class Subtitle(Track):
             caption_set.set_captions(lang, filtered_captions)
 
     @staticmethod
-    def merge_segmented_wvtt(data: bytes, period_start: float = 0.0) -> tuple[CaptionList, Optional[str]]:
+    def merge_segmented_wvtt(data: bytes, period_start: float = 0.0) -> tuple[CaptionList, str | None]:
         """
         Convert Segmented DASH WebVTT cues into a pycaption Caption List.
         Also returns an ISO 639-2 alpha-3 language tag if available.
@@ -1071,7 +1072,7 @@ class Subtitle(Track):
                     vttc_boxes = MP4.parse_stream(BytesIO(box.data))
                 current_time = base_time + period_start
 
-                for sample, vttc_box in zip(samples, vttc_boxes):
+                for sample, vttc_box in zip(samples, vttc_boxes, strict=False):
                     duration = sample.sample_duration or default_duration
                     if sample.sample_composition_time_offsets:
                         current_time += sample.sample_composition_time_offsets
@@ -1084,7 +1085,7 @@ class Subtitle(Track):
                         # vtte is a vttc that's empty, skip
                         continue
 
-                    layout: Optional[Layout] = None
+                    layout: Layout | None = None
                     nodes: list[CaptionNode] = []
 
                     for cue_box in vttc_box.children:
@@ -1117,7 +1118,7 @@ class Subtitle(Track):
         return captions, language
 
     def sample_slice(
-        self, starts: Sequence[float], timescale: float = 1, window: Optional[tuple[int, int]] = None
+        self, starts: Sequence[float], timescale: float = 1, window: tuple[int, int] | None = None
     ) -> slice:
         """Return the segments of ``window`` plus one segment on each side.
 
@@ -1241,7 +1242,7 @@ class Subtitle(Track):
                     else:
                         raise
                 sub.save()
-            except (IOError, OSError) as e:
+            except OSError as e:
                 if "is not valid subtitle file" in str(e):
                     log = logging.getLogger("Subtitle")
                     log.warning(f"Failed to strip SDH from {self.path.name}, keeping it as is: {e}")
@@ -1259,7 +1260,7 @@ class Subtitle(Track):
             raise ValueError("You must download the subtitle track first.")
 
         if not binaries.SubtitleEdit:
-            raise EnvironmentError("SubtitleEdit executable not found...")
+            raise OSError("SubtitleEdit executable not found...")
 
         from unshackle.core.tracks.subtitle_convert import SUBTITLE_EDIT_FORMATS, subtitleedit_args
 

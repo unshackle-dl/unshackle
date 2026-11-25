@@ -10,7 +10,8 @@ from __future__ import annotations
 import base64
 import secrets
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence, Union
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from pyplayready.system.wrmheader import WRMHeader
@@ -26,7 +27,7 @@ if TYPE_CHECKING:
     from unshackle.core.vaults import Vaults
 
 
-def kid_uuid(kid: Union[str, UUID]) -> UUID:
+def kid_uuid(kid: str | UUID) -> UUID:
     """A KID as a UUID; zeros on the right fill a short hex KID."""
     if isinstance(kid, UUID):
         return kid
@@ -34,7 +35,7 @@ def kid_uuid(kid: Union[str, UUID]) -> UUID:
     return UUID(hex=clean.ljust(32, "0"))
 
 
-def kid_hex(kid: Union[str, UUID]) -> str:
+def kid_hex(kid: str | UUID) -> str:
     """A KID as lower-case hex without dashes, the form the required KIDs use."""
     return str(kid).replace("-", "").lower()
 
@@ -94,16 +95,16 @@ class HttpCdm(ABC):
     is_remote_cdm = True
     chain_suffix = "Remote"
     privacy_cert_devices: tuple[str, ...] = ("L1",)
-    label: Optional[str] = None
+    label: str | None = None
 
     def __init__(
         self,
         host: str,
         device_name: str,
-        device_type: Optional[str],
-        service_name: Optional[str],
-        vaults: Optional[Vaults],
-        headers: Dict[str, str],
+        device_type: str | None,
+        service_name: str | None,
+        vaults: Vaults | None,
+        headers: dict[str, str],
     ) -> None:
         self.host = host.rstrip("/")
         self.device_name = device_name
@@ -113,7 +114,7 @@ class HttpCdm(ABC):
         self._is_playready = system_of(device_type, device_name) == "playready"
         if device_type:
             self.device_type = self.get_device_type_enum(device_type)
-        self._sessions: Dict[bytes, Dict[str, Any]] = {}
+        self._sessions: dict[bytes, dict[str, Any]] = {}
         self._http_session = Session()
         self._http_session.headers.update({"Content-Type": "application/json", **headers})
 
@@ -135,7 +136,7 @@ class HttpCdm(ABC):
         """Store the base64 PSSH that a PlayReady CDM session sends as its init data."""
         self._session(session_id)["pssh_b64"] = pssh_b64
 
-    def set_required_kids(self, kids: Sequence[Union[str, UUID]], session_id: bytes) -> None:
+    def set_required_kids(self, kids: Sequence[str | UUID], session_id: bytes) -> None:
         """Store the KIDs a CDM session needs, so that content keys from the vaults or the API cache can skip the licence."""
         self._session(session_id)["required_kids"] = [kid_hex(kid) for kid in kids]
 
@@ -143,7 +144,7 @@ class HttpCdm(ABC):
         """Make a unique session ID."""
         return secrets.token_bytes(16)
 
-    def get_init_data_from_pssh(self, pssh: Any, pssh_b64: Optional[str] = None) -> str:
+    def get_init_data_from_pssh(self, pssh: Any, pssh_b64: str | None = None) -> str:
         """Extract init data from various PSSH formats.
 
         PlayReady sends ``pssh_b64`` when it is set. Without it, a WRM header (object or XML text) goes
@@ -180,12 +181,12 @@ class HttpCdm(ABC):
         else:
             raise ValueError(f"Unsupported PSSH type: {type(pssh)}")
 
-    def _session(self, session_id: bytes) -> Dict[str, Any]:
+    def _session(self, session_id: bytes) -> dict[str, Any]:
         if session_id not in self._sessions:
             raise HttpCdmExceptions.InvalidSession(f"Invalid session ID: {session_id.hex()}")
         return self._sessions[session_id]
 
-    def _default_certificate(self) -> Optional[bytes]:
+    def _default_certificate(self) -> bytes | None:
         """The common privacy certificate for a Widevine device in ``privacy_cert_devices``, else None."""
         if not self._is_playready and self.device_name in self.privacy_cert_devices:
             return base64.b64decode(WidevineCdm.common_privacy_cert)
@@ -210,11 +211,11 @@ class HttpCdm(ABC):
         self._session(session_id)
         del self._sessions[session_id]
 
-    def get_service_certificate(self, session_id: bytes) -> Optional[bytes]:
+    def get_service_certificate(self, session_id: bytes) -> bytes | None:
         """The service certificate of a CDM session, or None."""
         return self._session(session_id)["service_certificate"]
 
-    def set_service_certificate(self, session_id: bytes, certificate: Optional[Union[bytes, str]]) -> str:
+    def set_service_certificate(self, session_id: bytes, certificate: bytes | str | None) -> str:
         """Set the service certificate (bytes or base64) of a CDM session and return a status message.
 
         With no certificate, a Widevine device in ``privacy_cert_devices`` gets the common privacy certificate.
@@ -246,14 +247,14 @@ class HttpCdm(ABC):
         required = session.get("required_kids")
         if self._keys_from_vaults(session, required):
             return b""
-        body: Dict[str, Any] = {"scheme": self.device_name, "init_data": session["init_data"]}
+        body: dict[str, Any] = {"scheme": self.device_name, "init_data": session["init_data"]}
         if self.service_name:
             body["service"] = self.service_name
         if session["service_certificate"]:
             body["service_certificate"] = base64.b64encode(session["service_certificate"]).decode("utf-8")
         return self._request_challenge(session, body, license_type, privacy_mode)
 
-    def _keys_from_vaults(self, session: Dict[str, Any], required: Optional[List[str]]) -> bool:
+    def _keys_from_vaults(self, session: dict[str, Any], required: list[str] | None) -> bool:
         """Look up the required KIDs in the vaults; True when they hold every one."""
         if not (self.use_vaults and self.vaults and required):
             return False
@@ -273,7 +274,7 @@ class HttpCdm(ABC):
         session["vault_keys"] = vault_keys
         return False
 
-    def _take_cached_keys(self, session: Dict[str, Any], cached_keys: List[Dict[str, Any]]) -> bool:
+    def _take_cached_keys(self, session: dict[str, Any], cached_keys: list[dict[str, Any]]) -> bool:
         """Keep the keys the API cache returned; True when they and the vault keys cover every required KID.
 
         Otherwise the cached keys wait in the CDM session for ``parse_license`` to merge with the licence keys.
@@ -287,12 +288,12 @@ class HttpCdm(ABC):
         session["keys"] = available
         return True
 
-    def _keep_challenge(self, session: Dict[str, Any], challenge: bytes, remote_session_id: Any) -> bytes:
+    def _keep_challenge(self, session: dict[str, Any], challenge: bytes, remote_session_id: Any) -> bytes:
         session["challenge"] = challenge
         session["remote_session_id"] = remote_session_id
         return challenge
 
-    def _post(self, path: str, body: Dict[str, Any], failure: str, timeout: float = 30) -> Dict[str, Any]:
+    def _post(self, path: str, body: dict[str, Any], failure: str, timeout: float = 30) -> dict[str, Any]:
         """POST ``body`` to ``path`` on the host and return the JSON answer; raises on a status other than 200."""
         response = self._http_session.post(f"{self.host}{path}", json=body, timeout=timeout)
         if response.status_code != 200:
@@ -302,8 +303,8 @@ class HttpCdm(ABC):
     @abstractmethod
     def _request_challenge(
         self,
-        session: Dict[str, Any],
-        body: Dict[str, Any],
+        session: dict[str, Any],
+        body: dict[str, Any],
         license_type: str,
         privacy_mode: bool,
     ) -> bytes:
@@ -313,10 +314,10 @@ class HttpCdm(ABC):
         """
 
     @abstractmethod
-    def _request_keys(self, session: Dict[str, Any], body: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def _request_keys(self, session: dict[str, Any], body: dict[str, Any]) -> list[dict[str, Any]]:
         """Send the licence to the API and return the keys it holds; the adapter's wire form."""
 
-    def parse_license(self, session_id: bytes, license_message: Union[bytes, str]) -> None:
+    def parse_license(self, session_id: bytes, license_message: bytes | str) -> None:
         """Have the API read a licence, then merge its keys with the vault and cached keys of the CDM session.
 
         A content key from the vaults or the API cache wins over a licence key with the same KID. A CDM session
@@ -370,7 +371,7 @@ class HttpCdm(ABC):
             if key_dict:
                 self.vaults.add_keys(key_dict)
 
-    def get_keys(self, session_id: bytes, type_: Optional[str] = None) -> List[Key]:
+    def get_keys(self, session_id: bytes, type_: str | None = None) -> list[Key]:
         """The keys of a CDM session; only the keys of type ``type_`` when it is set."""
         keys = [
             Key(

@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import threading
+from collections.abc import Callable
 from types import SimpleNamespace
-from typing import Any, Callable, Optional
+from typing import Any
 from uuid import UUID
 
 import click
@@ -68,7 +69,7 @@ def widevine(*kids: UUID) -> Widevine:
     return Widevine(pssh=PSSH.new(system_id=PSSH.SystemId.Widevine, key_ids=list(kids)))
 
 
-def prepare(keys: ContentKeyResolver, drm: Any, track_kid: Optional[UUID], table: Table, all_drm: bool = False) -> None:
+def prepare(keys: ContentKeyResolver, drm: Any, track_kid: UUID | None, table: Table, all_drm: bool = False) -> None:
     keys.licence_for(SimpleNamespace(drm=[drm]), None, table, all_drm)(drm, track_kid=track_kid)
 
 
@@ -150,7 +151,7 @@ def test_a_key_label_is_added_once_with_its_marker_and_source(licences: Licences
     ids=["widevine", "playready", "clearkey"],
 )
 def test_an_all_zero_licence_key_is_dropped(
-    monkeypatch: pytest.MonkeyPatch, drm_class: type, build: Callable[[], Any], cdm: Optional[str]
+    monkeypatch: pytest.MonkeyPatch, drm_class: type, build: Callable[[], Any], cdm: str | None
 ) -> None:
     def get_content_keys(self: Any, **_: Any) -> None:
         self.content_keys.update({KID_A: KEYS[KID_A], KID_C: "0" * 32})

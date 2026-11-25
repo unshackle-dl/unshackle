@@ -1,5 +1,6 @@
 import itertools
-from typing import Any, Iterable, Iterator, Sequence, Tuple, Type, Union
+from collections.abc import Iterable, Iterator, Sequence
+from typing import Any
 
 
 def as_lists(*args: Any) -> Iterator[Any]:
@@ -19,7 +20,7 @@ def as_list(*args: Any) -> list:
     return list(itertools.chain.from_iterable(as_lists(*args)))
 
 
-def flatten(items: Any, ignore_types: Union[Type, Tuple[Type, ...]] = str) -> Iterator:
+def flatten(items: Any, ignore_types: type | tuple[type, ...] = str) -> Iterator:
     """
     Flattens items recursively.
 

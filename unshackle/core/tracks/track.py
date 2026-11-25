@@ -8,12 +8,13 @@ import struct
 import subprocess
 from bisect import bisect_left, bisect_right
 from collections import defaultdict
+from collections.abc import Callable, Iterable, Sequence
 from copy import copy
 from dataclasses import dataclass
 from enum import Enum
 from functools import partial
 from pathlib import Path
-from typing import Any, Callable, Iterable, Optional, Sequence, Union
+from typing import Any
 from uuid import UUID
 from zlib import crc32
 
@@ -45,7 +46,7 @@ from unshackle.core.utilities import get_boxes, language_name, log_event, try_en
 from unshackle.core.utils import run_proxy
 from unshackle.core.utils.subprocess import ffprobe
 
-DRM_PREFERENCE_TYPES: dict[str, Union[type[Widevine], type[PlayReady]]] = {
+DRM_PREFERENCE_TYPES: dict[str, type[Widevine] | type[PlayReady]] = {
     "wv": Widevine,
     "widevine": Widevine,
     "pr": PlayReady,
@@ -53,7 +54,7 @@ DRM_PREFERENCE_TYPES: dict[str, Union[type[Widevine], type[PlayReady]]] = {
 }
 
 
-def direct_session(session: AnySession, proxy: Optional[str] = None) -> Session:
+def direct_session(session: AnySession, proxy: str | None = None) -> Session:
     """requests.Session with copied headers/cookies and no proxy, or only ``proxy`` when given."""
     new = Session()
     if proxy:
@@ -392,13 +393,13 @@ class DownloadContext:
     save_path: Path
     save_dir: Path
     progress: partial
-    session: Optional[AnySession] = None
-    proxy: Optional[str] = None
-    max_workers: Optional[int] = None
+    session: AnySession | None = None
+    proxy: str | None = None
+    max_workers: int | None = None
     adaptive_workers: bool = False
     download_processes: int = 1
-    license_widevine: Optional[Callable] = None
-    cdm: Optional[object] = None
+    license_widevine: Callable | None = None
+    cdm: object | None = None
 
     def ensure_session(self) -> AnySession:
         """Return the HTTP session, or a new ``Session`` if none was set."""
@@ -421,22 +422,22 @@ class Track:
 
     def __init__(
         self,
-        url: Union[str, list[str]],
-        language: Union[Language, str],
+        url: str | list[str],
+        language: Language | str,
         is_original_lang: bool = False,
         descriptor: Descriptor = Descriptor.URL,
         needs_repack: bool = False,
-        name: Optional[str] = None,
-        drm: Optional[Iterable[DRM_T]] = None,
-        edition: Optional[str] = None,
-        note: Optional[str] = None,
-        session: Optional[AnySession] = None,
-        downloader: Optional[Callable] = None,
-        downloader_args: Optional[dict] = None,
-        from_file: Optional[Path] = None,
-        data: Optional[Union[dict, defaultdict]] = None,
-        id_: Optional[str] = None,
-        extra: Optional[Any] = None,
+        name: str | None = None,
+        drm: Iterable[DRM_T] | None = None,
+        edition: str | None = None,
+        note: str | None = None,
+        session: AnySession | None = None,
+        downloader: Callable | None = None,
+        downloader_args: dict | None = None,
+        from_file: Path | None = None,
+        data: dict | defaultdict | None = None,
+        id_: str | None = None,
+        extra: Any | None = None,
     ) -> None:
         if not isinstance(url, (str, list)):
             raise TypeError(f"Expected url to be a {str}, or list of {str}, not {type(url)}")
@@ -473,12 +474,12 @@ class Track:
             try:
                 iter(drm)
             except TypeError:
-                raise TypeError(f"Expected drm to be an iterable, not {type(drm)}")
+                raise TypeError(f"Expected drm to be an iterable, not {type(drm)}") from None
 
         if downloader is None:
             downloader = requests
 
-        self.path: Optional[Path] = None
+        self.path: Path | None = None
         self.url = url
         self.language = language
         self.is_original_lang = is_original_lang
@@ -486,7 +487,7 @@ class Track:
         self.needs_repack = needs_repack
         self.name = name
         self.drm = drm
-        self._drm_preference: Optional[str] = None
+        self._drm_preference: str | None = None
         self.edition: list[str] = [edition] if isinstance(edition, str) else (edition or [])
         self.note = note
         self.session = session
@@ -507,12 +508,12 @@ class Track:
         self.id = id_
 
         # TODO: Currently using OnFoo event naming, change to just segment_filter
-        self.OnSegmentFilter: Optional[Callable] = None
+        self.OnSegmentFilter: Callable | None = None
         self.sample_start: float = 0.0
-        self.sample_bytes: Optional[tuple[bytes, str]] = None
+        self.sample_bytes: tuple[bytes, str] | None = None
 
     def sample_slice(
-        self, starts: Sequence[float], timescale: float = 1, window: Optional[tuple[int, int]] = None
+        self, starts: Sequence[float], timescale: float = 1, window: tuple[int, int] | None = None
     ) -> slice:
         """Return the slice of segments that hold ``window``, from the start time of each segment.
 
@@ -530,7 +531,7 @@ class Track:
         self.sample_start = (starts[first] - starts[0]) / timescale
         return slice(first, max(bisect_left(starts, high) + self.sample_tail, first + 1))
 
-    def sample_byte_range(self, session: AnySession) -> Optional[tuple[bytes, str]]:
+    def sample_byte_range(self, session: AnySession) -> tuple[bytes, str] | None:
         """Find the bytes of a one-file track that hold the sample window.
 
         Reads the start of the file for a ``sidx`` box. Returns the bytes before that box, which hold
@@ -593,7 +594,7 @@ class Track:
         return self._language
 
     @language.setter
-    def language(self, value: Union[Language, str, None]) -> None:
+    def language(self, value: Language | str | None) -> None:
         self._language = Language.get(value or "und")
 
     @property
@@ -625,7 +626,7 @@ class Track:
         return self._data
 
     @data.setter
-    def data(self, value: Union[dict, defaultdict]) -> None:
+    def data(self, value: dict | defaultdict) -> None:
         if not isinstance(value, (dict, defaultdict)):
             raise TypeError(f"Expected data to be a {dict} or {defaultdict}, not {type(value)}")
         if isinstance(value, dict):
@@ -633,7 +634,7 @@ class Track:
         self._data = value
 
     @property
-    def drm_preference(self) -> Optional[str]:
+    def drm_preference(self) -> str | None:
         """
         DRM system this track must license with, one of the names in DRM_PREFERENCE_TYPES.
 
@@ -643,7 +644,7 @@ class Track:
         return self._drm_preference
 
     @drm_preference.setter
-    def drm_preference(self, value: Optional[str]) -> None:
+    def drm_preference(self, value: str | None) -> None:
         if value is None:
             self._drm_preference = None
             return
@@ -653,7 +654,7 @@ class Track:
             )
         self._drm_preference = value.lower()
 
-    def add_init_drm(self, init_data: Optional[bytes], cdm: Optional[object]) -> None:
+    def add_init_drm(self, init_data: bytes | None, cdm: object | None) -> None:
         """Add the Widevine and PlayReady DRM that the init segment carries and the track does not have.
 
         A track with a different DRM type stays as it is. The DRM system that agrees with the CDM comes first.
@@ -678,20 +679,20 @@ class Track:
         else:
             log.debug("No PlayReady or Widevine PSSH was found for this track, is it DRM free?")
 
-    def prefers_playready(self, cdm: Optional[object]) -> bool:
+    def prefers_playready(self, cdm: object | None) -> bool:
         """Whether to try PlayReady before Widevine. The track's preference wins over the loaded CDM."""
         if self._drm_preference:
             return DRM_PREFERENCE_TYPES[self._drm_preference] is PlayReady
         return is_playready_cdm(cdm)
 
-    def pssh_order(self, cdm: Optional[object]) -> tuple[Union[type[Widevine], type[PlayReady]], ...]:
+    def pssh_order(self, cdm: object | None) -> tuple[type[Widevine] | type[PlayReady], ...]:
         """Widevine and PlayReady, in the order to look for their PSSH."""
         return (PlayReady, Widevine) if self.prefers_playready(cdm) else (Widevine, PlayReady)
 
     def drm_from_pssh(
         self,
-        cdm: Optional[object],
-        read: Callable[[Union[type[Widevine], type[PlayReady]]], DRM_T],
+        cdm: object | None,
+        read: Callable[[type[Widevine] | type[PlayReady]], DRM_T],
         log: logging.Logger,
     ) -> None:
         """Set drm to the first DRM that `read` finds a PSSH for, in pssh_order."""
@@ -708,12 +709,12 @@ class Track:
         self,
         session: AnySession,
         prepare_drm: partial,
-        max_workers: Optional[int] = None,
-        progress: Optional[partial] = None,
+        max_workers: int | None = None,
+        progress: partial | None = None,
         *,
-        cdm: Optional[object] = None,
+        cdm: object | None = None,
         no_proxy_download: bool = False,
-        proxy_download: Optional[str] = None,
+        proxy_download: str | None = None,
         adaptive_workers: bool = False,
         download_processes: int = 1,
     ) -> None:
@@ -799,7 +800,7 @@ class Track:
             cleanup()
 
         try:
-            manifest_parsers: dict[Track.Descriptor, Union[type[DASH], type[HLS], type[ISM]]] = {
+            manifest_parsers: dict[Track.Descriptor, type[DASH] | type[HLS] | type[ISM]] = {
                 self.Descriptor.HLS: HLS,
                 self.Descriptor.DASH: DASH,
                 self.Descriptor.ISM: ISM,
@@ -929,7 +930,7 @@ class Track:
         if not DOWNLOAD_LICENCE_ONLY.is_set():
             assert self.path is not None
             if self.path.stat().st_size <= 3:  # Empty UTF-8 BOM == 3 bytes
-                raise IOError("Download failed, the downloaded file is empty.")
+                raise OSError("Download failed, the downloaded file is empty.")
 
         events.emit(events.Types.TRACK_DOWNLOADED, track=self)
 
@@ -938,7 +939,7 @@ class Track:
             self.path.unlink()
             self.path = None
 
-    def move(self, target: Union[Path, str]) -> Path:
+    def move(self, target: Path | str) -> Path:
         """
         Move the Track's file from current location, to target location.
         This will overwrite anything at the target path.
@@ -988,14 +989,14 @@ class Track:
             name = language_name(Language.get(lang)) or lang
         return self.with_original_label(name) or ""
 
-    def get_track_name(self) -> Optional[str]:
+    def get_track_name(self) -> str | None:
         """Get the Track Name, or the name of its language when the service set none."""
         name = self.name
         if name is None and config.muxing.get("track_names") != "none":
             name = language_name(self.mux_language)
         return self.with_original_label(name)
 
-    def with_original_label(self, name: Optional[str]) -> Optional[str]:
+    def with_original_label(self, name: str | None) -> str | None:
         """Add `muxing.original_label` to the name of a track in the title's original language,
         unless the name already contains the label's words."""
         label = config.muxing.get("original_label")
@@ -1007,7 +1008,7 @@ class Track:
             return name
         return f"{name} {label}" if name else label
 
-    def get_drm_for_cdm(self, cdm: Optional[object]) -> Optional[DRM_T]:
+    def get_drm_for_cdm(self, cdm: object | None) -> DRM_T | None:
         """Return the DRM matching the provided CDM, if available."""
         if not self.drm:
             return None
@@ -1030,7 +1031,7 @@ class Track:
 
         return next(iter(self.drm))
 
-    def get_key_id(self, init_data: Optional[bytes] = None, *args: Any, **kwargs: Any) -> Optional[UUID]:
+    def get_key_id(self, init_data: bytes | None = None, *args: Any, **kwargs: Any) -> UUID | None:
         """
         Probe the DRM encryption Key ID (KID) for this specific track.
 
@@ -1072,7 +1073,7 @@ class Track:
                     return tenc.key_ID
         return None
 
-    def load_drm_if_needed(self, service: Optional[Any] = None) -> bool:
+    def load_drm_if_needed(self, service: Any | None = None) -> bool:
         """
         Load DRM information for this track if the parser deferred it.
 
@@ -1099,7 +1100,7 @@ class Track:
                 self.needs_drm_loading = False
                 return True
         except Exception as e:
-            raise ValueError(f"Failed to load DRM from service for track {self.id}: {e}")
+            raise ValueError(f"Failed to load DRM from service for track {self.id}: {e}")  # noqa: B904
 
         return self.load_drm_from_playlist()
 
@@ -1145,16 +1146,16 @@ class Track:
                 return True
 
         except Exception as e:
-            raise ValueError(f"Failed to load DRM from playlist for track {self.id}: {e}")
+            raise ValueError(f"Failed to load DRM from playlist for track {self.id}: {e}")  # noqa: B904
 
         return False
 
     def get_init_segment(
         self,
         maximum_size: int = 20000,
-        url: Optional[str] = None,
-        byte_range: Optional[str] = None,
-        session: Optional[AnySession] = None,
+        url: str | None = None,
+        byte_range: str | None = None,
+        session: AnySession | None = None,
     ) -> bytes:
         """
         Get the Track's initial segment data.
@@ -1217,7 +1218,7 @@ class Track:
             if range_test.status_code == 206:
                 byte_range = f"0-{content_length - 1}"
 
-        init_data: Optional[bytes]
+        init_data: bytes | None
         if byte_range:
             res = session.get(url=url, headers={"Range": f"bytes={byte_range}"})
             res.raise_for_status()
@@ -1237,7 +1238,7 @@ class Track:
 
         return init_data
 
-    def repackage(self, bsf_v: Optional[str] = None) -> bool:
+    def repackage(self, bsf_v: str | None = None) -> bool:
         """Remux the track with FFmpeg ``-c copy``.
 
         A given ``bsf_v`` goes into the same pass as ``-bsf:v``, which normalises video VUI
@@ -1252,13 +1253,13 @@ class Track:
 
         ffmpeg_bin = binaries.FFMPEG
         if not ffmpeg_bin:
-            raise EnvironmentError('FFmpeg executable "ffmpeg" was not found but is required for this call.')
+            raise OSError('FFmpeg executable "ffmpeg" was not found but is required for this call.')
 
         original_path = self.path
         output_path = original_path.with_stem(f"{original_path.stem}_repack")
 
-        def ffmpeg(extra_args: Optional[list[str]] = None, bsf: Optional[str] = None) -> None:
-            args: list[Union[str, Path]] = [
+        def ffmpeg(extra_args: list[str] | None = None, bsf: str | None = None) -> None:
+            args: list[str | Path] = [
                 ffmpeg_bin,
                 "-nostdin",
                 "-hide_banner",
@@ -1303,8 +1304,7 @@ class Track:
             subprocess.run(
                 args,
                 check=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+                capture_output=True,
             )
 
         log_event(

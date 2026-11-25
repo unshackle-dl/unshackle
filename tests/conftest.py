@@ -5,8 +5,9 @@ from __future__ import annotations
 import importlib
 import socket
 import socketserver
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any
 
 import pytest
 
@@ -87,7 +88,7 @@ def mux_args(monkeypatch: pytest.MonkeyPatch) -> Callable[..., list[str]]:
     class Stop(Exception):
         pass
 
-    def run(tracks: Any, ids: Optional[dict[str, int]] = None, **kwargs: Any) -> list[str]:
+    def run(tracks: Any, ids: dict[str, int] | None = None, **kwargs: Any) -> list[str]:
         captured: list[list[str]] = []
 
         def fake_popen(args: list[str], **_: object) -> None:

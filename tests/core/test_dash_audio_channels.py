@@ -1,5 +1,4 @@
 import xml.etree.ElementTree as ET
-from typing import Optional
 
 import pytest
 
@@ -66,5 +65,5 @@ def test_the_first_decodable_descriptor_wins() -> None:
 @pytest.mark.parametrize(
     ("representation", "expected"), [(config((COUNT, "6"), tag="Representation"), 5.1), (None, 2.0)]
 )
-def test_the_representation_overrides_the_adaptation_set(representation: Optional[ET.Element], expected: float) -> None:
+def test_the_representation_overrides_the_adaptation_set(representation: ET.Element | None, expected: float) -> None:
     assert DASH.get_audio_channels(config((COUNT, "2")), representation) == expected

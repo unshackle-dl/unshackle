@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import base64
 import json
+from collections.abc import Callable, Iterable
 from pathlib import Path
-from typing import Any, Callable, Iterable, Optional, Union
+from typing import Any
 from uuid import UUID
 
 import click
@@ -38,9 +39,9 @@ class ClearKeyCENC:
 
     def __init__(
         self,
-        kids: Iterable[Union[UUID, str, bytes]],
-        laurl: Optional[str] = None,
-        content_keys: Optional[dict[UUID, str]] = None,
+        kids: Iterable[UUID | str | bytes],
+        laurl: str | None = None,
+        content_keys: dict[UUID, str] | None = None,
         **kwargs: Any,
     ) -> None:
         kid_list: list[UUID] = []
@@ -56,12 +57,12 @@ class ClearKeyCENC:
             raise ClearKeyCENC.Exceptions.KIDNotFound("No Key ID was provided.")
 
         self.kids: list[UUID] = kid_list
-        self.laurl: Optional[str] = laurl
+        self.laurl: str | None = laurl
         self.content_keys: dict[UUID, str] = dict(content_keys or {})
         self.data: dict = kwargs or {}
 
     @property
-    def kid(self) -> Optional[UUID]:
+    def kid(self) -> UUID | None:
         """Get first Key ID, if any."""
         return next(iter(self.kids), None)
 
@@ -77,7 +78,7 @@ class ClearKeyCENC:
         request = {"kids": [b64url_encode_nopad(kid.bytes) for kid in kids], "type": "temporary"}
         return json.dumps(request).encode("utf8")
 
-    def get_content_keys(self, *, licence: Callable, session: Optional[Session] = None) -> None:
+    def get_content_keys(self, *, licence: Callable, session: Session | None = None) -> None:
         """
         Get Content Keys for this DRM Instance from a ClearKey license server.
 
@@ -171,7 +172,7 @@ class ClearKeyCENC:
         """Decrypt the file at ``path`` in place with this track's ClearKey (standard CENC) content keys."""
         decrypt_cenc(self, path, "ClearKeyCENC")
 
-    def mp4decrypt_key_args(self, track_kids: Optional[dict[int, UUID]] = None) -> list[str]:
+    def mp4decrypt_key_args(self, track_kids: dict[int, UUID] | None = None) -> list[str]:
         """Build the mp4decrypt --key arguments for every content key, and by track ID for each ``track_kids`` KID."""
         key_args = []
         for kid, key in self.content_keys.items():
@@ -185,8 +186,7 @@ class ClearKeyCENC:
     def decrypt_with_shaka_packager(self, path: Path) -> None:
         """Decrypt with shaka-packager."""
         keys = ",".join(
-            "label={}:key_id={}:key={}".format(i, kid.hex, key.lower())
-            for i, (kid, key) in enumerate(self.content_keys.items())
+            f"label={i}:key_id={kid.hex}:key={key.lower()}" for i, (kid, key) in enumerate(self.content_keys.items())
         )
         shaka_decrypt(path, keys, "ClearKey")
 

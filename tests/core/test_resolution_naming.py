@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import types
-from typing import Optional
 
 import pytest
 
@@ -26,7 +25,7 @@ def clean_config(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(config, "codec_names", {})
 
 
-def quality(width: Optional[int], height: Optional[int], scan_type: str = "Progressive") -> str:
+def quality(width: int | None, height: int | None, scan_type: str = "Progressive") -> str:
     movie = Movie(id_="movie-0001", service=DummyService, name="The Film", year=2024, language="en")
     video = types.SimpleNamespace(
         width=width,

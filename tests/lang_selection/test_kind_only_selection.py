@@ -11,7 +11,7 @@ from __future__ import annotations
 import inspect
 import logging
 from pathlib import Path
-from typing import Any, Optional, cast
+from typing import Any, cast
 
 import pytest
 import requests
@@ -97,7 +97,7 @@ def run(
     monkeypatch: pytest.MonkeyPatch,
     caplog: pytest.LogCaptureFixture,
     episodes: dict,
-    service: Optional[FakeService] = None,
+    service: FakeService | None = None,
     to_end: bool = False,
     **flags: Any,
 ) -> Any:

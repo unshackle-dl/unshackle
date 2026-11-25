@@ -9,12 +9,13 @@ import tempfile
 import threading
 import uuid
 from collections import deque
+from collections.abc import Callable
 from contextlib import suppress
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from unshackle.core.api.events import bus, publish_service_event
 from unshackle.core.api.sanitize import sanitize_log
@@ -33,7 +34,7 @@ log = logging.getLogger("download_manager")
 SENSITIVE_PARAM_KEYS = ("credential", "credentials", "password", "token", "api_key")
 
 
-def redact_parameters(parameters: Dict[str, Any]) -> Dict[str, Any]:
+def redact_parameters(parameters: dict[str, Any]) -> dict[str, Any]:
     """Return a copy of job parameters with secrets masked, safe to serialise."""
     if not isinstance(parameters, dict):
         return parameters
@@ -48,7 +49,7 @@ def redact_parameters(parameters: Dict[str, Any]) -> Dict[str, Any]:
     return redacted
 
 
-def credential_secrets(value: Any) -> List[str]:
+def credential_secrets(value: Any) -> list[str]:
     """The secret parts of one credential in any form ``Credential.from_config`` loads."""
     try:
         credential = Credential.from_config(value)
@@ -63,11 +64,11 @@ def credential_secrets(value: Any) -> List[str]:
     return [part for part in parts if len(part) >= 4]  # short parts would blanket-replace and garble the text
 
 
-def secret_values(parameters: Dict[str, Any], service: Optional[str] = None) -> List[str]:
+def secret_values(parameters: dict[str, Any], service: str | None = None) -> list[str]:
     """Raw secret strings carried in job parameters and the credentials configured for ``service``, longest first."""
     if not isinstance(parameters, dict):
         return []
-    secrets: List[str] = []
+    secrets: list[str] = []
     if service:
         from unshackle.core.config import config
 
@@ -92,14 +93,14 @@ def secret_values(parameters: Dict[str, Any], service: Optional[str] = None) -> 
     return sorted(set(secrets), key=len, reverse=True)  # longest first so substrings don't survive
 
 
-def owner_id(api_key: Optional[str]) -> Optional[str]:
+def owner_id(api_key: str | None) -> str | None:
     """A short digest of an API key for the on-disk history, so the key itself never lands in a file."""
     if api_key is None:
         return None
     return hashlib.sha256(api_key.encode()).hexdigest()[:16]
 
 
-def _redact_text(text: Optional[str], parameters: Dict[str, Any], service: Optional[str] = None) -> Optional[str]:
+def _redact_text(text: str | None, parameters: dict[str, Any], service: str | None = None) -> str | None:
     """Mask proxy userinfo and any known parameter secrets that leaked into a free-text field
     (error message / details / traceback / job worker stderr) before the API returns the field."""
     return redact_text(text, secret_values(parameters, service))
@@ -127,54 +128,54 @@ class DownloadJob:
     created_time: datetime
     service: str
     title_id: str
-    parameters: Dict[str, Any]
+    parameters: dict[str, Any]
 
-    started_time: Optional[datetime] = None
-    completed_time: Optional[datetime] = None
+    started_time: datetime | None = None
+    completed_time: datetime | None = None
     progress: float = 0.0
 
-    output_files: List[str] = field(default_factory=list)
-    error_message: Optional[str] = None
-    error_details: Optional[str] = None
-    error_code: Optional[str] = None
-    error_traceback: Optional[str] = None
-    worker_stderr: Optional[str] = None
+    output_files: list[str] = field(default_factory=list)
+    error_message: str | None = None
+    error_details: str | None = None
+    error_code: str | None = None
+    error_traceback: str | None = None
+    worker_stderr: str | None = None
 
-    phase: Optional[str] = None
-    title: Optional[str] = None
-    current_title: Optional[str] = None
+    phase: str | None = None
+    title: str | None = None
+    current_title: str | None = None
     completed_tracks: int = 0
     total_tracks: int = 0
-    active_tracks: List[str] = field(default_factory=list)
-    track_progress: List[Dict[str, Any]] = field(default_factory=list)
+    active_tracks: list[str] = field(default_factory=list)
+    track_progress: list[dict[str, Any]] = field(default_factory=list)
     segments_done: float = 0.0
     segments_total: float = 0.0
-    speed: Optional[str] = None
+    speed: str | None = None
 
     # Prompt a service raised through prompt_user() and waits on; answered by submit_input().
-    input_prompt: Optional[str] = None
+    input_prompt: str | None = None
     # Message a service shows through show_notice() while it waits for an approval; needs no answer.
-    notice: Optional[str] = None
+    notice: str | None = None
 
     # Subtitles skipped under skip_subtitle_errors (non-fatal). Each entry is a dl.SkippedSubtitle
     # dict (id / language / title) so a client can report which weren't available.
-    skipped_subtitles: List[Dict[str, Any]] = field(default_factory=list)
+    skipped_subtitles: list[dict[str, Any]] = field(default_factory=list)
     # Titles skipped because a requested track or language is missing; each a dl.SkippedTitle (title / reason).
-    skipped_titles: List[Dict[str, Any]] = field(default_factory=list)
+    skipped_titles: list[dict[str, Any]] = field(default_factory=list)
 
     cancel_event: threading.Event = field(default_factory=threading.Event)
 
     # Guards against writing the same job to the persistent history file twice.
     history_recorded: bool = False
 
-    redacted: Optional[tuple[tuple, Dict[str, Optional[str]]]] = field(default=None, repr=False, compare=False)
+    redacted: tuple[tuple, dict[str, str | None]] | None = field(default=None, repr=False, compare=False)
 
     # X-Secret-Key that created the job; scopes per-caller access, never serialized into to_dict().
-    owner_key: Optional[str] = None
+    owner_key: str | None = None
 
-    def to_dict(self, include_full_details: bool = False) -> Dict[str, Any]:
+    def to_dict(self, include_full_details: bool = False) -> dict[str, Any]:
         """Convert job to dictionary for JSON response."""
-        result: Dict[str, Any] = {
+        result: dict[str, Any] = {
             "job_id": self.job_id,
             "status": self.status.value,
             "created_time": self.created_time.isoformat(),
@@ -207,7 +208,7 @@ class DownloadJob:
                     raw,
                     {
                         name: redact_path(_redact_text(text, self.parameters, self.service))
-                        for name, text in zip(names, raw)
+                        for name, text in zip(names, raw, strict=True)
                     },
                 )
             result.update(
@@ -285,9 +286,7 @@ def record_job_history(job: DownloadJob) -> None:
         log.warning(f"Could not write job history: {e}")
 
 
-def read_job_history(
-    limit: int = 100, service: Optional[str] = None, owner: Optional[str] = None
-) -> List[Dict[str, Any]]:
+def read_job_history(limit: int = 100, service: str | None = None, owner: str | None = None) -> list[dict[str, Any]]:
     """Read persisted job history, newest first.
 
     With ``owner`` (an :func:`owner_id`), only that owner's entries and ownerless legacy
@@ -301,7 +300,7 @@ def read_job_history(
     except OSError as e:
         log.warning(f"Could not read job history: {e}")
         return []
-    entries: List[Dict[str, Any]] = []
+    entries: list[dict[str, Any]] = []
     for line in lines:
         line = line.strip()
         if not line:
@@ -321,7 +320,7 @@ def read_job_history(
     return entries[:limit] if limit and limit > 0 else entries
 
 
-def delete_job_history(job_id: str, allowed: Optional[set] = None, owner: Optional[str] = None) -> bool:
+def delete_job_history(job_id: str, allowed: set | None = None, owner: str | None = None) -> bool:
     """Remove a history entry by job_id (rewriting the file). Returns True if it removed one.
 
     When you give `allowed`, this function treats an entry outside the caller's service
@@ -335,7 +334,7 @@ def delete_job_history(job_id: str, allowed: Optional[set] = None, owner: Option
     except OSError as e:
         log.warning(f"Could not read job history: {e}")
         return False
-    kept: List[str] = []
+    kept: list[str] = []
     deleted = False
     for line in lines:
         stripped = line.strip()
@@ -362,7 +361,7 @@ def delete_job_history(job_id: str, allowed: Optional[set] = None, owner: Option
     return True
 
 
-def client_sent_keys(params: Dict[str, Any]) -> set[str]:
+def client_sent_keys(params: dict[str, Any]) -> set[str]:
     """Pop the server's ``client_keys`` stamp; a job without one counts every parameter as client-sent."""
     return set(params.pop("client_keys", params))
 
@@ -371,9 +370,9 @@ def perform_download(
     job_id: str,
     service: str,
     title_id: str,
-    params: Dict[str, Any],
-    progress_callback: Optional[Callable[[Dict[str, Any]], None]] = None,
-) -> List[str]:
+    params: dict[str, Any],
+    progress_callback: Callable[[dict[str, Any]], None] | None = None,
+) -> list[str]:
     """Do the synchronous download work for a job.
 
     ``params`` holds the API's form of the ``dl`` options; ``api_plan`` checks and casts them into the dl context,
@@ -455,14 +454,14 @@ def perform_download(
 
     except RunStopped as exc:
         log.debug("Stdout: %s", stdout_capture.getvalue())
-        raise APIError(APIErrorCode.DOWNLOAD_ERROR, f"Download failed: {exc.reason}")
+        raise APIError(APIErrorCode.DOWNLOAD_ERROR, f"Download failed: {exc.reason}") from exc
 
     except SystemExit as exc:
         if exc.code != 0:
             log.error(f"Download exited with code {exc.code}")
             log.debug("Stdout: %s", stdout_capture.getvalue())
             log.debug("Stderr: %s", stderr_capture.getvalue())
-            raise APIError(APIErrorCode.DOWNLOAD_ERROR, f"Download failed with exit code {exc.code}")
+            raise APIError(APIErrorCode.DOWNLOAD_ERROR, f"Download failed with exit code {exc.code}") from exc
         outcome = dl_instance.outcome()
 
     except Exception as exc:  # noqa: BLE001 - propagate to caller
@@ -493,25 +492,23 @@ class DownloadQueueManager:
         self.max_concurrent_downloads = max_concurrent_downloads
         self.job_retention_hours = job_retention_hours
 
-        self._jobs: Dict[str, DownloadJob] = {}
+        self._jobs: dict[str, DownloadJob] = {}
         self._job_queue: asyncio.Queue = asyncio.Queue()
         # asyncio.Queue has no reorder, so prioritized jobs go in a deque workers drain first.
         self._priority_jobs: deque = deque()
         self._promoted_ids: set = set()  # their stale FIFO-queue copies get skipped via this set
-        self._active_downloads: Dict[str, asyncio.Task] = {}
-        self._download_processes: Dict[str, asyncio.subprocess.Process] = {}
-        self._job_temp_files: Dict[str, Dict[str, str]] = {}
+        self._active_downloads: dict[str, asyncio.Task] = {}
+        self._download_processes: dict[str, asyncio.subprocess.Process] = {}
+        self._job_temp_files: dict[str, dict[str, str]] = {}
         self._workers_started = False
         self._shutdown_event = asyncio.Event()
-        self._subscribers: Dict[str, List[asyncio.Queue]] = {}
+        self._subscribers: dict[str, list[asyncio.Queue]] = {}
 
         log.info(
             f"Initialized download queue manager: max_concurrent={max_concurrent_downloads}, retention_hours={job_retention_hours}"
         )
 
-    def create_job(
-        self, service: str, title_id: str, owner_key: Optional[str] = None, **parameters: Any
-    ) -> DownloadJob:
+    def create_job(self, service: str, title_id: str, owner_key: str | None = None, **parameters: Any) -> DownloadJob:
         """Make a new download job and add it to the queue."""
         from unshackle.core.api.session_store import refuse_while_draining
 
@@ -534,11 +531,11 @@ class DownloadQueueManager:
         bus.publish("job", {"event": "queued", **job.to_dict(include_full_details=True)})
         return job
 
-    def get_job(self, job_id: str) -> Optional[DownloadJob]:
+    def get_job(self, job_id: str) -> DownloadJob | None:
         """Get job by ID."""
         return self._jobs.get(job_id)
 
-    def list_jobs(self) -> List[DownloadJob]:
+    def list_jobs(self) -> list[DownloadJob]:
         """Get all jobs."""
         return list(self._jobs.values())
 
@@ -585,7 +582,7 @@ class DownloadQueueManager:
         schedule_pending_reload()
 
     @staticmethod
-    def put(queue: asyncio.Queue, item: Optional[Dict[str, Any]]) -> None:
+    def put(queue: asyncio.Queue, item: dict[str, Any] | None) -> None:
         """Enqueue an item, discarding the oldest when a slow listener has filled the queue."""
         try:
             queue.put_nowait(item)
@@ -651,7 +648,7 @@ class DownloadQueueManager:
         log.info(f"Removed job {sanitize_log(job_id)}")
         return True
 
-    def clear_finished_jobs(self, owner_key: Optional[str] = None) -> int:
+    def clear_finished_jobs(self, owner_key: str | None = None) -> int:
         """Remove terminal (completed/failed/cancelled) jobs, returning the count removed.
 
         With ``owner_key`` only that key's jobs and ownerless legacy jobs go.
@@ -739,7 +736,7 @@ class DownloadQueueManager:
         for job_id, process in list(self._download_processes.items()):
             try:
                 await asyncio.wait_for(process.wait(), timeout=5)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 log.warning(f"Worker process for job {job_id} did not exit, killing")
                 process.kill()
                 await process.wait()
@@ -806,7 +803,7 @@ class DownloadQueueManager:
                     if job.job_id in self._active_downloads:
                         del self._active_downloads[job.job_id]
 
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 continue
             except Exception as e:
                 log.error(f"Worker {worker_name} error: {e}")
@@ -839,7 +836,7 @@ class DownloadQueueManager:
             log.error(f"Download failed for job {job.job_id}: {_redact_text(str(e), job.parameters, job.service)}")
             raise
 
-    def worker_speed_limit(self) -> Optional[float]:
+    def worker_speed_limit(self) -> float | None:
         """Return one job worker's share of the locked global speed limit, or None when unset."""
         requests_downloader = importlib.import_module("unshackle.core.downloaders.requests")
 
@@ -848,7 +845,7 @@ class DownloadQueueManager:
             return None
         return limiter.rate / max(1, self.max_concurrent_downloads)
 
-    async def run_download_async(self, job: DownloadJob) -> List[str]:
+    async def run_download_async(self, job: DownloadJob) -> list[str]:
         """Invoke a job worker subprocess to do the download."""
 
         payload = {
@@ -894,8 +891,8 @@ class DownloadQueueManager:
 
         stdout_bytes = b""
         stderr_bytes = b""
-        last_progress_stat: Optional[tuple[int, int]] = None  # (st_mtime_ns, st_size) of last parse
-        last_published: Optional[Dict[str, Any]] = None
+        last_progress_stat: tuple[int, int] | None = None  # (st_mtime_ns, st_size) of last parse
+        last_published: dict[str, Any] | None = None
 
         try:
             while True:
@@ -906,7 +903,7 @@ class DownloadQueueManager:
                     stat = os.stat(progress_path)
                     stat_key = (stat.st_mtime_ns, stat.st_size)
                     if stat_key != last_progress_stat:
-                        with open(progress_path, "r", encoding="utf-8") as handle:
+                        with open(progress_path, encoding="utf-8") as handle:
                             progress_data = json.load(handle)
                             prompt_before = job.input_prompt
                             if progress_data.get("phase") and progress_data["phase"] != job.phase:
@@ -964,7 +961,7 @@ class DownloadQueueManager:
                     process.terminate()
                     try:
                         await asyncio.wait_for(communicate_task, timeout=5)
-                    except asyncio.TimeoutError:
+                    except TimeoutError:
                         log.warning(f"Worker process for job {job.job_id} did not terminate, killing")
                         process.kill()
                         await asyncio.wait_for(communicate_task, timeout=5)
@@ -987,10 +984,10 @@ class DownloadQueueManager:
                 else:
                     log.debug(f"Worker stderr for job {job.job_id}: {safe_stderr}")
 
-            result_data: Optional[Dict[str, Any]] = None
+            result_data: dict[str, Any] | None = None
             for attempt in range(5):
                 try:
-                    with open(result_path, "r", encoding="utf-8") as handle:
+                    with open(result_path, encoding="utf-8") as handle:
                         result_data = json.load(handle)
                 except FileNotFoundError:
                     log.error(f"Result file missing for job {job.job_id}")
@@ -1049,7 +1046,7 @@ class DownloadQueueManager:
 
 
 # Global instance
-download_manager: Optional[DownloadQueueManager] = None
+download_manager: DownloadQueueManager | None = None
 
 
 def get_download_manager() -> DownloadQueueManager:
@@ -1077,10 +1074,10 @@ def busy_services() -> set[str]:
     return busy
 
 
-_reload_task: Optional[asyncio.Task[None]] = None
+_reload_task: asyncio.Task[None] | None = None
 
 
-def schedule_pending_reload(tag: Optional[str] = None) -> None:
+def schedule_pending_reload(tag: str | None = None) -> None:
     """Swap in staged service updates whose last job or remote session has ended, off the event loop.
 
     Runs on every job completion and remote session removal, because a busy service on a popular

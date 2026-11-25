@@ -43,7 +43,7 @@ def test_concat_list_is_written_as_utf8(tmp_path: Path, monkeypatch: pytest.Monk
 
     def spy_write_text(self, data, encoding=None, *args, **kwargs):
         encodings.append(encoding)
-        return real_write_text(self, data, encoding=encoding, *args, **kwargs)
+        return real_write_text(self, data, *args, encoding=encoding, **kwargs)
 
     seen: list[bytes] = []
 

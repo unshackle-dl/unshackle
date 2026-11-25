@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import base64
 import json
-from typing import Any, Optional
+from typing import Any
 from uuid import UUID
 
 import pytest
@@ -52,7 +52,7 @@ class StubLicence:
 
     def __init__(self, response: Any) -> None:
         self.response = response
-        self.challenge: Optional[bytes] = None
+        self.challenge: bytes | None = None
 
     def __call__(self, *, challenge: bytes) -> Any:
         self.challenge = challenge
@@ -72,8 +72,8 @@ class StubSession:
 
     def __init__(self, content: bytes) -> None:
         self.content = content
-        self.url: Optional[str] = None
-        self.data: Optional[bytes] = None
+        self.url: str | None = None
+        self.data: bytes | None = None
 
     def post(self, url: str, data: Any = None, **_: Any) -> StubResponse:
         self.url = url

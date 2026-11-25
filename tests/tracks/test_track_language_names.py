@@ -1,5 +1,5 @@
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, Optional
 
 import pytest
 from langcodes import Language
@@ -10,7 +10,7 @@ from unshackle.core.tracks import Audio, Subtitle, Tracks, Video
 from unshackle.core.utilities import language_name, multi_script_languages, with_script
 
 
-def sub(lang: str, name: Optional[str] = None, sdh: bool = False, original: bool = False) -> Subtitle:
+def sub(lang: str, name: str | None = None, sdh: bool = False, original: bool = False) -> Subtitle:
     return Subtitle(
         id_="s",
         url="https://x/s",
@@ -77,7 +77,7 @@ def test_with_script(tag: str, expected: str) -> None:
         ("x-foo", None),
     ],
 )
-def test_language_name(tag: str, expected: Optional[str]) -> None:
+def test_language_name(tag: str, expected: str | None) -> None:
     assert language_name(Language.get(tag)) == expected
 
 
@@ -105,7 +105,7 @@ def test_language_name(tag: str, expected: Optional[str]) -> None:
         ("qaa", None),
     ],
 )
-def test_native_language_name(tag: str, expected: Optional[str], monkeypatch: pytest.MonkeyPatch) -> None:
+def test_native_language_name(tag: str, expected: str | None, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(config, "muxing", {"track_names": "native"})
     assert language_name(Language.get(tag)) == expected
 

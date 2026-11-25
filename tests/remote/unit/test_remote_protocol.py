@@ -5,7 +5,7 @@ from __future__ import annotations
 import ast
 import functools
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import pytest
 import yaml
@@ -193,7 +193,7 @@ def keys(shape: Any) -> set[str]:
     return set(shape.__required_keys__ | shape.__optional_keys__)
 
 
-def properties(schema: Optional[dict]) -> set[str]:
+def properties(schema: dict | None) -> set[str]:
     return set(
         ((schema or {}).get("content", {}).get("application/json", {}).get("schema", {}) or {}).get("properties", {})
     )

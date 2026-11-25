@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional, cast
+from typing import Any, cast
 
 import click
 import pytest
@@ -14,7 +14,7 @@ from unshackle.core.services import Services
 
 
 def make_ctx(
-    command: click.Command, args: Optional[list[str]] = None, default_map: Optional[dict[str, Any]] = None
+    command: click.Command, args: list[str] | None = None, default_map: dict[str, Any] | None = None
 ) -> click.Context:
     """Parse the group options of a real ``Services`` command, without running its callback."""
     return command.make_context(
@@ -27,11 +27,11 @@ def group(ctx: click.Context) -> Services:
 
 
 @pytest.fixture
-def routed(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, Optional[str]]]:
+def routed(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, str | None]]:
     """Record the path get_command takes and the server it passes, without loading a service or calling a server."""
-    calls: list[tuple[str, Optional[str]]] = []
+    calls: list[tuple[str, str | None]] = []
 
-    def remote(name: str, server_name: Optional[str]) -> click.Command:
+    def remote(name: str, server_name: str | None) -> click.Command:
         calls.append(("remote", server_name))
         return click.Command(name)
 
@@ -46,7 +46,7 @@ def routed(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, Optional[str]]]:
 
 @pytest.mark.parametrize("command", [dl.cli, search])
 def test_service_remote_routes_to_remote_command(
-    monkeypatch: pytest.MonkeyPatch, routed: list[tuple[str, Optional[str]]], command: click.Command
+    monkeypatch: pytest.MonkeyPatch, routed: list[tuple[str, str | None]], command: click.Command
 ) -> None:
     """The typed name matches the config key in any case, as a service only the server has keeps the typed case."""
     monkeypatch.setattr(config, "services", {"EXAMPLE": {"dl": {"remote": True, "server": "box"}}})
@@ -73,8 +73,8 @@ def test_routing_precedence(
     routed: list,
     services: dict,
     args: list[str],
-    default_map: Optional[dict[str, Any]],
-    expected: tuple[str, Optional[str]],
+    default_map: dict[str, Any] | None,
+    expected: tuple[str, str | None],
 ) -> None:
     monkeypatch.setattr(config, "services", services)
     ctx = make_ctx(dl.cli, args, default_map)

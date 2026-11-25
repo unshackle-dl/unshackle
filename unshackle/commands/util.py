@@ -90,7 +90,7 @@ def crop(path: Path, aspect: str, letter: bool, offset: int, preview: bool) -> N
         try:
             video_track = next(iter(MediaInfo.parse(video_path).video_tracks or []))
         except StopIteration:
-            raise click.ClickException("There's no video tracks in the provided file.")
+            raise click.ClickException("There's no video tracks in the provided file.") from None
 
         crop_filter = {"HEVC": "hevc_metadata", "AVC": "h264_metadata"}.get(video_track.commercial_name)
         if not crop_filter:
@@ -193,7 +193,7 @@ def range_(path: Path, full: bool, preview: bool) -> None:
         try:
             video_track = next(iter(MediaInfo.parse(video_path).video_tracks or []))
         except StopIteration:
-            raise click.ClickException("There's no video tracks in the provided file.")
+            raise click.ClickException("There's no video tracks in the provided file.") from None
 
         metadata_key = {"HEVC": "hevc_metadata", "AVC": "h264_metadata"}.get(video_track.commercial_name)
         if not metadata_key:

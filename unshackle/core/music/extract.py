@@ -10,7 +10,7 @@ reuse them.
 from __future__ import annotations
 
 import re
-from typing import Any, Optional
+from typing import Any
 
 from unshackle.core.titles.music import Music, Song
 
@@ -42,7 +42,7 @@ def first_text(*values: Any, default: str = "") -> str:
     return default
 
 
-def first_number(*values: Any) -> Optional[float]:
+def first_number(*values: Any) -> float | None:
     """Return the first value parseable as a float, else ``None``."""
     for value in values:
         if value in (None, ""):
@@ -60,7 +60,7 @@ def year_from_value(value: Any) -> int:
     return int(match.group("year")) if match else 1900
 
 
-def duration_seconds(value: Any) -> Optional[float]:
+def duration_seconds(value: Any) -> float | None:
     """Coerce a duration to seconds, treating large numbers (>10000) as milliseconds."""
     number = first_number(value)
     if number is None:
@@ -104,7 +104,7 @@ def format_names(value: Any, sep: str = ", ") -> str:
     return sep.join(names)
 
 
-def classify_release_kind(raw_kind: str, tracks_count: Optional[float]) -> str:
+def classify_release_kind(raw_kind: str, tracks_count: float | None) -> str:
     """Normalise an already-extracted release-kind string to a canonical value.
 
     Returns one of ``single | ep | album | compilation | live | download |
@@ -138,10 +138,10 @@ def build_music_from_songs(
     songs: list[Song],
     *,
     kind: str,
-    title: Optional[str] = None,
-    artist: Optional[str] = None,
-    owner: Optional[str] = None,
-    description: Optional[str] = None,
+    title: str | None = None,
+    artist: str | None = None,
+    owner: str | None = None,
+    description: str | None = None,
     empty_error: str = "No songs were returned.",
 ) -> Music:
     """Assemble a :class:`Music` release from a list of :class:`Song` objects.

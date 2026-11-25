@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 import re
 from pathlib import PureWindowsPath
-from typing import Optional
 
 MAX_CACHE_KEY_DEPTH = 8
 MAX_SESSION_CACHE_KEYS = 256
@@ -20,7 +19,7 @@ def sanitize_log(value: object, keep_lines: bool = False) -> str:
     return (CONTROL_CHARS_BUT_LF if keep_lines else CONTROL_CHARS).sub("", str(value))
 
 
-def safe_cache_key(key: object) -> Optional[str]:
+def safe_cache_key(key: object) -> str | None:
     """Return a relative posix path for a peer-supplied cache key, or None if it escapes its directory.
 
     unshackle writes each cache key as ``<key>.json`` inside a fixed directory, and a key may

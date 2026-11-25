@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 import json
 from datetime import date
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import pytest
 from langcodes import Language
@@ -30,7 +30,7 @@ class _FakeSvc:
 
 
 def ep(**overrides: Any) -> Episode:
-    base: Dict[str, Any] = dict(
+    base: dict[str, Any] = dict(
         id_="ep-0001",
         service=_FakeSvc,
         title="My Show",
@@ -45,7 +45,7 @@ def ep(**overrides: Any) -> Episode:
 
 
 def _movie(**overrides: Any) -> Movie:
-    base: Dict[str, Any] = dict(id_="movie-0001", service=_FakeSvc, name="Film", year=2024, language=Language.get("en"))
+    base: dict[str, Any] = dict(id_="movie-0001", service=_FakeSvc, name="Film", year=2024, language=Language.get("en"))
     base.update(overrides)
     return Movie(**base)
 
@@ -129,10 +129,10 @@ class _FakeService:
     ANIME = True
     DAILY = True
 
-    def __init__(self, titles: List[Episode]) -> None:
+    def __init__(self, titles: list[Episode]) -> None:
         self._titles = titles
 
-    def get_titles(self) -> List[Episode]:
+    def get_titles(self) -> list[Episode]:
         return self._titles
 
 
@@ -144,7 +144,7 @@ def test_list_titles_stamps_the_service_flags(monkeypatch: pytest.MonkeyPatch) -
     assert (title["anime"], title["daily"]) == (True, True)
 
 
-def round_trip(episode: Episode, stamp: Optional[Any] = None) -> Episode:
+def round_trip(episode: Episode, stamp: Any | None = None) -> Episode:
     info = serialize_title(episode)
     if stamp is not None:
         info = stamp_service_flags(info, stamp)

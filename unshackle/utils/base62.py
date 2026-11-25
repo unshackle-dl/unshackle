@@ -105,12 +105,12 @@ def value(ch: str, charset: str) -> int:
     try:
         return charset.index(ch)
     except ValueError:
-        raise ValueError("base62: Invalid character (%s)" % ch)
+        raise ValueError(f"base62: Invalid character ({ch})") from None
 
 
 def check_type(value: object, expected_type: type) -> None:
     """Checks if the input is in an appropriate type."""
 
     if not isinstance(value, expected_type):
-        msg = "Expected {} object, not {}".format(expected_type, value.__class__.__name__)
+        msg = f"Expected {expected_type} object, not {value.__class__.__name__}"
         raise TypeError(msg)

@@ -2,7 +2,6 @@ import random
 import re
 import subprocess
 from functools import cached_property
-from typing import Optional
 
 from unshackle.core import binaries
 from unshackle.core.proxies.proxy import Proxy, cached_catalogue
@@ -14,7 +13,7 @@ class Hola(Proxy):
         Proxy provider that uses Hola's direct connections through the hola-proxy binary.
         """
         if not binaries.HolaProxy:
-            raise EnvironmentError("hola-proxy executable not found but is required for the Hola proxy provider.")
+            raise OSError("hola-proxy executable not found but is required for the Hola proxy provider.")
         self.binary = binaries.HolaProxy
 
     @cached_property
@@ -27,7 +26,7 @@ class Hola(Proxy):
 
         return f"{countries} Countr{['ies', 'y'][countries == 1]}"
 
-    def get_proxy(self, query: str) -> Optional[str]:
+    def get_proxy(self, query: str) -> str | None:
         """
         Get an HTTP proxy URI for a Datacenter ('direct') or Residential ('lum') Hola server.
 

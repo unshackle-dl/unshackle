@@ -4,7 +4,7 @@ import re
 from collections.abc import Generator
 from datetime import datetime
 from http.cookiejar import CookieJar
-from typing import Any, Optional
+from typing import Any
 
 import click
 
@@ -119,9 +119,9 @@ class MUSIC_EXAMPLE(Service):
         # the framework applies to whatever get_tracks() returns.
 
         if self.config is None:
-            raise EnvironmentError("config.yaml is missing for this service.")
+            raise OSError("config.yaml is missing for this service.")
 
-    def authenticate(self, cookies: Optional[CookieJar] = None, credential: Optional[Credential] = None) -> None:
+    def authenticate(self, cookies: CookieJar | None = None, credential: Credential | None = None) -> None:
         # Loads the cookie jar into self.session and stores self.credential.
         super().authenticate(cookies, credential)
 
@@ -135,7 +135,7 @@ class MUSIC_EXAMPLE(Service):
             self.log.info(" + Using cached tokens")
         else:
             if not credential:
-                raise EnvironmentError("Service requires Credentials.")
+                raise OSError("Service requires Credentials.")
             token = self.session.post(
                 url=self.config["endpoints"]["login"],
                 data={"username": credential.username, "password": credential.password},
@@ -370,7 +370,7 @@ class MUSIC_EXAMPLE(Service):
             },
         )
 
-    def get_lyrics(self, track: dict) -> Optional[str]:
+    def get_lyrics(self, track: dict) -> str | None:
         response = self.session.get(
             url=self.config["endpoints"]["lyrics"].format(track_id=track["id"]),
             params={"token": self.token},

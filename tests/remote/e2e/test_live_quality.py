@@ -11,7 +11,7 @@ discovered and skips so you can copy values back into the fixture.
 from __future__ import annotations
 
 import time
-from typing import Any, Optional
+from typing import Any
 
 import pytest
 
@@ -51,7 +51,7 @@ def wait_for_titles(http_session, server_url: str, sid: str, timeout: float = 12
     return 408, {"message": "auth timeout"}
 
 
-def pick_target_title(titles: list[dict[str, Any]], season: int = 1, episode: int = 1) -> Optional[dict[str, Any]]:
+def pick_target_title(titles: list[dict[str, Any]], season: int = 1, episode: int = 1) -> dict[str, Any] | None:
     """Pick the configured target episode; fall back to the first title."""
     for t in titles:
         if t.get("type") == "episode" and t.get("season") == season and t.get("number") == episode:
@@ -76,7 +76,7 @@ def summarize(video_tracks: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def resolve_title_id(conf: dict) -> Optional[str]:
+def resolve_title_id(conf: dict) -> str | None:
     """Prefer series_url so S01E01 logic kicks in; fall back to movie title_url."""
     return conf.get("series_url") or conf.get("title_url")
 

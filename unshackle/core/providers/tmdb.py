@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from difflib import SequenceMatcher
-from typing import Optional, Union
 
 import requests
 
@@ -24,7 +23,7 @@ class TMDBProvider(MetadataProvider):
     def api_key(self) -> str:
         return config.tmdb_api_key
 
-    def search(self, title: str, year: Optional[int], kind: str) -> Optional[MetadataResult]:
+    def search(self, title: str, year: int | None, kind: str) -> MetadataResult | None:
         search_title = strip_year(title)
         self.log.debug("Searching TMDB for %r (%s, %s)", search_title, kind, year)
 
@@ -44,8 +43,8 @@ class TMDBProvider(MetadataProvider):
             return None
 
         best_ratio = 0.0
-        best_id: Optional[int] = None
-        best_title: Optional[str] = None
+        best_id: int | None = None
+        best_title: str | None = None
         for result in results:
             candidates = [
                 result.get("title"),
@@ -95,7 +94,7 @@ class TMDBProvider(MetadataProvider):
             raw={"detail": detail or {}, "external_ids": ext_raw or {}},
         )
 
-    def get_by_id(self, provider_id: Union[int, str], kind: str) -> Optional[MetadataResult]:
+    def get_by_id(self, provider_id: int | str, kind: str) -> MetadataResult | None:
         detail = self.fetch_detail(int(provider_id), kind)
         if not detail:
             return None
@@ -114,7 +113,7 @@ class TMDBProvider(MetadataProvider):
             raw=detail,
         )
 
-    def get_external_ids(self, provider_id: Union[int, str], kind: str) -> ExternalIds:
+    def get_external_ids(self, provider_id: int | str, kind: str) -> ExternalIds:
         raw = self.fetch_external_ids_raw(int(provider_id), kind)
         if not raw:
             return ExternalIds(tmdb_id=int(provider_id), tmdb_kind=kind)
@@ -125,7 +124,7 @@ class TMDBProvider(MetadataProvider):
             tvdb_id=raw.get("tvdb_id"),
         )
 
-    def find_by_imdb_id(self, imdb_id: str, kind: str) -> Optional[ExternalIds]:
+    def find_by_imdb_id(self, imdb_id: str, kind: str) -> ExternalIds | None:
         """Look up TMDB/TVDB IDs from an IMDB ID using TMDB's /find endpoint.
 
         When the requested kind has no results, unshackle tries the other kind, so the
@@ -176,7 +175,7 @@ class TMDBProvider(MetadataProvider):
             tvdb_id=ext_raw.get("tvdb_id") if ext_raw else None,
         )
 
-    def fetch_detail(self, tmdb_id: int, kind: str) -> Optional[dict]:
+    def fetch_detail(self, tmdb_id: int, kind: str) -> dict | None:
         try:
             r = self.session.get(
                 f"{self.BASE_URL}/{kind}/{tmdb_id}",
@@ -189,7 +188,7 @@ class TMDBProvider(MetadataProvider):
             self.log.debug("Failed to fetch TMDB detail: %s", exc)
             return None
 
-    def fetch_external_ids_raw(self, tmdb_id: int, kind: str) -> Optional[dict]:
+    def fetch_external_ids_raw(self, tmdb_id: int, kind: str) -> dict | None:
         try:
             r = self.session.get(
                 f"{self.BASE_URL}/{kind}/{tmdb_id}/external_ids",

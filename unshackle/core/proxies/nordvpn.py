@@ -2,7 +2,6 @@ import json
 import random
 import re
 from functools import cached_property
-from typing import Optional, Union
 
 import requests
 
@@ -13,7 +12,7 @@ from unshackle.core.utilities import COUNTRY_CODE_ALIASES
 
 
 class NordVPN(Proxy):
-    def __init__(self, username: str, password: str, server_map: Optional[dict[str, Union[int, str]]] = None) -> None:
+    def __init__(self, username: str, password: str, server_map: dict[str, int | str] | None = None) -> None:
         """
         Proxy provider that uses NordVPN Service Credentials.
 
@@ -36,7 +35,7 @@ class NordVPN(Proxy):
         self.username = username
         self.password = password
         self.server_map = server_map or {}
-        self.last_hostname: Optional[str] = None
+        self.last_hostname: str | None = None
 
     @cached_property
     def countries(self) -> list[dict]:
@@ -49,7 +48,7 @@ class NordVPN(Proxy):
 
         return f"{countries} Countr{['ies', 'y'][countries == 1]} ({servers} Server{['s', ''][servers == 1]})"
 
-    def get_proxy(self, query: str) -> Optional[str]:
+    def get_proxy(self, query: str) -> str | None:
         """
         Get an HTTP(SSL) proxy URI for a NordVPN server.
 
@@ -133,11 +132,11 @@ class NordVPN(Proxy):
         self.last_hostname = hostname
         return f"https://{self.username}:{self.password}@{hostname}:89"
 
-    def last_connection_display(self) -> Optional[str]:
+    def last_connection_display(self) -> str | None:
         """Name the last server with its IP and network, so a blocked network can be excluded with '@-'."""
         return describe(self.last_hostname) if self.last_hostname else None
 
-    def get_country(self, by_id: Optional[int] = None, by_code: Optional[str] = None) -> Optional[dict]:
+    def get_country(self, by_id: int | None = None, by_code: str | None = None) -> dict | None:
         """Find a Country and its metadata."""
         if all(x is None for x in (by_id, by_code)):
             raise ValueError("At least one search query must be made.")
@@ -168,12 +167,10 @@ class NordVPN(Proxy):
         try:
             return res.json()
         except json.JSONDecodeError:
-            raise ValueError("Could not decode list of NordVPN servers, not JSON data.")
+            raise ValueError("Could not decode list of NordVPN servers, not JSON data.") from None
 
     @staticmethod
-    def get_recommended_servers(
-        country_id: int, city_id: Optional[int] = None, limit: Optional[int] = None
-    ) -> list[dict]:
+    def get_recommended_servers(country_id: int, city_id: int | None = None, limit: int | None = None) -> list[dict]:
         """
         Get the list of recommended Servers for a Country, or for one of its cities.
 
@@ -191,7 +188,7 @@ class NordVPN(Proxy):
         try:
             return res.json()
         except json.JSONDecodeError:
-            raise ValueError("Could not decode list of NordVPN countries, not JSON data.")
+            raise ValueError("Could not decode list of NordVPN countries, not JSON data.") from None
 
     @staticmethod
     @cached_catalogue
@@ -204,4 +201,4 @@ class NordVPN(Proxy):
         try:
             return res.json()
         except json.JSONDecodeError:
-            raise ValueError("Could not decode list of NordVPN countries, not JSON data.")
+            raise ValueError("Could not decode list of NordVPN countries, not JSON data.") from None

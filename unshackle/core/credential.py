@@ -4,13 +4,13 @@ import base64
 import hashlib
 import re
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import Any
 
 
 class Credential:
     """Username (or Email) and Password Credential."""
 
-    def __init__(self, username: str, password: str, extra: Optional[str] = None) -> None:
+    def __init__(self, username: str, password: str, extra: str | None = None) -> None:
         self.username = username
         self.password = password
         self.extra = extra
@@ -31,7 +31,7 @@ class Credential:
         """Return credential data as a string."""
         return f"{self.username}:{self.password}" + (f":{self.extra}" if self.extra else "")
 
-    def dump(self, path: Union[Path, str]) -> int:
+    def dump(self, path: Path | str) -> int:
         """Write credential data to a file."""
         if isinstance(path, str):
             path = Path(path)

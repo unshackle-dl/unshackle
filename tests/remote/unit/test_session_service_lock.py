@@ -18,8 +18,9 @@ import asyncio
 import contextlib
 import json
 import threading
+from collections.abc import Iterator
 from types import SimpleNamespace
-from typing import Any, Iterator, List
+from typing import Any
 
 import pytest
 
@@ -42,7 +43,7 @@ class Overlap:
     def __init__(self, window: float = OVERLAP_WINDOW) -> None:
         self.window = window
         self.max_active = 0
-        self.trace: List[str] = []
+        self.trace: list[str] = []
         self._lock = threading.Lock()
         self._active = 0
         self._joined = threading.Event()
@@ -86,7 +87,7 @@ class ServiceProbe:
         self.name = name
         self.session = SimpleNamespace(headers={}, cookies=[])
 
-    def get_titles(self) -> List[Movie]:
+    def get_titles(self) -> list[Movie]:
         with self.overlap.call(f"{self.name}:titles"):
             return [a_movie("movie-0001"), a_movie("movie-0002")]
 
@@ -94,7 +95,7 @@ class ServiceProbe:
         with self.overlap.call(f"{self.name}:tracks:{title.id}"):
             return empty_tracks()
 
-    def get_chapters(self, title: Any) -> List[Any]:
+    def get_chapters(self, title: Any) -> list[Any]:
         with self.overlap.call(f"{self.name}:chapters:{title.id}"):
             return []
 
@@ -105,14 +106,14 @@ def seed_titles(session: SessionEntry) -> None:
         session.title_map[title_id] = a_movie(title_id)
 
 
-def bodies(responses: List[Any]) -> List[dict]:
+def bodies(responses: list[Any]) -> list[dict]:
     parsed = [json.loads(response.body) for response in responses]
     for body in parsed:
         assert "error" not in body, body
     return parsed
 
 
-async def two_track_calls(session_id: str) -> List[Any]:
+async def two_track_calls(session_id: str) -> list[Any]:
     return list(
         await asyncio.gather(
             handlers.session_tracks_handler({"title_id": "movie-0001"}, session_id),
@@ -151,7 +152,7 @@ async def test_the_track_lock_covers_the_chapters_call() -> None:
     # Every call closes before the next one opens, so one title's chapters are read before the
     # other title's tracks are fetched.
     assert len(overlap.trace) == 8, overlap.trace
-    for opened, closed in zip(overlap.trace[0::2], overlap.trace[1::2]):
+    for opened, closed in zip(overlap.trace[0::2], overlap.trace[1::2], strict=True):
         assert closed == f"-{opened[1:]}", overlap.trace
 
 
@@ -211,7 +212,7 @@ class BlockingTracks:
         self.loop_was_blocked = not self.resume.wait(timeout=HANDSHAKE_TIMEOUT)
         return empty_tracks()
 
-    def get_chapters(self, title: Any) -> List[Any]:
+    def get_chapters(self, title: Any) -> list[Any]:
         return []
 
 

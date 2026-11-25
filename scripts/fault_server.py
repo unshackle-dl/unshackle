@@ -45,7 +45,7 @@ import threading
 import time
 from dataclasses import asdict, dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from typing import Any, Optional
+from typing import Any
 
 MIB = 1024 * 1024
 DEFAULT_SEED = 1729
@@ -186,7 +186,7 @@ class FaultServer(ThreadingHTTPServer):
         """Deterministic per-(path, attempt) fault gate: fires for ``pct`` percent of them."""
         if pct <= 0:
             return False
-        digest = hashlib.sha256(f"{self.seed}:{kind}:{path}:{attempt}".encode("utf-8")).digest()
+        digest = hashlib.sha256(f"{self.seed}:{kind}:{path}:{attempt}".encode()).digest()
         return (int.from_bytes(digest[:4], "big") / 0xFFFFFFFF) * 100.0 < pct
 
     def reset_counters(self) -> None:
@@ -212,7 +212,7 @@ class FaultHandler(BaseHTTPRequestHandler):
     def log_message(self, *_: Any) -> None:  # silence per-request logging
         pass
 
-    def _parse_range(self, total: int) -> Optional[tuple[int, int]]:
+    def _parse_range(self, total: int) -> tuple[int, int] | None:
         header = self.headers.get("Range")
         if not header or not header.startswith("bytes="):
             return None
@@ -372,7 +372,7 @@ class FaultHandler(BaseHTTPRequestHandler):
                 time.sleep(per_chunk)
 
 
-def resolve_profile(name: str, overrides: Optional[dict[str, Any]] = None) -> FaultProfile:
+def resolve_profile(name: str, overrides: dict[str, Any] | None = None) -> FaultProfile:
     """Return a copy of the named preset with any non-None ``overrides`` applied."""
     if name not in PROFILES:
         raise KeyError(f"unknown profile {name!r}; choices: {', '.join(sorted(PROFILES))}")

@@ -6,7 +6,7 @@ import subprocess
 import tempfile
 from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import Any
 
 from unshackle.core import binaries
 from unshackle.core.config import config
@@ -16,12 +16,12 @@ from unshackle.core.drm.verify import kidless_track_kids
 from unshackle.core.drm.widevine import Widevine
 from unshackle.core.remote_protocol import APIErrorCode, coded
 
-SEGMENT_DRM_T = Union[Widevine, PlayReady, ClearKeyCENC]
+SEGMENT_DRM_T = Widevine | PlayReady | ClearKeyCENC
 
 MAX_WORKERS = 16
 
 
-def can_use(drm: Any, decryption: str, init: Optional[bytes] = None) -> bool:
+def can_use(drm: Any, decryption: str, init: bytes | None = None) -> bool:
     """Whether unshackle can decrypt a track's segments one by one as they download.
 
     A track whose ``init`` mp4decrypt cannot key goes to the whole-file decrypt, which has the shaka fallback.
@@ -47,9 +47,9 @@ class SegmentDecrypter:
     bytes as decrypting the merged file in one pass.
     """
 
-    def __init__(self, drm: SEGMENT_DRM_T, init_data: bytes, work_dir: Path, workers: Optional[int] = None) -> None:
+    def __init__(self, drm: SEGMENT_DRM_T, init_data: bytes, work_dir: Path, workers: int | None = None) -> None:
         if not binaries.Mp4decrypt:
-            raise coded(EnvironmentError("mp4decrypt executable not found but is required."), APIErrorCode.DRM_ERROR)
+            raise coded(OSError("mp4decrypt executable not found but is required."), APIErrorCode.DRM_ERROR)
 
         self.drm = drm
         self.key_args = drm.mp4decrypt_key_args(kidless_track_kids(init_data))
@@ -61,7 +61,7 @@ class SegmentDecrypter:
 
         self.pool = ThreadPoolExecutor(max_workers=min(workers or os.cpu_count() or 4, MAX_WORKERS))
         self.futures: list[Future] = []
-        self._init_bytes: Optional[bytes] = None
+        self._init_bytes: bytes | None = None
 
     def submit(self, segment: Path) -> Future:
         """Queue one downloaded segment for decryption and return its future."""

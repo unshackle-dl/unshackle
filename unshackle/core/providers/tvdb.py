@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Collection
 from difflib import SequenceMatcher
-from typing import Any, Optional, Union
+from typing import Any
 
 import requests
 
@@ -10,7 +10,7 @@ from unshackle.core.config import config
 from unshackle.core.providers._base import ExternalIds, MetadataProvider, MetadataResult, clean, strip_year
 
 
-def primary_language(data: dict) -> Optional[str]:
+def primary_language(data: dict) -> str | None:
     """Search results spell the field primary_language, the extended record originalLanguage."""
     return data.get("primary_language") or data.get("originalLanguage") or None
 
@@ -23,17 +23,17 @@ SEASON_TYPES: tuple[str, ...] = ("official", "dvd", "absolute", "alternate", "re
 AIRED_ORDER = "official"
 
 # cached per-process; providers are re-instantiated per lookup
-_token: Optional[str] = None
+_token: str | None = None
 
 
-def parse_int(value: Optional[str]) -> Optional[int]:
+def parse_int(value: str | None) -> int | None:
     try:
         return int(value)  # type: ignore[arg-type]
     except (TypeError, ValueError):
         return None
 
 
-def ids_from_remote(remote_ids: Optional[list], tvdb_id: Optional[int]) -> ExternalIds:
+def ids_from_remote(remote_ids: list | None, tvdb_id: int | None) -> ExternalIds:
     """Assemble ExternalIds from a TVDB remote_ids/remoteIds list."""
     ext = ExternalIds(tvdb_id=tvdb_id)
     for entry in remote_ids or []:
@@ -46,12 +46,10 @@ def ids_from_remote(remote_ids: Optional[list], tvdb_id: Optional[int]) -> Exter
     return ext
 
 
-def pick_match(
-    results: list[dict], search_title: str, year: Optional[int]
-) -> tuple[Optional[dict], Optional[str], float]:
+def pick_match(results: list[dict], search_title: str, year: int | None) -> tuple[dict | None, str | None, float]:
     """The result whose title matches best, ignoring any whose year is more than a year out."""
-    best: Optional[dict] = None
-    best_title: Optional[str] = None
+    best: dict | None = None
+    best_title: str | None = None
     best_ratio = 0.0
     for result in results:
         result_year = parse_int(result.get("year"))
@@ -81,7 +79,7 @@ class TVDBProvider(MetadataProvider):
     def is_available(self) -> bool:
         return bool(config.tvdb_api_key)
 
-    def login(self) -> Optional[str]:
+    def login(self) -> str | None:
         global _token
         payload: dict[str, str] = {"apikey": config.tvdb_api_key}
         if config.tvdb_pin:
@@ -95,7 +93,7 @@ class TVDBProvider(MetadataProvider):
             _token = None
         return _token
 
-    def api_get(self, path: str, params: Optional[dict] = None) -> Any:
+    def api_get(self, path: str, params: dict | None = None) -> Any:
         """The `data` payload of a TVDB response: a dict for entities, a list for searches."""
         global _token
         token = _token or self.login()
@@ -122,7 +120,7 @@ class TVDBProvider(MetadataProvider):
                 return None
         return None
 
-    def search(self, title: str, year: Optional[int], kind: str) -> Optional[MetadataResult]:
+    def search(self, title: str, year: int | None, kind: str) -> MetadataResult | None:
         search_title = strip_year(title)
         self.log.debug("Searching TVDB for %r (%s, %s)", search_title, kind, year)
 
@@ -165,11 +163,11 @@ class TVDBProvider(MetadataProvider):
             raw=best,
         )
 
-    def fetch_extended(self, tvdb_id: int, kind: str) -> Optional[dict]:
+    def fetch_extended(self, tvdb_id: int, kind: str) -> dict | None:
         path = KIND_TO_PATH.get(kind, "series")
         return self.api_get(f"/{path}/{tvdb_id}/extended", {"short": "true"})
 
-    def get_by_id(self, provider_id: Union[int, str], kind: str) -> Optional[MetadataResult]:
+    def get_by_id(self, provider_id: int | str, kind: str) -> MetadataResult | None:
         tvdb_id = int(provider_id)
         detail = self.fetch_extended(tvdb_id, kind)
         if not detail:
@@ -189,7 +187,7 @@ class TVDBProvider(MetadataProvider):
             raw=detail,
         )
 
-    def get_external_ids(self, provider_id: Union[int, str], kind: str) -> ExternalIds:
+    def get_external_ids(self, provider_id: int | str, kind: str) -> ExternalIds:
         tvdb_id = int(provider_id)
         detail = self.fetch_extended(tvdb_id, kind)
         if not detail:
@@ -243,7 +241,7 @@ class TVDBProvider(MetadataProvider):
 
     def get_order_map(
         self, tvdb_id: int, order: str, source_order: str = AIRED_ORDER
-    ) -> dict[tuple[int, int], tuple[int, int, Optional[str]]]:
+    ) -> dict[tuple[int, int], tuple[int, int, str | None]]:
         """Map (season, episode) in `source_order` to (season, episode, name) in `order`.
 
         Every order lists the same episodes under the same TVDB episode ID, which is what
@@ -259,7 +257,7 @@ class TVDBProvider(MetadataProvider):
             return {}
 
         by_id = {ep.get("id"): ep for ep in target}
-        mapping: dict[tuple[int, int], tuple[int, int, Optional[str]]] = {}
+        mapping: dict[tuple[int, int], tuple[int, int, str | None]] = {}
         for ep in source:
             match = by_id.get(ep.get("id"))
             if not match:
@@ -273,7 +271,7 @@ class TVDBProvider(MetadataProvider):
         self.log.debug("TVDB %s -> %s order: mapped %d/%d episodes", source_order, order, len(mapping), len(source))
         return mapping
 
-    def find_by_imdb_id(self, imdb_id: str, kind: str) -> Optional[ExternalIds]:
+    def find_by_imdb_id(self, imdb_id: str, kind: str) -> ExternalIds | None:
         """Get a TVDB ID from an IMDb ID through /search/remoteid."""
         results = self.api_get(f"/search/remoteid/{imdb_id}")
         if not results:

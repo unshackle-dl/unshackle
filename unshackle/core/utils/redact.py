@@ -5,8 +5,9 @@ from __future__ import annotations
 import logging
 import re
 import sys
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable, Optional, overload
+from typing import overload
 from urllib.parse import urlsplit, urlunsplit
 
 REDACTED = "***"
@@ -21,7 +22,7 @@ SENSITIVE_QUERY_PARAM_RE = re.compile(
 )
 
 
-def redact_text(text: Optional[str], secrets: Iterable[str] = ()) -> Optional[str]:
+def redact_text(text: str | None, secrets: Iterable[str] = ()) -> str | None:
     """
     Mask URL userinfo, secret-bearing query parameters, and any known secret
     strings inside a free-text value before unshackle logs or serializes it.
@@ -120,7 +121,7 @@ def path_redaction_enabled() -> bool:
 def redact_path(text: str) -> str: ...
 @overload
 def redact_path(text: None) -> None: ...
-def redact_path(text: Optional[str]) -> Optional[str]:
+def redact_path(text: str | None) -> str | None:
     """Replace local base-directory prefixes (install root, venv, home) in ``text`` with tokens.
 
     Idempotent and cheap. It touches only the strings that contain a known base dir, so URLs
@@ -140,7 +141,7 @@ URL_RE = re.compile(r"https?://[^\s\"'<>\\]+", re.IGNORECASE)
 EXT_RE = re.compile(r"^\.[A-Za-z0-9]{1,5}$")
 
 
-def collapse_url(match: "re.Match[str]") -> str:
+def collapse_url(match: re.Match[str]) -> str:
     url = match.group(0)
     try:
         suffix = Path(urlsplit(url).path).suffix
@@ -151,7 +152,7 @@ def collapse_url(match: "re.Match[str]") -> str:
     return f"redacted{suffix}"
 
 
-def redact_url(text: Optional[str]) -> Optional[str]:
+def redact_url(text: str | None) -> str | None:
     """Collapse every http(s) URL in ``text`` to ``redacted[.ext]``.
 
     Hides media/CDN/manifest/segment/api locations (host + path + query) from shareable debug
@@ -163,12 +164,12 @@ def redact_url(text: Optional[str]) -> Optional[str]:
     return URL_RE.sub(collapse_url, text)
 
 
-def redact_all(text: Optional[str]) -> Optional[str]:
+def redact_all(text: str | None) -> str | None:
     """Full redaction for logged strings: secrets, then URLs, then local path prefixes."""
     return redact_path(redact_url(redact_text(text)))
 
 
-def redact_secrets(text: Optional[str]) -> Optional[str]:
+def redact_secrets(text: str | None) -> str | None:
     """Redact text that goes back to the caller: secrets and local path prefixes only.
 
     URLs stay readable. The caller supplied the URL that failed, or already holds it, so a

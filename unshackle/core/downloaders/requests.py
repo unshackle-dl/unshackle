@@ -12,16 +12,18 @@ import threading
 import time
 import traceback
 from collections import OrderedDict, deque
+from collections.abc import Callable, Generator, MutableMapping
 from concurrent.futures import FIRST_COMPLETED, wait
 from concurrent.futures.thread import ThreadPoolExecutor
 from copy import copy
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
+from functools import partial
 from http.cookiejar import CookieJar
 from pathlib import Path
 from queue import Empty, Queue
 from string import Formatter
-from typing import Any, Callable, Generator, MutableMapping, Optional, Union, cast
+from typing import Any, cast
 
 from requests import Session
 from requests.adapters import HTTPAdapter, Retry
@@ -96,7 +98,7 @@ class SpeedWindow:
         # zero-byte seed keeps early readings from exceeding the true rate
         self.samples: deque[tuple[float, int]] = deque([(start, 0)])
 
-    def rate(self, now: float, total: int) -> Optional[float]:
+    def rate(self, now: float, total: int) -> float | None:
         self.samples.append((now, total))
         while now - self.samples[0][0] > SPEED_ROLLING_WINDOW:
             self.samples.popleft()
@@ -129,7 +131,7 @@ class TokenBucket:
             DOWNLOAD_CANCELLED.wait(wait)
 
 
-speed_limiter: Optional[TokenBucket] = None
+speed_limiter: TokenBucket | None = None
 speed_limit_locked = False
 
 SPEED_UNITS = {
@@ -144,7 +146,7 @@ SPEED_UNITS = {
 }
 
 
-def parse_speed_limit(value: Union[str, int, float, None]) -> Optional[float]:
+def parse_speed_limit(value: str | int | float | None) -> float | None:
     """
     Parse a human-readable speed limit into bytes/sec, or None for unlimited.
 
@@ -173,7 +175,7 @@ def format_speed(bytes_per_sec: float) -> str:
     return f"{filesize.decimal(int(bytes_per_sec))}/s"
 
 
-def set_speed_limit(bytes_per_sec: Optional[float], lock: bool = False) -> None:
+def set_speed_limit(bytes_per_sec: float | None, lock: bool = False) -> None:
     """
     Set (or clear) the global download speed limit shared by all threads.
 
@@ -223,7 +225,7 @@ class AdaptiveWorkerController:
     """
 
     def __init__(
-        self, cap: int, start: Optional[int] = None, tick: float = ADAPTIVE_TICK, window: float = SPEED_ROLLING_WINDOW
+        self, cap: int, start: int | None = None, tick: float = ADAPTIVE_TICK, window: float = SPEED_ROLLING_WINDOW
     ) -> None:
         self.cap = max(ADAPTIVE_MIN, cap)
         base = self.cap if start is None else start
@@ -231,10 +233,10 @@ class AdaptiveWorkerController:
         self.tick = tick
         self.window = window
         self._samples: deque[tuple[float, int]] = deque()
-        self._first_sample: Optional[float] = None
+        self._first_sample: float | None = None
         self._errors = 0
-        self._last_tick: Optional[float] = None
-        self._last_action: Optional[str] = None
+        self._last_tick: float | None = None
+        self._last_action: str | None = None
         self._speed_before_increase = 0.0
         self._target_before_increase = self.target
         self._cooldown = False
@@ -253,7 +255,7 @@ class AdaptiveWorkerController:
     def record_error(self, now: float) -> None:
         self._errors += 1
 
-    def speed(self, now: float, span: Optional[float] = None) -> float:
+    def speed(self, now: float, span: float | None = None) -> float:
         """Rolling bytes/sec over the window, or over the trailing ``span`` seconds when given."""
         self.prune(now)
         if not self._samples:
@@ -272,7 +274,7 @@ class AdaptiveWorkerController:
         # measured from the first-ever sample so pruning cannot starve the check
         return self._first_sample is not None and (now - self._first_sample) >= self.tick / 2
 
-    def update(self, now: float, inflight_plus_remaining: Optional[int] = None) -> int:
+    def update(self, now: float, inflight_plus_remaining: int | None = None) -> int:
         """Evaluate the policy at most once per tick. Return the current target.
 
         ``inflight_plus_remaining`` (when given) is the count of segments still in flight or
@@ -303,7 +305,7 @@ class AdaptiveWorkerController:
             self._last_action = None
             return self.target
 
-        reason: Optional[str] = None
+        reason: str | None = None
         if errors >= ADAPTIVE_ERROR_BURST:
             self.target = max(ADAPTIVE_MIN, self.target // 2)
             self._cooldown = True
@@ -340,7 +342,7 @@ class AdaptiveWorkerController:
         return self.target
 
 
-def permanent_status(exc: BaseException) -> Optional[int]:
+def permanent_status(exc: BaseException) -> int | None:
     """HTTP status of ``exc`` when it is a client error that no retry can fix.
 
     408 and 429 do not count: they are transient, and a fan-out that trips a per-client rate
@@ -383,15 +385,15 @@ def retry_sleep(exc: Exception, attempts: int) -> float:
         except Exception:
             retry_after = None
         if retry_after:
-            wait: Optional[float] = None
+            wait: float | None = None
             try:
                 wait = float(retry_after)
             except ValueError:
                 try:
                     retry_date = parsedate_to_datetime(retry_after)
                     if retry_date.tzinfo is None:
-                        retry_date = retry_date.replace(tzinfo=timezone.utc)
-                    wait = (retry_date - datetime.now(timezone.utc)).total_seconds()
+                        retry_date = retry_date.replace(tzinfo=UTC)
+                    wait = (retry_date - datetime.now(UTC)).total_seconds()
                 except Exception:
                     wait = None
             if wait is not None and math.isfinite(wait):
@@ -452,7 +454,7 @@ def is_outage(exc: BaseException) -> bool:
     return False
 
 
-def is_content_encoded(value: Optional[str]) -> bool:
+def is_content_encoded(value: str | None) -> bool:
     """
     Whether a Content-Encoding value names any coding other than absent or `identity`.
 
@@ -527,7 +529,7 @@ def range_covers_full_body(headers: MutableMapping[str, Any], content_length: in
     return start == 0 and content_length == end + 1
 
 
-def parse_content_range(value: Any) -> Optional[tuple[int, int, Optional[int]]]:
+def parse_content_range(value: Any) -> tuple[int, int, int | None] | None:
     """Parse a 206's ``Content-Range`` into ``(start, end, total)``. Gives None when absent or unparseable.
 
     ``total`` is None for an unknown complete length (``*``). None fails closed: a caller
@@ -541,7 +543,7 @@ def parse_content_range(value: Any) -> Optional[tuple[int, int, Optional[int]]]:
     return int(match.group(1)), int(match.group(2)), None if match.group(3) == "*" else int(match.group(3))
 
 
-def parse_content_range_unsatisfied(value: Any) -> Optional[int]:
+def parse_content_range_unsatisfied(value: Any) -> int | None:
     """Parse a 416's ``Content-Range`` into the complete length. Gives None when absent or unknown.
 
     A 416 answers with ``bytes */N`` (or ``bytes */*``), which the 206 form does not cover.
@@ -552,7 +554,7 @@ def parse_content_range_unsatisfied(value: Any) -> Optional[int]:
     return int(match.group(1)) if match else None
 
 
-def range_clamped_to_end(content_range: tuple[int, int, Optional[int]], slice_end: int) -> bool:
+def range_clamped_to_end(content_range: tuple[int, int, int | None], slice_end: int) -> bool:
     """Whether a 206 stops early only because the requested range ends past the resource.
 
     RFC 9110 clamps a range end at or beyond the complete length to the last byte, so the
@@ -562,7 +564,7 @@ def range_clamped_to_end(content_range: tuple[int, int, Optional[int]], slice_en
     return total is not None and end == total - 1 and slice_end >= total
 
 
-def request_range(headers: MutableMapping[str, Any]) -> Optional[tuple[int, Optional[int]]]:
+def request_range(headers: MutableMapping[str, Any]) -> tuple[int, int | None] | None:
     """
     The request's ``Range`` as ``(start, end)``. Gives None when absent or not ``bytes=start-...``.
 
@@ -592,7 +594,7 @@ def force_unblock_stream(stream: Any) -> None:
         pass
 
 
-def split_ranges(size: int, max_parts: Optional[int], part_target: int) -> list[tuple[int, int]]:
+def split_ranges(size: int, max_parts: int | None, part_target: int) -> list[tuple[int, int]]:
     """Split ``[0, size)`` into inclusive ``[start, end]`` byte ranges with no gaps or overlaps.
 
     Parts of ~``part_target`` bytes each, at most ``max_parts`` of them when given. Pure, with no I/O, so testable.
@@ -758,15 +760,15 @@ def dispatch_parts(
 def download(
     url: str,
     save_path: Path,
-    session: Optional[Any] = None,
+    session: Any | None = None,
     segmented: bool = False,
-    part_offset: Optional[int] = None,
-    part_end: Optional[int] = None,
-    claimed: Optional[Callable[[], bool]] = None,
-    racing: Optional[Callable[[], bool]] = None,
-    abort: Optional[threading.Event] = None,
-    on_retry: Optional[Callable[[Exception], None]] = None,
-    register: Optional[Callable[[Any, bool], None]] = None,
+    part_offset: int | None = None,
+    part_end: int | None = None,
+    claimed: Callable[[], bool] | None = None,
+    racing: Callable[[], bool] | None = None,
+    abort: threading.Event | None = None,
+    on_retry: Callable[[Exception], None] | None = None,
+    register: Callable[[Any, bool], None] | None = None,
     **kwargs: Any,
 ) -> Generator[dict[str, Any], None, None]:
     """
@@ -855,8 +857,8 @@ def download(
     started = _time()
     written = 0
     resumes = 0
-    request_limit: Optional[int] = None
-    known_total: Optional[int] = None
+    request_limit: int | None = None
+    known_total: int | None = None
     high_water = 0
     progress_seeded = False
     while True:
@@ -887,7 +889,7 @@ def download(
             if not any(str(k).lower() == "accept-encoding" for k in req_headers):
                 req_headers["Accept-Encoding"] = "identity"
             # inclusive end of this request when it covers only part of what is left, else None
-            chunk_end: Optional[int] = None
+            chunk_end: int | None = None
             if part_mode and part_offset is not None and part_end is not None:  # spelled so mypy narrows
                 req_start = part_offset + written
                 chunk_end = part_end
@@ -928,7 +930,7 @@ def download(
                         yield dict(advance=1)
                     break
                 tmp_file.unlink(missing_ok=True)
-                raise IOError(f"resume from byte {resume_offset} got a 416, complete length {complete}")
+                raise OSError(f"resume from byte {resume_offset} got a 416, complete length {complete}")
 
             stream.raise_for_status()
 
@@ -950,14 +952,14 @@ def download(
                         resume_offset = 0
                     else:
                         tmp_file.unlink(missing_ok=True)
-                        raise IOError(f"resume from byte {resume_offset} got Content-Range {content_range!r}")
+                        raise OSError(f"resume from byte {resume_offset} got Content-Range {content_range!r}")
                 elif content_range[2] is not None:
                     known_total = content_range[2]
             if (not part_mode) and resume_offset > 0 and not resumed:
                 resume_offset = 0
             if part_mode and part_offset is not None and part_end is not None:  # spelled so mypy narrows
                 if stream.status_code != 206:
-                    raise IOError(f"expected 206 for ranged part, got {stream.status_code}")
+                    raise OSError(f"expected 206 for ranged part, got {stream.status_code}")
                 content_range = parse_content_range(
                     stream.headers.get("Content-Range") or stream.headers.get("content-range")
                 )
@@ -971,7 +973,7 @@ def download(
                     # an end past what this request asked for would spill into a sibling
                     # part's region, and a total at or below part_end means the resource
                     # changed under the part plan; fail the attempt before any byte is written
-                    raise IOError(f"part {part_offset}-{part_end} got Content-Range {content_range!r}")
+                    raise OSError(f"part {part_offset}-{part_end} got Content-Range {content_range!r}")
             if use_rnet:
                 content_encoded = is_content_encoded(
                     stream.headers.get("Content-Encoding") or stream.headers.get("content-encoding")
@@ -996,7 +998,7 @@ def download(
                 )
                 if fresh_range is not None:
                     if fresh_range[0] != resume_offset:
-                        raise IOError(f"206 body starts at byte {fresh_range[0]}, expected {resume_offset}")
+                        raise OSError(f"206 body starts at byte {fresh_range[0]}, expected {resume_offset}")
                     known_total = fresh_range[2]
 
             if item_range and not part_mode and stream.status_code != 206:
@@ -1005,7 +1007,7 @@ def download(
                 # fail the attempt unless the slice spans the whole resource, in which case the
                 # 200 body is byte-identical to the 206 and safe to keep
                 if not (stream.status_code == 200 and range_covers_full_body(req_headers, content_length)):
-                    raise IOError(f"expected 206 for byte-range segment, got {stream.status_code}")
+                    raise OSError(f"expected 206 for byte-range segment, got {stream.status_code}")
 
             if item_range and not part_mode and stream.status_code == 206:
                 # a 206 for a different range than the slice asked for (e.g. the whole parent,
@@ -1026,7 +1028,7 @@ def download(
                             and not range_clamped_to_end(content_range, slice_end)
                         )
                     ):
-                        raise IOError(
+                        raise OSError(
                             f"byte-range segment got Content-Range {content_range!r}, "
                             f"expected {slice_start}-{slice_end if slice_end is not None else ''}"
                         )
@@ -1035,7 +1037,7 @@ def download(
 
             if resumed and content_encoded:
                 tmp_file.unlink(missing_ok=True)
-                raise IOError(f"resume from byte {resume_offset} came back content-encoded")
+                raise OSError(f"resume from byte {resume_offset} came back content-encoded")
 
             limiter = speed_limiter
             chunk_size = adaptive_chunk_size(content_length)
@@ -1080,9 +1082,9 @@ def download(
                         # only pay the per-arrival read1 tax while this segment is actually
                         # racing; a blocking full-chunk read otherwise (the common case)
                         _raw_read = stream.raw.read
-                        chunks = iter(lambda: _read1(chunk_size) if racing() else _raw_read(chunk_size), b"")
+                        chunks = iter(lambda: _read1(chunk_size) if racing() else _raw_read(chunk_size), b"")  # noqa: B023
                     else:
-                        chunks = iter(lambda: stream.raw.read(chunk_size), b"")
+                        chunks = iter(partial(stream.raw.read, chunk_size), b"")
                 else:
                     chunks = stream.iter_content(chunk_size=chunk_size)
 
@@ -1142,7 +1144,7 @@ def download(
                 expected = part_end - part_offset + 1
                 target = expected if chunk_end is None else chunk_end - part_offset + 1
                 if written < target:
-                    raise IOError(f"Failed to read part {part_offset}-{part_end}: got {written}/{expected}")
+                    raise OSError(f"Failed to read part {part_offset}-{part_end}: got {written}/{expected}")
                 if written < expected:
                     # this request's sub-range arrived whole; the rest of the part is the next
                     # request, not a retry, so the attempt budget starts over for it
@@ -1154,7 +1156,7 @@ def download(
                 # chunk loop ends without raising, so without this check a truncated segment would
                 # finalize as complete and corrupt the merge. content_length==0 (chunked/gzip)
                 # is unknown-length and correctly skips the check.
-                raise IOError(f"Failed to read {content_length} bytes from the track URI.")
+                raise OSError(f"Failed to read {content_length} bytes from the track URI.")
 
             if not part_mode:
                 if known_total is not None:
@@ -1163,7 +1165,7 @@ def download(
                     incomplete = written == 0 or (stream.status_code == 206 and not item_range)
                 if incomplete:
                     if resume_offset + written <= resume_start:
-                        raise IOError(f"range from byte {resume_start} returned no bytes past it")
+                        raise OSError(f"range from byte {resume_start} returned no bytes past it")
                     resume_offset += written
                     if resume_offset > high_water:
                         high_water = resume_offset
@@ -1255,7 +1257,7 @@ def rebuildable_adapter(adapter: Any) -> bool:
     return type(adapter) in (HTTPAdapter, TimeoutHTTPAdapter)
 
 
-def build_session_spec(session: Optional[Any]) -> Optional[dict[str, Any]]:
+def build_session_spec(session: Any | None) -> dict[str, Any] | None:
     """Picklable spec to rebuild ``session`` in a child process. Gives None when it is not cheaply rebuildable.
 
     Live sessions (sockets, TLS state, threads) cannot cross a process boundary, so each child
@@ -1305,7 +1307,7 @@ def default_max_workers() -> int:
     return min(16, (os.cpu_count() or 1) + 4)
 
 
-def rebuild_session(spec: dict[str, Any], max_workers: int) -> Optional[Any]:
+def rebuild_session(spec: dict[str, Any], max_workers: int) -> Any | None:
     """Reconstruct an HTTP session inside a child process from a spec built by ``build_session_spec``.
 
     ``max_workers`` sizes the connection pool to what this child runs. The rebuilt HTTP session
@@ -1384,9 +1386,9 @@ def download_multiprocess(
     urls: list[Any],
     output_dir: Path,
     filename: str,
-    headers: Optional[MutableMapping[str, Union[str, bytes]]],
-    cookies: Optional[Union[MutableMapping[str, str], CookieJar]],
-    proxy: Optional[str],
+    headers: MutableMapping[str, str | bytes] | None,
+    cookies: MutableMapping[str, str] | CookieJar | None,
+    proxy: str | None,
     max_workers: int,
     adaptive: bool,
     spec: dict[str, Any],
@@ -1482,7 +1484,7 @@ def download_multiprocess(
                         for p in procs:
                             p.terminate()
                         codes = [p.exitcode for p in procs]
-                        raise RuntimeError(f"segment download child died without result (exitcodes: {codes})")
+                        raise RuntimeError(f"segment download child died without result (exitcodes: {codes})") from None
             if event is not None:
                 dead_ticks = 0
                 if "__mp_done__" in event:
@@ -1535,14 +1537,14 @@ def download_multiprocess(
 
 
 def requests(
-    urls: Union[str, dict[str, Any], list[str], list[dict[str, Any]], list[Union[str, dict[str, Any]]]],
+    urls: str | dict[str, Any] | list[str] | list[dict[str, Any]] | list[str | dict[str, Any]],
     output_dir: Path,
     filename: str,
-    headers: Optional[MutableMapping[str, Union[str, bytes]]] = None,
-    cookies: Optional[Union[MutableMapping[str, str], CookieJar]] = None,
-    proxy: Optional[str] = None,
-    max_workers: Optional[int] = None,
-    session: Optional[Any] = None,
+    headers: MutableMapping[str, str | bytes] | None = None,
+    cookies: MutableMapping[str, str] | CookieJar | None = None,
+    proxy: str | None = None,
+    max_workers: int | None = None,
+    session: Any | None = None,
     adaptive: bool = False,
     processes: int = 1,
     index_offset: int = 0,
@@ -1903,7 +1905,7 @@ def requests(
         tail_skipped: set[int] = set()
         part_aborts: list[threading.Event] = []
 
-        def submit(count: int, only: Optional[set[int]] = None) -> None:
+        def submit(count: int, only: set[int] | None = None) -> None:
             # only=<set> submits just those indices (used in the tail window to release
             # segments the boost declined while holding back boost candidates); with no
             # `only`, submits the leading `count` segments in FIFO order.
@@ -1934,7 +1936,7 @@ def requests(
             part_lock: threading.Lock,
             req_kwargs: dict[str, Any],
         ) -> None:
-            failure: Optional[Exception] = None
+            failure: Exception | None = None
             try:
                 # part_mode download writes [start, end] into the pre-truncated target and
                 # emits only byte-`advance`; swallow those, since tail segments report at segment

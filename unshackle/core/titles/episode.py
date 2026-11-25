@@ -1,8 +1,9 @@
 import re
 from abc import ABC
 from collections import Counter
+from collections.abc import Collection, Iterable
 from datetime import date, datetime
-from typing import Any, Collection, Iterable, Optional, Union
+from typing import Any
 
 from langcodes import Language
 from pymediainfo import MediaInfo
@@ -19,8 +20,8 @@ from unshackle.core.utils.template_formatter import TemplateFormatter, detect_sp
 class Episode(Title):
     # class-level defaults so Episodes restored from an older title cache read as part-less,
     # without an absolute number and not as sport
-    part: Optional[int] = None
-    absolute: Optional[int] = None
+    part: int | None = None
+    absolute: int | None = None
     sport: bool = False
 
     def __init__(
@@ -28,16 +29,16 @@ class Episode(Title):
         id_: Any,
         service: type,
         title: str,
-        season: Union[int, str],
-        number: Union[int, str],
-        name: Optional[str] = None,
-        year: Optional[Union[int, str]] = None,
-        language: Optional[Union[str, Language]] = None,
-        data: Optional[Any] = None,
-        description: Optional[str] = None,
-        air_date: Optional[Union[date, str]] = None,
-        part: Optional[Union[int, str]] = None,
-        absolute: Optional[Union[int, str]] = None,
+        season: int | str,
+        number: int | str,
+        name: str | None = None,
+        year: int | str | None = None,
+        language: str | Language | None = None,
+        data: Any | None = None,
+        description: str | None = None,
+        air_date: date | str | None = None,
+        part: int | str | None = None,
+        absolute: int | str | None = None,
         sport: bool = False,
     ) -> None:
         super().__init__(id_, service, language, data)
@@ -224,7 +225,7 @@ class Episode(Title):
     def get_filename(self, media_info: MediaInfo, folder: bool = False, show_service: bool = True) -> str:
         if folder:
             sports = self.sport and bool(config.folder_templates.get("sports"))
-            template: Optional[str] = config.get_folder_template("sports" if sports else "series")
+            template: str | None = config.get_folder_template("sports" if sports else "series")
             if template:
                 # all parts of an episode land in the same season folder
                 context = self.build_template_context(media_info, show_service, include_part=False)
@@ -283,7 +284,7 @@ class Episode(Title):
 
 
 class Series(SortedKeyList, ABC):
-    def __init__(self, iterable: Optional[Iterable] = None) -> None:
+    def __init__(self, iterable: Iterable | None = None) -> None:
         # part slots before year so existing ties still resolve by year
         super().__init__(iterable, key=lambda x: (x.season, x.number, x.part or 0, x.year or 0))
 

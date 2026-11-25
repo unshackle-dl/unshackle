@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import inspect
 import types
-from typing import Any, Iterator
+from collections.abc import Iterator
+from typing import Any
 
 import pytest
 from langcodes import Language

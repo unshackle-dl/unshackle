@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import base64
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import requests
 
@@ -23,11 +23,11 @@ class DecryptLabsRemoteCDM(HttpCdm):
         secret: str,
         host: str = "https://keyxtractor.decryptlabs.com",
         device_name: str = "ChromeCDM",
-        service_name: Optional[str] = None,
-        vaults: Optional[Vaults] = None,
-        device_type: Optional[str] = None,
-        system_id: Optional[int] = None,
-        security_level: Optional[int] = None,
+        service_name: str | None = None,
+        vaults: Vaults | None = None,
+        device_type: str | None = None,
+        system_id: int | None = None,
+        security_level: int | None = None,
         **kwargs: Any,
     ) -> None:
         """
@@ -62,8 +62,8 @@ class DecryptLabsRemoteCDM(HttpCdm):
 
     def _request_challenge(
         self,
-        session: Dict[str, Any],
-        body: Dict[str, Any],
+        session: dict[str, Any],
+        body: dict[str, Any],
         license_type: str,
         privacy_mode: bool,
     ) -> bytes:
@@ -115,7 +115,7 @@ class DecryptLabsRemoteCDM(HttpCdm):
         unexpected = f"Unexpected API response format: message_type={message_type}, available_fields={list(data)}"
         raise requests.RequestException(self._api_error(f"API response: {data['message']} - {unexpected}", data))
 
-    def _request_keys(self, session: Dict[str, Any], body: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def _request_keys(self, session: dict[str, Any], body: dict[str, Any]) -> list[dict[str, Any]]:
         data = self._post("/decrypt-response", body, "License decrypt failed")
 
         if data.get("message") != "success":
@@ -125,7 +125,7 @@ class DecryptLabsRemoteCDM(HttpCdm):
         return self.parse_keys_response(data)
 
     @staticmethod
-    def _api_error(message: str, data: Dict[str, Any]) -> str:
+    def _api_error(message: str, data: dict[str, Any]) -> str:
         """The message with the details and the error the API added to its answer."""
         if "details" in data:
             message += f" - Details: {data['details']}"
@@ -133,7 +133,7 @@ class DecryptLabsRemoteCDM(HttpCdm):
             message += f" - Error: {data['Error']}"
         return message
 
-    def parse_cached_keys(self, cached_keys_data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def parse_cached_keys(self, cached_keys_data: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Parse cached keys from API response.
 
         Args:
@@ -154,7 +154,7 @@ class DecryptLabsRemoteCDM(HttpCdm):
             pass
         return keys
 
-    def parse_keys_response(self, data: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def parse_keys_response(self, data: dict[str, Any]) -> list[dict[str, Any]]:
         """Parse keys from decrypt response."""
         keys = []
 

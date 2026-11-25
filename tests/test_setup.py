@@ -8,9 +8,9 @@ import subprocess
 import sys
 import tarfile
 import zipfile
+from collections.abc import Callable, Iterable, Iterator
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Callable, Iterable, Iterator
 
 import pytest
 import yaml

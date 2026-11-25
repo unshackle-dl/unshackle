@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from pymediainfo import MediaInfo
 
@@ -68,7 +68,7 @@ class Placement:
             or bool(isinstance(self.title, Movie) and config.get_folder_template("movies"))
         )
 
-    def folder(self, media_info: Optional[MediaInfo]) -> Path:
+    def folder(self, media_info: MediaInfo | None) -> Path:
         """The folder of the title: the title folder when the title has one, then the Sample folder."""
         folder = self.root
         if media_info and self.has_title_folder:
@@ -80,7 +80,7 @@ class Placement:
         name = self.title.get_filename(media_info, show_service=not self.no_source)
         return sample_name(name, self.title) if self.sample else name
 
-    def claim(self, folder: Path, stem: str, suffix: str, audio_codec: Optional[Audio.Codec] = None) -> Path:
+    def claim(self, folder: Path, stem: str, suffix: str, audio_codec: Audio.Codec | None = None) -> Path:
         """The final path for ``stem`` and ``suffix`` in ``folder``, which this title then holds."""
         folder.mkdir(parents=True, exist_ok=True)
         sep = config.get_template_separator(template_type(self.title))
@@ -95,7 +95,7 @@ class Placement:
         self.used.add(path)
         return path
 
-    def track_file(self, folder: Path, track: Any, media_info: MediaInfo, stem: Optional[str] = None) -> Path:
+    def track_file(self, folder: Path, track: Any, media_info: MediaInfo, stem: str | None = None) -> Path:
         """The final path of a track file saved on its own, named after ``stem`` or else the title."""
         stem = f"{stem or self.name(media_info)}{track_file_suffix(track)}"
         return self.claim(folder, stem, no_mux_extension(track, track.path, media_info))

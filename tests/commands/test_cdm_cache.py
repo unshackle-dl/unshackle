@@ -9,7 +9,7 @@ key pair and a blocking request to its host.
 from __future__ import annotations
 
 import logging
-from typing import Any, Optional
+from typing import Any
 
 import pytest
 
@@ -32,7 +32,7 @@ def builds(monkeypatch) -> list[tuple[str, str]]:
     """Record every ``load_cdm`` call and hand back a fresh stub for each one."""
     calls: list[tuple[str, str]] = []
 
-    def fake_load_cdm(cdm_name: str, *, service_name: str = "", vaults: Optional[Any] = None) -> StubCdm:
+    def fake_load_cdm(cdm_name: str, *, service_name: str = "", vaults: Any | None = None) -> StubCdm:
         calls.append((cdm_name, service_name))
         return StubCdm(cdm_name, service_name)
 

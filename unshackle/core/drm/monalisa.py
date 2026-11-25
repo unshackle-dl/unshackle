@@ -9,7 +9,7 @@ from __future__ import annotations
 import base64
 import logging
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import Any
 from uuid import UUID
 
 from unshackle.core.cdm.monalisa import MonaLisaCDM
@@ -41,9 +41,9 @@ class MonaLisa:
 
     def __init__(
         self,
-        ticket: Union[str, bytes],
+        ticket: str | bytes,
         device_path: Path,
-        tool_path: Optional[Path] = None,
+        tool_path: Path | None = None,
         **kwargs: Any,
     ) -> None:
         """
@@ -66,8 +66,8 @@ class MonaLisa:
         self._device_path = device_path
         self._tool_path = tool_path
         self._decrypted_segments: int = 0
-        self._kid: Optional[UUID] = None
-        self._key: Optional[str] = None
+        self._kid: UUID | None = None
+        self._key: str | None = None
         self.data: dict = kwargs or {}
 
         self.extract_keys()
@@ -88,14 +88,14 @@ class MonaLisa:
             finally:
                 cdm.close(session_id)
         except Exception as e:
-            raise MonaLisa.Exceptions.KeyExtractionFailed(f"Failed to extract keys: {e}")
+            raise MonaLisa.Exceptions.KeyExtractionFailed(f"Failed to extract keys: {e}")  # noqa: B904
 
     @classmethod
     def from_ticket(
         cls,
-        ticket: Union[str, bytes],
+        ticket: str | bytes,
         device_path: Path,
-        tool_path: Optional[Path] = None,
+        tool_path: Path | None = None,
     ) -> MonaLisa:
         """
         Make a MonaLisa DRM instance from a PSSH/ticket.
@@ -115,12 +115,12 @@ class MonaLisa:
         )
 
     @property
-    def kid(self) -> Optional[UUID]:
+    def kid(self) -> UUID | None:
         """Get the Key ID."""
         return self._kid
 
     @property
-    def key(self) -> Optional[str]:
+    def key(self) -> str | None:
         """Get the content key as hex string."""
         return self._key
 
@@ -146,7 +146,7 @@ class MonaLisa:
         return self._ticket
 
     @property
-    def content_id(self) -> Optional[str]:
+    def content_id(self) -> str | None:
         """
         Extract the Content ID from the PSSH for display.
 
@@ -191,7 +191,7 @@ class MonaLisa:
             return f"{self._kid.hex}:{self._key}"
         return ""
 
-    def decrypt_segment(self, segment_path: Path, output_path: Optional[Path] = None) -> None:
+    def decrypt_segment(self, segment_path: Path, output_path: Path | None = None) -> None:
         """
         Decrypt an individual segment file using the configured CLI tool via subprocess.
 
@@ -202,7 +202,7 @@ class MonaLisa:
         self._execute_decrypt(segment_path, output_path)
         self._decrypted_segments += 1
 
-    def decrypt(self, path: Path, output_path: Optional[Path] = None, *, is_segment: bool = False) -> None:
+    def decrypt(self, path: Path, output_path: Path | None = None, *, is_segment: bool = False) -> None:
         """
         Decrypt a media file (segment or track) using the configured CLI tool via subprocess.
 
@@ -223,7 +223,7 @@ class MonaLisa:
 
         self._execute_decrypt(path, output_path)
 
-    def _execute_decrypt(self, path: Path, output_path: Optional[Path] = None) -> None:
+    def _execute_decrypt(self, path: Path, output_path: Path | None = None) -> None:
         """Run the external tool into a temporary file, which replaces the target only on success."""
         if not path or not path.exists():
             raise ValueError(f"Target file does not exist: {path}")

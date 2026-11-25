@@ -4,7 +4,7 @@ take turns so the second one reads the content keys out of the cache."""
 from __future__ import annotations
 
 from threading import Lock
-from typing import Any, Optional
+from typing import Any
 from uuid import UUID
 
 import pytest
@@ -18,7 +18,7 @@ KID_B = UUID("22222222222222222222222222222222")
 
 
 class FakeDRM:
-    def __init__(self, kids: Optional[list[Any]] = None, content_id: Optional[str] = None) -> None:
+    def __init__(self, kids: list[Any] | None = None, content_id: str | None = None) -> None:
         self.kids = kids or []
         self.content_id = content_id
 

@@ -1,11 +1,9 @@
-from typing import Union
-
 from .episode import Episode, Series
 from .movie import Movie, Movies
 from .music import Album, Music, Song
 
-Title_T = Union[Movie, Episode, Song]
-Titles_T = Union[Movies, Series, Music, Album]
+Title_T = Movie | Episode | Song
+Titles_T = Movies | Series | Music | Album
 
 
 def remap_titles(titles: Titles_T, title_map: dict) -> Titles_T:

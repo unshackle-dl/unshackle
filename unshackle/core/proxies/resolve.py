@@ -6,7 +6,7 @@ import ipaddress
 import json
 import logging
 import re
-from typing import Any, List, Optional
+from typing import Any
 from urllib.parse import urlparse
 
 import click
@@ -33,11 +33,11 @@ class Unavailable(Proxy):
     def __repr__(self) -> str:
         return f"failed to load ({self.error})"
 
-    def get_proxy(self, query: str) -> Optional[str]:
+    def get_proxy(self, query: str) -> str | None:
         return None
 
 
-def find_provider(proxy_providers: List[Any], name: str, hint: str = "") -> Any:
+def find_provider(proxy_providers: list[Any], name: str, hint: str = "") -> Any:
     """
     Find a proxy provider by its class name, case-insensitive.
 
@@ -58,7 +58,7 @@ def find_provider(proxy_providers: List[Any], name: str, hint: str = "") -> Any:
     raise coded(ValueError(f"{message}. {hint}" if hint else message), APIErrorCode.INVALID_PROXY)
 
 
-def load_proxy_providers(exclude: tuple[str, ...] = (), raise_errors: bool = False, quiet: bool = False) -> List[Any]:
+def load_proxy_providers(exclude: tuple[str, ...] = (), raise_errors: bool = False, quiet: bool = False) -> list[Any]:
     """
     Build the proxy providers set in config: Basic first, then config key order, Control D last.
 
@@ -124,7 +124,7 @@ def load_proxy_providers(exclude: tuple[str, ...] = (), raise_errors: bool = Fal
     return proxy_providers
 
 
-def initialize_proxy_providers(raise_errors: bool = False, quiet: bool = False) -> List[Any]:
+def initialize_proxy_providers(raise_errors: bool = False, quiet: bool = False) -> list[Any]:
     """
     Load the proxy providers for the REST API and the remote service client.
 
@@ -140,7 +140,7 @@ def initialize_proxy_providers(raise_errors: bool = False, quiet: bool = False) 
 CITY_HINT = "A city query needs a proxy provider prefix, for example nordvpn:us:seattle."
 
 
-def split_proxy_query(proxy: str, proxy_providers: List[Any]) -> tuple[Optional[str], str]:
+def split_proxy_query(proxy: str, proxy_providers: list[Any]) -> tuple[str | None, str]:
     """
     Split a proxy value into the proxy provider that its prefix names and the query for it.
 
@@ -156,7 +156,7 @@ def split_proxy_query(proxy: str, proxy_providers: List[Any]) -> tuple[Optional[
     return name, query
 
 
-def pick_proxy(proxy_providers: List[Any], query: str, provider_name: Optional[str] = None) -> tuple[Any, str]:
+def pick_proxy(proxy_providers: list[Any], query: str, provider_name: str | None = None) -> tuple[Any, str]:
     """
     Get a proxy provider and its proxy URI: from the named one, or else from the first one that answers.
 
@@ -247,7 +247,7 @@ def describe_explicit_proxy(uri: str) -> str:
     return f"Using explicit Proxy: {mask_proxy(uri)}"
 
 
-def resolve_proxy(proxy: str, proxy_providers: List[Any]) -> Optional[str]:
+def resolve_proxy(proxy: str, proxy_providers: list[Any]) -> str | None:
     """Change a proxy parameter to a real proxy URI.
 
     Accepts:

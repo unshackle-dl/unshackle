@@ -6,18 +6,18 @@ import asyncio
 import threading
 from collections import deque
 from contextlib import suppress
-from typing import Any, Deque, Dict, List, Optional
+from typing import Any
 
 
 class EventBus:
     """Fan events out to every subscriber queue; drop when a subscriber falls behind."""
 
     def __init__(self, history: int = 20000) -> None:
-        self._subs: List[asyncio.Queue] = []
+        self._subs: list[asyncio.Queue] = []
         self.seq = 0
-        self.history: Deque[Dict[str, Any]] = deque(maxlen=history)
-        self._loop: Optional[asyncio.AbstractEventLoop] = None
-        self._loop_thread: Optional[threading.Thread] = None
+        self.history: deque[dict[str, Any]] = deque(maxlen=history)
+        self._loop: asyncio.AbstractEventLoop | None = None
+        self._loop_thread: threading.Thread | None = None
         self._lock = threading.RLock()
 
     def subscribe(self) -> asyncio.Queue:
@@ -31,7 +31,7 @@ class EventBus:
         with suppress(ValueError):
             self._subs.remove(queue)
 
-    def since(self, seq: int) -> List[Dict[str, Any]]:
+    def since(self, seq: int) -> list[dict[str, Any]]:
         """Return the history after ``seq``.
 
         ``deque.copy()`` is one C call, so it is atomic against an append from another thread.
@@ -40,7 +40,7 @@ class EventBus:
         """
         return [item for item in self.history.copy() if item["seq"] > seq]
 
-    def publish(self, event: str, data: Dict[str, Any]) -> None:
+    def publish(self, event: str, data: dict[str, Any]) -> None:
         """Record and fan out one event; safe to call from any thread.
 
         The lock is re-entrant because a log call inside it publishes again. ``seq``
@@ -62,7 +62,7 @@ class EventBus:
                 self._loop.call_soon_threadsafe(_put_drop, queue, item)
 
 
-def _put_drop(queue: asyncio.Queue, item: Dict[str, Any]) -> None:
+def _put_drop(queue: asyncio.Queue, item: dict[str, Any]) -> None:
     with suppress(asyncio.QueueFull):
         queue.put_nowait(item)
 
@@ -70,18 +70,18 @@ def _put_drop(queue: asyncio.Queue, item: Dict[str, Any]) -> None:
 bus = EventBus()
 
 
-def publish_service_event(action: str, tags: List[str], errors: Optional[List[str]] = None) -> None:
+def publish_service_event(action: str, tags: list[str], errors: list[str] | None = None) -> None:
     """Tell dashboard listeners that services were staged, applied, or failed to reload.
 
     Lives here rather than in ``core.services`` so the service loader never imports the API layer.
     """
-    data: Dict[str, Any] = {"action": action, "tags": list(tags)}
+    data: dict[str, Any] = {"action": action, "tags": list(tags)}
     if errors:
         data["errors"] = list(errors)
     bus.publish("service", data)
 
 
-def publish_refresh_events(repos: List[Dict[str, Any]]) -> None:
+def publish_refresh_events(repos: list[dict[str, Any]]) -> None:
     """Publish the ``service`` events one ``refresh_and_reload`` result implies.
 
     A tag counts as applied only when it changed, was not deferred, and did not fail to

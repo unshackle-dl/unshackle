@@ -15,12 +15,13 @@ import traceback
 import unicodedata
 import zlib
 from collections import defaultdict
-from datetime import datetime, timezone
+from collections.abc import Callable, Iterator, Mapping, Sequence
+from datetime import UTC, datetime
 from fractions import Fraction
 from functools import cache
 from pathlib import Path
 from types import ModuleType
-from typing import Any, Callable, Iterator, Mapping, Optional, Sequence, Union
+from typing import Any
 from urllib.parse import ParseResult, urlparse
 from uuid import uuid4
 
@@ -125,7 +126,7 @@ def import_module_by_path(path: Path) -> ModuleType:
 RESOLUTION_TIERS = (4320, 2160, 1440, 1080, 720, 576, 540, 480, 360, 240)
 
 
-def standard_resolution(width: Optional[int], height: Optional[int]) -> Optional[int]:
+def standard_resolution(width: int | None, height: int | None) -> int | None:
     """The resolution a release name uses: the nearest standard height within 10%, from the short side or a 16:9 width.
 
     A cropped 1920x800, a padded 1920x1088 and a 1080x1920 portrait picture are all 1080. A size with no
@@ -145,7 +146,7 @@ def standard_resolution(width: Optional[int], height: Optional[int]) -> Optional
     return tier if abs(tier - equivalent) <= tier / 10 else round(equivalent)
 
 
-def sanitize_filename(filename: str, spacer: str = ".", unicode: Optional[bool] = None) -> str:
+def sanitize_filename(filename: str, spacer: str = ".", unicode: bool | None = None) -> str:
     """
     Sanitise a string to be filename safe.
 
@@ -176,7 +177,7 @@ def sanitize_filename(filename: str, spacer: str = ".", unicode: Optional[bool] 
     return unicodedata.normalize("NFC", filename)
 
 
-def is_close_match(language: Union[str, Language], languages: Sequence[Union[str, Language, None]]) -> bool:
+def is_close_match(language: str | Language, languages: Sequence[str | Language | None]) -> bool:
     """Examine whether a language closely matches any of the given languages."""
     languages = [x for x in languages if x]
     if not languages:
@@ -184,7 +185,7 @@ def is_close_match(language: Union[str, Language], languages: Sequence[Union[str
     return closest_match(language, list(map(str, languages)))[1] <= LANGUAGE_MAX_DISTANCE
 
 
-def valid_language(language: Any) -> Optional[str]:
+def valid_language(language: Any) -> str | None:
     """Return the language tag as text, or None when it is not a valid tag."""
     if not language:
         return None
@@ -234,7 +235,7 @@ def with_script(language: Language) -> Language:
     return language.update_dict({"script": language.maximize().script}).simplify_script()
 
 
-def language_name(language: Language) -> Optional[str]:
+def language_name(language: Language) -> str | None:
     """
     Return the name of a track language, or None for an unknown or private-use language.
 
@@ -272,7 +273,7 @@ def language_name(language: Language) -> Optional[str]:
     return name[:1].upper() + name[1:] if full.script in ("Latn", "Cyrl", "Grek", "Armn") else name
 
 
-def is_exact_match(language: Union[str, Language], languages: Sequence[Union[str, Language, None]]) -> bool:
+def is_exact_match(language: str | Language, languages: Sequence[str | Language | None]) -> bool:
     """Examine whether a language exactly matches any of the given languages."""
     languages = [x for x in languages if x]
     if not languages:
@@ -280,7 +281,7 @@ def is_exact_match(language: Union[str, Language], languages: Sequence[Union[str
     return closest_match(language, list(map(str, languages)))[1] <= LANGUAGE_EXACT_DISTANCE
 
 
-def partition_exclusions(tokens: Optional[Sequence[str]]) -> tuple[list[str], list[str]]:
+def partition_exclusions(tokens: Sequence[str] | None) -> tuple[list[str], list[str]]:
     """
     Split selection tokens into wanted values and values excluded with a leading '-'.
 
@@ -315,7 +316,7 @@ def inherited_exclusions(own: Sequence[str], own_excl: Sequence[str], fallback_e
 
 def matched_language_tags(
     tokens: Sequence[str],
-    available: Sequence[Union[str, Language, None]],
+    available: Sequence[str | Language | None],
     exact: bool = False,
     *,
     every_variant: bool = False,
@@ -345,7 +346,7 @@ def plain_subtitle_tags(tokens: Sequence[str], subtitles: Sequence[Any], exact: 
     return tags | {str(lang) for lang in sdh if tags and matching_languages(lang, list(tags), exact=True)}
 
 
-def kind_only_conflict(params: Mapping[str, Any]) -> Optional[tuple[str, str]]:
+def kind_only_conflict(params: Mapping[str, Any]) -> tuple[str, str] | None:
     """
     Return the first (kind-only flag, flag that drops its track type) pair that are both set.
 
@@ -401,7 +402,7 @@ def apply_original_language(title: Any, language: Language) -> None:
 
 def find_missing_langs(
     requested: Sequence[str],
-    available: Sequence[Union[str, Language, None]],
+    available: Sequence[str | Language | None],
     *,
     exact: bool = False,
 ) -> list[str]:
@@ -412,8 +413,8 @@ def find_missing_langs(
 
 def missing_required_langs(
     required: Sequence[str],
-    available: Sequence[Union[str, Language, None]],
-    original: Optional[Union[str, Language]] = None,
+    available: Sequence[str | Language | None],
+    original: str | Language | None = None,
     *,
     exact: bool = False,
 ) -> list[str]:
@@ -427,14 +428,14 @@ def missing_required_langs(
     return find_missing_langs(resolve_sort_langs(wanted, original, exact=exact), available, exact=exact)
 
 
-def as_requested(tokens: Sequence[str], orig_token: Optional[str]) -> str:
+def as_requested(tokens: Sequence[str], orig_token: str | None) -> str:
     """Return language tokens as the user wrote them, so 'orig' reads as 'orig' and not the language it resolved to."""
     return ", ".join("orig" if tok == orig_token else tok for tok in tokens)
 
 
 def matching_languages(
-    language: Union[str, Language],
-    available: Sequence[Union[str, Language, None]],
+    language: str | Language,
+    available: Sequence[str | Language | None],
     exact: bool = False,
     *,
     every_variant: bool = False,
@@ -473,14 +474,12 @@ class ServiceTag(str):
     """
 
 
-def original_tag(language: Union[str, Language], exact: bool = False) -> str:
+def original_tag(language: str | Language, exact: bool = False) -> str:
     """The tag to match a service-supplied language with: a ServiceTag, or the plain tag in exact mode."""
     return str(language) if exact else ServiceTag(str(language))
 
 
-def orig_token(
-    requested: Sequence[str], language: Optional[Union[str, Language]], exact: bool = False
-) -> Optional[str]:
+def orig_token(requested: Sequence[str], language: str | Language | None, exact: bool = False) -> str | None:
     """The tag 'orig' resolved to, for as_requested. None when 'orig' did not resolve or the user also named that tag."""
     if "orig" not in requested or not language:
         return None
@@ -489,7 +488,7 @@ def orig_token(
 
 
 def resolve_sort_langs(
-    tokens: Sequence[str], original: Optional[Union[str, Language]] = None, *, exact: bool = False
+    tokens: Sequence[str], original: str | Language | None = None, *, exact: bool = False
 ) -> list[str]:
     """
     Resolve language tokens for selection, exclusion and the Tracks.sort_* by_language argument.
@@ -574,7 +573,7 @@ def get_boxes(data: bytes, box_type: bytes, as_bytes: bool = False) -> Box:  # t
 
             offset = box_start + len(built)
 
-        except IOError:
+        except OSError:
             break
         except ValidationError as e:
             if box_type == b"tenc":
@@ -583,7 +582,7 @@ def get_boxes(data: bytes, box_type: bytes, as_bytes: bool = False) -> Box:  # t
             raise e
 
 
-def ap_case(text: str, keep_spaces: bool = False, stop_words: Optional[tuple[str, ...]] = None) -> str:
+def ap_case(text: str, keep_spaces: bool = False, stop_words: tuple[str, ...] | None = None) -> str:
     """
     Convert a string to title case using AP/APA style.
     Based on https://github.com/words/ap-style-title-case
@@ -641,7 +640,7 @@ COUNTRY_CODE_ALIASES = {
 }
 
 
-def get_country_name(code: str) -> Optional[str]:
+def get_country_name(code: str) -> str | None:
     """
     Convert a 2-letter country code to full country name.
 
@@ -670,7 +669,7 @@ def get_country_name(code: str) -> Optional[str]:
     return None
 
 
-def get_country_code(name: str) -> Optional[str]:
+def get_country_code(name: str) -> str | None:
     """
     Convert a country name to its 2-letter ISO 3166-1 alpha-2 code.
 
@@ -768,7 +767,7 @@ def get_free_port() -> int:
         return s.getsockname()[1]
 
 
-def get_extension(value: Union[str, Path, ParseResult]) -> Optional[str]:
+def get_extension(value: str | Path | ParseResult) -> str | None:
     """
     Get a URL or Path file extension/suffix.
 
@@ -788,7 +787,7 @@ def get_extension(value: Union[str, Path, ParseResult]) -> Optional[str]:
     return None
 
 
-def extract_font_family(font_path: Path) -> Optional[str]:
+def extract_font_family(font_path: Path) -> str | None:
     """
     Extract font family name from TTF/OTF file using fontTools.
 
@@ -953,7 +952,7 @@ FONT_ALIASES = {
 }
 
 
-def find_case_insensitive(font_name: str, fonts: dict[str, Path]) -> Optional[Path]:
+def find_case_insensitive(font_name: str, fonts: dict[str, Path]) -> Path | None:
     """
     Find a font by a case-insensitive name.
 
@@ -971,7 +970,7 @@ def find_case_insensitive(font_name: str, fonts: dict[str, Path]) -> Optional[Pa
     return None
 
 
-def find_font_with_fallbacks(font_name: str, system_fonts: dict[str, Path]) -> Optional[Path]:
+def find_font_with_fallbacks(font_name: str, system_fonts: dict[str, Path]) -> Path | None:
     """
     Find a font by name, with intelligent fallbacks.
 
@@ -1052,7 +1051,7 @@ def suggest_font_packages(missing_fonts: list[str]) -> dict[str, list[str]]:
             needed_aliases.update(FONT_ALIASES[font])
 
     # Map needed aliases to packages
-    for package_name, package_info in FONT_PACKAGES.items():
+    for package_info in FONT_PACKAGES.values():
         provided_fonts = package_info["fonts"]
         matching_fonts = [f for f in provided_fonts if f in needed_aliases]
         if matching_fonts:
@@ -1103,7 +1102,7 @@ class DebugLogger:
     This makes it easy to parse, filter, and analyse logs programmatically.
     """
 
-    def __init__(self, log_path: Optional[Path] = None, enabled: bool = False, log_keys: bool = False) -> None:
+    def __init__(self, log_path: Path | None = None, enabled: bool = False, log_keys: bool = False) -> None:
         """
         Initialise the debug logger.
 
@@ -1148,13 +1147,13 @@ class DebugLogger:
         level: str = "DEBUG",
         operation: str = "",
         message: str = "",
-        context: Optional[dict[str, Any]] = None,
-        service: Optional[str] = None,
-        error: Optional[BaseException] = None,
-        request: Optional[dict[str, Any]] = None,
-        response: Optional[dict[str, Any]] = None,
-        duration_ms: Optional[float] = None,
-        success: Optional[bool] = None,
+        context: dict[str, Any] | None = None,
+        service: str | None = None,
+        error: BaseException | None = None,
+        request: dict[str, Any] | None = None,
+        response: dict[str, Any] | None = None,
+        duration_ms: float | None = None,
+        success: bool | None = None,
         **kwargs: Any,
     ) -> None:
         """
@@ -1177,7 +1176,7 @@ class DebugLogger:
             return
 
         entry: dict[str, Any] = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "session_id": self.session_id,
             "level": level,
         }
@@ -1300,7 +1299,7 @@ class DebugLogger:
         operation: str,
         operation_id: str,
         success: bool = True,
-        duration_ms: Optional[float] = None,
+        duration_ms: float | None = None,
         **kwargs: Any,
     ) -> None:
         """
@@ -1397,10 +1396,10 @@ class DebugLogger:
 
 
 # Global debug logger instance
-debug_logger: Optional[DebugLogger] = None
+debug_logger: DebugLogger | None = None
 
 
-def get_debug_logger() -> Optional[DebugLogger]:
+def get_debug_logger() -> DebugLogger | None:
     """Get the global debug logger instance."""
     return debug_logger
 
@@ -1458,7 +1457,7 @@ def timed_operation(operation: str, *, level: str = "DEBUG", message: str = "", 
     )
 
 
-def init_debug_logger(log_path: Optional[Path] = None, enabled: bool = False, log_keys: bool = False) -> None:
+def init_debug_logger(log_path: Path | None = None, enabled: bool = False, log_keys: bool = False) -> None:
     """
     Initialise the global debug logger.
 

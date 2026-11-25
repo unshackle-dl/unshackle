@@ -1,11 +1,11 @@
 import logging
 import time
 from abc import ABCMeta, abstractmethod
-from collections.abc import Callable, Generator
+from collections.abc import Callable, Generator, Sequence
 from dataclasses import dataclass, field
 from http.cookiejar import CookieJar
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional, Sequence, TypeVar, Union
+from typing import TYPE_CHECKING, Any, TypeVar, Union
 
 if TYPE_CHECKING:
     from unshackle.core.api.input_bridge import InputBridge
@@ -132,7 +132,7 @@ class TrackRequest:
     generate_dv: bool = False
 
 
-def sanitize_proxy_for_log(uri: Optional[str], mask_host: bool = False) -> Optional[str]:
+def sanitize_proxy_for_log(uri: str | None, mask_host: bool = False) -> str | None:
     """
     Sanitise a proxy URI for logs by masking any embedded userinfo (username/password).
 
@@ -166,10 +166,10 @@ class Service(metaclass=ABCMeta):
     DAILY: bool = False  # catalog is daily/date-based. episodes are named by air date. Title.daily overrides per title.
     ANONYMOUS_SEARCH: bool = False  # search() needs no login; a search then skips cookies and authenticate().
     # vault namespace override; when set, key vault read/write uses this tag instead of the service's own.
-    VAULT_TAG: Optional[str] = None
+    VAULT_TAG: str | None = None
     # Auth methods the service accepts ("cookies"/"credentials"); when None the REST /services
     # endpoint infers them from authenticate().
-    AUTH_METHODS: Optional[tuple[str, ...]] = None
+    AUTH_METHODS: tuple[str, ...] | None = None
     # Config keys a remote client may supply for a session its own device licenses (a device identity
     # such as an ESN); the server's own values for these keys are withheld from that session.
     CLIENT_CONFIG: tuple[str, ...] = ()
@@ -193,9 +193,9 @@ class Service(metaclass=ABCMeta):
         self.cache_dir = config.directories.cache / self.__class__.__name__
 
         self.ctx = ctx
-        self.credential: Optional[Credential] = None  # Will be set in authenticate()
+        self.credential: Credential | None = None  # Will be set in authenticate()
         self.current_region = None  # Will be set based on proxy/geolocation
-        self._input_bridge: Optional[InputBridge] = None
+        self._input_bridge: InputBridge | None = None
 
         # Set track request from CLI params - services can read/override in their __init__
         vcodec = ctx.parent.params.get("vcodec") if ctx.parent else None
@@ -308,7 +308,7 @@ class Service(metaclass=ABCMeta):
         run_proxy.watch(type(self), run_proxy.proxy_of(self.session))
 
     @classmethod
-    def is_region_allowed(cls, region: Optional[str]) -> bool:
+    def is_region_allowed(cls, region: str | None) -> bool:
         """True when an exit IP in `region` (two-letter region code, any case) can use the service.
 
         An unknown region (None or empty) is allowed, because there is nothing to compare.
@@ -357,7 +357,7 @@ class Service(metaclass=ABCMeta):
             held = {Tracks.signature(track) for track in all_tracks}
             all_tracks.add([track for track in tracks if Tracks.signature(track) not in held], warn_only=True)
 
-        codecs: Sequence[Optional[Video.Codec]] = self.track_request.codecs or [None]
+        codecs: Sequence[Video.Codec | None] = self.track_request.codecs or [None]
         ranges = self.track_request.ranges or [Video.Range.SDR]
 
         for range_val in ranges:
@@ -445,7 +445,7 @@ class Service(metaclass=ABCMeta):
         """
         return []
 
-    def authenticate(self, cookies: Optional[CookieJar] = None, credential: Optional[Credential] = None) -> None:
+    def authenticate(self, cookies: CookieJar | None = None, credential: Credential | None = None) -> None:
         """
         Authenticate the Service with Cookies and/or Credentials (Email/Username and Password).
 
@@ -480,7 +480,7 @@ class Service(metaclass=ABCMeta):
         return prompt_user(prompt)
 
     def wait_for_approval(
-        self, message: str, check: Callable[[], Optional[T]], timeout: float, interval: float = 3.0
+        self, message: str, check: Callable[[], T | None], timeout: float, interval: float = 3.0
     ) -> T:
         """Show ``message``, then call ``check`` until it returns a value.
 
@@ -518,7 +518,7 @@ class Service(metaclass=ABCMeta):
 
     def get_widevine_service_certificate(
         self, *, challenge: bytes, title: Title_T, track: AnyTrack
-    ) -> Optional[Union[bytes, str]]:
+    ) -> bytes | str | None:
         """
         Get the Widevine Service Certificate used for Privacy Mode.
 
@@ -531,7 +531,7 @@ class Service(metaclass=ABCMeta):
             Decode the data, return as is to reduce unnecessary computations.
         """
 
-    def get_widevine_license(self, *, challenge: bytes, title: Title_T, track: AnyTrack) -> Optional[Union[bytes, str]]:
+    def get_widevine_license(self, *, challenge: bytes, title: Title_T, track: AnyTrack) -> bytes | str | None:
         """
         Get a Widevine License message by sending a License Request (challenge).
 
@@ -550,9 +550,7 @@ class Service(metaclass=ABCMeta):
             Decode the data, return as is to reduce unnecessary computations.
         """
 
-    def get_playready_license(
-        self, *, challenge: bytes, title: Title_T, track: AnyTrack
-    ) -> Optional[Union[bytes, str]]:
+    def get_playready_license(self, *, challenge: bytes, title: Title_T, track: AnyTrack) -> bytes | str | None:
         """
         Get a PlayReady License message by sending a License Request (challenge).
 
@@ -576,9 +574,7 @@ class Service(metaclass=ABCMeta):
             **declared_kwargs(self.get_widevine_license, {"challenge": challenge, "title": title, "track": track})
         )
 
-    def get_clearkey_license(
-        self, *, challenge: bytes, title: Title_T, track: AnyTrack
-    ) -> Optional[Union[bytes, str, dict]]:
+    def get_clearkey_license(self, *, challenge: bytes, title: Title_T, track: AnyTrack) -> bytes | str | dict | None:
         """
         Get a W3C ClearKey License (JWK Set) by sending a License Request (challenge).
 
@@ -612,7 +608,7 @@ class Service(metaclass=ABCMeta):
         This can be useful to store information on each title that you need later, like any sub-asset IDs, or such.
         """
 
-    def get_titles_cached(self, title_id: Optional[str] = None) -> Titles_T:
+    def get_titles_cached(self, title_id: str | None = None) -> Titles_T:
         """
         Cached wrapper around get_titles() to reduce redundant API calls.
 
@@ -749,7 +745,7 @@ class Service(metaclass=ABCMeta):
             track: The downloaded Track object.
         """
 
-    def on_track_decrypted(self, track: AnyTrack, drm: DRM_T, segment: Optional[m3u8.Segment] = None) -> None:
+    def on_track_decrypted(self, track: AnyTrack, drm: DRM_T, segment: m3u8.Segment | None = None) -> None:
         """
         Called when a Track has finished decrypting.
 

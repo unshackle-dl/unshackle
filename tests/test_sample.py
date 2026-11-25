@@ -6,9 +6,9 @@ import functools
 import http.server
 import struct
 import threading
+from collections.abc import Callable
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Callable, Optional
 from unittest.mock import MagicMock
 
 import click
@@ -124,7 +124,7 @@ BASE_MPD = """
 WINDOW = (62, 120)
 
 
-def dash_names(mpd: str, window: Optional[tuple[int, int]]) -> tuple[list[str], float]:
+def dash_names(mpd: str, window: tuple[int, int] | None) -> tuple[list[str], float]:
     tree = load_xml(mpd.encode())
     period = tree.find("Period")
     aset = period.find("AdaptationSet")

@@ -14,7 +14,7 @@ import re
 import sys
 import uuid
 from pathlib import Path
-from typing import Any, Dict, Union
+from typing import Any
 
 import wasmtime
 
@@ -64,7 +64,7 @@ class MonaLisaCDM:
         try:
             data = json.loads(self.device_path.read_text(encoding="utf-8", errors="replace"))
         except Exception as e:
-            raise ValueError(f"Invalid device file (JSON): {e}")
+            raise ValueError(f"Invalid device file (JSON): {e}") from e
 
         wasm_path_str = data.get("wasm_path")
         if not wasm_path_str:
@@ -83,7 +83,7 @@ class MonaLisaCDM:
             else:
                 self.module = wasmtime.Module(self.engine, wasm_path.read_bytes())
         except Exception as e:
-            raise RuntimeError(f"Failed to load WASM module: {e}")
+            raise RuntimeError(f"Failed to load WASM module: {e}")  # noqa: B904
 
         self.store: wasmtime.Store | None = None
         self.memory: wasmtime.Memory | None = None
@@ -159,7 +159,7 @@ class MonaLisaCDM:
         self.exports = {}
         self.ctx = None
 
-    def extract_keys(self, license_data: Union[str, bytes]) -> Dict:
+    def extract_keys(self, license_data: str | bytes) -> dict:
         """
         Extract decryption keys from license/ticket data.
 

@@ -3,7 +3,6 @@ from __future__ import annotations
 import hashlib
 import json
 from difflib import SequenceMatcher
-from typing import Optional, Union
 
 import requests
 
@@ -34,14 +33,14 @@ def escape_graphql(value: str) -> str:
     return value.replace("\\", "\\\\").replace('"', '\\"')
 
 
-def primary_language(data: dict) -> Optional[str]:
+def primary_language(data: dict) -> str | None:
     """IMDb orders spokenLanguages most prominent first. Either level can come back null."""
     spoken = data.get("spokenLanguages") or {}
     langs = spoken.get("spokenLanguages") or []
     return langs[0].get("id") if langs else None
 
 
-def title_to_result(node: dict, kind: str) -> Optional[MetadataResult]:
+def title_to_result(node: dict, kind: str) -> MetadataResult | None:
     title = (node.get("titleText") or {}).get("text") or (node.get("originalTitleText") or {}).get("text")
     if not title:
         return None
@@ -66,7 +65,7 @@ class IMDBProvider(MetadataProvider):
     def is_available(self) -> bool:
         return True
 
-    def graphql(self, operation: str, query: str) -> Optional[dict]:
+    def graphql(self, operation: str, query: str) -> dict | None:
         """Send a persisted query, and add it to the gateway with one POST if the gateway does not know its hash."""
         extensions = {"persistedQuery": {"version": 1, "sha256Hash": hashlib.sha256(query.encode()).hexdigest()}}
         # IMDb's GraphQL gateway decodes "+" literally, so these JSON params must carry no spaces
@@ -93,7 +92,7 @@ class IMDBProvider(MetadataProvider):
             return None
         return body.get("data")
 
-    def search(self, title: str, year: Optional[int], kind: str) -> Optional[MetadataResult]:
+    def search(self, title: str, year: int | None, kind: str) -> MetadataResult | None:
         self.log.debug("Searching IMDb for %r (%s, %s)", title, kind, year)
 
         constraints = [f'titleTextConstraint: {{searchTerm: "{escape_graphql(title)}"}}']
@@ -106,8 +105,8 @@ class IMDBProvider(MetadataProvider):
             constraints.append(f"titleTypeConstraint: {{anyTitleTypeIds: {json.dumps(types)}}}")
 
         query = (
-            "query UnshackleTitleSearch { advancedTitleSearch(first: 5, constraints: {%s}) "
-            "{ edges { node { title { %s } } } } }" % (", ".join(constraints), TITLE_FIELDS)
+            f"query UnshackleTitleSearch {{ advancedTitleSearch(first: 5, constraints: {{{', '.join(constraints)}}}) "
+            f"{{ edges {{ node {{ title {{ {TITLE_FIELDS} }} }} }} }} }}"
         )
 
         data = self.graphql("UnshackleTitleSearch", query)
@@ -126,19 +125,19 @@ class IMDBProvider(MetadataProvider):
         self.log.debug("IMDb -> %s (ID %s)", result.title, result.external_ids.imdb_id)
         return result
 
-    def get_by_id(self, provider_id: Union[int, str], kind: str) -> Optional[MetadataResult]:
+    def get_by_id(self, provider_id: int | str, kind: str) -> MetadataResult | None:
         """Fetch metadata by IMDB ID (e.g. 'tt1375666')."""
         imdb_id = str(provider_id)
         self.log.debug("Fetching IMDb title %s", imdb_id)
 
-        query = 'query UnshackleTitle { title(id: "%s") { %s } }' % (escape_graphql(imdb_id), TITLE_FIELDS)
+        query = f'query UnshackleTitle {{ title(id: "{escape_graphql(imdb_id)}") {{ {TITLE_FIELDS} }} }}'
         data = self.graphql("UnshackleTitle", query)
         node = (data or {}).get("title")
         if not node:
             return None
         return title_to_result(node, kind)
 
-    def get_external_ids(self, provider_id: Union[int, str], kind: str) -> ExternalIds:
+    def get_external_ids(self, provider_id: int | str, kind: str) -> ExternalIds:
         """Return external IDs. For IMDB, the provider_id IS the IMDB ID."""
         return ExternalIds(imdb_id=str(provider_id))
 

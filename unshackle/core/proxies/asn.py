@@ -5,24 +5,24 @@ from __future__ import annotations
 import ipaddress
 import re
 import socket
+from collections.abc import Iterable
 from concurrent.futures import ThreadPoolExecutor
-from typing import Iterable, Optional
 
 from unidecode import unidecode
 
 WHOIS = ("whois.cymru.com", 43)
 TIMEOUT = 3
 NETWORKS: dict[str, str] = {}
-FAILED: Optional[str] = None
+FAILED: str | None = None
 
 
-def split_selector(query: str) -> tuple[str, Optional[str]]:
+def split_selector(query: str) -> tuple[str, str | None]:
     """Split "fr:paris@-datacamp" into the region query and the network selector after "@"."""
     query, _, selector = query.partition("@")
     return query, selector or None
 
 
-def mapped_query(region: str, value: object) -> Optional[str]:
+def mapped_query(region: str, value: object) -> str | None:
     """
     Get the query that a server_map value stands for, or None for a plain server value.
 
@@ -102,7 +102,7 @@ def select(servers: dict[str, str], selector: str) -> list[str]:
 def resolve_all(hostnames: Iterable[str]) -> dict[str, str]:
     """Resolve hostnames to an IPv4 address each, in parallel. A hostname that does not resolve is left out."""
 
-    def resolve(hostname: str) -> Optional[str]:
+    def resolve(hostname: str) -> str | None:
         try:
             return socket.gethostbyname(hostname)
         except OSError:
@@ -110,10 +110,10 @@ def resolve_all(hostnames: Iterable[str]) -> dict[str, str]:
 
     hostnames = list(dict.fromkeys(hostnames))
     with ThreadPoolExecutor(16) as pool:
-        return {x: ip for x, ip in zip(hostnames, pool.map(resolve, hostnames)) if ip}
+        return {x: ip for x, ip in zip(hostnames, pool.map(resolve, hostnames), strict=True) if ip}
 
 
-def describe(hostname: str, ip: Optional[str] = None) -> str:
+def describe(hostname: str, ip: str | None = None) -> str:
     """Name a server with its IP and network, for the line that says which proxy is in use. This never raises."""
     try:
         ip = ip or socket.gethostbyname(hostname)

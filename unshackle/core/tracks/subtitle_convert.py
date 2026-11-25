@@ -20,9 +20,10 @@ import math
 import re
 import subprocess
 import time
+from collections.abc import Mapping
 from itertools import pairwise
 from pathlib import Path
-from typing import Any, Mapping, Optional, Protocol
+from typing import Any, Protocol
 
 import pycaption
 import pysubs2
@@ -79,7 +80,7 @@ def subtitleedit_args(
     src: Path,
     fmt: str,
     *,
-    output_folder: Optional[Path] = None,
+    output_folder: Path | None = None,
     convert_colors: bool = False,
     remove_hi: bool = False,
     reverse_rtl: bool = False,
@@ -284,7 +285,7 @@ REGISTRY: list[SubtitleBackend] = [
 ]
 
 
-def resolve_backends(source: Codec, target: Codec, *, pin: Optional[str] = None) -> list[SubtitleBackend]:
+def resolve_backends(source: Codec, target: Codec, *, pin: str | None = None) -> list[SubtitleBackend]:
     """Available backends that can convert source->target, ordered by rank. A pinned backend goes first."""
     available = [b for b in REGISTRY if b.is_available() and b.can_convert(source, target)]
     if pin:
@@ -382,7 +383,7 @@ def build_ass_style(fields: Mapping[str, Any]) -> pysubs2.SSAStyle:
     return style
 
 
-def style_substation(path: Path, style: pysubs2.SSAStyle, video_size: Optional[tuple[int, int]]) -> None:
+def style_substation(path: Path, style: pysubs2.SSAStyle, video_size: tuple[int, int] | None) -> None:
     """Give every style of a converted SSA/ASS file the look of ``style``.
 
     A file with no PlayResY gets a 1080-line canvas in the shape of the video. A file with one keeps it, so positions
@@ -434,7 +435,7 @@ def finalize(sub: Subtitle, target: Codec, out: Path) -> Path:
     return out
 
 
-def time_sorted_copy(src: Path) -> Optional[Path]:
+def time_sorted_copy(src: Path) -> Path | None:
     """
     Copy an SSA/ASS file with its events in start-time order, or return None when it is already in order.
 
@@ -454,7 +455,7 @@ def time_sorted_copy(src: Path) -> Optional[Path]:
     return copy
 
 
-def run_conversion(sub: Subtitle, target: Codec, *, pin: Optional[str] = None, forced: bool = False) -> Path:
+def run_conversion(sub: Subtitle, target: Codec, *, pin: str | None = None, forced: bool = False) -> Path:
     """
     Convert ``sub`` to ``target`` using the best available backend, falling back through the
     capability chain on failure.
@@ -484,7 +485,7 @@ def run_conversion(sub: Subtitle, target: Codec, *, pin: Optional[str] = None, f
 
     out = src.with_suffix(f".{target.value.lower()}")
     sorted_src = time_sorted_copy(src) if source in SUBSTATION and target not in SUBSTATION else None
-    last_exc: Optional[Exception] = None
+    last_exc: Exception | None = None
     try:
         for backend in chain:
             try:

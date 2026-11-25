@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import logging
 import mmap
+from collections.abc import Collection
+from itertools import pairwise
 from pathlib import Path
-from typing import Collection, NamedTuple, Optional, cast
+from typing import NamedTuple, cast
 
 from unshackle.core.drm.verify import ENTRY_FIELDS, children, walk
 from unshackle.core.manifests.ism_init import box
@@ -56,7 +58,7 @@ class FragmentSamples(NamedTuple):
     trimmable: bool
 
 
-def senc_ends(data: bytes, start: int, end: int, iv_size: int) -> Optional[list[int]]:
+def senc_ends(data: bytes, start: int, end: int, iv_size: int) -> list[int] | None:
     """The end offset of each sample entry of a senc box, or None when the entries do not fill it exactly."""
     flags, pos, ends = be32(data, start + 8) & 0xFFFFFF, start + 16, []
     for _ in range(be32(data, start + 12)):
@@ -73,7 +75,7 @@ def senc_ends(data: bytes, start: int, end: int, iv_size: int) -> Optional[list[
 
 def cenc_entries(
     data: bytes, named: dict[bytes, tuple[int, int]], moof: int, count: int, iv_size: int
-) -> Optional[list[int]]:
+) -> list[int] | None:
     """The senc entry ends of a traf whose senc, saiz and saio describe ``count`` samples, saio pointing at senc."""
     if not CENC <= named.keys() or iv_size < 0:
         return None
@@ -92,7 +94,7 @@ def cenc_entries(
     return ends if fits else None
 
 
-def group_runs(data: bytes, start: int, end: int) -> Optional[Runs]:
+def group_runs(data: bytes, start: int, end: int) -> Runs | None:
     """The entry count offset and (sample count, group index) runs of an sbgp box, or None when they overrun it."""
     at = start + 16 + 4 * (data[start + 8] == 1)
     count = be32(data, at)
@@ -102,8 +104,8 @@ def group_runs(data: bytes, start: int, end: int) -> Optional[Runs]:
 
 
 def read_samples(
-    data: bytes, moof: tuple[int, int], mdat: Optional[tuple[int, int]], defaults: tuple[int, int], iv_size: int
-) -> Optional[FragmentSamples]:
+    data: bytes, moof: tuple[int, int], mdat: tuple[int, int] | None, defaults: tuple[int, int], iv_size: int
+) -> FragmentSamples | None:
     """Parse a moof and the mdat right after it; None when it has no single traf with a tfdt and one bounded trun."""
     start, end = moof
     trafs = [b for b in child_boxes(data, start + 8, end) if b[0] == b"traf"]
@@ -259,7 +261,7 @@ def write_trimmed(data: bytes, temp: Path, joins: Collection[int]) -> int:
 
     keep: dict[int, int] = {}
     untrimmable = 0
-    for (i, fragment), (_, following) in zip(fragments, fragments[1:]):
+    for (i, fragment), (_, following) in pairwise(fragments):
         join = following.decode_time
         if join not in joins or fragment.decode_time + sum(fragment.durations) <= join:
             continue

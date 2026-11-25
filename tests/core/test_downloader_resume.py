@@ -20,9 +20,9 @@ import importlib
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Optional
 
 import pytest
+import urllib3
 from requests import Session
 
 # the downloaders package re-exports a `requests` function that shadows this submodule
@@ -40,7 +40,7 @@ class _FaultServer:
     def __init__(self, body: bytes) -> None:
         self.body = body
         self.attempts = 0  # GETs seen for the single resource
-        self.ranges: list[Optional[str]] = []  # Range header per GET, in order
+        self.ranges: list[str | None] = []  # Range header per GET, in order
         self.truncate_first = 0  # send only half the body + close, for the first N attempts
         self._lock = threading.Lock()
         server = self
@@ -85,7 +85,7 @@ class _FaultServer:
         self._httpd = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
         self._thread = threading.Thread(target=self._httpd.serve_forever, daemon=True)
 
-    def __enter__(self) -> "_FaultServer":
+    def __enter__(self) -> _FaultServer:
         self._thread.start()
         return self
 
@@ -111,7 +111,7 @@ def test_truncated_segment_is_not_finalized(tmp_path: Path, monkeypatch: pytest.
     save = tmp_path / "seg.bin"
     with _FaultServer(body) as srv:
         srv.truncate_first = 99  # every attempt under-delivers
-        with pytest.raises(Exception):
+        with pytest.raises((OSError, urllib3.exceptions.HTTPError)):
             consume(dl.download(url=srv.url, save_path=save, session=Session(), segmented=True))
     assert not save.exists(), "truncated segment must not be finalized as complete"
 

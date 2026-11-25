@@ -85,7 +85,7 @@ def test_dash_skips_an_unparseable_playready_entry_and_keeps_widevine(caplog: py
 
 @pytest.mark.parametrize(
     "data",
-    [b"\x00\x00not a header", "<WRMHEADER/>".encode("utf-8")],
+    [b"\x00\x00not a header", b"<WRMHEADER/>"],
     ids=["garbage", "utf-8-header"],
 )
 def test_other_bad_data_keeps_the_original_error(data: bytes) -> None:

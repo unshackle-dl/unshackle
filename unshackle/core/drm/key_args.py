@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import re
-from typing import Any, Iterable, Mapping, Optional
+from collections.abc import Iterable, Mapping
+from typing import Any
 
 ZERO_KID = "00" * 16
 SHAKA_NOISE = re.compile(r"^(?:[IWV]\d{4} |\[[^\]]*:(?:INFO|WARNING|VERBOSE\d*):)")
@@ -18,7 +19,7 @@ def _hex(value: Any) -> str:
     return str(value).replace("-", "").lower()
 
 
-def zero_kid_key(content_keys: dict[Any, Any], own_kids: Iterable[Any]) -> Optional[str]:
+def zero_kid_key(content_keys: dict[Any, Any], own_kids: Iterable[Any]) -> str | None:
     """Return the content key to give the all-zero KID, or None when no content key is safe.
 
     Some tracks carry an all-zero default KID in the init segment and signal the real KID
@@ -44,7 +45,7 @@ def zero_kid_key(content_keys: dict[Any, Any], own_kids: Iterable[Any]) -> Optio
     return None
 
 
-def track_key_args(content_keys: dict[Any, Any], track_kids: Optional[Mapping[int, Any]]) -> list[str]:
+def track_key_args(content_keys: dict[Any, Any], track_kids: Mapping[int, Any] | None) -> list[str]:
     """Build the mp4decrypt --key arguments by track ID for each track whose own KID has a content key."""
     keys = {_hex(kid): _hex(key) for kid, key in content_keys.items()}
     key_args: list[str] = []
@@ -55,7 +56,7 @@ def track_key_args(content_keys: dict[Any, Any], track_kids: Optional[Mapping[in
 
 
 def mp4decrypt_key_args(
-    content_keys: dict[Any, Any], own_kids: Iterable[Any], track_kids: Optional[Mapping[int, Any]] = None
+    content_keys: dict[Any, Any], own_kids: Iterable[Any], track_kids: Mapping[int, Any] | None = None
 ) -> list[str]:
     """Build the mp4decrypt --key arguments: every content key, the zero-KID fallback and the ``track_kids`` keys."""
     key_args: list[str] = []

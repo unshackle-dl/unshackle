@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import base64
-from typing import Union
 from uuid import UUID
 
 import pytest
@@ -17,7 +16,7 @@ AUDIO_KID = UUID("ffeeddcc-bbaa-9988-7766-554433221100")
 VIDEO_KEY = "0000000000000000000000000000000a"
 AUDIO_KEY = "0000000000000000000000000000000b"
 
-DRM = Union[Widevine, PlayReady]
+DRM = Widevine | PlayReady
 
 
 def _playready_pssh(*kids: UUID) -> tuple[PlayReadyPSSH, str]:

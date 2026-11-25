@@ -8,11 +8,12 @@ import os
 import re
 import shutil
 from bisect import bisect_right
+from collections.abc import Callable, Collection
 from contextlib import suppress
 from copy import deepcopy
-from functools import lru_cache, partial
+from functools import cache, partial
 from pathlib import Path
-from typing import Any, BinaryIO, Callable, Collection, Optional, Union, cast
+from typing import Any, BinaryIO, cast
 from urllib.parse import urljoin, urlparse
 from uuid import UUID
 from zlib import crc32
@@ -59,7 +60,7 @@ COUNT_CHANNEL_SCHEMES = (
     "urn:dts:dash:audio_channel_configuration:2012",
 )
 CICP_CHANNEL_SCHEME = "urn:mpeg:mpegB:cicp:ChannelConfiguration"
-CICP_CHANNEL_LAYOUTS: dict[int, Union[float, str]] = {
+CICP_CHANNEL_LAYOUTS: dict[int, float | str] = {
     1: 1.0,
     2: 2.0,
     3: 3.0,
@@ -97,14 +98,16 @@ def missing_language(where: str, fallback: Any) -> MissingLanguageError:
 def rebase_webvtt_files(groups: list[list[Path]], bounds_ms: list[int]) -> None:
     """Rewrite the WebVTT segment files of each period or discontinuity block, shifted by webvtt_block_offsets."""
     texts = [[try_ensure_utf8(path.read_bytes()).decode("utf8") for path in group] for group in groups]
-    for group, parts, offset in zip(groups, texts, webvtt_block_offsets(["\n\n".join(t) for t in texts], bounds_ms)):
+    for group, parts, offset in zip(
+        groups, texts, webvtt_block_offsets(["\n\n".join(t) for t in texts], bounds_ms), strict=False
+    ):
         if not offset:
             continue
-        for path, text in zip(group, parts):
+        for path, text in zip(group, parts, strict=True):
             path.write_bytes(shift_webvtt(text, offset).encode("utf8"))
 
 
-def mdhd_timescale(init_data: bytes) -> Optional[int]:
+def mdhd_timescale(init_data: bytes) -> int | None:
     """The media timescale of the first track in an init segment, or None when it has no mdhd."""
     for kind, body, box_end in walk(init_data):
         if kind == b"mdhd":
@@ -142,8 +145,8 @@ class PeriodRebase:
         self.periods = periods
         self.timescale = timescale
         self.offset = 0
-        self.base: Optional[int] = None
-        self.previous: Optional[tuple[int, int, int]] = None
+        self.base: int | None = None
+        self.previous: tuple[int, int, int] | None = None
         self.joins: set[int] = set()
 
     def append(self, dst: BinaryIO, segment_file: Path) -> None:
@@ -195,7 +198,7 @@ class PeriodRebase:
         self.previous = (first + self.offset, length, media_start + self.offset + length)
 
 
-def rep_shape(adaptation_set: Element, rep: Element) -> tuple[Optional[str], ...]:
+def rep_shape(adaptation_set: Element, rep: Element) -> tuple[str | None, ...]:
     """The attributes a Representation must keep to continue a track into another Period."""
     return tuple(DASH.get_attr(a, adaptation_set, rep) for a in ("codecs", "width", "height", "audioSamplingRate"))
 
@@ -207,7 +210,7 @@ def rep_bandwidth(rep: Element) -> float:
         return 0.0
 
 
-def kind_and_lang(adaptation_set: Element) -> tuple[Optional[str], str]:
+def kind_and_lang(adaptation_set: Element) -> tuple[str | None, str]:
     """Content type and language subtag, without the region, of an AdaptationSet."""
     mime = DASH.get_attr("mimeType", adaptation_set, adaptation_set.find("Representation")) or ""
     kind = adaptation_set.get("contentType") or mime.split("/")[0] or None
@@ -230,7 +233,7 @@ class DASH:
         self.url = url
 
     @classmethod
-    def from_url(cls, url: str, session: Optional[Union[Session, RnetSession]] = None, **args: Any) -> DASH:
+    def from_url(cls, url: str, session: Session | RnetSession | None = None, **args: Any) -> DASH:
         """Fetch and parse an MPD. The XML declaration gives the encoding, then the HTTP charset."""
         if not url:
             raise requests.URLRequired("DASH manifest URL must be provided for relative path computations.")
@@ -278,9 +281,7 @@ class DASH:
 
         return cls(manifest, url)
 
-    def to_tracks(
-        self, language: Optional[Union[str, Language]] = None, period_filter: Optional[Callable] = None
-    ) -> Tracks:
+    def to_tracks(self, language: str | Language | None = None, period_filter: Callable | None = None) -> Tracks:
         """
         Convert an MPEG-DASH document to Video, Audio and Subtitle Track objects.
 
@@ -346,7 +347,9 @@ class DASH:
                             content_type = "text"
                             mime_type = f"application/mp4; codecs='{real_codec.value.lower()}'"
                         except ValueError:
-                            raise ValueError(f"Unsupported content type '{content_type}' with codecs of '{codecs}'")
+                            raise ValueError(
+                                f"Unsupported content type '{content_type}' with codecs of '{codecs}'"
+                            ) from None
 
                     if content_type == "text" and mime_type and "/mp4" not in mime_type:
                         # mimeType likely specifies the subtitle codec better than `codecs`
@@ -487,7 +490,7 @@ class DASH:
         manifest: ElementTree = track.data["dash"]["manifest"]
         adaptation_set: Element = track.data["dash"]["adaptation_set"]
         representation: Element = track.data["dash"]["representation"]
-        rep_id: Optional[str] = track.data["dash"].get("representation_id") or representation.get("id")
+        rep_id: str | None = track.data["dash"].get("representation_id") or representation.get("id")
         filtered_period_ids = set(track.data["dash"].get("filtered_period_ids", []))
 
         # Preserve existing DRM if it was set by the service, especially when service set Widevine
@@ -547,20 +550,20 @@ class DASH:
                             drm_obj.content_keys[kid] = key
 
         all_periods = manifest.findall("Period")
-        segments: list[tuple[str, Optional[str]]] = []
-        seen_segments: set[tuple[str, Optional[str]]] = set()
+        segments: list[tuple[str, str | None]] = []
+        seen_segments: set[tuple[str, str | None]] = set()
         segment_durations: list[int] = []
         segment_timescale: float = 0
-        init_data: Optional[bytes] = None
-        track_kid: Optional[UUID] = None
+        init_data: bytes | None = None
+        track_kid: UUID | None = None
         period_starts: dict[int, tuple[float, float, float]] = {}
         timed = True
 
         content_periods = [p for p in all_periods if DASH.is_content_period(p, filtered_period_ids)]
         period_count = len(content_periods)
-        durations = dict(zip(map(id, all_periods), DASH.period_durations(manifest)))
-        content_timing: list[tuple[Optional[float], Optional[float]]] = []
-        elapsed: Optional[float] = 0.0
+        durations = dict(zip(map(id, all_periods), DASH.period_durations(manifest), strict=True))
+        content_timing: list[tuple[float | None, float | None]] = []
+        elapsed: float | None = 0.0
         for content_period in content_periods:
             duration = durations[id(content_period)]
             content_timing.append((elapsed, duration))
@@ -569,7 +572,7 @@ class DASH:
         if period_count > 1:
             log.debug(f"Multi-period manifest detected with {period_count} content periods")
 
-        stored_period: Optional[Element] = track.data["dash"].get("period")
+        stored_period: Element | None = track.data["dash"].get("period")
 
         for period_idx, content_period in enumerate(content_periods):
             if content_period is stored_period:
@@ -687,7 +690,7 @@ class DASH:
                 {"url": url, "headers": {"Range": f"bytes={bytes_range}"} if bytes_range else {}}
                 for url, bytes_range in segments
             ]
-            output_dir, filename = save_dir, "{i:0%d}.mp4" % (len(str(len(segments))))
+            output_dir, filename = save_dir, f"{{i:0{len(str(len(segments)))}}}.mp4"
 
         log_event(
             "manifest_dash_download_start",
@@ -708,11 +711,11 @@ class DASH:
             not drm and isinstance(track, Subtitle) and track.codec not in (Subtitle.Codec.fVTT, Subtitle.Codec.fTTML)
         )
 
-        decrypter: Optional[SegmentDecrypter] = None
+        decrypter: SegmentDecrypter | None = None
         if use_segment_decrypt and init_data:
             decrypter = SegmentDecrypter(cast(SEGMENT_DRM_T, drm), init_data, save_dir.parent, ctx.max_workers)
 
-        rebase: Optional[PeriodRebase] = None
+        rebase: PeriodRebase | None = None
         known = timed and len(period_starts) > 1
         timescale = mdhd_timescale(init_data) if known and init_data and not is_text_subtitle else None
         if timescale:
@@ -824,7 +827,7 @@ class DASH:
         complete_track(track, ctx, drm, decrypt=not decrypter)
 
     @staticmethod
-    def find_segment_element(name: str, adaptation_set: Element, representation: Element) -> Optional[Element]:
+    def find_segment_element(name: str, adaptation_set: Element, representation: Element) -> Element | None:
         """Find a segment description element on the representation, or else on its adaptation set."""
         element = representation.find(name)
         return element if element is not None else adaptation_set.find(name)
@@ -846,9 +849,9 @@ class DASH:
     @staticmethod
     def collapsible_single_url(
         is_subtitle: bool,
-        segments: list[tuple[str, Optional[str]]],
+        segments: list[tuple[str, str | None]],
         init_len: int,
-    ) -> Optional[tuple[int, int]]:
+    ) -> tuple[int, int] | None:
         """
         Get the first and last byte of the segments when every segment is a byte range of one
         parent resource that follows an init of init_len bytes, so unshackle can download the
@@ -890,7 +893,7 @@ class DASH:
 
     @staticmethod
     def single_url_prefix_matches(
-        session: Union[Session, RnetSession],
+        session: Session | RnetSession,
         url: str,
         span: tuple[int, int],
         init_data: bytes,
@@ -924,7 +927,7 @@ class DASH:
         return True
 
     @staticmethod
-    def period_durations(manifest: ElementTree) -> list[Optional[float]]:
+    def period_durations(manifest: ElementTree) -> list[float | None]:
         """The duration in seconds of every Period, None where the manifest does not give it.
 
         A Period without @start starts at 0 when it is the first, else where the previous Period
@@ -932,7 +935,7 @@ class DASH:
         or to the end of the presentation. A duration that is not positive counts as unknown.
         """
         periods = manifest.findall("Period")
-        starts: list[Optional[float]] = []
+        starts: list[float | None] = []
         for i, period in enumerate(periods):
             previous = periods[i - 1] if i else None
             if period.get("start"):
@@ -944,9 +947,9 @@ class DASH:
             else:
                 starts.append(None)
         total = manifest.get("mediaPresentationDuration")
-        durations: list[Optional[float]] = []
-        for i, (period, start) in enumerate(zip(periods, starts)):
-            duration: Optional[float] = None
+        durations: list[float | None] = []
+        for i, (period, start) in enumerate(zip(periods, starts, strict=True)):
+            duration: float | None = None
             if period.get("duration"):
                 duration = DASH.pt_to_sec(period.get("duration"))
             elif start is not None and i + 1 < len(periods):
@@ -958,7 +961,7 @@ class DASH:
         return durations
 
     @staticmethod
-    def period_duration(manifest: ElementTree, period: Element) -> Optional[float]:
+    def period_duration(manifest: ElementTree, period: Element) -> float | None:
         """The duration in seconds of one Period, by DASH.period_durations."""
         index = next((i for i, p in enumerate(manifest.findall("Period")) if p is period), None)
         if index is None:
@@ -977,7 +980,7 @@ class DASH:
         return int(element.get("presentationTimeOffset") or 0) / (float(element.get("timescale") or 1) or 1.0)
 
     @staticmethod
-    def merge_segment_templates(adaptation_set: Element, representation: Element) -> Optional[Element]:
+    def merge_segment_templates(adaptation_set: Element, representation: Element) -> Element | None:
         """
         Assemble the effective SegmentTemplate for a Representation by cascading the
         AdaptationSet > Representation levels (ISO/IEC 23009-1 5.3.9.1).
@@ -1010,16 +1013,16 @@ class DASH:
         manifest: ElementTree,
         track: Track,
         track_url: str,
-        session: Union[Session, RnetSession],
+        session: Session | RnetSession,
         probe_kid: bool = True,
-        window: Optional[tuple[int, int]] = None,
-        duration: Optional[float] = None,
+        window: tuple[int, int] | None = None,
+        duration: float | None = None,
     ) -> tuple[
-        Optional[bytes],
-        list[tuple[str, Optional[str]]],
+        bytes | None,
+        list[tuple[str, str | None]],
         float,
         list[int],
-        Optional[UUID],
+        UUID | None,
     ]:
         """
         Extract segments from a single period's representation.
@@ -1047,7 +1050,7 @@ class DASH:
         period_duration = (
             duration or DASH.period_duration(manifest, period) or (DASH.pt_to_sec(total) if total else None)
         )
-        init_data: Optional[bytes] = None
+        init_data: bytes | None = None
 
         segment_template = DASH.merge_segment_templates(adaptation_set, representation)
 
@@ -1055,10 +1058,10 @@ class DASH:
 
         segment_base = DASH.find_segment_element("SegmentBase", adaptation_set, representation)
 
-        segments: list[tuple[str, Optional[str]]] = []
+        segments: list[tuple[str, str | None]] = []
         segment_timescale: float = 0
         segment_durations: list[int] = []
-        track_kid: Optional[UUID] = None
+        track_kid: UUID | None = None
 
         if segment_template is not None:
             start_number = int(segment_template.get("startNumber") or 1)
@@ -1131,7 +1134,7 @@ class DASH:
                 if not end_number:
                     end_number = start_number + len(segment_durations) - 1
 
-                for t, n in zip(segment_durations, range(start_number, end_number + 1)):
+                for t, n in zip(segment_durations, range(start_number, end_number + 1), strict=False):
                     segments.append(
                         (
                             DASH.replace_fields(
@@ -1248,7 +1251,7 @@ class DASH:
         return init_data, segments, segment_timescale, segment_durations, track_kid
 
     @staticmethod
-    def get_attr(item: str, adaptation_set: Element, representation: Optional[Element] = None) -> Optional[Any]:
+    def get_attr(item: str, adaptation_set: Element, representation: Element | None = None) -> Any | None:
         """Helper to get a requested item from the Representation, otherwise from the AdaptationSet."""
         adaptation_set_item = adaptation_set.get(item)
         if representation is None:
@@ -1262,7 +1265,7 @@ class DASH:
 
     @staticmethod
     def find_elements(
-        item: str, adaptation_set: Element, representation: Optional[Element] = None, both: bool = False
+        item: str, adaptation_set: Element, representation: Element | None = None, both: bool = False
     ) -> list[Any]:
         """
         Helper to get all requested items from the Representation, otherwise from the AdaptationSet.
@@ -1285,9 +1288,9 @@ class DASH:
     @staticmethod
     def get_language(
         adaptation_set: Element,
-        representation: Optional[Element] = None,
-        fallback: Optional[Union[str, Language]] = None,
-    ) -> Optional[Language]:
+        representation: Element | None = None,
+        fallback: str | Language | None = None,
+    ) -> Language | None:
         """
         Get Language (if any) from the AdaptationSet or Representation.
 
@@ -1364,7 +1367,7 @@ class DASH:
         )
 
     @staticmethod
-    def adaptation_set_key(adaptation_set: Element) -> tuple[Optional[str], ...]:
+    def adaptation_set_key(adaptation_set: Element) -> tuple[str | None, ...]:
         """Identity of an AdaptationSet, used to re-find its counterpart in another Period."""
         return tuple(
             adaptation_set.get(attr)
@@ -1373,8 +1376,8 @@ class DASH:
 
     @staticmethod
     def resolve_representation(
-        period: Element, rep_id: Optional[str], adaptation_set: Element
-    ) -> Optional[tuple[Element, Element]]:
+        period: Element, rep_id: str | None, adaptation_set: Element
+    ) -> tuple[Element, Element] | None:
         """
         Find the (AdaptationSet, Representation) in another Period that continues rep_id.
 
@@ -1389,7 +1392,7 @@ class DASH:
         def same_shape(as_: Element) -> list[Element]:
             return sorted((r for r in as_.findall("Representation") if rep_shape(as_, r) == want), key=rep_bandwidth)
 
-        def sets(within: Optional[Element], key: Callable[[Element], Any]) -> list[Element]:
+        def sets(within: Element | None, key: Callable[[Element], Any]) -> list[Element]:
             found = within.findall("AdaptationSet") if within is not None else []
             target = key(adaptation_set)
             return [a for a in found if key(a) == target and not DASH.is_trick_mode(a) and same_shape(a)]
@@ -1458,7 +1461,7 @@ class DASH:
         )
 
     @staticmethod
-    def get_audio_channels(adaptation_set: Element, representation: Optional[Element]) -> Union[float, str, None]:
+    def get_audio_channels(adaptation_set: Element, representation: Element | None) -> float | str | None:
         """
         Channel layout from the first AudioChannelConfiguration whose scheme is known, decoded by that scheme.
 
@@ -1479,7 +1482,7 @@ class DASH:
         return None
 
     @staticmethod
-    def get_ddp_complexity_index(adaptation_set: Element, representation: Optional[Element]) -> Optional[int]:
+    def get_ddp_complexity_index(adaptation_set: Element, representation: Element | None) -> int | None:
         """Get the DD+ Complexity Index (if any) from the AdaptationSet or Representation."""
         return next(
             (
@@ -1604,7 +1607,7 @@ class DASH:
         return drm
 
     @staticmethod
-    def pt_to_sec(d: Union[str, float]) -> float:
+    def pt_to_sec(d: str | float) -> float:
         if isinstance(d, float):
             return d
         has_ymd = d[0:8] == "P0Y0M0DT"
@@ -1618,7 +1621,7 @@ class DASH:
         return sum(float(x[0:-1]) * {"H": 60 * 60, "M": 60, "S": 1}[x[-1].upper()] for x in m)
 
     @staticmethod
-    @lru_cache(maxsize=None)
+    @cache
     def field_format_pattern(field: str) -> re.Pattern:
         # printf-style `$Field%fmt$` matcher, compiled once per field name
         return re.compile(rf"\${re.escape(field)}%([a-z0-9]+)\$", flags=re.I)

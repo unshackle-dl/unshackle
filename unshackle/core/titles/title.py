@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from abc import abstractmethod
-from typing import Any, Optional, Union
+from typing import Any
 
 from langcodes import Language
 from pymediainfo import MediaInfo
@@ -17,7 +17,7 @@ from unshackle.core.tracks import Tracks, Video
 from unshackle.core.utilities import spoken_language, standard_resolution
 
 
-def rename(name: Optional[str]) -> str:
+def rename(name: str | None) -> str:
     """Return the user's `codec_names` override for a filename label, read here so per-service overrides are covered."""
     value = config.codec_names.get(name, name) if name else name
     return "" if value is None else str(value)
@@ -25,7 +25,7 @@ def rename(name: Optional[str]) -> str:
 
 class Title:
     def __init__(
-        self, id_: Any, service: type, language: Optional[Union[str, Language]] = None, data: Optional[Any] = None
+        self, id_: Any, service: type, language: str | Language | None = None, data: Any | None = None
     ) -> None:
         """
         Media Title from a Service.
@@ -59,8 +59,8 @@ class Title:
         self.service = service
         self.language = language
         self.data: Any = data
-        self.anime: Optional[bool] = None
-        self.daily: Optional[bool] = None
+        self.anime: bool | None = None
+        self.daily: bool | None = None
 
         self.tracks = Tracks()
 
@@ -82,7 +82,7 @@ class Title:
         primary_audio_track = next(
             (
                 t
-                for t, lang in zip(media_info.audio_tracks, spoken_audio)
+                for t, lang in zip(media_info.audio_tracks, spoken_audio, strict=True)
                 if original_lang_tag and lang == original_lang_tag
             ),
             next(iter(media_info.audio_tracks), None),

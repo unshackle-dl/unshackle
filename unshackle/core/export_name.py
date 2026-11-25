@@ -10,7 +10,7 @@ from __future__ import annotations
 import os
 from collections.abc import Collection, Iterable, Mapping, Sequence
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from unshackle.core.constants import AnyTrack
 from unshackle.core.titles import Episode, Movie, Song, Title_T
@@ -105,7 +105,7 @@ def scope_part(titles: Sequence[Title_T], seasons: Mapping[int, Collection[int]]
     return ".".join(parts)
 
 
-def resolution(track: Video) -> Optional[int]:
+def resolution(track: Video) -> int | None:
     """The resolution a release name uses, the same as the {resolution} template variable."""
     return standard_resolution(track.width, track.height) if track.height else None
 
@@ -155,7 +155,7 @@ def export_name(
     titles: Sequence[Title_T],
     tracks: Iterable[AnyTrack],
     service_tag: str,
-    seasons: Optional[Mapping[int, Collection[int]]] = None,
+    seasons: Mapping[int, Collection[int]] | None = None,
 ) -> str:
     """The export file name without ``.json``, from the exported ``titles`` and ``tracks``.
 
@@ -185,12 +185,12 @@ def move_export(current: Path, name: str) -> Path:
 class ExportNamer:
     """The state of one run's export: its titles, tracks, and the current file path."""
 
-    def __init__(self, service_tag: str, seasons: Optional[Mapping[int, Collection[int]]] = None) -> None:
+    def __init__(self, service_tag: str, seasons: Mapping[int, Collection[int]] | None = None) -> None:
         self.service_tag = service_tag
         self.seasons: dict[int, set[int]] = {season: set(numbers) for season, numbers in (seasons or {}).items()}
         self.titles: dict[str, Title_T] = {}
         self.tracks: dict[str, AnyTrack] = {}
-        self.path: Optional[Path] = None
+        self.path: Path | None = None
 
     def add(self, title: Title_T, track: AnyTrack) -> None:
         """Record ``track`` and the video and audio tracks selected for ``title``.

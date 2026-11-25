@@ -7,8 +7,8 @@ import re
 import socket
 import ssl
 import threading
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Iterator
 from unittest.mock import MagicMock
 
 import pytest
@@ -306,7 +306,7 @@ def tls_echo(tmp_path: Path) -> Iterator[tuple[int, ssl.SSLContext]]:
     """A TLS echo server for *.prod.surfshark.com on loopback, and a client context that trusts it."""
     key = ec.generate_private_key(ec.SECP256R1())
     name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "*.prod.surfshark.com")])
-    now = datetime.datetime.now(datetime.timezone.utc)
+    now = datetime.datetime.now(datetime.UTC)
     cert = (
         x509.CertificateBuilder()
         .subject_name(name)

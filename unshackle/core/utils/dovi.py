@@ -16,7 +16,6 @@ import json
 import subprocess
 import time
 from pathlib import Path
-from typing import Optional, Union
 
 from unshackle.core import binaries
 from unshackle.core.utils.subprocess import log_tool_run, run_step
@@ -24,7 +23,7 @@ from unshackle.core.utils.subprocess import log_tool_run, run_step
 
 def require_dovi_tool() -> str:
     if not binaries.DoviTool:
-        raise EnvironmentError("dovi_tool executable was not found but is required.")
+        raise OSError("dovi_tool executable was not found but is required.")
     return str(binaries.DoviTool)
 
 
@@ -32,8 +31,8 @@ def extract_rpu(
     source: Path,
     output: Path,
     *,
-    mode: Optional[int] = 3,
-    status: Optional[str] = "Extracting DV RPU...",
+    mode: int | None = 3,
+    status: str | None = "Extracting DV RPU...",
     label: str = "dovi_tool extract-rpu",
 ) -> bytes:
     """Extract DV RPU NALs from a raw HEVC bitstream. `mode=None` skips the -m flag (untouched)."""
@@ -50,7 +49,7 @@ def inject_rpu(
     rpu: Path,
     output: Path,
     *,
-    status: Optional[str] = "Re-injecting DV RPU...",
+    status: str | None = "Re-injecting DV RPU...",
     label: str = "dovi_tool inject-rpu",
 ) -> bytes:
     """Inject a DV RPU back into a raw HEVC bitstream, producing DV-signaled output."""
@@ -68,7 +67,7 @@ def editor(
     json_spec: Path,
     output: Path,
     *,
-    status: Optional[str] = "Editing DV RPU...",
+    status: str | None = "Editing DV RPU...",
     label: str = "dovi_tool editor",
 ) -> bytes:
     """Apply a JSON edit spec to an RPU file."""
@@ -124,20 +123,20 @@ def info_frame(rpu: Path, frame: int = 0) -> dict:
     try:
         return json.loads(p.stdout[start:])
     except json.JSONDecodeError as e:
-        raise RuntimeError(f"dovi_tool info returned invalid JSON: {e}")
+        raise RuntimeError(f"dovi_tool info returned invalid JSON: {e}") from e
 
 
 def generate(
     config_json: Path,
     output: Path,
     *,
-    hdr10plus_json: Optional[Path] = None,
-    status: Optional[str] = "Generating DV RPU...",
+    hdr10plus_json: Path | None = None,
+    status: str | None = "Generating DV RPU...",
     label: str = "dovi_tool generate",
 ) -> bytes:
     """Build a DV RPU from a dovi_tool generator config, and from hdr10plus_tool JSON when given."""
     tool = require_dovi_tool()
-    extra: list[Union[str, Path]] = ["--hdr10plus-json", hdr10plus_json] if hdr10plus_json else []
+    extra: list[str | Path] = ["--hdr10plus-json", hdr10plus_json] if hdr10plus_json else []
     return run_step(
         [tool, "generate", "-j", config_json, *extra, "-o", output],
         status=status,

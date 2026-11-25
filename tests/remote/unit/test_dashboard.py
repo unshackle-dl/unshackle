@@ -7,7 +7,7 @@ import logging
 import sys
 import threading
 from collections.abc import Callable
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from aiohttp import web
@@ -326,7 +326,7 @@ async def test_dashboard_log_read_does_not_touch_the_session() -> None:
     store = SessionStore()
     entry = await store.create("EXAMPLE", object())
 
-    stale = datetime.now(timezone.utc) - timedelta(seconds=1)
+    stale = datetime.now(UTC) - timedelta(seconds=1)
     entry.last_accessed = stale
     assert store.peek(entry.session_id) is entry
     assert entry.last_accessed == stale

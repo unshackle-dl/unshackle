@@ -12,7 +12,7 @@ from __future__ import annotations
 import json
 from functools import partial
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import click
 import pytest
@@ -57,7 +57,7 @@ def exported_video(track_id: str, url: str, codec: str, width: int, height: int)
     }
 
 
-def make_service(tmp_path: Path, manifest_url: Optional[str], tracks: dict[str, Any]) -> ImportService:
+def make_service(tmp_path: Path, manifest_url: str | None, tracks: dict[str, Any]) -> ImportService:
     entry: dict[str, Any] = {
         "meta": {"type": "movie", "id": "movie-1", "name": "Example Movie", "year": 2024, "language": "en"},
         "manifest_type": "DASH",

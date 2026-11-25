@@ -1,8 +1,8 @@
 import json
 import random
 import re
+from collections.abc import Iterator
 from functools import cached_property
-from typing import Iterator, Optional
 
 import requests
 
@@ -11,7 +11,7 @@ from unshackle.core.proxies.proxy import Proxy, cached_catalogue
 
 
 class WindscribeVPN(Proxy):
-    def __init__(self, username: str, password: str, server_map: Optional[dict[str, str]] = None) -> None:
+    def __init__(self, username: str, password: str, server_map: dict[str, str] | None = None) -> None:
         """
         Proxy provider that uses WindscribeVPN Service Credentials.
 
@@ -32,7 +32,7 @@ class WindscribeVPN(Proxy):
         self.username = username
         self.password = password
         self.server_map = server_map or {}
-        self.last_hostname: Optional[str] = None
+        self.last_hostname: str | None = None
 
     @cached_property
     def countries(self) -> list[dict]:
@@ -45,7 +45,7 @@ class WindscribeVPN(Proxy):
 
         return f"{countries} Countr{['ies', 'y'][countries == 1]} ({servers} Server{['s', ''][servers == 1]})"
 
-    def get_proxy(self, query: str) -> Optional[str]:
+    def get_proxy(self, query: str) -> str | None:
         """
         Get an HTTPS proxy URI for a WindscribeVPN server.
 
@@ -70,7 +70,7 @@ class WindscribeVPN(Proxy):
         if selector:
             if not re.fullmatch(r"[a-z]+", query):
                 raise ValueError(f"'{query}' is already one WindscribeVPN server, so it takes no '@' network selector.")
-            hostname: Optional[str] = self.get_random_server(query, city, selector)
+            hostname: str | None = self.get_random_server(query, city, selector)
         elif mapping := self.server_map.get(server_map_key) or self.server_map.get(query):
             if mapped := mapped_query(server_map_key, mapping):
                 return self.get_proxy(mapped)
@@ -92,7 +92,7 @@ class WindscribeVPN(Proxy):
         hostname = self.last_hostname = hostname.split(":")[0]
         return f"https://{self.username}:{self.password}@{hostname}:443"
 
-    def last_connection_display(self) -> Optional[str]:
+    def last_connection_display(self) -> str | None:
         """Name the last server with its IP and network, so a blocked network can be excluded with '@-'."""
         return describe(self.last_hostname) if self.last_hostname else None
 
@@ -104,7 +104,7 @@ class WindscribeVPN(Proxy):
                     if host.get("hostname"):
                         yield host["hostname"]
 
-    def get_specific_server(self, country_code: str, server_num: str) -> Optional[str]:
+    def get_specific_server(self, country_code: str, server_num: str) -> str | None:
         """
         Find a server by country code and number, e.g. "sg007" -> "sg-007.totallyacdn.com".
 
@@ -123,9 +123,7 @@ class WindscribeVPN(Proxy):
                         return hostname
         return None
 
-    def get_random_server(
-        self, country_code: str, city: Optional[str] = None, selector: Optional[str] = None
-    ) -> Optional[str]:
+    def get_random_server(self, country_code: str, city: str | None = None, selector: str | None = None) -> str | None:
         """
         Get a random server hostname for a country, optionally filtered by city.
 
@@ -185,4 +183,4 @@ class WindscribeVPN(Proxy):
             data = res.json()
             return data.get("data", [])
         except json.JSONDecodeError:
-            raise ValueError("Could not decode list of WindscribeVPN locations, not JSON data.")
+            raise ValueError("Could not decode list of WindscribeVPN locations, not JSON data.") from None

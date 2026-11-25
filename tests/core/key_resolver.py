@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from types import SimpleNamespace
-from typing import Any, Callable, Optional
+from typing import Any
 from uuid import UUID
 
 from rich.table import Table
@@ -45,7 +46,7 @@ WIDEVINE = cdm_type_stub("widevine")
 def resolver(
     vaults: Any = None,
     cdm: Any = WIDEVINE,
-    cdm_for: Optional[Callable[..., Any]] = None,
+    cdm_for: Callable[..., Any] | None = None,
     tag: str = "TEST",
     **flags: Any,
 ) -> ContentKeyResolver:

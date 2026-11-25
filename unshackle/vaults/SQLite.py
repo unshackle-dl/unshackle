@@ -1,8 +1,8 @@
 import sqlite3
 import threading
+from collections.abc import Iterator
 from pathlib import Path
 from sqlite3 import Connection
-from typing import Iterator, Optional, Union
 from uuid import UUID
 
 from unshackle.core.vault import Vault, is_null_key
@@ -13,13 +13,13 @@ class SQLite(Vault):
 
     local = True
 
-    def __init__(self, name: str, path: Union[str, Path], no_push: bool = False) -> None:
+    def __init__(self, name: str, path: str | Path, no_push: bool = False) -> None:
         super().__init__(name, no_push)
         self.path = Path(path).expanduser()
         # TODO: Use a DictCursor or such to get fetches as dict?
         self.conn_factory = ConnectionFactory(self.path)
 
-    def get_key(self, kid: Union[UUID, str], service: str) -> Optional[str]:
+    def get_key(self, kid: UUID | str, service: str) -> str | None:
         if isinstance(kid, UUID):
             kid = kid.hex
 
@@ -52,12 +52,11 @@ class SQLite(Vault):
 
         try:
             cursor.execute(f"SELECT `kid`, `key_` FROM `{table}` WHERE `key_`!=?", ("0" * 32,))
-            for kid, key_ in cursor.fetchall():
-                yield kid, key_
+            yield from cursor.fetchall()
         finally:
             cursor.close()
 
-    def add_key(self, service: str, kid: Union[UUID, str], key: str) -> bool:
+    def add_key(self, service: str, kid: UUID | str, key: str) -> bool:
         if is_null_key(key):
             raise ValueError("You cannot add a NULL Content Key to a Vault.")
 
@@ -93,8 +92,8 @@ class SQLite(Vault):
 
         return True
 
-    def add_keys(self, service: str, kid_keys: dict[Union[UUID, str], str]) -> int:
-        for kid, key in kid_keys.items():
+    def add_keys(self, service: str, kid_keys: dict[UUID | str, str]) -> int:
+        for key in kid_keys.values():
             if is_null_key(key):
                 raise ValueError("You cannot add a NULL Content Key to a Vault.")
 
@@ -169,7 +168,7 @@ class SQLite(Vault):
         finally:
             cursor.close()
 
-    def is_bad_key(self, kid: Union[UUID, str], key: str) -> bool:
+    def is_bad_key(self, kid: UUID | str, key: str) -> bool:
         if isinstance(kid, UUID):
             kid = kid.hex
         self.create_bad_keys_table()
@@ -180,7 +179,7 @@ class SQLite(Vault):
         finally:
             cursor.close()
 
-    def flag_bad_key(self, service: str, kid: Union[UUID, str], key: str, source: str) -> None:
+    def flag_bad_key(self, service: str, kid: UUID | str, key: str, source: str) -> None:
         if isinstance(kid, UUID):
             kid = kid.hex
         self.create_bad_keys_table()
@@ -198,7 +197,7 @@ class SQLite(Vault):
             conn.commit()
             cursor.close()
 
-    def unflag_bad_key(self, kid: Union[UUID, str], key: str) -> None:
+    def unflag_bad_key(self, kid: UUID | str, key: str) -> None:
         if isinstance(kid, UUID):
             kid = kid.hex
         self.create_bad_keys_table()
@@ -235,7 +234,7 @@ class SQLite(Vault):
         # set only after the commit: a parallel vault thread must not query a table still being made
         self._bad_keys_ready = True
 
-    def resolve_table(self, name: str) -> Optional[str]:
+    def resolve_table(self, name: str) -> str | None:
         """Get the actual Table name matching `name` case-insensitively, if it exists."""
         conn = self.conn_factory.get()
         cursor = conn.cursor()
@@ -285,7 +284,7 @@ class SQLite(Vault):
 
 
 class ConnectionFactory:
-    def __init__(self, path: Union[str, Path]) -> None:
+    def __init__(self, path: str | Path) -> None:
         self._path = path
         self._store = threading.local()
 

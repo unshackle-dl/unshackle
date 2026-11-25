@@ -19,9 +19,10 @@ import os
 import re
 import shlex
 import subprocess
+from collections.abc import Iterator, Sequence
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, Iterator, Optional, Sequence
+from typing import Any
 
 from unshackle.core.config import config
 from unshackle.core.console import console
@@ -75,7 +76,7 @@ def substitute(tokens: Sequence[str], context: dict[str, str]) -> list[str]:
     return argv
 
 
-def _data_injected_flag(tokens: Sequence[str], argv: Sequence[str]) -> Optional[str]:
+def _data_injected_flag(tokens: Sequence[str], argv: Sequence[str]) -> str | None:
     """A token that only became a ``-flag`` after substitution.
 
     Tokenizing before substituting stops a value becoming a *new* token, but a bare
@@ -84,7 +85,7 @@ def _data_injected_flag(tokens: Sequence[str], argv: Sequence[str]) -> Optional[
     value, not the template. A literal flag like ``--opt={var}`` starts with ``-`` in the
     template itself and is the user's own, so it is never flagged.
     """
-    for template, token in zip(tokens, argv):
+    for template, token in zip(tokens, argv, strict=False):
         if token.startswith("-") and not template.startswith("-"):
             return token
     return None
@@ -92,13 +93,13 @@ def _data_injected_flag(tokens: Sequence[str], argv: Sequence[str]) -> Optional[
 
 def build_context(
     title: Any,
-    media_info: Optional[Any] = None,
+    media_info: Any | None = None,
     *,
-    filepath: Optional[Path] = None,
-    folder: Optional[Path] = None,
+    filepath: Path | None = None,
+    folder: Path | None = None,
     sidecars: Sequence[Path] = (),
     service: str = "",
-    ids: Optional[dict[str, Any]] = None,
+    ids: dict[str, Any] | None = None,
     error: str = "",
 ) -> dict[str, str]:
     """Assemble the variable set for one output file.

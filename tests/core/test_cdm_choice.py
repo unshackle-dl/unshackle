@@ -4,8 +4,10 @@ Device names start with the system they are for: ``wv_`` is Widevine, ``pr_`` is
 ``stub:pr``. Each answer tuple runs over the named systems of its column.
 """
 
+from collections.abc import Callable
+from functools import partial
 from types import SimpleNamespace
-from typing import Any, Callable, Optional
+from typing import Any
 
 import pytest
 
@@ -22,7 +24,7 @@ SERVER = ("widevine", "playready", "wv")
 TIER = {"devices": ["wv_tier"], "playready_devices": ["pr_tier"]}
 DUAL = {"widevine": "wv_dev", "playready": "pr_dev"}
 
-ROWS: dict[str, tuple[dict, Optional[str], Optional[dict]]] = {
+ROWS: dict[str, tuple[dict, str | None, dict | None]] = {
     "string widevine": ({"EXAMPLE": "wv_dev"}, None, None),
     "string playready": ({"EXAMPLE": "pr_dev"}, None, None),
     "profile mapping, no profile": ({"EXAMPLE": {"alice": "pr_alice", "default": "wv_dev"}}, None, None),
@@ -89,10 +91,10 @@ def attempt(answer: Callable[[], Any]) -> Any:
 
 def each(systems: tuple, answer: Callable[[Any], Any]) -> tuple:
     """``answer`` for each named system."""
-    return tuple(attempt(lambda: answer(system)) for system in systems)
+    return tuple(attempt(partial(answer, system)) for system in systems)
 
 
-def answers(monkeypatch: pytest.MonkeyPatch, cdm: dict, profile: Optional[str], key_cdm: Optional[dict]) -> dict:
+def answers(monkeypatch: pytest.MonkeyPatch, cdm: dict, profile: str | None, key_cdm: dict | None) -> dict:
     """What every ladder answers for one config row."""
     monkeypatch.setattr(handlers.config, "cdm", cdm, raising=False)
     user = {**TIER, **({"cdm": key_cdm} if key_cdm else {})}
@@ -336,7 +338,7 @@ def test_each_ladder_gives_the_pinned_choice(monkeypatch: pytest.MonkeyPatch, de
     ("name", "system"),
     [("wv", "widevine"), ("PlayReady", "playready"), ("PR", "playready"), ("clearkey", None), (5, None), (None, None)],
 )
-def test_drm_system_reads_each_name_of_a_system(name: Any, system: Optional[str]) -> None:
+def test_drm_system_reads_each_name_of_a_system(name: Any, system: str | None) -> None:
     assert drm_system(name) == system
 
 
@@ -344,5 +346,5 @@ def test_drm_system_reads_each_name_of_a_system(name: Any, system: Optional[str]
     ("entry", "system"),
     [({"widevine": "wv_dev"}, "widevine"), (DUAL, None), ({"default": "pr_dev"}, None), ("pr_dev", None)],
 )
-def test_the_entry_settles_a_system_only_when_it_names_one(entry: Any, system: Optional[str]) -> None:
+def test_the_entry_settles_a_system_only_when_it_names_one(entry: Any, system: str | None) -> None:
     assert choose_cdm({"EXAMPLE": entry}, "EXAMPLE").system == system

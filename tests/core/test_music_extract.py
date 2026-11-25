@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 import pytest
 
@@ -31,11 +31,11 @@ def make_song(
     album: str = "Album",
     artist: str = "Artist",
     name: str = "Song",
-    album_artist: Optional[str] = None,
-    total_tracks: Optional[int] = None,
-    total_discs: Optional[int] = None,
-    artwork_url: Optional[str] = None,
-    data: Optional[Any] = None,
+    album_artist: str | None = None,
+    total_tracks: int | None = None,
+    total_discs: int | None = None,
+    artwork_url: str | None = None,
+    data: Any | None = None,
 ) -> Song:
     return Song(
         id_=f"{album}-{disc}-{track}",
@@ -81,7 +81,7 @@ def test_first_text(values: tuple[Any, ...], default: str, expected: str) -> Non
         ((), None),
     ],
 )
-def test_first_number(values: tuple[Any, ...], expected: Optional[float]) -> None:
+def test_first_number(values: tuple[Any, ...], expected: float | None) -> None:
     assert first_number(*values) == expected
 
 
@@ -110,7 +110,7 @@ def test_year_from_value(value: Any, expected: int) -> None:
         ("nope", None),
     ],
 )
-def test_duration_seconds(value: Any, expected: Optional[float]) -> None:
+def test_duration_seconds(value: Any, expected: float | None) -> None:
     assert duration_seconds(value) == expected
 
 
@@ -165,7 +165,7 @@ def test_format_names(value: Any, sep: str, expected: str) -> None:
         ("", None, "album"),
     ],
 )
-def test_classify_release_kind(raw_kind: str, count: Optional[float], expected: str) -> None:
+def test_classify_release_kind(raw_kind: str, count: float | None, expected: str) -> None:
     assert classify_release_kind(raw_kind, count) == expected
 
 

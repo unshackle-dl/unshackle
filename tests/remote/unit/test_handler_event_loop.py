@@ -12,8 +12,9 @@ from __future__ import annotations
 import asyncio
 import json
 import threading
+from collections.abc import Awaitable, Callable
 from types import SimpleNamespace
-from typing import Any, Awaitable, Callable, List
+from typing import Any
 
 import pytest
 from aiohttp import web
@@ -56,7 +57,7 @@ class BlockingTitles:
     def __init__(self, handshake: Handshake) -> None:
         self.handshake = handshake
 
-    def get_titles(self) -> List[Movie]:
+    def get_titles(self) -> list[Movie]:
         self.handshake.block()
         return [a_movie()]
 
@@ -65,7 +66,7 @@ class BlockingTracks:
     def __init__(self, handshake: Handshake) -> None:
         self.handshake = handshake
 
-    def get_titles(self) -> List[Movie]:
+    def get_titles(self) -> list[Movie]:
         return [a_movie()]
 
     def get_tracks(self, title: Any) -> Any:

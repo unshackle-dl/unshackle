@@ -10,7 +10,7 @@ from contextlib import suppress
 from datetime import datetime
 from functools import partial
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import click
 from aiohttp import web
@@ -134,7 +134,7 @@ RESTART_KEYS = ("remote_only", "services_refresh_interval")
 log = logging.getLogger("serve")
 
 
-def _prepare_serve(serve: dict, no_key: bool, app_config: Any = None) -> Optional[str]:
+def _prepare_serve(serve: dict, no_key: bool, app_config: Any = None) -> str | None:
     """Glob the device directories into ``serve``, validate it in place and return the api_secret.
 
     ``app_config`` is the config ``serve`` belongs to, so a reload checks key devices against the new file.
@@ -159,7 +159,7 @@ def _prepare_serve(serve: dict, no_key: bool, app_config: Any = None) -> Optiona
     try:
         parse_speed_limit(serve.get("global_speed_limit"))
     except ValueError as e:
-        raise ValueError(f"serve.global_speed_limit: {e}")
+        raise ValueError(f"serve.global_speed_limit: {e}") from e
 
     users = serve.get("users", {})
     if isinstance(users, dict):
@@ -195,7 +195,7 @@ def _prepare_serve(serve: dict, no_key: bool, app_config: Any = None) -> Optiona
 
 
 def _build_cdm_config(
-    serve: dict, api_secret: Optional[str], serve_widevine: bool, serve_playready: bool
+    serve: dict, api_secret: str | None, serve_widevine: bool, serve_playready: bool
 ) -> tuple[dict, dict]:
     """The ``app["config"]`` for the main app and the PlayReady sub-app, derived from a prepared ``serve``.
 
@@ -467,7 +467,7 @@ def serve(
         try:
             api_secret = _prepare_serve(config.serve, no_key)
         except ValueError as e:
-            raise click.ClickException(str(e))
+            raise click.ClickException(str(e)) from e
 
         remote_only = remote_only or config.serve.get("remote_only", False)
         if remote_only:
@@ -492,7 +492,7 @@ def serve(
             try:
                 server_accounts = validate_server_accounts()
             except ValueError as e:
-                raise click.ClickException(str(e))
+                raise click.ClickException(str(e)) from e
             for tag in server_accounts:
                 regions = server_account_regions(tag) or {}
                 covered = list(regions.get("regions") or []) + (["global"] if regions.get("global") else [])

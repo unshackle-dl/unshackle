@@ -18,7 +18,8 @@ import threading
 import time
 import traceback
 from collections import deque
-from typing import Any, Callable, Deque, List, MutableMapping, Optional, Tuple
+from collections.abc import Callable, MutableMapping
+from typing import Any
 
 from unshackle.core.api.sanitize import sanitize_log
 from unshackle.core.remote_protocol import LogRecord
@@ -34,10 +35,10 @@ class SessionLogBuffer:
     """
 
     def __init__(self, maxlen: int = MAX_RECORDS) -> None:
-        self._records: Deque[LogRecord] = deque(maxlen=maxlen)
+        self._records: deque[LogRecord] = deque(maxlen=maxlen)
         self._seq = 0
         self._lock = threading.Lock()
-        self.listener: Optional[Callable[[LogRecord], None]] = None
+        self.listener: Callable[[LogRecord], None] | None = None
 
     def append(self, level: int, message: str) -> None:
         with self._lock:
@@ -52,7 +53,7 @@ class SessionLogBuffer:
             if self.listener is not None:
                 self.listener(record)
 
-    def since(self, seq: int) -> List[LogRecord]:
+    def since(self, seq: int) -> list[LogRecord]:
         """Records with a sequence number greater than *seq*, oldest first."""
         with self._lock:
             return [r.copy() for r in self._records if r["seq"] > seq]
@@ -63,7 +64,7 @@ class SessionLogBuffer:
             return self._seq
 
 
-def format_message(msg: Any, args: Tuple[Any, ...]) -> str:
+def format_message(msg: Any, args: tuple[Any, ...]) -> str:
     """Render a logging call's message the way ``LogRecord`` would."""
     try:
         return str(msg) % args if args else str(msg)
@@ -137,10 +138,10 @@ class capture_service_logs:
     opened the window.
     """
 
-    def __init__(self, logger_name: str, buffer: Optional[SessionLogBuffer]) -> None:
+    def __init__(self, logger_name: str, buffer: SessionLogBuffer | None) -> None:
         self._logger = logging.getLogger(logger_name)
-        self._handler: Optional[SessionLogHandler] = SessionLogHandler(buffer) if buffer else None
-        self._prev_level: Optional[int] = None
+        self._handler: SessionLogHandler | None = SessionLogHandler(buffer) if buffer else None
+        self._prev_level: int | None = None
 
     def __enter__(self) -> None:
         if self._handler:

@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import base64
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable, Optional, Union
+from typing import Any
 from uuid import UUID
 
 import click
@@ -33,7 +34,7 @@ class Widevine:
         UUID("00010203-0405-0607-0809-101112131415"),  # Shaka Packager test pattern
     }
 
-    def __init__(self, pssh: PSSH, kid: Union[UUID, str, bytes, None] = None, **kwargs: Any) -> None:
+    def __init__(self, pssh: PSSH, kid: UUID | str | bytes | None = None, **kwargs: Any) -> None:
         if not pssh:
             raise ValueError("Provided PSSH is empty.")
         if not isinstance(pssh, PSSH):
@@ -42,7 +43,7 @@ class Widevine:
         if pssh.system_id == PSSH.SystemId.PlayReady:
             pssh = self.from_playready(pssh)
 
-        self._kid: Optional[UUID] = None
+        self._kid: UUID | None = None
         if kid:
             if isinstance(kid, str):
                 kid = UUID(hex=kid)
@@ -86,7 +87,7 @@ class Widevine:
         return PSSH.new(system_id=PSSH.SystemId.Widevine, key_ids=list(dict.fromkeys(kids)))
 
     @classmethod
-    def from_track(cls, track: AnyTrack, session: Optional[AnySession] = None) -> Widevine:
+    def from_track(cls, track: AnyTrack, session: AnySession | None = None) -> Widevine:
         """
         Get PSSH and KID from within the Initiation Segment of the Track Data.
         It also tries to get PSSH and KID from other track data like M3U8 data
@@ -107,7 +108,7 @@ class Widevine:
             session = run_proxy.fallback_session()
             session.headers.update(config.headers)
 
-        kid: Optional[UUID] = None
+        kid: UUID | None = None
         pssh_boxes: list[Container] = []
         tenc_boxes: list[Container] = []
 
@@ -160,7 +161,7 @@ class Widevine:
         if not isinstance(init_data, bytes):
             raise TypeError(f"Expected init data to be bytes, not {init_data!r}")
 
-        kid: Optional[UUID] = None
+        kid: UUID | None = None
         pssh_boxes: list[Container] = list(get_boxes(init_data, b"pssh"))
         tenc_boxes: list[Container] = list(get_boxes(init_data, b"tenc"))
 
@@ -188,7 +189,7 @@ class Widevine:
         return self._pssh
 
     @property
-    def kid(self) -> Optional[UUID]:
+    def kid(self) -> UUID | None:
         """Get first Key ID, if any."""
         return next(iter(self.kids), None)
 
@@ -297,7 +298,7 @@ class Widevine:
             return [self._kid]
         return self.kids
 
-    def mp4decrypt_key_args(self, track_kids: Optional[dict[int, UUID]] = None) -> list[str]:
+    def mp4decrypt_key_args(self, track_kids: dict[int, UUID] | None = None) -> list[str]:
         """Build the mp4decrypt --key arguments for every content key, the zero-KID and the track ID fallbacks."""
         return drm_key_args.mp4decrypt_key_args(self.content_keys, self.own_kids(), track_kids)
 

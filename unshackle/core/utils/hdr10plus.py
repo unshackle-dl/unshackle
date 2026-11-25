@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import logging
 import struct
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
-from typing import TYPE_CHECKING, Callable, Optional, TypeVar, Union
+from typing import TYPE_CHECKING, TypeVar
 from urllib.parse import urljoin
 
 from requests import Session
@@ -39,7 +40,7 @@ def is_ts(data: bytes) -> bool:
     return data[:1] == b"\x47" and (len(data) <= TS_PACKET or data[TS_PACKET : TS_PACKET + 1] == b"\x47")
 
 
-def ts_streams(data: bytes) -> Optional[list[tuple[int, bytes]]]:
+def ts_streams(data: bytes) -> list[tuple[int, bytes]] | None:
     """The ``stream_type`` and registration format identifier of each PMT entry, or None without a PMT."""
     entries = ts_pmt(data)
     return None if entries is None else [(stream_type, registration) for _, stream_type, registration in entries]
@@ -56,7 +57,7 @@ def ts_payload(packet: bytes) -> bytes:
     return packet[5 + packet[4] if adaptation & 2 else 4 :] if adaptation & 1 else b""
 
 
-def ts_pmt(data: bytes) -> Optional[list[tuple[int, int, bytes]]]:
+def ts_pmt(data: bytes) -> list[tuple[int, int, bytes]] | None:
     """The PID, ``stream_type`` and registration format identifier of each PMT entry, or None without a PMT.
 
     PAT program 0 names the network information table, so it is skipped. Lengths that run past the packet
@@ -101,7 +102,7 @@ def ts_pmt(data: bytes) -> Optional[list[tuple[int, int, bytes]]]:
     return None
 
 
-def sei_number(rbsp: bytes, i: int) -> tuple[Optional[int], int]:
+def sei_number(rbsp: bytes, i: int) -> tuple[int | None, int]:
     """Read the SEI payload type or size that starts at ``i``: 0xFF bytes add 255 each. Returns (value, next)."""
     value = 0
     while i < len(rbsp) and rbsp[i] == 0xFF:
@@ -127,7 +128,7 @@ def sei_has_t35(nal: bytes, t35: bytes) -> bool:
     return False
 
 
-def fragment_has_t35(data: bytes, t35: bytes) -> Optional[bool]:
+def fragment_has_t35(data: bytes, t35: bytes) -> bool | None:
     """Whether the first sample of an fMP4 fragment carries the T.35 SEI that ``t35`` starts, or None when the bytes
     cannot tell. ``HDR10PLUS_T35`` finds HDR10+, ``CUVA_T35`` HDR Vivid.
 
@@ -156,7 +157,7 @@ def fragment_has_t35(data: bytes, t35: bytes) -> Optional[bool]:
     return None
 
 
-def first_segment(track: "Track", session: Union[Session, RnetSession]) -> Optional[tuple[str, int]]:
+def first_segment(track: Track, session: Session | RnetSession) -> tuple[str, int] | None:
     """The URL and start offset of the track's first media segment, looked up without a full parse."""
     from unshackle.core.manifests import DASH
     from unshackle.core.tracks.track import Track
@@ -196,7 +197,7 @@ def first_segment(track: "Track", session: Union[Session, RnetSession]) -> Optio
     return None
 
 
-def first_fragment(track: "Track", session: Union[Session, RnetSession]) -> Optional[bytes]:
+def first_fragment(track: Track, session: Session | RnetSession) -> bytes | None:
     """The first PROBE_BYTES of the track's first media fragment, or of its first segment when that is MPEG-TS."""
     segment = first_segment(track, session)
     if not segment:
@@ -222,12 +223,12 @@ def first_fragment(track: "Track", session: Union[Session, RnetSession]) -> Opti
 
 
 def probe_dynamic_hdr(
-    videos: list["Video"],
-    session: Union[Session, RnetSession],
+    videos: list[Video],
+    session: Session | RnetSession,
     *,
     log: logging.Logger,
     workers: int,
-    on_start: Optional[Callable[[], None]] = None,
+    on_start: Callable[[], None] | None = None,
 ) -> None:
     """Relabel HEVC tracks by the dynamic HDR metadata of their first sample, and flag DV tracks with HDR10+.
 
@@ -254,7 +255,7 @@ def probe_dynamic_hdr(
     if any(ladders) and on_start:
         on_start()
 
-    def proven(data: Optional[bytes]) -> Optional["Video.Range"]:
+    def proven(data: bytes | None) -> Video.Range | None:
         if not data:
             return None
         if is_ts(data):
@@ -263,7 +264,7 @@ def probe_dynamic_hdr(
             return Video.Range.VIVID
         return Video.Range.HDR10P if fragment_has_t35(data, HDR10PLUS_T35) else None
 
-    def probe(video: "Video") -> Optional["Video.Range"]:
+    def probe(video: Video) -> Video.Range | None:
         """The range the first segment proves (HDR10P or VIVID), else None."""
         try:
             found = proven(first_fragment(video, video.session or session))
@@ -273,10 +274,10 @@ def probe_dynamic_hdr(
         log.debug(f"{video.id}: dynamic HDR probe {found}")
         return found
 
-    def probe_all(tracks: list["Video"]) -> dict[int, Optional["Video.Range"]]:
-        return dict(zip(map(id, tracks), map_probes(probe, tracks, workers)))
+    def probe_all(tracks: list[Video]) -> dict[int, Video.Range | None]:
+        return dict(zip(map(id, tracks), map_probes(probe, tracks, workers), strict=True))
 
-    plans: list[tuple[list["Video"], list["Video"], list["Video"]]] = []
+    plans: list[tuple[list[Video], list[Video], list[Video]]] = []
     for candidates in ladders:
         if len(candidates) <= 4 or len({(v.width, v.height) for v in candidates}) < len(candidates):
             plans.append((candidates, candidates, []))
@@ -287,9 +288,11 @@ def probe_dynamic_hdr(
     found = probe_all([v for _, samples, _ in plans for v in samples])
     labels = [{found[id(s)] for s in samples} for _, samples, _ in plans]
     found.update(
-        probe_all([v for (_, _, rest), seen in zip(plans, labels) if any(seen) and len(seen) > 1 for v in rest])
+        probe_all(
+            [v for (_, _, rest), seen in zip(plans, labels, strict=True) if any(seen) and len(seen) > 1 for v in rest]
+        )
     )
-    for (candidates, _, _), seen in zip(plans, labels):
+    for (candidates, _, _), seen in zip(plans, labels, strict=True):
         whole = next(iter(seen)) if len(seen) == 1 else None
         for video in candidates:
             label = found.get(id(video), whole)
@@ -300,7 +303,7 @@ def probe_dynamic_hdr(
 
 
 def probe_audio_codecs(
-    audio: list["Audio"], session: Union[Session, RnetSession], *, log: logging.Logger, workers: int
+    audio: list[Audio], session: Session | RnetSession, *, log: logging.Logger, workers: int
 ) -> None:
     """Name the codec of each audio track that has none from the PMT of its MPEG-TS first segment.
 
@@ -308,7 +311,7 @@ def probe_audio_codecs(
     """
     from unshackle.core.tracks import Audio
 
-    def probe(track: "Audio") -> None:
+    def probe(track: Audio) -> None:
         try:
             track_session = track.session or session
             segment = first_segment(track, track_session)
@@ -328,12 +331,12 @@ def probe_audio_codecs(
 
 
 def probed_tracks(
-    service: "Service",
-    title: "Title_T",
+    service: Service,
+    title: Title_T,
     *,
-    workers: Optional[int] = None,
-    on_probe: Optional[Callable[[], None]] = None,
-) -> "Tracks":
+    workers: int | None = None,
+    on_probe: Callable[[], None] | None = None,
+) -> Tracks:
     """The title's tracks from ``service.get_tracks``, with HDR10+ and HDR Vivid found in HDR10 and HLG tracks.
 
     Audio with no codec gets one from the MPEG-TS ``stream_type``. ``workers`` defaults to ``dl.workers`` from

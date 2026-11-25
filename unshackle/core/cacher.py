@@ -7,14 +7,14 @@ import zlib
 from datetime import datetime
 from os import stat_result
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import Any
 
 import jsonpickle
 import jwt
 
 from unshackle.core.config import config
 
-EXP_T = Union[datetime, str, int, float]
+EXP_T = datetime | str | int | float
 
 # A number below this is seconds until expiration; at or above it, a unix timestamp (2001-09-09 onwards).
 ABSOLUTE_TIMESTAMP_MIN = 1_000_000_000
@@ -26,11 +26,11 @@ class Cacher:
     def __init__(
         self,
         service_tag: str,
-        key: Optional[str] = None,
-        version: Optional[int] = 1,
-        data: Optional[Any] = None,
-        expiration: Optional[datetime] = None,
-        route: Optional[tuple[tuple[str, ...], str]] = None,
+        key: str | None = None,
+        version: int | None = 1,
+        data: Any | None = None,
+        expiration: datetime | None = None,
+        route: tuple[tuple[str, ...], str] | None = None,
     ) -> None:
         """``route`` is ``(prefixes, tag)``: a cache key that starts with one of ``prefixes`` lives under ``tag``."""
         self.service_tag = service_tag
@@ -87,7 +87,7 @@ class Cacher:
                 raise ValueError(f"The {self.service_tag} {key} cache is outdated, delete {cache.path}")
         return cache
 
-    def set(self, data: Any, expiration: Optional[EXP_T] = None) -> Any:
+    def set(self, data: Any, expiration: EXP_T | None = None) -> Any:
         """
         Set the cached data of the service by cache key.
         :param data: absolutely anything including None.
@@ -158,4 +158,4 @@ class Cacher:
                 timestamp += time.time()
             return datetime.fromtimestamp(timestamp)
         except (ValueError, OverflowError, OSError):
-            raise ValueError(f"Unrecognized Timestamp value {timestamp!r}")
+            raise ValueError(f"Unrecognized Timestamp value {timestamp!r}") from None

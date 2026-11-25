@@ -9,7 +9,7 @@ import subprocess
 import time
 from enum import Enum
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import Any
 
 from unshackle.core import binaries
 from unshackle.core.tracks.track import (
@@ -101,7 +101,7 @@ class Audio(Track):
             raise ValueError(f"The MIME '{mime}' is not a supported Audio Codec")
 
         @staticmethod
-        def from_ts(stream_type: int, registration: bytes) -> Optional[Audio.Codec]:
+        def from_ts(stream_type: int, registration: bytes) -> Audio.Codec | None:
             """The codec an MPEG-TS PMT entry names by its registration descriptor or ``stream_type``, else None."""
             if registration in (b"AVSA", b"av3a"):
                 return Audio.Codec.AV3A
@@ -110,7 +110,7 @@ class Audio(Track):
             )
 
         @staticmethod
-        def from_ffprobe(codec_name: str, profile: str = "") -> Optional[Audio.Codec]:
+        def from_ffprobe(codec_name: str, profile: str = "") -> Audio.Codec | None:
             """Map an FFprobe ``codec_name`` to a codec, or None for one core does not name."""
             if codec_name.startswith("pcm_"):
                 return Audio.Codec.PCM
@@ -131,11 +131,11 @@ class Audio(Track):
     def __init__(
         self,
         *args: Any,
-        codec: Optional[Audio.Codec] = None,
-        bitrate: Optional[Union[str, int, float]] = None,
-        channels: Optional[Union[str, int, float]] = None,
-        joc: Optional[int] = None,
-        descriptive: Union[bool, int] = False,
+        codec: Audio.Codec | None = None,
+        bitrate: str | int | float | None = None,
+        channels: str | int | float | None = None,
+        joc: int | None = None,
+        descriptive: bool | int = False,
         **kwargs: Any,
     ) -> None:
         """
@@ -174,12 +174,12 @@ class Audio(Track):
         try:
             self.bitrate = int(math.ceil(float(bitrate))) if bitrate else None
         except (ValueError, TypeError) as e:
-            raise ValueError(f"Expected bitrate to be a number or float, {e}")
+            raise ValueError(f"Expected bitrate to be a number or float, {e}") from None
 
         try:
             self.channels = self.parse_channels(channels) if channels else None
         except (ValueError, NotImplementedError) as e:
-            raise ValueError(f"Expected channels to be a number, float, or a string, {e}")
+            raise ValueError(f"Expected channels to be a number, float, or a string, {e}") from None
 
         self.joc = joc
         self.descriptive = bool(descriptive)
@@ -220,7 +220,7 @@ class Audio(Track):
         )
 
     @staticmethod
-    def parse_channels(channels: Union[str, int, float]) -> Union[float, str]:
+    def parse_channels(channels: str | int | float) -> float | str:
         """
         Converts a Channel string to a float representing the audio channel layout.
         E.g. "3" -> "3.0", "2.1" -> "2.1", ".1" -> "0.1".
@@ -246,7 +246,7 @@ class Audio(Track):
         return float(channels)
 
     @staticmethod
-    def dolby_channel_layout(mask: int) -> Union[float, str]:
+    def dolby_channel_layout(mask: int) -> float | str:
         """Channel layout of a Dolby DASH channel configuration mask, e.g. 0xF801 -> 5.1."""
         counts = {"main": 0, "lfe": 0, "height": 0}
         for bit, (count, kind) in enumerate(DOLBY_CHANNEL_BITS):
@@ -257,7 +257,7 @@ class Audio(Track):
         return float(f"{counts['main']}.{counts['lfe']}")
 
     @staticmethod
-    def channels_from_count(count: Union[str, int, None]) -> Union[float, str, None]:
+    def channels_from_count(count: str | int | None) -> float | str | None:
         """
         Channel layout for a bare number of channels, as HLS CHANNELS, Smooth Streaming and most DASH schemes give it.
 
@@ -269,7 +269,7 @@ class Audio(Track):
         return COUNT_CHANNEL_LAYOUTS.get(int(count), float(count))
 
     @staticmethod
-    def channel_total(channels: Union[str, int, float]) -> float:
+    def channel_total(channels: str | int | float) -> float:
         """
         Total number of channels in either channel form, so a caller can compare both.
 
@@ -315,7 +315,7 @@ class Audio(Track):
             return {}
         return stream
 
-    def to_music_container(self, start: float = 0.0, duration: Optional[float] = None) -> None:
+    def to_music_container(self, start: float = 0.0, duration: float | None = None) -> None:
         """Remux the track into the container of the codec FFprobe reads from the file, cut to the sample window.
 
         The declared codec is used only when FFprobe cannot read the file. Every failure raises and keeps the
@@ -343,7 +343,7 @@ class Audio(Track):
         self.path = output
 
     def ffmpeg_music_container(
-        self, source: Path, stream: dict[str, Any], start: float, duration: Optional[float]
+        self, source: Path, stream: dict[str, Any], start: float, duration: float | None
     ) -> Path:
         """Remux with FFmpeg. FLAC is encoded, never copied: FFmpeg's FLAC muxer writes a real sample count
         only from an encoder. Float PCM and PCM above 24 bits go to WAV: FLAC has no float samples, and FFmpeg
@@ -351,7 +351,7 @@ class Audio(Track):
         widen to 32-bit float. DTS goes to Matroska, because FFmpeg writes it into
         MP4 with an mp4a sample entry. Only AAC, ALAC and AC-3 take the ipod muxer (the M4A brand)."""
         if not binaries.FFMPEG:
-            raise EnvironmentError('FFmpeg executable "ffmpeg" was not found but is required for this call.')
+            raise OSError('FFmpeg executable "ffmpeg" was not found but is required for this call.')
 
         sample_fmt = stream.get("sample_fmt")
         lossless_pcm = (
@@ -403,10 +403,10 @@ class Audio(Track):
         )
         return output
 
-    def mp4box_music_container(self, source: Path, start: float, duration: Optional[float]) -> Path:
+    def mp4box_music_container(self, source: Path, start: float, duration: float | None) -> Path:
         """Rewrite the track as an unfragmented .m4a with MP4Box, for the codecs FFmpeg cannot write into MP4."""
         if not binaries.MP4Box:
-            raise EnvironmentError(f"MP4Box (GPAC) not found, the {getattr(self.codec, 'value', None)} remux needs it")
+            raise OSError(f"MP4Box (GPAC) not found, the {getattr(self.codec, 'value', None)} remux needs it")
         candidate = source.with_name(f"{source.stem}_init.mp4")
         output = source.with_name(f"{source.stem}_music.m4a")
         try:
@@ -439,7 +439,7 @@ class Audio(Track):
             candidate.unlink(missing_ok=True)
         return output
 
-    def get_track_name(self) -> Optional[str]:
+    def get_track_name(self) -> str | None:
         """Return the base Track Name."""
         track_name = super().get_track_name() or ""
         flag = self.descriptive and "Descriptive"
@@ -463,7 +463,7 @@ FFPROBE_CODECS: dict[str, Audio.Codec] = {
     "mpegh_3d_audio": Audio.Codec.MPEGH,
 }
 
-COPY_CONTAINERS: dict[Optional[Audio.Codec], str] = {
+COPY_CONTAINERS: dict[Audio.Codec | None, str] = {
     Audio.Codec.OPUS: ".opus",
     Audio.Codec.OGG: ".ogg",
     Audio.Codec.MP3: ".mp3",

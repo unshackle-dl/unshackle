@@ -17,7 +17,7 @@ def selection(**flags: Any) -> TrackSelection:
     """A TrackSelection with every filter off but the given flags."""
     off: dict[str, Any] = {}
     for flag in fields(TrackSelection):
-        off[flag.name] = [] if str(flag.type).startswith("list") else None if "Optional" in str(flag.type) else False
+        off[flag.name] = None if "None" in str(flag.type) else [] if str(flag.type).startswith("list") else False
     return TrackSelection(**{**off, **flags})
 
 

@@ -7,7 +7,7 @@ import subprocess
 import tempfile
 import threading
 import time
-from typing import Any, Optional
+from typing import Any
 
 import requests
 
@@ -162,12 +162,12 @@ class Gluetun(Proxy):
 
     def __init__(
         self,
-        providers: Optional[dict] = None,
+        providers: dict | None = None,
         base_port: int = 8888,
         auto_cleanup: bool = True,
         container_prefix: str = "unshackle-gluetun",
-        auth_user: Optional[str] = None,
-        auth_password: Optional[str] = None,
+        auth_user: str | None = None,
+        auth_password: str | None = None,
         verify_ip: bool = True,
         **kwargs: Any,
     ) -> None:
@@ -231,7 +231,7 @@ class Gluetun(Proxy):
         provider_count = len(self.providers)
         return f"Gluetun ({provider_count} provider{['s', ''][provider_count == 1]})"
 
-    def get_proxy(self, query: str) -> Optional[str]:
+    def get_proxy(self, query: str) -> str | None:
         """
         Get an HTTP proxy URI for a Gluetun VPN connection.
 
@@ -366,7 +366,7 @@ class Gluetun(Proxy):
             self.remove_container(container_name)
             if query_key in self.active_containers:
                 del self.active_containers[query_key]
-            raise coded(RuntimeError(f"Failed to create Gluetun container: {e}"), APIErrorCode.INVALID_PROXY)
+            raise coded(RuntimeError(f"Failed to create Gluetun container: {e}"), APIErrorCode.INVALID_PROXY) from e
 
     def cleanup(self) -> None:
         """Stop and remove all managed Gluetun containers."""
@@ -408,7 +408,7 @@ class Gluetun(Proxy):
                 success=True,
             )
 
-    def get_connection_info(self, query: str) -> Optional[dict]:
+    def get_connection_info(self, query: str) -> dict | None:
         """
         Get connection info for a proxy query.
 
@@ -590,7 +590,7 @@ class Gluetun(Proxy):
             log.error(f"Docker pull failed: {result.stderr}")
             return False
         except subprocess.TimeoutExpired:
-            raise RuntimeError(f"Timed out pulling Docker image '{image}'")
+            raise RuntimeError(f"Timed out pulling Docker image '{image}'") from None
 
     def create_container(
         self,
@@ -598,9 +598,9 @@ class Gluetun(Proxy):
         port: int,
         provider_name: str,
         provider_config: dict,
-        country: Optional[str] = None,
-        city: Optional[str] = None,
-        hostname: Optional[str] = None,
+        country: str | None = None,
+        city: str | None = None,
+        hostname: str | None = None,
     ) -> None:
         """
         Make and start a Gluetun Docker container.
@@ -766,7 +766,7 @@ class Gluetun(Proxy):
                     success=False,
                     duration_ms=(time.time() - start_time) * 1000,
                 )
-                raise RuntimeError("Docker run command timed out")
+                raise RuntimeError("Docker run command timed out") from None
 
             if result.returncode != 0:
                 error_msg = result.stderr or "unknown error"
@@ -850,7 +850,7 @@ class Gluetun(Proxy):
         except (subprocess.TimeoutExpired, FileNotFoundError):
             return False
 
-    def get_existing_container_info(self, container_name: str) -> Optional[dict]:
+    def get_existing_container_info(self, container_name: str) -> dict | None:
         """
         Find whether a container exists in Docker, and get its info.
 
@@ -1038,7 +1038,7 @@ class Gluetun(Proxy):
         )
         return False
 
-    def get_container_exit_info(self, container_name: str) -> Optional[dict]:
+    def get_container_exit_info(self, container_name: str) -> dict | None:
         """Get exit information for a stopped container."""
         try:
             result = subprocess.run(

@@ -9,8 +9,9 @@ from __future__ import annotations
 import base64
 import json
 import threading
+from collections.abc import Callable, Iterator
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from typing import Any, Callable, Dict, Iterator, List
+from typing import Any
 from uuid import UUID
 
 import pytest
@@ -29,15 +30,15 @@ CHALLENGE = b"loopback challenge"
 LICENCE = b"loopback licence"
 PR_LICENCE = "<License>loopback</License>"
 
-Answer = Callable[[Dict[str, Any]], Dict[str, Any]]
+Answer = Callable[[dict[str, Any]], dict[str, Any]]
 
 
 class Api:
     """A loopback HTTP API: one answer per path, every request recorded."""
 
     def __init__(self) -> None:
-        self.answers: Dict[str, Answer] = {}
-        self.requests: List[tuple[str, Dict[str, str], Dict[str, Any]]] = []
+        self.answers: dict[str, Answer] = {}
+        self.requests: list[tuple[str, dict[str, str], dict[str, Any]]] = []
         api = self
 
         class Handler(BaseHTTPRequestHandler):
@@ -192,7 +193,7 @@ def test_decrypt_labs_partial_cache_asks_for_a_licence(api: Api, second_answer: 
         assert keys == {KID: KEY}
 
 
-CUSTOM_CONFIG: Dict[str, Any] = {
+CUSTOM_CONFIG: dict[str, Any] = {
     "auth": {"type": "header", "header_name": "x-api-key", "key": "s3cret"},
     "endpoints": {"get_request": "/challenge", "decrypt_response": {"path": "/keys"}},
     "request_mapping": {"get_request": {"param_names": {"init_data": "pssh"}}},
@@ -221,7 +222,7 @@ def custom_answers(api: Api) -> None:
         ({"name": "SL3000", "type": "PLAYREADY"}, playready_drm, PR_LICENCE),
     ],
 )
-def test_custom_api(api: Api, device: Dict[str, Any], drm_of: Callable[[], Any], licence: Any) -> None:
+def test_custom_api(api: Api, device: dict[str, Any], drm_of: Callable[[], Any], licence: Any) -> None:
     custom_answers(api)
     drm = drm_of()
     cdm = CustomRemoteCDM(host=api.url, device=device, **CUSTOM_CONFIG)

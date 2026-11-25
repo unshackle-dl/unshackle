@@ -9,7 +9,7 @@ API now fails at the first API call instead.
 from __future__ import annotations
 
 import functools
-from typing import Any, Optional
+from typing import Any
 
 import requests
 from Crypto.PublicKey import RSA
@@ -29,7 +29,7 @@ class SecretSession(requests.Session):
             prepared_request.headers.pop("X-Secret-Key", None)
 
 
-def _connect(cdm: Any, drm: str, host: Optional[str], secret: Optional[str], device_name: Optional[str]) -> None:
+def _connect(cdm: Any, drm: str, host: str | None, secret: str | None, device_name: str | None) -> None:
     """Set what upstream `__init__` sets after the probe, on the name-mangled upstream session."""
     if not (host and secret and device_name):
         raise ValueError(f"A {drm} remote CDM needs host, secret and device_name")
@@ -51,18 +51,16 @@ class UnprobedWidevineRemoteCdm(WidevineRemoteCdm):
         device_type: Any,
         system_id: int,
         security_level: int,
-        host: Optional[str],
-        secret: Optional[str],
-        device_name: Optional[str],
+        host: str | None,
+        secret: str | None,
+        device_name: str | None,
     ) -> None:
         _connect(self, "Widevine", host, secret, device_name)
         WidevineCdm.__init__(self, device_type, system_id, security_level, ClientIdentification(), _placeholder_key())
 
 
 class UnprobedPlayReadyRemoteCdm(PlayReadyRemoteCdm):
-    def __init__(
-        self, security_level: int, host: Optional[str], secret: Optional[str], device_name: Optional[str]
-    ) -> None:
+    def __init__(self, security_level: int, host: str | None, secret: str | None, device_name: str | None) -> None:
         if not isinstance(security_level, int):
             raise TypeError(f"A PlayReady remote CDM needs an int security_level, not {security_level!r}")
         _connect(self, "PlayReady", host, secret, device_name)

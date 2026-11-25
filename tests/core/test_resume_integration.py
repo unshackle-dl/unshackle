@@ -16,6 +16,7 @@ from functools import partial
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
+import requests
 
 from unshackle.core.config import config
 from unshackle.core.constants import DOWNLOAD_CANCELLED
@@ -116,7 +117,7 @@ def test_second_run_reuses_completed_segments(server, tmp_path):
     # part1.bin is missing -> the first run completes part0 then dies on part1
 
     ctx = make_ctx(tmp_path)
-    with pytest.raises(Exception):
+    with pytest.raises(requests.HTTPError):
         DASH.download_track(make_track(mpd(server), server), ctx)
 
     assert (ctx.save_dir / "0.mp4").read_bytes() == PART0
@@ -138,7 +139,7 @@ def test_changed_segmentation_wipes_stale_segments(server, tmp_path):
     server.routes["/part0.bin"] = PART0
 
     ctx = make_ctx(tmp_path)
-    with pytest.raises(Exception):
+    with pytest.raises(requests.HTTPError):
         DASH.download_track(make_track(mpd(server), server), ctx)
     assert (ctx.save_dir / "0.mp4").exists()
 

@@ -5,8 +5,8 @@ from __future__ import annotations
 import logging
 import operator
 import re
-from collections.abc import Mapping
-from typing import Any, Callable, Optional
+from collections.abc import Callable, Mapping
+from typing import Any
 
 log = logging.getLogger(__name__)
 
@@ -23,7 +23,7 @@ ORDERING = (">=", "<=", ">", "<")
 NUMBER = re.compile(r"\d+(?:\.\d+)?")
 
 
-def evaluate_tag_rules(rules: Any, context: dict[str, Any]) -> Optional[str]:
+def evaluate_tag_rules(rules: Any, context: dict[str, Any]) -> str | None:
     """Evaluate tag rules against a filename template context.
 
     unshackle evaluates the rules in order. It returns the tag of the first rule

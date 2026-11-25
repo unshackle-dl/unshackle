@@ -142,12 +142,17 @@ force-exclude = true
 line-length = 120
 
 [tool.ruff.lint]
-select = ["E4", "E7", "E9", "F", "W"]
+select = ["E4", "E7", "E9", "F", "W", "UP", "B"]
+# StrEnum makes str() and format() of a member give its value, not "Codec.AVC"; callers and services read that text.
+ignore = ["UP042"]
 
 [tool.ruff.lint.per-file-ignores]
 # binaries are resolved lazily via module-level __getattr__ (PEP 562), so the
 # names in __all__ are intentionally not defined statically.
 "unshackle/core/binaries.py" = ["F822"]
+# Optional hooks with a no-op default: a service or vault overrides only the ones it needs.
+"unshackle/core/service.py" = ["B027"]
+"unshackle/core/vault.py" = ["B027"]
 
 [tool.isort]
 profile = "black"

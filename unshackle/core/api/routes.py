@@ -4,7 +4,7 @@ import logging
 import re
 import time
 from collections.abc import Awaitable, Callable
-from typing import Any, Optional
+from typing import Any
 
 import click
 from aiohttp import web
@@ -184,7 +184,7 @@ def categorized(handler: Handler) -> Handler:
 MAX_LOGIN_BODY_BYTES = 8 * 1024 * 1024
 
 
-async def json_body(request: web.Request, max_size: Optional[int] = None) -> Any:
+async def json_body(request: web.Request, max_size: int | None = None) -> Any:
     """The request's JSON object; raises INVALID_INPUT when it does not parse or is not an object.
 
     ``max_size`` replaces the body limit of the application for this read.
@@ -256,10 +256,10 @@ def heartbeat(handler: Handler) -> Handler:
 
 
 UPDATE_CHECK_TTL = 300.0
-UPDATE_CHECK: list[tuple[float, Optional[str]]] = []
+UPDATE_CHECK: list[tuple[float, str | None]] = []
 
 
-async def latest_release() -> Optional[str]:
+async def latest_release() -> str | None:
     """The newer release the update check reports, kept for ``UPDATE_CHECK_TTL`` seconds: clients poll health."""
     if UPDATE_CHECK and time.monotonic() - UPDATE_CHECK[0][0] < UPDATE_CHECK_TTL:
         return UPDATE_CHECK[0][1]

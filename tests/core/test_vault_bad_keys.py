@@ -3,7 +3,6 @@ import threading
 import time
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Optional, Union
 from uuid import UUID
 
 import pytest
@@ -103,7 +102,7 @@ SERVER = SimpleNamespace(
 )
 
 
-def batch_title(*batches: dict[UUID, str], kids: Optional[list[UUID]] = None) -> SimpleNamespace:
+def batch_title(*batches: dict[UUID, str], kids: list[UUID] | None = None) -> SimpleNamespace:
     """A title with one track per batch, whose DRM names ``kids`` (every KID of its batch by default)."""
     return SimpleNamespace(
         tracks=[
@@ -259,13 +258,13 @@ def test_retry_takes_the_next_parallel_answer_without_a_new_request(tmp_path: Pa
     started, release = threading.Event(), threading.Event()
 
     class Fast(FakeVault):
-        def get_key(self, kid: Union[UUID, str], service: str) -> Optional[str]:
+        def get_key(self, kid: UUID | str, service: str) -> str | None:
             # answer only once the slow query runs, or the pool shutdown cancels it before it starts
             started.wait(5)
             return super().get_key(kid, service)
 
     class Slow(FakeVault):
-        def get_key(self, kid: Union[UUID, str], service: str) -> Optional[str]:
+        def get_key(self, kid: UUID | str, service: str) -> str | None:
             started.set()
             release.wait(5)
             return super().get_key(kid, service)
@@ -409,7 +408,7 @@ def test_stale_backup_from_a_killed_run_is_not_restored(tmp_path: Path, monkeypa
     ids=["file-uses-it", "file-does-not", "unmapped"],
 )
 def test_an_unkeyed_kid_the_file_uses_is_licensed_before_the_decrypt(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, windows: Optional[dict], licensed: list[UUID]
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, windows: dict | None, licensed: list[UUID]
 ) -> None:
     keys = make_resolver(monkeypatch, Vaults("SVC"))
     drm = FakeDRM({KID: GOOD})

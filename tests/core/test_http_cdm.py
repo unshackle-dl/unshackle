@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import base64
-from typing import Any, Dict, List, Optional
+from typing import Any
 from uuid import UUID
 
 import pytest
@@ -23,17 +23,17 @@ KEY_A, KEY_B, KEY_X = "01" * 16, "02" * 16, "0f" * 16
 
 
 class FakeVaults:
-    def __init__(self, keys: Dict[UUID, str]) -> None:
+    def __init__(self, keys: dict[UUID, str]) -> None:
         self.keys = dict(keys)
-        self.added: Dict[Any, str] = {}
+        self.added: dict[Any, str] = {}
 
     def __len__(self) -> int:
         return 1
 
-    def get_key(self, kid: UUID) -> tuple[Optional[str], None]:
+    def get_key(self, kid: UUID) -> tuple[str | None, None]:
         return self.keys.get(kid), None
 
-    def add_keys(self, keys: Dict[Any, str]) -> None:
+    def add_keys(self, keys: dict[Any, str]) -> None:
         self.added.update(keys)
 
 
@@ -42,21 +42,21 @@ class StubCdm(HttpCdm):
 
     def __init__(
         self,
-        cached: Optional[List[Dict[str, Any]]] = None,
-        licence: Optional[List[Dict[str, Any]]] = None,
+        cached: list[dict[str, Any]] | None = None,
+        licence: list[dict[str, Any]] | None = None,
         vaults: Any = None,
     ) -> None:
         super().__init__("https://cdm.test/", "L3", None, "EXAMPLE", vaults, {})
         self.cached = cached
         self.licence = licence or []
         self.challenges = 0
-        self.required: List[Optional[List[str]]] = []
-        self.bodies: List[Dict[str, Any]] = []
+        self.required: list[list[str] | None] = []
+        self.bodies: list[dict[str, Any]] = []
 
     def _request_challenge(
         self,
-        session: Dict[str, Any],
-        body: Dict[str, Any],
+        session: dict[str, Any],
+        body: dict[str, Any],
         license_type: str,
         privacy_mode: bool,
     ) -> bytes:
@@ -66,16 +66,16 @@ class StubCdm(HttpCdm):
             return b""
         return self._keep_challenge(session, b"challenge", "remote-1")
 
-    def _request_keys(self, session: Dict[str, Any], body: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def _request_keys(self, session: dict[str, Any], body: dict[str, Any]) -> list[dict[str, Any]]:
         self.bodies.append(body)
         return self.licence
 
 
-def key(kid: UUID, value: str) -> Dict[str, str]:
+def key(kid: UUID, value: str) -> dict[str, str]:
     return {"kid": kid.hex, "key": value, "type": "CONTENT"}
 
 
-def licensed(cdm: StubCdm, *kids: UUID) -> Dict[UUID, str]:
+def licensed(cdm: StubCdm, *kids: UUID) -> dict[UUID, str]:
     """Run one challenge and licence round and return the content keys of the session."""
     session_id = cdm.open()
     cdm.set_required_kids(list(kids), session_id=session_id)
@@ -149,9 +149,9 @@ class L1StubCdm(StubCdm):
 
     def __init__(self) -> None:
         super().__init__(licence=[key(KID_A, KEY_A)])
-        self.sent: List[Dict[str, Any]] = []
+        self.sent: list[dict[str, Any]] = []
 
-    def _request_challenge(self, session: Dict[str, Any], body: Dict[str, Any], *rest: Any) -> bytes:
+    def _request_challenge(self, session: dict[str, Any], body: dict[str, Any], *rest: Any) -> bytes:
         self.sent.append(body)
         return super()._request_challenge(session, body, *rest)
 

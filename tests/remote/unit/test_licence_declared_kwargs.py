@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import base64
 from types import SimpleNamespace
-from typing import Any, Optional
+from typing import Any
 from uuid import UUID
 
 import pyplayready.system.pssh as pr_pssh_mod
@@ -59,13 +59,13 @@ class SessionService(_Recorder):
     """DEMO: a session-aware service, the shape that needs the open CDM session id."""
 
     def get_widevine_license(
-        self, *, challenge: bytes, title: Any, track: Any, session_id: Optional[bytes] = None
+        self, *, challenge: bytes, title: Any, track: Any, session_id: bytes | None = None
     ) -> bytes:
         self.calls.append({"challenge": challenge, "title": title, "track": track, "session_id": session_id})
         return b"LIC"
 
     def get_playready_license(
-        self, *, challenge: bytes, title: Any, track: Any, session_id: Optional[bytes] = None
+        self, *, challenge: bytes, title: Any, track: Any, session_id: bytes | None = None
     ) -> str:
         self.calls.append({"challenge": challenge, "title": title, "track": track, "session_id": session_id})
         return "<License>ok</License>"
@@ -104,7 +104,7 @@ class StubPlayReady(PlayReady):
     pssh_b64: Any = None
     kids: Any = None
 
-    def __init__(self, pssh: Any = None, pssh_b64: Optional[str] = None, **kwargs: Any) -> None:
+    def __init__(self, pssh: Any = None, pssh_b64: str | None = None, **kwargs: Any) -> None:
         self.pssh = SimpleNamespace(wrm_headers=[SimpleNamespace(dumps=lambda: "<WRMHEADER/>")])
         self.pssh_b64 = pssh_b64
         self.kids = [KID]

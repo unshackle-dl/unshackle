@@ -8,7 +8,7 @@ import zipfile
 from fnmatch import fnmatch
 from functools import partial
 from pathlib import Path, PurePosixPath
-from typing import Any, Optional
+from typing import Any
 
 import click
 import yaml
@@ -146,20 +146,20 @@ def versioned(tool: str, text: str) -> str:
     return text.format(v=version, dashed=version.replace(".", "-"))
 
 
-def platform_spec(tool: str, system: Optional[str] = None) -> dict[str, Any]:
+def platform_spec(tool: str, system: str | None = None) -> dict[str, Any]:
     """Return a tool's entry with the overrides for this platform applied."""
     entry = TOOLS[tool]
     return {**entry, **entry.get(system or sys.platform, {})}
 
 
-def label(tool: str, system: Optional[str] = None) -> str:
+def label(tool: str, system: str | None = None) -> str:
     """Return the tool name with its pinned version and download size, for prompts."""
     spec = platform_spec(tool, system)
     text = tool if spec["version"] == "latest" else f"{tool} {spec['version']}"
     return f"{text}, {spec['size']}" if spec.get("size") else text
 
 
-def asset_url(tool: str, system: Optional[str] = None, machine: Optional[str] = None) -> Optional[str]:
+def asset_url(tool: str, system: str | None = None, machine: str | None = None) -> str | None:
     """Return the download URL of a tool for a platform, or None when it has no portable build."""
     machine = (machine or platform.machine()).lower()
     machine = {"amd64": "x86_64", "arm64": "aarch64"}.get(machine, machine)
@@ -231,7 +231,7 @@ def install(tool: str, url: str, dest: Path) -> bool:
     say(f"Downloading {tool} ({spec['version']}) ...", end=" ")
     try:
         with tempfile.TemporaryDirectory() as tmp:
-            downloaded: Optional[Path] = None
+            downloaded: Path | None = None
             for event in requests(url, Path(tmp), url.rsplit("/", 1)[-1], session=session()):
                 downloaded = event.get("file_downloaded") or downloaded
             if downloaded is None:
@@ -287,7 +287,7 @@ def data_dirs(data_root: Path) -> dict[str, Any]:
     return dirs
 
 
-def write_config(path: Path, downloads: Path, data_root: Optional[Path]) -> Optional[dict[str, Any]]:
+def write_config(path: Path, downloads: Path, data_root: Path | None) -> dict[str, Any] | None:
     """Write a minimal config to path and return its data, or None when path exists.
 
     With a data_root, the data folders move there, out of the package folder.

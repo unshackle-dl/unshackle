@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Union
 
 from Cryptodome.Cipher import Blowfish
 
@@ -17,7 +16,7 @@ class BlowfishStripe:
     CHUNK = 2048
     IV = bytes(range(8))
 
-    def __init__(self, key: Union[bytes, str]) -> None:
+    def __init__(self, key: bytes | str) -> None:
         self.key: bytes = bytes.fromhex(key) if isinstance(key, str) else key
 
     def decrypt_chunk(self, chunk: bytes) -> bytes:

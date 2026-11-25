@@ -7,7 +7,7 @@ import re
 from collections.abc import Generator
 from datetime import datetime
 from http.cookiejar import CookieJar
-from typing import Any, Optional, Union
+from typing import Any
 
 import click
 from langcodes import Language
@@ -161,9 +161,9 @@ class EXAMPLE(Service):
             self.track_request.ranges = [Video.Range.SDR]
 
         if self.config is None:
-            raise EnvironmentError("config.yaml is missing for this service.")
+            raise OSError("config.yaml is missing for this service.")
 
-    def authenticate(self, cookies: Optional[CookieJar] = None, credential: Optional[Credential] = None) -> None:
+    def authenticate(self, cookies: CookieJar | None = None, credential: Credential | None = None) -> None:
         # Loads the cookie jar into self.session and stores self.credential.
         super().authenticate(cookies, credential)
 
@@ -187,7 +187,7 @@ class EXAMPLE(Service):
             if cookies:
                 jwt_token = next((c.value for c in cookies if c.name == "streamco_token"), None)
                 if not jwt_token:
-                    raise EnvironmentError("Cookie 'streamco_token' not found in jar.")
+                    raise OSError("Cookie 'streamco_token' not found in jar.")
                 payload = json.loads(base64.urlsafe_b64decode(jwt_token.split(".")[1] + "==").decode())
                 body = {"token": jwt_token, "profileId": payload.get("profileId")}
             elif credential:
@@ -195,7 +195,7 @@ class EXAMPLE(Service):
                 otp = self.request_input("Enter the OTP sent to your device: ")
                 body = {"username": credential.username, "password": credential.password, "otp": otp}
             else:
-                raise EnvironmentError("Service requires either Cookies or Credentials.")
+                raise OSError("Service requires either Cookies or Credentials.")
 
             token = self.session.post(url=self.config["endpoints"]["login"], data=body).json()
             cache.set(data=token, expiration=token.get("expires_in"))
@@ -289,7 +289,7 @@ class EXAMPLE(Service):
     # codec x range in the TrackRequest, handles HYBRID (HDR10 + DV merge), and -
     # when --best-available is set - skips combos the service can't deliver.
     def get_tracks(self, title: Title_T) -> Tracks:
-        def fetch_variant(title: Title_T, codec: Optional[Video.Codec], range_: Video.Range) -> Tracks:
+        def fetch_variant(title: Title_T, codec: Video.Codec | None, range_: Video.Range) -> Tracks:
             vcodec_str = "H265" if codec == Video.Codec.HEVC else "H264"
             self.log.info(f" + Fetching {vcodec_str} {range_.name} manifest")
             tracks = self.fetch_dash_manifest(title, vcodec=vcodec_str, range_=range_)
@@ -455,11 +455,11 @@ class EXAMPLE(Service):
             unique.setdefault(chapter.timestamp, chapter)
         return Chapters(sorted(unique.values(), key=lambda c: c.timestamp))
 
-    def get_widevine_service_certificate(self, **_: Any) -> Optional[str]:
+    def get_widevine_service_certificate(self, **_: Any) -> str | None:
         # Returning the service cert enables privacy-mode license requests.
         return self.config.get("certificate")
 
-    def get_widevine_license(self, *, challenge: bytes, title: Title_T, track: AnyTrack) -> Optional[Union[bytes, str]]:
+    def get_widevine_license(self, *, challenge: bytes, title: Title_T, track: AnyTrack) -> bytes | str | None:
         # `track` is passed so you can use its per-segment PSSH if the service rotates keys.
         license_url = self.license_data.get("url") or self.config["endpoints"].get("widevine_license")
         if not license_url:
@@ -481,9 +481,7 @@ class EXAMPLE(Service):
         except (ValueError, KeyError):
             return response.content
 
-    def get_playready_license(
-        self, *, challenge: bytes, title: Title_T, track: AnyTrack
-    ) -> Optional[Union[bytes, str]]:
+    def get_playready_license(self, *, challenge: bytes, title: Title_T, track: AnyTrack) -> bytes | str | None:
         license_url = self.config["endpoints"].get("playready_license")
         if not license_url:
             raise ValueError("PlayReady license endpoint not configured")
@@ -495,9 +493,7 @@ class EXAMPLE(Service):
         response.raise_for_status()
         return response.content
 
-    def get_clearkey_license(
-        self, *, challenge: bytes, title: Title_T, track: AnyTrack
-    ) -> Optional[Union[bytes, str, dict]]:
+    def get_clearkey_license(self, *, challenge: bytes, title: Title_T, track: AnyTrack) -> bytes | str | dict | None:
         # DASH org.w3.clearkey: `challenge` is the W3C JSON license request; return the
         # JWK Set response. Omit this method entirely when the manifest carries a Laurl:
         # the framework then POSTs the challenge there with no service code at all.

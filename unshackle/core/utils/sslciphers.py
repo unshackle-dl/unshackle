@@ -1,5 +1,5 @@
 import ssl
-from typing import Any, Optional
+from typing import Any
 
 from requests.adapters import HTTPAdapter
 
@@ -46,7 +46,7 @@ class SSLCiphers(HTTPAdapter):
 
     __attrs__ = [*HTTPAdapter.__attrs__, "_ssl_context"]
 
-    def __init__(self, cipher_list: Optional[str] = None, security_level: int = 0, *args: Any, **kwargs: Any) -> None:
+    def __init__(self, cipher_list: str | None = None, security_level: int = 0, *args: Any, **kwargs: Any) -> None:
         if cipher_list:
             if not isinstance(cipher_list, str):
                 raise TypeError(f"Expected cipher_list to be a str, not {cipher_list!r}")

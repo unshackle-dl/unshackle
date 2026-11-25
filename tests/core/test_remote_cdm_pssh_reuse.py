@@ -7,7 +7,8 @@ decrypt in parallel on it. Each CDM session keeps its own PSSH and required KIDs
 from __future__ import annotations
 
 import base64
-from typing import Any, Callable, List
+from collections.abc import Callable
+from typing import Any
 
 import pytest
 from pyplayready.system.wrmheader import WRMHeader
@@ -36,9 +37,9 @@ class FakePssh:
         self.raw = raw
 
 
-def recording(cdm: Any) -> List[tuple[str, Any]]:
+def recording(cdm: Any) -> list[tuple[str, Any]]:
     """Make the adapter record the init data and required KIDs of each challenge instead of sending it."""
-    sent: List[tuple[str, Any]] = []
+    sent: list[tuple[str, Any]] = []
 
     def request_challenge(session: Any, body: Any, *_: Any) -> bytes:
         sent.append((body["init_data"], session.get("required_kids")))

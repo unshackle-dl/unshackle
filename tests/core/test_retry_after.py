@@ -1,6 +1,6 @@
 """RnetSession.get_sleep_time must survive hostile or malformed Retry-After headers."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from email.utils import format_datetime
 from types import SimpleNamespace
 
@@ -35,18 +35,18 @@ def test_huge_numeric_retry_after_respects_session_cap():
 
 
 def test_http_date_retry_after_honoured(session):
-    when = format_datetime(datetime.now(timezone.utc) + timedelta(seconds=10), usegmt=True)
+    when = format_datetime(datetime.now(UTC) + timedelta(seconds=10), usegmt=True)
     assert 5 <= session.get_sleep_time(response(when), 1) <= 10
 
 
 def test_naive_http_date_does_not_raise(session):
     # "-0000" makes parsedate_to_datetime return a naive datetime
-    when = format_datetime(datetime.now(timezone.utc) + timedelta(seconds=10)).replace("+0000", "-0000")
+    when = format_datetime(datetime.now(UTC) + timedelta(seconds=10)).replace("+0000", "-0000")
     assert 5 <= session.get_sleep_time(response(when), 1) <= 10
 
 
 def test_past_http_date_yields_no_sleep(session):
-    when = format_datetime(datetime.now(timezone.utc) - timedelta(seconds=30), usegmt=True)
+    when = format_datetime(datetime.now(UTC) - timedelta(seconds=30), usegmt=True)
     assert session.get_sleep_time(response(when), 1) <= 0
 
 

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional, Union
+from typing import TYPE_CHECKING
 
 import requests
 
@@ -27,7 +27,7 @@ ALIASES: dict[str, str] = {"imdbapi": "imdb"}
 DEFAULT_ORDER: tuple[str, ...] = ("imdb", "omdb", "simkl", "tmdb", "tvdb", "anilist")
 
 
-def provider_order(kind: Optional[str] = None, anime: bool = False) -> list[type[MetadataProvider]]:
+def provider_order(kind: str | None = None, anime: bool = False) -> list[type[MetadataProvider]]:
     """Metadata provider classes in the order configured by `metadata_providers`.
 
     `metadata_providers` is either a flat list applying to both kinds, or a mapping of
@@ -54,7 +54,7 @@ def get_available_providers() -> list[MetadataProvider]:
     return [cls() for cls in provider_order() if cls().is_available()]
 
 
-def get_provider(name: str) -> Optional[MetadataProvider]:
+def get_provider(name: str) -> MetadataProvider | None:
     """Get one specific metadata provider by name."""
     cls = REGISTRY.get(name)
     if not cls:
@@ -65,14 +65,14 @@ def get_provider(name: str) -> Optional[MetadataProvider]:
 
 def search_metadata(
     title: str,
-    year: Optional[int],
+    year: int | None,
     kind: str,
-    title_cacher: Optional[TitleCacher] = None,
-    cache_title_id: Optional[str] = None,
-    cache_region: Optional[str] = None,
-    cache_account_hash: Optional[str] = None,
+    title_cacher: TitleCacher | None = None,
+    cache_title_id: str | None = None,
+    cache_region: str | None = None,
+    cache_account_hash: str | None = None,
     anime: bool = False,
-) -> Optional[MetadataResult]:
+) -> MetadataResult | None:
     """Find metadata in every available metadata provider. Returns the best result."""
     from unshackle.core.config import config
 
@@ -128,11 +128,11 @@ def search_metadata(
 def get_title_by_id(
     tmdb_id: int,
     kind: str,
-    title_cacher: Optional[TitleCacher] = None,
-    cache_title_id: Optional[str] = None,
-    cache_region: Optional[str] = None,
-    cache_account_hash: Optional[str] = None,
-) -> Optional[str]:
+    title_cacher: TitleCacher | None = None,
+    cache_title_id: str | None = None,
+    cache_region: str | None = None,
+    cache_account_hash: str | None = None,
+) -> str | None:
     """Get title name by TMDB ID."""
     if title_cacher and cache_title_id:
         cached = title_cacher.get_cached_provider("tmdb", cache_title_id, kind, cache_region, cache_account_hash)
@@ -170,11 +170,11 @@ def get_title_by_id(
 def get_year_by_id(
     tmdb_id: int,
     kind: str,
-    title_cacher: Optional[TitleCacher] = None,
-    cache_title_id: Optional[str] = None,
-    cache_region: Optional[str] = None,
-    cache_account_hash: Optional[str] = None,
-) -> Optional[int]:
+    title_cacher: TitleCacher | None = None,
+    cache_title_id: str | None = None,
+    cache_region: str | None = None,
+    cache_account_hash: str | None = None,
+) -> int | None:
     """Get release year by TMDB ID."""
     if title_cacher and cache_title_id:
         cached = title_cacher.get_cached_provider("tmdb", cache_title_id, kind, cache_region, cache_account_hash)
@@ -213,11 +213,11 @@ def get_year_by_id(
 def get_language_by_id(
     tmdb_id: int,
     kind: str,
-    title_cacher: Optional[TitleCacher] = None,
-    cache_title_id: Optional[str] = None,
-    cache_region: Optional[str] = None,
-    cache_account_hash: Optional[str] = None,
-) -> Optional[str]:
+    title_cacher: TitleCacher | None = None,
+    cache_title_id: str | None = None,
+    cache_region: str | None = None,
+    cache_account_hash: str | None = None,
+) -> str | None:
     """Get original language by TMDB ID."""
     if title_cacher and cache_title_id:
         cached = title_cacher.get_cached_provider("tmdb", cache_title_id, kind, cache_region, cache_account_hash)
@@ -236,10 +236,10 @@ def get_language_by_id(
 def fetch_external_ids(
     tmdb_id: int,
     kind: str,
-    title_cacher: Optional[TitleCacher] = None,
-    cache_title_id: Optional[str] = None,
-    cache_region: Optional[str] = None,
-    cache_account_hash: Optional[str] = None,
+    title_cacher: TitleCacher | None = None,
+    cache_title_id: str | None = None,
+    cache_region: str | None = None,
+    cache_account_hash: str | None = None,
 ) -> ExternalIds:
     """Get external IDs by TMDB ID."""
     if title_cacher and cache_title_id:
@@ -281,20 +281,20 @@ def fetch_external_ids(
 
 
 def resolve_by_ids(
-    tmdb_id: Optional[int] = None,
-    imdb_id: Optional[str] = None,
-    tvdb_id: Optional[int] = None,
-    anilist_id: Optional[Union[int, str]] = None,
+    tmdb_id: int | None = None,
+    imdb_id: str | None = None,
+    tvdb_id: int | None = None,
+    anilist_id: int | str | None = None,
     *,
-    title: Optional[str] = None,
-    year: Optional[int] = None,
+    title: str | None = None,
+    year: int | None = None,
     kind: str = "movie",
-    title_cacher: Optional[TitleCacher] = None,
-    cache_title_id: Optional[str] = None,
-    cache_region: Optional[str] = None,
-    cache_account_hash: Optional[str] = None,
+    title_cacher: TitleCacher | None = None,
+    cache_title_id: str | None = None,
+    cache_region: str | None = None,
+    cache_account_hash: str | None = None,
     anime: bool = False,
-) -> Optional[MetadataResult]:
+) -> MetadataResult | None:
     """Get metadata from user-supplied external IDs, and find the title by name only without them.
 
     A supplied ID is authoritative. unshackle looks it up directly through the metadata
@@ -302,7 +302,7 @@ def resolve_by_ids(
     always survives into `external_ids` whatever a metadata provider answers. Without any
     supplied ID, unshackle finds the title by a fuzzy name comparison.
     """
-    supplied: dict[str, Union[int, str]] = {}
+    supplied: dict[str, int | str] = {}
     if tmdb_id is not None:
         supplied["tmdb"] = tmdb_id
     if imdb_id:
@@ -317,7 +317,7 @@ def resolve_by_ids(
             return None
         return search_metadata(title, year, kind, title_cacher, cache_title_id, cache_region, cache_account_hash, anime)
 
-    result: Optional[MetadataResult] = None
+    result: MetadataResult | None = None
     for cls in provider_order(kind, anime):
         provider_id = supplied.get(cls.ID_KIND or "")
         if provider_id is None:
@@ -365,7 +365,7 @@ def resolve_by_ids(
 ENRICHMENT_AUTHORITY: tuple[str, ...] = ("tmdb", "simkl", "tvdb")
 
 
-def enrichment_providers(kind: Optional[str] = None) -> list[str]:
+def enrichment_providers(kind: str | None = None) -> list[str]:
     """Names of the configured metadata providers that can find a title by IMDB ID, most trusted first."""
     configured = {cls.NAME for cls in provider_order(kind) if hasattr(cls, "find_by_imdb_id")}
     return [name for name in ENRICHMENT_AUTHORITY if name in configured]
@@ -478,7 +478,7 @@ def external_ids_to_dict(ext: ExternalIds) -> dict:
     return result
 
 
-def cached_to_result(cached: dict, provider_name: str, kind: str) -> Optional[MetadataResult]:
+def cached_to_result(cached: dict, provider_name: str, kind: str) -> MetadataResult | None:
     """Convert a cached metadata provider dict back to a MetadataResult."""
     if provider_name == "tmdb":
         detail = cached.get("detail", {})

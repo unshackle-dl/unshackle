@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Literal, Optional
+from typing import Any, Literal
 
 from unshackle.core.utils.collections import ci_get
 
@@ -11,7 +11,7 @@ SYSTEMS = ("widevine", "playready")
 SYSTEM_NAMES = {"wv": "widevine", "widevine": "widevine", "pr": "playready", "playready": "playready"}
 
 
-def drm_system(name: Any) -> Optional[str]:
+def drm_system(name: Any) -> str | None:
     """``widevine`` or ``playready`` for either name or its short form in any case; None for anything else."""
     return SYSTEM_NAMES.get(name.lower()) if isinstance(name, str) else None
 
@@ -25,12 +25,12 @@ class CdmChoice:
     both: bool
 
     @property
-    def system(self) -> Optional[str]:
+    def system(self) -> str | None:
         """The DRM system the entry settles by its keys alone: the only one it names."""
         return self.systems[0] if len(self.systems) == 1 else None
 
     @property
-    def name(self) -> Optional[str]:
+    def name(self) -> str | None:
         """The device as a device name; None when the entry gives none or an inline mapping."""
         return self.device if isinstance(self.device, str) and self.device else None
 
@@ -38,8 +38,8 @@ class CdmChoice:
 def choose_cdm(
     cdm: dict[str, Any],
     service: str,
-    profile: Optional[str] = None,
-    drm: Optional[str] = None,
+    profile: str | None = None,
+    drm: str | None = None,
     *,
     entry: Any = None,
     view: Literal["load", "licence", "stub"] = "load",

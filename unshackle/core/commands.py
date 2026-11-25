@@ -1,6 +1,5 @@
 import logging
 from pathlib import Path
-from typing import Optional
 
 import click
 
@@ -67,7 +66,7 @@ class Commands(click.Group):
         check_load_errors()
         return [x.stem.replace("_", "-") for x in COMMANDS]
 
-    def get_command(self, ctx: click.Context, name: str) -> Optional[click.Command]:
+    def get_command(self, ctx: click.Context, name: str) -> click.Command | None:
         """Load the command code and return the main click command function."""
         check_load_errors()
         module = MODULES.get(name) or MODULES.get(name.replace("-", "_"))

@@ -5,9 +5,11 @@ import re
 import subprocess
 import tempfile
 from collections import Counter
+from collections.abc import Iterable
 from concurrent import futures
+from itertools import pairwise
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Iterable, Optional
+from typing import TYPE_CHECKING, Any
 
 from rich.padding import Padding
 from rich.rule import Rule
@@ -113,7 +115,7 @@ def measured_shots(frames: list[tuple[int, float, int, bool]]) -> list[dict]:
     cuts.append(len(frames))
     to_12_bit = 4095 / 65535
     shots = []
-    for start, end in zip(cuts, cuts[1:]):
+    for start, end in pairwise(cuts):
         shot = frames[start:end]
         level1 = {
             "min_pq": round(min(f[0] for f in shot) * to_12_bit),
@@ -124,7 +126,7 @@ def measured_shots(frames: list[tuple[int, float, int, bool]]) -> list[dict]:
     return shots
 
 
-def hdr10plus_mean_pq(values: dict[int, float], active_fraction: float = 1.0) -> Optional[float]:
+def hdr10plus_mean_pq(values: dict[int, float], active_fraction: float = 1.0) -> float | None:
     """Mean PQ code of the maxRGB distribution in one HDR10+ histogram, or None if a slot is missing.
 
     Dolby Vision L1 avg is a mean of PQ-coded maxRGB over the active area. HDR10+ AverageMaxRGB is a
@@ -142,7 +144,7 @@ def hdr10plus_mean_pq(values: dict[int, float], active_fraction: float = 1.0) ->
 
     low = 1.0 - active_fraction
     area = 0.0
-    for (x1, y1), (x2, y2) in zip(knots, knots[1:]):
+    for (x1, y1), (x2, y2) in pairwise(knots):
         if x2 <= low:
             continue
         if x1 < low:
@@ -169,13 +171,13 @@ def hdr10plus_shots(metadata: dict, active_fraction: float = 1.0) -> list[dict]:
 
     shots = []
     fallbacks = 0
-    for first_frame, length in zip(first_frames, summary["SceneFrameNumbers"]):
+    for first_frame, length in zip(first_frames, summary["SceneFrameNumbers"], strict=False):
         start = first_frame - offset
         luminance = scenes[start]["LuminanceParameters"]
         distribution = luminance["LuminanceDistributions"]
         values = {
             index: value / 10
-            for index, value in zip(distribution["DistributionIndex"], distribution["DistributionValues"])
+            for index, value in zip(distribution["DistributionIndex"], distribution["DistributionValues"], strict=False)
         }
         peaks = [value for index, value in values.items() if index != 10]
         max_pq = nits_to_pq(max(peaks or [v / 10 for v in luminance["MaxScl"]]))
@@ -205,7 +207,7 @@ class NoHDR10PlusMetadata(ValueError):
 
 
 class Hybrid:
-    def __init__(self, videos: list["Video"], source: str, output_name: Optional[str] = None) -> None:
+    def __init__(self, videos: list["Video"], source: str, output_name: str | None = None) -> None:
         self.log = logging.getLogger("hybrid")
 
         """
@@ -359,7 +361,7 @@ class Hybrid:
                 message=f"Failed extracting {type_} stream",
                 context={"type": type_, "input": str(save_path), "output": str(output), "error": str(e)},
             )
-            raise ValueError(f"Failed extracting {type_} stream")
+            raise ValueError(f"Failed extracting {type_} stream") from None
 
         log_event(
             "hybrid_extract_stream",
@@ -394,8 +396,10 @@ class Hybrid:
                 self.extract_rpu(video, untouched=True)
                 return
             if "Invalid PPS index" in stderr_text:
-                raise ValueError("Dolby Vision VideoTrack seems to be corrupt")
-            raise ValueError(f"Failed extracting{' untouched ' if untouched else ' '}RPU from Dolby Vision stream")
+                raise ValueError("Dolby Vision VideoTrack seems to be corrupt") from None
+            raise ValueError(
+                f"Failed extracting{' untouched ' if untouched else ' '}RPU from Dolby Vision stream"
+            ) from None
 
         log_event(
             "hybrid_extract_rpu",
@@ -438,7 +442,7 @@ class Hybrid:
             )
         except RuntimeError as e:
             log_event("hybrid_align", level="ERROR", message="Failed aligning the RPU", context={"error": str(e)})
-            raise ValueError("Failed aligning the Dolby Vision RPU with the sample")
+            raise ValueError("Failed aligning the Dolby Vision RPU with the sample") from None
         log_event("hybrid_align", level="DEBUG", message="Aligned the RPU", context={"frames": frames}, success=True)
         self.rpu_file = "RPU_ALIGN.bin"
 
@@ -481,7 +485,7 @@ class Hybrid:
                 message="Failed editing RPU Level 5 values",
                 context={"error": str(e)},
             )
-            raise ValueError("Failed editing RPU Level 5 values")
+            raise ValueError("Failed editing RPU Level 5 values") from None
 
         log_event(
             "hybrid_level5",
@@ -492,7 +496,7 @@ class Hybrid:
         )
         self.rpu_file = "RPU_L5.bin"
 
-    def detect_active_area(self, input_video: Path) -> Optional[tuple[tuple[int, int, int, int], float]]:
+    def detect_active_area(self, input_video: Path) -> tuple[tuple[int, int, int, int], float] | None:
         """The picture's crop as (left, top, right, bottom) and its share of the frame, or None.
 
         None also when the picture is under 40% of the frame: cropdetect on dark samples can report a tiny
@@ -504,8 +508,7 @@ class Hybrid:
         with console.status("Detecting active area (crop detection)...", spinner="dots"):
             result_duration = subprocess.run(
                 [ffprobe_bin, "-v", "error", "-show_entries", "format=duration", "-of", "json", str(input_video)],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+                capture_output=True,
                 text=True,
                 encoding="utf-8",
                 errors="replace",
@@ -546,8 +549,7 @@ class Hybrid:
                     "json",
                     str(input_video),
                 ],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+                capture_output=True,
                 text=True,
                 encoding="utf-8",
                 errors="replace",
@@ -569,7 +571,7 @@ class Hybrid:
 
             sample_times = [duration * (i + 0.5) / 10 for i in range(10)]
 
-            def sample_crop(t: float) -> Optional[tuple[int, int, int, int]]:
+            def sample_crop(t: float) -> tuple[int, int, int, int] | None:
                 result_cropdetect = subprocess.run(
                     [
                         ffmpeg_bin,
@@ -591,8 +593,7 @@ class Hybrid:
                         "null",
                         "-",
                     ],
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
+                    capture_output=True,
                     text=True,
                     encoding="utf-8",
                     errors="replace",
@@ -641,8 +642,8 @@ class Hybrid:
 
     @staticmethod
     def sanitize_l6(
-        max_mdl: Optional[int], min_mdl: Optional[int], max_cll: Optional[int], max_fall: Optional[int]
-    ) -> tuple[Optional[int], Optional[int], Optional[int], Optional[int]]:
+        max_mdl: int | None, min_mdl: int | None, max_cll: int | None, max_fall: int | None
+    ) -> tuple[int | None, int | None, int | None, int | None]:
         """Clamp static L6 values to a valid relationship.
 
         MaxCLL must not exceed the mastering-display peak (some HDR10+ sources ship
@@ -671,7 +672,7 @@ class Hybrid:
                 message="Failed reading RPU metadata for Level 6 values",
                 context={"error": str(e)},
             )
-            raise ValueError("Failed reading RPU metadata for Level 6 values")
+            raise ValueError("Failed reading RPU metadata for Level 6 values") from None
 
         blocks = rpu_info.get("vdr_dm_data", {}).get("cmv29_metadata", {}).get("ext_metadata_blocks", [])
         level6: dict[str, Any] = next((b["Level6"] for b in blocks if isinstance(b, dict) and "Level6" in b), {})
@@ -750,7 +751,7 @@ class Hybrid:
                 message="Failed editing RPU Level 6 values",
                 context={"error": str(e)},
             )
-            raise ValueError("Failed editing RPU Level 6 values")
+            raise ValueError("Failed editing RPU Level 6 values") from None
 
         log_event(
             "hybrid_level6",
@@ -785,7 +786,7 @@ class Hybrid:
                 message="Failed injecting Dolby Vision metadata into HDR10 stream",
                 context={"error": str(e)},
             )
-            raise ValueError("Failed injecting Dolby Vision metadata into HDR10 stream")
+            raise ValueError("Failed injecting Dolby Vision metadata into HDR10 stream") from None
 
         log_event(
             "hybrid_inject_rpu",
@@ -828,8 +829,8 @@ class Hybrid:
                 context={"error": str(e)},
             )
             if "dynamic metadata" in str(e):
-                raise NoHDR10PlusMetadata("No HDR10+ metadata found in the stream")
-            raise ValueError("Failed extracting HDR10+ metadata")
+                raise NoHDR10PlusMetadata("No HDR10+ metadata found in the stream") from None
+            raise ValueError("Failed extracting HDR10+ metadata") from None
 
         file_size = os.path.getsize(config.directories.temp / self.hdr10plus_file)
         if file_size == 0:
@@ -876,8 +877,7 @@ class Hybrid:
                 "json",
                 str(config.directories.temp / "HDR10.hevc"),
             ],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            capture_output=True,
             text=True,
             encoding="utf-8",
             errors="replace",
@@ -965,7 +965,7 @@ class Hybrid:
                     message="Failed converting HDR10+ to Dolby Vision",
                     context={"error": str(e)},
                 )
-                raise ValueError("Failed converting HDR10+ to Dolby Vision")
+                raise ValueError("Failed converting HDR10+ to Dolby Vision") from None
         finally:
             config_path.unlink(missing_ok=True)
             hdr10plus_path.unlink(missing_ok=True)
@@ -985,7 +985,7 @@ class Hybrid:
         self.log.info(f"Dolby Vision generated from HDR10+ metadata ({len(shots)} scenes, {mode})")
 
     def measure_frames(
-        self, input_video: Path, crop: Optional[tuple[int, int, int, int]]
+        self, input_video: Path, crop: tuple[int, int, int, int] | None
     ) -> tuple[list[tuple[int, float, int, bool]], float]:
         """Decode the whole video through MEASURE_GRAPH.
 
@@ -1085,8 +1085,7 @@ class Hybrid:
                 "default=nw=1",
                 str(stream),
             ],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            capture_output=True,
             text=True,
             encoding="utf-8",
             errors="replace",
@@ -1119,7 +1118,7 @@ class Hybrid:
             generator_config["l1_avg_pq_cm_version"] = "V40"
         return generator_config
 
-    def measure_dv(self, crop: Optional[tuple[int, int, int, int]] = None) -> None:
+    def measure_dv(self, crop: tuple[int, int, int, int] | None = None) -> None:
         """Generate a Dolby Vision RPU with L1 measured from the decoded video, one shot per scene cut.
 
         It measures HDR10.hevc, the file that gets the RPU, so the shots count the same frames. The first
@@ -1148,7 +1147,7 @@ class Hybrid:
                 message="Failed generating Dolby Vision from the decoded video",
                 context={"error": str(e)},
             )
-            raise ValueError("Failed generating Dolby Vision from the decoded video")
+            raise ValueError("Failed generating Dolby Vision from the decoded video") from None
         finally:
             config_path.unlink(missing_ok=True)
 

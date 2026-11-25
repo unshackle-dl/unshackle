@@ -6,13 +6,12 @@ import html
 from http.cookiejar import CookieJar, MozillaCookieJar
 from io import StringIO
 from pathlib import Path
-from typing import Optional
 
 from unshackle.core.config import config
 from unshackle.core.credential import Credential
 
 
-def get_cookie_path(service: str, profile: Optional[str]) -> Optional[Path]:
+def get_cookie_path(service: str, profile: str | None) -> Path | None:
     """Get Service Cookie File Path for Profile."""
     direct_cookie_file = config.directories.cookies / f"{service}.txt"
     profile_cookie_file = config.directories.cookies / service / f"{profile}.txt"
@@ -27,7 +26,7 @@ def get_cookie_path(service: str, profile: Optional[str]) -> Optional[Path]:
     return None
 
 
-def get_cookie_jar(service: str, profile: Optional[str]) -> Optional[CookieJar]:
+def get_cookie_jar(service: str, profile: str | None) -> CookieJar | None:
     """
     Get Service Cookies for Profile.
 
@@ -99,7 +98,7 @@ def save_cookies(path: Path, cookies: CookieJar) -> None:
     cookie_jar.save(ignore_discard=True, ignore_expires=True)
 
 
-def get_credentials(service: str, profile: Optional[str]) -> Optional[Credential]:
+def get_credentials(service: str, profile: str | None) -> Credential | None:
     """Get Service Credentials for Profile."""
     credentials = config.credentials.get(service)
     if credentials:

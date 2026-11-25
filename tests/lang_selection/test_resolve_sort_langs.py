@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Optional, Sequence
+from collections.abc import Sequence
 
 import pytest
 from langcodes import Language
@@ -22,7 +22,7 @@ from unshackle.core.utilities import ServiceTag, resolve_sort_langs
         ([], "ja", []),
     ],
 )
-def test_resolve_sort_langs(tokens: Sequence[str], original: Optional[str], expected: list[str]) -> None:
+def test_resolve_sort_langs(tokens: Sequence[str], original: str | None, expected: list[str]) -> None:
     assert resolve_sort_langs(tokens, original) == expected
 
 

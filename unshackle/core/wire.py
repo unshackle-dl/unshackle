@@ -18,7 +18,7 @@ import re
 from datetime import date as date_
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 from uuid import UUID
 
 import click
@@ -52,7 +52,7 @@ def enum_name(value: Any) -> str:
     return value.name if hasattr(value, "name") else str(value)
 
 
-def enum_get(enum_cls: type[Enum], name: Optional[str], default: Any = None) -> Any:
+def enum_get(enum_cls: type[Enum], name: str | None, default: Any = None) -> Any:
     """Safely get an enum value by name."""
     if not name:
         return default
@@ -62,15 +62,15 @@ def enum_get(enum_cls: type[Enum], name: Optional[str], default: Any = None) -> 
         return default
 
 
-def descriptor_name(track: Any) -> Optional[str]:
+def descriptor_name(track: Any) -> str | None:
     """Manifest descriptor (HLS/DASH/URL) name for a track, or None."""
     descriptor = getattr(track, "descriptor", None)
     return enum_name(descriptor) if descriptor else None
 
 
-def episode_flags(title: Episode) -> Dict[str, Any]:
+def episode_flags(title: Episode) -> dict[str, Any]:
     """The optional Episode keys both forms write only when set, so the JSON of a title without them stays the same."""
-    flags: Dict[str, Any] = {}
+    flags: dict[str, Any] = {}
     if title.absolute is not None:
         flags["absolute"] = title.absolute
     if getattr(title, "daily", None) is not None:
@@ -80,7 +80,7 @@ def episode_flags(title: Episode) -> Dict[str, Any]:
     return flags
 
 
-def serialize_title(title: Title_T) -> Dict[str, Any]:
+def serialize_title(title: Title_T) -> dict[str, Any]:
     """Convert a title object to JSON-serializable dict."""
     title_language = str(title.language) if hasattr(title, "language") and title.language else None
     # Optional display metadata a service may provide: a synopsis (title.description) and a
@@ -169,7 +169,7 @@ def title_to_meta(title: Title_T) -> dict[str, Any]:
     return meta
 
 
-def episode_name(name: Optional[str], series_title: Optional[str]) -> Optional[str]:
+def episode_name(name: str | None, series_title: str | None) -> str | None:
     """Drop a placeholder episode name the way ``Episode.__init__`` does.
 
     The server sends "Episode 04" for an unnamed episode, so the same filter has to run
@@ -195,7 +195,7 @@ def parse_air_date(value: Any) -> Any:
     return value
 
 
-def apply_title_fields(title: Title_T, info: Dict[str, Any]) -> None:
+def apply_title_fields(title: Title_T, info: dict[str, Any]) -> None:
     """Copy the serialized metadata fields onto a local title.
 
     A service can change its title inside ``get_tracks`` (a corrected original language,
@@ -240,7 +240,7 @@ def apply_title_fields(title: Title_T, info: Dict[str, Any]) -> None:
             title.data = extra
 
 
-def build_title(info: Dict[str, Any], service_tag: str, fallback_id: str) -> Title_T:
+def build_title(info: dict[str, Any], service_tag: str, fallback_id: str) -> Title_T:
     """Rebuild a title from its REST form or its export form, under a stand-in class named for the service."""
     svc_class = type(service_tag, (), {})
     lang = Language.get(info["language"]) if info.get("language") else None
@@ -296,7 +296,7 @@ def build_title(info: Dict[str, Any], service_tag: str, fallback_id: str) -> Tit
     return title
 
 
-def serialize_drm(drm_list: Any) -> Optional[List[Dict[str, Any]]]:
+def serialize_drm(drm_list: Any) -> list[dict[str, Any]] | None:
     """Serialise DRM objects to JSON-serializable list."""
     if not drm_list:
         return None
@@ -347,7 +347,7 @@ def serialize_drm(drm_list: Any) -> Optional[List[Dict[str, Any]]]:
     return result if result else None
 
 
-def reconstruct_drm(drm_list: Optional[list]) -> list:
+def reconstruct_drm(drm_list: list | None) -> list:
     """Reconstruct DRM objects from the REST form."""
     if not drm_list:
         return []
@@ -369,7 +369,7 @@ def reconstruct_drm(drm_list: Optional[list]) -> list:
     return result
 
 
-def pssh_drm(system: str, pssh_b64: str, kids: Optional[List[str]]) -> Union[Widevine, PlayReady]:
+def pssh_drm(system: str, pssh_b64: str, kids: list[str] | None) -> Widevine | PlayReady:
     """A Widevine or PlayReady DRM rebuilt from its base64 PSSH, as both forms carry it (system in lower case).
 
     kids repeats the PSSH KIDs, so kids[0] is not the track's own KID; only a PSSH without KIDs needs it.
@@ -380,7 +380,7 @@ def pssh_drm(system: str, pssh_b64: str, kids: Optional[List[str]]) -> Union[Wid
     return Widevine(pssh=wv_pssh, kid=kids[0] if kids and not wv_pssh.key_ids else None)
 
 
-def drm_to_dict(drm: Union[Widevine, PlayReady, ClearKeyCENC]) -> dict[str, Any]:
+def drm_to_dict(drm: Widevine | PlayReady | ClearKeyCENC) -> dict[str, Any]:
     """A DRM in the export form: its system, PSSH and KIDs.
 
     The export keeps the content keys once at title level, not here.
@@ -406,7 +406,7 @@ def drm_to_dict(drm: Union[Widevine, PlayReady, ClearKeyCENC]) -> dict[str, Any]
     }
 
 
-def drm_from_dict(data: dict[str, Any]) -> Union[Widevine, PlayReady, ClearKeyCENC]:
+def drm_from_dict(data: dict[str, Any]) -> Widevine | PlayReady | ClearKeyCENC:
     """Reconstruct a Widevine/PlayReady/ClearKeyCENC DRM instance from its export form.
 
     Rebuilds the PSSH from the stored base64 (KIDs for ClearKey, which has no PSSH)
@@ -419,7 +419,7 @@ def drm_from_dict(data: dict[str, Any]) -> Union[Widevine, PlayReady, ClearKeyCE
     content_keys = data.get("content_keys") or {}
 
     if system == "ClearKeyCENC":
-        drm: Union[Widevine, PlayReady, ClearKeyCENC] = ClearKeyCENC(kids=kids, laurl=data.get("laurl"))
+        drm: Widevine | PlayReady | ClearKeyCENC = ClearKeyCENC(kids=kids, laurl=data.get("laurl"))
     elif not pssh_b64:
         raise ValueError("Cannot reconstruct DRM without a stored PSSH.")
     elif system in ("PlayReady", "Widevine"):
@@ -433,7 +433,7 @@ def drm_from_dict(data: dict[str, Any]) -> Union[Widevine, PlayReady, ClearKeyCE
     return drm
 
 
-def serialize_track_data(track: Any) -> Optional[Dict[str, Any]]:
+def serialize_track_data(track: Any) -> dict[str, Any] | None:
     """The JSON-safe part of a service-set ``track.data``.
 
     This drops the manifest parsers' own keys: the client rebuilds those from the
@@ -442,7 +442,7 @@ def serialize_track_data(track: Any) -> Optional[Dict[str, Any]]:
     data = getattr(track, "data", None)
     if not isinstance(data, dict):
         return None
-    safe: Dict[str, Any] = {}
+    safe: dict[str, Any] = {}
     for key, value in data.items():
         if key in MANIFEST_DATA_KEYS:
             continue
@@ -454,7 +454,7 @@ def serialize_track_data(track: Any) -> Optional[Dict[str, Any]]:
     return safe or None
 
 
-def serialize_track_common(track: Any) -> Dict[str, Any]:
+def serialize_track_common(track: Any) -> dict[str, Any]:
     """The Track fields every track type shares, a superset of ``Track.to_dict()``."""
     return {
         "id": str(track.id),
@@ -472,7 +472,7 @@ def serialize_track_common(track: Any) -> Dict[str, Any]:
     }
 
 
-def serialize_tracks(tracks: Tracks, title: Any, include_url: bool = False) -> Dict[str, List[Dict[str, Any]]]:
+def serialize_tracks(tracks: Tracks, title: Any, include_url: bool = False) -> dict[str, list[dict[str, Any]]]:
     """The ``video``, ``audio`` and ``subtitles`` lists of a title's tracks, video and audio highest bitrate first."""
     video_tracks = sorted(tracks.videos, key=lambda t: t.bitrate or 0, reverse=True)
     audio_tracks = sorted(tracks.audio, key=lambda t: t.bitrate or 0, reverse=True)
@@ -486,7 +486,7 @@ def serialize_tracks(tracks: Tracks, title: Any, include_url: bool = False) -> D
     }
 
 
-def original_audio_ids(tracks: List[Audio], title: Title_T) -> set:
+def original_audio_ids(tracks: list[Audio], title: Title_T) -> set:
     """Return the ids of the audio tracks 'orig' resolves to, empty when the title has no language.
 
     This defers to Tracks.by_language through original_tag, as 'orig' does, so the flag agrees
@@ -498,7 +498,7 @@ def original_audio_ids(tracks: List[Audio], title: Title_T) -> set:
     return {t.id for t in Tracks.by_language(tracks, [original_tag(language)])}
 
 
-def serialize_video_track(track: Video, include_url: bool = False) -> Dict[str, Any]:
+def serialize_video_track(track: Video, include_url: bool = False) -> dict[str, Any]:
     """Convert video track to JSON-serializable dict."""
     codec_name = enum_name(track.codec)
     codec_value = track.codec.value if track.codec else codec_name
@@ -529,7 +529,7 @@ def serialize_video_track(track: Video, include_url: bool = False) -> Dict[str, 
     return result
 
 
-def serialize_audio_track(track: Audio, include_url: bool = False, is_original: bool = False) -> Dict[str, Any]:
+def serialize_audio_track(track: Audio, include_url: bool = False, is_original: bool = False) -> dict[str, Any]:
     """Convert audio track to JSON-serializable dict.
 
     Get is_original from original_audio_ids so the flag always agrees with the
@@ -556,7 +556,7 @@ def serialize_audio_track(track: Audio, include_url: bool = False, is_original: 
     return result
 
 
-def serialize_subtitle_track(track: Subtitle, include_url: bool = False) -> Dict[str, Any]:
+def serialize_subtitle_track(track: Subtitle, include_url: bool = False) -> dict[str, Any]:
     """Convert subtitle track to JSON-serializable dict."""
     result = {
         "id": str(track.id),
@@ -571,12 +571,12 @@ def serialize_subtitle_track(track: Subtitle, include_url: bool = False) -> Dict
     return result
 
 
-def base_track_kwargs(data: Dict[str, Any]) -> Dict[str, Any]:
+def base_track_kwargs(data: dict[str, Any]) -> dict[str, Any]:
     """The Track constructor kwargs that both forms decode the same way."""
     return {"name": data.get("name"), "edition": data.get("edition") or None, "id_": data.get("id")}
 
 
-def rest_track_kwargs(data: Dict[str, Any]) -> Dict[str, Any]:
+def rest_track_kwargs(data: dict[str, Any]) -> dict[str, Any]:
     """The shared Track constructor kwargs of the REST form.
 
     An older server omits the newer keys, so each one falls back to the value a
@@ -609,7 +609,7 @@ def export_track_kwargs(data: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def deserialize_bitrate(data: Dict[str, Any]) -> int:
+def deserialize_bitrate(data: dict[str, Any]) -> int:
     """Exact bits/s when the server sent it, otherwise the kb/s figure scaled back up."""
     exact = data.get("bitrate_bps")
     if exact:
@@ -617,7 +617,7 @@ def deserialize_bitrate(data: Dict[str, Any]) -> int:
     return data["bitrate"] * 1000 if data.get("bitrate") else 0
 
 
-def deserialize_video(data: Dict[str, Any]) -> Video:
+def deserialize_video(data: dict[str, Any]) -> Video:
     """A video track from its REST form."""
     return Video(
         **rest_track_kwargs(data),
@@ -636,7 +636,7 @@ def deserialize_video(data: Dict[str, Any]) -> Video:
     )
 
 
-def deserialize_audio(data: Dict[str, Any]) -> Audio:
+def deserialize_audio(data: dict[str, Any]) -> Audio:
     """An audio track from its REST form."""
     joc = data.get("joc")
     return Audio(
@@ -650,7 +650,7 @@ def deserialize_audio(data: Dict[str, Any]) -> Audio:
     )
 
 
-def deserialize_subtitle(data: Dict[str, Any]) -> Subtitle:
+def deserialize_subtitle(data: dict[str, Any]) -> Subtitle:
     """A subtitle track from its REST form."""
     return Subtitle(
         **rest_track_kwargs(data),
@@ -661,7 +661,7 @@ def deserialize_subtitle(data: Dict[str, Any]) -> Subtitle:
     )
 
 
-def build_tracks(data: Dict[str, Any]) -> Tracks:
+def build_tracks(data: dict[str, Any]) -> Tracks:
     """A title's tracks, their DRM and its attachments from the REST form."""
     tracks = Tracks()
     tracks.videos = [deserialize_video(v) for v in data.get("video", [])]
@@ -669,9 +669,9 @@ def build_tracks(data: Dict[str, Any]) -> Tracks:
     tracks.subtitles = [deserialize_subtitle(s) for s in data.get("subtitles", [])]
 
     for track_data, track_obj in [
-        *zip(data.get("video", []), tracks.videos),
-        *zip(data.get("audio", []), tracks.audio),
-        *zip(data.get("subtitles", []), tracks.subtitles),
+        *zip(data.get("video", []), tracks.videos, strict=False),
+        *zip(data.get("audio", []), tracks.audio, strict=False),
+        *zip(data.get("subtitles", []), tracks.subtitles, strict=False),
     ]:
         drm_objs = reconstruct_drm(track_data.get("drm"))
         if drm_objs:
@@ -743,13 +743,13 @@ def track_to_dict(track: Track) -> dict[str, Any]:
     return data
 
 
-def track_from_dict(data: dict[str, Any]) -> Union[Video, Audio, Subtitle]:
+def track_from_dict(data: dict[str, Any]) -> Video | Audio | Subtitle:
     """Reconstruct the correct Track subclass from its export form.
 
     DRM is not reconstructed here: the import flow attaches the licensed DRM + content keys separately.
     """
     track_type = data.get("type")
-    kinds: dict[Optional[str], type[Track]] = {"Video": Video, "Audio": Audio, "Subtitle": Subtitle}
+    kinds: dict[str | None, type[Track]] = {"Video": Video, "Audio": Audio, "Subtitle": Subtitle}
     kind = kinds.get(track_type)
     if kind is None:
         raise ValueError(f"Cannot reconstruct unsupported track type: {track_type!r}")
@@ -786,7 +786,7 @@ def track_from_dict(data: dict[str, Any]) -> Union[Video, Audio, Subtitle]:
     )
 
 
-def attachment_to_dict(attachment: Attachment) -> Dict[str, Any]:
+def attachment_to_dict(attachment: Attachment) -> dict[str, Any]:
     """An attachment in the export form, which is also the REST form of a URL-backed attachment."""
     return {
         "url": attachment.url,
@@ -796,7 +796,7 @@ def attachment_to_dict(attachment: Attachment) -> Dict[str, Any]:
     }
 
 
-def serialize_attachment(attachment: Any) -> Optional[Dict[str, Any]]:
+def serialize_attachment(attachment: Any) -> dict[str, Any] | None:
     """One attachment as JSON, with a path-only attachment carried as base64 file bytes.
 
     A service can attach a file it already wrote to disk (a font, a poster). The client
@@ -830,7 +830,7 @@ def serialize_attachment(attachment: Any) -> Optional[Dict[str, Any]]:
     return result
 
 
-def build_attachment(data: Dict[str, Any]) -> Optional[Attachment]:
+def build_attachment(data: dict[str, Any]) -> Attachment | None:
     """Rebuild one attachment. A path-only attachment arrives as base64, which this writes to temp."""
     kwargs = {
         "name": data.get("name"),

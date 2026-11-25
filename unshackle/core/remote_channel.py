@@ -14,8 +14,10 @@ import json
 import logging
 import time
 from collections import deque
+from collections.abc import Callable, Iterator
+from contextlib import AbstractContextManager
 from threading import Event, Lock, Thread
-from typing import TYPE_CHECKING, Any, Callable, ContextManager, Dict, Iterator, Optional, Union, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import aiohttp
 import requests
@@ -68,7 +70,7 @@ class ServerMessages:
         self.recent_logs: deque[str] = deque(maxlen=3)
         self.log_lock = Lock()
         self.cdm_lock = Lock()
-        self.cdm_sessions: Dict[str, bytes] = {}
+        self.cdm_sessions: dict[str, bytes] = {}
 
     def route(self, route: str) -> str:
         return route.format(session_id=self.service._session_id)
@@ -87,7 +89,7 @@ class ServerMessages:
                 self.recent_logs.append(message.strip())
                 self.log_seq = seq
 
-    def answer_cdm(self, call: Dict[str, Any]) -> Dict[str, Any]:
+    def answer_cdm(self, call: dict[str, Any]) -> dict[str, Any]:
         """Run one of the server's CDM calls on this machine's device; both adapters share its CDM sessions."""
         from unshackle.core.cdm.client_relay import answer_cdm_call
 
@@ -151,7 +153,7 @@ class PollingChannel:
         self.cdm_stop = Event()
         self.paused: Callable[[], bool] = lambda: False
 
-    def wait_auth(self, timeout: float = AUTH_TIMEOUT, step: Optional[Callable[[], bool]] = None) -> None:
+    def wait_auth(self, timeout: float = AUTH_TIMEOUT, step: Callable[[], bool] | None = None) -> None:
         """Poll the server until authentication completes, and answer its prompts and CDM calls.
 
         ``step`` replaces :meth:`auth_step` for an adapter that learns the login state another way.
@@ -248,7 +250,7 @@ class PollingChannel:
             if last:
                 self.messages.close_cdm_sessions()
 
-    def poll_cdm_calls(self, stop: Event, interval: Optional[float] = None) -> None:
+    def poll_cdm_calls(self, stop: Event, interval: float | None = None) -> None:
         endpoint = self.messages.route(PROMPT_ROUTE)
         while not stop.wait(CDM_POLL_INTERVAL if interval is None else interval):
             if self.paused():
@@ -302,15 +304,15 @@ class WebSocketChannel:
         self.connected = Event()
         self.attempted = Event()
         self.changed = Event()
-        self.status: Optional[str] = None
+        self.status: str | None = None
         self.error = ""
-        self.failure: Optional[RemoteError] = None
+        self.failure: RemoteError | None = None
         self.draining_now = False
-        self.answers: Dict[str, Optional[ChannelAnswer]] = {}  # None while this client still works on the ask
+        self.answers: dict[str, ChannelAnswer | None] = {}  # None while this client still works on the ask
         fallback.paused = self.connected.is_set
-        self.ws: Optional[aiohttp.ClientWebSocketResponse] = None
-        self.loop: Optional[asyncio.AbstractEventLoop] = None
-        self.task: Optional[asyncio.Task[None]] = None
+        self.ws: aiohttp.ClientWebSocketResponse | None = None
+        self.loop: asyncio.AbstractEventLoop | None = None
+        self.task: asyncio.Task[None] | None = None
         self.thread = Thread(
             target=lambda: asyncio.run(self.run()), name=f"{self.service.service_tag}-channel", daemon=True
         )
@@ -358,7 +360,7 @@ class WebSocketChannel:
                     if not self.attempted.is_set() or e.status in GONE_STATUSES:
                         return
                     backoff = max(backoff, retry_after(e) or 0)
-                except (aiohttp.ClientError, asyncio.TimeoutError, OSError) as e:
+                except (TimeoutError, aiohttp.ClientError, OSError) as e:
                     log.debug(f"The session channel could not connect: {e!r}")
                     if not self.attempted.is_set():
                         return
@@ -385,7 +387,7 @@ class WebSocketChannel:
             if isinstance(data, dict):
                 await self.receive(ws, data)
 
-    async def receive(self, ws: aiohttp.ClientWebSocketResponse, data: Dict[str, Any]) -> None:
+    async def receive(self, ws: aiohttp.ClientWebSocketResponse, data: dict[str, Any]) -> None:
         kind = data.get("type")
         if kind == ChannelMessage.LOG:
             self.messages.show_logs([cast(LogRecord, data)])
@@ -404,7 +406,7 @@ class WebSocketChannel:
             elif kept := self.answers[ask_id]:
                 await ws.send_json(kept)  # the server sends an ask again after a reconnect when its answer was lost
 
-    def answer(self, data: Dict[str, Any]) -> None:
+    def answer(self, data: dict[str, Any]) -> None:
         """Answer one prompt or CDM call on this thread, so the channel keeps reading while the user types."""
         cdm_call = data["type"] == ChannelMessage.CDM_CALL
         answer = ChannelAnswer(type=ChannelMessage.ANSWER, id=data["id"], response="")
@@ -455,7 +457,7 @@ class WebSocketChannel:
         if not self.connected.is_set():
             self.fallback.keep_alive()
 
-    def in_flight(self, endpoint: str) -> ContextManager[None]:
+    def in_flight(self, endpoint: str) -> AbstractContextManager[None]:
         """The fallback's CDM call poller, which polls only while the channel is down."""
         return self.fallback.in_flight(endpoint)
 
@@ -475,7 +477,7 @@ class WebSocketChannel:
         self.messages.close_cdm_sessions()
 
 
-Channel = Union[PollingChannel, WebSocketChannel]
+Channel = PollingChannel | WebSocketChannel
 
 
 def open_channel(service: RemoteService) -> Channel:

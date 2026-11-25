@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import base64
 import re
+from collections.abc import Callable
 from pathlib import Path
 from threading import Lock
-from typing import Any, Callable, Optional, Union
+from typing import Any
 from uuid import UUID
 
 import click
@@ -36,8 +37,8 @@ class PlayReady:
     def __init__(
         self,
         pssh: PSSH,
-        kid: Union[UUID, str, bytes, None] = None,
-        pssh_b64: Optional[str] = None,
+        kid: UUID | str | bytes | None = None,
+        pssh_b64: str | None = None,
         **kwargs: Any,
     ) -> None:
         if not pssh:
@@ -55,7 +56,7 @@ class PlayReady:
                 if extra_kid not in kids:
                     kids.append(extra_kid)
 
-        self._kid: Optional[UUID] = None
+        self._kid: UUID | None = None
         if kid:
             if isinstance(kid, str):
                 kid = UUID(hex=kid)
@@ -168,7 +169,7 @@ class PlayReady:
         return []
 
     @classmethod
-    def from_pssh_b64(cls, pssh_b64: str, kid: Optional[UUID] = None) -> PlayReady:
+    def from_pssh_b64(cls, pssh_b64: str, kid: UUID | None = None) -> PlayReady:
         """Load a base64 PSSH box or PlayReady Object, or a bare UTF-16LE WRMHEADER that some packagers emit.
 
         It wraps a bare WRMHEADER in a PlayReady Object and keeps that as `pssh_b64`, so remote CDMs and
@@ -188,12 +189,12 @@ class PlayReady:
         return cls(pssh=pssh, kid=kid, pssh_b64=pssh_b64)
 
     @classmethod
-    def from_track(cls, track: AnyTrack, session: Optional[AnySession] = None) -> PlayReady:
+    def from_track(cls, track: AnyTrack, session: AnySession | None = None) -> PlayReady:
         if not session:
             session = run_proxy.fallback_session()
             session.headers.update(config.headers)
 
-        kid: Optional[UUID] = None
+        kid: UUID | None = None
         pssh_boxes: list[Container] = []
         tenc_boxes: list[Container] = []
 
@@ -238,7 +239,7 @@ class PlayReady:
         if not isinstance(init_data, bytes):
             raise TypeError(f"Expected init data to be bytes, not {init_data!r}")
 
-        kid: Optional[UUID] = None
+        kid: UUID | None = None
         pssh_boxes: list[Container] = list(get_boxes(init_data, b"pssh"))
         tenc_boxes: list[Container] = list(get_boxes(init_data, b"tenc"))
 
@@ -265,11 +266,11 @@ class PlayReady:
         return self._pssh
 
     @property
-    def pssh_b64(self) -> Optional[str]:
+    def pssh_b64(self) -> str | None:
         return self.data.get("pssh_b64")
 
     @property
-    def kid(self) -> Optional[UUID]:
+    def kid(self) -> UUID | None:
         return next(iter(self.kids), None)
 
     def to_dict(self) -> dict[str, Any]:
@@ -450,7 +451,7 @@ class PlayReady:
         self,
         cdm: PlayReadyCdm,
         header: WRMHeader,
-        pssh_b64: Optional[str],
+        pssh_b64: str | None,
         required_kids: list[UUID],
         licence: Callable,
     ) -> dict[UUID, str]:
@@ -516,7 +517,7 @@ class PlayReady:
             cdm.close(session_id)
 
     @staticmethod
-    def detect_revocation(text: str) -> Optional[str]:
+    def detect_revocation(text: str) -> str | None:
         """Return the decoded error string if a revocation HRESULT is present, else None.
 
         Reads the code from the raw SOAP body (<StatusCode>0x8004C065</StatusCode>)
@@ -546,7 +547,7 @@ class PlayReady:
             return [self._kid]
         return self.kids
 
-    def mp4decrypt_key_args(self, track_kids: Optional[dict[int, UUID]] = None) -> list[str]:
+    def mp4decrypt_key_args(self, track_kids: dict[int, UUID] | None = None) -> list[str]:
         """Build the mp4decrypt --key arguments for every content key, the zero-KID and the track ID fallbacks."""
         return drm_key_args.mp4decrypt_key_args(self.content_keys, self.own_kids(), track_kids)
 

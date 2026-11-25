@@ -67,7 +67,9 @@ def ladder(
 ) -> tuple[list[Any], list[str]]:
     """HEVC HDR10 tracks, highest bitrate first; '+' marks the ones whose fragment carries HDR10+."""
     heights = heights or [2160 - 100 * i for i in range(len(pattern))]
-    videos = [hevc(f"v{i}{mark}", height, 100 - i) for i, (mark, height) in enumerate(zip(pattern, heights))]
+    videos = [
+        hevc(f"v{i}{mark}", height, 100 - i) for i, (mark, height) in enumerate(zip(pattern, heights, strict=False))
+    ]
     return videos, probe(monkeypatch, videos)
 
 

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from difflib import SequenceMatcher
-from typing import Optional, Union
 
 import requests
 from langcodes import Language
@@ -15,7 +14,7 @@ KIND_TO_TYPE: dict[str, str] = {
 }
 
 
-def primary_language(data: dict) -> Optional[str]:
+def primary_language(data: dict) -> str | None:
     """OMDb gives English language names, most prominent first, e.g. 'Korean, English'."""
     name = (data.get("Language") or "").split(",")[0].strip()
     if not name:
@@ -26,7 +25,7 @@ def primary_language(data: dict) -> Optional[str]:
         return None
 
 
-def parse_year(value: Optional[str]) -> Optional[int]:
+def parse_year(value: str | None) -> int | None:
     # OMDb years look like "2017", "2008–2013" or "2023–"
     if value and len(value) >= 4 and value[:4].isdigit():
         return int(value[:4])
@@ -48,7 +47,7 @@ class OMDBProvider(MetadataProvider):
     def api_key(self) -> str:
         return config.omdb_api_key
 
-    def api_get(self, params: dict[str, str]) -> Optional[dict]:
+    def api_get(self, params: dict[str, str]) -> dict | None:
         try:
             r = self.session.get(self.BASE_URL, params={"apikey": self.api_key, **params}, timeout=30)
             r.raise_for_status()
@@ -61,7 +60,7 @@ class OMDBProvider(MetadataProvider):
             return None
         return data
 
-    def search(self, title: str, year: Optional[int], kind: str) -> Optional[MetadataResult]:
+    def search(self, title: str, year: int | None, kind: str) -> MetadataResult | None:
         self.log.debug("Searching OMDb for %r (%s, %s)", title, kind, year)
 
         params: dict[str, str] = {"s": title}
@@ -81,7 +80,7 @@ class OMDBProvider(MetadataProvider):
 
         results = data.get("Search") or []
 
-        best_match: Optional[dict] = None
+        best_match: dict | None = None
         best_ratio = 0.0
         for candidate in results:
             name = candidate.get("Title") or ""
@@ -120,7 +119,7 @@ class OMDBProvider(MetadataProvider):
             raw=detail or best_match,
         )
 
-    def get_by_id(self, provider_id: Union[int, str], kind: str) -> Optional[MetadataResult]:
+    def get_by_id(self, provider_id: int | str, kind: str) -> MetadataResult | None:
         """Fetch metadata by IMDb ID (e.g. 'tt1375666')."""
         imdb_id = str(provider_id)
         self.log.debug("Fetching OMDb title %s", imdb_id)
@@ -139,6 +138,6 @@ class OMDBProvider(MetadataProvider):
             raw=data,
         )
 
-    def get_external_ids(self, provider_id: Union[int, str], kind: str) -> ExternalIds:
+    def get_external_ids(self, provider_id: int | str, kind: str) -> ExternalIds:
         """Return external IDs. For OMDb, the provider_id IS the IMDb ID."""
         return ExternalIds(imdb_id=str(provider_id))

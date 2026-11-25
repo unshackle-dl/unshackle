@@ -1,13 +1,14 @@
 import logging
+from collections.abc import Iterable
 from types import SimpleNamespace
-from typing import Any, Iterable, Optional
+from typing import Any
 from uuid import UUID
 
 from unshackle.core.remote_service import RemoteService, ServerVault
 
 
 def remote_keys(
-    server_cdm: Optional[bool] = True,
+    server_cdm: bool | None = True,
     server_cdm_type: str = "widevine",
     local_cdm: Any = None,
 ) -> RemoteService:
@@ -39,7 +40,7 @@ class MemoryKeySource:
         self.local_cdm = local_cdm
         self.client_licensed = set(client_licensed)
         self.server_vault_keys: dict[UUID, str] = {}
-        self.asked: list[tuple[Any, Optional[UUID]]] = []
+        self.asked: list[tuple[Any, UUID | None]] = []
 
     def resolve_server_keys(self, title: Any) -> None:
         pass
@@ -47,7 +48,7 @@ class MemoryKeySource:
     def licenses_locally(self, track: Any) -> bool:
         return str(track.id) in self.client_licensed
 
-    def license_track(self, track: Any, drm: Any, kid: Optional[UUID] = None) -> Optional[dict[UUID, str]]:
+    def license_track(self, track: Any, drm: Any, kid: UUID | None = None) -> dict[UUID, str] | None:
         self.asked.append((track.id, kid))
         if self.licence is None:
             self.client_licensed.add(str(track.id))

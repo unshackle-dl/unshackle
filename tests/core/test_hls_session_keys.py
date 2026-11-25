@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import base64
 import json
-from typing import Optional
 
 import m3u8
 import pytest
@@ -34,14 +33,14 @@ def _b64(items: list[dict]) -> str:
     return base64.b64encode(json.dumps(items).encode()).decode()
 
 
-def _item(method: str, keyformat: Optional[str] = None) -> dict:
+def _item(method: str, keyformat: str | None = None) -> dict:
     item = {"method": method, "uri": KEY_URI}
     if keyformat:
         item["keyformat"] = keyformat
     return item
 
 
-def _key(method: str, keyformat: Optional[str] = None) -> m3u8.model.Key:
+def _key(method: str, keyformat: str | None = None) -> m3u8.model.Key:
     return m3u8.model.Key(method=method, base_uri="", uri=KEY_URI, keyformat=keyformat)
 
 
@@ -60,7 +59,7 @@ def test_session_data_playready_urn_key_is_kept() -> None:
         ("ISO-23001-7", None),
     ],
 )
-def test_session_data_supported_keys_are_kept(method: str, keyformat: Optional[str]) -> None:
+def test_session_data_supported_keys_are_kept(method: str, keyformat: str | None) -> None:
     keys = HLS.parse_session_data_keys(_master(_b64([_item(method, keyformat)])))
     assert [k.keyformat for k in keys] == [keyformat]
 

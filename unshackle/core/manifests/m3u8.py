@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Optional, Union
-
 import m3u8
 from requests import Session
 
@@ -17,8 +15,8 @@ def parse(
     master: m3u8.M3U8,
     language: str,
     *,
-    session: Optional[Union[Session, RnetSession]] = None,
-    url: Optional[str] = None,
+    session: Session | RnetSession | None = None,
+    url: str | None = None,
 ) -> Tracks:
     """Parse a variant playlist to ``Tracks`` with basic information, defer DRM loading."""
     tracks = HLS(master, session=session, url=url).to_tracks(language)

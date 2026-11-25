@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Optional, Union
-
 import pytest
 
 from unshackle.core import providers
@@ -14,26 +12,26 @@ from unshackle.core.providers._base import ExternalIds, MetadataProvider, Metada
 class FakeProvider(MetadataProvider):
     """Stands in for a real provider; records the ID it was asked for."""
 
-    def __init__(self, name: str, result: Optional[MetadataResult] = None, raises: bool = False) -> None:
+    def __init__(self, name: str, result: MetadataResult | None = None, raises: bool = False) -> None:
         self.NAME = name
         self._result = result
         self._raises = raises
-        self.asked: list[Union[int, str]] = []
+        self.asked: list[int | str] = []
         super().__init__()
 
     def is_available(self) -> bool:
         return True
 
-    def search(self, title: str, year: Optional[int], kind: str) -> Optional[MetadataResult]:
+    def search(self, title: str, year: int | None, kind: str) -> MetadataResult | None:
         raise AssertionError("resolve_by_ids must not search when an ID was supplied")
 
-    def get_by_id(self, provider_id: Union[int, str], kind: str) -> Optional[MetadataResult]:
+    def get_by_id(self, provider_id: int | str, kind: str) -> MetadataResult | None:
         self.asked.append(provider_id)
         if self._raises:
             raise ValueError("provider is down")
         return self._result
 
-    def get_external_ids(self, provider_id: Union[int, str], kind: str) -> ExternalIds:
+    def get_external_ids(self, provider_id: int | str, kind: str) -> ExternalIds:
         return ExternalIds()
 
 

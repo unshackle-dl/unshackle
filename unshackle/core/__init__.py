@@ -1,7 +1,7 @@
 import hashlib
 import os
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, Optional
 
 from rich_click.patch import patch as _patch_click_help
 
@@ -31,8 +31,8 @@ def code_files() -> list[str]:
 
 
 def code_hash(
-    files: Optional[list[str]] = None,
-    read: Optional[Callable[[str], bytes]] = None,
+    files: list[str] | None = None,
+    read: Callable[[str], bytes] | None = None,
 ) -> str:
     """
     sha1 of the framework source. Two installs on the same version differ here if their code does.

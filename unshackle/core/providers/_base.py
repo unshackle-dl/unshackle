@@ -5,7 +5,6 @@ import re
 from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass, field
 from difflib import SequenceMatcher
-from typing import Optional, Union
 
 import requests
 from requests.adapters import HTTPAdapter, Retry
@@ -22,24 +21,24 @@ YEAR_RE = re.compile(r"\s*\(?[12][0-9]{3}\)?$")
 class ExternalIds:
     """Normalized external IDs across providers."""
 
-    imdb_id: Optional[str] = None
-    tmdb_id: Optional[int] = None
-    tmdb_kind: Optional[str] = None  # "movie" or "tv"
-    tvdb_id: Optional[int] = None
-    anilist_id: Optional[int] = None
+    imdb_id: str | None = None
+    tmdb_id: int | None = None
+    tmdb_kind: str | None = None  # "movie" or "tv"
+    tvdb_id: int | None = None
+    anilist_id: int | None = None
 
 
 @dataclass
 class MetadataResult:
     """Unified metadata result from any metadata provider."""
 
-    title: Optional[str] = None
-    year: Optional[int] = None
-    kind: Optional[str] = None  # "movie" or "tv"
+    title: str | None = None
+    year: int | None = None
+    kind: str | None = None  # "movie" or "tv"
     external_ids: ExternalIds = field(default_factory=ExternalIds)
-    original_language: Optional[str] = None  # alpha-2 or alpha-3, whichever the provider speaks
+    original_language: str | None = None  # alpha-2 or alpha-3, whichever the provider speaks
     source: str = ""
-    raw: Optional[dict] = None
+    raw: dict | None = None
 
 
 class MetadataProvider(metaclass=ABCMeta):
@@ -47,11 +46,11 @@ class MetadataProvider(metaclass=ABCMeta):
 
     NAME: str = ""
     REQUIRES_KEY: bool = True
-    ID_KIND: Optional[str] = None
+    ID_KIND: str | None = None
 
     def __init__(self) -> None:
         self.log = logging.getLogger(f"METADATA.{self.NAME.upper()}")
-        self._session: Optional[requests.Session] = None
+        self._session: requests.Session | None = None
 
     @property
     def session(self) -> requests.Session:
@@ -75,15 +74,15 @@ class MetadataProvider(metaclass=ABCMeta):
         """Return True if this metadata provider has the credentials/keys it needs."""
 
     @abstractmethod
-    def search(self, title: str, year: Optional[int], kind: str) -> Optional[MetadataResult]:
+    def search(self, title: str, year: int | None, kind: str) -> MetadataResult | None:
         """Find a title and return its metadata, or None on failure or when nothing matches."""
 
     @abstractmethod
-    def get_by_id(self, provider_id: Union[int, str], kind: str) -> Optional[MetadataResult]:
+    def get_by_id(self, provider_id: int | str, kind: str) -> MetadataResult | None:
         """Fetch metadata by this provider's native ID."""
 
     @abstractmethod
-    def get_external_ids(self, provider_id: Union[int, str], kind: str) -> ExternalIds:
+    def get_external_ids(self, provider_id: int | str, kind: str) -> ExternalIds:
         """Fetch external IDs for a title by this provider's native ID."""
 
 

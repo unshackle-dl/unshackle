@@ -1,7 +1,6 @@
 import logging
 import shutil
 from pathlib import Path
-from typing import Optional
 
 import click
 import yaml
@@ -129,7 +128,7 @@ def dump(wvd_paths: list[Path], out_dir: Path) -> None:
         if not wvd_paths:
             console.log(f"[bright_blue]{config.directories.wvds.absolute()}[/] is empty...")
 
-    for i, (wvd_path, out_path) in enumerate(zip(wvd_paths, (out_dir / x.stem for x in wvd_paths))):
+    for i, (wvd_path, out_path) in enumerate(zip(wvd_paths, (out_dir / x.stem for x in wvd_paths), strict=True)):
         if i > 0:
             log.info("")
 
@@ -203,10 +202,10 @@ def new(
     name: str,
     private_key: Path,
     client_id: Path,
-    file_hashes: Optional[Path],
+    file_hashes: Path | None,
     type_: str,
     level: int,
-    output: Optional[Path],
+    output: Path | None,
 ) -> None:
     """
     Make a new .WVD Widevine provision file.
@@ -223,7 +222,7 @@ def new(
         # TODO: Remove need for name, create name based on Client IDs ClientInfo values
         name = unidecode(name.strip().lower().replace(" ", "_"))
     except UnidecodeError as e:
-        raise click.UsageError(f"name: Failed to sanitise name, {e}", ctx)
+        raise click.UsageError(f"name: Failed to sanitise name, {e}", ctx) from e
     if not name:
         raise click.UsageError("name: Empty after sanitising", ctx)
     if not private_key.is_file():

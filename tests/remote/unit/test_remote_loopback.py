@@ -6,10 +6,11 @@ import asyncio
 import json
 import logging
 import threading
-from datetime import datetime, timezone
+from collections.abc import Callable, Iterator
+from datetime import UTC, datetime
 from threading import Event, Semaphore, Thread
 from types import SimpleNamespace
-from typing import Any, Callable, Iterator, Optional
+from typing import Any
 
 import aiohttp
 import click
@@ -46,7 +47,7 @@ class StubService:
     """
 
     logins = 0
-    hooks: dict[str, Callable[["StubService"], None]] = {}
+    hooks: dict[str, Callable[[StubService], None]] = {}
 
     def __init__(self, beats: Semaphore) -> None:
         self.beats = beats
@@ -187,7 +188,7 @@ def on_loop(server: SimpleNamespace, coroutine: Any) -> Any:
     return asyncio.run_coroutine_threadsafe(coroutine, server.loop).result(10)
 
 
-def count(server: SimpleNamespace, method: str, route: str, session_id: Optional[str] = None) -> int:
+def count(server: SimpleNamespace, method: str, route: str, session_id: str | None = None) -> int:
     """The requests the server saw for one route; without a session id, for any session."""
     if session_id is None:
         prefix, _, suffix = route.partition("{session_id}")
@@ -210,7 +211,7 @@ def example_messages(caplog: pytest.LogCaptureFixture) -> list[str]:
 
 
 def idle_seconds(entry: Any) -> float:
-    return (datetime.now(timezone.utc) - entry.last_accessed).total_seconds()
+    return (datetime.now(UTC) - entry.last_accessed).total_seconds()
 
 
 @pytest.mark.parametrize(

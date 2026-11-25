@@ -19,7 +19,7 @@ import subprocess
 import time
 from pathlib import Path
 from tempfile import mkdtemp
-from typing import Any, Optional
+from typing import Any
 
 import click
 from requests import Session
@@ -34,7 +34,7 @@ STREAMS: list[tuple[str, str]] = [
     ("sony-1a", "https://dash.akamaized.net/dash264/TestCases/1a/sony/SNE_DASH_SD_CASE1A_REVISED.mpd"),
 ]
 
-guard_results: list[Optional[tuple[int, int]]] = []
+guard_results: list[tuple[int, int] | None] = []
 
 
 def install_guard_spy() -> bool:
@@ -43,7 +43,7 @@ def install_guard_spy() -> bool:
     if orig is None:
         return False
 
-    def spy(is_subtitle: bool, segments: Any, init_len: int) -> Optional[tuple[int, int]]:
+    def spy(is_subtitle: bool, segments: Any, init_len: int) -> tuple[int, int] | None:
         result = orig(is_subtitle, segments, init_len)
         guard_results.append(result)
         return result

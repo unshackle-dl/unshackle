@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Iterator, Optional, Union
 from uuid import UUID
 
 import pytest
@@ -27,16 +27,16 @@ class RecordingVault(Vault):
         super().__init__("net")
         self.batches: list[int] = []
 
-    def get_key(self, kid: Union[UUID, str], service: str) -> Optional[str]:
+    def get_key(self, kid: UUID | str, service: str) -> str | None:
         return None
 
     def get_keys(self, service: str) -> Iterator[tuple[str, str]]:
         return iter(())
 
-    def add_key(self, service: str, kid: Union[UUID, str], key: str) -> bool:
+    def add_key(self, service: str, kid: UUID | str, key: str) -> bool:
         return False
 
-    def add_keys(self, service: str, kid_keys: dict[Union[UUID, str], str]) -> int:
+    def add_keys(self, service: str, kid_keys: dict[UUID | str, str]) -> int:
         self.batches.append(len(kid_keys))
         return len(kid_keys)
 
@@ -49,7 +49,7 @@ def test_sql_vault_gets_one_call(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     calls: list[int] = []
     real = vault.add_keys
 
-    def spy(service: str, kid_keys: dict[Union[UUID, str], str]) -> int:
+    def spy(service: str, kid_keys: dict[UUID | str, str]) -> int:
         calls.append(len(kid_keys))
         return real(service, kid_keys)
 

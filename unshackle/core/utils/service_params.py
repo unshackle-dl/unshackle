@@ -1,4 +1,5 @@
-from typing import Any, Collection, Dict, Iterable
+from collections.abc import Collection, Iterable
+from typing import Any
 
 import click
 
@@ -6,8 +7,8 @@ FLAT_DL_KEYS = frozenset({"title", "service", "title_id", "profile", "proxy", "n
 
 
 def service_options(
-    data: Dict[str, Any], names: Collection[str], flat_excluded: Iterable[str] = FLAT_DL_KEYS
-) -> Dict[str, Any]:
+    data: dict[str, Any], names: Collection[str], flat_excluded: Iterable[str] = FLAT_DL_KEYS
+) -> dict[str, Any]:
     """A request's service options named in ``names``: from its ``service_params`` object, else its flat keys.
 
     With ``service_params`` present every flat key is a dl value, so it never fills a service option of the same name.
@@ -20,7 +21,7 @@ def service_options(
     return {k: v for k, v in data.items() if k in names and k not in excluded}
 
 
-def cast_service_options(params: Iterable[click.Parameter], ctx: Any, options: Dict[str, Any]) -> Dict[str, Any]:
+def cast_service_options(params: Iterable[click.Parameter], ctx: Any, options: dict[str, Any]) -> dict[str, Any]:
     """``options`` with each value cast by the click parameter of the same name; raises ``click.BadParameter``.
 
     A name that no parameter declares keeps its value. A JSON object, an array for a single-value text option
@@ -28,7 +29,7 @@ def cast_service_options(params: Iterable[click.Parameter], ctx: Any, options: D
     ``BadParameter`` for strings, so any other error of a JSON value becomes one too.
     """
     by_name = {p.name: p for p in params if p.name}
-    cast: Dict[str, Any] = {}
+    cast: dict[str, Any] = {}
     for k, v in options.items():
         param = by_name.get(k)
         if param is None:

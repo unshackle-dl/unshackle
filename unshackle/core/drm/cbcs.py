@@ -17,9 +17,10 @@ from __future__ import annotations
 
 import shutil
 import struct
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import BinaryIO, Callable, Iterator, Optional, Union
+from typing import BinaryIO
 from uuid import UUID
 
 from Cryptodome.Cipher import AES
@@ -49,7 +50,7 @@ class SampleEntry:
     crypt_block: int
     skip_block: int
     offset: int
-    sinf_offset: Optional[int]
+    sinf_offset: int | None
 
 
 @dataclass
@@ -79,7 +80,7 @@ class Layout:
         return {entry.scheme for track in self.tracks.values() for entry in track.protected_entries}
 
 
-def iter_boxes(data: bytes, start: int = 0, end: Optional[int] = None) -> Iterator[tuple[bytes, int, int, int]]:
+def iter_boxes(data: bytes, start: int = 0, end: int | None = None) -> Iterator[tuple[bytes, int, int, int]]:
     """Yield (type, header_size, box_start, box_end) for each box in data[start:end]."""
     if end is None:
         end = len(data)
@@ -98,7 +99,7 @@ def iter_boxes(data: bytes, start: int = 0, end: Optional[int] = None) -> Iterat
         pos += size
 
 
-def _find_child(data: bytes, start: int, end: int, wanted: bytes) -> Optional[tuple[int, int, int]]:
+def _find_child(data: bytes, start: int, end: int, wanted: bytes) -> tuple[int, int, int] | None:
     for box_type, header, box_start, box_end in iter_boxes(data, start, end):
         if box_type == wanted:
             return header, box_start, box_end
@@ -205,7 +206,7 @@ def _walk(data: bytes, start: int, end: int, visit: Callable[[bytes, int, int, i
             _walk(data, box_start + header, box_end, visit)
 
 
-def parse_moov(data: bytes, start: int = 0, end: Optional[int] = None) -> Layout:
+def parse_moov(data: bytes, start: int = 0, end: int | None = None) -> Layout:
     """Read the tracks, sample entries and `tenc` boxes out of a `moov` box at data[start:end]."""
     layout = Layout()
     current: list[TrackLayout] = []
@@ -240,10 +241,10 @@ def parse_moov(data: bytes, start: int = 0, end: Optional[int] = None) -> Layout
     return layout
 
 
-def inspect(path: Path) -> Optional[Layout]:
+def inspect(path: Path) -> Layout | None:
     """Return the protection layout of a fragmented MP4, or None when it has no `moov`."""
     with path.open("rb") as fh:
-        for box_type, header, start, size in _top_level(fh):
+        for box_type, _header, start, size in _top_level(fh):
             if box_type == b"moov":
                 fh.seek(start)
                 return parse_moov(fh.read(size))
@@ -294,13 +295,13 @@ def _parse_moof(data: bytes, moof_offset: int, layout: Layout) -> list[_Fragment
         track_id = 0
         entry_index = 0
         default_size = 0
-        base_offset: Optional[int] = None
+        base_offset: int | None = None
         samples: list[tuple[int, int]] = []
         ivs: list[bytes] = []
         subsamples: list[list[tuple[int, int]]] = []
         neutralise: list[int] = []
-        next_offset: Optional[int] = None
-        senc: Optional[tuple[int, int, int]] = None
+        next_offset: int | None = None
+        senc: tuple[int, int, int] | None = None
         for child, child_header, child_start, child_end in iter_boxes(data, traf_start + header, traf_end):
             # tfhd, trun and senc are full boxes: the payload follows version and flags.
             body = child_start + child_header + 4
@@ -429,7 +430,7 @@ def strip_moov_protection(moov: bytearray, layout: Layout) -> None:
 SampleDecrypter = Callable[[list[bytes]], list[bytes]]
 """Decrypts the protected samples of one fragment outside this module and returns them in order."""
 
-KeyResolver = Callable[[TrackLayout, SampleEntry], Union[bytes, SampleDecrypter]]
+KeyResolver = Callable[[TrackLayout, SampleEntry], bytes | SampleDecrypter]
 
 SAMPLE_BATCH_BYTES = 8 * 1024 * 1024
 """The most sample bytes one remote `pack_samples` frame carries; a larger single sample travels alone."""
@@ -471,7 +472,7 @@ def decrypt_file(path: Path, key_for: KeyResolver) -> None:
     if unsupported:
         raise NotImplementedError(f"In-process decryption handles cbcs only, not {', '.join(sorted(unsupported))}")
 
-    keys: dict[tuple[int, int], Union[bytes, SampleDecrypter]] = {}
+    keys: dict[tuple[int, int], bytes | SampleDecrypter] = {}
     for track in layout.tracks.values():
         for entry in track.protected_entries:
             resolved = key_for(track, entry)
@@ -485,7 +486,7 @@ def decrypt_file(path: Path, key_for: KeyResolver) -> None:
     work_path = path.with_stem(f"{path.stem}_decrypted")
     shutil.copyfile(path, work_path)
     with work_path.open("r+b") as fh:
-        for box_type, header, start, size in list(_top_level(fh)):
+        for box_type, _header, start, size in list(_top_level(fh)):
             if box_type == b"moov":
                 fh.seek(start)
                 moov = bytearray(fh.read(size))
@@ -508,7 +509,7 @@ def decrypt_file(path: Path, key_for: KeyResolver) -> None:
 
 
 def _decrypt_fragment(
-    fh: BinaryIO, fragment: _Fragment, layout: Layout, keys: dict[tuple[int, int], Union[bytes, SampleDecrypter]]
+    fh: BinaryIO, fragment: _Fragment, layout: Layout, keys: dict[tuple[int, int], bytes | SampleDecrypter]
 ) -> None:
     if not fragment.samples:
         return
@@ -572,10 +573,10 @@ def _decrypt_with(decrypter: SampleDecrypter, buf: bytearray, span_start: int, f
     plaintexts = decrypter(ciphertexts)
     if len(plaintexts) != len(ciphertexts):
         raise ValueError(f"The sample decrypter returned {len(plaintexts)} samples for {len(ciphertexts)}")
-    for number, (cipher, plain) in enumerate(zip(ciphertexts, plaintexts)):
+    for number, (cipher, plain) in enumerate(zip(ciphertexts, plaintexts, strict=True)):
         if len(plain) != len(cipher):
             raise ValueError(f"The sample decrypter returned {len(plain)} bytes for sample {number}, not {len(cipher)}")
-    for runs, plain in zip(samples, plaintexts):
+    for runs, plain in zip(samples, plaintexts, strict=True):
         cursor = 0
         for start, length in runs:
             buf[start : start + length] = plain[cursor : cursor + length]

@@ -1,6 +1,7 @@
 import re
 from abc import ABC
-from typing import Any, Collection, Iterable, Optional, Union
+from collections.abc import Collection, Iterable
+from typing import Any
 
 from langcodes import Language
 from pymediainfo import MediaInfo
@@ -85,23 +86,23 @@ class Song(Title):
         album: str,
         track: int,
         disc: int = 1,
-        year: Optional[int] = None,
-        language: Optional[Union[str, Language]] = None,
-        data: Optional[Any] = None,
-        album_artist: Optional[str] = None,
+        year: int | None = None,
+        language: str | Language | None = None,
+        data: Any | None = None,
+        album_artist: str | None = None,
         release_type: str = "album",
-        total_tracks: Optional[int] = None,
-        total_discs: Optional[int] = None,
-        genre: Optional[str] = None,
-        explicit: Optional[bool] = None,
-        isrc: Optional[str] = None,
-        upc: Optional[str] = None,
-        copyright: Optional[str] = None,
-        label: Optional[str] = None,
-        lyrics: Optional[str] = None,
-        artwork_url: Optional[str] = None,
-        synced_lyrics: Optional[str] = None,
-        lyrics_suffix: Optional[str] = None,
+        total_tracks: int | None = None,
+        total_discs: int | None = None,
+        genre: str | None = None,
+        explicit: bool | None = None,
+        isrc: str | None = None,
+        upc: str | None = None,
+        copyright: str | None = None,
+        label: str | None = None,
+        lyrics: str | None = None,
+        artwork_url: str | None = None,
+        synced_lyrics: str | None = None,
+        lyrics_suffix: str | None = None,
     ) -> None:
         """`lyrics` is the plain text the tagger embeds.
 
@@ -275,17 +276,17 @@ class Music(SortedKeyList, ABC):
 
     def __init__(
         self,
-        iterable: Optional[Iterable] = None,
+        iterable: Iterable | None = None,
         kind: str = "album",
-        title: Optional[str] = None,
-        artist: Optional[str] = None,
-        year: Optional[int] = None,
-        total_tracks: Optional[int] = None,
-        total_discs: Optional[int] = None,
-        artwork_url: Optional[str] = None,
-        total_duration: Optional[int] = None,
-        owner: Optional[str] = None,
-        description: Optional[str] = None,
+        title: str | None = None,
+        artist: str | None = None,
+        year: int | None = None,
+        total_tracks: int | None = None,
+        total_discs: int | None = None,
+        artwork_url: str | None = None,
+        total_duration: int | None = None,
+        owner: str | None = None,
+        description: str | None = None,
     ) -> None:
         if not isinstance(kind, str):
             raise TypeError(f"Expected kind to be a str, not {kind!r}")

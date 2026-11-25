@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import time
 from pathlib import Path
-from typing import Optional
 
 import requests
 
@@ -47,7 +46,7 @@ class UpdateChecker:
             return {}
 
         try:
-            with open(cache_file, "r") as f:
+            with open(cache_file) as f:
                 return json.load(f)
         except (json.JSONDecodeError, OSError):
             return {}
@@ -92,7 +91,7 @@ class UpdateChecker:
             return False
 
     @classmethod
-    def fetch_latest_version(cls) -> Optional[str]:
+    def fetch_latest_version(cls) -> str | None:
         """
         Fetch the latest version from GitHub API.
 
@@ -135,7 +134,7 @@ class UpdateChecker:
         return (current_time - last_check) >= check_interval
 
     @classmethod
-    def update_cache(cls, latest_version: Optional[str] = None, current_version: Optional[str] = None) -> None:
+    def update_cache(cls, latest_version: str | None = None, current_version: str | None = None) -> None:
         """
         Update the cache file with the current timestamp and version info.
 
@@ -184,7 +183,7 @@ class UpdateChecker:
             current_parts.extend([0] * (max_length - len(current_parts)))
             latest_parts.extend([0] * (max_length - len(latest_parts)))
 
-            for current_part, latest_part in zip(current_parts, latest_parts):
+            for current_part, latest_part in zip(current_parts, latest_parts, strict=True):
                 if latest_part > current_part:
                     return True
                 elif latest_part < current_part:
@@ -195,7 +194,7 @@ class UpdateChecker:
             return False
 
     @classmethod
-    def get_cached_update_info(cls, current_version: str) -> Optional[str]:
+    def get_cached_update_info(cls, current_version: str) -> str | None:
         """
         Examine the cache for an update for the current version.
 
@@ -220,7 +219,7 @@ class UpdateChecker:
         return None
 
     @classmethod
-    def check_for_updates_sync(cls, current_version: str, check_interval: Optional[int] = None) -> Optional[str]:
+    def check_for_updates_sync(cls, current_version: str, check_interval: int | None = None) -> str | None:
         """
         Synchronous version of update check with rate limiting.
 

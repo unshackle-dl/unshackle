@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from difflib import SequenceMatcher
-from typing import Optional, Union
 
 import requests
 
@@ -13,10 +12,10 @@ MEDIA_FIELDS = "id idMal title { romaji english native } format startDate { year
 
 SEARCH_QUERY = (
     "query UnshackleAniListSearch($search: String) { Page(perPage: 10) "
-    "{ media(search: $search, type: ANIME, sort: SEARCH_MATCH) { %s } } }" % MEDIA_FIELDS
+    f"{{ media(search: $search, type: ANIME, sort: SEARCH_MATCH) {{ {MEDIA_FIELDS} }} }} }}"
 )
-MEDIA_QUERY = "query UnshackleAniListMedia($id: Int) { Media(id: $id, type: ANIME) { %s } }" % MEDIA_FIELDS
-MAL_QUERY = "query UnshackleAniListMal($idMal: Int) { Media(idMal: $idMal, type: ANIME) { %s } }" % MEDIA_FIELDS
+MEDIA_QUERY = f"query UnshackleAniListMedia($id: Int) {{ Media(id: $id, type: ANIME) {{ {MEDIA_FIELDS} }} }}"
+MAL_QUERY = f"query UnshackleAniListMal($idMal: Int) {{ Media(idMal: $idMal, type: ANIME) {{ {MEDIA_FIELDS} }} }}"
 
 TITLE_LANGUAGES: tuple[str, ...] = ("english", "romaji", "native")
 
@@ -25,7 +24,7 @@ TITLE_LANGUAGES: tuple[str, ...] = ("english", "romaji", "native")
 COUNTRY_TO_LANGUAGE: dict[str, str] = {"JP": "ja", "KR": "ko", "CN": "zh", "TW": "zh", "HK": "zh"}
 
 
-def parse_anilist_ref(value: Union[int, str]) -> Optional[tuple[str, int]]:
+def parse_anilist_ref(value: int | str) -> tuple[str, int] | None:
     """Split an AniList reference into its namespace and number.
 
     A bare number is an AniList ID. ``mal:12345`` is a MyAnimeList ID, which AniList
@@ -55,7 +54,7 @@ class AniListProvider(MetadataProvider):
     def is_available(self) -> bool:
         return True
 
-    def graphql(self, query: str, variables: dict) -> Optional[dict]:
+    def graphql(self, query: str, variables: dict) -> dict | None:
         try:
             r = self.session.post(GRAPHQL_URL, json={"query": query, "variables": variables}, timeout=30)
             body = r.json()
@@ -69,7 +68,7 @@ class AniListProvider(MetadataProvider):
             return None
         return body.get("data")
 
-    def title_variant(self, titles: dict) -> Optional[str]:
+    def title_variant(self, titles: dict) -> str | None:
         from unshackle.core.config import config
 
         configured = (config.anilist_title_language or "english").lower()
@@ -79,7 +78,7 @@ class AniListProvider(MetadataProvider):
                 return str(value)
         return None
 
-    def to_result(self, node: dict) -> Optional[MetadataResult]:
+    def to_result(self, node: dict) -> MetadataResult | None:
         title = self.title_variant(node.get("title") or {})
         if not title:
             return None
@@ -93,7 +92,7 @@ class AniListProvider(MetadataProvider):
             raw=node,
         )
 
-    def search(self, title: str, year: Optional[int], kind: str) -> Optional[MetadataResult]:
+    def search(self, title: str, year: int | None, kind: str) -> MetadataResult | None:
         self.log.debug("Searching AniList for %r (%s, %s)", title, kind, year)
 
         data = self.graphql(SEARCH_QUERY, {"search": title})
@@ -116,7 +115,7 @@ class AniListProvider(MetadataProvider):
             self.log.debug("AniList -> %s (ID %s)", result.title, result.external_ids.anilist_id)
         return result
 
-    def get_by_id(self, provider_id: Union[int, str], kind: str) -> Optional[MetadataResult]:
+    def get_by_id(self, provider_id: int | str, kind: str) -> MetadataResult | None:
         """Fetch metadata by AniList ID, or by MyAnimeList ID when given as 'mal:12345'."""
         ref = parse_anilist_ref(provider_id)
         if not ref:
@@ -135,7 +134,7 @@ class AniListProvider(MetadataProvider):
             return None
         return self.to_result(node)
 
-    def get_external_ids(self, provider_id: Union[int, str], kind: str) -> ExternalIds:
+    def get_external_ids(self, provider_id: int | str, kind: str) -> ExternalIds:
         """Return external IDs. AniList knows no western IDs, so only its own."""
         ref = parse_anilist_ref(provider_id)
         if not ref:

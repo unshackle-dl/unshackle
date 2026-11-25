@@ -10,7 +10,6 @@ import sqlite3
 import tempfile
 from http.cookiejar import Cookie, CookieJar
 from pathlib import Path
-from typing import Dict, List, Optional
 
 
 def get_firefox_root() -> Path:
@@ -49,7 +48,7 @@ def get_latest_profile_path(ff_root: Path) -> Path:
     return max(valid_profiles, key=lambda p: (p / "cookies.sqlite").stat().st_mtime)
 
 
-def get_local_storage_data(profile_path: Path, hosts: List[str], tmp_dir_path: Path) -> Dict[str, str]:
+def get_local_storage_data(profile_path: Path, hosts: list[str], tmp_dir_path: Path) -> dict[str, str]:
     """
     Extracts LocalStorage tokens from webappsstore.sqlite with strict origin matching.
     Operates within a secure temporary directory.
@@ -83,7 +82,7 @@ def get_local_storage_data(profile_path: Path, hosts: List[str], tmp_dir_path: P
     return extracted_storage
 
 
-def get_firefox_cookies(service_settings: dict) -> Optional[CookieJar]:
+def get_firefox_cookies(service_settings: dict) -> CookieJar | None:
     """
     Extracts cookies and optionally localStorage from Firefox based on provided host patterns.
     Implements security hardening and data consistency (it can copy the WAL log) as per PR review.

@@ -12,7 +12,7 @@ import json
 import struct
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, Optional, cast
+from typing import Any, cast
 from unittest.mock import patch
 from uuid import UUID
 
@@ -42,7 +42,7 @@ def playready_object(kid: UUID) -> str:
     return base64.b64encode(struct.pack("<IH", len(record) + 6, 1) + record).decode()
 
 
-def media_playlist(kid: Optional[UUID]) -> str:
+def media_playlist(kid: UUID | None) -> str:
     key = ""
     if kid:
         key = (
@@ -91,7 +91,7 @@ def write_export(tmp_path: Path, language: str = "", manifest_url: str = MASTER_
     return path
 
 
-def import_title(export: Path, master_text: str, playlists: dict[str, Optional[UUID]]) -> tuple[ImportService, Any]:
+def import_title(export: Path, master_text: str, playlists: dict[str, UUID | None]) -> tuple[ImportService, Any]:
     ctx = cast(click.Context, SimpleNamespace(parent=None, params={}))
     svc = ImportService(ctx, "EXAMPLE", "ep-1", str(export))
 
@@ -99,7 +99,7 @@ def import_title(export: Path, master_text: str, playlists: dict[str, Optional[U
         name = url.split("?")[0].rsplit("/", 1)[-1]
         return SimpleNamespace(text=media_playlist(playlists.get(name)), raise_for_status=lambda: None)
 
-    setattr(svc.session, "get", get)
+    svc.session.get = get
     episode = next(iter(svc.get_titles()))
     with patch.object(HLS, "from_url", side_effect=lambda url, session=None, **kw: HLS.from_text(master_text, url)):
         episode.tracks = svc.get_tracks(episode)

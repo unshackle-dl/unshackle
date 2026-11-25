@@ -14,6 +14,7 @@ from functools import partial
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
+import requests
 
 from unshackle.core.config import config
 from unshackle.core.constants import DOWNLOAD_CANCELLED
@@ -109,7 +110,7 @@ def test_hls_second_run_reuses_completed_segments(server, tmp_path):
     # part1.bin missing -> run 1 completes part0 then dies during the download phase
 
     ctx = make_ctx(tmp_path)
-    with pytest.raises(Exception):
+    with pytest.raises(requests.HTTPError):
         HLS.download_track(make_track(server), ctx)
 
     assert (ctx.save_dir / "segments" / "0.bin").read_bytes() == PART0
@@ -133,7 +134,7 @@ def test_hls_aes128_content_never_writes_sidecar(server, tmp_path):
     # part1.bin missing -> crash mid-download, the state resume would normally preserve
 
     ctx = make_ctx(tmp_path)
-    with pytest.raises(Exception):
+    with pytest.raises(requests.HTTPError):
         HLS.download_track(make_track(server), ctx)
 
     assert not resume.sidecar_path(ctx.save_dir).exists()

@@ -1,5 +1,6 @@
 """The server spends its own proxy subscriptions only for a key that opts in."""
 
+from datetime import UTC
 from types import SimpleNamespace
 
 import pytest
@@ -266,7 +267,7 @@ class TestDownloadEnforcement:
     def created_params(self, monkeypatch):
         """Drive download_handler with the job machinery faked out; capture create_job params."""
         import asyncio
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         from unshackle.core.api import download_manager as dm
 
@@ -279,7 +280,7 @@ class TestDownloadEnforcement:
             def create_job(self, service, title_id, owner_key=None, **params):
                 created.update(params)
                 return SimpleNamespace(
-                    job_id="job1", status=SimpleNamespace(value="queued"), created_time=datetime.now(timezone.utc)
+                    job_id="job1", status=SimpleNamespace(value="queued"), created_time=datetime.now(UTC)
                 )
 
         monkeypatch.setattr(dm, "get_download_manager", lambda: FakeManager())

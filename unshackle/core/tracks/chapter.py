@@ -1,14 +1,13 @@
 from __future__ import annotations
 
 import re
-from typing import Optional, Union
 from zlib import crc32
 
 TIMESTAMP_FORMAT = re.compile(r"^(?P<hour>\d{2}):(?P<minute>\d{2}):(?P<second>\d{2})(?P<ms>.\d{3}|)$")
 
 
 class Chapter:
-    def __init__(self, timestamp: Union[str, int, float], name: Optional[str] = None) -> None:
+    def __init__(self, timestamp: str | int | float, name: str | None = None) -> None:
         """
         Make a new Chapter with a Timestamp and optional name.
 

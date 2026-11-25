@@ -14,8 +14,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Optional, Sequence
 from urllib.parse import urlsplit, urlunsplit
 
 _VERSION = 1
@@ -26,7 +26,7 @@ def sidecar_path(save_dir: Path) -> Path:
     return save_dir.with_name(save_dir.name + ".resume.json")
 
 
-def _strip_url(url: Optional[str]) -> str:
+def _strip_url(url: str | None) -> str:
     """Drop query and fragment: auth tokens rotate between runs and would make every digest unique."""
     if not url:
         return ""
@@ -35,8 +35,8 @@ def _strip_url(url: Optional[str]) -> str:
 
 
 def fingerprint(
-    manifest_url: Optional[str],
-    segments: Sequence[tuple[str, Optional[str]]],
+    manifest_url: str | None,
+    segments: Sequence[tuple[str, str | None]],
     extra: Sequence[str] = (),
 ) -> str:
     """Stable digest of a track's segmentation.

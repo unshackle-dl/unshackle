@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, Optional
 
 import pytest
 from langcodes import Language
@@ -22,7 +22,7 @@ from unshackle.core.tracks import Audio, Subtitle, Tracks
         (["en-US"], None, None),
     ],
 )
-def test_first_match_index(languages: list[str], preferred: Optional[str], expected: Optional[int]) -> None:
+def test_first_match_index(languages: list[str], preferred: str | None, expected: int | None) -> None:
     tracks = [
         Audio(id_=f"a{i}", url=f"https://x/{i}", language=lang, codec=Audio.Codec.AAC, bitrate=1)
         for i, lang in enumerate(languages)
@@ -55,7 +55,7 @@ def subtitle(index: int, language: str, kind: str) -> Subtitle:
         (None, [], None),
     ],
 )
-def test_default_subtitle_index(language: Optional[str], types: list[str], expected: Optional[int]) -> None:
+def test_default_subtitle_index(language: str | None, types: list[str], expected: int | None) -> None:
     kinds = [("pl", "forced"), ("pl", "normal"), ("en", "normal"), ("en", "sdh")]
     subtitles = [subtitle(i, lang, kind) for i, (lang, kind) in enumerate(kinds)]
     assert Tracks.default_subtitle_index(subtitles, language, types) == expected
@@ -65,7 +65,7 @@ def test_default_subtitle_index(language: Optional[str], types: list[str], expec
     ("audio", "expected"),
     [("en", 1), ("ar", 0), ("fr", 2), (None, 2)],
 )
-def test_a_forced_default_with_no_language_follows_the_audio(audio: Optional[str], expected: int) -> None:
+def test_a_forced_default_with_no_language_follows_the_audio(audio: str | None, expected: int) -> None:
     kinds = [("ar", "forced"), ("en", "forced"), ("en", "normal")]
     subtitles = [subtitle(i, lang, kind) for i, (lang, kind) in enumerate(kinds)]
     audio_language = Language.get(audio) if audio else None

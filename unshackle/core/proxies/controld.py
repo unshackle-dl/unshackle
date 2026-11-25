@@ -10,7 +10,6 @@ import socketserver
 import threading
 import time
 from functools import cached_property
-from typing import Optional
 from urllib.parse import urlsplit
 
 import requests
@@ -328,9 +327,9 @@ class ControlD(Proxy):
         self,
         *,
         token: str,
-        profile: Optional[str] = None,
-        resolver: Optional[str] = None,
-        profiles: Optional[list[dict]] = None,
+        profile: str | None = None,
+        resolver: str | None = None,
+        profiles: list[dict] | None = None,
         max_profiles: int = 4,
     ) -> None:
         """
@@ -360,7 +359,7 @@ class ControlD(Proxy):
         self.configured = {x["profile"]: resolver_id(x["resolver"]) for x in pairs}
         self.max_profiles = max_profiles
         self.resolvers = dict(self.configured)
-        self.last_profile: Optional[str] = None
+        self.last_profile: str | None = None
 
     @cached_property
     def catalogue(self) -> list[dict]:
@@ -385,7 +384,7 @@ class ControlD(Proxy):
             log.warning(f"Could not read Control D's locations: {e}")
             return []
 
-    def location(self, query: str) -> Optional[str]:
+    def location(self, query: str) -> str | None:
         """Get the identifier of a Control D proxy location for a country or location code."""
         if not self.catalogue:
             self.catalogue = self.get_locations()
@@ -470,7 +469,7 @@ class ControlD(Proxy):
         log.info(f"Created profile {name} ({profile}) on the Control D account")
         return profile
 
-    def claim(self, query: str) -> Optional[str]:
+    def claim(self, query: str) -> str | None:
         """Point a profile at this region, unless one already is, and get its resolver ID. Hold STATE."""
         location = self.location(query)
         if not location:
@@ -492,13 +491,13 @@ class ControlD(Proxy):
         self.last_profile = profile
         return resolver
 
-    def get_proxy(self, query: str) -> Optional[str]:
+    def get_proxy(self, query: str) -> str | None:
         """Get the local HTTP proxy URI that resolves through Control D for this region."""
         with STATE:
             resolver = self.claim(query.lower())
             return forwarder(resolver).uri if resolver else None
 
-    def last_connection_display(self) -> Optional[str]:
+    def last_connection_display(self) -> str | None:
         """Name the location of the last claim, with the resolver ID masked, in place of the loopback URI."""
         location = LOCATIONS.get(self.last_profile or "")
         if not location:
@@ -507,7 +506,7 @@ class ControlD(Proxy):
         label = f"{location} - {city}" if city else location
         return f"({label}): {self.resolvers[self.last_profile][:4]}{REDACTED}@dns.controld.com"
 
-    def get_remote_proxy(self, query: str) -> Optional[str]:
+    def get_remote_proxy(self, query: str) -> str | None:
         """Get the `controld://` proxy URI for this region, for a server on another machine."""
         with STATE:
             resolver = self.claim(query.lower())

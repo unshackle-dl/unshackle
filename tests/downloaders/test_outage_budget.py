@@ -121,7 +121,7 @@ def test_disk_full_is_not_retried(tmp_path, monkeypatch, serve):
 
 def test_status_failure_keeps_the_normal_budget(tmp_path, serve):
     server = serve(503)
-    with pytest.raises(Exception):
+    with pytest.raises(rq.HTTPError):
         list(dl.download(url=server.url, save_path=tmp_path / "a.bin", session=rq.Session()))
 
     assert server.requests == dl.MAX_ATTEMPTS

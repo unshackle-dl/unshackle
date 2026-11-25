@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 import pytest
 
@@ -41,7 +41,7 @@ def _provider(monkeypatch: pytest.MonkeyPatch, body: dict) -> tuple[AniListProvi
     provider = AniListProvider()
     sent: list[dict] = []
 
-    def fake_post(url: str, json: Optional[dict] = None, **kwargs: Any) -> FakeResponse:
+    def fake_post(url: str, json: dict | None = None, **kwargs: Any) -> FakeResponse:
         sent.append(json or {})
         return FakeResponse(body)
 
@@ -75,7 +75,7 @@ def default_title_language(monkeypatch: pytest.MonkeyPatch) -> None:
         ("²", None),  # superscript two passes isdigit() but crashes int()
     ],
 )
-def test_parse_anilist_ref(value: Any, expected: Optional[tuple[str, int]]) -> None:
+def test_parse_anilist_ref(value: Any, expected: tuple[str, int] | None) -> None:
     assert parse_anilist_ref(value) == expected
 
 
@@ -215,7 +215,7 @@ def test_a_title_with_no_variant_at_all_is_a_miss(monkeypatch: pytest.MonkeyPatc
     [("JP", "ja"), ("KR", "ko"), ("CN", "zh"), ("TW", "zh"), ("US", None), (None, None)],
 )
 def test_country_of_origin_maps_to_a_language(
-    monkeypatch: pytest.MonkeyPatch, country: Optional[str], language: Optional[str]
+    monkeypatch: pytest.MonkeyPatch, country: str | None, language: str | None
 ) -> None:
     provider, _ = _provider(monkeypatch, {"data": {"Media": {**ONE_PIECE, "countryOfOrigin": country}}})
 
@@ -228,7 +228,7 @@ def test_country_of_origin_maps_to_a_language(
 @pytest.mark.parametrize(
     ("format_", "kind"), [("MOVIE", "movie"), ("TV", "tv"), ("ONA", "tv"), ("SPECIAL", "tv"), (None, "tv")]
 )
-def test_format_maps_to_kind(monkeypatch: pytest.MonkeyPatch, format_: Optional[str], kind: str) -> None:
+def test_format_maps_to_kind(monkeypatch: pytest.MonkeyPatch, format_: str | None, kind: str) -> None:
     provider, _ = _provider(monkeypatch, {"data": {"Media": {**ONE_PIECE, "format": format_}}})
 
     result = provider.get_by_id(21, "tv")

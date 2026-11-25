@@ -5,12 +5,13 @@ from __future__ import annotations
 import logging
 import shutil
 import sys
+from collections.abc import Callable, Sequence
 from concurrent import futures
 from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 from functools import partial
 from pathlib import Path
-from typing import Any, Callable, Optional, Sequence, Union
+from typing import Any
 
 import click
 from pymediainfo import MediaInfo
@@ -28,7 +29,7 @@ from unshackle.core.tracks.hybrid import Hybrid
 from unshackle.core.tracks.selection import select_hybrid_bases
 from unshackle.core.utilities import standard_resolution
 
-MuxOutput = tuple[Path, Optional[Audio.Codec]]
+MuxOutput = tuple[Path, Audio.Codec | None]
 
 
 def group_videos_by_variant(videos: list[Video], *, merge: bool) -> list[list[Video]]:
@@ -47,7 +48,7 @@ def group_videos_by_variant(videos: list[Video], *, merge: bool) -> list[list[Vi
     return list(groups.values())
 
 
-def hybrid_plan(videos: Sequence[Video], generate_dv: bool) -> tuple[list[Video], Optional[Video]]:
+def hybrid_plan(videos: Sequence[Video], generate_dv: bool) -> tuple[list[Video], Video | None]:
     """The hybrid bases and the 2D DV track to pair with them.
 
     With no DV track, a base qualifies only with ``--generate-dv``. A resolution with a
@@ -60,7 +61,7 @@ def hybrid_plan(videos: Sequence[Video], generate_dv: bool) -> tuple[list[Video]
     return select_hybrid_bases(base_pool), matching_dv
 
 
-def hybrid_source_tracks(base: Video, dv: Optional[Video], base_container: Optional[Path] = None) -> list[Video]:
+def hybrid_source_tracks(base: Video, dv: Video | None, base_container: Path | None = None) -> list[Video]:
     """Copies of the base and DV tracks for the hybrid step, with the base on its container file.
 
     The hybrid step reads the duration and seeks, and the raw stream from the DV fixup
@@ -71,7 +72,7 @@ def hybrid_source_tracks(base: Video, dv: Optional[Video], base_container: Optio
     return tracks
 
 
-def hybrid_step_error(tracks: list[Video], source: str, output_name: str) -> Optional[str]:
+def hybrid_step_error(tracks: list[Video], source: str, output_name: str) -> str | None:
     """Run the hybrid step for one resolution; the error that failed it, or None.
 
     A failure here is this resolution's alone: the title goes on with its other resolutions.
@@ -83,7 +84,7 @@ def hybrid_step_error(tracks: list[Video], source: str, output_name: str) -> Opt
     return None
 
 
-def missing_hybrid_error(bases: Sequence[Video], made: int) -> Optional[str]:
+def missing_hybrid_error(bases: Sequence[Video], made: int) -> str | None:
     """Why the title has no hybrid file, or None when at least one was made."""
     if made:
         return None
@@ -93,29 +94,29 @@ def missing_hybrid_error(bases: Sequence[Video], made: int) -> Optional[str]:
 
 
 def mux_title(
-    title: Union[Movie, Episode],
+    title: Movie | Episode,
     placement: Placement,
     *,
     log: logging.Logger,
     service_tag: str,
-    split_audio: Optional[bool],
-    merge_video: Optional[bool],
+    split_audio: bool | None,
+    merge_video: bool | None,
     audio_expected: bool,
     skip_subtitles: bool,
     quality: Sequence[Any],
     range_: Sequence[Video.Range],
     vcodec: Sequence[Any],
     generate_dv: bool,
-    progress_sink: Optional[Callable[[dict[str, Any]], None]],
-    write_sidecars: Optional[Callable[[str, Path], list[Path]]],
-) -> tuple[list[MuxOutput], dict[Optional[Path], list[Path]]]:
+    progress_sink: Callable[[dict[str, Any]], None] | None,
+    write_sidecars: Callable[[str, Path], list[Path]] | None,
+) -> tuple[list[MuxOutput], dict[Path | None, list[Path]]]:
     """Mux the tracks of a title, then delete them; the muxed files and the sidecar files of each.
 
     Each output is a muxed file with the audio codec it holds when the audio is split by codec.
     A failed mux exits the run.
     """
     outputs: list[MuxOutput] = []
-    sidecars: dict[Optional[Path], list[Path]] = {}
+    sidecars: dict[Path | None, list[Path]] = {}
     progress = Progress(
         TextColumn("[progress.description]{task.description}"),
         SpinnerColumn(finished_text=""),
@@ -131,7 +132,7 @@ def mux_title(
 
     merge_video = merge_video if merge_video is not None else config.muxing.get("merge_video", False)
 
-    multiplex_tasks: list[tuple[TaskID, Tracks, Optional[Audio.Codec]]] = []
+    multiplex_tasks: list[tuple[TaskID, Tracks, Audio.Codec | None]] = []
     mux_futures: list[futures.Future[tuple[Path, int, list[str]]]] = []
     # Track hybrid-processing outputs explicitly so we can always clean them up,
     # even if muxing fails early (e.g. SystemExit) before the normal delete loop.
@@ -148,8 +149,8 @@ def mux_title(
         task_tracks.attachments = list(base_tracks.attachments)
         return task_tracks
 
-    def unique_mux_output(task_tracks: Tracks, index: int) -> Optional[Path]:
-        src: Optional[Path] = None
+    def unique_mux_output(task_tracks: Tracks, index: int) -> Path | None:
+        src: Path | None = None
         ext = ".muxed.mkv"
         if task_tracks.videos:
             src = task_tracks.videos[0].path
@@ -183,7 +184,7 @@ def mux_title(
             mux_futures.append(pool.submit(mux_one, len(multiplex_tasks), task_id, base_tracks))
             return
 
-        audio_by_codec: dict[Optional[Audio.Codec], list[Audio]] = {}
+        audio_by_codec: dict[Audio.Codec | None, list[Audio]] = {}
         for audio_track in base_tracks.audio:
             audio_by_codec.setdefault(audio_track.codec, []).append(audio_track)
 
@@ -197,7 +198,7 @@ def mux_title(
             multiplex_tasks.append((task_id, task_tracks, audio_codec))
             mux_futures.append(pool.submit(mux_one, len(multiplex_tasks), task_id, task_tracks))
 
-    def mux_video_group(video_tracks: list[Optional[Video]]) -> None:
+    def mux_video_group(video_tracks: list[Video | None]) -> None:
         for video_track in video_tracks:
             if video_track and video_track.dv_compatible_bitstream:
                 container = apply_dv_fixup(video_track, keep_source=video_track.id in hybrid_base_ids)
@@ -223,7 +224,7 @@ def mux_title(
 
         enqueue_mux_tasks(task_description, task_tracks)
 
-    def group_file_size(video_tracks: Sequence[Optional[Video]]) -> int:
+    def group_file_size(video_tracks: Sequence[Video | None]) -> int:
         return sum(v.path.stat().st_size for v in video_tracks if v and v.path and v.path.exists())
 
     if progress_sink:
@@ -246,7 +247,7 @@ def mux_title(
                     original_videos = list(title.tracks.videos)
 
                     standalone_videos = [v for v in original_videos if not v.hybrid_base_only]
-                    standalone_groups: list[list[Optional[Video]]] = [
+                    standalone_groups: list[list[Video | None]] = [
                         list(g) for g in group_videos_by_variant(standalone_videos, merge=merge_video)
                     ]
                     hybrid_bases, matching_dv = hybrid_plan(
@@ -302,15 +303,15 @@ def mux_title(
 
                     console.print()
                 else:
-                    groups: list[list[Optional[Video]]] = [
+                    groups: list[list[Video | None]] = [
                         list(g) for g in group_videos_by_variant(title.tracks.videos, merge=merge_video)
                     ] or [[None]]
                     for group in sorted(groups, key=group_file_size, reverse=True):
                         mux_video_group(group)
 
             mux_results = [f.result() for f in mux_futures]
-            for (task_id, task_tracks, audio_codec), (muxed_path, return_code, errors) in zip(
-                multiplex_tasks, mux_results
+            for (_, _, audio_codec), (muxed_path, return_code, errors) in zip(
+                multiplex_tasks, mux_results, strict=True
             ):
                 outputs.append((muxed_path, audio_codec))
                 if return_code >= 2:
@@ -328,7 +329,7 @@ def mux_title(
                 sys.exit(1)
 
             if write_sidecars:
-                sidecar_targets: list[tuple[Optional[Path], str, Path]] = []
+                sidecar_targets: list[tuple[Path | None, str, Path]] = []
                 for path, _ in outputs:
                     media_info = MediaInfo.parse(path)
                     sidecar_targets.append((path, placement.name(media_info), placement.folder(media_info)))

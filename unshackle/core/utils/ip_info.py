@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Any, Callable, Optional
+from collections.abc import Callable
+from typing import Any
 
 import requests
 
@@ -20,7 +21,7 @@ REQUEST_TIMEOUT = 10
 # verify_proxy_exit compares against the proxy exit IP.
 GEO_CACHE_KEYS = ("ip", "country", "country_code")
 
-Fetcher = Callable[[requests.Session], Optional[dict]]
+Fetcher = Callable[[requests.Session], dict | None]
 
 log = logging.getLogger("ip_info")
 
@@ -40,7 +41,7 @@ def normalize(
     as_name: str = "",
     continent_code: str = "",
     timezone: str = "",
-) -> Optional[dict]:
+) -> dict | None:
     """Assemble the canonical IP-info dict, or None if no country code is present."""
     code = country_code.strip()
     if not code:
@@ -59,7 +60,7 @@ def normalize(
     }
 
 
-def parse_ipinfo_lite(data: dict) -> Optional[dict]:
+def parse_ipinfo_lite(data: dict) -> dict | None:
     asn = (data.get("asn") or "").strip()
     as_name = (data.get("as_name") or "").strip()
     return normalize(
@@ -72,7 +73,7 @@ def parse_ipinfo_lite(data: dict) -> Optional[dict]:
     )
 
 
-def parse_ipinfo(data: dict) -> Optional[dict]:
+def parse_ipinfo(data: dict) -> dict | None:
     return normalize(
         country_code=data.get("country") or "",
         ip=data.get("ip") or "",
@@ -83,7 +84,7 @@ def parse_ipinfo(data: dict) -> Optional[dict]:
     )
 
 
-def parse_ip_api_in(data: dict) -> Optional[dict]:
+def parse_ip_api_in(data: dict) -> dict | None:
     asn = (data.get("asn") or "").strip()
     org_name = (data.get("organization") or "").strip()
     return normalize(
@@ -99,7 +100,7 @@ def parse_ip_api_in(data: dict) -> Optional[dict]:
     )
 
 
-def lookup_session(source: Optional[requests.Session]) -> requests.Session:
+def lookup_session(source: requests.Session | None) -> requests.Session:
     """
     Assemble a plain, retry-free `requests` HTTP session for IP geolocation.
 
@@ -120,7 +121,7 @@ def lookup_session(source: Optional[requests.Session]) -> requests.Session:
     return sess
 
 
-def json_or_raise(response: requests.Response) -> Optional[dict]:
+def json_or_raise(response: requests.Response) -> dict | None:
     """Raise RateLimited on 429, return parsed JSON on 200, else None."""
     if response.status_code == 429:
         raise RateLimited()
@@ -135,19 +136,19 @@ def json_or_raise(response: requests.Response) -> Optional[dict]:
 def fetch_ipinfo_lite(token: str) -> Fetcher:
     headers = {"Authorization": f"Bearer {token}"}
 
-    def fetch(session: requests.Session) -> Optional[dict]:
+    def fetch(session: requests.Session) -> dict | None:
         payload = json_or_raise(session.get("https://api.ipinfo.io/lite/me", headers=headers, timeout=REQUEST_TIMEOUT))
         return parse_ipinfo_lite(payload) if payload else None
 
     return fetch
 
 
-def fetch_ipinfo(session: requests.Session) -> Optional[dict]:
+def fetch_ipinfo(session: requests.Session) -> dict | None:
     payload = json_or_raise(session.get("https://ipinfo.io/json", timeout=REQUEST_TIMEOUT))
     return parse_ipinfo(payload) if payload else None
 
 
-def fetch_ip_api_in(session: requests.Session) -> Optional[dict]:
+def fetch_ip_api_in(session: requests.Session) -> dict | None:
     """ip-api.in has no /me endpoint, so get the IP from ipify first, then look it up."""
     ip_resp = session.get("https://api.ipify.org", timeout=REQUEST_TIMEOUT)
     if ip_resp.status_code == 429:
@@ -189,12 +190,12 @@ def load_provider_state(cacher: Cacher) -> dict[str, Any]:
 
 
 def get_ip_info(
-    session: Optional[requests.Session] = None,
+    session: requests.Session | None = None,
     *,
     cached: bool = False,
-    errors: Optional[list[Exception]] = None,
+    errors: list[Exception] | None = None,
     require: tuple[str, ...] = (),
-) -> Optional[dict]:
+) -> dict | None:
     """
     Look up IP/geolocation info through ipinfo.io (Lite when `ipinfo_api_key` configured)
     with fallback to ip-api.in.

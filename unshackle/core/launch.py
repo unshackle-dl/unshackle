@@ -2,7 +2,7 @@
 
 import copy
 from pathlib import Path
-from typing import Any, Dict, Optional, TypedDict, cast
+from typing import Any, TypedDict, cast
 
 import click
 
@@ -29,19 +29,19 @@ class LaunchKeys(TypedDict, total=False):
     client_device: bool
     client_identity: bool
     client_argv: str
-    proxy_arg: Optional[str]
-    proxy_query: Optional[str]
-    proxy_provider: Optional[str]
+    proxy_arg: str | None
+    proxy_query: str | None
+    proxy_provider: str | None
 
 
-def launch(ctx: click.Context, keys: LaunchKeys, obj: Optional[ContextData] = None) -> None:
+def launch(ctx: click.Context, keys: LaunchKeys, obj: ContextData | None = None) -> None:
     """Write the launch ``keys`` into ``ctx.params``, and ``obj`` as ``ctx.obj`` when given."""
     ctx.params.update(keys)
     if obj is not None:
         ctx.obj = obj
 
 
-def served_context(obj: ContextData, params: Dict[str, Any], keys: LaunchKeys) -> click.Context:
+def served_context(obj: ContextData, params: dict[str, Any], keys: LaunchKeys) -> click.Context:
     """A new parent context for a service that a serve runs for an API client, with the dl options in ``params``."""
     ctx = click.Context(click.Command("serve"))
     # dl defaults -q to [], and services iterate it
@@ -50,7 +50,7 @@ def served_context(obj: ContextData, params: Dict[str, Any], keys: LaunchKeys) -
     return ctx
 
 
-SERVICE_YAML: Dict[Path, tuple[tuple[int, int], dict]] = {}
+SERVICE_YAML: dict[Path, tuple[tuple[int, int], dict]] = {}
 
 
 def load_service_config(tag: str, local: bool = True) -> dict:

@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from collections import Counter
 from pathlib import Path
-from typing import Any, Union
+from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
@@ -33,7 +33,7 @@ def cases(entries: list[dict[str, Any]]) -> list[Any]:
 def parse(entry: dict[str, Any]) -> Tracks:
     """Parse a fixture the way from_url does: XML from bytes, M3U8 decoded as UTF-8."""
     data = (CORPUS / entry["file"]).read_bytes()
-    parser: Union[DASH, HLS, ISM]
+    parser: DASH | HLS | ISM
     if entry["kind"] == "hls":
         parser = HLS.from_text(data.decode("utf-8"), entry["url"])
     else:

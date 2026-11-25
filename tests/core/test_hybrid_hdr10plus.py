@@ -10,9 +10,10 @@ import json
 import logging
 import re
 import weakref
+from collections.abc import Iterator
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, Iterator, Optional
+from typing import Any
 
 import pytest
 
@@ -219,7 +220,7 @@ def make_hybrid() -> Hybrid:
     return obj
 
 
-def stub_hybrid_steps(monkeypatch: pytest.MonkeyPatch, *steps: str, tool: Optional[str] = "hdr10plus_tool") -> None:
+def stub_hybrid_steps(monkeypatch: pytest.MonkeyPatch, *steps: str, tool: str | None = "hdr10plus_tool") -> None:
     """Make the stream, Level 5 and inject steps (and those named) do nothing, with a fixed active area."""
     for name in ("extract_stream", "level_5", "injecting", *steps):
         monkeypatch.setattr(Hybrid, name, lambda self, *a, **k: None)
@@ -240,7 +241,7 @@ def capture_generate(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
 
 
 @pytest.mark.parametrize("top, expected", [(277, (2160 - 554) / 2160), (1000, None)])
-def test_active_area_share(top: int, expected: Optional[float], quiet: None, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_active_area_share(top: int, expected: float | None, quiet: None, monkeypatch: pytest.MonkeyPatch) -> None:
     """A letterboxed picture gives its crop and share of the frame; an implausibly small one gives None.
 
     cropdetect settles over its frames, so the last crop line counts.
@@ -451,7 +452,7 @@ def test_a_conversion_run_removes_its_rpus_so_the_next_base_makes_its_own(
 
 @pytest.mark.parametrize("range_, tool", [(Video.Range.HDR10, "hdr10plus_tool"), (Video.Range.HDR10P, None)])
 def test_a_base_without_usable_hdr10plus_is_measured_inside_its_crop(
-    range_: Video.Range, tool: Optional[str], quiet: None, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    range_: Video.Range, tool: str | None, quiet: None, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     base = tmp_path / "base.mkv"
     base.write_bytes(b"")
@@ -594,7 +595,7 @@ def test_an_hdr10plus_conversion_fills_light_levels_the_stream_does_not_state(
     ],
 )
 def test_a_sample_rpu_is_shifted_to_the_first_frame_of_the_base(
-    dv_start: float, expected: Optional[dict[str, Any]], quiet: None, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    dv_start: float, expected: dict[str, Any] | None, quiet: None, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     """--sample cuts each track on its own segment grid, so the RPU can start before or after the base."""
     seen: dict[str, Any] = {}
@@ -850,7 +851,7 @@ def video(
     id_: str,
     range_: Video.Range,
     height: int = 2160,
-    codec: Optional[Video.Codec] = Video.Codec.HEVC,
+    codec: Video.Codec | None = Video.Codec.HEVC,
     native_hybrid: bool = False,
 ) -> Any:
     return SimpleNamespace(id=id_, height=height, range=range_, codec=codec, native_hybrid=native_hybrid, stereo=False)

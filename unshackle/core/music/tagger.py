@@ -8,7 +8,7 @@ from base64 import b64encode
 from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import Any
 
 from unshackle.core import binaries
 from unshackle.core.config import config
@@ -56,7 +56,7 @@ except ImportError:  # pragma: no cover - optional tagging dependency
 
 log = logging.getLogger("MUSIC_TAGGER")
 
-TagValues = dict[str, Union[str, list[str]]]
+TagValues = dict[str, str | list[str]]
 MAX_COVER_BYTES = 2**24 - 1  # a FLAC metadata block length is 24 bits
 
 
@@ -185,7 +185,7 @@ def build_tag_values(song: Any, *, source_md5: str = "") -> TagValues:
     return {key: value for key, value in tags.items() if value}
 
 
-def write_flac_tags(path: Path, tags: TagValues, cover_data: Optional[bytes], mime_type: str) -> None:
+def write_flac_tags(path: Path, tags: TagValues, cover_data: bytes | None, mime_type: str) -> None:
     audio = FLAC(path)
     for key, value in tags.items():
         audio[key] = as_list(value)
@@ -196,7 +196,7 @@ def write_flac_tags(path: Path, tags: TagValues, cover_data: Optional[bytes], mi
     audio.save()
 
 
-def build_picture(cover_data: Optional[bytes], mime_type: str) -> Optional[Any]:
+def build_picture(cover_data: bytes | None, mime_type: str) -> Any | None:
     """Build a FLAC Picture block, which Ogg reuses base64-encoded."""
     if not cover_data or Picture is None:
         return None
@@ -215,9 +215,7 @@ def build_picture(cover_data: Optional[bytes], mime_type: str) -> Optional[Any]:
     return picture
 
 
-def write_ogg_tags(
-    path: Path, tags: TagValues, cover_data: Optional[bytes], mime_type: str, reader: Any = None
-) -> None:
+def write_ogg_tags(path: Path, tags: TagValues, cover_data: bytes | None, mime_type: str, reader: Any = None) -> None:
     audio = (reader or OggVorbis)(path)
     for key, value in tags.items():
         audio[key] = as_list(value)
@@ -228,7 +226,7 @@ def write_ogg_tags(
     audio.save()
 
 
-def write_mp3_tags(path: Path, tags: TagValues, cover_data: Optional[bytes], mime_type: str, reader: Any) -> None:
+def write_mp3_tags(path: Path, tags: TagValues, cover_data: bytes | None, mime_type: str, reader: Any) -> None:
     """Write ID3 frames; ``reader`` is mutagen's MP3 or WAVE, both of which carry ID3."""
     try:
         audio = reader(path)
@@ -272,7 +270,7 @@ def write_mp3_tags(path: Path, tags: TagValues, cover_data: Optional[bytes], mim
     audio.save()
 
 
-def write_mp4_tags(path: Path, tags: TagValues, cover_data: Optional[bytes], mime_type: str) -> None:
+def write_mp4_tags(path: Path, tags: TagValues, cover_data: bytes | None, mime_type: str) -> None:
     audio = MP4(path)
     if tags.get("TITLE"):
         audio["\xa9nam"] = [tags["TITLE"]]
@@ -326,7 +324,7 @@ def write_mp4_tags(path: Path, tags: TagValues, cover_data: Optional[bytes], mim
     audio.save()
 
 
-def download_cover(session: Any, artwork_url: str) -> tuple[Optional[bytes], str]:
+def download_cover(session: Any, artwork_url: str) -> tuple[bytes | None, str]:
     if not session or not artwork_url:
         return None, ""
     try:
@@ -342,7 +340,7 @@ def download_cover(session: Any, artwork_url: str) -> tuple[Optional[bytes], str
         return None, ""
 
 
-def attachment_cover(song: Any) -> tuple[Optional[bytes], str]:
+def attachment_cover(song: Any) -> tuple[bytes | None, str]:
     """Return the first downloaded image attachment of the Song, for a service that gives no artwork_url."""
     tracks = getattr(song, "tracks", None)
     for attachment in getattr(tracks, "attachments", None) or []:
@@ -353,7 +351,7 @@ def attachment_cover(song: Any) -> tuple[Optional[bytes], str]:
     return None, ""
 
 
-def usable_cover(cover_data: Optional[bytes], mime_type: str, name: str) -> tuple[Optional[bytes], str]:
+def usable_cover(cover_data: bytes | None, mime_type: str, name: str) -> tuple[bytes | None, str]:
     """Convert a WebP cover to JPEG, which every container takes, and drop one too large to embed."""
     if cover_data and mime_type == "image/webp":
         try:

@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from rich.padding import Padding
 from rich.rule import Rule
@@ -32,12 +32,12 @@ if TYPE_CHECKING:
 class DVFixup:
     """Demux a DV-composite HEVC track to an elementary HEVC file so mkvmerge exposes DV."""
 
-    def __init__(self, video: "Video") -> None:
+    def __init__(self, video: Video) -> None:
         self.log = logging.getLogger("dv-fixup")
         self.video = video
 
         if not FFMPEG:
-            raise EnvironmentError("ffmpeg is required for DV-composite fixup but was not found.")
+            raise OSError("ffmpeg is required for DV-composite fixup but was not found.")
         if not video.path or not Path(video.path).exists():
             raise ValueError(f"Video track {video.id} was not downloaded before DV fixup.")
 
@@ -84,7 +84,7 @@ class DVFixup:
         return fixed_hevc
 
 
-def apply_dv_fixup(video: "Video", keep_source: bool = False) -> Optional[Path]:
+def apply_dv_fixup(video: Video, keep_source: bool = False) -> Path | None:
     """Do the DV fixup on `video` if flagged as DV-composite and set `video.path` to the result.
 
     Deletes the source file. With `keep_source`, returns its path for the caller to delete.

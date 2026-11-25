@@ -8,9 +8,9 @@ server received, because the session dicts pass even with the leak in place.
 from __future__ import annotations
 
 import threading
+from collections.abc import Iterator
 from http.cookiejar import Cookie, CookieJar
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from typing import Iterator
 
 import pytest
 import rnet

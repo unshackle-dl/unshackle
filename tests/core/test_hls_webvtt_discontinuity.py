@@ -2,7 +2,6 @@ from functools import partial
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Optional
 
 from tests.core.test_dash_period_rebase import fragment, init_segment, server, tfdts
 from unshackle.core.manifests import HLS
@@ -23,7 +22,7 @@ def starts(text: str) -> list[str]:
 
 
 def rebase(texts: list[str], bounds_ms: list[int]) -> list[str]:
-    return [shift_webvtt(t, o) for t, o in zip(texts, webvtt_block_offsets(texts, bounds_ms))]
+    return [shift_webvtt(t, o) for t, o in zip(texts, webvtt_block_offsets(texts, bounds_ms), strict=False)]
 
 
 def test_restarting_blocks_move_to_their_playlist_start() -> None:
@@ -84,7 +83,7 @@ def playlist(names: list[str], init: str = "") -> bytes:
     return f"#EXTM3U\n#EXT-X-VERSION:6\n#EXT-X-TARGETDURATION:4\n{blocks}#EXT-X-ENDLIST\n".encode()
 
 
-def download(server: ThreadingHTTPServer, tmp_path: Path, codec: Optional[Subtitle.Codec] = None) -> Path:
+def download(server: ThreadingHTTPServer, tmp_path: Path, codec: Subtitle.Codec | None = None) -> Path:
     url = f"http://127.0.0.1:{server.server_address[1]}/master.m3u8"
     track = HLS.from_text(MASTER, url=url).to_tracks(language="en").subtitles[0]
     if codec:

@@ -9,12 +9,13 @@ remote session.
 from __future__ import annotations
 
 import asyncio
+import builtins
 import logging
 import uuid
 from collections import Counter, deque
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Any, Deque, Dict, List, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 from unshackle.core.api.events import bus
 from unshackle.core.api.input_bridge import AUTH_INPUT_TIMEOUT, InputBridge
@@ -37,33 +38,33 @@ class SessionEntry:
     service_tag: str
     service_instance: Any
     titles: Any = None  # Titles_T from get_titles()
-    title_map: Dict[str, Any] = field(default_factory=dict)
-    current_title_id: Optional[str] = None  # title the client last asked tracks for
-    tracks: Dict[str, Track] = field(default_factory=dict)
-    served_keys: Dict[str, tuple[str, str]] = field(
+    title_map: dict[str, Any] = field(default_factory=dict)
+    current_title_id: str | None = None  # title the client last asked tracks for
+    tracks: dict[str, Track] = field(default_factory=dict)
+    served_keys: dict[str, tuple[str, str]] = field(
         default_factory=dict
     )  # KID -> (KEY, serving vault name or "cdm") from server_cdm
-    tracks_by_title: Dict[str, Dict[str, Track]] = field(default_factory=dict)
-    chapters_by_title: Dict[str, List[Any]] = field(default_factory=dict)
+    tracks_by_title: dict[str, dict[str, Track]] = field(default_factory=dict)
+    chapters_by_title: dict[str, list[Any]] = field(default_factory=dict)
     lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False, compare=False)
-    creator_ip: Optional[str] = None
-    owner_key: Optional[str] = None  # X-Secret-Key that owns this session
-    cache_tag: Optional[str] = None
-    server_account: Optional[str] = None  # profile name when the server lent its own account
+    creator_ip: str | None = None
+    owner_key: str | None = None  # X-Secret-Key that owns this session
+    cache_tag: str | None = None
+    server_account: str | None = None  # profile name when the server lent its own account
     server_cdm: bool = False  # False: the client's own device licenses this session
-    server_cdm_max_height: Optional[int] = None
+    server_cdm_max_height: int | None = None
     server_vault: bool = False  # a session the client's device licenses may still take keys from the server vault
     server_device: bool = False  # its service runs on the server's lent device, so keys come only from a vault
     client_auth: bool = False  # the login is the client's: it succeeded without a server account
-    user_config: Optional[Dict[str, Any]] = None  # the serve.users entry the session was created with
-    input_bridge: Optional[InputBridge] = None
-    log_buffer: Optional[Any] = None  # SessionLogBuffer mirroring the service's self.log
+    user_config: dict[str, Any] | None = None  # the serve.users entry the session was created with
+    input_bridge: InputBridge | None = None
+    log_buffer: Any | None = None  # SessionLogBuffer mirroring the service's self.log
     channel: SessionChannel = field(default_factory=SessionChannel, repr=False, compare=False)
-    auth_error: Optional[str] = None
-    client: Dict[str, Any] = field(default_factory=dict)  # version/argv/platform the client reported
-    actions: Deque[Dict[str, Any]] = field(default_factory=lambda: deque(maxlen=500))
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    last_accessed: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    auth_error: str | None = None
+    client: dict[str, Any] = field(default_factory=dict)  # version/argv/platform the client reported
+    actions: deque[dict[str, Any]] = field(default_factory=lambda: deque(maxlen=500))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    last_accessed: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def __post_init__(self) -> None:
         if self.input_bridge is not None:
@@ -78,13 +79,13 @@ class SessionEntry:
 
     def add_tracks(self, title_id: str, tracks: Tracks) -> None:
         """Register the video, audio and subtitle tracks of a title, so the later routes find each one by its id."""
-        title_tracks: Dict[str, Track] = {str(t.id): t for t in [*tracks.videos, *tracks.audio, *tracks.subtitles]}
+        title_tracks: dict[str, Track] = {str(t.id): t for t in [*tracks.videos, *tracks.audio, *tracks.subtitles]}
         self.tracks.update(title_tracks)
         self.tracks_by_title[title_id] = title_tracks
 
     def touch(self) -> None:
         """Update last_accessed timestamp."""
-        self.last_accessed = datetime.now(timezone.utc)
+        self.last_accessed = datetime.now(UTC)
 
     @property
     def in_use(self) -> bool:
@@ -101,11 +102,11 @@ class SessionEntry:
             self.input_bridge.cancel()
         self.channel.end()
 
-    def summary(self, include_actions: bool = True) -> Dict[str, Any]:
+    def summary(self, include_actions: bool = True) -> dict[str, Any]:
         """Dashboard view of the session: no service instance, no raw owner key."""
         from unshackle.core.api.stats import mask_key
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         title_id = (
             self.current_title_id if self.current_title_id in self.title_map else next(iter(self.title_map), None)
         )
@@ -144,7 +145,7 @@ def _schedule_pending_reload(service_tag: str) -> None:
 
 
 def _publish(
-    action: str, entry: SessionEntry, reason: Optional[str] = None, action_entry: Optional[Dict[str, Any]] = None
+    action: str, entry: SessionEntry, reason: str | None = None, action_entry: dict[str, Any] | None = None
 ) -> None:
     """Tell dashboard listeners about a remote session; ``action_entry`` replaces the action log with that one action."""
     data = {"action": action, **entry.summary(include_actions=action_entry is None)}
@@ -159,9 +160,9 @@ class SessionStore:
     """Thread-safe remote session store with TTL-based expiration."""
 
     def __init__(self) -> None:
-        self._sessions: Dict[str, SessionEntry] = {}
+        self._sessions: dict[str, SessionEntry] = {}
         self._lock = asyncio.Lock()
-        self._cleanup_task: Optional[asyncio.Task] = None
+        self._cleanup_task: asyncio.Task | None = None
         self.draining = False
 
     @property
@@ -170,7 +171,7 @@ class SessionStore:
         return config.serve.get("session_ttl", 300)
 
     @property
-    def max_sessions(self) -> Optional[int]:
+    def max_sessions(self) -> int | None:
         """Max concurrent sessions from config; None when the operator set no limit.
 
         ``max_sessions: null`` or ``0`` means unlimited, so a dashboard can tell "no cap" from
@@ -183,24 +184,24 @@ class SessionStore:
         self,
         service_tag: str,
         service_instance: Any,
-        session_id: Optional[str] = None,
+        session_id: str | None = None,
         *,
-        owner_key: Optional[str] = None,
-        creator_ip: Optional[str] = None,
-        server_account: Optional[str] = None,
-        cache_tag: Optional[str] = None,
-        user_config: Optional[Dict[str, Any]] = None,
+        owner_key: str | None = None,
+        creator_ip: str | None = None,
+        server_account: str | None = None,
+        cache_tag: str | None = None,
+        user_config: dict[str, Any] | None = None,
         server_cdm: bool = False,
-        server_cdm_max_height: Optional[int] = None,
+        server_cdm_max_height: int | None = None,
         server_vault: bool = False,
         server_device: bool = False,
         client_auth: bool = False,
-        client: Optional[Dict[str, Any]] = None,
-        input_bridge: Optional[InputBridge] = None,
-        log_buffer: Optional[Any] = None,
+        client: dict[str, Any] | None = None,
+        input_bridge: InputBridge | None = None,
+        log_buffer: Any | None = None,
     ) -> SessionEntry:
         """Make a new remote session, complete with every field the dashboard shows, and announce it."""
-        evicted_tag: Optional[str] = None
+        evicted_tag: str | None = None
         async with self._lock:
             max_sessions = self.max_sessions
             if max_sessions is not None and len(self._sessions) >= max_sessions:
@@ -242,7 +243,7 @@ class SessionStore:
         await self.remove_cache_dirs([evicted_tag])
         return entry
 
-    async def get(self, session_id: str) -> Optional[SessionEntry]:
+    async def get(self, session_id: str) -> SessionEntry | None:
         """Get a remote session by ID, returns None if not found or expired."""
         async with self._lock:
             entry = self._sessions.get(session_id)
@@ -251,7 +252,7 @@ class SessionStore:
 
             expired = False
             if not entry.in_use and entry.auth_status != AuthStatus.AUTHENTICATING:
-                elapsed = (datetime.now(timezone.utc) - entry.last_accessed).total_seconds()
+                elapsed = (datetime.now(UTC) - entry.last_accessed).total_seconds()
                 if elapsed > self.ttl:
                     log.info(f"Session {sanitize_log(session_id)} expired (elapsed={elapsed:.0f}s, ttl={self.ttl}s)")
                     _publish("delete", self._sessions.pop(session_id), "expired")
@@ -264,7 +265,7 @@ class SessionStore:
         await self.remove_cache_dirs([entry.cache_tag])
         return None
 
-    def peek(self, session_id: str) -> Optional[SessionEntry]:
+    def peek(self, session_id: str) -> SessionEntry | None:
         """A remote session entry without touching it, for read-only observers.
 
         ``get`` refreshes ``last_accessed`` and expires stale entries, so an observer polling
@@ -288,7 +289,7 @@ class SessionStore:
     async def cleanup_expired(self) -> int:
         """Remove all expired sessions. Returns count of removed sessions."""
         async with self._lock:
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             expired = []
             for sid, entry in self._sessions.items():
                 if entry.in_use:
@@ -300,7 +301,7 @@ class SessionStore:
                 elif elapsed > self.ttl:
                     expired.append(sid)
             ended_tags: set[str] = set()
-            cache_tags: list[Optional[str]] = []
+            cache_tags: list[str | None] = []
             for sid in expired:
                 entry = self._sessions.pop(sid)
                 entry.end()
@@ -346,13 +347,13 @@ class SessionStore:
             log.info(f"Cancelled bridges for {count} active session(s)")
 
     @classmethod
-    async def remove_cache_dirs(cls, cache_tags: List[Optional[str]]) -> None:
+    async def remove_cache_dirs(cls, cache_tags: builtins.list[str | None]) -> None:
         """Remove the cache directories of ended remote sessions on a worker thread, outside the store lock."""
         if any(cache_tags):
             await asyncio.to_thread(lambda: [cls.cleanup_cache_dir(tag) for tag in cache_tags])
 
     @staticmethod
-    def cleanup_cache_dir(cache_tag: Optional[str]) -> None:
+    def cleanup_cache_dir(cache_tag: str | None) -> None:
         """Remove the remote session cache directory and empty parents."""
         if not cache_tag:
             return
@@ -378,7 +379,7 @@ class SessionStore:
         """Tell dashboard listeners that a session's summary changed (titles or tracks loaded, auth settled)."""
         _publish("update", entry)
 
-    def record_action(self, session_id: str, action: Dict[str, Any]) -> None:
+    def record_action(self, session_id: str, action: dict[str, Any]) -> None:
         """Append one request to the session's action log and tell dashboard listeners."""
         entry = self._sessions.get(session_id)
         if entry is None:
@@ -386,7 +387,7 @@ class SessionStore:
         entry.actions.append(action)
         _publish("update", entry, action_entry=action)
 
-    def list(self) -> List[SessionEntry]:
+    def list(self) -> builtins.list[SessionEntry]:
         """Snapshot of every live session."""
         return list(self._sessions.values())
 
@@ -414,7 +415,7 @@ class SessionStore:
         return len(self._sessions)
 
 
-session_store: Optional[SessionStore] = None
+session_store: SessionStore | None = None
 
 
 def refuse_while_draining() -> None:

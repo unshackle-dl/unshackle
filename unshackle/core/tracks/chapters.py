@@ -4,8 +4,9 @@ import os
 import re
 import threading
 from abc import ABC
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Any, Iterable, Optional, Union
+from typing import Any
 from zlib import crc32
 
 from sortedcontainers import SortedKeyList
@@ -17,7 +18,7 @@ OGM_SIMPLE_LINE_2_FORMAT = re.compile(r"^CHAPTER(?P<number>\d+)NAME=(?P<name>.*)
 
 
 class Chapters(SortedKeyList, ABC):
-    def __init__(self, iterable: Optional[Iterable[Chapter]] = None) -> None:
+    def __init__(self, iterable: Iterable[Chapter] | None = None) -> None:
         super().__init__(key=lambda x: x.timestamp or 0)
         for chapter in iterable or []:
             self.add(chapter)
@@ -45,7 +46,7 @@ class Chapters(SortedKeyList, ABC):
 
         chapters = []
 
-        for line_1, line_2 in zip(lines[::2], lines[1::2]):
+        for line_1, line_2 in zip(lines[::2], lines[1::2], strict=False):
             line_1_match = OGM_SIMPLE_LINE_1_FORMAT.match(line_1)
             if not line_1_match:
                 raise SyntaxError(f"An unexpected syntax error occurred on: {line_1}")
@@ -69,7 +70,7 @@ class Chapters(SortedKeyList, ABC):
         return cls(chapters)
 
     @classmethod
-    def load(cls, path: Union[Path, str]) -> Chapters:
+    def load(cls, path: Path | str) -> Chapters:
         """Load chapter data from a file."""
         if isinstance(path, str):
             path = Path(path)
@@ -107,7 +108,7 @@ class Chapters(SortedKeyList, ABC):
 
         return "\n".join(chapters)
 
-    def dump(self, path: Union[Path, str], *args: Any, **kwargs: Any) -> int:
+    def dump(self, path: Path | str, *args: Any, **kwargs: Any) -> int:
         """
         Write chapter data in OGM-based Simple Chapter format to a file.
 

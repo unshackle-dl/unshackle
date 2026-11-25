@@ -4,7 +4,6 @@ import mimetypes
 import os
 import re
 from pathlib import Path
-from typing import Optional, Union
 from urllib.parse import urlparse
 from zlib import crc32
 
@@ -17,12 +16,12 @@ from unshackle.core.utils import run_proxy
 class Attachment:
     def __init__(
         self,
-        path: Union[Path, str, None] = None,
-        url: Optional[str] = None,
-        name: Optional[str] = None,
-        mime_type: Optional[str] = None,
-        description: Optional[str] = None,
-        session: Optional[AnySession] = None,
+        path: Path | str | None = None,
+        url: str | None = None,
+        name: str | None = None,
+        mime_type: str | None = None,
+        description: str | None = None,
+        session: AnySession | None = None,
     ) -> None:
         """
         Make a new Attachment.
@@ -47,7 +46,7 @@ class Attachment:
 
         self.url = url
         self.session = session
-        self.file_name: Optional[str] = None
+        self.file_name: str | None = None
 
         if url:
             if not isinstance(url, str):
@@ -96,10 +95,10 @@ class Attachment:
 
     def download(
         self,
-        session: Optional[AnySession] = None,
+        session: AnySession | None = None,
         *,
         no_proxy_download: bool = False,
-        proxy_download: Optional[str] = None,
+        proxy_download: str | None = None,
     ) -> None:
         """Download a URL-backed attachment to the temp directory with the same retries as a track."""
         if self.path is not None or not self.url or DOWNLOAD_LICENCE_ONLY.is_set():
@@ -135,7 +134,7 @@ class Attachment:
     def __str__(self) -> str:
         return " | ".join(filter(None, ["ATT", self.name, self.mime_type, self.description]))
 
-    def to_dict(self) -> dict[str, Optional[str]]:
+    def to_dict(self) -> dict[str, str | None]:
         """The attachment in the export form; see ``wire.attachment_to_dict``."""
         from unshackle.core.wire import attachment_to_dict
 
@@ -162,11 +161,11 @@ class Attachment:
     def from_url(
         cls,
         url: str,
-        name: Optional[str] = None,
-        mime_type: Optional[str] = None,
-        description: Optional[str] = None,
-        session: Optional[AnySession] = None,
-    ) -> "Attachment":
+        name: str | None = None,
+        mime_type: str | None = None,
+        description: str | None = None,
+        session: AnySession | None = None,
+    ) -> Attachment:
         """
         Make an attachment from a URL.
 

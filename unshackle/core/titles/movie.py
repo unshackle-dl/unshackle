@@ -1,6 +1,7 @@
 import re
 from abc import ABC
-from typing import Any, Iterable, Optional, Union
+from collections.abc import Iterable
+from typing import Any
 
 from langcodes import Language
 from pymediainfo import MediaInfo
@@ -20,10 +21,10 @@ class Movie(Title):
         id_: Any,
         service: type,
         name: str,
-        year: Optional[Union[int, str]] = None,
-        language: Optional[Union[str, Language]] = None,
-        data: Optional[Any] = None,
-        description: Optional[str] = None,
+        year: int | str | None = None,
+        language: str | Language | None = None,
+        data: Any | None = None,
+        description: str | None = None,
     ) -> None:
         super().__init__(id_, service, language, data)
 
@@ -61,7 +62,7 @@ class Movie(Title):
 
     def get_filename(self, media_info: MediaInfo, folder: bool = False, show_service: bool = True) -> str:
         if folder:
-            template: Optional[str] = config.get_folder_template("movies")
+            template: str | None = config.get_folder_template("movies")
             if template:
                 context = self.build_template_context(media_info, show_service)
                 spacer = detect_spacer(template)  # one style for the whole path
@@ -86,7 +87,7 @@ class Movie(Title):
 
 
 class Movies(SortedKeyList, ABC):
-    def __init__(self, iterable: Optional[Iterable] = None) -> None:
+    def __init__(self, iterable: Iterable | None = None) -> None:
         super().__init__(iterable, key=lambda x: x.year or 0)
 
     def __str__(self) -> str:

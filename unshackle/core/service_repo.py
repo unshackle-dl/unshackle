@@ -6,7 +6,6 @@ import shutil
 import subprocess  # nosec B404 - git is resolved via binaries.find, args are composed locally
 import time
 from pathlib import Path
-from typing import Optional
 
 from unshackle.core import binaries
 
@@ -63,10 +62,10 @@ def is_repo_spec(value: object) -> bool:
     return bool(SHORTHAND_RE.match(base)) and not Path(value).expanduser().exists()
 
 
-def parse_spec(spec: str) -> tuple[str, Optional[str], str]:
+def parse_spec(spec: str) -> tuple[str, str | None, str]:
     """Return (clone_url, branch, dest_name). This function honours `@branch` for http/shorthand, not for ssh."""
     is_ssh = spec.startswith(("git@", "ssh://"))
-    branch: Optional[str] = None
+    branch: str | None = None
     url = spec
     if not is_ssh and "@" in spec:
         url, branch = spec.rsplit("@", 1)
@@ -96,7 +95,7 @@ def repos_base() -> Path:
     return Config._Directories.namespace_dir / "services" / "_repos"
 
 
-def resolve_service_repo(spec: str, *, ttl: int = DEFAULT_TTL, force: bool = False) -> Optional[Path]:
+def resolve_service_repo(spec: str, *, ttl: int = DEFAULT_TTL, force: bool = False) -> Path | None:
     """Find the local clone dir of a repo spec.
 
     First use clones it. Only a TTL-stale clone touches the network. With ``force=True``
@@ -116,7 +115,7 @@ def resolve_service_repo(spec: str, *, ttl: int = DEFAULT_TTL, force: bool = Fal
     return dest
 
 
-def clone(url: str, branch: Optional[str], dest: Path, stamp: Path) -> Optional[Path]:
+def clone(url: str, branch: str | None, dest: Path, stamp: Path) -> Path | None:
     if not binaries.Git:
         log.error("git not found on PATH; cannot fetch service repo %s", url)
         return None
@@ -151,7 +150,7 @@ def pull(dest: Path, stamp: Path) -> None:
     write_stamp(stamp)  # stamp regardless so a flaky remote can't trigger a fetch every run (force overrides)
 
 
-def refresh_repo(spec: str) -> tuple[Optional[Path], list[str]]:
+def refresh_repo(spec: str) -> tuple[Path | None, list[str]]:
     """Force-sync a repo to upstream and return (clone dir, git-style per-service change lines).
 
     Used by the manual ``refresh-services`` command. Each line is one service tag with a status
@@ -173,7 +172,7 @@ def refresh_repo(spec: str) -> tuple[Optional[Path], list[str]]:
     return dest, lines
 
 
-def head(dest: Path) -> Optional[str]:
+def head(dest: Path) -> str | None:
     r = subprocess.run([str(binaries.Git), "-C", str(dest), "rev-parse", "HEAD"], capture_output=True)  # nosec B603
     return r.stdout.decode(errors="ignore").strip() if r.returncode == 0 else None
 
@@ -188,7 +187,7 @@ def local_dirty_services(dest: Path) -> list[str]:
     return sorted({line.split("/")[0] for line in r.stdout.decode(errors="ignore").splitlines() if line})
 
 
-def changed_services(dest: Path, old: Optional[str], new: Optional[str]) -> list[str]:
+def changed_services(dest: Path, old: str | None, new: str | None) -> list[str]:
     """Summarise a HEAD old->new diff as one ``+TAG``/``~TAG``/``-TAG`` token per top-level service directory."""
     if not old or not new or old == new:
         return []

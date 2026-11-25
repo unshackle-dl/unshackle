@@ -21,7 +21,7 @@ import socket
 import ssl
 import struct
 import threading
-from typing import Any, Optional
+from typing import Any
 from urllib.parse import unquote, urlsplit
 
 import aiohttp
@@ -80,7 +80,7 @@ def frame(sid: int, kind: int, data: bytes = b"") -> bytes:
     return HEADER.pack(sid, kind) + data
 
 
-def new_queue() -> asyncio.Queue[Optional[bytes]]:
+def new_queue() -> asyncio.Queue[bytes | None]:
     return asyncio.Queue(maxsize=BACKLOG + 1)  # the extra slot always takes the end marker
 
 
@@ -90,7 +90,7 @@ class Link:
     def __init__(self, ws: Any) -> None:
         self.ws = ws
         self.lock = asyncio.Lock()
-        self.streams: dict[int, asyncio.Queue[Optional[bytes]]] = {}
+        self.streams: dict[int, asyncio.Queue[bytes | None]] = {}
 
     async def send(self, sid: int, kind: int, data: bytes = b"") -> None:
         async with self.lock:
@@ -106,7 +106,7 @@ class Link:
         finally:
             await self.close_stream(sid)  # the peer does not echo CLOSE, so this also ends our drain
 
-    async def drain(self, q: asyncio.Queue[Optional[bytes]], writer: asyncio.StreamWriter) -> None:
+    async def drain(self, q: asyncio.Queue[bytes | None], writer: asyncio.StreamWriter) -> None:
         """Copy the bytes that the peer sends for one connection into a socket, then close the socket."""
         try:
             while (chunk := await q.get()) is not None:
@@ -144,29 +144,29 @@ class Link:
             self.end(sid)
 
     async def relay(
-        self, sid: int, q: asyncio.Queue[Optional[bytes]], reader: asyncio.StreamReader, writer: asyncio.StreamWriter
+        self, sid: int, q: asyncio.Queue[bytes | None], reader: asyncio.StreamReader, writer: asyncio.StreamWriter
     ) -> None:
         await asyncio.gather(self.pump(sid, reader), self.drain(q, writer))
 
 
-TUNNELS: dict[str, "Tunnel"] = {}
+TUNNELS: dict[str, Tunnel] = {}
 
 
 class Tunnel:
     """The server side of one client's tunnel: a loopback SOCKS5 listener and the client's current link."""
 
-    def __init__(self, owner: Optional[str], client: Optional[str] = None) -> None:
+    def __init__(self, owner: str | None, client: str | None = None) -> None:
         self.id = secrets.token_urlsafe(16)
         self.secret = secrets.token_urlsafe(24)
         self.owner = owner
         self.client = client
-        self.link: Optional[Link] = None
+        self.link: Link | None = None
         self.pending: dict[int, asyncio.Future[bool]] = {}
         self.sids = itertools.count(1)
-        self.listener: Optional[asyncio.Server] = None
-        self.expiry: Optional[asyncio.TimerHandle] = None
+        self.listener: asyncio.Server | None = None
+        self.expiry: asyncio.TimerHandle | None = None
         self.linked = asyncio.Event()
-        self.closing: Optional[asyncio.Task[None]] = None
+        self.closing: asyncio.Task[None] | None = None
 
     @property
     def port(self) -> int:
@@ -216,12 +216,12 @@ class Tunnel:
                 fut.set_result(False)
             link.end(sid)
 
-    async def wait_link(self) -> Optional[Link]:
+    async def wait_link(self) -> Link | None:
         """The current link, waiting ``RELINK_WAIT`` seconds for a dropped one to come back."""
         if not self.link:
             try:
                 await asyncio.wait_for(self.linked.wait(), RELINK_WAIT)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 pass
         return self.link
 
@@ -275,7 +275,7 @@ class Tunnel:
         try:
             await link.send(sid, OPEN, port + host.encode())
             ok = await asyncio.wait_for(fut, OPEN_TIMEOUT)
-        except (asyncio.TimeoutError, asyncio.CancelledError, ConnectionError, RuntimeError):
+        except (TimeoutError, asyncio.CancelledError, ConnectionError, RuntimeError):
             pass
         if not ok:
             self.pending.pop(sid, None)
@@ -311,7 +311,7 @@ class Tunnel:
         self.closing = asyncio.ensure_future(self.close())  # held, so the loop cannot drop the task
 
 
-def tunnel_proxy(tunnel_id: str, owner: Optional[str]) -> Optional[str]:
+def tunnel_proxy(tunnel_id: str, owner: str | None) -> str | None:
     """The loopback proxy URI for the tunnel ``tunnel_id`` that the caller owns, or None."""
     tunnel = TUNNELS.get(tunnel_id)
     return tunnel.proxy_uri if tunnel and tunnel.owner == owner else None
@@ -322,7 +322,7 @@ async def close_tunnels(_: web.Application) -> None:
         await tunnel.close()
 
 
-def parse_ip(address: str) -> Optional[ipaddress.IPv4Address | ipaddress.IPv6Address]:
+def parse_ip(address: str) -> ipaddress.IPv4Address | ipaddress.IPv6Address | None:
     try:
         return ipaddress.ip_address(address.partition("%")[0])
     except ValueError:
@@ -373,7 +373,7 @@ async def connect_public(host: str, port: int) -> tuple[asyncio.StreamReader, as
     for address in addresses:
         try:
             reader, writer = await asyncio.wait_for(asyncio.open_connection(address, port), 10)
-        except (OSError, asyncio.TimeoutError) as e:
+        except (TimeoutError, OSError) as e:
             error = OSError(str(e))
             continue
         if not dialled_itself(writer):
@@ -408,7 +408,7 @@ async def check_proxied_target(host: str, port: int) -> None:
         infos = await asyncio.get_running_loop().getaddrinfo(host, port, type=socket.SOCK_STREAM)
     except (OSError, UnicodeError):
         if is_ip_literal(host):
-            raise PermissionError(f"{host} is not a public address")
+            raise PermissionError(f"{host} is not a public address") from None
         return
     allowed_addresses(host, [str(info[4][0]) for info in infos])
 
@@ -488,14 +488,14 @@ async def socks5_handshake(
     await reader.readexactly(length + 2)
 
 
-def parse_retry_after(value: Optional[str]) -> Optional[int]:
+def parse_retry_after(value: str | None) -> int | None:
     """Whole seconds, at least 1, from a delay-seconds Retry-After; None for an absent, HTTP-date or malformed one."""
     if not value or len(value) > 9 or not (value.isascii() and value.isdigit()):
         return None
     return max(1, int(value))
 
 
-def retry_after(e: aiohttp.WSServerHandshakeError) -> Optional[int]:
+def retry_after(e: aiohttp.WSServerHandshakeError) -> int | None:
     """The Retry-After seconds of a rate-limit refusal, or None for any other refusal."""
     return parse_retry_after(CIMultiDict(e.headers or {}).get("Retry-After")) if e.status == 429 else None
 
@@ -512,22 +512,22 @@ def refusal(e: aiohttp.WSServerHandshakeError) -> str:
 class TunnelClient:
     """The client side: a background thread that keeps the tunnel's WebSocket open and dials for the server."""
 
-    def __init__(self, server_url: str, headers: dict[str, str], proxy: Optional[str] = None) -> None:
+    def __init__(self, server_url: str, headers: dict[str, str], proxy: str | None = None) -> None:
         self.url = server_url.rstrip("/") + ROUTE
         self.headers = headers
         self.proxy = proxy
         self.proxy_failed = False
-        self.id: Optional[str] = None
-        self.error: Optional[BaseException] = None
-        self.retry_after: Optional[int] = None
+        self.id: str | None = None
+        self.error: BaseException | None = None
+        self.retry_after: int | None = None
         self.at_limit = False
         self.lost = False
         self.ready = threading.Event()
         self.relays: set[asyncio.Task[None]] = set()
         self.refused: set[str] = set()
         self.thread = threading.Thread(target=lambda: asyncio.run(self.run()), name="tunnel", daemon=True)
-        self.loop: Optional[asyncio.AbstractEventLoop] = None
-        self.task: Optional[asyncio.Task[None]] = None
+        self.loop: asyncio.AbstractEventLoop | None = None
+        self.task: asyncio.Task[None] | None = None
 
     def start(self, timeout: float = 20) -> str:
         """Open the tunnel and return its id."""
@@ -577,7 +577,7 @@ class TunnelClient:
                             log.warning(f"The server closed the tunnel (HTTP {e.status}), so its requests now fail")
                         self.ready.set()
                         return
-                except (aiohttp.ClientError, asyncio.TimeoutError, ValueError, KeyError, TypeError) as e:
+                except (TimeoutError, aiohttp.ClientError, ValueError, KeyError, TypeError) as e:
                     self.error = e
                     if not self.id:
                         self.ready.set()
@@ -620,7 +620,7 @@ class TunnelClient:
                 log.warning(f"Tunnel refused {e}")
             await link.close_stream(sid)
             return
-        except (OSError, ValueError, asyncio.TimeoutError) as e:  # the idna codec raises ValueError on a bad hostname
+        except (TimeoutError, OSError, ValueError) as e:  # the idna codec raises ValueError on a bad hostname
             if self.proxy and not self.proxy_failed:
                 self.proxy_failed = True
                 log.warning(f"Tunnel dial through the proxy failed: {str(e) or 'timed out'}")

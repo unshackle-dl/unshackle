@@ -1,8 +1,9 @@
 """The dl front door: one checked run plan from a dl click parse or a REST API job, and what the run gave back."""
 
+from collections.abc import Collection, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Collection, Mapping, Optional, Union
+from typing import Any
 
 import click
 from click.core import ParameterSource
@@ -39,7 +40,7 @@ class RunOutcome:
 
     files: list[Path] = field(default_factory=list)
     skipped_subtitles: list[Any] = field(default_factory=list)
-    error: Optional[BaseException] = None
+    error: BaseException | None = None
 
 
 @dataclass(frozen=True)
@@ -60,10 +61,10 @@ class RunPlan:
 
 
 def validate_metadata_ids(
-    tmdb_id: Optional[int],
-    imdb_id: Optional[str],
-    tvdb_id: Optional[int],
-    anilist_id: Optional[Union[int, str]] = None,
+    tmdb_id: int | None,
+    imdb_id: str | None,
+    tvdb_id: int | None,
+    anilist_id: int | str | None = None,
 ) -> None:
     """Reject ID flags that conflict, or that no configured metadata provider could ever find.
 
@@ -95,7 +96,7 @@ def validate_metadata_ids(
     raise PlanError(f"{flag} needs the {' or '.join(names)} provider, which your metadata_providers config leaves out.")
 
 
-def bitrate_range(value: Optional[str], flag: str, example: str) -> Optional[tuple[int, int]]:
+def bitrate_range(value: str | None, flag: str, example: str) -> tuple[int, int] | None:
     """A ``MIN-MAX`` bitrate range as (low, high), in either order."""
     if not value:
         return None
@@ -174,7 +175,7 @@ def check_options(params: Mapping[str, Any]) -> None:
             raise PlanError("Unable to run hybrid mode: dovi_tool not found")
 
 
-def api_plan(params: Mapping[str, Any], client_keys: Optional[Collection[str]] = None) -> RunPlan:
+def api_plan(params: Mapping[str, Any], client_keys: Collection[str] | None = None) -> RunPlan:
     """The checked run plan of a REST API job from its parameters, by API name.
 
     A value counts as typed on the command line when its API name is in ``client_keys`` (every parameter when None),

@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import threading
 import time
+from datetime import UTC
 from types import SimpleNamespace
 
 import pytest
@@ -71,10 +72,10 @@ async def test_delete_returns_false_when_missing(store: SessionStore) -> None:
 
 
 async def test_cleanup_expired_drops_old_authenticated(store: SessionStore, monkeypatch: pytest.MonkeyPatch) -> None:
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
     entry = await store.create("EXAMPLE", _FakeService())
-    entry.last_accessed = datetime.now(timezone.utc) - timedelta(seconds=store.ttl + 100)
+    entry.last_accessed = datetime.now(UTC) - timedelta(seconds=store.ttl + 100)
     removed = await store.cleanup_expired()
     assert removed == 1
     assert store.session_count == 0
@@ -82,10 +83,10 @@ async def test_cleanup_expired_drops_old_authenticated(store: SessionStore, monk
 
 async def test_session_with_work_in_progress_does_not_expire(store: SessionStore) -> None:
     """A request that holds the lock for longer than the TTL keeps its session and cache directory."""
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
     entry = await store.create("EXAMPLE", _FakeService(), session_id="busy")
-    entry.last_accessed = datetime.now(timezone.utc) - timedelta(seconds=store.ttl + 100)
+    entry.last_accessed = datetime.now(UTC) - timedelta(seconds=store.ttl + 100)
     async with entry.lock:
         assert await store.cleanup_expired() == 0
         assert await store.get("busy") is entry
@@ -93,31 +94,31 @@ async def test_session_with_work_in_progress_does_not_expire(store: SessionStore
 
 async def test_cleanup_expired_keeps_a_login_under_grace(store: SessionStore) -> None:
     """A session that still logs in, a prompt included, gets a longer grace period (10 min) than authenticated TTL."""
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
     entry = await store.create("EXAMPLE", _FakeService(), input_bridge=InputBridge())
-    entry.last_accessed = datetime.now(timezone.utc) - timedelta(seconds=store.ttl + 1)
+    entry.last_accessed = datetime.now(UTC) - timedelta(seconds=store.ttl + 1)
     removed = await store.cleanup_expired()
     assert removed == 0
     assert store.session_count == 1
 
 
 async def test_get_keeps_a_login_past_the_ttl(store: SessionStore) -> None:
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
     entry = await store.create("EXAMPLE", _FakeService(), input_bridge=InputBridge())
-    entry.last_accessed = datetime.now(timezone.utc) - timedelta(seconds=store.ttl + 1)
+    entry.last_accessed = datetime.now(UTC) - timedelta(seconds=store.ttl + 1)
     assert await store.get(entry.session_id) is entry
 
 
 async def test_cleanup_expired_drops_a_login_past_grace(store: SessionStore) -> None:
     """The auth-state grace is the single AUTH_INPUT_TIMEOUT rule, not a separate magic number."""
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
     from unshackle.core.api.input_bridge import AUTH_INPUT_TIMEOUT
 
     entry = await store.create("EXAMPLE", _FakeService(), input_bridge=InputBridge())
-    entry.last_accessed = datetime.now(timezone.utc) - timedelta(seconds=AUTH_INPUT_TIMEOUT + 1)
+    entry.last_accessed = datetime.now(UTC) - timedelta(seconds=AUTH_INPUT_TIMEOUT + 1)
     removed = await store.cleanup_expired()
     assert removed == 1
     assert store.session_count == 0
@@ -167,13 +168,13 @@ async def test_max_sessions_evicts_the_oldest_session_of_the_key_that_holds_the_
 
 
 async def test_get_expiry_removes_cache_dir(store: SessionStore, monkeypatch: pytest.MonkeyPatch) -> None:
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
     removed: list = []
     monkeypatch.setattr(SessionStore, "cleanup_cache_dir", staticmethod(removed.append))
     entry = await store.create("EXAMPLE", _FakeService())
     entry.cache_tag = "_sessions/k/s/EXAMPLE"
-    entry.last_accessed = datetime.now(timezone.utc) - timedelta(seconds=store.ttl + 100)
+    entry.last_accessed = datetime.now(UTC) - timedelta(seconds=store.ttl + 100)
     assert await store.get(entry.session_id) is None
     assert removed == ["_sessions/k/s/EXAMPLE"]
 
@@ -251,12 +252,12 @@ async def test_eviction_applies_staged_service_reload(store: SessionStore, monke
 async def test_inline_expiry_applies_staged_service_reload(
     store: SessionStore, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
     applied = _stage_reload(monkeypatch, {"EXAMPLE"})
 
     entry = await store.create("EXAMPLE", _FakeService())
-    entry.last_accessed = datetime.now(timezone.utc) - timedelta(seconds=store.ttl + 100)
+    entry.last_accessed = datetime.now(UTC) - timedelta(seconds=store.ttl + 100)
     assert await store.get(entry.session_id) is None
     await asyncio.sleep(0.05)
     assert applied == [set()]
@@ -266,10 +267,10 @@ async def test_cleanup_expired_applies_staged_service_reload_once(
     store: SessionStore, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A cleanup sweep that drops several sessions on one tag schedules one reload for that tag."""
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
     applied = _stage_reload(monkeypatch, {"EXAMPLE"})
-    stale = datetime.now(timezone.utc) - timedelta(seconds=store.ttl + 100)
+    stale = datetime.now(UTC) - timedelta(seconds=store.ttl + 100)
     for sid in ("a", "b"):
         (await store.create("EXAMPLE", _FakeService(), session_id=sid)).last_accessed = stale
 
