@@ -38,7 +38,6 @@ from unshackle.core.manifests.segment_pipeline import (
     complete_track,
     fetch_segments,
     license_drm,
-    licensing,
 )
 from unshackle.core.manifests.trim import trim_overlaps
 from unshackle.core.session import RnetSession
@@ -641,15 +640,8 @@ class DASH:
             pssh_init = init_data
             track.drm_from_pssh(cdm, lambda system: system.from_init_data(pssh_init), log)
 
-        if track.drm:
-            track_kid = track_kid or track.get_key_id(url=segments[0][0], session=session)
-            drm = track.get_drm_for_cdm(cdm)
-            if isinstance(drm, (Widevine, PlayReady, ClearKeyCENC)):
-                # license and grab content keys (ClearKeyCENC uses no CDM)
-                with licensing(ctx):
-                    license_drm(drm, ctx, track_kid=track_kid)
-        else:
-            drm = None
+        drm = track.get_drm_for_cdm(cdm)
+        license_drm(track, drm, ctx, track_kid, probe=lambda: track.get_key_id(url=segments[0][0], session=session))
 
         if DOWNLOAD_LICENCE_ONLY.is_set():
             progress(downloaded="[yellow]SKIPPED")

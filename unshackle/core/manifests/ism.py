@@ -35,7 +35,6 @@ from unshackle.core.manifests.segment_pipeline import (
     complete_track,
     fetch_segments,
     license_drm,
-    licensing,
 )
 from unshackle.core.session import RnetSession
 from unshackle.core.tracks import Audio, DownloadContext, Subtitle, Track, Tracks, Video, resume
@@ -419,14 +418,8 @@ class ISM:
             segments = segments[kept]
             track.data["ism"]["fragment_times"] = segment_times[kept]
 
-        session_drm = None
-        if track.drm:
-            # Mirror HLS.download_track: pick the DRM matching the provided CDM
-            # (or the first available) and license it if supported.
-            session_drm = track.get_drm_for_cdm(ctx.cdm)
-            if isinstance(session_drm, (Widevine, PlayReady)):
-                with licensing(ctx):
-                    license_drm(session_drm, ctx)
+        session_drm = track.get_drm_for_cdm(ctx.cdm)
+        license_drm(track, session_drm, ctx)
 
         if DOWNLOAD_LICENCE_ONLY.is_set():
             progress(downloaded="[yellow]SKIPPED")

@@ -12,14 +12,16 @@ from concurrent.futures import Future
 from contextlib import ExitStack, closing, contextmanager
 from pathlib import Path
 from typing import Any, BinaryIO, Callable, Iterator, Optional
+from uuid import UUID
 
 from unshackle.core.constants import DOWNLOAD_CANCELLED, AnyTrack
-from unshackle.core.drm import DRM_T
+from unshackle.core.drm import DRM_T, ClearKeyCENC, MonaLisa, PlayReady, Widevine
 from unshackle.core.drm.segment_decrypt import SegmentDecrypter
 from unshackle.core.drm.verify import decrypt_track
 from unshackle.core.events import events
+from unshackle.core.remote_protocol import APIErrorCode, coded
 from unshackle.core.session import AnySession
-from unshackle.core.tracks import DownloadContext, resume
+from unshackle.core.tracks import DownloadContext, Track, resume
 from unshackle.core.tracks.track import assert_fragments_decrypted
 from unshackle.core.utilities import log_event, try_ensure_utf8
 
@@ -92,13 +94,46 @@ def licensing(ctx: DownloadContext) -> Iterator[None]:
         raise
 
 
-def license_drm(drm: DRM_T, ctx: DownloadContext, **kwargs: Any) -> None:
-    """Call ctx.license_widevine for one DRM, with the LICENSING and LICENSED progress around it."""
-    if not ctx.license_widevine:
-        raise ValueError("license_widevine func must be supplied to use DRM")
-    ctx.progress(downloaded="LICENSING")
-    ctx.license_widevine(drm, **kwargs)
-    ctx.progress(downloaded="[yellow]LICENSED")
+LICENSABLE: dict[Track.Descriptor, tuple[type, ...]] = {
+    Track.Descriptor.URL: (Widevine, PlayReady, ClearKeyCENC),
+    Track.Descriptor.DASH: (Widevine, PlayReady, ClearKeyCENC),
+    Track.Descriptor.HLS: (Widevine, PlayReady, MonaLisa),
+    Track.Descriptor.ISM: (Widevine, PlayReady),
+}
+"""The DRM systems the licence step licenses, by the kind of manifest the track comes from."""
+
+
+def license_drm(
+    track: AnyTrack,
+    drm: Optional[DRM_T],
+    ctx: DownloadContext,
+    kid: Optional[UUID] = None,
+    probe: Optional[Callable[[], Optional[UUID]]] = None,
+) -> None:
+    """The licence step: get the content keys of `drm` for `track` through ctx.license_widevine, with progress.
+
+    A DRM system that LICENSABLE does not list for the track gets no licence. The track KID is `kid`, else
+    what `probe` reads from the init. An HLS or ISM DRM comes from the track's own key tag or protection
+    header, so its first KID stands in when the init names none. A MonaLisa DRM gets no KID: its ticket gives
+    the track's own key. A failed `probe` fails only this track; a failed licence cancels the run.
+    ctx.license_widevine licenses every DRM system; dl and services pass it by keyword.
+    """
+    if not isinstance(drm, LICENSABLE[track.descriptor]):
+        return
+    track_kid = None
+    if not isinstance(drm, MonaLisa):
+        track_kid = kid or (probe() if probe else None)
+        if not track_kid and track.descriptor in (Track.Descriptor.HLS, Track.Descriptor.ISM):
+            track_kid = getattr(drm, "kid", None)
+    with licensing(ctx):
+        if not ctx.license_widevine:
+            raise coded(
+                ValueError(f"No licence callback for the {type(drm).__name__} DRM of track {track.id}"),
+                APIErrorCode.DRM_ERROR,
+            )
+        ctx.progress(downloaded="LICENSING")
+        ctx.license_widevine(drm, track_kid=track_kid)
+        ctx.progress(downloaded="[yellow]LICENSED")
 
 
 def fetch_segments(

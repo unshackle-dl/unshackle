@@ -32,7 +32,7 @@ from unshackle.core import binaries
 from unshackle.core.cdm.detect import cdm_type_stub, is_playready_cdm, is_widevine_cdm
 from unshackle.core.config import config
 from unshackle.core.constants import DOWNLOAD_ALL_DRM, DOWNLOAD_LICENCE_ONLY, AnyTrack
-from unshackle.core.drm import DRM_T, ClearKey, ClearKeyCENC, MonaLisa, PlayReady, Widevine
+from unshackle.core.drm import DRM_T, ClearKey, ClearKeyCENC, PlayReady, Widevine
 from unshackle.core.drm.segment_decrypt import SegmentDecrypter, can_use
 from unshackle.core.drm.verify import decrypt_track
 from unshackle.core.events import events
@@ -709,7 +709,6 @@ class HLS:
                 )
                 media_drm = HLS.get_drm(media_playlist_key, session, **({"kid": init_kid} if init_kid else {}))
                 if isinstance(media_drm, (Widevine, PlayReady)):
-                    track_kid = init_kid or media_drm.kid
                     # Preserve pre-existing keys (e.g. from server_cdm)
                     if track.drm:
                         for existing_drm in track.drm:
@@ -718,8 +717,7 @@ class HLS:
                     track.drm = [media_drm]
                     if DOWNLOAD_ALL_DRM.is_set():
                         track.drm += HLS.alternate_drm(media_keys, media_drm, session, init_kid)
-                    with licensing(ctx):
-                        license_drm(media_drm, ctx, track_kid=track_kid)
+                    license_drm(track, media_drm, ctx, init_kid)
                     initial_drm_licensed = True
                     initial_drm_key = media_playlist_key
                     session_drm = media_drm
@@ -730,14 +728,8 @@ class HLS:
                     initial_drm_key = media_playlist_key
                     initial_drm_licensed = True
 
-        if not initial_drm_licensed and session_drm and isinstance(session_drm, (Widevine, PlayReady)):
-            with licensing(ctx):
-                track_kid = HLS.get_track_kid_from_init(master, track, session) or session_drm.kid
-                license_drm(session_drm, ctx, track_kid=track_kid)
-
-        if not initial_drm_licensed and session_drm and isinstance(session_drm, MonaLisa):
-            with licensing(ctx):
-                license_drm(session_drm, ctx)
+        if not initial_drm_licensed:
+            license_drm(track, session_drm, ctx, probe=lambda: HLS.get_track_kid_from_init(master, track, session))
 
         if DOWNLOAD_LICENCE_ONLY.is_set():
             # a playlist can change its key part-way, and only the download loop licenses the later keys
@@ -750,8 +742,7 @@ class HLS:
                     continue
                 licensed_keys.append(key)
                 later_drm = HLS.get_drm_or_probe(key, master, track, session, segment.init_section)
-                if isinstance(later_drm, (Widevine, PlayReady)) and license_widevine:
-                    license_widevine(later_drm, track_kid=later_drm.kid)
+                license_drm(track, later_drm, ctx)
             progress(downloaded="[yellow]SKIPPED")
             return
 
@@ -1080,8 +1071,7 @@ class HLS:
                     with licensing(ctx):
                         init_kid = track.get_key_id(map_data[1]) if map_data and key.method != "AES-128" else None
                         drm = HLS.get_drm(key, session, **({"kid": init_kid} if init_kid else {}))
-                        if isinstance(drm, (Widevine, PlayReady)):
-                            license_drm(drm, ctx, track_kid=init_kid or drm.kid)
+                    license_drm(track, drm, ctx, init_kid)
                     if (
                         encryption_data
                         and isinstance(drm, (Widevine, PlayReady))

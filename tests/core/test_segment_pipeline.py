@@ -11,8 +11,9 @@ from uuid import UUID
 
 import pytest
 
+from tests.core.test_all_drm import playready, widevine
 from unshackle.core.constants import DOWNLOAD_CANCELLED
-from unshackle.core.drm import verify
+from unshackle.core.drm import ClearKey, ClearKeyCENC, MonaLisa, verify
 from unshackle.core.events import events
 from unshackle.core.manifests.segment_pipeline import (
     RollingMerge,
@@ -20,9 +21,9 @@ from unshackle.core.manifests.segment_pipeline import (
     complete_track,
     fetch_segments,
     license_drm,
-    licensing,
 )
-from unshackle.core.tracks.track import DownloadContext
+from unshackle.core.remote_protocol import APIErrorCode
+from unshackle.core.tracks.track import DownloadContext, Track
 
 INIT = b"init" * 8
 DECRYPTED_INIT = b"clear-init" * 8
@@ -197,17 +198,91 @@ def test_a_short_rolling_merge_raises_and_removes_the_output(tmp_path):
     check_merged(merger, 0, SimpleNamespace(id="EXAMPLE"), ctx, "EXAMPLE")  # type: ignore[arg-type]
 
 
-def test_license_drm_wraps_the_callback_in_licensing_progress(tmp_path):
-    received: list[tuple[Any, dict[str, Any]]] = []
-    ctx = make_ctx(tmp_path, license_widevine=lambda drm, **kw: received.append((drm, kw)))
-    drm = object()
+WV, PR, CKC, ML, AES = "Widevine", "PlayReady", "ClearKeyCENC", "MonaLisa", "ClearKey"
+PSSH_KID = UUID(hex="22222222222222222222222222222222")
+PROBED_KID = UUID(hex="33333333333333333333333333333333")
+URL, DASH_, HLS_, ISM_ = (Track.Descriptor.URL, Track.Descriptor.DASH, Track.Descriptor.HLS, Track.Descriptor.ISM)
 
-    with licensing(ctx):
-        license_drm(drm, ctx, track_kid=KID)  # type: ignore[arg-type]
 
-    assert received == [(drm, {"track_kid": KID})]
-    assert ctx.statuses == ["LICENSING", "[yellow]LICENSED"]
-    assert not DOWNLOAD_CANCELLED.is_set()
+def make_drm(system: str, monkeypatch: pytest.MonkeyPatch) -> Any:
+    """One DRM of each system; every one that names a KID names PSSH_KID."""
+    if system == WV:
+        return widevine(PSSH_KID)
+    if system == PR:
+        return playready(PSSH_KID)
+    if system == CKC:
+        return ClearKeyCENC(kids=[PSSH_KID])
+    if system == ML:
+        monkeypatch.setattr(MonaLisa, "extract_keys", lambda self: None)
+        return MonaLisa("EXAMPLE", Path("unused.mld"))
+    return ClearKey(key=bytes(16))
+
+
+def licence_calls(tmp_path: Path) -> tuple[DownloadContext, list[tuple[Any, Any]]]:
+    calls: list[tuple[Any, Any]] = []
+    return make_ctx(tmp_path, license_widevine=lambda drm, track_kid: calls.append((drm, track_kid))), calls
+
+
+LICENSED = {URL: {WV, PR, CKC}, DASH_: {WV, PR, CKC}, HLS_: {WV, PR, ML}, ISM_: {WV, PR}}
+
+
+@pytest.mark.parametrize("descriptor", list(LICENSED), ids=lambda d: d.name)
+@pytest.mark.parametrize("system", [WV, PR, CKC, ML, AES])
+def test_the_licence_step_licenses_the_systems_each_manifest_kind_licensed(tmp_path, monkeypatch, descriptor, system):
+    ctx, calls = licence_calls(tmp_path)
+    drm = make_drm(system, monkeypatch)
+
+    license_drm(SimpleNamespace(descriptor=descriptor, id="EXAMPLE"), drm, ctx)  # type: ignore[arg-type]
+
+    licensed = system in LICENSED[descriptor]
+    assert [c[0] for c in calls] == ([drm] if licensed else [])
+    assert ctx.statuses == (["LICENSING", "[yellow]LICENSED"] if licensed else [])  # type: ignore[attr-defined]
+
+
+def test_the_licence_step_skips_a_track_with_no_drm(tmp_path):
+    ctx, calls = licence_calls(tmp_path)
+    license_drm(SimpleNamespace(descriptor=DASH_, id="EXAMPLE"), None, ctx)  # type: ignore[arg-type]
+    assert calls == [] and ctx.statuses == []  # type: ignore[attr-defined]
+
+
+@pytest.mark.parametrize(
+    "descriptor, system, kid, probed, expected",
+    [
+        (DASH_, WV, KID, None, KID),
+        (DASH_, WV, None, PROBED_KID, PROBED_KID),
+        (DASH_, WV, None, None, None),
+        (URL, CKC, None, "no probe", None),
+        (HLS_, WV, KID, "no probe", KID),
+        (HLS_, PR, None, "no probe", PSSH_KID),
+        (HLS_, WV, None, None, PSSH_KID),
+        (HLS_, ML, KID, PROBED_KID, None),
+        (ISM_, PR, None, "no probe", PSSH_KID),
+    ],
+    ids=[
+        "dash-init-kid",
+        "dash-probed",
+        "dash-never-the-pssh-kid",
+        "url-never-the-drm-kid",
+        "hls-init-kid",
+        "hls-drm-kid",
+        "hls-probe-misses",
+        "monalisa-no-kid",
+        "ism-drm-kid",
+    ],
+)
+def test_the_licence_step_finds_the_track_kid(tmp_path, monkeypatch, descriptor, system, kid, probed, expected):
+    ctx, calls = licence_calls(tmp_path)
+    probes: list[bool] = []
+
+    def probe() -> Any:
+        probes.append(True)
+        return probed
+
+    track = SimpleNamespace(descriptor=descriptor, id="EXAMPLE")
+    license_drm(track, make_drm(system, monkeypatch), ctx, kid, None if probed == "no probe" else probe)  # type: ignore[arg-type]
+
+    assert [c[1] for c in calls] == [expected]
+    assert not (kid and probes), "a KID the caller holds needs no probe"
 
 
 def test_a_licence_failure_cancels_the_other_tracks_and_shows_failed(tmp_path):
@@ -216,18 +291,29 @@ def test_a_licence_failure_cancels_the_other_tracks_and_shows_failed(tmp_path):
 
     ctx = make_ctx(tmp_path, license_widevine=refuse)
     with pytest.raises(PermissionError, match="EXAMPLE licence refused"):
-        with licensing(ctx):
-            license_drm(object(), ctx)  # type: ignore[arg-type]
+        license_drm(SimpleNamespace(descriptor=DASH_, id="EXAMPLE"), widevine(KID), ctx)  # type: ignore[arg-type]
 
-    assert ctx.statuses == ["LICENSING", "[red]FAILED"]
+    assert ctx.statuses == ["LICENSING", "[red]FAILED"]  # type: ignore[attr-defined]
     assert DOWNLOAD_CANCELLED.is_set()
 
 
-def test_license_drm_without_a_callback_raises(tmp_path):
+def test_a_failed_kid_probe_fails_only_this_track(tmp_path):
+    def probe() -> Any:
+        raise ConnectionError("EXAMPLE init unreachable")
+
+    ctx, calls = licence_calls(tmp_path)
+    with pytest.raises(ConnectionError):
+        license_drm(SimpleNamespace(descriptor=DASH_, id="EXAMPLE"), widevine(KID), ctx, probe=probe)  # type: ignore[arg-type]
+    assert calls == [] and ctx.statuses == []  # type: ignore[attr-defined]
+    assert not DOWNLOAD_CANCELLED.is_set()
+
+
+def test_the_licence_step_without_a_callback_raises_a_drm_error(tmp_path):
     ctx = make_ctx(tmp_path)
-    with pytest.raises(ValueError, match="license_widevine func must be supplied"):
-        license_drm(object(), ctx)  # type: ignore[arg-type]
-    assert ctx.statuses == []
+    with pytest.raises(ValueError, match="No licence callback for the Widevine DRM of track EXAMPLE") as raised:
+        license_drm(SimpleNamespace(descriptor=DASH_, id="EXAMPLE"), widevine(KID), ctx)  # type: ignore[arg-type]
+    assert raised.value.error_code == APIErrorCode.DRM_ERROR  # type: ignore[attr-defined]
+    assert ctx.statuses == ["[red]FAILED"]  # type: ignore[attr-defined]
 
 
 @pytest.fixture

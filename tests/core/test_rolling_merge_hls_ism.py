@@ -18,20 +18,23 @@ from pathlib import Path
 from uuid import UUID
 
 import pytest
+import requests
 from Cryptodome.Cipher import AES
 from Cryptodome.Util.Padding import pad
 from pywidevine.pssh import PSSH
 
 from tests.core.test_hls_kid_from_init import KEY_LINE, no_kid_pssh
 from tests.core.test_ism_init import piff_fragment
+from unshackle.core import constants
 from unshackle.core.config import config
 from unshackle.core.constants import DOWNLOAD_CANCELLED
-from unshackle.core.drm import MonaLisa, Widevine
+from unshackle.core.drm import ClearKeyCENC, MonaLisa, Widevine
 from unshackle.core.manifests import DASH, HLS, ISM
 from unshackle.core.manifests import dash as dash_module
 from unshackle.core.manifests import hls as hls_module
 from unshackle.core.manifests import segment_pipeline
 from unshackle.core.manifests.ism_init import PIFF_SENC_UUID
+from unshackle.core.tracks import Video
 from unshackle.core.tracks import track as track_module
 from unshackle.core.tracks.track import DownloadContext
 
@@ -401,3 +404,43 @@ def test_hls_rekey_takes_the_kid_from_the_init_segment_of_the_new_key(server, tm
     HLS.download_track(track, ctx)
 
     assert licensed == [KID, later_kid]
+
+
+@pytest.mark.parametrize("system", ["Widevine", "ClearKeyCENC"])
+@pytest.mark.parametrize("kind", ["dash", "hls", "ism", "url"])
+def test_each_manifest_kind_licenses_through_the_licence_step(server, tmp_path, monkeypatch, kind, system):
+    """A licence-only run of every download path: the step picks the systems and the KID for each kind.
+
+    The fake inits name no KID, so DASH and URL pass none, and HLS and ISM take the KID their DRM names.
+    """
+    drm = widevine() if system == "Widevine" else ClearKeyCENC(kids=[KID])
+    licensed: list[tuple[object, object]] = []
+
+    def licence(drm, track_kid=None):
+        licensed.append((drm, track_kid))
+
+    if kind == "url":
+        track = Video(url=f"{base(server)}init.mp4", language="en", descriptor=Video.Descriptor.URL, drm=[drm])
+    else:
+        track = {"dash": dash_track, "hls": lambda srv: hls_track(srv, False), "ism": ism_track}[kind](server)
+        track.drm = [drm]
+    ctx = make_ctx(tmp_path, f"{kind}.mp4")
+    ctx.license_widevine = licence
+    monkeypatch.setattr(constants.DOWNLOAD_LICENCE_ONLY, "is_set", lambda: True)
+
+    if kind == "url":
+        track.download(requests.Session(), licence, progress=ctx.progress)
+    else:
+        {"dash": DASH, "hls": HLS, "ism": ISM}[kind].download_track(track, ctx)
+
+    expected = {
+        ("dash", "Widevine"): [(drm, None)],
+        ("dash", "ClearKeyCENC"): [(drm, None)],
+        ("hls", "Widevine"): [(drm, KID)],
+        ("hls", "ClearKeyCENC"): [],
+        ("ism", "Widevine"): [(drm, KID)],
+        ("ism", "ClearKeyCENC"): [],
+        ("url", "Widevine"): [(drm, None)],
+        ("url", "ClearKeyCENC"): [(drm, None)],
+    }
+    assert licensed == expected[(kind, system)]

@@ -41,8 +41,8 @@ def playready_object(kid: UUID) -> str:
     return base64.b64encode(pro).decode()
 
 
-def widevine() -> Widevine:
-    return Widevine(pssh=PSSH.new(system_id=PSSH.SystemId.Widevine, key_ids=[KID]))
+def widevine(kid: UUID = KID) -> Widevine:
+    return Widevine(pssh=PSSH.new(system_id=PSSH.SystemId.Widevine, key_ids=[kid]))
 
 
 def playready(kid: UUID = KID) -> PlayReady:

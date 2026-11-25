@@ -10,9 +10,10 @@ from pathlib import Path
 from typing import Any
 from uuid import UUID
 
+import pytest
 from pywidevine.pssh import PSSH
 
-from unshackle.core.constants import DOWNLOAD_LICENCE_ONLY
+from unshackle.core.constants import DOWNLOAD_CANCELLED, DOWNLOAD_LICENCE_ONLY
 from unshackle.core.manifests.hls import HLS
 from unshackle.core.remote_service import segment_uri_filter
 from unshackle.core.tracks import Video
@@ -74,6 +75,44 @@ def test_licence_only_licenses_a_key_that_starts_part_way(tmp_path: Path, monkey
 
     assert licensed == [FIRST_KID, LATER_KID]
     assert track.data["hls"]["unwanted_segments"] == []
+
+
+def test_a_refused_later_key_fails_through_the_licence_step(tmp_path: Path, monkeypatch: Any) -> None:
+    """The rotation loop licenses each later key through the licence step, so a refusal shows FAILED and cancels."""
+    playlist = tmp_path / "media.m3u8"
+    playlist.write_text(PLAYLIST, encoding="utf-8")
+    track = Video(
+        url="https://example.test/media.m3u8",
+        language="en",
+        descriptor=Track.Descriptor.HLS,
+        codec=Video.Codec.HEVC,
+    )
+    track.from_file = playlist
+    monkeypatch.setattr(HLS, "get_track_kid_from_init", staticmethod(lambda *args, **kwargs: None))
+
+    def licence(drm: Any, track_kid: Any = None) -> None:
+        if track_kid == LATER_KID:
+            raise PermissionError("EXAMPLE licence refused")
+
+    statuses: list[str] = []
+    ctx = DownloadContext(
+        save_path=tmp_path / "video.mp4",
+        save_dir=tmp_path / "video_segments",
+        progress=lambda **kw: statuses.append(kw["downloaded"]) if "downloaded" in kw else None,
+        license_widevine=licence,
+        cdm=None,
+    )
+
+    DOWNLOAD_LICENCE_ONLY.set()
+    try:
+        with pytest.raises(PermissionError, match="EXAMPLE licence refused"):
+            HLS.download_track(track=track, ctx=ctx)
+        assert DOWNLOAD_CANCELLED.is_set()
+    finally:
+        DOWNLOAD_LICENCE_ONLY.clear()
+        DOWNLOAD_CANCELLED.clear()
+
+    assert statuses == ["LICENSING", "[yellow]LICENSED", "LICENSING", "[red]FAILED"]
 
 
 def test_licence_only_skips_the_key_of_a_filtered_segment(tmp_path: Path, monkeypatch: Any) -> None:

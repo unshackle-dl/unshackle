@@ -27,7 +27,7 @@ from unshackle.core.cdm.detect import is_playready_cdm, is_widevine_cdm
 from unshackle.core.config import config
 from unshackle.core.constants import DOWNLOAD_ALL_DRM, DOWNLOAD_CANCELLED, DOWNLOAD_LICENCE_ONLY, DownloadCancelled
 from unshackle.core.downloaders.requests import requests
-from unshackle.core.drm import DRM_T, BlowfishStripe, ClearKeyCENC, PlayReady, Widevine
+from unshackle.core.drm import DRM_T, BlowfishStripe, PlayReady, Widevine
 from unshackle.core.drm.verify import (
     children,
     decrypt_track,
@@ -723,6 +723,7 @@ class Track:
         track's init data and stores it on the track, so a service need not declare `drm` itself.
         """
         from unshackle.core.manifests import DASH, HLS, ISM
+        from unshackle.core.manifests.segment_pipeline import license_drm
         from unshackle.core.tracks.audio import Audio
         from unshackle.core.tracks.subtitle import Subtitle
         from unshackle.core.tracks.video import Video
@@ -803,19 +804,19 @@ class Track:
                 self.Descriptor.DASH: DASH,
                 self.Descriptor.ISM: ISM,
             }
+            ctx = DownloadContext(
+                save_path=save_path,
+                save_dir=save_dir,
+                progress=progress,
+                session=dl_session,
+                proxy=proxy,
+                max_workers=max_workers,
+                adaptive_workers=adaptive_workers,
+                download_processes=download_processes,
+                license_widevine=prepare_drm,
+                cdm=cdm,
+            )
             if self.descriptor in manifest_parsers:
-                ctx = DownloadContext(
-                    save_path=save_path,
-                    save_dir=save_dir,
-                    progress=progress,
-                    session=dl_session,
-                    proxy=proxy,
-                    max_workers=max_workers,
-                    adaptive_workers=adaptive_workers,
-                    download_processes=download_processes,
-                    license_widevine=prepare_drm,
-                    cdm=cdm,
-                )
                 manifest_parsers[self.descriptor].download_track(track=self, ctx=ctx)
             elif self.descriptor == self.Descriptor.URL:
                 try:
@@ -831,13 +832,7 @@ class Track:
                     if self.drm:
                         drm = self.get_drm_for_cdm(cdm)
                         track_kid = None if isinstance(drm, BlowfishStripe) else self.get_key_id(session=session)
-                        if isinstance(drm, (Widevine, PlayReady, ClearKeyCENC)):
-                            if not prepare_drm:
-                                system = type(drm).__name__.removesuffix("CENC")
-                                raise ValueError(f"prepare_drm func must be supplied to use {system} DRM")
-                            progress(downloaded="LICENSING")
-                            prepare_drm(drm, track_kid=track_kid)
-                            progress(downloaded="[yellow]LICENSED")
+                        license_drm(self, drm, ctx, track_kid)
                     else:
                         drm = None
 
