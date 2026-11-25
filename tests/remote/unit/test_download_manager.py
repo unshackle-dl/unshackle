@@ -241,8 +241,7 @@ def test_perform_download_passes_latest_episodes_to_dl_result(tmp_path: Path, mo
             raise _CapturedCtx(kwargs)
 
     class FakeService:
-        def __init__(self, ctx: click.Context) -> None:
-            pass
+        cli = click.Command("svc", callback=lambda title: object())
 
     monkeypatch.setattr(dl_module, "dl", FakeDl)
     monkeypatch.setattr(Services, "get_path", staticmethod(lambda s: tmp_path))
@@ -277,8 +276,9 @@ def test_perform_download_gives_dl_the_defaults_for_null_and_empty_values(
             raise RuntimeError("stop")
 
     class FakeService:
-        def __init__(self, ctx: click.Context) -> None:
-            seen["parent"] = dict(ctx.parent.params)
+        cli = click.Command(
+            "svc", callback=click.pass_context(lambda ctx, title: seen.update(parent=dict(ctx.parent.params)))
+        )
 
     monkeypatch.setattr(dl_module, "dl", FakeDl)
     monkeypatch.setattr(Services, "get_path", staticmethod(lambda s: tmp_path))
@@ -307,13 +307,15 @@ def test_perform_download_casts_service_options(tmp_path: Path, monkeypatch: pyt
         def __init__(self, ctx: click.Context, **kwargs: object) -> None:
             pass
 
+    def build(title: str, episodes: object, tag: object) -> None:
+        raise _CapturedCtx(episodes, tag)
+
     class FakeService:
         cli = click.Command(
-            "svc", params=[click.Option(["--episodes"], type=int), click.Option(["--tag"], multiple=True)]
+            "svc",
+            params=[click.Option(["--episodes"], type=int), click.Option(["--tag"], multiple=True)],
+            callback=build,
         )
-
-        def __init__(self, ctx: click.Context, episodes: object = None, tag: object = ()) -> None:
-            raise _CapturedCtx(episodes, tag)
 
     monkeypatch.setattr(dl_module, "dl", FakeDl)
     monkeypatch.setattr(Services, "get_path", staticmethod(lambda s: tmp_path))
@@ -669,28 +671,25 @@ async def test_a_skip_written_just_before_the_worker_exits_reaches_the_job(
 
 
 def test_a_stopped_run_names_its_reason_in_the_job_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    import sys
-
     import click
 
     import unshackle.commands.dl as dl_module
     from unshackle.core.api import download_manager, handlers
     from unshackle.core.api.errors import APIError
+    from unshackle.core.run_plan import RunStopped
     from unshackle.core.services import Services
 
     class FakeDl:
         cli = dl_module.dl.cli
 
         def __init__(self, ctx: click.Context, **kwargs: object) -> None:
-            self.stop_reason = None
+            pass
 
         def result(self, **kwargs: object) -> None:
-            self.stop_reason = "Show S01E01: Required audio language(s) not found: ko"
-            sys.exit(1)
+            raise RunStopped("Show S01E01: Required audio language(s) not found: ko")
 
     class FakeService:
-        def __init__(self, ctx: click.Context) -> None:
-            pass
+        cli = click.Command("svc", callback=lambda title: object())
 
     monkeypatch.setattr(dl_module, "dl", FakeDl)
     monkeypatch.setattr(Services, "get_path", staticmethod(lambda s: tmp_path))

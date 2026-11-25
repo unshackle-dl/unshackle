@@ -335,7 +335,7 @@ def test_a_service_click_default_stays_out_of_the_download_gate(monkeypatch):
     monkeypatch.setattr(dm, "get_download_manager", Manager)
     body = {"service": "EXAMPLE1", "title_id": "t1", "quality": [1080]}
     asyncio.run(handlers.download_handler(body, request("flat")))
-    assert jobs[0]["service_params"] == {"best_available": True}
+    assert jobs[0]["service_params"] == {}
     assert not jobs[0].get("best_available")
 
 

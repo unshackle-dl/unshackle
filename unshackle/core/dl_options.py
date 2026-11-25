@@ -22,12 +22,11 @@ RemoteKind = Literal["langs", "audio_codecs", "flag"]
 class ApiOption:
     """A dl option that a REST API client can set, with its API default.
 
-    ``raw`` keeps the API value uncast, because perform_download parses it. ``remote`` names how a remote client
-    sends the option to the server in ``dl_params``, for a service that reads it from ``ctx.parent.params``.
+    ``remote`` names how a remote client sends the option to the server in ``dl_params``, for a service that
+    reads it from ``ctx.parent.params``.
     """
 
     default: Any
-    raw: bool = False
     remote: Optional[RemoteKind] = None
 
 
@@ -45,7 +44,7 @@ DL_OPTIONS: Dict[str, Optional[ApiOption]] = {
     "range": ApiOption(["SDR"]),
     "channels": ApiOption(None),
     "no_atmos": ApiOption(False),
-    "wanted": ApiOption([], raw=True),
+    "wanted": ApiOption([]),
     "latest_episode": ApiOption(False),
     "latest_episodes": ApiOption(None),
     "lang": ApiOption(["orig"], remote="langs"),
@@ -74,7 +73,7 @@ DL_OPTIONS: Dict[str, Optional[ApiOption]] = {
     "no_attachments": ApiOption(False),
     "audio_description": ApiOption(False),
     "audio_description_only": ApiOption(False),
-    "slow": ApiOption(None, raw=True),
+    "slow": ApiOption(None),
     "split_audio": ApiOption(None),
     "skip_dl": ApiOption(False),
     "all_drm": ApiOption(False),
@@ -131,7 +130,6 @@ An option the REST API takes has an ``ApiOption``; a ``CLI_ONLY`` option never r
 """
 
 DEFAULT_DOWNLOAD_PARAMS: Dict[str, Any] = {name: option.default for name, option in DL_OPTIONS.items() if option}
-API_SHAPED_DL_PARAMS = frozenset(name for name, option in DL_OPTIONS.items() if option and option.raw)
 FORWARDED_DL_PARAMS = [
     (name, option)
     for kind in get_args(RemoteKind)
@@ -144,9 +142,8 @@ def cast_dl_params(cli: click.Command, params: Dict[str, Any]) -> Dict[str, Any]
     """Cast each ``DEFAULT_DOWNLOAD_PARAMS`` parameter in ``params`` by its dl click type, under its dl option name.
 
     A missing, ``None`` or empty-string parameter, and an empty ``range``, take the API default, so
-    ``output_dir: ""`` is not the working directory. An ``API_SHAPED_DL_PARAMS`` value stays as sent. A parameter
-    outside ``DEFAULT_DOWNLOAD_PARAMS`` never reaches dl, so a new CLI option is closed to API clients by default.
-    Raises ``click.BadParameter``.
+    ``output_dir: ""`` is not the working directory. A parameter outside ``DEFAULT_DOWNLOAD_PARAMS`` never reaches
+    dl, so API clients cannot set a new CLI option until the table opens it. Raises ``click.BadParameter``.
     """
     kept: Dict[str, Any] = {}
     to_cast: Dict[str, Any] = {}
@@ -154,7 +151,7 @@ def cast_dl_params(cli: click.Command, params: Dict[str, Any]) -> Dict[str, Any]
         value = params.get(key)
         if value is None or value == "" or (key == "range" and value == []):
             value = default
-        (kept if value is None or key in API_SHAPED_DL_PARAMS else to_cast)[DL_OPTION_ALIASES.get(key, key)] = value
+        (kept if value is None else to_cast)[DL_OPTION_ALIASES.get(key, key)] = value
     try:
         return {**kept, **cast_service_options(cli.params, click.Context(cli), to_cast)}
     except click.BadParameter as e:

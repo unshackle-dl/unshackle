@@ -11,7 +11,6 @@ from unshackle.commands.dl import dl
 from unshackle.core.api import routes
 from unshackle.core.api.handlers import validate_download_parameters
 from unshackle.core.dl_options import (
-    API_SHAPED_DL_PARAMS,
     DEFAULT_DOWNLOAD_PARAMS,
     DL_OPTION_ALIASES,
     DL_OPTIONS,
@@ -54,15 +53,10 @@ def test_the_server_reads_back_what_a_remote_client_forwards():
 
 
 def test_api_defaults_cast_to_the_dl_defaults():
-    """An API-shaped option keeps its own empty default, which perform_download normalizes."""
+    """``wanted`` keeps its API default of no keys, which dl reads as every title, like the CLI's None."""
     ctx = click.Context(dl.cli)
-    expected = {
-        p.name: p.type_cast_value(ctx, p.get_default(ctx))
-        for p in dl.cli.params
-        if p.name not in CLI_ONLY | API_SHAPED_DL_PARAMS
-    }
-    cast = cast_dl_params(dl.cli, {})
-    assert {k: v for k, v in cast.items() if k not in API_SHAPED_DL_PARAMS} == expected
+    expected = {p.name: p.type_cast_value(ctx, p.get_default(ctx)) for p in dl.cli.params if p.name not in CLI_ONLY}
+    assert cast_dl_params(dl.cli, {}) == {**expected, "wanted": []}
 
 
 def test_cli_only_options_never_reach_dl():
@@ -107,7 +101,7 @@ def test_values_are_cast_by_the_dl_click_types():
     assert cast["acodec"] == [Audio.Codec.EC3]
     assert cast["range_"] == [Video.Range.HDR10P, Video.Range.DV]
     assert cast["lang"] == ["en"]
-    assert (cast["slow"], cast["wanted"]) == ("20-40", ["S01E01"])
+    assert (cast["slow"], cast["wanted"]) == ((20, 40), ["1x1"])
     assert (cast["downloads"], cast["sample"], cast["tvdb_order"]) == (3, (0, 60), "dvd")
     assert cast["sub_format"] is Subtitle.Codec.SubRip
     assert (cast["output_dir"], cast["cdm_only"], cast["s_lang"]) == (None, False, ["all"])
@@ -186,8 +180,8 @@ def test_api_refuses_a_value_the_dl_option_cannot_take(data, error):
 
 
 def test_no_dl_option_needs_a_parse_step_the_cast_skips():
-    """type_cast_value runs no callback and no required check, so neither may appear on a dl option."""
-    assert not [p.name for p in dl.cli.params if p.callback or p.required]
+    """type_cast_value runs no callback, required check or envvar lookup, so none may appear on a dl option."""
+    assert not [p.name for p in dl.cli.params if p.callback or p.required or getattr(p, "envvar", None)]
 
 
 def test_null_takes_the_api_default():

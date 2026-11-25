@@ -322,10 +322,18 @@ class SeasonRange(click.ParamType):
                 computed = [k for k in computed if k != exclusion and not k.startswith(prefix)]
         return list(set(computed))
 
+    PARSED_KEY = re.compile(r"^!?(0|[1-9]\d*)x(0|[1-9]\d*)(\.[1-9]\d?)?$")
+
     def convert(
-        self, value: str, param: Optional[click.Parameter] = None, ctx: Optional[click.Context] = None
+        self, value: Union[str, list], param: Optional[click.Parameter] = None, ctx: Optional[click.Context] = None
     ) -> list[str]:
-        return self.parse_tokens(*re.split(r"\s*[,;]\s*", value))
+        """Parse a comma or semicolon separated string, or a list of tokens; parsed keys such as ``!1x2.3`` pass."""
+        tokens = re.split(r"\s*[,;]\s*", value) if isinstance(value, str) else value
+        if not isinstance(tokens, list) or not all(isinstance(t, str) for t in tokens):
+            self.fail("expected a string or a list of strings", param, ctx)
+        if all(self.PARSED_KEY.match(t) for t in tokens):
+            return list(tokens)
+        return self.parse_tokens(*tokens)
 
 
 class LanguageRange(click.ParamType):
@@ -500,6 +508,8 @@ class SlowDelayRange(click.ParamType):
             return value
         if isinstance(value, bool):
             return (60, 120) if value else None
+        if isinstance(value, list) and len(value) == 2:
+            value = f"{value[0]}-{value[1]}"
 
         match = re.match(r"^(\d+)-(\d+)$", str(value))
         if not match:

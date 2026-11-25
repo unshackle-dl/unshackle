@@ -296,7 +296,7 @@ def test_the_api_refuses_a_bad_sample_window(sample: object) -> None:
 
 
 def test_the_api_refuses_sample_with_include_sample() -> None:
-    assert "include_sample" in (validate_download_parameters({"sample": True, "include_sample": True}) or "")
+    assert "--include-sample" in (validate_download_parameters({"sample": True, "include_sample": True}) or "")
 
 
 def test_sample_name_uses_the_separator_of_the_template(monkeypatch: pytest.MonkeyPatch) -> None:

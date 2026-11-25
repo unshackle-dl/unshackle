@@ -243,7 +243,7 @@ The request body accepts the full download parameter set. A few of the most usef
 | `downloads` | `1` | Number of tracks to download concurrently |
 | `proxy` | `null` | Proxy URI or country code |
 
-Validation is strict: invalid codecs, subtitle formats, dynamic-range names, non-positive counts, or mutually exclusive flags (for example both `video_only` and `audio_only`) come back as `400` with error code `INVALID_PARAMETERS`. See the full reference on the [download reference page](endpoints.md) for every accepted field.
+Validation is strict: invalid codecs, subtitle formats, dynamic-range names, non-positive counts, or flags that conflict (for example both `no_subs` and `subs_only`) come back as `400` with error code `INVALID_PARAMETERS`. See the full reference on the [download reference page](endpoints.md) for every accepted field.
 
 !!! note "Gated fields"
     The server refuses a per-request CDM (`cdm`) or inline credentials (`credential` / `credentials`) with `403 FORBIDDEN`, unless the server operator has explicitly opted in with `serve.cdm_overrides` and `serve.allow_job_credentials`. Both are off by default.

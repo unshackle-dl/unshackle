@@ -109,7 +109,7 @@ def test_client_sent_keys_without_stamp_counts_all_keys():
     assert dm.client_sent_keys({"workers": 1, "quality": None}) == {"workers", "quality"}
 
 
-def test_service_defaults_and_options_travel_nested(env, monkeypatch):
+def test_service_options_travel_nested_without_their_defaults(env, monkeypatch):
     @click.command()
     @click.option("--profile", type=int, default=1)
     @click.option("--device", default="chrome")
@@ -119,8 +119,8 @@ def test_service_defaults_and_options_travel_nested(env, monkeypatch):
     monkeypatch.setattr(handlers.Services, "load", lambda service: SimpleNamespace(cli=cli))
     params = env(body={"profile": "work", "service_params": {"profile": 2}})
     assert params["profile"] == "work"
-    assert params["service_params"] == {"profile": 2, "device": "chrome"}
-    assert env(body={"device": "tv"})["service_params"] == {"profile": 1, "device": "tv"}
+    assert params["service_params"] == {"profile": 2}
+    assert env(body={"device": "tv"})["service_params"] == {"device": "tv"}
 
 
 def use_cli(monkeypatch, *options):
@@ -157,4 +157,4 @@ def test_a_json_shape_click_cannot_convert_is_a_400(env, monkeypatch, name, valu
 
 def test_a_flat_dl_key_never_fills_a_service_option_of_the_same_name(env, monkeypatch):
     use_cli(monkeypatch, click.Option(["--quality"], type=click.Choice(["SD", "HD"]), default="HD"))
-    assert env(body={"quality": [1080]})["service_params"] == {"quality": "HD"}
+    assert env(body={"quality": [1080]})["service_params"] == {}

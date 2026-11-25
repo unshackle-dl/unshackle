@@ -18,7 +18,6 @@ import pytest
 
 import unshackle.commands.dl as dl_module
 from tests.remote.unit.test_remote_service_helpers import _sent_create_data
-from unshackle.commands.dl import generated_dv_ranges
 from unshackle.core import mux_step
 from unshackle.core.api import download_manager, handlers
 from unshackle.core.api.handlers import validate_download_parameters
@@ -37,7 +36,12 @@ from unshackle.core.tracks.hybrid import (
     nits_to_pq,
     pq_to_nits,
 )
-from unshackle.core.tracks.selection import hybrid_gate_failure, keep_generated_dv_bases, select_hybrid_bases
+from unshackle.core.tracks.selection import (
+    generated_dv_ranges,
+    hybrid_gate_failure,
+    keep_generated_dv_bases,
+    select_hybrid_bases,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -803,8 +807,7 @@ def test_a_rest_job_gives_the_flag_to_the_service_ctx_and_to_dl(
             raise _Captured(self.ctx.params["generate_dv"], kwargs["generate_dv"])
 
     class FakeService:
-        def __init__(self, ctx: click.Context) -> None:
-            pass
+        cli = click.Command("svc", callback=lambda title: object())
 
     monkeypatch.setattr(dl_module, "dl", FakeDl)
     monkeypatch.setattr(Services, "get_path", staticmethod(lambda s: tmp_path))

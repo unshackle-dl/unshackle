@@ -66,7 +66,6 @@ from unshackle.core.launch import LaunchKeys, launch, load_service_config
 from unshackle.core.manifests.snapshot import capture
 from unshackle.core.mux_step import mux_title
 from unshackle.core.placement import SAMPLE_DIR, Placement, sample_name
-from unshackle.core.providers.anilist import parse_anilist_ref
 from unshackle.core.providers.tvdb import SEASON_TYPES, parse_int
 from unshackle.core.proxies.resolve import (
     REGION,
@@ -79,6 +78,7 @@ from unshackle.core.proxies.resolve import (
     resolve_proxy,
     split_proxy_query,
 )
+from unshackle.core.run_plan import PlanError, RunOutcome, RunStopped, bitrate_range, check_options
 from unshackle.core.service import Service, grow_session_pool
 from unshackle.core.services import ROUTING_PARAMS, Services
 from unshackle.core.temp import with_task_temp
@@ -87,7 +87,7 @@ from unshackle.core.titles import Movie, Movies, Series, Song, Title_T
 from unshackle.core.titles.episode import Episode
 from unshackle.core.tracks import Audio, Subtitle, Tracks, Video
 from unshackle.core.tracks.attachment import Attachment
-from unshackle.core.tracks.selection import HYBRID_BASE_RANGES, Skip, TrackSelection
+from unshackle.core.tracks.selection import Skip, TrackSelection, generated_dv_ranges
 from unshackle.core.tracks.subtitle_convert import PYCAPTION_WRITERS, SUBSTATION, build_ass_style
 from unshackle.core.tracks.track import (
     Track,
@@ -100,8 +100,8 @@ from unshackle.core.utilities import (
     find_font_with_fallbacks,
     get_debug_logger,
     get_system_fonts,
+    inherited_exclusions,
     init_debug_logger,
-    kind_only_conflict,
     log_event,
     matching_languages,
     partition_exclusions,
@@ -166,47 +166,6 @@ def normalize_dl_config(dl_config: dict[str, Any]) -> dict[str, Any]:
     return {DL_OPTION_ALIASES.get(key, key): value for key, value in dl_config.items()}
 
 
-ID_PROVIDER_KEYS = {"tmdb": "tmdb_api_key", "tvdb": "tvdb_api_key", "omdb": "omdb_api_key"}
-
-
-def validate_metadata_ids(
-    tmdb_id: Optional[int],
-    imdb_id: Optional[str],
-    tvdb_id: Optional[int],
-    anilist_id: Optional[Union[int, str]] = None,
-) -> None:
-    """Reject ID flags that conflict, or that no configured metadata provider could ever find.
-
-    --anilist stays outside the mutual exclusion: AniList knows no western IDs, so pairing
-    it with one of the other three is how an anime title gets both.
-    """
-    if anilist_id and not parse_anilist_ref(anilist_id):
-        raise click.UsageError("--anilist takes an AniList ID like 21, or a MyAnimeList ID like mal:21.")
-
-    supplied = [
-        (flag, value) for flag, value in (("--tmdb", tmdb_id), ("--imdb", imdb_id), ("--tvdb", tvdb_id)) if value
-    ]
-    if len(supplied) > 1:
-        raise click.UsageError(f"{', '.join(flag for flag, _ in supplied)} cannot be used together; give one ID")
-    if not supplied:
-        return
-
-    flag, _ = supplied[0]
-    id_kind = flag.lstrip("-")
-    ordered = {cls.NAME: cls for kind in ("tv", "movie") for cls in providers.provider_order(kind)}
-    consumers = [cls for cls in ordered.values() if cls.ID_KIND == id_kind]
-    if any(cls().is_available() for cls in consumers):
-        return
-
-    if consumers:
-        keys = sorted({ID_PROVIDER_KEYS[cls.NAME] for cls in consumers if cls.NAME in ID_PROVIDER_KEYS})
-        raise click.UsageError(f"{flag} needs the {consumers[0].NAME} provider: set {' or '.join(keys)} in your config")
-    names = sorted({cls.NAME for cls in providers.REGISTRY.values() if cls.ID_KIND == id_kind})
-    raise click.UsageError(
-        f"{flag} needs the {' or '.join(names)} provider, which your metadata_providers config leaves out."
-    )
-
-
 def convert_scc(subtitle: Subtitle, sub_format: Optional[Union[Subtitle.Codec, str]]) -> Subtitle.Codec:
     """
     Convert an SCC subtitle to sub_format when pycaption can write it, else to SRT, and return the new codec.
@@ -219,21 +178,6 @@ def convert_scc(subtitle: Subtitle, sub_format: Optional[Union[Subtitle.Codec, s
     if subtitle.path and not subtitle.path.read_text("utf8").strip():
         logging.getLogger("Subtitle").warning(f"SCC subtitle {subtitle.language} has no CC1 captions")
     return target
-
-
-def generated_dv_ranges(
-    range_: Sequence[Video.Range], generate_dv: bool
-) -> tuple[list[Video.Range], list[Video.Range]]:
-    """Turn ``-r HDR10 --generate-dv`` (or HDR10P) into a HYBRID run on that base alone.
-
-    Returns the ranges to run with, and the base ranges the user named. The second list is empty when
-    the flag is off, HYBRID or DV is in the ranges, or no base range is. The service still gets the
-    ranges the user gave, so it fetches no DV track.
-    """
-    bases = [r for r in range_ if r in HYBRID_BASE_RANGES]
-    if not generate_dv or not bases or Video.Range.HYBRID in range_ or Video.Range.DV in range_:
-        return list(range_), []
-    return [Video.Range.HYBRID, *(r for r in range_ if r not in bases)], bases
 
 
 def subtitle_look(
@@ -1219,8 +1163,6 @@ class dl:
         # report which weren't available without parsing the console output. See SkippedSubtitle.
         self.skipped_subtitles: list[SkippedSubtitle] = []
         self.skipped_titles: list[SkippedTitle] = []
-        # Why a missing track or language stopped the run, for the API job error.
-        self.stop_reason: Optional[str] = None
         # result() catches a download-worker failure, reports it, and returns rather than
         # re-raising (so the CLI still exits cleanly). Keep it so an embedding caller (the API
         # worker) can tell the title did not complete instead of reading it as a success.
@@ -1251,25 +1193,18 @@ class dl:
 
         self.profile = profile
         self.proxy_requested = bool(proxy)
-        validate_metadata_ids(tmdb_id, imdb_id, tvdb_id, anilist_id)
+        check_options(ctx.params)
         self.tmdb_id = tmdb_id
         self.imdb_id = imdb_id
         self.tvdb_id = tvdb_id
         self.anilist_id = anilist_id
         self.tvdb_order = (tvdb_order or config.tvdb_order or "").lower()
-        if self.tvdb_order and self.tvdb_order not in SEASON_TYPES:
-            raise click.UsageError(f"tvdb_order must be one of {', '.join(SEASON_TYPES)}, not {self.tvdb_order!r}")
         self.continuous_episodes = continuous_episodes
         self.enrich = enrich
         self.daily = daily
         self.output_dir = output_dir
         self.service_anime = False
         self.service_daily = False
-
-        if self.enrich and not (self.tmdb_id or self.imdb_id or self.tvdb_id or self.anilist_id):
-            raise click.UsageError(
-                "--enrich requires --tmdb, --imdb, --tvdb, or --anilist to provide a metadata source."
-            )
 
         if self.daily and not self.enrich:
             self.log.warning("--daily takes TVDB air dates only with --enrich")
@@ -1418,10 +1353,9 @@ class dl:
             try:
                 self.cdm = self.get_cdm(self.service, self.profile)
             except ValueError as e:
-                self.log.error(f"Failed to load CDM, {e}")
                 if self.debug_logger:
                     self.debug_logger.log_error("load_cdm", e, service=self.service)
-                sys.exit(1)
+                raise click.ClickException(f"Failed to load CDM, {e}") from None
 
             if self.cdm:
                 cdm_info = cdm_summary(self.cdm)
@@ -1462,8 +1396,7 @@ class dl:
                 try:
                     requested_provider, query = split_proxy_query(proxy, self.proxy_providers)
                 except ValueError as e:
-                    self.log.error(str(e))
-                    sys.exit(1)
+                    raise PlanError(str(e)) from None
                 # Match region codes (us, ca, uk1, us:ny, yul) or provider:region (nordvpn:ca, protonvpn:us:ny).
                 if re.fullmatch(rf"(?:[a-z]+:)?{REGION}", query, re.IGNORECASE):
                     # Kept apart from ctx.params["proxy"], which becomes the URI: a service proxy_map keys on it.
@@ -1479,8 +1412,7 @@ class dl:
                                 self.proxy_providers, proxy_query, requested_provider
                             )
                         except ValueError as e:
-                            self.log.error(str(e))
-                            sys.exit(1)
+                            raise click.ClickException(str(e)) from None
                         ctx.params["proxy"] = proxy_uri
                         self.log.info(describe_proxy(proxy_provider, proxy_uri, proxy_query))
                     keys["proxy_query"] = proxy_query
@@ -1513,6 +1445,10 @@ class dl:
         # needs to be added this way instead of @cli.result_callback to be
         # able to keep `self` as the first positional
         self.cli._result_callback = self.result
+
+    def outcome(self) -> RunOutcome:
+        """What the run gave back so far, for an embedding caller such as the API job."""
+        return RunOutcome(list(self.completed_files), list(self.skipped_subtitles), self.download_error)
 
     @with_task_temp
     def result(
@@ -1591,7 +1527,7 @@ class dl:
         generate_dv: bool = False,
         *_: Any,
         **__: Any,
-    ) -> None:
+    ) -> RunOutcome:
         if all_drm:
             DOWNLOAD_ALL_DRM.set()
         else:
@@ -1601,8 +1537,6 @@ class dl:
         if continue_downloads:
             config.continue_downloads = True
         config.sample = sample
-        if sample and include_sample:
-            raise click.ClickException("--sample and --include-sample cannot be used together.")
         self.tmdb_searched = False
         self.search_source = None
         self.service_anime = bool(getattr(service, "ANIME", False))
@@ -1620,34 +1554,13 @@ class dl:
         a_lang, a_lang_excl = partition_exclusions(a_lang)
         s_lang, s_lang_excl = partition_exclusions(s_lang)
         forced_s_lang, fsl_excl = partition_exclusions(forced_s_lang)
-        for flag, excludes in (
-            ("-l/--lang", lang_excl),
-            ("-vl/--v-lang", v_lang_excl),
-            ("-al/--a-lang", a_lang_excl),
-            ("-sl/--s-lang", s_lang_excl),
-            ("-fsl/--forced-s-lang", fsl_excl),
-        ):
-            if any(token.lower() == "all" for token in excludes):
-                self.log.error(f"{flag}: 'all' cannot be excluded")
-                sys.exit(1)
         # exclusion-only use falls back to the flag's own default; -vl/-al have none, they cascade to -l
         if lang_excl and not lang:
             lang = ["orig"]
         if s_lang_excl and not s_lang:
             s_lang = ["all"]
-        # an override that names languages replaces -l entirely, so it must not inherit its exclusions
-        video_excl = list(dict.fromkeys(v_lang_excl + ([] if v_lang else lang_excl)))
-        audio_excl = list(dict.fromkeys(a_lang_excl + ([] if a_lang else lang_excl)))
-        for flag, tokens, excludes in (
-            ("--require-audio", require_audio, audio_excl),
-            ("--require-video", require_video, video_excl),
-            ("--require-subs", require_subs, s_lang_excl),
-        ):
-            required, own_excl = partition_exclusions(tokens)
-            clash = own_excl + [t for t in required if any(t.lower() == e.lower() for e in excludes)]
-            if clash:
-                self.log.error(f"{flag}: {clash[0]} cannot be required and excluded at the same time.")
-                sys.exit(1)
+        video_excl = inherited_exclusions(v_lang, v_lang_excl, lang_excl)
+        audio_excl = inherited_exclusions(a_lang, a_lang_excl, lang_excl)
 
         ctx = getattr(service, "ctx", None)
         parent_params = ctx.parent.params if ctx and ctx.parent else None
@@ -1663,23 +1576,6 @@ class dl:
                 if excludes and name in parent_params:
                     parent_params[name] = includes
 
-        conflict = kind_only_conflict(
-            {
-                "audio_description_only": audio_description_only,
-                "forced_subs_only": forced_subs_only,
-                "no_audio": no_audio,
-                "no_subs": no_subs,
-                "video_only": video_only,
-                "audio_only": audio_only,
-                "subs_only": subs_only,
-                "chapters_only": chapters_only,
-            }
-        )
-        if conflict:
-            first, second = (f"--{name.replace('_', '-')}" for name in conflict)
-            self.log.error(f"{first} cannot be used with {second}: {second} drops the tracks that {first} selects.")
-            sys.exit(1)
-
         if audio_description_only:
             audio_description = True
 
@@ -1694,11 +1590,7 @@ class dl:
         if skip_dl:
             DOWNLOAD_LICENCE_ONLY.set()
 
-        try:
-            speed_limit_bps = parse_speed_limit(speed_limit)
-        except ValueError as e:
-            self.log.error(str(e))
-            sys.exit(1)
+        speed_limit_bps = parse_speed_limit(speed_limit)
         set_speed_limit(speed_limit_bps)
         if speed_limit_bps:
             self.log.info(f"Speed limit: {format_speed(speed_limit_bps)}")
@@ -1713,8 +1605,7 @@ class dl:
             try:
                 proxy_download = resolve_proxy(proxy_download.lower(), self.proxy_providers)
             except ValueError as e:
-                self.log.error(f"--proxy-download: {e}")
-                sys.exit(1)
+                raise click.ClickException(f"--proxy-download: {e}") from None
 
         if export:
             config.directories.exports.mkdir(parents=True, exist_ok=True)
@@ -1725,37 +1616,8 @@ class dl:
         else:
             export_path = None
 
-        vbitrate_min, vbitrate_max = None, None
-        if vbitrate_range:
-            if vbitrate and vbitrate_range:
-                self.log.error("Cannot use both --vbitrate and --vbitrate-range at the same time.")
-                sys.exit(1)
-            try:
-                parts = vbitrate_range.split("-")
-                if len(parts) != 2:
-                    raise ValueError
-                vbitrate_min, vbitrate_max = int(parts[0]), int(parts[1])
-                if vbitrate_min > vbitrate_max:
-                    vbitrate_min, vbitrate_max = vbitrate_max, vbitrate_min
-            except (ValueError, IndexError):
-                self.log.error("Invalid --vbitrate-range: expected MIN-MAX, such as 6000-7000")
-                sys.exit(1)
-
-        abitrate_min, abitrate_max = None, None
-        if abitrate_range:
-            if abitrate and abitrate_range:
-                self.log.error("Cannot use both --abitrate and --abitrate-range at the same time.")
-                sys.exit(1)
-            try:
-                parts = abitrate_range.split("-")
-                if len(parts) != 2:
-                    raise ValueError
-                abitrate_min, abitrate_max = int(parts[0]), int(parts[1])
-                if abitrate_min > abitrate_max:
-                    abitrate_min, abitrate_max = abitrate_max, abitrate_min
-            except (ValueError, IndexError):
-                self.log.error("Invalid --abitrate-range: expected MIN-MAX, such as 128-256")
-                sys.exit(1)
+        vbitrate_min, vbitrate_max = bitrate_range(vbitrate_range, "--vbitrate-range", "6000-7000") or (None, None)
+        abitrate_min, abitrate_max = bitrate_range(abitrate_range, "--abitrate-range", "128-256") or (None, None)
 
         if not acodec:
             acodec = []
@@ -1766,10 +1628,6 @@ class dl:
         ):
             acodec = AUDIO_CODEC_LIST.convert(acodec)
 
-        if select_titles and wanted:
-            self.log.error("--select-titles and -w/--wanted cannot be used together")
-            sys.exit(1)
-
         try:
             sub_format, ass_style = subtitle_look(
                 sub_format,
@@ -1779,18 +1637,11 @@ class dl:
                 typed_format="sub_format" in self.typed_params,
             )
         except ValueError as e:
-            self.log.error(str(e))
-            sys.exit(1)
+            raise PlanError(str(e)) from None
 
         if generate_dv and Video.Range.DV in range_ and Video.Range.HYBRID not in range_:
             self.log.warning("--generate-dv ignored: DV is in the selected ranges")
         range_, generated_dv_bases = generated_dv_ranges(range_, generate_dv)
-        if any(r == Video.Range.HYBRID for r in range_):
-            from unshackle.core.binaries import DoviTool
-
-            if not DoviTool:
-                self.log.error("Unable to run hybrid mode: dovi_tool not found")
-                sys.exit(1)
 
         if cdm_only is None:
             vaults_only = None
@@ -1861,7 +1712,7 @@ class dl:
                         message="No titles returned from service",
                         success=False,
                     )
-                    sys.exit(1)
+                    raise RunStopped("No titles returned")
             except Exception as e:
                 if self.debug_logger:
                     self.debug_logger.log_error("get_titles", e, service=self.service)
@@ -1943,7 +1794,7 @@ class dl:
         print_listing(titles.tree(verbose=list_titles))
 
         if list_titles:
-            return
+            return self.outcome()
 
         if export_path and isinstance(titles, Series):
             # before --select-titles and -w drop titles, so a whole season can be told from part of one
@@ -1961,7 +1812,7 @@ class dl:
             )
             if not selected_idx:
                 console.print(Padding(":x: Selection Cancelled...", (0, 5, 1, 5)))
-                return
+                return self.outcome()
             start_time += time.time() - selection_start
 
             keep = set(selected_idx)
@@ -2022,7 +1873,7 @@ class dl:
 
             if not selected_ui_idx:
                 console.print(Padding(":x: Selection Cancelled...", (0, 5, 1, 5)))
-                return
+                return self.outcome()
 
             selection_end = time.time()
             start_time += selection_end - selection_start
@@ -2121,9 +1972,9 @@ class dl:
             stops the run. A run with one title always stops, because it has nothing else to download.
             """
             if wanted_total <= 1 or not (kind_only or skip_missing):
-                self.stop_reason = f"{title}: {reason}"
-                self.log.error(self.stop_reason)
-                sys.exit(1)
+                stop = f"{title}: {reason}"
+                self.log.error(stop)
+                raise RunStopped(stop)
             self.skipped_titles.append(SkippedTitle(title=str(title), reason=reason))
             if progress_sink:
                 progress_sink({"skipped_titles": list(self.skipped_titles)})
@@ -2560,7 +2411,7 @@ class dl:
                 self.keys.wait_vault_writes()
                 if export_path:
                     self.log_export_summary()
-                return
+                return self.outcome()
             except Exception as e:  # noqa
                 # Reported and swallowed (no re-raise) so the CLI exits cleanly; keep it so the
                 # API worker sees the title failed rather than completing with no output.
@@ -2596,7 +2447,7 @@ class dl:
                 self.keys.wait_vault_writes()
                 if export_path:
                     self.log_export_summary()
-                return
+                return self.outcome()
 
             self.keys.wait_vault_writes()
             if export_path:
@@ -2924,14 +2775,15 @@ class dl:
             self.log_export_summary()
         if self.skipped_titles:
             if len(self.skipped_titles) == wanted_total:
-                self.stop_reason = f"Skipped all {wanted_total} titles"
-                self.log.error(self.stop_reason)
-                sys.exit(1)
+                stop = f"Skipped all {wanted_total} titles"
+                self.log.error(stop)
+                raise RunStopped(stop)
             skipped = ", ".join(t["title"] for t in self.skipped_titles)
             self.log.warning(f"Skipped {len(self.skipped_titles)} of {wanted_total} titles: {skipped}")
         dl_time = time_elapsed_since(start_time)
 
         console.print(Padding(f"Processed all titles in [progress.elapsed]{dl_time}", (0, 5, 1, 5)))
+        return self.outcome()
 
     def write_sample(self, source: Path, title: Title_T, media_info: MediaInfo) -> None:
         """Cut a 60 second sample from a finished file into a ``Sample`` folder next to it.

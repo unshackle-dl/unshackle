@@ -4,7 +4,6 @@ import importlib
 import json
 import logging
 import os
-import re
 import sys
 import tempfile
 import threading
@@ -21,7 +20,6 @@ from unshackle.core.api.events import bus, publish_service_event
 from unshackle.core.api.sanitize import sanitize_log
 from unshackle.core.credential import Credential
 from unshackle.core.utils.redact import REDACTED, URL_USERINFO_RE, redact_all, redact_path, redact_text
-from unshackle.core.utils.service_params import cast_service_options, service_options
 
 if TYPE_CHECKING:
     from unshackle.core.service import Service
@@ -378,11 +376,9 @@ def perform_download(
 ) -> List[str]:
     """Do the synchronous download work for a job.
 
-    `params` holds the API's string form of the `dl` options. The function first normalizes the API-shaped
-    options in place: `slow` accepts "MIN-MAX", a two-item list, or True (which means 60-120), and `wanted`
-    accepts forms such as "S01E01", "S01-S03", "s1e1", or "1x1" as well as the internal "SxE" form. Music takes track
-    numbers in the same field, such as "1-5" or "2x3" for disc 2 track 3. Then each dl click type casts its option
-    into ``ctx.params``, which feeds dl() and dl.result() as on the CLI.
+    ``params`` holds the API's form of the ``dl`` options; ``api_plan`` checks and casts them into the dl context,
+    which feeds dl() and dl.result() as on the CLI. The service is built through its click cli like every other
+    server path.
     """
 
     from contextlib import redirect_stderr, redirect_stdout
@@ -415,67 +411,12 @@ def perform_download(
         if params.pop(banned, None) is not None:
             log.warning(f"Ignoring '{banned}' in API download parameters; post-scripts are config-only")
 
-    client_keys = client_sent_keys(params)
-
-    slow_raw = params.get("slow")
-    if slow_raw is not None and not isinstance(slow_raw, tuple):
-        if isinstance(slow_raw, bool):
-            params["slow"] = (60, 120) if slow_raw else None
-        elif isinstance(slow_raw, list) and len(slow_raw) == 2:
-            params["slow"] = (int(slow_raw[0]), int(slow_raw[1]))
-        elif isinstance(slow_raw, str):
-            from unshackle.core.utils.click_types import SLOW_DELAY_RANGE
-
-            try:
-                params["slow"] = SLOW_DELAY_RANGE.convert(slow_raw, None, None)
-            except click.BadParameter as exc:
-                raise Exception(f"Invalid slow parameter: {exc}")
-
-    wanted_raw = params.get("wanted")
-    if wanted_raw:
-        from unshackle.core.utils.click_types import SeasonRange
-
-        if isinstance(wanted_raw, str):
-            # the CLI splits a comma-separated value before parsing, so a raw string must too
-            wanted_raw = re.split(r"\s*[,;]\s*", wanted_raw)
-        # the !? keeps a pre-parsed part exclusion from being re-fed through parse_tokens
-        needs_conversion = any(not re.match(r"^!?\d+x\d+(\.\d+)?$", w) for w in wanted_raw)
-        if needs_conversion:
-            season_range = SeasonRange()
-            params["wanted"] = season_range.parse_tokens(*wanted_raw)
-
-    remote = params.get("remote")
-
-    from unshackle.commands.dl import dl as dl_command
-
-    ctx = click.Context(dl_command.cli)
-    ctx.invoked_subcommand = service
-    from unshackle.core.api.handlers import relay_label
-    from unshackle.core.dl_options import DL_OPTION_API_NAMES, cast_dl_params
+    from unshackle.core.api.handlers import DL_TRANSPORT_KEYS, instantiate_service, relay_label
     from unshackle.core.launch import launch
+    from unshackle.core.run_plan import RunStopped, api_plan
 
-    try:
-        dl_params = cast_dl_params(dl_command.cli, params)
-    except click.BadParameter as exc:
-        raise APIError(APIErrorCode.INVALID_PARAMETERS, exc.message)
-    ctx.params = {
-        **dl_params,
-        "cdm_name": params.get("cdm"),
-        # dl skips the local service config and guards the proxy for a remote_services server
-        "remote": bool(remote),
-        "server": remote,
-    }
+    ctx = api_plan(params, client_sent_keys(params)).context(dl.cli, service)
     launch(ctx, {"client_argv": f"{relay_label(params)} download job {job_id}"})
-    # Hand-built context: record parameter sources so service dl overrides
-    # apply to defaults but never clobber client-sent values.
-    from click.core import ParameterSource
-
-    for param_name in ctx.params:
-        source_key = DL_OPTION_API_NAMES.get(param_name, param_name)
-        ctx.set_parameter_source(
-            param_name, ParameterSource.COMMANDLINE if source_key in client_keys else ParameterSource.DEFAULT
-        )
-
     dl_instance = dl(ctx=ctx, proxy_providers=None if params.get("server_proxy") is True else [], **ctx.params)
     # Per-request credential ("user:pass"); feed it into the map get_credentials() reads so a
     # client can authenticate without anything being persisted to disk. Without a profile,
@@ -487,45 +428,15 @@ def perform_download(
             config.credentials[service] = svc_creds = {}
         svc_creds[params.get("profile") or "default"] = params["credential"]
 
-    service_ctx = click.Context(click.Command(service), parent=ctx, obj=ctx.obj)
+    remote = ctx.params["server"]
     if remote:
         from unshackle.core.remote_service import make_remote_service
 
+        service_ctx = click.Context(click.Command(service), parent=ctx, obj=ctx.obj)
         # RemoteService duck-types Service for dl.result()
         service_instance = cast("Service", make_remote_service(service_ctx, remote, service, title_id, params))
     else:
-        service_module = Services.load(service)
-
-        try:
-            import inspect
-
-            service_init_params = inspect.signature(service_module.__init__).parameters
-
-            service_kwargs: Dict[str, Any] = {}
-
-            if "title" in service_init_params:
-                service_kwargs["title"] = title_id
-
-            cli_params = getattr(getattr(service_module, "cli", None), "params", None) or []
-            options = service_options(params, service_init_params.keys() - {"title"})
-            service_kwargs.update(cast_service_options(cli_params, service_ctx, options))
-
-            for param_name, param_info in service_init_params.items():
-                if param_name not in service_kwargs and param_name not in ["self", "ctx"]:
-                    if param_info.default is inspect.Parameter.empty:
-                        if param_name == "movie":
-                            service_kwargs[param_name] = "/movies/" in title_id
-                        elif param_name == "meta_lang":
-                            service_kwargs[param_name] = None
-                        else:
-                            log.warning(f"Unknown required parameter '{param_name}' for service {service}, using None")
-                            service_kwargs[param_name] = None
-
-            service_instance = service_module(service_ctx, **service_kwargs)
-
-        except Exception as exc:  # noqa: BLE001 - propagate meaningful failure
-            log.error(f"Failed to create service instance: {exc}")
-            raise
+        service_instance = instantiate_service(ctx, Services.load(service), title_id, params, DL_TRANSPORT_KEYS)
 
     original_download_dir = config.directories.downloads
 
@@ -536,20 +447,23 @@ def perform_download(
     # (success/failure) is reported by the worker's result file.
     try:
         with redirect_stdout(stdout_capture), redirect_stderr(stderr_capture):
-            dl_instance.result(
+            outcome = dl_instance.result(
                 service=service_instance,
                 **{**ctx.params, "select_titles": False, "list_": False, "list_titles": False},
                 progress_sink=progress_callback,
             )
+
+    except RunStopped as exc:
+        log.debug("Stdout: %s", stdout_capture.getvalue())
+        raise APIError(APIErrorCode.DOWNLOAD_ERROR, f"Download failed: {exc.reason}")
 
     except SystemExit as exc:
         if exc.code != 0:
             log.error(f"Download exited with code {exc.code}")
             log.debug("Stdout: %s", stdout_capture.getvalue())
             log.debug("Stderr: %s", stderr_capture.getvalue())
-            if reason := getattr(dl_instance, "stop_reason", None):
-                raise APIError(APIErrorCode.DOWNLOAD_ERROR, f"Download failed: {reason}")
             raise APIError(APIErrorCode.DOWNLOAD_ERROR, f"Download failed with exit code {exc.code}")
+        outcome = dl_instance.outcome()
 
     except Exception as exc:  # noqa: BLE001 - propagate to caller
         log.error(f"Download execution failed: {exc}")
@@ -557,19 +471,16 @@ def perform_download(
         log.debug("Stderr: %s", stderr_capture.getvalue())
         raise
 
-    # dl.result() catches a download-worker exception, reports it, but returns normally (exit 0).
-    # It keeps the error in download_error, so the job isn't reported as completed with no output.
-    if (error := getattr(dl_instance, "download_error", None)) is not None:
+    # dl.result() reports a download-worker exception and returns normally, so the CLI exits cleanly.
+    if outcome.error is not None:
         # segment URLs carry signed CDN tokens (hmac, session IDs) that redact_text does not match
-        detail = redact_all(dl_instance.failure_lines(error)[1].strip())
+        detail = redact_all(dl_instance.failure_lines(outcome.error)[1].strip())
         raise APIError(APIErrorCode.WORKER_ERROR, f"download worker failed: {detail}")
 
-    if progress_callback:
-        skipped_subs = getattr(dl_instance, "skipped_subtitles", None)
-        if skipped_subs:
-            progress_callback({"skipped_subtitles": list(skipped_subs)})
+    if progress_callback and outcome.skipped_subtitles:
+        progress_callback({"skipped_subtitles": outcome.skipped_subtitles})
 
-    output_files = [str(p) for p in dl_instance.completed_files]
+    output_files = [str(p) for p in outcome.files]
     log.info(f"Download completed for job {job_id}, {len(output_files)} file(s) in {original_download_dir}")
 
     return output_files

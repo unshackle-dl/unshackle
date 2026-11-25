@@ -1,7 +1,6 @@
 import asyncio
 import base64
 import copy
-import enum
 import functools
 import json
 import logging
@@ -41,13 +40,11 @@ from unshackle.core.config import config
 from unshackle.core.dl_options import (
     DEFAULT_DOWNLOAD_PARAMS,
     DL_OPTION_API_NAMES,
-    cast_dl_params,
     forwarded_dl_params,
 )
 from unshackle.core.drm import BlowfishStripe, cbcs, is_null_key, real_kids
 from unshackle.core.launch import load_service_config, served_context
 from unshackle.core.manifests.snapshot import capture
-from unshackle.core.providers.anilist import parse_anilist_ref
 from unshackle.core.proxies.resolve import initialize_proxy_providers, is_loopback, resolve_proxy
 from unshackle.core.remote_protocol import (
     HEALTH_ROUTE,
@@ -70,6 +67,7 @@ from unshackle.core.remote_protocol import (
     TracksReply,
     TracksRequest,
 )
+from unshackle.core.run_plan import PlanError, api_plan
 from unshackle.core.services import Services
 from unshackle.core.session import RnetSession, utf8_text
 from unshackle.core.titles import Episode, Song
@@ -84,8 +82,8 @@ from unshackle.core.tunnel import (
     is_public_ip,
     tunnel_proxy,
 )
-from unshackle.core.utilities import declared_kwargs, kind_only_conflict
-from unshackle.core.utils.click_types import QUALITY_LIST, VIDEO_CODEC_LIST, ContextData
+from unshackle.core.utilities import declared_kwargs
+from unshackle.core.utils.click_types import QUALITY_LIST, SEASON_RANGE, VIDEO_CODEC_LIST, ContextData
 from unshackle.core.utils.collections import ci_get, merge_dict
 from unshackle.core.utils.hdr10plus import probed_tracks
 from unshackle.core.utils.redact import REDACTED, URL_USERINFO_RE, redact_all, redact_secrets, redact_text
@@ -1675,23 +1673,12 @@ async def list_tracks_handler(data: Dict[str, Any], request: Optional[web.Reques
 
             wanted = None
             if wanted_param:
-                from unshackle.core.utils.click_types import SeasonRange
-
                 try:
-                    season_range = SeasonRange()
-                    if isinstance(wanted_param, list):
-                        wanted = season_range.parse_tokens(*wanted_param)
-                    else:
-                        # convert(), not parse_tokens(), so a comma-separated string splits
-                        # into tokens the way the CLI splits it
-                        wanted = season_range.convert(wanted_param)
-                    log.debug(
-                        f"Parsed wanted '{sanitize_log(wanted_param)}' into {len(wanted)} episodes: {wanted[:10]}..."
-                    )
-                except (Exception, SystemExit) as e:
+                    wanted = SEASON_RANGE.convert(wanted_param)
+                except click.BadParameter as e:
                     raise APIError(
                         APIErrorCode.INVALID_PARAMETERS,
-                        f"Invalid wanted parameter: {e}",
+                        f"Invalid wanted parameter: {e.message}",
                         details={"wanted": wanted_param, "service": normalized_service},
                     )
             elif season is not None and episode is not None:
@@ -1813,19 +1800,11 @@ def resolve_vcodec(value: Any) -> Optional[list]:
 
 
 def wanted_refusal(wanted: Any) -> Optional[str]:
-    """Why the job worker could not parse ``wanted``, or None when it can."""
-    if not wanted:
-        return None
-    from unshackle.core.utils.click_types import SeasonRange
-
-    tokens = re.split(r"\s*[,;]\s*", wanted) if isinstance(wanted, str) else wanted
-    if not isinstance(tokens, list) or not all(isinstance(t, str) for t in tokens):
-        return "wanted must be a string or a list of strings"
+    """Why dl could not parse ``wanted``, or None when it can."""
     try:
-        if any(not re.match(r"^!?\d+x\d+(\.\d+)?$", t) for t in tokens):
-            SeasonRange().parse_tokens(*tokens)
-    except (click.BadParameter, ValueError) as e:
-        return f"Invalid wanted parameter: {e}"
+        SEASON_RANGE.convert(wanted or [])
+    except click.BadParameter as e:
+        return f"Invalid wanted parameter: {e.message}"
     return None
 
 
@@ -1845,16 +1824,6 @@ def validate_download_parameters(data: Dict[str, Any]) -> Optional[str]:
         client_profile(data)
     except APIError as e:
         return e.message
-
-    if data.get("sample") is not None:
-        from unshackle.core.utils.click_types import SAMPLE_RANGE
-
-        try:
-            SAMPLE_RANGE.convert(data["sample"], None, None)
-        except click.BadParameter:
-            return "sample must be true or a 'START-END' window in seconds, such as '60-120'."
-    if data.get("sample") and data.get("include_sample"):
-        return "sample and include_sample cannot be used together."
 
     # The serve user would create and write any directory a client names; keep it under downloads.
     if data.get("output_dir"):
@@ -1880,13 +1849,6 @@ def validate_download_parameters(data: Dict[str, Any]) -> Optional[str]:
     if "abitrate" in data and data["abitrate"] is not None:
         if not isinstance(data["abitrate"], int) or data["abitrate"] <= 0:
             return "abitrate must be a positive integer"
-
-    for prefix, example in (("v", "6000-7000"), ("a", "128-256")):
-        value = data.get(f"{prefix}bitrate_range")
-        if value and data.get(f"{prefix}bitrate") is not None:
-            return f"Cannot use both {prefix}bitrate and {prefix}bitrate_range"
-        if value is not None and (not isinstance(value, str) or not re.fullmatch(r"\s*\d+\s*-\s*\d+\s*", value)):
-            return f"{prefix}bitrate_range must be a string in 'MIN-MAX' format (e.g., '{example}')"
 
     if data.get("quality") is not None:
         try:
@@ -1922,38 +1884,6 @@ def validate_download_parameters(data: Dict[str, Any]) -> Optional[str]:
         if not isinstance(data["imdb_id"], str) or not re.fullmatch(r"tt\d+", data["imdb_id"]):
             return "imdb_id must be an IMDB ID like 'tt1375666'"
 
-    if data.get("anilist_id") is not None:
-        value = data["anilist_id"]
-        # same parser as --anilist so both surfaces accept and reject the same inputs
-        valid = not isinstance(value, bool) and isinstance(value, (int, str)) and parse_anilist_ref(value)
-        if not valid:
-            return "anilist_id must be a positive integer, or a MyAnimeList ID like 'mal:21'"
-
-    supplied_ids = [name for name in ("tmdb_id", "imdb_id", "tvdb_id") if data.get(name)]
-    if len(supplied_ids) > 1:
-        return f"Cannot use multiple external IDs: {', '.join(supplied_ids)}; give one ID"
-
-    exclusive_flags = []
-    if data.get("video_only"):
-        exclusive_flags.append("video_only")
-    if data.get("audio_only"):
-        exclusive_flags.append("audio_only")
-    if data.get("subs_only"):
-        exclusive_flags.append("subs_only")
-    if data.get("chapters_only"):
-        exclusive_flags.append("chapters_only")
-
-    if len(exclusive_flags) > 1:
-        return f"Cannot use multiple exclusive flags: {', '.join(exclusive_flags)}"
-
-    if data.get("no_subs") and data.get("subs_only"):
-        return "Cannot use both no_subs and subs_only"
-    if data.get("no_audio") and data.get("audio_only"):
-        return "Cannot use both no_audio and audio_only"
-    conflict = kind_only_conflict(data)
-    if conflict:
-        return f"Cannot use both {conflict[0]} and {conflict[1]}"
-
     for key, default in DEFAULT_DOWNLOAD_PARAMS.items():
         if isinstance(default, bool) and data.get(key) is not None and not isinstance(data[key], bool):
             return f"{key} must be a boolean"
@@ -1972,11 +1902,11 @@ def validate_download_parameters(data: Dict[str, Any]) -> Optional[str]:
         if value is not None and (not isinstance(value, list) or not all(isinstance(v, str) for v in value)):
             return f"{key} must be an array of language strings"
 
-    from unshackle.commands.dl import dl, subtitle_look
+    from unshackle.commands.dl import subtitle_look
 
     try:
-        params = cast_dl_params(dl.cli, data)
-    except click.BadParameter as e:
+        params = api_plan(data).params
+    except PlanError as e:
         return e.message
 
     if params.get("sub_font"):
@@ -2129,7 +2059,7 @@ async def download_handler(data: Dict[str, Any], request: Optional[web.Request] 
             details={"service": service_tag},
         )
 
-    validation_error = validate_download_parameters(data)
+    validation_error = await asyncio.to_thread(validate_download_parameters, data)
     if validation_error:
         raise APIError(
             APIErrorCode.INVALID_PARAMETERS,
@@ -2141,22 +2071,13 @@ async def download_handler(data: Dict[str, Any], request: Optional[web.Request] 
         service_module = None if server else Services.load(normalized_service)
         service_params: Optional[Dict[str, Any]] = None
 
-        # Service defaults and options travel nested: flat, a service default would overwrite the dl value of
-        # the same name. Missing required __init__ params are handled in download_manager.perform_download.
-        # A remote service applies its own defaults on the remote server.
+        # Service options travel nested, so a flat key the worker reads stays a dl value; click fills the defaults
+        # when the worker builds the service. A remote service applies its own on the remote server.
         cli_params = getattr(getattr(service_module, "cli", None), "params", None)
         if cli_params is not None:
-            defaults = {
-                param.name: param.default
-                for param in cli_params
-                if param.name and param.default is not None and not isinstance(param.default, enum.Enum)
-            }
-            # A flat dl key (quality, lang) stays a dl value, as in instantiate_service.
-            sent = service_options(
-                data, {param.name for param in cli_params}, FLAT_DL_KEYS | DEFAULT_DOWNLOAD_PARAMS.keys()
-            )
+            sent = service_options(data, {param.name for param in cli_params}, DL_TRANSPORT_KEYS)
             cast_or_refuse(cli_params, click.Context(click.Command(normalized_service)), sent)
-            service_params = {**defaults, **sent}
+            service_params = sent
 
         filtered_params = {k: v for k, v in data.items() if k not in ["service", "title_id", "owner_key"]}
         # Overlay any dl-relevant keys from `serve:` config (e.g. downloads, workers) so the API
@@ -3261,6 +3182,7 @@ async def env_check_handler(request: Optional[web.Request] = None) -> web.Respon
 
 
 # "client" stays out: a flat "client" value with no service_params is a service option.
+DL_TRANSPORT_KEYS = FLAT_DL_KEYS | DEFAULT_DOWNLOAD_PARAMS.keys()
 SESSION_TRANSPORT_KEYS = (SessionCreate.__required_keys__ | SessionCreate.__optional_keys__) - {"client"}
 
 

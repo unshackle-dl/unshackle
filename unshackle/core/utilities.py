@@ -308,6 +308,11 @@ def partition_exclusions(tokens: Optional[Sequence[str]]) -> tuple[list[str], li
     return includes, excludes
 
 
+def inherited_exclusions(own: Sequence[str], own_excl: Sequence[str], fallback_excl: Sequence[str]) -> list[str]:
+    """A language flag's exclusions plus those of the flag it falls back to, unless it names languages of its own."""
+    return list(dict.fromkeys([*own_excl, *([] if own else fallback_excl)]))
+
+
 def matched_language_tags(
     tokens: Sequence[str],
     available: Sequence[Union[str, Language, None]],

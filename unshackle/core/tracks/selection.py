@@ -33,6 +33,21 @@ log = logging.getLogger("download")
 HYBRID_BASE_RANGES = (Video.Range.HDR10P, Video.Range.HDR10)
 
 
+def generated_dv_ranges(
+    range_: Sequence[Video.Range], generate_dv: bool
+) -> tuple[list[Video.Range], list[Video.Range]]:
+    """Turn ``-r HDR10 --generate-dv`` (or HDR10P) into a HYBRID run on that base alone.
+
+    Returns the ranges to run with, and the base ranges the user named. The second list is empty when
+    the flag is off, HYBRID or DV is in the ranges, or no base range is. The service still gets the
+    ranges the user gave, so it fetches no DV track.
+    """
+    bases = [r for r in range_ if r in HYBRID_BASE_RANGES]
+    if not generate_dv or not bases or Video.Range.HYBRID in range_ or Video.Range.DV in range_:
+        return list(range_), []
+    return [Video.Range.HYBRID, *(r for r in range_ if r not in bases)], bases
+
+
 @dataclass(frozen=True)
 class Skip:
     """The title has no track the selection asks for.

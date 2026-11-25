@@ -14,6 +14,7 @@ from langcodes import Language
 
 from tests.lang_selection import test_kind_only_selection as harness
 from tests.lang_selection.test_track_selection import audio, episode, selection, standard, video
+from unshackle.core.run_plan import PlanError, check_options
 from unshackle.core.tracks.selection import Kept, Skip
 from unshackle.core.utilities import missing_required_langs
 
@@ -98,11 +99,9 @@ def test_every_kind_misses_in_one_reason() -> None:
         ({"require_audio": ["-en"]}, "--require-audio: en"),
     ],
 )
-def test_a_required_and_excluded_language_stops_the_run(
-    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture, flags: dict[str, Any], clash: str
-) -> None:
-    assert harness.run(monkeypatch, caplog, {1: {}}, **flags) == 1
-    assert f"{clash} cannot be required and excluded at the same time." in caplog.text
+def test_a_required_and_excluded_language_is_refused(flags: dict[str, Any], clash: str) -> None:
+    with pytest.raises(PlanError, match=f"^{clash} cannot be required and excluded at the same time.$"):
+        check_options(flags)
 
 
 def test_a_language_override_does_not_inherit_the_lang_exclusions(

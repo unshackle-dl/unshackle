@@ -57,7 +57,8 @@ def test_kind_only_conflict(params, expected):
 
 def test_api_rejects_a_conflict():
     assert validate_download_parameters({**BASE, "audio_description_only": True, "no_audio": True}) == (
-        "Cannot use both audio_description_only and no_audio"
+        "--audio-description-only cannot be used with --no-audio: --no-audio drops the tracks that "
+        "--audio-description-only selects."
     )
     assert validate_download_parameters({**BASE, "audio_description_only": True, "audio_only": True}) is None
 

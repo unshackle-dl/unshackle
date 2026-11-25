@@ -36,8 +36,7 @@ def test_a_rest_job_converts_quality_and_passes_cdm_only(tmp_path: Path, monkeyp
             raise _Captured(self.ctx.params["quality"], kwargs["quality"], self.ctx.params["cdm_only"])
 
     class FakeService:
-        def __init__(self, ctx: click.Context) -> None:
-            pass
+        cli = click.Command("svc", callback=lambda title: object())
 
     monkeypatch.setattr(dl_module, "dl", FakeDl)
     monkeypatch.setattr(Services, "get_path", staticmethod(lambda s: tmp_path))
