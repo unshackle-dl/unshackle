@@ -335,7 +335,7 @@ def test_the_session_channel_carries_what_the_server_starts(
         assert service.server_draining()
         server.loop.call_soon_threadsafe(store.stop_drain)
         assert wait_until(lambda: not store.draining, 5)
-        assert not service.server_draining()
+        assert wait_until(lambda: not service.server_draining(), 5)
         assert count(server, "GET", PROMPT_ROUTE) == count(server, "GET", LOGS_ROUTE) == 0
     finally:
         release.set()
