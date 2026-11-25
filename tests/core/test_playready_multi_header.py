@@ -4,7 +4,9 @@ import base64
 from typing import Any
 from uuid import UUID
 
+import click
 import pytest
+from pyplayready.misc.exceptions import InvalidLicense, InvalidXmrLicense
 from pyplayready.system.pssh import PSSH
 from pyplayready.system.wrmheader import WRMHeader
 
@@ -414,3 +416,24 @@ def test_a_single_refused_header_still_raises_on_every_call() -> None:
     for _ in range(2):
         with pytest.raises(RuntimeError, match="licence refused"):
             drm.get_content_keys(cdm=cdm, certificate=_cert, licence=_licence)
+
+
+@pytest.mark.parametrize(
+    "error, expected",
+    [
+        (InvalidXmrLicense("Cannot parse an empty licence message"), click.ClickException),
+        (InvalidLicense("bad"), click.ClickException),
+        (InvalidLicense("server fault 0x8004C065"), PlayReady.Exceptions.DeviceRevoked),
+    ],
+)
+def test_a_licence_the_cdm_cannot_parse_is_one_line_unless_the_device_is_revoked(
+    error: Exception, expected: type[Exception]
+) -> None:
+    cdm = FakeCdm({KID_A: KEY_A})
+
+    def parse_license(session_id: str, response: str) -> None:
+        raise error
+
+    cdm.parse_license = parse_license  # type: ignore[method-assign]
+    with pytest.raises(expected):
+        _drm(_wrm_header(KID_A)).get_content_keys(cdm=cdm, certificate=_cert, licence=_licence)

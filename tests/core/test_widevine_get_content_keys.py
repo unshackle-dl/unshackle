@@ -3,10 +3,15 @@ from __future__ import annotations
 from typing import Any
 from uuid import UUID
 
+import click
 import pytest
+import requests
+from pywidevine.exceptions import InvalidLicenseMessage
 from pywidevine.pssh import PSSH
 
-from unshackle.core.drm import Widevine
+from unshackle.core.cdm.custom_remote_cdm import CustomRemoteCDMExceptions
+from unshackle.core.cdm.decrypt_labs_remote_cdm import DecryptLabsRemoteCDMExceptions
+from unshackle.core.drm import ClearKeyCENC, PlayReady, Widevine
 from unshackle.core.utilities import declared_kwargs
 
 KID = UUID("00112233-4455-6677-8899-aabbccddeeff")
@@ -95,13 +100,25 @@ def test_an_empty_challenge_raises_instead_of_licensing() -> None:
         )
 
 
-def test_a_licence_the_cdm_cannot_parse_is_one_line() -> None:
-    import click
-    from pywidevine.exceptions import InvalidLicenseMessage
-
+@pytest.mark.parametrize(
+    "error",
+    [
+        InvalidLicenseMessage("Could not parse license_message as a SignedMessage"),
+        CustomRemoteCDMExceptions.InvalidLicenseMessage("bad"),
+        DecryptLabsRemoteCDMExceptions.InvalidLicenseMessage("bad"),
+        requests.RequestException("License decrypt failed: 400"),
+    ],
+)
+def test_a_licence_the_cdm_cannot_parse_is_one_line(error: Exception) -> None:
     class JunkCdm(FakeCdm):
         def parse_license(self, session_id: str, response: Any) -> None:
-            raise InvalidLicenseMessage("Could not parse license_message as a SignedMessage")
+            raise error
 
     with pytest.raises(click.ClickException, match=KID.hex):
         _drm().get_content_keys(JunkCdm(), certificate=lambda **_: None, licence=lambda **_: b"junk licence")
+
+
+@pytest.mark.parametrize("drm", [Widevine, PlayReady, ClearKeyCENC])
+def test_a_licence_with_no_usable_key_is_one_line(drm: Any) -> None:
+    assert issubclass(drm.Exceptions.EmptyLicense, click.ClickException)
+    assert issubclass(drm.Exceptions.CEKNotFound, click.ClickException)

@@ -10,6 +10,7 @@ import base64
 from types import SimpleNamespace
 from uuid import UUID
 
+import click
 import pytest
 from pyplayready.system.pssh import PSSH as PRPSSH
 from pywidevine.pssh import PSSH as WvPSSH
@@ -113,5 +114,5 @@ def test_failed_licence_without_injected_keys_still_raises(server_env):
         get_widevine_license=lambda **_: b"garbage",
     )
 
-    with pytest.raises(ValueError, match="not a licence"):
+    with pytest.raises(click.ClickException, match="not a licence"):
         handlers.handle_single_server_cdm(service, SimpleNamespace(), track, pssh.dumps(), "widevine", None)

@@ -10,7 +10,6 @@ import m3u8
 from construct import Container
 from pymp4.parser import Box
 from pywidevine.cdm import Cdm as WidevineCdm
-from pywidevine.exceptions import InvalidLicenseMessage
 from pywidevine.pssh import PSSH
 
 from unshackle.core.config import config
@@ -251,10 +250,10 @@ class Widevine:
                     license_res = call_licence(licence, challenge, pssh=self.pssh, session_id=session_id)
                     try:
                         cdm.parse_license(session_id, license_res)
-                    except InvalidLicenseMessage:
-                        raise click.ClickException(
-                            f"The licence server sent no usable Widevine licence for KID {kid.hex}"
-                        ) from None
+                    except Exception as e:
+                        raise Widevine.Exceptions.EmptyLicense(
+                            f"No usable Widevine licence for KID {kid.hex}: {e}"
+                        ) from e
                     log_event(
                         "drm_license_response",
                         level="DEBUG",
@@ -318,10 +317,10 @@ class Widevine:
         class KIDNotFound(Exception):
             """KID (Encryption Key ID) was not found."""
 
-        class CEKNotFound(Exception):
+        class CEKNotFound(click.ClickException):
             """CEK (Content Encryption Key) for KID was not found in License."""
 
-        class EmptyLicense(Exception):
+        class EmptyLicense(click.ClickException):
             """License returned no Content Encryption Keys."""
 
 

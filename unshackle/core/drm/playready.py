@@ -7,6 +7,7 @@ from threading import Lock
 from typing import Any, Callable, Optional, Union
 from uuid import UUID
 
+import click
 import m3u8
 from construct import Container
 from pymp4.parser import Box
@@ -491,7 +492,15 @@ class PlayReady:
                         except ValueError:
                             pass
 
-                    cdm.parse_license(session_id, license_str)
+                    try:
+                        cdm.parse_license(session_id, license_str)
+                    except Exception as e:
+                        if self.detect_revocation(license_str) or self.detect_revocation(str(e)):
+                            raise
+                        kids = ", ".join(kid.hex for kid in required_kids)
+                        raise PlayReady.Exceptions.EmptyLicense(
+                            f"No usable PlayReady licence for KID {kids}: {e}"
+                        ) from e
                     log_event(
                         "drm_license_response",
                         level="DEBUG",
@@ -561,10 +570,10 @@ class PlayReady:
         class KIDNotFound(Exception):
             pass
 
-        class CEKNotFound(Exception):
+        class CEKNotFound(click.ClickException):
             pass
 
-        class EmptyLicense(Exception):
+        class EmptyLicense(click.ClickException):
             pass
 
         class DeviceRevoked(Exception):

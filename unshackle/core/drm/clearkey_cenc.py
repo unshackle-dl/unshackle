@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any, Callable, Iterable, Optional, Union
 from uuid import UUID
 
+import click
 from requests import Session
 
 from unshackle.core.config import config
@@ -192,10 +193,10 @@ class ClearKeyCENC:
         class KIDNotFound(Exception):
             """KID (Encryption Key ID) was not found."""
 
-        class CEKNotFound(Exception):
+        class CEKNotFound(click.ClickException):
             """CEK (Content Encryption Key) for KID was not found in License."""
 
-        class EmptyLicense(Exception):
+        class EmptyLicense(click.ClickException):
             """License returned no Content Encryption Keys."""
 
 
