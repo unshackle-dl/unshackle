@@ -8,7 +8,7 @@ from pathlib import PureWindowsPath
 from typing import Optional
 
 MAX_CACHE_KEY_DEPTH = 8
-MAX_SESSION_CACHE_KEYS = 64
+MAX_SESSION_CACHE_KEYS = 256
 
 
 CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f-\x9f]")

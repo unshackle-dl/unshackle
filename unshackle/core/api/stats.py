@@ -388,12 +388,16 @@ def _reply_json(response: Any) -> Dict[str, Any]:
 
 
 async def _consumed_json(request: web.Request) -> Dict[str, Any]:
-    """The JSON object of the request body when the handler consumed it (aiohttp caches that read), else ``{}``.
+    """The JSON object of the request body when the handler consumed it, else ``{}``.
+
+    ``json_body`` keeps the object on the request, and aiohttp caches a direct read.
 
     A body nobody read belongs to a call refused before the handler, a 401 or a 429. It stays
     unread: reading it would spend time and memory on an unauthenticated caller, and wait on a
     body that never finishes arriving.
     """
+    if "json_body" in request:
+        return request["json_body"]
     if not request.content.at_eof():
         return {}
     try:

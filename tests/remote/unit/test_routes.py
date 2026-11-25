@@ -22,6 +22,8 @@ from unshackle.core.remote_protocol import APIErrorCode
 
 pytestmark = pytest.mark.unit
 
+ABOVE_APP_LIMIT = 2 * 1024 * 1024
+
 
 @pytest.fixture
 def make_app():
@@ -389,3 +391,30 @@ def test_setup_routes_with_docs_registers_each_route_once() -> None:
     routes_with_docs = Counter((r.method, r.resource.canonical) for r in documented.router.routes())
     assert max(routes_with_docs.values()) == 1
     assert {route for route in routes_with_docs if not route[1].startswith("/api/docs")} == set(collect_paths(plain))
+
+
+@pytest.mark.parametrize(
+    "path, handler", [("/api/session/create", "session_create_handler"), ("/api/search", "search_handler")]
+)
+async def test_a_login_route_reads_a_body_above_the_application_limit(
+    path: str, handler: str, make_app, aiohttp_client, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def echo(data: dict, request: web.Request) -> web.Response:
+        return web.json_response({"size": len(data["cache"]["a"])})
+
+    monkeypatch.setattr(routes, handler, echo)
+    client = await aiohttp_client(make_app())
+
+    taken = await client.post(path, json={"cache": {"a": "x" * ABOVE_APP_LIMIT}})
+    refused = await client.post(path, json={"cache": {"a": "x" * routes.MAX_LOGIN_BODY_BYTES}})
+
+    assert await taken.json() == {"size": ABOVE_APP_LIMIT}
+    assert (await refused.json())["error_code"] == APIErrorCode.INVALID_INPUT.value
+
+
+async def test_another_route_keeps_the_application_body_limit(make_app, aiohttp_client) -> None:
+    client = await aiohttp_client(make_app())
+
+    refused = await client.post("/api/list-titles", json={"cache": {"a": "x" * ABOVE_APP_LIMIT}})
+
+    assert "Too Large" in (await refused.json())["details"]["error"]

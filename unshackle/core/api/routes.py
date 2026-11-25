@@ -179,14 +179,21 @@ def categorized(handler: Handler) -> Handler:
     return wrapper
 
 
-async def json_body(request: web.Request) -> Any:
-    """The request's JSON object; raises INVALID_INPUT when it does not parse or is not an object."""
+MAX_LOGIN_BODY_BYTES = 8 * 1024 * 1024
+
+
+async def json_body(request: web.Request, max_size: Optional[int] = None) -> Any:
+    """The request's JSON object; raises INVALID_INPUT when it does not parse or is not an object.
+
+    ``max_size`` replaces the body limit of the application for this read.
+    """
     try:
-        data = await request.json()
+        data = await (request.clone(client_max_size=max_size) if max_size else request).json()
     except Exception as e:
         raise APIError(APIErrorCode.INVALID_INPUT, "Invalid JSON request body", details={"error": str(e)}) from e
     if not isinstance(data, dict):
         raise APIError(APIErrorCode.INVALID_INPUT, "The request body must be a JSON object")
+    request["json_body"] = data
     return data
 
 
@@ -688,7 +695,7 @@ async def search(request: web.Request) -> web.Response:
       '400':
         description: Invalid request
     """
-    data = await json_body(request)
+    data = await json_body(request, MAX_LOGIN_BODY_BYTES)
     return await search_handler(data, request)
 
 
@@ -2112,7 +2119,7 @@ async def session_create(request: web.Request) -> web.Response:
       '401':
         description: Authentication failed
     """
-    data = await json_body(request)
+    data = await json_body(request, MAX_LOGIN_BODY_BYTES)
     return await session_create_handler(data, request)
 
 
