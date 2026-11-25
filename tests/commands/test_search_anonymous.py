@@ -33,11 +33,11 @@ def login_calls(monkeypatch, tmp_path):
 
         return call
 
-    dl = search_command.dl
-    monkeypatch.setattr(dl, "get_cookie_jar", record("get_cookie_jar", None))
-    monkeypatch.setattr(dl, "get_credentials", record("get_credentials", None))
-    monkeypatch.setattr(dl, "get_cookie_path", record("get_cookie_path", tmp_path / "cookies.txt"))
-    monkeypatch.setattr(dl, "save_cookies", record("save_cookies", None))
+    login = search_command.login
+    monkeypatch.setattr(login, "get_cookie_jar", record("get_cookie_jar", None))
+    monkeypatch.setattr(login, "get_credentials", record("get_credentials", None))
+    monkeypatch.setattr(login, "get_cookie_path", record("get_cookie_path", tmp_path / "cookies.txt"))
+    monkeypatch.setattr(login, "save_cookies", record("save_cookies", None))
     return calls
 
 

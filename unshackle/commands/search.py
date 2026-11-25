@@ -10,7 +10,7 @@ from rich.padding import Padding
 from rich.rule import Rule
 from rich.tree import Tree
 
-from unshackle.commands.dl import dl
+from unshackle.core import login
 from unshackle.core.config import config, load_yaml
 from unshackle.core.console import console
 from unshackle.core.constants import context_settings
@@ -140,8 +140,8 @@ def result(service: Service, profile: Optional[str] = None, remote: bool = False
 
     if not remote and not service.ANONYMOUS_SEARCH:
         with console.status("Authenticating with Service...", spinner="dots"):
-            cookies = dl.get_cookie_jar(service_tag, profile)
-            credential = dl.get_credentials(service_tag, profile)
+            cookies = login.get_cookie_jar(service_tag, profile)
+            credential = login.get_credentials(service_tag, profile)
             service.authenticate(cookies, credential)
             if cookies or credential:
                 log.info("Authenticated with Service")
@@ -159,9 +159,9 @@ def result(service: Service, profile: Optional[str] = None, remote: bool = False
             result_text += f"\n[bright_black]id: {result.id}[/]"
             search_results.add(result_text + "\n")
 
-    cookie_file = None if remote or service.ANONYMOUS_SEARCH else dl.get_cookie_path(service_tag, profile)
+    cookie_file = None if remote or service.ANONYMOUS_SEARCH else login.get_cookie_path(service_tag, profile)
     if cookie_file:
-        dl.save_cookies(cookie_file, service.session.cookies)
+        login.save_cookies(cookie_file, service.session.cookies)
 
     console.print(Padding(Rule(f"[rule.text]{len(search_results.children)} Search Results"), (1, 2)))
 

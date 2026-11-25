@@ -45,6 +45,7 @@ from rich.padding import Padding
 from rich.rule import Rule
 from rich.spinner import Spinner
 
+from unshackle.core import login
 from unshackle.core.config import config
 from unshackle.core.console import SyncLive, console
 from unshackle.core.constants import AnyTrack
@@ -632,9 +633,7 @@ def make_remote_service(
 
 
 def load_credentials_for_transport(service_tag: str, profile: Optional[str]) -> Optional[Dict[str, str]]:
-    from unshackle.commands.dl import dl
-
-    credential = dl.get_credentials(service_tag, profile)
+    credential = login.get_credentials(service_tag, profile)
     if credential:
         result: Dict[str, str] = {"username": credential.username, "password": credential.password}
         if credential.extra:
@@ -646,9 +645,7 @@ def load_credentials_for_transport(service_tag: str, profile: Optional[str]) -> 
 def load_cookies_for_transport(service_tag: str, profile: Optional[str]) -> Optional[str]:
     import zlib
 
-    from unshackle.commands.dl import dl
-
-    cookie_path = dl.get_cookie_path(service_tag, profile)
+    cookie_path = login.get_cookie_path(service_tag, profile)
     if cookie_path and cookie_path.exists():
         return base64.b64encode(zlib.compress(cookie_path.read_bytes())).decode("ascii")
     return None
@@ -789,9 +786,7 @@ def cache_key_filter(service_tag: str, profile: Optional[str]) -> Callable[[str]
     because a service may embed the credential digest or profile name in a directory name
     as well as in the basename. A profile with no credentials entry uses the default one.
     """
-    from unshackle.commands.dl import dl
-
-    credential = dl.get_credentials(service_tag, profile)
+    credential = login.get_credentials(service_tag, profile)
     allowed = credential_cache_digests(credential) if credential else set()
     active = profile or "default"
     profiles = config.credentials.get(service_tag)

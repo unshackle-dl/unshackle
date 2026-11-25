@@ -3,7 +3,7 @@ import logging
 import time
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from functools import partial
-from typing import Any, Iterator, Optional, Union
+from typing import Any, Collection, Iterable, Iterator, Optional, Union
 from uuid import UUID
 
 from unshackle.core.config import config
@@ -38,30 +38,15 @@ class Vaults:
     def __len__(self) -> int:
         return len(self.vaults)
 
-    def load(self, type_: str, **kwargs: Any) -> bool:
-        """Load a Vault into the vaults list. Returns True if successful, False otherwise."""
+    def load(self, type_: str, **kwargs: Any) -> None:
+        """Load a Vault into the vaults list, or raise when it cannot be built."""
         module = MODULES.get(type_)
         if not module:
             raise ValueError(f"Unable to find vault command by the name '{type_}'.")
         # only pass the global default to vaults that declare a timeout param (per-vault config still wins)
         if "timeout" not in kwargs and "timeout" in inspect.signature(module).parameters:
             kwargs["timeout"] = config.vault_timeout
-        try:
-            vault = module(**kwargs)
-            self.vaults.append(vault)
-            return True
-        # one bad vault config must not stop the others from loading
-        except Exception as e:
-            log.debug(f"Vault '{type_}' failed to load: {e!r}")
-            return False
-
-    def load_critical(self, type_: str, **kwargs: Any) -> None:
-        """Load a critical Vault that must succeed or raise an exception."""
-        module = MODULES.get(type_)
-        if not module:
-            raise ValueError(f"Unable to find vault command by the name '{type_}'.")
-        vault = module(**kwargs)
-        self.vaults.append(vault)
+        self.vaults.append(module(**kwargs))
 
     def get_key(self, kid: Union[UUID, str]) -> tuple[Optional[str], Optional[Vault]]:
         """Get Key from the first Vault it can by KID (Key ID) and Service.
@@ -274,4 +259,39 @@ class Vaults:
             log.warning(f"Skipping Vault '{vault.name}' for the rest of this run")
 
 
-__all__ = ("Vaults",)
+__all__ = ("Vaults", "load_config_vaults")
+
+
+def load_config_vaults(
+    service: Optional[str] = None,
+    configs: Optional[Iterable[dict[str, Any]]] = None,
+    critical: Collection[str] = (),
+) -> tuple[Vaults, dict[str, BaseException]]:
+    """Load vault configs (the config's ``key_vaults`` by default) into one Vaults for a service.
+
+    A vault whose lower-case type is in ``critical`` raises when it fails to load; any other vault
+    that fails is left out and returned by name with its error. A DecryptLabs API vault with no
+    token of its own takes the global ``decrypt_labs_api_key``.
+    """
+    vaults = Vaults(service)
+    failed: dict[str, BaseException] = {}
+    for vault_config in config.key_vaults if configs is None else configs:
+        cfg = dict(vault_config)
+        type_ = str(cfg.pop("type", ""))
+        name = str(cfg.get("name") or type_)
+        if type_.lower() == "api" and "decrypt_labs" in name.lower() and not cfg.get("token"):
+            if config.decrypt_labs_api_key:
+                cfg["token"] = config.decrypt_labs_api_key
+            else:
+                log.warning(f"No token for DecryptLabs vault '{name}' and no global decrypt_labs_api_key")
+        try:
+            vaults.load(type_, **cfg)
+        except (Exception, SystemExit) as e:
+            if type_.lower() in critical:
+                log.error(f"vault failure: {name} ({type_}) - {e}")
+                raise
+            failed[name] = e
+            log.debug(f"Failed to load vault: {name} ({type_}): {e!r}")
+        else:
+            log.debug(f"Successfully loaded vault: {name} ({type_})")
+    return vaults, failed

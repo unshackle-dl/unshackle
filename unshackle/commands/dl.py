@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import html
 import logging
 import os
 import random
@@ -16,8 +15,6 @@ from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 from datetime import date, timedelta
 from functools import partial
-from http.cookiejar import CookieJar, MozillaCookieJar
-from io import StringIO
 from itertools import groupby
 from operator import attrgetter
 from pathlib import Path
@@ -36,7 +33,7 @@ from rich.rule import Rule
 from rich.spinner import Spinner
 from rich.table import Table
 
-from unshackle.core import __version__, binaries, providers
+from unshackle.core import __version__, binaries, login, providers
 from unshackle.core.cdm.choice import choose_cdm
 from unshackle.core.cdm.detect import cdm_system, cdm_type_stub, is_playready_cdm, is_remote_cdm
 from unshackle.core.config import cdm_entry_names_device, config, load_yaml, resolve_cdm_name, resolve_decryption
@@ -49,7 +46,6 @@ from unshackle.core.constants import (
     AnyTrack,
     context_settings,
 )
-from unshackle.core.credential import Credential
 from unshackle.core.dl_options import DL_OPTION_ALIASES
 from unshackle.core.downloaders import (
     default_max_workers,
@@ -135,7 +131,7 @@ from unshackle.core.utils.post_scripts import NO_POST_SCRIPTS, build_context, di
 from unshackle.core.utils.redact import mask_proxy
 from unshackle.core.utils.selector import select_multiple
 from unshackle.core.utils.subprocess import ffprobe
-from unshackle.core.vaults import Vaults
+from unshackle.core.vaults import Vaults, load_config_vaults
 
 if TYPE_CHECKING:
     import pysubs2
@@ -1509,40 +1505,8 @@ class dl:
             )
         else:
             with console.status("Loading Key Vaults...", spinner="dots"):
-                self.vaults = Vaults(self.vault_service)
+                self.vaults, failed_vaults = load_config_vaults(self.vault_service, critical={"sqlite"})
                 total_vaults = len(config.key_vaults)
-                failed_vaults = []
-
-                for vault in config.key_vaults:
-                    vault_type = vault["type"]
-                    vault_name = vault.get("name", vault_type)
-                    vault_copy = vault.copy()
-                    del vault_copy["type"]
-
-                    if vault_type.lower() == "api" and "decrypt_labs" in vault_name.lower():
-                        if "token" not in vault_copy or not vault_copy["token"]:
-                            if config.decrypt_labs_api_key:
-                                vault_copy["token"] = config.decrypt_labs_api_key
-                            else:
-                                self.log.warning(
-                                    f"No token provided for DecryptLabs vault '{vault_name}' and no global "
-                                    "decrypt_labs_api_key configured"
-                                )
-
-                    if vault_type.lower() == "sqlite":
-                        try:
-                            self.vaults.load_critical(vault_type, **vault_copy)
-                            self.log.debug(f"Successfully loaded vault: {vault_name} ({vault_type})")
-                        except Exception as e:
-                            self.log.error(f"vault failure: {vault_name} ({vault_type}) - {e}")
-                            raise
-                    else:
-                        # Other vaults (MySQL, HTTP, API) - soft fail
-                        if not self.vaults.load(vault_type, **vault_copy):
-                            failed_vaults.append(vault_name)
-                            self.log.debug(f"Failed to load vault: {vault_name} ({vault_type})")
-                        else:
-                            self.log.debug(f"Successfully loaded vault: {vault_name} ({vault_type})")
 
                 loaded_count = len(self.vaults)
                 if failed_vaults:
@@ -1968,8 +1932,8 @@ class dl:
             spinner="dots",
         ):
             try:
-                cookies = self.get_cookie_jar(self.service, self.profile)
-                credential = self.get_credentials(self.service, self.profile)
+                cookies = login.get_cookie_jar(self.service, self.profile)
+                credential = login.get_credentials(self.service, self.profile)
                 service.authenticate(cookies, credential)
                 if cookies or credential:
                     self.log.info("Authenticated with Service")
@@ -3394,9 +3358,9 @@ class dl:
                     progress_sink({"output_files": [str(p) for p in self.completed_files]})
 
             if not hasattr(service, "close"):
-                cookie_file = self.get_cookie_path(self.service, self.profile)
+                cookie_file = login.get_cookie_path(self.service, self.profile)
                 if cookie_file:
-                    self.save_cookies(cookie_file, service.session.cookies)
+                    login.save_cookies(cookie_file, service.session.cookies)
 
         self.keys.wait_vault_writes()
         if hasattr(service, "close"):
@@ -3965,107 +3929,6 @@ class dl:
         if quality and cdm_system(cdm) != system:
             cdm = self.get_cdm(self.service, self.profile, drm=system)
         return cdm
-
-    @staticmethod
-    def get_cookie_path(service: str, profile: Optional[str]) -> Optional[Path]:
-        """Get Service Cookie File Path for Profile."""
-        direct_cookie_file = config.directories.cookies / f"{service}.txt"
-        profile_cookie_file = config.directories.cookies / service / f"{profile}.txt"
-        default_cookie_file = config.directories.cookies / service / "default.txt"
-
-        if direct_cookie_file.exists():
-            return direct_cookie_file
-        elif profile_cookie_file.exists():
-            return profile_cookie_file
-        elif default_cookie_file.exists():
-            return default_cookie_file
-        return None
-
-    @staticmethod
-    def get_cookie_jar(service: str, profile: Optional[str]) -> Optional[CookieJar]:
-        """
-        Get Service Cookies for Profile.
-
-        If the config has firefox_cookies for the service, cookies come from Firefox first. If that extraction
-        raises or returns nothing, unshackle uses the profile's cookie file instead and does not log the failure.
-        """
-        ff_settings = getattr(config, "firefox_cookies", {}).get(service)
-        if ff_settings:
-            try:
-                from unshackle.core.utils.firefox_cookie_extractor import get_firefox_cookies
-
-                extracted_jar = get_firefox_cookies(ff_settings)
-                if extracted_jar:
-                    return extracted_jar
-            except Exception:
-                pass
-
-        cookie_file = dl.get_cookie_path(service, profile)
-        if cookie_file:
-            return dl.load_cookie_file(cookie_file)
-
-        return None
-
-    @staticmethod
-    def load_cookie_file(cookie_file: Path) -> MozillaCookieJar:
-        """Load a Netscape cookie file with every expiry blanked, so no layer drops an expired cookie."""
-        cookie_jar = dl.parse_cookie_text(cookie_file.read_text("utf-8-sig"), str(cookie_file))
-        cookie_jar.filename = str(cookie_file)
-        return cookie_jar
-
-    @staticmethod
-    def parse_cookie_text(text: str, source: str) -> MozillaCookieJar:
-        """Parse Netscape cookie text the way :meth:`load_cookie_file` does; ``source`` names it in errors."""
-        cookie_jar = MozillaCookieJar()
-        cookie_data = html.unescape(text).splitlines(keepends=False)
-        head = next((line.lstrip() for line in cookie_data if line.strip()), "")
-        if head[:1] in ("[", "{"):
-            raise ValueError(f"{source} is a JSON export; export it again in Netscape format")
-        for i, line in enumerate(cookie_data):
-            body = line.lstrip()
-            prefix = "#HttpOnly_" if body.startswith("#HttpOnly_") else ""
-            body = body[len(prefix) :]
-            if not body or body.startswith("#"):
-                continue
-            line_data = body.split("\t") if "\t" in body else body.split(None, 6)
-            if len(line_data) == 6:
-                line_data.append("")
-            if len(line_data) != 7:
-                raise ValueError(f"{source} line {i + 1} is not a Netscape cookie row: {line!r}")
-            line_data[4] = ""
-            line_data[1] = str(line_data[0].startswith(".")).upper()
-            cookie_data[i] = prefix + "\t".join(line_data)
-        cookie_data.insert(0, "# Netscape HTTP Cookie File")
-        cookie_jar._really_load(StringIO("\n".join(cookie_data)), source, True, True)  # type: ignore[attr-defined]
-        if not len(cookie_jar):
-            raise ValueError(f"{source} holds no cookies; export it again in Netscape format")
-        return cookie_jar
-
-    @staticmethod
-    def save_cookies(path: Path, cookies: CookieJar) -> None:
-        if hasattr(cookies, "jar"):
-            cookies = cookies.jar
-
-        cookie_jar = dl.load_cookie_file(path) if path.exists() else MozillaCookieJar(path)
-        for cookie in cookies:
-            if not cookie.name or not cookie.domain:
-                continue
-            cookie_jar.set_cookie(cookie)
-        cookie_jar.save(ignore_discard=True, ignore_expires=True)
-
-    @staticmethod
-    def get_credentials(service: str, profile: Optional[str]) -> Optional[Credential]:
-        """Get Service Credentials for Profile."""
-        credentials = config.credentials.get(service)
-        if credentials:
-            if isinstance(credentials, dict):
-                if profile:
-                    credentials = credentials.get(profile) or credentials.get("default")
-                else:
-                    credentials = credentials.get("default")
-            if credentials:
-                return Credential.from_config(credentials)
-        return None
 
     def cdm_from_service_entry(self) -> bool:
         """Whether the service's own ``cdm`` entry named the loaded device, not ``--cdm`` or the ``default`` entry."""

@@ -64,8 +64,8 @@ def seen(tmp_path, monkeypatch):
     monkeypatch.setattr(handlers, "resolve_server_account", lambda *args: None)
     monkeypatch.setattr(handlers, "load_full_cdm", lambda *args: None)
     monkeypatch.setattr(handlers.Services, "load", staticmethod(lambda service: module))
-    monkeypatch.setattr("unshackle.commands.dl.dl.get_cookie_jar", staticmethod(lambda service, profile: None))
-    monkeypatch.setattr("unshackle.commands.dl.dl.get_credentials", staticmethod(lambda service, profile: None))
+    monkeypatch.setattr("unshackle.core.login.get_cookie_jar", lambda service, profile: None)
+    monkeypatch.setattr("unshackle.core.login.get_credentials", lambda service, profile: None)
     return _CacheService.seen
 
 

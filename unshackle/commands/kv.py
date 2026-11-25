@@ -24,12 +24,12 @@ from unshackle.core.console import GradientPulseBarColumn, console
 from unshackle.core.constants import context_settings
 from unshackle.core.services import Services
 from unshackle.core.vault import Vault, is_null_key
-from unshackle.core.vaults import Vaults
+from unshackle.core.vaults import Vaults, load_config_vaults
 
 
 def load_vaults(vault_names: list[str]) -> Vaults:
     """Load and validate vaults by config name, or by the path of an SQLite vault file."""
-    vaults = Vaults()
+    configs = []
     for vault_name in vault_names:
         vault_config = next((x for x in config.key_vaults if x["name"] == vault_name), None)
         if not vault_config:
@@ -37,14 +37,11 @@ def load_vaults(vault_names: list[str]) -> Vaults:
             if not path.is_file():
                 raise click.ClickException(f"Vault ({vault_name}) is not defined in the config or an existing file.")
             vault_config = {"type": "SQLite", "name": path.stem, "path": path}
+        configs.append(vault_config)
 
-        vault_type = vault_config["type"]
-        vault_args = vault_config.copy()
-        del vault_args["type"]
-
-        if not vaults.load(vault_type, **vault_args):
-            raise click.ClickException(f"Failed to load vault ({vault_name}).")
-
+    vaults, failed = load_config_vaults(configs=configs)
+    if failed:
+        raise click.ClickException(f"Failed to load vault ({next(iter(failed))}).")
     return vaults
 
 

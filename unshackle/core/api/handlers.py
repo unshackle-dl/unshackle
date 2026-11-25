@@ -23,6 +23,7 @@ from urllib.parse import urlsplit
 import click
 from aiohttp import web
 
+from unshackle.core import login
 from unshackle.core.api.compression import safe_inflate
 from unshackle.core.api.errors import APIError, categorize_exception, handle_api_exception
 from unshackle.core.api.input_bridge import InputBridge, NoUserBridge
@@ -224,13 +225,12 @@ def server_login_material(
     which the operator's own UI drives, uses its own profiles; a ``--remote-only`` server uses only
     what the client sent, the same rule as a remote session.
     """
-    from unshackle.commands.dl import dl
     from unshackle.core.api.stats import stats
 
     if account:
-        return server_account_cookies(normalized_service, profile), dl.get_credentials(normalized_service, profile)
+        return server_account_cookies(normalized_service, profile), login.get_credentials(normalized_service, profile)
     if stats.mode != "remote_only":
-        return dl.get_cookie_jar(normalized_service, profile), dl.get_credentials(normalized_service, profile)
+        return login.get_cookie_jar(normalized_service, profile), login.get_credentials(normalized_service, profile)
     return load_client_cookies(data.get("cookies")), client_credential(data)
 
 
@@ -1244,12 +1244,10 @@ def _regions(value: Any) -> set[str]:
 
 def server_account_cookies(service: str, profile: Optional[str]) -> Any:
     """Cookies for a server account: the profile's own file only, so a bare ``cookies/{service}.txt`` cannot shadow it."""
-    from unshackle.commands.dl import dl
-
     if profile is None:
-        return dl.get_cookie_jar(service, None)
+        return login.get_cookie_jar(service, None)
     path = config.directories.cookies / service / f"{profile}.txt"
-    return dl.load_cookie_file(path) if path.exists() else None
+    return login.load_cookie_file(path) if path.exists() else None
 
 
 def load_client_cookies(cookie_text: Any) -> Optional[CookieJar]:
@@ -1259,14 +1257,12 @@ def load_client_cookies(cookie_text: Any) -> Optional[CookieJar]:
     the way local ``dl`` parses a cookie file, so a file that works locally also works
     over ``--remote``.
     """
-    from unshackle.commands.dl import dl
-
     if not cookie_text or not isinstance(cookie_text, str):
         return None
 
     try:
         cookie_str = safe_inflate(base64.b64decode(cookie_text)).decode("utf-8-sig")
-        return dl.parse_cookie_text(cookie_str, "client cookies")
+        return login.parse_cookie_text(cookie_str, "client cookies")
     except (ValueError, zlib.error, OSError) as e:
         raise APIError(APIErrorCode.INVALID_INPUT, f"cookies is not a compressed Netscape cookie file: {e}")
 
@@ -2755,11 +2751,11 @@ def run_health_checks(checks: Optional[List[Dict[str, Any]]] = None) -> List[Dic
         name = vault_config.get("name") or vault_config.get("type", "vault")
 
         def vault_probe(vault_config: Any = vault_config) -> tuple[str, str]:
-            from unshackle.core.vaults import Vaults
+            from unshackle.core.vaults import load_config_vaults
 
-            cfg = dict(vault_config)
-            vaults = Vaults(probe_service)
-            vaults.load_critical(cfg.pop("type"), **cfg)
+            vaults, failed = load_config_vaults(probe_service, [vault_config])
+            if failed:
+                raise next(iter(failed.values()))
             vault = vaults.vaults[0]
             try:
                 vault.get_key(HEALTH_PROBE_KID, probe_service)
@@ -3389,7 +3385,6 @@ def create_service_instance(
     client that sends nothing authenticates with nothing, because the server never lends its
     own accounts.
     """
-    from unshackle.commands.dl import dl
     from unshackle.core.tracks import Video
 
     server_config = service_config = key_service_yaml(normalized_service, user_config)
@@ -3433,7 +3428,7 @@ def create_service_instance(
 
     if server_account:
         cookies = server_account_cookies(normalized_service, profile)
-        credential = dl.get_credentials(normalized_service, profile)
+        credential = login.get_credentials(normalized_service, profile)
     else:
         credential = client_credential(data)
         cookies = load_client_cookies(data.get("cookies"))
@@ -4454,21 +4449,11 @@ def pick_server_pssh(track: Any, candidates: List[str]) -> Optional[tuple[str, s
 
 
 def load_server_vaults(service_name: str) -> Any:
-    """Load server vaults from config.key_vaults."""
-    from unshackle.core.config import config as app_config
+    """Load server vaults from config.key_vaults; a vault that fails to load is left out."""
     from unshackle.core.services import Services
-    from unshackle.core.vaults import Vaults
+    from unshackle.core.vaults import load_config_vaults
 
-    vaults = Vaults(Services.get_vault_tag(service_name))
-    for vault_config in app_config.key_vaults:
-        cfg = vault_config.copy()
-        vault_type = cfg.pop("type", None)
-        if vault_type:
-            try:
-                vaults.load(vault_type, **cfg)
-            except (Exception, SystemExit) as e:
-                log.warning(f"Could not load vault '{vault_type}': {e}")
-    return vaults
+    return load_config_vaults(Services.get_vault_tag(service_name))[0]
 
 
 def once(shared: Dict[Any, Any], key: Any, make: Callable[[], Any]) -> Any:

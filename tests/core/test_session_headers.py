@@ -243,7 +243,7 @@ def test_clear_by_name_drops_a_server_set_cookie(server: str) -> None:
 def test_clear_before_the_client_exists_empties_the_jar_and_sends_nothing(server: str) -> None:
     """``clear()`` on a session that has made no request must empty every cookie view.
 
-    ``dl.save_cookies`` writes ``cookies.jar`` back to the cookie file and only ever merges,
+    ``login.save_cookies`` writes ``cookies.jar`` back to the cookie file and only ever merges,
     so a cleared cookie left in the jar returns to disk.
     """
     session = RnetSession()

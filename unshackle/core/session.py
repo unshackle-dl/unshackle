@@ -418,7 +418,7 @@ class RnetCookieAdapter(MutableMapping):
     def jar(self) -> CookieJar:
         """Return a CookieJar of the cookies that arrived as a CookieJar (requests compat).
 
-        ``save_cookies`` in dl.py uses this to write cookies back to disk, so it carries a value
+        ``login.save_cookies`` uses this to write cookies back to disk, so it carries a value
         the server rotated for one of those cookies but not the cookies set by name.
         """
         jar = CookieJar()

@@ -186,8 +186,8 @@ def test_setup_list_service_threads_request(monkeypatch):
     monkeypatch.setattr(handlers, "load_full_cdm", lambda *args: None)
     monkeypatch.setattr(handlers.Services, "load", lambda service: None)
     monkeypatch.setattr(handlers, "instantiate_service", lambda *args: FakeService())
-    monkeypatch.setattr("unshackle.commands.dl.dl.get_cookie_jar", staticmethod(lambda service, profile: None))
-    monkeypatch.setattr("unshackle.commands.dl.dl.get_credentials", staticmethod(lambda service, profile: None))
+    monkeypatch.setattr("unshackle.core.login.get_cookie_jar", lambda service, profile: None)
+    monkeypatch.setattr("unshackle.core.login.get_credentials", lambda service, profile: None)
 
     req = request("plainkey")
     handlers.setup_list_service({}, "EXAMPLE", None, "some-title", req)
@@ -204,8 +204,8 @@ def test_search_reports_failed_proxy_check_as_invalid_proxy(monkeypatch):
     monkeypatch.setattr(handlers, "load_full_cdm", lambda *args: None)
     monkeypatch.setattr(handlers.Services, "load", lambda service: None)
     monkeypatch.setattr(handlers, "instantiate_service", failed_check)
-    monkeypatch.setattr("unshackle.commands.dl.dl.get_cookie_jar", staticmethod(lambda service, profile: None))
-    monkeypatch.setattr("unshackle.commands.dl.dl.get_credentials", staticmethod(lambda service, profile: None))
+    monkeypatch.setattr("unshackle.core.login.get_cookie_jar", lambda service, profile: None)
+    monkeypatch.setattr("unshackle.core.login.get_credentials", lambda service, profile: None)
 
     with pytest.raises(APIError) as exc_info:
         handlers.run_service_search({}, "EXAMPLE", "query", request("plainkey"))
