@@ -3112,7 +3112,7 @@ control this trade-off on the <code>dl</code> command:</p>
 </tr>
 <tr>
 <td><code>--cdm-only</code></td>
-<td>Ignore vaults for sourcing keys and always perform a fresh license request. Over a <code>server_cdm</code> remote session the server still reads its own vaults; the flag only skips the client's decode check on the key it gets back.</td>
+<td>Ignore vaults for sourcing keys and always perform a fresh license request. Over <code>--remote</code>, your own CDM licenses each track, and the run uses neither the server CDM nor the server vault. A remote session on the server's device fails, and so does a run with no local CDM.</td>
 </tr>
 <tr>
 <td><code>--cdm &lt;name&gt;</code></td>
