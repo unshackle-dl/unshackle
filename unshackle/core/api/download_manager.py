@@ -412,11 +412,13 @@ def perform_download(
 
     from unshackle.core.api.handlers import DL_TRANSPORT_KEYS, instantiate_service, relay_label
     from unshackle.core.launch import launch
+    from unshackle.core.proxies.resolve import initialize_proxy_providers
     from unshackle.core.run_plan import RunStopped, api_plan
 
     ctx = api_plan(params, client_sent_keys(params)).context(dl.cli, service)
     launch(ctx, {"client_argv": f"{relay_label(params)} download job {job_id}"})
-    dl_instance = dl(ctx=ctx, proxy_providers=None if params.get("server_proxy") is True else [], **ctx.params)
+    providers = initialize_proxy_providers(quiet=True) if params.get("server_proxy") is True else []
+    dl_instance = dl(ctx=ctx, proxy_providers=providers, **ctx.params)
     # Per-request credential ("user:pass"); feed it into the map get_credentials() reads so a
     # client can authenticate without anything being persisted to disk. Without a profile,
     # get_credentials() falls back to "default", so store it there too rather than dropping it

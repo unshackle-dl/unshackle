@@ -105,6 +105,7 @@ Config keys of the Control D proxy provider. See
 | `max_profiles` | `int` | `4` | The most profiles unshackle uses: your pairs plus the `unshackle-*` endpoints on the account. It must be 1 or more. unshackle creates an `unshackle-<region>` profile and endpoint only while the total is lower. |
 
 !!! note "Provider loading differs between CLI and REST server"
-    The `dl` CLI loads all providers, including `gluetun`. The REST API / remote-client path
-    does **not** load `gluetun`, because it starts a local Docker container. ExpressVPN and ProtonVPN also auto-load when their cached session exists, and Hola
+    The `dl` and `search` commands load all providers, including `gluetun`. A server (REST API
+    requests, download jobs and remote sessions) and the remote client do **not** load `gluetun`,
+    because it starts a local Docker container. ExpressVPN and ProtonVPN also auto-load when their cached session exists, and Hola
     auto-loads whenever the `hola-proxy` binary is present.

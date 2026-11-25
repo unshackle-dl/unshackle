@@ -580,6 +580,11 @@ in unshackle itself.
     Give `--remote` a proxy the server can reach, or run the service locally. A server on this
     machine (a `remote_services` URL on `127.0.0.1`) can reach a local proxy, so it is exempt.
 
+!!! warning "Not available on a server"
+    `unshackle serve` does not load Gluetun. A REST API request, a download job and a
+    remote session cannot use a `gluetun:` proxy, also for an API key with `server_proxy`.
+    Use Gluetun with `dl` or `search` on your own machine.
+
 !!! warning "Docker is required"
     Gluetun needs a working [Docker](https://docs.docker.com/get-docker/) installation on
     your `PATH`. If Docker is not found, the proxy provider fails to load. The container also needs the `NET_ADMIN` capability and access
@@ -1043,19 +1048,12 @@ proxy_providers:
 
 The returned proxy is HTTPS on **port 443**.
 
-!!! warning "Windscribe is not loaded by the REST API resolver"
-    The `dl` command loads the standalone Windscribe proxy provider (and Gluetun), but
-    the proxy resolver that the REST API and the remote-download client use does **not**.
-    If you drive downloads through the API and need Windscribe or Gluetun exits, get the
-    proxy on the CLI side, or use a different proxy provider for API jobs. See the
-    developer note below.
-
 ## Developer notes
 
 !!! note "One resolution path (developers)"
     `dl`, `search`, the REST API handlers and the remote-service client all load proxy
     providers through `load_proxy_providers()` in `unshackle/core/proxies/resolve.py`.
-    The REST API and the remote-service client call it through
+    The REST API, its download jobs and the remote-service client call it through
     `initialize_proxy_providers()`, which leaves out Gluetun because Gluetun starts a
     local Docker container. All paths accept the same query grammar: a direct URI, a
     `provider:query`, a bare query tried against providers in order, or a `controld://`

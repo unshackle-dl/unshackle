@@ -303,9 +303,9 @@ class TestDownloadEnforcement:
         created = created_params({"service": "EXAMPLE", "title_id": "t1"}, request("proxykey"))
         assert created["server_proxy"] is True
 
-    @pytest.mark.parametrize(("params", "expected"), [({}, []), ({"server_proxy": True}, None)])
+    @pytest.mark.parametrize(("params", "expected"), [({}, []), ({"server_proxy": True}, ["server"])])
     def test_perform_download_maps_stamp_to_dl_providers(self, monkeypatch, tmp_path, params, expected):
-        """An unstamped or denied job hands dl an empty provider list; a stamped one loads config."""
+        """An unstamped or denied job hands dl an empty provider list; a stamped one gets the server's list."""
 
         from unshackle.commands import dl as dl_module
         from unshackle.core.api import download_manager as dm
@@ -325,6 +325,7 @@ class TestDownloadEnforcement:
         monkeypatch.setattr(dl_module, "dl", FakeDl)
         monkeypatch.setattr("unshackle.core.services.Services.get_path", staticmethod(lambda service: tmp_path))
         monkeypatch.setattr(handlers, "load_full_cdm", lambda *args: None)
+        monkeypatch.setattr("unshackle.core.proxies.resolve.initialize_proxy_providers", lambda **_: ["server"])
 
         with pytest.raises(Stop):
             dm.perform_download("job1", "EXAMPLE", "t1", dict(params))
