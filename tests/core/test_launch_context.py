@@ -27,6 +27,7 @@ def cli_dl(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> click.Context:
     from unshackle.commands import dl as dl_module
 
     monkeypatch.setattr(dl_module.config, "key_vaults", [])
+    monkeypatch.setattr(dl_module.config, "output_template", {"movies": "{title}"})
     monkeypatch.setattr(dl_module.dl, "get_cdm", lambda self, *a, **k: None)
     monkeypatch.setattr(dl_module.Services, "get_path", staticmethod(lambda tag: tmp_path))
     # dl.__init__ hangs its result callback on the shared click command
