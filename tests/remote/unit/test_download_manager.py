@@ -404,6 +404,7 @@ def test_a_prompt_discards_an_answer_sent_before_it(tmp_path: Path, monkeypatch:
     finally:
         set_prompt_handler(None)
     assert categorize_exception(exc_info.value).error_code is APIErrorCode.AUTH_FAILED
+    assert exc_info.value.error_code is APIErrorCode.AUTH_FAILED  # type: ignore[attr-defined]
 
 
 def test_concurrent_prompts_go_out_one_at_a_time(monkeypatch: pytest.MonkeyPatch) -> None:

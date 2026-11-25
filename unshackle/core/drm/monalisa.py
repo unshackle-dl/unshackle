@@ -13,6 +13,7 @@ from typing import Any, Optional, Union
 from uuid import UUID
 
 from unshackle.core.cdm.monalisa import MonaLisaCDM
+from unshackle.core.remote_protocol import APIErrorCode
 from unshackle.core.utils.subprocess import run_step
 
 log = logging.getLogger(__name__)
@@ -31,8 +32,12 @@ class MonaLisa:
         class TicketNotFound(Exception):
             """Raised when the caller gives no PSSH/ticket data."""
 
+            error_code = APIErrorCode.DRM_ERROR
+
         class KeyExtractionFailed(Exception):
             """Raised when content key extraction from the ticket fails."""
+
+            error_code = APIErrorCode.DRM_ERROR
 
     def __init__(
         self,

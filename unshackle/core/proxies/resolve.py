@@ -14,6 +14,7 @@ import requests
 from click.core import ParameterSource
 
 from unshackle.core.proxies.proxy import Proxy
+from unshackle.core.remote_protocol import APIErrorCode, coded
 from unshackle.core.utils.redact import mask_proxy
 
 log = logging.getLogger("proxies")
@@ -46,12 +47,15 @@ def find_provider(proxy_providers: List[Any], name: str, hint: str = "") -> Any:
     for provider in proxy_providers:
         if isinstance(provider, Unavailable):
             if provider.name.lower() == name.lower():
-                raise ValueError(f"The proxy provider {provider.name} could not load: {provider.error}")
+                raise coded(
+                    ValueError(f"The proxy provider {provider.name} could not load: {provider.error}"),
+                    APIErrorCode.INVALID_PROXY,
+                )
         elif provider.__class__.__name__.lower() == name.lower():
             return provider
     available = [x.__class__.__name__ for x in proxy_providers if not isinstance(x, Unavailable)]
     message = f"The proxy provider '{name}' was not found. Available: {available}"
-    raise ValueError(f"{message}. {hint}" if hint else message)
+    raise coded(ValueError(f"{message}. {hint}" if hint else message), APIErrorCode.INVALID_PROXY)
 
 
 def load_proxy_providers(exclude: tuple[str, ...] = (), raise_errors: bool = False, quiet: bool = False) -> List[Any]:
@@ -166,9 +170,13 @@ def pick_proxy(proxy_providers: List[Any], query: str, provider_name: Optional[s
         except Exception as e:
             if isinstance(e, ValueError) and not isinstance(e, (json.JSONDecodeError, requests.RequestException)):
                 raise
-            raise ValueError(f"The proxy provider {provider_name} failed for {query}: {e}") from e
+            raise coded(
+                ValueError(f"The proxy provider {provider_name} failed for {query}: {e}"), APIErrorCode.INVALID_PROXY
+            ) from e
         if not uri:
-            raise ValueError(f"The proxy provider {provider_name} had no proxy for {query}")
+            raise coded(
+                ValueError(f"The proxy provider {provider_name} had no proxy for {query}"), APIErrorCode.INVALID_PROXY
+            )
         return provider, uri
     errors = []
     for provider in proxy_providers:
@@ -182,7 +190,7 @@ def pick_proxy(proxy_providers: List[Any], query: str, provider_name: Optional[s
         if uri:
             return provider, uri
     detail = f" ({'; '.join(errors)})" if errors else ""
-    raise ValueError(f"No proxy provider had a proxy for {query}{detail}")
+    raise coded(ValueError(f"No proxy provider had a proxy for {query}{detail}"), APIErrorCode.INVALID_PROXY)
 
 
 def describe_proxy(provider: Any, uri: str, query: str, allow_debug: bool = True) -> str:

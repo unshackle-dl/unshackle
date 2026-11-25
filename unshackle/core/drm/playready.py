@@ -21,6 +21,7 @@ from unshackle.core.config import config
 from unshackle.core.constants import AnyTrack
 from unshackle.core.drm import key_args as drm_key_args
 from unshackle.core.drm.decrypters import decrypt_cenc, mp4decrypt, shaka_decrypt
+from unshackle.core.remote_protocol import APIErrorCode
 from unshackle.core.session import AnySession, utf8_text
 from unshackle.core.utilities import call_licence, get_boxes, log_event
 from unshackle.core.utils import run_proxy
@@ -559,19 +560,19 @@ class PlayReady:
 
     class Exceptions:
         class PSSHNotFound(Exception):
-            pass
+            error_code = APIErrorCode.DRM_ERROR
 
         class KIDNotFound(Exception):
-            pass
+            error_code = APIErrorCode.DRM_ERROR
 
         class CEKNotFound(click.ClickException):
-            pass
+            error_code = APIErrorCode.DRM_ERROR
 
         class EmptyLicense(click.ClickException):
-            pass
+            error_code = APIErrorCode.DRM_ERROR
 
         class DeviceRevoked(Exception):
-            pass
+            error_code = APIErrorCode.DRM_ERROR
 
 
 __all__ = ("PlayReady",)

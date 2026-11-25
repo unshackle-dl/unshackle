@@ -84,6 +84,7 @@ from unshackle.core.remote_protocol import (
     TrackKeys,
     TracksReply,
     TracksRequest,
+    coded,
 )
 from unshackle.core.search_result import SearchResult
 from unshackle.core.session import MAX_BACKOFF
@@ -1680,7 +1681,9 @@ class RemoteService:
             why = "The server CDM refused this track"
         cdm = self.local_cdm
         if cdm is None:
-            raise click.ClickException(f"{why}, and {track} needs a local CDM to license it")
+            raise coded(
+                click.ClickException(f"{why}, and {track} needs a local CDM to license it"), APIErrorCode.DRM_ERROR
+            )
         drm_class = "PlayReady" if is_playready_cdm(cdm) else "Widevine"
         height = getattr(track, "height", None)
         systems = {d.__class__.__name__ for d in track.drm or ()}

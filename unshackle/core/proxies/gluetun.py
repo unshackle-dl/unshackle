@@ -13,6 +13,7 @@ import requests
 
 from unshackle.core import binaries
 from unshackle.core.proxies.proxy import Proxy
+from unshackle.core.remote_protocol import APIErrorCode, coded
 from unshackle.core.utilities import get_country_code, get_country_name, get_debug_logger, log_event
 from unshackle.core.utils import run_proxy
 from unshackle.core.utils.ip_info import get_ip_info
@@ -191,7 +192,7 @@ class Gluetun(Proxy):
             verify_ip: Automatically make sure that the IP and region are correct after connection (default: True)
         """
         if not binaries.Docker:
-            raise RuntimeError("Docker not found, the Gluetun proxy needs it")
+            raise coded(RuntimeError("Docker not found, the Gluetun proxy needs it"), APIErrorCode.INVALID_PROXY)
 
         self.providers = providers or {}
         self.base_port = base_port
@@ -365,7 +366,7 @@ class Gluetun(Proxy):
             self.remove_container(container_name)
             if query_key in self.active_containers:
                 del self.active_containers[query_key]
-            raise RuntimeError(f"Failed to create Gluetun container: {e}")
+            raise coded(RuntimeError(f"Failed to create Gluetun container: {e}"), APIErrorCode.INVALID_PROXY)
 
     def cleanup(self) -> None:
         """Stop and remove all managed Gluetun containers."""

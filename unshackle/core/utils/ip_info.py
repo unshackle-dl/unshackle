@@ -7,6 +7,7 @@ from typing import Any, Callable, Optional
 import requests
 
 from unshackle.core.cacher import Cacher
+from unshackle.core.remote_protocol import APIErrorCode, coded
 from unshackle.core.utils import run_proxy
 
 CACHE_KEY = "ip_info_v4"
@@ -288,13 +289,19 @@ def verify_proxy_exit(session: requests.Session) -> dict:
         if len(errors) < len(build_providers()):
             log.warning("No geolocation API returned the proxy exit IP, so the exit IP check does not occur")
             return {}
-        raise ConnectionError(f"Proxy check failed: no IP lookup got through the proxy ({type(errors[-1]).__name__})")
+        raise coded(
+            ConnectionError(f"Proxy check failed: no IP lookup got through the proxy ({type(errors[-1]).__name__})"),
+            APIErrorCode.INVALID_PROXY,
+        )
     exit_ip = info.get("ip")
     server_ip = (get_ip_info(cached=True) or {}).get("ip")
     # The cached IP can be up to 24h old: a machine that was on a VPN when it cached its IP,
     # and now uses that VPN as a proxy, matches the old IP. A live lookup runs only on a match.
     if exit_ip and server_ip == exit_ip and (get_ip_info() or {}).get("ip") == exit_ip:
-        raise ConnectionError(
-            "Proxy check failed: the proxy exit IP is the IP of this machine, so traffic does not go through the proxy."
+        raise coded(
+            ConnectionError(
+                "Proxy check failed: the proxy exit IP is the IP of this machine, so traffic does not go through the proxy."
+            ),
+            APIErrorCode.INVALID_PROXY,
         )
     return info

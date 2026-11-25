@@ -12,6 +12,7 @@ from requests import Session
 from unshackle.core.config import config
 from unshackle.core.drm import key_args as drm_key_args
 from unshackle.core.drm.decrypters import decrypt_cenc, mp4decrypt, shaka_decrypt
+from unshackle.core.remote_protocol import APIErrorCode
 from unshackle.core.utilities import log_event
 from unshackle.core.utils import run_proxy
 
@@ -193,11 +194,17 @@ class ClearKeyCENC:
         class KIDNotFound(Exception):
             """KID (Encryption Key ID) was not found."""
 
+            error_code = APIErrorCode.DRM_ERROR
+
         class CEKNotFound(click.ClickException):
             """CEK (Content Encryption Key) for KID was not found in License."""
 
+            error_code = APIErrorCode.DRM_ERROR
+
         class EmptyLicense(click.ClickException):
             """License returned no Content Encryption Keys."""
+
+            error_code = APIErrorCode.DRM_ERROR
 
 
 __all__ = ("ClearKeyCENC",)

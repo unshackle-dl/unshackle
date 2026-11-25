@@ -18,8 +18,9 @@ from unshackle.core.constants import AnyTrack
 from unshackle.core.credential import Credential
 from unshackle.core.drm import ClearKey, MonaLisa, real_kids
 from unshackle.core.manifests import DASH, HLS, ISM, MissingLanguageError, snapshot
+from unshackle.core.remote_protocol import APIErrorCode, coded
 from unshackle.core.remote_service import RemoteService, ServerKeySource, resolve_proxy_arg, segment_uri_filter
-from unshackle.core.session import utf8_text
+from unshackle.core.session import failure_response, utf8_text
 from unshackle.core.titles import Episode, Movies, Series, Title_T, Titles_T, remap_titles
 from unshackle.core.tracks import Audio, Chapter, Chapters, Subtitle, Tracks, Video
 from unshackle.core.tracks.attachment import Attachment
@@ -98,6 +99,27 @@ def content_period_filter(manifest: Any, kept: Any, title: Any) -> Optional[Call
     return lambda period: period.get("id") not in kept
 
 
+def manifest_fetch_error(manifest_type: str, title: Any, error: Exception) -> click.ClickException:
+    """The error for a failed manifest fetch, with the API error code of an HTTP status that has only one cause.
+
+    An expired signed URL can also answer 200 with an error page, so every failure names a possible expiry.
+    A 403 can be an expiry, a region or a proxy, so it and a failure with no answer keep the keyword code.
+    """
+    status = getattr(failure_response(error), "status_code", None)
+    status = status if isinstance(status, int) else None
+    answered = f" (HTTP {status})" if status else ""
+    failure = click.ClickException(
+        f"Failed to fetch the {manifest_type} manifest for '{title}'{answered}, the URL may have expired: {error}"
+    )
+    if status in (404, 410):
+        return coded(failure, APIErrorCode.NOT_FOUND)
+    if status == 429:
+        return coded(failure, APIErrorCode.RATE_LIMITED)
+    if status and status >= 500:
+        return coded(failure, APIErrorCode.SERVICE_UNAVAILABLE)
+    return failure
+
+
 def resolve_import_manifest_data(
     tracks: Tracks,
     manifest_type: Optional[str],
@@ -148,9 +170,7 @@ def resolve_import_manifest_data(
         except ValueError as e:
             raise click.ClickException(f"Failed to parse the {manifest_type} manifest for '{title}': {e}")
         except Exception as e:
-            raise click.ClickException(
-                f"Failed to fetch the {manifest_type} manifest for '{title}', the URL may have expired: {e}"
-            )
+            raise manifest_fetch_error(manifest_type, title, e)
 
         local_tracks = [*parsed.videos, *parsed.audio, *parsed.subtitles]
         for track in pending:
@@ -409,9 +429,7 @@ class ImportService:
                 try:
                     manifest = parser.from_url(url=manifest_url, session=self.session)
                 except Exception as e:
-                    raise click.ClickException(
-                        f"Failed to fetch the {manifest_type} manifest for '{title}', the URL may have expired: {e}"
-                    )
+                    raise manifest_fetch_error(manifest_type, title, e)
                 if language is None and isinstance(manifest, HLS):
                     language = hls_audio_language(manifest)
                     if language is None:
@@ -825,7 +843,10 @@ class ImportService:
             }
         )
         subject = f"KID {', '.join(kids)}" if kids else f"track {track}"
-        return click.ClickException(f"The export has no content key to decrypt {subject}, and no vault has it")
+        return coded(
+            click.ClickException(f"The export has no content key to decrypt {subject}, and no vault has it"),
+            APIErrorCode.DRM_ERROR,
+        )
 
     def decrypts_samples(self, track: AnyTrack) -> bool:
         return False

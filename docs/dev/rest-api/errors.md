@@ -166,15 +166,21 @@ service yields `INVALID_SERVICE`. These carry a precise code, message, and often
 populated `details` object.
 
 **Categorised exceptions.** When an endpoint calls into a streaming service and an
-uncategorised exception bubbles up, the server runs it through a classifier that
-inspects the exception type and message and maps it to the most appropriate code.
-The classification is keyword-based, checked in order:
+exception that is not an `APIError` bubbles up, the server gives it a code in two steps:
+
+1. **The code the failure names.** An unshackle core failure states its own code: a region
+   check gives `GEOFENCE`, a proxy that fails gives `INVALID_PROXY`, a login that needs
+   an absent user gives `AUTH_FAILED`, and a DRM failure gives `DRM_ERROR`. The server
+   reads this code first, so the wording of the message does not change it.
+2. **The keywords of the message.** A failure that names no code, such as the plain text
+   that a service raises, gets a code from the words in its message, checked in order:
 
 | If the error mentions... | It becomes | Retryable |
 |---|---|---|
+| `geofence`, `geoblock`, `geo-block`, `geolocation`, `region`, `not available in`, `territory` | `GEOFENCE` (403) | no |
+| `proxy` | `INVALID_PROXY` (400) | no |
 | `auth`, `login`, `credential`, `unauthorized`, `forbidden`, `token` | `AUTH_FAILED` (401) | no |
 | `connection`, `timeout`, `network`, `unreachable`, `socket`, `dns`, `resolve` (or `ConnectionError`, `TimeoutError`, `URLError`, `SSLError`) | `NETWORK_ERROR` (424) | yes |
-| `geofence`, `geoblock`, `region`, `not available in`, `territory` | `GEOFENCE` (403) | no |
 | `not found`, `404`, `does not exist`, `invalid id` | `NOT_FOUND` (404) | no |
 | `rate limit`, `too many requests`, `429`, `throttle` | `RATE_LIMITED` (429) | yes |
 | `drm`, `license`, `widevine`, `playready`, `decrypt` | `DRM_ERROR` (422) | no |

@@ -7,7 +7,7 @@ import json
 import pytest
 
 from unshackle.core.api.errors import APIError, build_error_response, categorize_exception, handle_api_exception
-from unshackle.core.remote_protocol import APIErrorCode
+from unshackle.core.remote_protocol import APIErrorCode, coded
 
 pytestmark = pytest.mark.unit
 
@@ -225,3 +225,71 @@ def test_categorize_system_exit_is_a_service_error() -> None:
     err = categorize_exception(SystemExit(1), {"service": "EXAMPLE"})
     assert err.error_code == APIErrorCode.SERVICE_ERROR
     assert err.message == "Service EXAMPLE exited"
+
+
+@pytest.mark.parametrize(
+    "code, message",
+    [
+        (APIErrorCode.GEOFENCE, "login token expired"),
+        (APIErrorCode.INVALID_PROXY, "region not available in GB"),
+        (APIErrorCode.AUTH_FAILED, "read timeout"),
+        (APIErrorCode.NETWORK_ERROR, "license refused"),
+        (APIErrorCode.NOT_FOUND, "the proxy failed"),
+        (APIErrorCode.RATE_LIMITED, "not found"),
+        (APIErrorCode.DRM_ERROR, "proxy check failed"),
+        (APIErrorCode.SERVICE_UNAVAILABLE, "invalid input"),
+        (APIErrorCode.SERVICE_ERROR, "Docker not found"),
+        (APIErrorCode.INTERNAL_ERROR, "connection refused"),
+    ],
+)
+def test_a_coded_exception_keeps_its_code_whatever_its_message_says(code: APIErrorCode, message: str) -> None:
+    err = categorize_exception(coded(RuntimeError(message), code), {"service": "EXAMPLE"})
+    assert err.error_code == code
+    assert err.retryable is (
+        code in {APIErrorCode.NETWORK_ERROR, APIErrorCode.RATE_LIMITED, APIErrorCode.SERVICE_UNAVAILABLE}
+    )
+    assert err.message.endswith(message) and err.details["service"] == "EXAMPLE"
+
+
+def test_a_coded_exception_gets_the_message_prefix_of_its_keyword_twin() -> None:
+    coded_err = categorize_exception(coded(ValueError("Service is not available in GB"), APIErrorCode.GEOFENCE))
+    guessed = categorize_exception(ValueError("Service is not available in GB"))
+    assert (coded_err.message, coded_err.details) == (guessed.message, guessed.details)
+
+
+def test_a_coded_cause_names_the_code_of_its_wrapper() -> None:
+    try:
+        try:
+            raise coded(ValueError("bad"), APIErrorCode.INVALID_PROXY)
+        except ValueError as e:
+            raise RuntimeError("license step failed") from e
+    except RuntimeError as wrapper:
+        err = categorize_exception(wrapper)
+    assert err.error_code == APIErrorCode.INVALID_PROXY
+    assert err.message.endswith("bad")
+
+
+def test_the_wrapper_code_wins_over_the_cause_code() -> None:
+    try:
+        try:
+            raise coded(ValueError("bad"), APIErrorCode.INVALID_PROXY)
+        except ValueError as e:
+            raise coded(RuntimeError("outer"), APIErrorCode.DRM_ERROR) from e
+    except RuntimeError as wrapper:
+        assert categorize_exception(wrapper).error_code == APIErrorCode.DRM_ERROR
+
+
+def test_an_error_code_that_is_no_api_code_falls_back_to_the_keywords() -> None:
+    exc = RuntimeError("Connection refused")
+    exc.error_code = 104  # type: ignore[attr-defined]
+    assert categorize_exception(exc).error_code == APIErrorCode.NETWORK_ERROR
+
+
+def test_a_system_exit_stays_a_service_error_whatever_its_cause_names() -> None:
+    try:
+        try:
+            raise coded(ValueError("bad"), APIErrorCode.INVALID_PROXY)
+        except ValueError as e:
+            raise SystemExit(1) from e
+    except SystemExit as exit_:
+        assert categorize_exception(exit_).error_code == APIErrorCode.SERVICE_ERROR

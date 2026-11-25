@@ -27,6 +27,7 @@ from unshackle.core.drm import DRM_T
 from unshackle.core.launch import launch_keys
 from unshackle.core.proxies.basic import Basic
 from unshackle.core.proxies.resolve import pick_proxy
+from unshackle.core.remote_protocol import APIErrorCode, coded
 from unshackle.core.search_result import SearchResult
 from unshackle.core.session import (
     BACKOFF_FACTOR,
@@ -251,8 +252,11 @@ class Service(metaclass=ABCMeta):
                             elif self.is_region_allowed(current_region):
                                 self.log.info("Service is not Geoblocked in your region")
                             elif not (fence_targets := [x for x in self.GEOFENCE if self.is_region_allowed(x)]):
-                                raise click.ClickException(
-                                    f"Service is not available in {whose} region ({current_region.upper()})"
+                                raise coded(
+                                    click.ClickException(
+                                        f"Service is not available in {whose} region ({current_region.upper()})"
+                                    ),
+                                    APIErrorCode.GEOFENCE,
                                 )
                             else:
                                 requested_proxy = fence_targets[0]  # first is likely main region
@@ -285,8 +289,11 @@ class Service(metaclass=ABCMeta):
                 self.current_region = exit_region
                 # Only GEOBLOCK applies here: an explicit --proxy outside GEOFENCE stays the user's call.
                 if exit_region and any(x.lower() == exit_region.lower() for x in self.GEOBLOCK):
-                    raise click.ClickException(
-                        f"Service is not available in {whose} proxy's region ({exit_region.upper()})"
+                    raise coded(
+                        click.ClickException(
+                            f"Service is not available in {whose} proxy's region ({exit_region.upper()})"
+                        ),
+                        APIErrorCode.GEOFENCE,
                     )
             else:
                 # No proxy, use cached IP info for title caching (non-critical)
@@ -492,7 +499,7 @@ class Service(metaclass=ABCMeta):
                 if result is not None:
                     return result
                 if time.monotonic() + interval >= deadline:
-                    raise TimeoutError(f"No approval within {timeout:.0f}s")
+                    raise coded(TimeoutError(f"No approval within {timeout:.0f}s"), APIErrorCode.AUTH_FAILED)
                 time.sleep(interval)
         finally:
             show_notice(None)

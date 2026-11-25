@@ -18,6 +18,7 @@ from uuid import uuid4
 from unshackle.core.api.input_bridge import AUTH_INPUT_TIMEOUT
 from unshackle.core.console import set_notice_handler, set_prompt_handler
 from unshackle.core.downloaders import format_speed, set_speed_limit
+from unshackle.core.remote_protocol import APIErrorCode, coded
 
 from .download_manager import perform_download
 
@@ -84,10 +85,10 @@ def relay_prompts(progress_callback: Callable[[Dict[str, Any]], None]) -> None:
             try:
                 return answers.get(timeout=AUTH_INPUT_TIMEOUT)
             except queue.Empty:
-                # "authentication" makes categorize_exception report AUTH_FAILED, not a retryable network
-                # error: a retry only waits on another prompt.
-                raise TimeoutError(
-                    f"No client answer to the authentication prompt within {AUTH_INPUT_TIMEOUT:.0f}s"
+                # not a retryable NETWORK_ERROR: a retry only waits on another prompt
+                raise coded(
+                    TimeoutError(f"No client answer to the authentication prompt within {AUTH_INPUT_TIMEOUT:.0f}s"),
+                    APIErrorCode.AUTH_FAILED,
                 ) from None
             finally:
                 progress_callback({"input_prompt": None})

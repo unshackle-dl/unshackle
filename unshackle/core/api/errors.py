@@ -145,6 +145,79 @@ def build_error_response(
     return response
 
 
+CATEGORIES: dict[APIErrorCode, tuple[str, str]] = {
+    APIErrorCode.GEOFENCE: ("Content not available in your region", "geofence_restriction"),
+    APIErrorCode.INVALID_PROXY: ("The proxy for this session failed", "proxy_error"),
+    APIErrorCode.AUTH_FAILED: ("Authentication failed", "authentication_error"),
+    APIErrorCode.NETWORK_ERROR: ("Network error occurred", "network_connectivity"),
+    APIErrorCode.NOT_FOUND: ("Resource not found", "not_found"),
+    APIErrorCode.RATE_LIMITED: ("Rate limit exceeded", "rate_limited"),
+    APIErrorCode.DRM_ERROR: ("DRM error", "drm_failure"),
+    APIErrorCode.SERVICE_UNAVAILABLE: ("Service temporarily unavailable", "service_unavailable"),
+    APIErrorCode.INVALID_INPUT: ("Invalid input", "validation_failed"),
+    APIErrorCode.INTERNAL_ERROR: ("An unexpected error occurred", ""),
+}
+"""The message prefix and ``details.reason`` of each code that ``categorize_exception`` gives."""
+
+RETRYABLE = {APIErrorCode.NETWORK_ERROR, APIErrorCode.RATE_LIMITED, APIErrorCode.SERVICE_UNAVAILABLE}
+
+
+def categorized(code: APIErrorCode, text: str, context: dict[str, Any]) -> APIError:
+    """The APIError of ``code`` for an exception with message ``text``."""
+    prefix, reason = CATEGORIES.get(code, ("", ""))
+    text = redact_secrets(text) or ""
+    return APIError(
+        error_code=code,
+        message=f"{prefix}: {text}" if prefix else text,
+        details={**context, "reason": reason} if reason else context,
+        retryable=code in RETRYABLE,
+    )
+
+
+def keyword_code(exc_str: str, root: BaseException) -> APIErrorCode:
+    """Guess the code of an exception that names none, from the words of its message and its type.
+
+    The fallback for exceptions from out-of-repo services; a core raiser names its code with ``coded``.
+    """
+    exc_type = type(root).__name__
+    if any(
+        keyword in exc_str
+        for keyword in ["geofence", "geoblock", "geo-block", "geolocation", "region", "not available in", "territory"]
+    ):
+        return APIErrorCode.GEOFENCE
+    if "proxy" in str(root).lower():
+        return APIErrorCode.INVALID_PROXY
+    if any(keyword in exc_str for keyword in ["auth", "login", "credential", "unauthorized", "forbidden", "token"]):
+        return APIErrorCode.AUTH_FAILED
+    if any(
+        keyword in exc_str
+        for keyword in [
+            "connection",
+            "timeout",
+            "network",
+            "unreachable",
+            "socket",
+            "dns",
+            "resolve",
+        ]
+    ) or exc_type in ["ConnectionError", "TimeoutError", "URLError", "SSLError"]:
+        return APIErrorCode.NETWORK_ERROR
+    if any(keyword in exc_str for keyword in ["not found", "404", "does not exist", "invalid id"]):
+        return APIErrorCode.NOT_FOUND
+    if any(keyword in exc_str for keyword in ["rate limit", "too many requests", "429", "throttle"]):
+        return APIErrorCode.RATE_LIMITED
+    if any(keyword in exc_str for keyword in ["drm", "license", "widevine", "playready", "decrypt"]):
+        return APIErrorCode.DRM_ERROR
+    if any(keyword in exc_str for keyword in ["service unavailable", "503", "maintenance", "temporarily unavailable"]):
+        return APIErrorCode.SERVICE_UNAVAILABLE
+    if any(keyword in exc_str for keyword in ["invalid", "malformed", "validation"]) or exc_type in [
+        "ValueError",
+        "ValidationError",
+    ]:
+        return APIErrorCode.INVALID_INPUT
+    return APIErrorCode.INTERNAL_ERROR
+
+
 def categorize_exception(
     exc: BaseException,
     context: dict[str, Any] | None = None,
@@ -152,8 +225,8 @@ def categorize_exception(
     """
     Categorize a generic exception into a structured APIError; an APIError is returned as it is.
 
-    This function attempts to identify the type of error based on the exception
-    type, message patterns, and optional context information.
+    An exception that names its code (``coded``, or its cause's) gets that code. Any other gets the code
+    that ``keyword_code`` guesses from its message.
 
     Args:
         exc: The exception to categorize
@@ -174,105 +247,11 @@ def categorize_exception(
             retryable=False,
         )
     root = exc.__cause__ or exc
-    exc_str = f"{exc} {root}".lower()
-    exc_type = type(root).__name__
-
-    if any(
-        keyword in exc_str
-        for keyword in ["geofence", "geoblock", "geo-block", "geolocation", "region", "not available in", "territory"]
-    ):
-        return APIError(
-            error_code=APIErrorCode.GEOFENCE,
-            message=f"Content not available in your region: {redact_secrets(str(exc))}",
-            details={**context, "reason": "geofence_restriction"},
-            retryable=False,
-        )
-
-    if "proxy" in str(root).lower():
-        return APIError(
-            error_code=APIErrorCode.INVALID_PROXY,
-            message=f"The proxy for this session failed: {redact_secrets(str(root))}",
-            details={**context, "reason": "proxy_error"},
-            retryable=False,
-        )
-
-    if any(keyword in exc_str for keyword in ["auth", "login", "credential", "unauthorized", "forbidden", "token"]):
-        return APIError(
-            error_code=APIErrorCode.AUTH_FAILED,
-            message=f"Authentication failed: {redact_secrets(str(exc))}",
-            details={**context, "reason": "authentication_error"},
-            retryable=False,
-        )
-
-    if any(
-        keyword in exc_str
-        for keyword in [
-            "connection",
-            "timeout",
-            "network",
-            "unreachable",
-            "socket",
-            "dns",
-            "resolve",
-        ]
-    ) or exc_type in ["ConnectionError", "TimeoutError", "URLError", "SSLError"]:
-        return APIError(
-            error_code=APIErrorCode.NETWORK_ERROR,
-            message=f"Network error occurred: {redact_secrets(str(exc))}",
-            details={**context, "reason": "network_connectivity"},
-            retryable=True,
-        )
-
-    if any(keyword in exc_str for keyword in ["not found", "404", "does not exist", "invalid id"]):
-        return APIError(
-            error_code=APIErrorCode.NOT_FOUND,
-            message=f"Resource not found: {redact_secrets(str(exc))}",
-            details={**context, "reason": "not_found"},
-            retryable=False,
-        )
-
-    if any(keyword in exc_str for keyword in ["rate limit", "too many requests", "429", "throttle"]):
-        return APIError(
-            error_code=APIErrorCode.RATE_LIMITED,
-            message=f"Rate limit exceeded: {redact_secrets(str(exc))}",
-            details={**context, "reason": "rate_limited"},
-            retryable=True,
-            http_status=429,
-        )
-
-    if any(keyword in exc_str for keyword in ["drm", "license", "widevine", "playready", "decrypt"]):
-        return APIError(
-            error_code=APIErrorCode.DRM_ERROR,
-            message=f"DRM error: {redact_secrets(str(exc))}",
-            details={**context, "reason": "drm_failure"},
-            retryable=False,
-        )
-
-    if any(keyword in exc_str for keyword in ["service unavailable", "503", "maintenance", "temporarily unavailable"]):
-        return APIError(
-            error_code=APIErrorCode.SERVICE_UNAVAILABLE,
-            message=f"Service temporarily unavailable: {redact_secrets(str(exc))}",
-            details={**context, "reason": "service_unavailable"},
-            retryable=True,
-        )
-
-    if any(keyword in exc_str for keyword in ["invalid", "malformed", "validation"]) or exc_type in [
-        "ValueError",
-        "ValidationError",
-    ]:
-        return APIError(
-            error_code=APIErrorCode.INVALID_INPUT,
-            message=f"Invalid input: {redact_secrets(str(exc))}",
-            details={**context, "reason": "validation_failed"},
-            retryable=False,
-        )
-
-    return APIError(
-        error_code=APIErrorCode.INTERNAL_ERROR,
-        message=f"An unexpected error occurred: {redact_secrets(str(exc))}",
-        details=context,
-        retryable=False,
-    )
+    for carrier in (exc, root):
+        if isinstance(code := getattr(carrier, "error_code", None), APIErrorCode):
+            return categorized(code, str(carrier), context)
+    code = keyword_code(f"{exc} {root}".lower(), root)
+    return categorized(code, str(root if code == APIErrorCode.INVALID_PROXY else exc), context)
 
 
 def handle_api_exception(

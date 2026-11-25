@@ -6,6 +6,7 @@ import pytest
 
 from unshackle.core import console
 from unshackle.core.api.input_bridge import NO_USER_MESSAGE, InputBridge, NoUserBridge
+from unshackle.core.remote_protocol import APIErrorCode
 from unshackle.core.service import Service
 
 
@@ -19,8 +20,9 @@ def test_returns_the_first_value_check_gives():
 
 
 def test_times_out_when_check_never_gives_a_value():
-    with pytest.raises(TimeoutError):
+    with pytest.raises(TimeoutError) as caught:
         Service.wait_for_approval(_service(), "enter code", lambda: None, timeout=0.05, interval=0.01)
+    assert caught.value.error_code is APIErrorCode.AUTH_FAILED
 
 
 def test_stops_when_the_remote_session_is_cancelled():
@@ -58,7 +60,6 @@ def test_a_request_with_no_user_fails_at_once():
 
 def test_no_user_message_is_an_authentication_error():
     from unshackle.core.api.errors import categorize_exception
-    from unshackle.core.remote_protocol import APIErrorCode
 
     assert categorize_exception(RuntimeError(NO_USER_MESSAGE)).error_code == APIErrorCode.AUTH_FAILED
 

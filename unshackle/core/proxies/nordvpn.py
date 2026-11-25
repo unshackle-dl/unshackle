@@ -8,6 +8,7 @@ import requests
 
 from unshackle.core.proxies.asn import describe, is_ip, mapped_query, select, split_selector
 from unshackle.core.proxies.proxy import Proxy, cached_catalogue
+from unshackle.core.remote_protocol import APIErrorCode, coded
 from unshackle.core.utilities import COUNTRY_CODE_ALIASES
 
 
@@ -24,7 +25,10 @@ class NordVPN(Proxy):
         if not password:
             raise ValueError("No password for the NordVPN proxy provider")
         if not re.match(r"^[a-z0-9]{48}$", username + password, re.IGNORECASE) or "@" in username:
-            raise ValueError("NordVPN needs its Service Credentials, not your login credentials")
+            raise coded(
+                ValueError("NordVPN needs its Service Credentials, not your login credentials"),
+                APIErrorCode.INVALID_PROXY,
+            )
 
         if server_map is not None and not isinstance(server_map, dict):
             raise TypeError(f"Expected server_map to be a dict mapping a region to a server ID, not '{server_map!r}'.")

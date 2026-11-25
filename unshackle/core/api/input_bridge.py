@@ -14,7 +14,7 @@ import uuid
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Optional
 
-from unshackle.core.remote_protocol import AuthStatus
+from unshackle.core.remote_protocol import APIErrorCode, AuthStatus, coded
 
 if TYPE_CHECKING:
     from unshackle.core.api.session_channel import SessionChannel
@@ -92,7 +92,7 @@ class InputBridge:
         try:
             # cancel() and an answer both set the event, so a single wait returns on signal-or-cancel
             if not ask.answered.wait(timeout=timeout):
-                raise TimeoutError(f"No client response for prompt within {timeout}s")
+                raise coded(TimeoutError(f"No client response for prompt within {timeout}s"), APIErrorCode.AUTH_FAILED)
             with self._lock:
                 if self._cancelled:
                     raise RuntimeError("Session was cancelled")
@@ -258,7 +258,7 @@ class NoUserBridge(InputBridge):
     """Bridge for a request with no channel to the user: a login step that needs the user fails at once."""
 
     def request_input(self, prompt: str, timeout: float = AUTH_INPUT_TIMEOUT) -> str:
-        raise RuntimeError(NO_USER_MESSAGE)
+        raise coded(RuntimeError(NO_USER_MESSAGE), APIErrorCode.AUTH_FAILED)
 
     def ensure_active(self) -> None:
-        raise RuntimeError(NO_USER_MESSAGE)
+        raise coded(RuntimeError(NO_USER_MESSAGE), APIErrorCode.AUTH_FAILED)

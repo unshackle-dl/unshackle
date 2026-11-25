@@ -9,7 +9,7 @@ older peer.
 from __future__ import annotations
 
 from enum import Enum, StrEnum
-from typing import Any, NotRequired, Optional, TypedDict
+from typing import Any, NotRequired, Optional, TypedDict, TypeVar
 
 HEALTH_ROUTE = "/api/health"
 SERVICES_ROUTE = "/api/services"
@@ -72,6 +72,15 @@ class APIErrorCode(str, Enum):
     SERVICE_UNAVAILABLE = "SERVICE_UNAVAILABLE"
     SERVER_DRAINING = "SERVER_DRAINING"
     WORKER_ERROR = "WORKER_ERROR"
+
+
+E = TypeVar("E", bound=BaseException)
+
+
+def coded(exc: E, code: APIErrorCode) -> E:
+    """``exc`` with the API error code that ``categorize_exception`` reports for it, whatever its message says."""
+    exc.error_code = code  # type: ignore[attr-defined]
+    return exc
 
 
 class ClientErrorKind(StrEnum):

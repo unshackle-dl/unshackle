@@ -14,6 +14,7 @@ from unshackle.core.drm.clearkey_cenc import ClearKeyCENC
 from unshackle.core.drm.playready import PlayReady
 from unshackle.core.drm.verify import kidless_track_kids
 from unshackle.core.drm.widevine import Widevine
+from unshackle.core.remote_protocol import APIErrorCode, coded
 
 SEGMENT_DRM_T = Union[Widevine, PlayReady, ClearKeyCENC]
 
@@ -48,7 +49,7 @@ class SegmentDecrypter:
 
     def __init__(self, drm: SEGMENT_DRM_T, init_data: bytes, work_dir: Path, workers: Optional[int] = None) -> None:
         if not binaries.Mp4decrypt:
-            raise EnvironmentError("mp4decrypt executable not found but is required.")
+            raise coded(EnvironmentError("mp4decrypt executable not found but is required."), APIErrorCode.DRM_ERROR)
 
         self.drm = drm
         self.key_args = drm.mp4decrypt_key_args(kidless_track_kids(init_data))
