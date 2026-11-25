@@ -39,7 +39,7 @@ from rich.table import Table
 from unshackle.core import __version__, binaries, providers
 from unshackle.core.cdm import DecryptLabsRemoteCDM
 from unshackle.core.cdm.choice import choose_cdm
-from unshackle.core.cdm.detect import cdm_type_stub, is_playready_cdm, is_remote_cdm, is_widevine_cdm
+from unshackle.core.cdm.detect import cdm_system, cdm_type_stub, is_playready_cdm, is_remote_cdm
 from unshackle.core.config import cdm_entry_names_device, config, load_yaml, resolve_cdm_name, resolve_decryption
 from unshackle.core.console import GradientPulseBarColumn, SyncLive, console, listing_panel, print_listing
 from unshackle.core.constants import (
@@ -473,6 +473,21 @@ def no_mux_extension(track: Any, path: Path, media_info: MediaInfo) -> str:
     if container == "MPEG-TS":
         return ".ts"
     return ".m4a" if isinstance(track, Audio) and path.suffix == ".mp4" and container == "MPEG-4" else path.suffix
+
+
+def cdm_summary(cdm: Any) -> dict[str, Any]:
+    """The loaded CDM's DRM system, whether it is remote, its device and its security level, for the load log."""
+    drm_type = "PlayReady" if is_playready_cdm(cdm) else "Widevine"
+    remote = is_remote_cdm(cdm)
+    if isinstance(cdm, DecryptLabsRemoteCDM):
+        device = "DecryptLabs"
+    elif remote:
+        device = cdm.device_name
+    elif drm_type == "Widevine":
+        device = str(cdm.system_id)
+    else:
+        device = cdm.certificate_chain.get_name() if cdm.certificate_chain else "Unknown"
+    return {"drm_type": drm_type, "remote": remote, "device": device, "security_level": cdm.security_level}
 
 
 def apply_service_dl_overrides(ctx: click.Context, service_dl_config: dict[str, Any], log: logging.Logger) -> None:
@@ -1554,36 +1569,12 @@ class dl:
                 sys.exit(1)
 
             if self.cdm:
-                cdm_info = {}
-                if isinstance(self.cdm, DecryptLabsRemoteCDM):
-                    drm_type = "PlayReady" if self.cdm.is_playready else "Widevine"
-                    self.log.info(f"Loaded {drm_type} Remote CDM: DecryptLabs (L{self.cdm.security_level})")
-                    cdm_info = {"type": "DecryptLabs", "drm_type": drm_type, "security_level": self.cdm.security_level}
-                elif hasattr(self.cdm, "device_type") and self.cdm.device_type.name in ["ANDROID", "CHROME"]:
-                    self.log.info(f"Loaded Widevine CDM: {self.cdm.system_id} (L{self.cdm.security_level})")
-                    cdm_info = {
-                        "type": "Widevine",
-                        "system_id": self.cdm.system_id,
-                        "security_level": self.cdm.security_level,
-                        "device_type": self.cdm.device_type.name,
-                    }
-                else:
-                    # Handle both local PlayReady CDM and RemoteCdm (which has certificate_chain=None)
-                    is_remote = self.cdm.certificate_chain is None and hasattr(self.cdm, "device_name")
-                    if is_remote:
-                        cdm_name = self.cdm.device_name
-                        self.log.info(f"Loaded PlayReady Remote CDM: {cdm_name} (L{self.cdm.security_level})")
-                    else:
-                        cdm_name = self.cdm.certificate_chain.get_name() if self.cdm.certificate_chain else "Unknown"
-                        self.log.info(f"Loaded PlayReady CDM: {cdm_name} (L{self.cdm.security_level})")
-                    cdm_info = {
-                        "type": "PlayReady",
-                        "certificate": cdm_name,
-                        "security_level": self.cdm.security_level,
-                    }
-
-                if cdm_info:
-                    log_event("load_cdm", level="INFO", service=self.service, context={"cdm": cdm_info})
+                cdm_info = cdm_summary(self.cdm)
+                where = " Remote" if cdm_info["remote"] else ""
+                self.log.info(
+                    f"Loaded {cdm_info['drm_type']}{where} CDM: {cdm_info['device']} (L{cdm_info['security_level']})"
+                )
+                log_event("load_cdm", level="INFO", service=self.service, context={"cdm": cdm_info})
 
         if ctx.params.get("local_proxy"):
             require_alone_local_proxy(ctx)
@@ -2588,25 +2579,14 @@ class dl:
             video_tracks = title.tracks.videos
             if video_tracks and not server_cdm_type:
                 highest_quality = max((track.height for track in video_tracks if track.height), default=0)
-                if highest_quality > 0:
-                    if is_widevine_cdm(self.cdm):
-                        quality_based_cdm = self.get_cdm(
-                            self.service, self.profile, drm="widevine", quality=highest_quality
+                system = cdm_system(self.cdm)
+                if highest_quality > 0 and system:
+                    quality_based_cdm = self.get_cdm(self.service, self.profile, drm=system, quality=highest_quality)
+                    if quality_based_cdm and quality_based_cdm != self.cdm:
+                        self.log.debug(
+                            f"Pre-selecting the {system} CDM for the highest quality {highest_quality}p of all video tracks"
                         )
-                        if quality_based_cdm and quality_based_cdm != self.cdm:
-                            self.log.debug(
-                                f"Pre-selecting Widevine CDM based on highest quality {highest_quality}p across all video tracks"
-                            )
-                            self.cdm = quality_based_cdm
-                    elif is_playready_cdm(self.cdm):
-                        quality_based_cdm = self.get_cdm(
-                            self.service, self.profile, drm="playready", quality=highest_quality
-                        )
-                        if quality_based_cdm and quality_based_cdm != self.cdm:
-                            self.log.debug(
-                                f"Pre-selecting PlayReady CDM based on highest quality {highest_quality}p across all video tracks"
-                            )
-                            self.cdm = quality_based_cdm
+                        self.cdm = quality_based_cdm
 
             title_all_drm = all_drm and not server_cdm_type
             if all_drm and server_cdm_type and DOWNLOAD_ALL_DRM.is_set():
@@ -2614,18 +2594,18 @@ class dl:
                 self.log.warning("--all-drm is ignored: the server CDM licenses this session with one DRM system")
             if title_all_drm:
                 heights = {track.height for track in title.tracks.videos if track.height} or {None}
-                for system, matches in (("Widevine", is_widevine_cdm), ("PlayReady", is_playready_cdm)):
-                    system_cdms = [self.cdm_for(system.lower(), height) for height in heights]
-                    if not all(system_cdm and matches(system_cdm) for system_cdm in system_cdms):
+                for system, name in (("widevine", "Widevine"), ("playready", "PlayReady")):
+                    system_cdms = [self.cdm_for(system, height) for height in heights]
+                    if not all(cdm_system(system_cdm) == system for system_cdm in system_cdms):
                         hint = (
                             "drop --cdm, which selects one device"
                             if self.cdm_override
-                            else f"set cdm.{self.service}.{system.lower()}"
+                            else f"set cdm.{self.service}.{system}"
                         )
-                        raise click.ClickException(f"--all-drm needs a {system} CDM for {self.service}: {hint}")
-                    if is_remote_cdm(system_cdms[0]) and system not in self.keys.all_drm_warned:
-                        self.keys.all_drm_warned.add(system)
-                        self.log.warning(f"The {system} CDM is remote and can answer with cached content keys")
+                        raise click.ClickException(f"--all-drm needs a {name} CDM for {self.service}: {hint}")
+                    if is_remote_cdm(system_cdms[0]) and name not in self.keys.all_drm_warned:
+                        self.keys.all_drm_warned.add(name)
+                        self.log.warning(f"The {name} CDM is remote and can answer with cached content keys")
 
             self.keys.take_server_keys(title)
 
@@ -3984,9 +3964,8 @@ class dl:
         A quality key that names one device applies to both DRM systems. When that device is for
         the other system, the ``widevine`` or ``playready`` config key selects the device.
         """
-        matches = is_playready_cdm if system == "playready" else is_widevine_cdm
         cdm = self.get_cdm(self.service, self.profile, drm=system, quality=quality)
-        if quality and not (cdm and matches(cdm)):
+        if quality and cdm_system(cdm) != system:
             cdm = self.get_cdm(self.service, self.profile, drm=system)
         return cdm
 

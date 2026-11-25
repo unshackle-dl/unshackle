@@ -69,9 +69,7 @@ ROWS: dict[str, tuple[dict, Optional[str], Optional[dict]]] = {
 def devices(monkeypatch: pytest.MonkeyPatch) -> None:
     """A device loads as its own name, and its name says its DRM system in place of a device file."""
     monkeypatch.setitem(cdm_mod.__dict__, "load_cdm", lambda name, **_: name)
-    monkeypatch.setattr(
-        handlers, "detect_cdm_type", lambda name, _: {"wv": "widevine", "pr": "playready"}.get(name[:2])
-    )
+    monkeypatch.setattr(handlers, "device_system", lambda name, _: {"wv": "widevine", "pr": "playready"}.get(name[:2]))
 
 
 def shown(value: Any) -> Any:

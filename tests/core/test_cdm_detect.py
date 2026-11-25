@@ -1,208 +1,124 @@
-"""CDM detection and load-time DRM stamping for local and remote CDMs.
+"""The CDM catalogue: a device name's DRM system read from config, and what each built CDM object says it is.
 
-Covers the predicates in ``unshackle.core.cdm.detect`` (playready/widevine, local/remote,
-and the remote combinations) and the loader stamping that sets a remote CDM's DRM type at
-load time instead of guessing it on each call. Services such as EXAMPLE choose a device
-profile from that type, so a wrong classification here is what produces a licence denial
-for the requested resolution.
+The config peek, the loader and the CDM classes read one rule, so a device is the same system before
+and after it loads.
 """
 
 from __future__ import annotations
 
-from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
-from unshackle.core.cdm import loader as loader_mod
-from unshackle.core.cdm.detect import (
-    cdm_location,
-    is_local_cdm,
-    is_playready_cdm,
-    is_remote_cdm,
-    is_remote_playready_cdm,
-    is_remote_widevine_cdm,
-    is_widevine_cdm,
-)
-from unshackle.core.cdm.loader import stamp_remote
+from unshackle.commands.dl import cdm_summary
+from unshackle.core.api import handlers
+from unshackle.core.cdm.client_relay import ClientDeviceCdm
+from unshackle.core.cdm.detect import cdm_system, cdm_type_stub, is_playready_cdm, is_remote_cdm, is_widevine_cdm
+from unshackle.core.cdm.loader import device_system, load_cdm
+from unshackle.core.config import config
 
 pytestmark = pytest.mark.unit
 
-REPO = Path(__file__).resolve().parents[2]
-PRD_DIR = REPO / "unshackle" / "PRDs"
+ENTRIES = [
+    ({"type": "decrypt_labs", "secret": "s", "device_name": "SL2"}, "playready"),
+    ({"type": "decrypt_labs", "secret": "s", "device_name": "ChromeCDM", "device_type": "PLAYREADY"}, "playready"),
+    ({"type": "decrypt_labs", "secret": "s", "device_name": "L1"}, "widevine"),
+    ({"type": "custom_api", "host": "http://h.invalid", "device": {"type": "PLAYREADY", "name": "pr"}}, "playready"),
+    ({"type": "custom_api", "host": "http://h.invalid", "device": {"name": "SL3000"}}, "playready"),
+    ({"type": "custom_api", "host": "http://h.invalid", "device": {"name": "ChromeCDM"}}, "widevine"),
+    ({"Device Type": "PLAYREADY", "host": "http://h.invalid", "secret": "s", "device_name": "d"}, "playready"),
+    (
+        {
+            "device_type": "ANDROID",
+            "system_id": 1,
+            "security_level": 3,
+            "host": "http://h.invalid",
+            "secret": "s",
+            "device_name": "SLOT",
+        },
+        "widevine",
+    ),
+]
 
 
-def test_stamped_remote_playready():
-    cdm = SimpleNamespace(drm="playready", is_remote_cdm=True)
-    assert is_playready_cdm(cdm)
-    assert not is_widevine_cdm(cdm)
+def app_config(tmp_path, entries=(), cdm=None):
+    """A config view with ``entries`` as its remote_cdm and ``tmp_path`` as both device folders."""
+    folders = SimpleNamespace(prds=tmp_path / "prd", wvds=tmp_path / "wvd")
+    folders.prds.mkdir(exist_ok=True)
+    folders.wvds.mkdir(exist_ok=True)
+    return SimpleNamespace(remote_cdm=list(entries), directories=folders, cdm=cdm or {})
+
+
+@pytest.mark.parametrize(("entry", "system"), ENTRIES)
+def test_config_and_the_built_cdm_agree(entry, system, tmp_path, monkeypatch):
+    entry = {"name": "x", **entry}
+    assert device_system("x", app_config(tmp_path, [entry])) == system
+
+    monkeypatch.setattr(config, "remote_cdm", [entry])
+    cdm = load_cdm("x", service_name="EXAMPLE")
+    assert cdm_system(cdm) == system
     assert is_remote_cdm(cdm)
-    assert is_remote_playready_cdm(cdm)
-    assert not is_remote_widevine_cdm(cdm)
-    assert cdm_location(cdm) == "remote"
 
 
-def test_stamped_remote_widevine():
-    cdm = SimpleNamespace(drm="widevine", is_remote_cdm=True)
-    assert is_widevine_cdm(cdm)
-    assert not is_playready_cdm(cdm)
-    assert is_remote_widevine_cdm(cdm)
-    assert not is_remote_playready_cdm(cdm)
-    assert cdm_location(cdm) == "remote"
-
-
-def test_drm_stamp_beats_conflicting_is_playready_attr():
-    # The stamped drm takes priority over the wrapper's own is_playready guess.
-    cdm = SimpleNamespace(drm="playready", is_playready=False, is_remote_cdm=True)
-    assert is_playready_cdm(cdm)
-    assert not is_widevine_cdm(cdm)
-
-
-def test_drm_stamp_case_insensitive():
-    cdm = SimpleNamespace(drm="PlayReady", is_remote_cdm=True)
-    assert is_playready_cdm(cdm)
-
-
-def test_none_classifies_as_nothing():
-    for fn in (
-        is_playready_cdm,
-        is_widevine_cdm,
-        is_remote_cdm,
-        is_local_cdm,
-        is_remote_playready_cdm,
-        is_remote_widevine_cdm,
-    ):
-        assert fn(None) is False
-    assert cdm_location(None) == "unknown"
-
-
-@pytest.mark.parametrize("device_name", ["SL2", "SL3", "SL2000", "SL3000", "sl3000"])
-def test_decryptlabs_sl_names_are_playready(device_name):
-    from unshackle.core.cdm.decrypt_labs_remote_cdm import DecryptLabsRemoteCDM
-
-    cdm = DecryptLabsRemoteCDM(secret="x", device_name=device_name)
-    assert cdm.is_playready
-    assert is_playready_cdm(cdm)
-    assert is_remote_cdm(cdm)
-    assert is_remote_playready_cdm(cdm)
-    assert not is_local_cdm(cdm)
-
-
-@pytest.mark.parametrize("device_name", ["ChromeCDM", "L1", "L2"])
-def test_decryptlabs_widevine_names(device_name):
-    from unshackle.core.cdm.decrypt_labs_remote_cdm import DecryptLabsRemoteCDM
-
-    cdm = DecryptLabsRemoteCDM(secret="x", device_name=device_name)
-    assert not cdm.is_playready
-    assert is_widevine_cdm(cdm)
-    assert is_remote_widevine_cdm(cdm)
-
-
-def test_decryptlabs_device_type_forces_playready():
-    from unshackle.core.cdm.decrypt_labs_remote_cdm import DecryptLabsRemoteCDM
-
-    cdm = DecryptLabsRemoteCDM(secret="x", device_name="ChromeCDM", device_type="PLAYREADY")
-    assert cdm.is_playready
+def test_the_server_settles_a_service_on_its_remote_device_system(tmp_path):
+    entry = {"name": "x", "type": "decrypt_labs", "secret": "s", "device_name": "SL3000"}
+    assert (
+        handlers.detect_cdm_type_for_service("EXAMPLE", app_config(tmp_path, [entry], {"EXAMPLE": "x"})) == "playready"
+    )
 
 
 @pytest.mark.parametrize(
-    ("device", "expect_pr"),
-    [
-        ({"name": "SL3000"}, True),
-        ({"name": "SL2"}, True),
-        ({"name": "ChromeCDM"}, False),
-        ({"type": "PLAYREADY", "name": "ChromeCDM"}, True),
-    ],
+    ("folder", "suffix", "system"),
+    [("prd", "prd", "playready"), ("wvd", "prd", "playready"), ("wvd", "wvd", "widevine")],
 )
-def test_custom_remote_cdm_classification(device, expect_pr):
+def test_a_local_file_names_its_system(folder, suffix, system, tmp_path):
+    view = app_config(tmp_path)
+    (tmp_path / folder / f"x.{suffix}").write_bytes(b"")
+    assert device_system("x", view) == system
+
+
+def test_an_unknown_name_is_no_device(tmp_path, monkeypatch):
+    view = app_config(tmp_path)
+    assert device_system("x", view) is None
+    monkeypatch.setattr(config, "remote_cdm", [])
+    monkeypatch.setattr(config, "directories", view.directories)
+    with pytest.raises(ValueError, match="does not exist"):
+        load_cdm("x")
+
+
+def test_stand_ins_carry_their_system():
+    assert cdm_system(cdm_type_stub("playready")) == "playready"
+    assert cdm_system(cdm_type_stub("None")) == "widevine"
+    assert cdm_system(ClientDeviceCdm(SimpleNamespace(), is_playready=True)) == "playready"
+    assert not is_remote_cdm(cdm_type_stub("widevine"))
+
+
+def test_library_cdms_are_known_by_class():
+    from pyplayready.cdm import Cdm as PlayReadyCdm
+    from pyplayready.remote.remotecdm import RemoteCdm as PlayReadyRemoteCdm
+    from pywidevine.cdm import Cdm as WidevineCdm
+    from pywidevine.remotecdm import RemoteCdm as WidevineRemoteCdm
+
+    local_pr, remote_wv = object.__new__(PlayReadyCdm), object.__new__(WidevineRemoteCdm)
+    assert is_playready_cdm(local_pr) and not is_remote_cdm(local_pr)
+    assert is_widevine_cdm(object.__new__(WidevineCdm))
+    assert is_widevine_cdm(remote_wv) and is_remote_cdm(remote_wv)
+    assert is_remote_cdm(object.__new__(PlayReadyRemoteCdm))
+
+
+@pytest.mark.parametrize("cdm", [None, object()])
+def test_no_cdm_is_neither_system(cdm):
+    assert cdm_system(cdm) is None
+    assert not is_playready_cdm(cdm) and not is_widevine_cdm(cdm) and not is_remote_cdm(cdm)
+
+
+@pytest.mark.parametrize(
+    ("device", "drm_type"), [({"type": "PLAYREADY", "name": "pr"}, "PlayReady"), ({"name": "wv"}, "Widevine")]
+)
+def test_the_load_log_names_a_custom_remote_cdm_by_its_system(device, drm_type):
     from unshackle.core.cdm.custom_remote_cdm import CustomRemoteCDM
 
-    cdm = CustomRemoteCDM(host="http://example.invalid", device=device)
-    assert cdm.is_playready is expect_pr
-    assert is_playready_cdm(cdm) is expect_pr
-    assert is_remote_cdm(cdm)
-
-
-def test_stamp_remote_sets_attrs_and_returns_same_object():
-    obj = SimpleNamespace()
-    out = stamp_remote(obj, "playready")
-    assert out is obj
-    assert obj.drm == "playready"
-    assert obj.is_remote_cdm is True
-
-
-def test_stamp_remote_is_best_effort_on_unsettable_object():
-    class Slotted:
-        __slots__ = ()
-
-    obj = Slotted()
-    out = stamp_remote(obj, "widevine")  # must not raise
-    assert out is obj
-    assert not hasattr(obj, "drm")
-
-
-def test_load_remote_decryptlabs_playready_is_stamped():
-    cdm_api = {"name": "dl-pr", "type": "decrypt_labs", "secret": "x", "device_name": "SL3000"}
-    cdm = loader_mod.load_remote_cdm(dict(cdm_api), "dl-pr", "EXAMPLE", None)
-    assert cdm.drm == "playready"
-    assert cdm.is_remote_cdm is True
-    assert is_remote_playready_cdm(cdm)
-
-
-def test_load_remote_decryptlabs_widevine_is_stamped():
-    cdm_api = {"name": "dl-wv", "type": "decrypt_labs", "secret": "x", "device_name": "ChromeCDM"}
-    cdm = loader_mod.load_remote_cdm(dict(cdm_api), "dl-wv", "EXAMPLE", None)
-    assert cdm.drm == "widevine"
-    assert is_remote_widevine_cdm(cdm)
-
-
-def test_load_remote_native_playready_is_stamped(monkeypatch):
-    import unshackle.core.cdm.unprobed_remote_cdm as unprobed_mod
-
-    class FakePlayReadyRemote:
-        def __init__(self, **kwargs):
-            self.kwargs = kwargs
-
-    monkeypatch.setattr(unprobed_mod, "UnprobedPlayReadyRemoteCdm", FakePlayReadyRemote)
-    cdm_api = {"name": "pr", "Device Type": "PLAYREADY", "host": "h", "secret": "s", "device_name": "d"}
-    cdm = loader_mod.load_remote_cdm(dict(cdm_api), "pr", "EXAMPLE", None)
-    assert isinstance(cdm, FakePlayReadyRemote)
-    assert cdm.drm == "playready"
-    assert cdm.is_remote_cdm is True
-    assert is_remote_playready_cdm(cdm)
-
-
-def test_load_remote_native_widevine_is_stamped(monkeypatch):
-    import unshackle.core.cdm.unprobed_remote_cdm as unprobed_mod
-
-    class FakeWidevineRemote:
-        def __init__(self, **kwargs):
-            self.kwargs = kwargs
-
-    monkeypatch.setattr(unprobed_mod, "UnprobedWidevineRemoteCdm", FakeWidevineRemote)
-    cdm_api = {"name": "wv", "Device Type": "ANDROID", "host": "h", "secret": "s", "device_name": "d"}
-    cdm = loader_mod.load_remote_cdm(dict(cdm_api), "wv", "EXAMPLE", None)
-    assert isinstance(cdm, FakeWidevineRemote)
-    assert cdm.drm == "widevine"
-    assert is_remote_widevine_cdm(cdm)
-
-
-@pytest.fixture
-def local_playready_cdm():
-    prds = sorted(PRD_DIR.glob("*.prd"))
-    if not prds:
-        pytest.skip(f"no local .prd present in {PRD_DIR}")
-    from pyplayready.cdm import Cdm
-    from pyplayready.device import Device
-
-    return Cdm.from_device(Device.load(str(prds[0])))
-
-
-def test_local_playready_is_playready_and_local(local_playready_cdm):
-    cdm = local_playready_cdm
-    assert is_playready_cdm(cdm)
-    assert not is_widevine_cdm(cdm)
-    assert is_local_cdm(cdm)
-    assert not is_remote_cdm(cdm)
-    assert not is_remote_playready_cdm(cdm)
-    assert cdm_location(cdm) == "local"
+    summary = cdm_summary(CustomRemoteCDM(host="http://h.invalid", device=device))
+    assert summary["drm_type"] == drm_type
+    assert summary["remote"] is True
+    assert summary["device"] == device["name"]

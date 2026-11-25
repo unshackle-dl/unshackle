@@ -21,7 +21,7 @@ def widevine_configured(monkeypatch):
         app_config, "cdm", {"SVC": {"<=1080": "wv_l3", ">1080": "wv_l1", "default": "wv_l3"}}, raising=False
     )
     # every resolved device name is a Widevine device
-    monkeypatch.setattr(handlers, "detect_cdm_type", lambda name, cfg: "widevine")
+    monkeypatch.setattr(handlers, "device_system", lambda name, cfg: "widevine")
 
     def fail_load(*args, **kwargs):
         raise AssertionError("load_cdm must not run for a mismatched type")
@@ -39,7 +39,7 @@ def test_widevine_client_loads_the_configured_device(monkeypatch):
     from unshackle.core.config import config as app_config
 
     monkeypatch.setattr(app_config, "cdm", {"SVC": {"default": "wv_l3"}}, raising=False)
-    monkeypatch.setattr(handlers, "detect_cdm_type", lambda name, cfg: "widevine")
+    monkeypatch.setattr(handlers, "device_system", lambda name, cfg: "widevine")
     loaded = {}
     monkeypatch.setattr("unshackle.core.cdm.load_cdm", lambda name, service_name=None: loaded.setdefault("n", name))
     handlers.load_full_cdm("SVC", None, "widevine")

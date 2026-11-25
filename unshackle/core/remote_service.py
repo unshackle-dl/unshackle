@@ -1175,13 +1175,13 @@ class RemoteService:
                 "so the server decides who licenses it"
             )
         if cdm is not None:
-            from unshackle.core.cdm.detect import is_playready_cdm
+            from unshackle.core.cdm.detect import cdm_system
 
             if cdm_entry or cdm_name or cdm_only:
                 self._server_cdm = False
             if self._server_cdm is False:
                 create_data["server_cdm"] = False
-            create_data["cdm_type"] = "playready" if is_playready_cdm(cdm) else "widevine"
+            create_data["cdm_type"] = cdm_system(cdm) or "widevine"
             level = getattr(cdm, "security_level", None)
             if isinstance(level, int):
                 create_data["cdm_security_level"] = level
@@ -1580,9 +1580,9 @@ class RemoteService:
 
         drm_type = self.server_cdm_type
         if getattr(self, "_server_vault", False):
-            from unshackle.core.cdm.detect import is_playready_cdm
+            from unshackle.core.cdm.detect import cdm_system
 
-            drm_type = "playready" if is_playready_cdm(self.local_cdm) else "widevine"
+            drm_type = cdm_system(self.local_cdm) or "widevine"
         self.log.debug(f"Requesting server CDM keys (server_cdm_type={drm_type})")
 
         capped: Dict[str, Any] = {}
@@ -1657,7 +1657,7 @@ class RemoteService:
         dl then licenses it through the challenge relay. An HLS track with no DRM yet passes, as its
         media playlist names the DRM and the downloader honours ``drm_preference``.
         """
-        from unshackle.core.cdm.detect import is_playready_cdm, is_widevine_cdm
+        from unshackle.core.cdm.detect import cdm_system, is_playready_cdm
 
         if refusal.get("reason") == "server_device":
             vaults = (
@@ -1683,8 +1683,11 @@ class RemoteService:
         systems = {d.__class__.__name__ for d in track.drm or ()}
         if systems and drm_class not in systems:
             other = "Widevine" if drm_class == "PlayReady" else "PlayReady"
-            matches = is_widevine_cdm if other == "Widevine" else is_playready_cdm
-            if not (other in systems and self.ctx.obj.cdm_for and matches(self.ctx.obj.cdm_for(other.lower(), height))):
+            if not (
+                other in systems
+                and self.ctx.obj.cdm_for
+                and cdm_system(self.ctx.obj.cdm_for(other.lower(), height)) == other.lower()
+            ):
                 label = f"the {height}p track" if height else str(track)
                 hint = f"; pass -q {height} to start the session on your device" if cap and height else ""
                 have = " and ".join(sorted(systems))

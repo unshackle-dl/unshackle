@@ -11,6 +11,7 @@ from pywidevine.device import DeviceTypes
 from requests import Session
 
 from unshackle.core import __version__
+from unshackle.core.cdm.loader import system_of
 from unshackle.core.vault import is_null_key
 from unshackle.core.vaults import Vaults
 
@@ -115,6 +116,8 @@ class CustomRemoteCDM:
 
     service_certificate_challenge = b"\x08\x04"
 
+    is_remote_cdm = True
+
     def __init__(
         self,
         host: str,
@@ -158,9 +161,7 @@ class CustomRemoteCDM:
         self.system_id = device.get("system_id", 26830)
         self.security_level = device.get("security_level", 3)
 
-        self._is_playready = self.device_type_str.upper() == "PLAYREADY" or (
-            bool(self.device_name) and self.device_name.upper().startswith("SL")
-        )
+        self._is_playready = system_of(self.device_type_str, self.device_name) == "playready"
 
         if self.device_type_str:
             self.device_type = self.get_device_type_enum(self.device_type_str)

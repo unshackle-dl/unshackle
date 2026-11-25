@@ -97,7 +97,7 @@ def env(monkeypatch):
     monkeypatch.setattr(handlers.config, "serve", {"users": {}}, raising=False)
     # the device name says what the device is, in place of the .wvd / .prd file on disk
     monkeypatch.setattr(
-        handlers, "detect_cdm_type", lambda name, cfg: {"wv": "widevine", "pr": "playready"}.get(name[:2])
+        handlers, "device_system", lambda name, cfg: {"wv": "widevine", "pr": "playready"}.get(name[:2])
     )
 
 

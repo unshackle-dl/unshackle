@@ -11,14 +11,14 @@ from __future__ import annotations
 
 from typing import Any
 
+from .detect import is_playready_cdm, is_remote_cdm, is_widevine_cdm
+
 __all__ = [
     "DecryptLabsRemoteCDM",
     "CustomRemoteCDM",
     "MonaLisaCDM",
     "load_cdm",
     "is_remote_cdm",
-    "is_local_cdm",
-    "cdm_location",
     "is_playready_cdm",
     "is_widevine_cdm",
 ]
@@ -41,22 +41,5 @@ def __getattr__(name: str) -> Any:
         from .loader import load_cdm
 
         return load_cdm
-
-    if name in {
-        "is_remote_cdm",
-        "is_local_cdm",
-        "cdm_location",
-        "is_playready_cdm",
-        "is_widevine_cdm",
-    }:
-        from .detect import cdm_location, is_local_cdm, is_playready_cdm, is_remote_cdm, is_widevine_cdm
-
-        return {
-            "is_remote_cdm": is_remote_cdm,
-            "is_local_cdm": is_local_cdm,
-            "cdm_location": cdm_location,
-            "is_playready_cdm": is_playready_cdm,
-            "is_widevine_cdm": is_widevine_cdm,
-        }[name]
 
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

@@ -330,7 +330,7 @@ def test_the_server_cdm_stub_is_the_first_drm_system_of_the_config_entry(
 ) -> None:
     monkeypatch.setattr("unshackle.core.config.config.cdm", {"EXAMPLE": entry})
     monkeypatch.setattr(
-        "unshackle.core.api.handlers.detect_cdm_type",
+        "unshackle.core.api.handlers.device_system",
         lambda name, _: "playready" if name == "pr_device" else "widevine",
     )
 

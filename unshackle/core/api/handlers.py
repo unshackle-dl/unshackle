@@ -34,7 +34,8 @@ from unshackle.core.api.session_store import SessionEntry, SessionStore
 from unshackle.core.binaries import binary_version
 from unshackle.core.cacher import Cacher
 from unshackle.core.cdm.choice import choose_cdm, drm_system
-from unshackle.core.cdm.detect import cdm_type_stub, is_playready_cdm
+from unshackle.core.cdm.detect import cdm_system, cdm_type_stub
+from unshackle.core.cdm.loader import device_system
 from unshackle.core.config import config, load_yaml
 from unshackle.core.dl_options import (
     DEFAULT_DOWNLOAD_PARAMS,
@@ -141,7 +142,7 @@ def load_full_cdm(
         return resolve_server_cdm(service, profile, cdm_type, app_config)
 
     wanted = drm_system(cdm_type)
-    if wanted and detect_cdm_type(cdm_name, app_config) not in (None, wanted):
+    if wanted and device_system(cdm_name, app_config) not in (None, wanted):
         return cdm_type_stub(wanted)
 
     try:
@@ -1087,7 +1088,7 @@ def key_config_error(where: str, user_cfg: Dict[str, Any], app_config: Any = Non
         ):
             return f"{where}.cdm.{tag} must be a device name or a widevine/playready/default mapping of device names"
         for system, device in named.items():
-            found = detect_cdm_type(device, app_config)
+            found = device_system(device, app_config)
             if found is None or system != "default" and found != system:
                 return f"{where}.cdm.{tag}: no {'CDM' if system == 'default' else system} device named '{device}'"
     for tag, entry in service_config.items():
@@ -3800,7 +3801,7 @@ async def session_tracks_handler(
         config_cdm_type = detect_cdm_type_for_service(service_tag, app_config)
         if not config_cdm_type and session.server_cdm and choose_cdm(app_config.cdm, service_tag).both:
             loaded = getattr(getattr(getattr(service_instance, "ctx", None), "obj", None), "cdm", None)
-            config_cdm_type = "playready" if is_playready_cdm(loaded) else "widevine"
+            config_cdm_type = cdm_system(loaded) or "widevine"
 
         track_has_wv = any(
             d.__class__.__name__ == "Widevine" for t in list(tracks.videos) + list(tracks.audio) if t.drm for d in t.drm
@@ -3948,7 +3949,7 @@ def resolve_server_cdm(
     app_config = app_config or config
     cdm_name = choose_cdm(app_config.cdm, service, view="stub").name
     if cdm_name:
-        detected_type = detect_cdm_type(cdm_name, app_config)
+        detected_type = device_system(cdm_name, app_config)
         if detected_type:
             return cdm_type_stub(detected_type)
 
@@ -3968,30 +3969,7 @@ def detect_cdm_type_for_service(service: str, app_config: Any) -> Optional[str]:
     if choice.systems:
         return choice.system
     if choice.name:
-        return detect_cdm_type(choice.name, app_config)
-    return None
-
-
-def detect_cdm_type(cdm_name: str, app_config: Any) -> Optional[str]:
-    """Detect CDM type (PlayReady/widevine) from config without loading it.
-
-    Checks remote_cdm entries and local file extensions to determine the type.
-    """
-    for entry in getattr(app_config, "remote_cdm", []) or []:
-        if entry.get("name") == cdm_name:
-            device_type = str(entry.get("device_type", entry.get("Device Type", ""))).upper()
-            return "playready" if device_type == "PLAYREADY" else "widevine"
-
-    prd_path = app_config.directories.prds / f"{cdm_name}.prd"
-    if not prd_path.is_file():
-        prd_path = app_config.directories.wvds / f"{cdm_name}.prd"
-    if prd_path.is_file():
-        return "playready"
-
-    wvd_path = app_config.directories.wvds / f"{cdm_name}.wvd"
-    if wvd_path.is_file():
-        return "widevine"
-
+        return device_system(choice.name, app_config)
     return None
 
 
@@ -4440,7 +4418,7 @@ def server_drm_candidates(
             device_name = resolve_device_name(user_config, drm_type, service_tag)
         except APIError:
             continue
-        if detect_cdm_type(device_name, app_config) in (None, drm_type):
+        if device_system(device_name, app_config) in (None, drm_type):
             candidates.append(drm_type)
 
     preferred = drm_preference_name(track)

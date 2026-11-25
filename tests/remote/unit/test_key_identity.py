@@ -108,7 +108,7 @@ def test_bad_key_config_is_refused_at_load(server, monkeypatch, user_cfg, proble
 
 def test_a_known_device_passes_validation(server, monkeypatch):
     monkeypatch.setattr(handlers.Services, "get_tags", staticmethod(lambda: ["EXAMPLE"]))
-    monkeypatch.setattr(handlers, "detect_cdm_type", lambda name, cfg: "playready")
+    monkeypatch.setattr(handlers, "device_system", lambda name, cfg: "playready")
     assert handlers.key_config_error("u", {"cdm": {"EXAMPLE": {"playready": "dev"}}, "service_config": {}}) is None
     assert handlers.key_config_error("u", {"cdm": {"EXAMPLE": {"default": "dev"}}, "service_config": None}) is None
     assert handlers.key_config_error("u", {"cdm": {"EXAMPLE": {"widevine": "dev"}}}) is not None

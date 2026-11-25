@@ -20,7 +20,7 @@ from rich.text import Text
 from rich.tree import Tree
 
 from unshackle.core import binaries
-from unshackle.core.cdm.detect import is_playready_cdm, is_widevine_cdm
+from unshackle.core.cdm.detect import cdm_system, is_playready_cdm
 from unshackle.core.console import console
 from unshackle.core.constants import DOWNLOAD_CANCELLED, AnyTrack, DownloadCancelled
 from unshackle.core.drm import (
@@ -722,7 +722,7 @@ class ContentKeyResolver:
         a track downloading at the same time can swap self.cdms.cdm.
         """
         if drm_system is None:
-            drm_system = "playready" if is_playready_cdm(self.cdms.cdm) else "widevine"
+            drm_system = cdm_system(self.cdms.cdm) or "widevine"
         fn = self.service.get_playready_license if drm_system == "playready" else self.service.get_widevine_license
         return fn(**declared_kwargs(fn, kwargs))
 
@@ -959,11 +959,10 @@ class ContentKeyResolver:
         licence = partial(licence, drm_system=drm_system)
 
         if not server_cdm and isinstance(drm, (Widevine, PlayReady)):
-            matches = is_playready_cdm if drm_system == "playready" else is_widevine_cdm
-            if not matches(self.cdms.cdm):
+            if cdm_system(self.cdms.cdm) != drm_system:
                 name, other = ("PlayReady", "Widevine") if drm_system == "playready" else ("Widevine", "PlayReady")
                 system_cdm = self.cdms.cdm_for(drm_system, track_quality)
-                if system_cdm and matches(system_cdm):
+                if cdm_system(system_cdm) == drm_system:
                     self.log.info(f"Switching to the {name} CDM")
                     self.cdms.cdm = system_cdm
                     track_cdm = system_cdm
