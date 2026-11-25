@@ -886,7 +886,7 @@ class Track:
 
                         if drm:
                             progress(downloaded="Decrypting", completed=0, total=None)
-                            decrypt_track(drm, save_path, prepare_drm, track_kid)
+                            decrypt_track(drm, save_path, prepare_drm, track_kid, track=self)
                             if not isinstance(drm, BlowfishStripe):
                                 assert_fragments_decrypted(save_path)
                             self.drm = None

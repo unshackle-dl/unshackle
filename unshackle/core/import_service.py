@@ -677,6 +677,11 @@ class ImportService:
         """Always None: no server vault serves an import."""
         return None
 
+    @property
+    def server_vault(self) -> None:
+        """Always None: an import has no server to push content keys to."""
+        return None
+
     def resolve_server_keys(self, title: Title_T) -> None:
         """Inject exported keys into the selected encrypted tracks by KID (no network).
 

@@ -962,7 +962,7 @@ unshackle dl -w S01 --slow 30-60 EXAMPLE 81234567
 By default, unshackle checks your **key vaults** first and only asks a **CDM** to license
 a content key when the vault misses. You can force one side or the other:
 
-- `--cdm-only`: only use the CDM (skip vaults). Over a `server_cdm` remote session the flag does not reach the server, whose vault shortcut still runs; it only skips the client's decode check on a server key.
+- `--cdm-only`: only use the CDM (skip vaults). Over `--remote`, your own CDM licenses each track, and the run uses neither the server CDM nor the server vault. It needs a local CDM, and a remote session on the server's device fails.
 - `--cdm <name>`: use the named CDM device for this run, ignoring the `cdm` config mapping (including its quality and Widevine/PlayReady sub-entries). Over `--remote`, that device licenses the remote session, not the server CDM.
 - `--vaults-only`: only use key vaults and never license through the CDM. A missing
   content key fails.

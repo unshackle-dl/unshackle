@@ -201,7 +201,7 @@ def decrypt_output(track: AnyTrack, ctx: DownloadContext, drm: DRM_T, decrypt: b
     `decrypt=False` means a SegmentDecrypter already decrypted the segments, so only the check runs.
     """
     ctx.progress(downloaded="Decrypting", completed=0, total=None)
-    decrypt_track(drm, ctx.save_path, ctx.license_widevine, decrypt=decrypt)
+    decrypt_track(drm, ctx.save_path, ctx.license_widevine, decrypt=decrypt, track=track)
     assert_fragments_decrypted(ctx.save_path)
     track.drm = None
     events.emit(events.Types.TRACK_DECRYPTED, track=track, drm=drm, segment=None)

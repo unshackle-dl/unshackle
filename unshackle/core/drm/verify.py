@@ -38,6 +38,7 @@ def decrypt_track(
     licence: Optional[Callable] = None,
     track_kid: Optional[UUID] = None,
     decrypt: bool = True,
+    track: Any = None,
 ) -> None:
     """Decrypt ``path`` with ``drm`` through the installed hook, or directly when there is none.
 
@@ -45,7 +46,7 @@ def decrypt_track(
     then only checks the result, because there is no ciphertext left to retry with.
     """
     if DECRYPT_HOOK:
-        DECRYPT_HOOK(drm, path, licence, track_kid, decrypt)
+        DECRYPT_HOOK(drm, path, licence, track_kid, decrypt, track=track)
     elif decrypt:
         drm.decrypt(path)
 

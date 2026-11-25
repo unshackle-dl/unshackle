@@ -30,6 +30,7 @@ from unshackle.core.api.stats import stats, stats_middleware
 from unshackle.core.config import config
 from unshackle.core.remote_protocol import (
     BAD_KEY_ROUTE,
+    KEYS_ROUTE,
     LICENSE_ROUTE,
     LOGS_ROUTE,
     PROMPT_ROUTE,
@@ -111,6 +112,7 @@ BODIES: dict[str, Any] = {
     SEGMENT_FILTER_ROUTE: {"track_id": "v1"},
     LICENSE_ROUTE: {"track_id": "v1", "challenge": "AAAA"},
     BAD_KEY_ROUTE: {"kid": "00" * 16, "key": "11" * 16},
+    KEYS_ROUTE: {"track_id": "v1", "keys": {"22" * 16: "33" * 16}},
     PROMPT_ROUTE: {"response": "1234"},
     "/api/list-titles": {"service": "EXAMPLE", "title_id": "title-0001"},
     "/api/list-tracks": {"service": "EXAMPLE", "title_id": "title-0001"},
@@ -118,7 +120,15 @@ BODIES: dict[str, Any] = {
     "/api/download/jobs/{job_id}/input": {"response": "1234"},
     "/api/remote/logins/{login_id}/input": {"response": "1234"},
 }
-AUTHENTICATED_ROUTES = [TITLES_ROUTE, TRACKS_ROUTE, SEGMENTS_ROUTE, SEGMENT_FILTER_ROUTE, LICENSE_ROUTE, BAD_KEY_ROUTE]
+AUTHENTICATED_ROUTES = [
+    TITLES_ROUTE,
+    TRACKS_ROUTE,
+    SEGMENTS_ROUTE,
+    SEGMENT_FILTER_ROUTE,
+    LICENSE_ROUTE,
+    BAD_KEY_ROUTE,
+    KEYS_ROUTE,
+]
 SAMPLES = fill(SAMPLES_ROUTE) + "?track_id=v1&entry=1"
 
 
@@ -196,6 +206,13 @@ def fault_cases() -> dict[str, Case]:
             "POST",
             fill(BAD_KEY_ROUTE),
             BODIES[BAD_KEY_ROUTE],
+            session=Faulty(),
+            patch={"load_server_vaults": Faulty(kind).fail},
+        )
+        cases[f"keys {kind}"] = Case(
+            "POST",
+            fill(KEYS_ROUTE),
+            BODIES[KEYS_ROUTE],
             session=Faulty(),
             patch={"load_server_vaults": Faulty(kind).fail},
         )

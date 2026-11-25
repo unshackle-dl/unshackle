@@ -985,7 +985,7 @@ class HLS:
                         assert decrypted_init is not None
                         map_data = (map_data[0], decrypted_init)
                     merge(to=merged_path, via=files, delete=True, include_map_data=True)
-                    decrypt_track(drm, merged_path, license_widevine, decrypt=not segment_decrypter)
+                    decrypt_track(drm, merged_path, license_widevine, decrypt=not segment_decrypter, track=track)
                     assert_fragments_decrypted(merged_path)
                     merged_path.rename(decrypted_path)
                 else:

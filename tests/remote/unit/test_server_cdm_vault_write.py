@@ -219,8 +219,8 @@ def test_cdm_only_still_reuses_keys_from_the_run_cache():
     assert vaults.pushes == [{NEW: "k_new"}]
 
 
-def test_cdm_only_trusts_server_vault_keys():
-    """--cdm-only skips the vault checks, so a server vault key is not sourced for a decode check."""
+def test_a_forced_licence_trusts_server_vault_keys():
+    """A forced licence (cdm_only=True, as --all-drm passes) does not name the server vault as a source, so no decode check."""
     from unshackle.core.remote_service import ServerVault
 
     vaults = FakeVaults()

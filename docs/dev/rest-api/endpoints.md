@@ -472,7 +472,7 @@ Make a download job. It requires `service` and `title_id`. Every other field is 
 | `skip_dl` | boolean | `false` | Only fetch keys, do not download. |
 | `all_drm` | boolean | `false` | License each track with both Widevine and PlayReady. Needs a CDM for each DRM system. Key vaults are read first; `cdm_only: true` sends a challenge for each system. The server refuses it with `cdm`, which selects one device. |
 | `export` | boolean | `false` | Export manifest/keys/subs to JSON. |
-| `cdm_only` | boolean | `null` | Force CDM-only (`true`) or vault-only (`false`) key retrieval. |
+| `cdm_only` | boolean | `null` | Force CDM-only (`true`) or vault-only (`false`) key retrieval. With `remote`, `true` licenses every track with the CDM of this server and uses no CDM or vault of the remote server. |
 | `proxy` / `no_proxy` / `no_proxy_download` / `proxy_download` | string / bool / bool / string | `null` / `false` / `false` / `null` | Proxy controls. `proxy` and `proxy_download` must be full proxy URIs on a public host unless the API key has `server_proxy`. A Control D resolver, `controld://<resolver>@dns.controld.com`, counts as a full proxy URI: the server runs a forwarder for it. |
 | `no_folder` / `no_source` / `no_mux` | boolean | `false` | Output/mux controls. |
 | `sample` | boolean/string | `null` | Download a short sample and write it with a `SAMPLE` tag on the filename in a `Sample` folder inside the output folder. `true` is 60 seconds from 2 minutes in; `"0-60"` is a window in seconds. |
@@ -956,6 +956,7 @@ POST /api/session/{id}/segments → resolve segment URLs / DRM / headers per tra
 POST /api/session/{id}/segment_filter → HLS segments the service drops (ads, bumpers)
 POST /api/session/{id}/samples  → decrypt cbcs samples of a track on the server
 POST /api/session/{id}/license  → proxy or server-CDM DRM licensing
+POST /api/session/{id}/keys     → store the content keys the client proved on a track
 POST /api/session/{id}/keys/bad → report a server-vault content key that did not decrypt
 DELETE /api/session/{id}        → tear down, harvest updated cache
 ```
@@ -1244,6 +1245,19 @@ A slow answer arrives as a [slow response](#slow-responses).
 | `404` | `TRACK_NOT_FOUND` | Unknown track ID. |
 | `404` | `NO_CONTENT` | Server CDM produced no keys. |
 | `422` | `SERVICE_ERROR` | The service aborted during licensing. |
+
+### `POST /api/session/{session_id}/keys`
+
+Store the content keys that the client proved on a track and that the server did not serve to this remote session. The server stores a content key only for a KID that a track of the remote session names and that no local server vault holds a content key for. It never stores a pair flagged bad, and it never removes a flag. The server answers when its local vaults hold the pairs, and sends them to its other vaults after the answer. The client sends each key of a licence when the licence returns, and each vault key after its decode check passes.
+
+```json
+{ "track_id": "<track_id>", "keys": { "<kid_hex>": "<key_hex>" } }
+```
+
+| Status | Error code | Meaning |
+| --- | --- | --- |
+| `200` | - | `{}`, whatever the server stored. |
+| `404` | `SESSION_NOT_FOUND` | Unknown remote session. |
 
 ### `POST /api/session/{session_id}/keys/bad`
 

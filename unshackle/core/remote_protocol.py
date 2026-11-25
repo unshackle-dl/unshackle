@@ -22,6 +22,7 @@ SEGMENTS_ROUTE = SESSION_ROUTE + "/segments"
 SEGMENT_FILTER_ROUTE = SESSION_ROUTE + "/segment_filter"
 SAMPLES_ROUTE = SESSION_ROUTE + "/samples"
 LICENSE_ROUTE = SESSION_ROUTE + "/license"
+KEYS_ROUTE = SESSION_ROUTE + "/keys"
 BAD_KEY_ROUTE = SESSION_ROUTE + "/keys/bad"
 LOGS_ROUTE = SESSION_ROUTE + "/logs"
 PROMPT_ROUTE = SESSION_ROUTE + "/prompt"
@@ -205,6 +206,11 @@ class LicenseReply(TypedDict, total=False):
 class BadKeyReport(TypedDict):
     kid: str
     key: str
+
+
+class TrackKeys(TypedDict):
+    track_id: str
+    keys: dict[str, str]
 
 
 class PromptReply(TypedDict, total=False):

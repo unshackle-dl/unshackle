@@ -241,7 +241,7 @@ def no_decrypt(monkeypatch) -> list[tuple[object, bool]]:
     """
     calls: list[tuple[object, bool]] = []
 
-    def decrypt_track(drm, path, licence=None, track_kid=None, decrypt=True):
+    def decrypt_track(drm, path, licence=None, track_kid=None, decrypt=True, track=None):
         calls.append((drm, decrypt))
 
     for module in (segment_pipeline, hls_module):

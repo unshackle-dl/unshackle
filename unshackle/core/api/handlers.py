@@ -42,7 +42,7 @@ from unshackle.core.dl_options import (
     cast_dl_params,
     forwarded_dl_params,
 )
-from unshackle.core.drm import BlowfishStripe, cbcs, is_null_key
+from unshackle.core.drm import BlowfishStripe, cbcs, is_null_key, real_kids
 from unshackle.core.launch import served_context
 from unshackle.core.manifests.snapshot import capture
 from unshackle.core.providers.anilist import parse_anilist_ref
@@ -64,6 +64,7 @@ from unshackle.core.remote_protocol import (
     SessionCreated,
     SessionInfo,
     TitlesReply,
+    TrackKeys,
     TracksReply,
     TracksRequest,
 )
@@ -5289,6 +5290,71 @@ async def session_bad_key_handler(
         f"Client proved {kid}:{served_key} from vault {sanitize_log(source)} wrong, flagged in the server vaults"
     )
     return web.json_response({"flagged": True})
+
+
+async def session_keys_handler(data: TrackKeys, session_id: str, request: Optional[web.Request] = None) -> web.Response:
+    """Store the content keys a client proved on a track of this remote session in the server vaults.
+
+    The server takes a KID only when a track of the remote session names it and no local server vault holds a
+    content key for it, and never a pair flagged bad or one it served, so a client can add a missing content key but
+    never replace or unflag one. It answers once the local vaults hold the pairs and pushes them to the other vaults
+    after, so the client never waits on a remote vault. The reply is always empty, so the client learns nothing.
+    """
+    session = await get_validated_session(session_id, request)
+    require_authenticated(session)
+
+    track_id, posted = data.get("track_id"), data.get("keys")
+    pairs = {
+        str(kid).replace("-", "").lower(): key.lower()
+        for kid, key in (posted.items() if isinstance(posted, dict) else ())
+        if isinstance(key, str) and re.fullmatch(r"[0-9a-fA-F]{32}", key)
+    }
+    if not pairs:
+        return web.json_response({})
+    service = session.service_instance
+
+    def named_kids() -> set[str]:
+        track = session.tracks.get(track_id) if isinstance(track_id, str) else None
+        if track is not None:
+            ensure_track_drm(track, getattr(service, "session", None))
+        return {kid.hex for t in list(session.tracks.values()) for drm in t.drm or [] for kid in real_kids(drm)}
+
+    def store(named: set[str]) -> tuple[Any, Dict[Any, str]]:
+        vaults = load_server_vaults(service.__class__.__name__)
+        local = [vault for vault in vaults.vaults if vault.local]
+
+        def held(vault: Any, kid: uuid.UUID) -> bool:
+            """Whether ``vault`` holds a content key for ``kid``. A failed lookup counts as held, a vault with no read access as empty."""
+            try:
+                return bool(vault.get_key(kid, vaults.service))
+            except (PermissionError, NotImplementedError):
+                return False
+            except Exception:
+                return True
+
+        new: Dict[Any, str] = {}
+        for kid_hex, key in pairs.items():
+            if kid_hex not in named or session.served_keys.get(kid_hex, ("",))[0].lower() == key:
+                continue
+            kid = uuid.UUID(hex=kid_hex)
+            if not vaults.is_flagged(kid, key) and not any(held(vault, kid) for vault in local):
+                new[kid] = key
+        if new and sum(vaults.push_keys(vault, new) for vault in local if not vault.no_push):
+            log.info(
+                f"Session {sanitize_log(session_id[:12])} sent {len(new)} client content key(s) to the server vaults"
+            )
+        return vaults, new
+
+    try:
+        async with session.lock:
+            named = await asyncio.to_thread(named_kids)
+        vaults, new = await asyncio.to_thread(store, named)
+        remote = [vault for vault in vaults.vaults if not vault.local and not vault.no_push]
+        if new and remote:
+            asyncio.get_running_loop().run_in_executor(None, lambda: [vaults.push_keys(vault, new) for vault in remote])
+    except (Exception, SystemExit) as e:
+        log.debug(f"Session {sanitize_log(session_id[:12])} content keys not stored: {e!r}")
+    return web.json_response({})
 
 
 async def session_info_handler(session_id: str, request: Optional[web.Request] = None) -> web.Response:

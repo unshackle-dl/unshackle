@@ -57,7 +57,7 @@ def client_calls() -> tuple[set[tuple[str, str]], set[str]]:
         for call in ast.walk(function):
             if not (isinstance(call, ast.Call) and isinstance(call.func, ast.Attribute) and call.args):
                 continue
-            if call.func.attr == "request" and isinstance(call.args[0], ast.Constant) and len(call.args) > 1:
+            if call.func.attr in ("request", "send") and isinstance(call.args[0], ast.Constant) and len(call.args) > 1:
                 method, target = str(call.args[0].value).upper(), call.args[1]
             elif call.func.attr in CLIENT_METHODS:
                 method, target = CLIENT_METHODS[call.func.attr], call.args[0]
@@ -115,6 +115,7 @@ def test_the_wire_values_stay_what_older_peers_send():
         "SEGMENT_FILTER_ROUTE": "/api/session/{session_id}/segment_filter",
         "SAMPLES_ROUTE": "/api/session/{session_id}/samples",
         "LICENSE_ROUTE": "/api/session/{session_id}/license",
+        "KEYS_ROUTE": "/api/session/{session_id}/keys",
         "BAD_KEY_ROUTE": "/api/session/{session_id}/keys/bad",
         "LOGS_ROUTE": "/api/session/{session_id}/logs",
         "PROMPT_ROUTE": "/api/session/{session_id}/prompt",
@@ -205,6 +206,7 @@ def properties(schema: Optional[dict]) -> set[str]:
         ("POST", protocol.TRACKS_ROUTE, protocol.TracksRequest, None),
         ("POST", protocol.SEGMENT_FILTER_ROUTE, protocol.SegmentFilterRequest, protocol.SegmentFilterReply),
         ("POST", protocol.LICENSE_ROUTE, protocol.LicenseRequest, protocol.LicenseReply),
+        ("POST", protocol.KEYS_ROUTE, protocol.TrackKeys, None),
         ("POST", protocol.BAD_KEY_ROUTE, protocol.BadKeyReport, None),
         ("GET", protocol.LOGS_ROUTE, None, protocol.LogsReply),
         ("GET", protocol.PROMPT_ROUTE, None, protocol.PromptReply),

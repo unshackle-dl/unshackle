@@ -2848,7 +2848,7 @@ class dl:
                         for track in drm_tracks:
                             drm = track.get_drm_for_cdm(self.cdm)
                             if drm and hasattr(drm, "decrypt"):
-                                self.keys.decrypt_verified(drm, track.path, prepare_drm_for(track))
+                                self.keys.decrypt_verified(drm, track.path, prepare_drm_for(track), track=track)
                                 if not isinstance(drm, MonaLisa):
                                     # MonaLisa decrypts per segment; its decrypt() here is a no-op
                                     assert_fragments_decrypted(track.path)
@@ -3421,6 +3421,7 @@ class dl:
                 if cookie_file:
                     self.save_cookies(cookie_file, service.session.cookies)
 
+        self.keys.wait_vault_writes()
         if hasattr(service, "close"):
             service.close()
 
@@ -3430,7 +3431,6 @@ class dl:
                 run_context["folder"] = str(folder)
                 dispatch("success", "run", run_context, postscript)
 
-        self.keys.wait_vault_writes()
         if export_path:
             self.log_export_summary()
         if self.skipped_titles:

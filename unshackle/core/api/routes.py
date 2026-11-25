@@ -63,6 +63,7 @@ from unshackle.core.api.handlers import (
     session_create_handler,
     session_delete_handler,
     session_info_handler,
+    session_keys_handler,
     session_license_handler,
     session_logs_handler,
     session_prompt_get_handler,
@@ -82,6 +83,7 @@ from unshackle.core.remote_protocol import (
     BAD_KEY_ROUTE,
     CHANNEL_ROUTE,
     HEALTH_ROUTE,
+    KEYS_ROUTE,
     LICENSE_ROUTE,
     LOGS_ROUTE,
     PROMPT_ROUTE,
@@ -1146,7 +1148,7 @@ async def download(request: web.Request) -> web.Response:
                 description: Export manifest, DRM init data, keys, and track info to a JSON file in the exports directory (default - false)
               cdm_only:
                 type: boolean
-                description: Only use CDM for content key retrieval (true) or only vaults (false) (default - None)
+                description: Only use CDM for content key retrieval (true) or only vaults (false). With `remote`, true licenses every track with the CDM of this server and uses no CDM or vault of the remote server (default - None)
               cdm:
                 type: string
                 description: CDM device name on the server to license with, overriding the cdm config mapping. Requires serve.cdm_overrides to allow it (default - None)
@@ -2484,6 +2486,52 @@ async def session_bad_key(request: web.Request) -> web.Response:
 
 
 @api_handler
+async def session_keys(request: web.Request) -> web.Response:
+    """
+    Store the content keys a client proved on a track in the server vaults.
+    ---
+    summary: Store proven content keys
+    description: >-
+      The client decrypted a track and the output decoded. It sends the content keys that the server
+      did not serve to this remote session. The server stores a content key only for a KID that a
+      track of the remote session names and that no server vault holds a content key for, and never
+      a pair flagged bad. The reply is always empty.
+    parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - track_id
+              - keys
+            properties:
+              track_id:
+                type: string
+                description: The track the keys decrypted
+              keys:
+                type: object
+                description: Content key as hex, by KID as hex
+                additionalProperties:
+                  type: string
+    responses:
+      '200':
+        description: An empty object, whatever the server stored
+      '404':
+        description: Remote session not found
+    """
+    session_id = request.match_info["session_id"]
+    data = await json_body(request)
+    return await session_keys_handler(data, session_id, request)
+
+
+@api_handler
 async def session_info(request: web.Request) -> web.Response:
     """
     Get remote session info.
@@ -3460,6 +3508,7 @@ ROUTES: list[tuple[str, str, Handler, bool]] = [
     ("POST", SEGMENT_FILTER_ROUTE, session_segment_filter, True),
     ("POST", SAMPLES_ROUTE, session_samples, True),
     ("POST", LICENSE_ROUTE, session_license, True),
+    ("POST", KEYS_ROUTE, session_keys, True),
     ("POST", BAD_KEY_ROUTE, session_bad_key, True),
     ("GET", LOGS_ROUTE, session_logs, True),
     ("GET", PROMPT_ROUTE, session_prompt_get, True),

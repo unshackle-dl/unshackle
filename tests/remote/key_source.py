@@ -20,6 +20,7 @@ def remote_keys(
     svc.client_licensed = set(client_licensed)
     svc.deferred_refusals = {}
     svc.server_vault_keys = dict(server_vault_keys or {})
+    svc.served_keys = set()
     svc.server_vault = ServerVault(svc)
     svc.ctx = SimpleNamespace(obj=SimpleNamespace(cdm=local_cdm, cdm_for=None))
     return svc

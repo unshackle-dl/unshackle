@@ -57,6 +57,7 @@ from unshackle.core.proxies.resolve import is_loopback
 from unshackle.core.remote_protocol import (
     BAD_KEY_ROUTE,
     HEALTH_ROUTE,
+    KEYS_ROUTE,
     LICENSE_ROUTE,
     SAMPLES_ROUTE,
     SEARCH_ROUTE,
@@ -79,6 +80,7 @@ from unshackle.core.remote_protocol import (
     SessionCreate,
     SessionCreated,
     TitlesReply,
+    TrackKeys,
     TracksReply,
     TracksRequest,
 )
@@ -121,6 +123,7 @@ RETRY_AFTER_LOCK = Lock()
 RATE_LIMIT_TRIES = 3
 TUNNEL_SLOT_POLL = 15
 PROBE_TIMEOUT = 30.0
+KEYS_TIMEOUT = 5.0
 REOPEN_WAIT = 1800.0  # seconds a lost session waits for its server to come back; covers a deploy's whole drain
 
 
@@ -826,14 +829,18 @@ class ServerKeySource(Protocol):
     def vault_source(self, kid: UUID, key: str) -> Optional[Vault]:
         """The server vault when it served ``key`` for ``kid``, else None. That content key must pass a decrypt check."""
 
+    @property
+    def server_vault(self) -> Optional["ServerVault"]:
+        """The server's vaults, which take the content keys a decrypt proved, or None."""
+
 
 class ServerVault(Vault):
-    """The server's vaults as one source seen from the client: it can only be reported against.
+    """The server's vaults as one source for the client, which reports bad pairs to it and pushes proven ones.
 
     ``decrypt_verified`` needs a Vault to hold in ``Vaults.sources`` so a server-supplied
     content key gets the same decode check as a local vault key. The client never learns
-    which server vault answered and can neither read nor write it, so every method returns
-    nothing. A bad verdict goes to the server at once, so its next licence skips the pair.
+    which server vault answered and cannot read it. A bad verdict goes to the server at once,
+    so its next licence skips the pair. ``add_keys`` pushes the proven keys the server did not serve.
     """
 
     report_now = True
@@ -851,7 +858,23 @@ class ServerVault(Vault):
     def add_key(self, service: str, kid: Union[UUID, str], key: str) -> bool:
         return False
 
-    def add_keys(self, service: str, kid_keys: dict[Union[UUID, str], str]) -> int:
+    def add_keys(self, service: str, kid_keys: dict[Union[UUID, str], str], track: Optional[AnyTrack] = None) -> int:
+        """Post the pairs of ``track`` the server neither served nor accepted; always 0, as it does not say what it stored.
+
+        It runs on the vault writer thread and is silent: it drops a failed post and logs nothing. The wait is
+        short, as the server writes its local vaults before it answers and its other vaults after.
+        """
+        remote = self.service
+        pairs = ((UUID(str(kid)), key) for kid, key in kid_keys.items())
+        keys = {kid.hex: key for kid, key in pairs if (kid, key) not in remote.served_keys}
+        session_id = remote._session_id
+        if keys and track is not None and session_id:
+            body = TrackKeys(track_id=remote.server_track_id(track.id), keys=keys)
+            with contextlib.suppress(Exception):
+                if remote.client.send(
+                    "post", KEYS_ROUTE.format(session_id=session_id), KEYS_TIMEOUT, background=True, json=body
+                ).ok:
+                    remote.served_keys.update((UUID(hex=kid), key) for kid, key in keys.items())
         return 0
 
     def get_services(self) -> Iterator[str]:
@@ -908,6 +931,7 @@ class RemoteService:
         self.client_licensed: set[str] = set()  # track ids this machine's device licenses by challenge relay
         self.deferred_refusals: Dict[str, str] = {}
         self.server_vault_keys: Dict[UUID, str] = {}
+        self.served_keys: set[tuple[UUID, str]] = set()
         self.server_vault = ServerVault(self)
         self._segment_filters: Dict[str, Callable[[Any], bool]] = {}
         self._sample_decrypt_tracks: set[str] = set()
@@ -1141,6 +1165,9 @@ class RemoteService:
         # sent with the server CDM too: a capped server hands the tracks above its cap to this device
         cdm = self.local_cdm
         cdm_name = self.ctx.parent and self.ctx.parent.params.get("cdm_name")
+        cdm_only = bool(self.ctx.parent and self.ctx.parent.params.get("cdm_only"))
+        if cdm_only and cdm is None:
+            raise click.ClickException(f"--cdm-only over --remote needs a local CDM for {self.service_tag}")
         cdm_entry = cdm is not None and self.ctx.obj.cdm_entry and self._server_cdm is None
         if not (cdm_entry or cdm_name or self._server_cdm is not None) and ci_get(config.cdm, self.service_tag):
             self.log.warning(
@@ -1150,7 +1177,7 @@ class RemoteService:
         if cdm is not None:
             from unshackle.core.cdm.detect import is_playready_cdm
 
-            if cdm_entry or cdm_name:
+            if cdm_entry or cdm_name or cdm_only:
                 self._server_cdm = False
             if self._server_cdm is False:
                 create_data["server_cdm"] = False
@@ -1195,6 +1222,10 @@ class RemoteService:
         if "server_cdm" in result:
             self.adopt_session_cdm(bool(result["server_cdm"]), result.get("server_cdm_max_height"))
         self._server_device = bool(result.get("server_device"))
+        if cdm_only and self._server_device:
+            raise click.ClickException(
+                f"--cdm-only cannot license {self.service_tag}: the remote session runs on the server's device"
+            )
         if cdm_entry and self._server_cdm is False and not self._server_device:
             self.log.info(
                 f"The cdm config has an entry for {self.service_tag}, so your own device licenses "
@@ -1205,7 +1236,7 @@ class RemoteService:
             self._server_cdm = True
             whose = "the server vault or yours" if vault else "your vaults only"
             self.log.info(f"This session runs on the server's device: keys come from {whose}")
-        self._server_vault = vault and not self._server_cdm
+        self._server_vault = vault and not self._server_cdm and not cdm_only
         # without the server vault grant the server refuses every key request, so none is sent
         self._local_vaults_only = self._server_device and not vault
 
@@ -1679,9 +1710,10 @@ class RemoteService:
         return self.server_vault if self.server_vault_keys.get(kid) == key else None
 
     def note_vault_keys(self, keys: Dict[str, str], vault_kids: set[str]) -> None:
-        """Remember which of the served keys a server vault supplied, and forget the rest."""
+        """Remember every served pair, and which of them a server vault supplied. ``served_keys`` also takes each pair the server accepted."""
         for kid_hex, key in keys.items():
             kid = UUID(hex=kid_hex)
+            self.served_keys.add((kid, key))
             if kid_hex in vault_kids:
                 self.server_vault_keys[kid] = key
             else:

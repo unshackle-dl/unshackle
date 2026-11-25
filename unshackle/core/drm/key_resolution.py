@@ -131,6 +131,7 @@ class ContentKeyResolver:
         licence: Optional[Callable] = None,
         track_kid: Optional[UUID] = None,
         decrypt: bool = True,
+        track: Optional[AnyTrack] = None,
     ) -> None:
         """Decrypt the file, and when a vault supplied a content key, prove the output decodes.
 
@@ -151,6 +152,9 @@ class ContentKeyResolver:
 
         With ``decrypt=False`` the downloader already decrypted the segments in place, so a
         failure can only flag and raise; the next run skips the flagged pair.
+
+        After a decrypt that passes, the server key source's vault gets the proven content keys of
+        ``track``: each licence key, and each vault key the decode check passed.
 
         Before the decrypt, each KID the DRM names without a content key is licensed when the file
         uses it, or when the file cannot be mapped, because ``_prepare_drm`` licensed only for the track's KID.
@@ -231,6 +235,13 @@ class ContentKeyResolver:
         windows = kid_map.windows if kid_map else {}
         video = kid_map.video if kid_map else None
 
+        def proven(passed: dict[UUID, Vault]) -> dict[Union[UUID, str], str]:
+            """The licence keys and the vault keys in ``passed``, without null keys; a flagged pair never gets here."""
+            sourced = vault_kids()
+            return {
+                kid: key for kid, key in keys.items() if (kid in passed or kid not in sourced) and not is_null_key(key)
+            }
+
         def window_decodes(start: float, end: float) -> bool:
             return ffmpeg_decodes(path, start=start, seconds=end - start if end > start else 0.5, video=video)
 
@@ -286,6 +297,11 @@ class ContentKeyResolver:
                                 ]
                             )
                         self.vaults.report_replaced(keys)
+                        server_vault = self.source.server_vault if self.source and track is not None else None
+                        if server_vault is not None:
+                            self._flush_vault_writes(
+                                [partial(server_vault.add_keys, self.tag, proven(kids if checked else {}), track)]
+                            )
                         return
                 bad = {kid: drop(kid) for kid in {*failed, *stale}}
                 for kid, key in bad.items():
@@ -367,9 +383,6 @@ class ContentKeyResolver:
                     elif kid not in self.LICENSE_KEY_CACHE:
                         self.LICENSE_KEY_CACHE[kid] = server_key
                         self._flush_vault_writes([partial(self._cache_keys_to_vaults, {kid: server_key})])
-                    self.log.debug(
-                        f"{vault.name} holds a different key for {kid.hex} than the server, testing it first"
-                    )
 
     def _cache_resolved_keys(self, source: "ServerKeySource", title: Title_T) -> None:
         """Cache the keys a batch licence or an import put on the tracks.
@@ -550,6 +563,7 @@ class ContentKeyResolver:
         ``decrypt_verified`` licenses any other KID the file turns out to use.
         ``force`` skips the run cache, so the licence runs again for each KID no vault answers.
         A licence can answer a KID with a blank or null key; a vault key for that KID wins.
+        Every content key of the licence goes to the vaults and to the server key source's vault at once.
         """
         pssh: Optional[str] = None
         if isinstance(drm, ClearKeyCENC):
@@ -667,12 +681,13 @@ class ContentKeyResolver:
                 drop_null_keys(drm)
                 drm.content_keys.update(from_vaults)
                 self.LICENSE_KEY_CACHE.update(drm.content_keys)
-                pending_vault_writes.append(
-                    partial(
-                        self._cache_keys_to_vaults,
-                        {k: v for k, v in drm.content_keys.items() if k not in from_vaults},
+                licensed = {k: v for k, v in drm.content_keys.items() if k not in from_vaults}
+                pending_vault_writes.append(partial(self._cache_keys_to_vaults, licensed))
+                server_vault = self.source.server_vault if self.source else None
+                if server_vault is not None:
+                    pending_vault_writes.append(
+                        partial(server_vault.add_keys, self.tag, cast(dict[Union[UUID, str], str], licensed), track)
                     )
-                )
 
             if track_kid and track_kid not in drm.content_keys:
                 msg = f"No Content Key for KID {track_kid.hex} was returned in the License"

@@ -1470,6 +1470,160 @@
   },
   "status": 422
  },
+ "POST /api/session/{session_id}/keys no key": {
+  "body": {
+   "message": "Secret Key is Empty.",
+   "status": 401
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [],
+  "stats": {
+   "error": null,
+   "late_status": null
+  },
+  "status": 401
+ },
+ "POST /api/session/{session_id}/keys not an object": {
+  "body": {
+   "error_code": "INVALID_INPUT",
+   "message": "The request body must be a JSON object (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: INVALID_INPUT 400 POST /api/session/pinned-session/keys service=- user=test\u2026: The request body must be a JSON object"
+  ],
+  "stats": {
+   "error": {
+    "code": "INVALID_INPUT",
+    "message": "The request body must be a JSON object",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 400
+ },
+ "POST /api/session/{session_id}/keys not authenticated": {
+  "body": {
+   "details": {
+    "auth_status": "authenticating"
+   },
+   "error_code": "INVALID_INPUT",
+   "message": "Session authentication not complete (status: authenticating) (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: INVALID_INPUT 400 POST /api/session/pinned-session/keys service=EXAMPLE user=test\u2026: Session authentication not complete (status: authenticating)"
+  ],
+  "stats": {
+   "error": {
+    "code": "INVALID_INPUT",
+    "message": "Session authentication not complete (status: authenticating)",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 400
+ },
+ "POST /api/session/{session_id}/keys not json": {
+  "body": {
+   "details": {
+    "error": "Expecting property name enclosed in double quotes: line 1 column 2 (char 1)"
+   },
+   "error_code": "INVALID_INPUT",
+   "message": "Invalid JSON request body (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: INVALID_INPUT 400 POST /api/session/pinned-session/keys service=- user=test\u2026: Invalid JSON request body"
+  ],
+  "stats": {
+   "error": {
+    "code": "INVALID_INPUT",
+    "message": "Invalid JSON request body",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 400
+ },
+ "POST /api/session/{session_id}/keys plain before the handler's try": {
+  "body": {
+   "error_code": "INTERNAL_ERROR",
+   "message": "Internal server error (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [],
+  "stats": {
+   "raised": true
+  },
+  "status": 422
+ },
+ "POST /api/session/{session_id}/keys unknown session": {
+  "body": {
+   "details": {
+    "session_id": "pinned-session"
+   },
+   "error_code": "SESSION_NOT_FOUND",
+   "message": "Session not found or expired: pinned-session (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: SESSION_NOT_FOUND 404 POST /api/session/pinned-session/keys service=- user=test\u2026: Session not found or expired: pinned-session"
+  ],
+  "stats": {
+   "error": {
+    "code": "SESSION_NOT_FOUND",
+    "message": "Session not found or expired: pinned-session",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 404
+ },
+ "POST /api/session/{session_id}/keys wrong owner": {
+  "body": {
+   "error_code": "FORBIDDEN",
+   "message": "Session access denied (ref REF)",
+   "ref": "REF",
+   "status": "error",
+   "timestamp": "TIMESTAMP"
+  },
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [
+   "Error ref REF: FORBIDDEN 403 POST /api/session/pinned-session/keys service=EXAMPLE user=test\u2026: Session access denied"
+  ],
+  "stats": {
+   "error": {
+    "code": "FORBIDDEN",
+    "message": "Session access denied",
+    "ref": "REF"
+   },
+   "late_status": null
+  },
+  "status": 403
+ },
  "POST /api/session/{session_id}/keys/bad no key": {
   "body": {
    "message": "Secret Key is Empty.",
@@ -2583,6 +2737,39 @@
    "raised": true
   },
   "status": 422
+ },
+ "keys api": {
+  "body": {},
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [],
+  "stats": {
+   "error": null,
+   "late_status": null
+  },
+  "status": 200
+ },
+ "keys exit": {
+  "body": {},
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [],
+  "stats": {
+   "error": null,
+   "late_status": null
+  },
+  "status": 200
+ },
+ "keys plain": {
+  "body": {},
+  "content_type": "application/json",
+  "leading_newlines": false,
+  "log": [],
+  "stats": {
+   "error": null,
+   "late_status": null
+  },
+  "status": 200
  },
  "license batch api": {
   "body": {
