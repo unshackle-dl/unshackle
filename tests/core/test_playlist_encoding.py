@@ -1,5 +1,5 @@
 """Unit tests for manifest response decoding. Reading `.text` on a response with no encoding
-makes requests run chardet over the whole body, so the playlist fetch paths set utf-8
+makes requests run charset detection over the whole body, so the playlist fetch paths set utf-8
 first. A charset the server did send must survive. An MPD is parsed from bytes, so the
 XML declaration gives the encoding."""
 

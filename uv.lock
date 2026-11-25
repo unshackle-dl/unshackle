@@ -341,15 +341,6 @@ wheels = [
 ]
 
 [[package]]
-name = "chardet"
-version = "5.2.0"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/f3/0d/f7b6ab21ec75897ed80c17d79b15951a719226b9fababf1e40ea74d69079/chardet-5.2.0.tar.gz", hash = "sha256:1b3b6ff479a8c414bc3fa2c0852995695c4a026dcd6d0633b2dd092ca39c1cf7", size = 2069618, upload-time = "2023-08-01T19:23:02.662Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/38/6f/f5fbc992a329ee4e0f288c1fe0e2ad9485ed064cac731ed2fe47dcc38cbf/chardet-5.2.0-py3-none-any.whl", hash = "sha256:e1cf59446890a00105fe7b7912492ea04b6e6f06d4b742b2c788469e34c82970", size = 199385, upload-time = "2023-08-01T19:23:00.661Z" },
-]
-
-[[package]]
 name = "charset-normalizer"
 version = "3.4.6"
 source = { registry = "https://pypi.org/simple" }
@@ -464,15 +455,6 @@ name = "construct"
 version = "2.8.8"
 source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/b6/2c/66bab4fef920ef8caa3e180ea601475b2cbbe196255b18f1c58215940607/construct-2.8.8.tar.gz", hash = "sha256:1b84b8147f6fd15bcf64b737c3e8ac5100811ad80c830cb4b2545140511c4157", size = 717694, upload-time = "2016-10-20T22:29:12.563Z" }
-
-[[package]]
-name = "crccheck"
-version = "1.3.1"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/3c/d1/a943f4f1ca899917cc3fe1cb89d59348edd1b407503e4b02608e8d6b421e/crccheck-1.3.1.tar.gz", hash = "sha256:1544c0110bf0a697d875d4f29dc40d7079f9d4d402a9317383f55f90ca72563a", size = 41696, upload-time = "2025-07-10T07:01:08.683Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/01/b5/68a9054be852e61f31de1be4e8d95802646b93344ce17c2380a1748706fa/crccheck-1.3.1-py3-none-any.whl", hash = "sha256:1680c9a7bb1ca4bec45fa19b8ca64319f10d2ce4eb8b0d25d51cb99a20ca0108", size = 24608, upload-time = "2025-07-10T07:01:07.25Z" },
-]
 
 [[package]]
 name = "cryptography"
@@ -790,15 +772,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/63/53/4f3c058e3bace40282876f9b553343376ee687f3c35a525dc79dbd450f88/isort-7.0.0.tar.gz", hash = "sha256:5513527951aadb3ac4292a41a16cbc50dd1642432f5e8c20057d414bdafb4187", size = 805049, upload-time = "2025-10-11T13:30:59.107Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/7f/ed/e3705d6d02b4f7aea715a353c8ce193efd0b5db13e204df895d38734c244/isort-7.0.0-py3-none-any.whl", hash = "sha256:1bcabac8bc3c36c7fb7b98a76c8abb18e0f841a3ba81decac7691008592499c1", size = 94672, upload-time = "2025-10-11T13:30:57.665Z" },
-]
-
-[[package]]
-name = "jsonpath-ng"
-version = "1.8.0"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/32/58/250751940d75c8019659e15482d548a4aa3b6ce122c515102a4bfdac50e3/jsonpath_ng-1.8.0.tar.gz", hash = "sha256:54252968134b5e549ea5b872f1df1168bd7defe1a52fed5a358c194e1943ddc3", size = 74513, upload-time = "2026-02-24T14:42:06.182Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/03/99/33c7d78a3fb70d545fd5411ac67a651c81602cc09c9cf0df383733f068c5/jsonpath_ng-1.8.0-py3-none-any.whl", hash = "sha256:b8dde192f8af58d646fc031fac9c99fe4d00326afc4148f1f043c601a8cfe138", size = 67844, upload-time = "2026-02-28T00:53:19.637Z" },
 ]
 
 [[package]]
@@ -1552,15 +1525,6 @@ wheels = [
 ]
 
 [[package]]
-name = "pyexecjs"
-version = "1.5.1"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "six" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/ba/8e/aedef81641c8dca6fd0fb7294de5bed9c45f3397d67fddf755c1042c2642/PyExecJS-1.5.1.tar.gz", hash = "sha256:34cc1d070976918183ff7bdc0ad71f8157a891c92708c00c5fbbff7a769f505c", size = 13344, upload-time = "2018-01-18T04:33:55.126Z" }
-
-[[package]]
 name = "pygments"
 version = "2.20.0"
 source = { registry = "https://pypi.org/simple" }
@@ -2177,15 +2141,12 @@ dependencies = [
     { name = "aiohttp-swagger3" },
     { name = "appdirs" },
     { name = "brotli" },
-    { name = "chardet" },
     { name = "click" },
     { name = "construct" },
-    { name = "crccheck" },
     { name = "cryptography" },
     { name = "defusedxml" },
     { name = "filelock" },
     { name = "fonttools" },
-    { name = "jsonpath-ng" },
     { name = "jsonpickle" },
     { name = "langcodes" },
     { name = "language-data" },
@@ -2196,7 +2157,6 @@ dependencies = [
     { name = "pycaption" },
     { name = "pycountry" },
     { name = "pycryptodomex" },
-    { name = "pyexecjs" },
     { name = "pyjwt" },
     { name = "pymediainfo" },
     { name = "pymp4" },
@@ -2248,15 +2208,12 @@ requires-dist = [
     { name = "aiohttp-swagger3", specifier = ">=0.9.0,<1" },
     { name = "appdirs", specifier = ">=1.4.4,<2" },
     { name = "brotli", specifier = ">=1.1.0,<2" },
-    { name = "chardet", specifier = ">=5.2.0,<6" },
     { name = "click", specifier = ">=8.2,<9" },
     { name = "construct", specifier = ">=2.8.8,<3" },
-    { name = "crccheck", specifier = ">=1.3.0,<2" },
     { name = "cryptography", specifier = ">=45.0.0,<47" },
     { name = "defusedxml", specifier = ">=0.7.1" },
     { name = "filelock", specifier = ">=3.20.3,<4" },
     { name = "fonttools", specifier = ">=4.60.2,<5" },
-    { name = "jsonpath-ng", specifier = ">=1.8.0" },
     { name = "jsonpickle", specifier = ">=3.0.4,<5" },
     { name = "langcodes", specifier = ">=3.4.0,<4" },
     { name = "language-data", specifier = ">=1.4.0" },
@@ -2267,7 +2224,6 @@ requires-dist = [
     { name = "pycaption", specifier = ">=2.2.24,<2.2.27" },
     { name = "pycountry", specifier = ">=24.6.1" },
     { name = "pycryptodomex", specifier = ">=3.20.0,<4" },
-    { name = "pyexecjs", specifier = ">=1.5.1,<2" },
     { name = "pyjwt", specifier = ">=2.12.0,<3" },
     { name = "pymediainfo", specifier = ">=6.1.0,<8" },
     { name = "pymp4", specifier = ">=1.4.0,<2" },

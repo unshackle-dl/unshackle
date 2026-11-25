@@ -24,7 +24,6 @@ from typing import Any, Callable, Iterator, Mapping, Optional, Sequence, Union
 from urllib.parse import ParseResult, urlparse
 from uuid import uuid4
 
-import chardet
 import pycountry
 from construct import ValidationError
 from fontTools import ttLib
@@ -730,8 +729,8 @@ def try_ensure_utf8(data: bytes) -> bytes:
     Parameters:
         data: Input data that may or may not yet be UTF-8 or another encoding.
 
-    Returns the input data encoded in UTF-8 if successful. If unable to detect the
-    encoding of the input data, then this function returns the original data as-received.
+    Returns the data as-is when it is valid UTF-8 after decompression, else decoded as
+    CP-1252 with unknown bytes replaced and encoded in UTF-8.
     """
     if data[:2] == b"\x1f\x8b":
         try:
@@ -748,19 +747,7 @@ def try_ensure_utf8(data: bytes) -> bytes:
         data.decode("utf8")
         return data
     except UnicodeDecodeError:
-        try:
-            # CP-1252 is a superset of latin1 but has gaps. Replace unknown
-            # characters instead of failing on them.
-            return data.decode("cp1252", errors="replace").encode("utf8")
-        except UnicodeDecodeError:
-            try:
-                # last ditch effort to detect encoding
-                detection_result = chardet.detect(data)
-                if not detection_result["encoding"]:
-                    return data.decode("utf-8", errors="replace").encode("utf-8")
-                return data.decode(detection_result["encoding"], errors="replace").encode("utf8")
-            except (UnicodeDecodeError, LookupError):
-                return data.decode("utf-8", errors="replace").encode("utf-8")
+        return data.decode("cp1252", errors="replace").encode("utf8")
 
 
 def get_free_port() -> int:
