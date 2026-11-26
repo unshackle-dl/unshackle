@@ -52,6 +52,10 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
         python-version: ${{ fromJSON(github.event_name == 'push' && github.ref == 'refs/heads/dev' && '["3.11"]' || '["3.11", "3.14"]') }}
+        include:
+          - os: ubuntu-latest
+            python-version: "3.11"
+            coverage: true
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     env:
@@ -67,7 +71,14 @@ jobs:
       - name: CLI loads
         run: uv run unshackle --help
       - name: Tests
-        run: uv run pytest -n auto --dist worksteal -m "not live and not slow"
+        run: uv run pytest -n auto --dist worksteal -m "not live and not slow" ${{ matrix.coverage && '--cov --cov-report=term --cov-report=html' || '' }}
+      - name: Upload coverage report
+        if: ${{ matrix.coverage && !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-report
+          path: htmlcov/
+          retention-days: 14
 
   build:
     runs-on: ubuntu-latest
