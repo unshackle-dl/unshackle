@@ -246,7 +246,20 @@ def test_relayed_server_logs_lose_their_control_characters(monkeypatch: pytest.M
 
 def test_a_relayed_login_prompt_loses_its_control_characters() -> None:
     service = RemoteService.__new__(RemoteService)
-    asked: list[str] = []
-    service._input_bridge = SimpleNamespace(request_input=lambda prompt: asked.append(prompt) or "1234")
-    assert ServerMessages(service).ask_user("Code\x1b[2J:\n") == "1234"
-    assert asked == ["Code[2J:\n"]
+    asked: list[tuple[str, str | None]] = []
+    service._input_bridge = SimpleNamespace(request_input=lambda prompt, qr=None: asked.append((prompt, qr)) or "1234")
+    assert ServerMessages(service).ask_user("Code\x1b[2J:\n", {"not": "text"}) == "1234"
+    assert asked == [("Code[2J:\n", None)]
+
+
+def test_a_relayed_qr_code_too_long_to_draw_still_logs_its_line(monkeypatch) -> None:
+    from unshackle.core import console
+
+    seen: list[str] = []
+    service = RemoteService.__new__(RemoteService)
+    service._input_bridge, service.auth_qr = None, None
+    service.log = SimpleNamespace(log=lambda level, message: seen.append(message))
+    monkeypatch.setattr(console.console, "print", lambda *a, **k: pytest.fail("nothing to draw"))
+    messages = ServerMessages(service)
+    messages.show_logs([{"seq": 1, "level": "INFO", "message": "Scan", "qr": "\u20ac" * 1500}])
+    assert seen == ["Scan"] and messages.log_seq == 1

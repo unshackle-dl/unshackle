@@ -40,7 +40,7 @@ class SessionLogBuffer:
         self._lock = threading.Lock()
         self.listener: Callable[[LogRecord], None] | None = None
 
-    def append(self, level: int, message: str) -> None:
+    def append(self, level: int, message: str, qr: str | None = None) -> None:
         with self._lock:
             self._seq += 1
             record = LogRecord(
@@ -49,6 +49,8 @@ class SessionLogBuffer:
                 message=sanitize_log(message)[:MAX_MESSAGE_LEN],
                 ts=time.time(),
             )
+            if qr:
+                record["qr"] = qr
             self._records.append(record)
             if self.listener is not None:
                 self.listener(record)
@@ -96,7 +98,8 @@ class SessionLogMirror(logging.LoggerAdapter):
             if isinstance(exc_info, tuple) and exc_info[1] is not None:
                 cause = "".join(traceback.format_exception_only(exc_info[0], exc_info[1])).strip()
                 message = f"{message} | {cause}"
-        self.buffer.append(level, message)
+        qr = (kwargs.get("extra") or {}).get("qr")
+        self.buffer.append(level, message, qr if isinstance(qr, str) else None)
         super().log(level, msg, *args, **kwargs)
 
     def process(self, msg: Any, kwargs: MutableMapping[str, Any]) -> tuple[Any, MutableMapping[str, Any]]:

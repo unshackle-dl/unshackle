@@ -172,9 +172,9 @@ def test_session_transport_keys_are_the_create_body():
 @pytest.mark.parametrize(
     "shape,fields",
     [
-        (protocol.ChannelPrompt, {"type", "id", "prompt"}),
+        (protocol.ChannelPrompt, {"type", "id", "prompt", "qr"}),
         (protocol.ChannelCdmCall, {"type", "id", "call"}),
-        (protocol.ChannelLog, {"type", "seq", "level", "message", "ts"}),
+        (protocol.ChannelLog, {"type", "seq", "level", "message", "ts", "qr"}),
         (protocol.ChannelStatus, {"type", "status", "error"}),
         (protocol.ChannelDrain, {"type", "draining"}),
         (protocol.ChannelAnswer, {"type", "id", "response", "error"}),

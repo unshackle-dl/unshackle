@@ -514,38 +514,75 @@ def print_listing(renderable: RenderableType) -> None:
         console.print(Padding(renderable, (0, 5)))
 
 
-_prompt_handler: Callable[[str], str] | None = None
+_prompt_handler: Callable[[str, str | None], str] | None = None
 
 
-def set_prompt_handler(handler: Callable[[str], str] | None) -> None:
+def set_prompt_handler(handler: Callable[[str, str | None], str] | None) -> None:
     """Route every :func:`prompt_user` call to *handler*, for a process with no terminal to prompt on."""
     global _prompt_handler
     _prompt_handler = handler
 
 
-def prompt_user(prompt: str) -> str:
-    """Ask the user for input on the shared console, themed and indented like the rest of the output."""
+def qr_text(data: str, indent: int = 5) -> Text:
+    """Draw *data* as a QR code in half blocks, dark on light whatever the theme, so a phone camera reads it."""
+    import segno
+
+    rows = [list(row) for row in segno.make_qr(data).matrix_iter(border=2)]
+    if len(rows) % 2:
+        rows.append([False] * len(rows[0]))
+    blocks = {(True, True): "\u2588", (True, False): "\u2580", (False, True): "\u2584", (False, False): " "}
+    text = Text()
+    for top, bottom in zip(rows[::2], rows[1::2], strict=True):
+        text.append(" " * indent)
+        text.append("".join(blocks[bool(t), bool(b)] for t, b in zip(top, bottom, strict=True)), style="black on white")
+        text.append("\n")
+    return text
+
+
+def show_qr(data: str) -> None:
+    """Draw *data* as a QR code on the shared console, unless a prompt handler stands in for the terminal.
+
+    Text longer than a QR code holds draws nothing: the prompt or notice beside it still shows.
+    """
+    from segno import DataOverflowError
+
     if _prompt_handler is not None:
-        return _prompt_handler(prompt)
+        return
+    try:
+        text = qr_text(data)
+    except DataOverflowError:
+        return
+    console.print(text, no_wrap=True, overflow="ignore", crop=False)
+
+
+def prompt_user(prompt: str, qr: str | None = None) -> str:
+    """Ask the user for input on the shared console, themed and indented like the rest of the output.
+
+    *qr* is drawn above the prompt as a QR code, for a login the user scans on a phone.
+    """
+    if _prompt_handler is not None:
+        return _prompt_handler(prompt, qr)
+    if qr:
+        show_qr(qr)
     indent = " " * 5
     body = Text(indent + prompt.rstrip("\n ").replace("\n", "\n" + indent), style="text")
     body.append("\n" + indent + "> ", style="rule.text")
     return console.input(body)
 
 
-_notice_handler: Callable[[str | None], None] | None = None
+_notice_handler: Callable[[str | None, str | None], None] | None = None
 
 
-def set_notice_handler(handler: Callable[[str | None], None] | None) -> None:
+def set_notice_handler(handler: Callable[[str | None, str | None], None] | None) -> None:
     """Route every :func:`show_notice` call to *handler*, for a process whose log output no user reads."""
     global _notice_handler
     _notice_handler = handler
 
 
-def show_notice(message: str | None) -> None:
-    """Give *message* to the notice handler, or None to clear it. Without a handler this does nothing."""
+def show_notice(message: str | None, qr: str | None = None) -> None:
+    """Give *message* and its QR code text to the notice handler, or None to clear it. Without a handler this does nothing."""
     if _notice_handler is not None:
-        _notice_handler(message)
+        _notice_handler(message, qr)
 
 
 __all__ = (

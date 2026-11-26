@@ -346,16 +346,19 @@ def test_worker_relays_a_prompt_and_reads_the_answer(monkeypatch: pytest.MonkeyP
     def answer_on_prompt(update: dict) -> None:
         """Answer only once the prompt is out: the prompt discards answers that arrived before it."""
         updates.append(update)
-        if update["input_prompt"]:
+        if update.get("input_prompt"):
             os.write(write_fd, (json.dumps("12\n34") + "\n").encode("utf-8"))
 
     download_worker.relay_prompts(answer_on_prompt)
     try:
-        assert prompt_user("Enter PIN") == "12\n34"
+        assert prompt_user("Enter PIN", qr="https://login.example/scan") == "12\n34"
     finally:
         set_prompt_handler(None)
         os.close(write_fd)
-    assert updates == [{"input_prompt": "Enter PIN"}, {"input_prompt": None}]
+    assert updates == [
+        {"input_prompt": "Enter PIN", "qr": "https://login.example/scan"},
+        {"input_prompt": None, "qr": None},
+    ]
 
 
 def test_worker_relays_a_notice_as_progress(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -373,13 +376,16 @@ def test_worker_relays_a_notice_as_progress(monkeypatch: pytest.MonkeyPatch) -> 
 
     download_worker.relay_prompts(updates.append)
     try:
-        show_notice("Enter pair code ABCD")
+        show_notice("Enter pair code ABCD", "https://login.example/pair")
         show_notice(None)
     finally:
         set_prompt_handler(None)
         set_notice_handler(None)
         os.close(write_fd)
-    assert updates == [{"notice": "Enter pair code ABCD"}, {"notice": None}]
+    assert updates == [
+        {"notice": "Enter pair code ABCD", "qr": "https://login.example/pair"},
+        {"notice": None, "qr": None},
+    ]
 
 
 def test_a_prompt_discards_an_answer_sent_before_it(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -530,7 +536,8 @@ async def test_a_notice_reaches_the_job_and_an_event_listener(
     # The prompt holds the worker open until the test has seen the notice.
     source = FAKE_PROMPT_WORKER.replace("import prompt_user", "import prompt_user, show_notice").replace(
         'answers = [prompt_user("Enter OTP"), prompt_user("Enter OTP")]',
-        'show_notice("Enter pair code ABCD")\nanswers = [prompt_user("Continue")]',
+        'show_notice("Enter pair code ABCD", "https://login.example/pair")\n'
+        'answers = [prompt_user("Continue", "https://login.example/pair")]',
     )
     assert source.count("show_notice") == 2, "FAKE_PROMPT_WORKER changed; update the replacements"
     worker.write_text(source, encoding="utf-8")
@@ -550,12 +557,13 @@ async def test_a_notice_reaches_the_job_and_an_event_listener(
             if event and event["data"]["input_prompt"]:
                 assert event["data"]["notice"] == "Enter pair code ABCD"
                 assert job.to_dict()["notice"] == "Enter pair code ABCD"
+                assert event["data"]["qr"] == job.to_dict()["qr"] == "https://login.example/pair"
                 assert manager.submit_input(job, "ok") is True
                 return
 
     await asyncio.wait_for(answer_after_notice(), timeout=20)
     assert await asyncio.wait_for(run, timeout=20) == ["ok"]
-    assert job.notice is None
+    assert job.notice is None and job.qr is None
 
 
 async def test_input_handler_rejects_bad_requests(

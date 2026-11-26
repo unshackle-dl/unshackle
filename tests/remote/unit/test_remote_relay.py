@@ -216,7 +216,7 @@ def test_a_quiet_remote_login_shows_its_last_server_lines_as_a_notice(monkeypatc
     from unshackle.core import remote_channel
 
     shown = []
-    monkeypatch.setattr(remote_channel, "show_notice", shown.append)
+    monkeypatch.setattr(remote_channel, "show_notice", lambda message, qr=None: shown.append(message))
     monkeypatch.setattr(remote_channel, "AUTH_POLL_INTERVAL", 0)
     logs = iter([["+ IP Region: CA"], ["+ Open URL: https://example.test/start\n+ Enter pair code: 9835-2503"], []])
     statuses = iter(["authenticating", "authenticating", "authenticating", "authenticated"])
@@ -234,7 +234,7 @@ def test_a_quiet_remote_login_shows_its_last_server_lines_as_a_notice(monkeypatc
 
     remote = object.__new__(remote_service.RemoteService)
     remote.seq = 0
-    remote.client, remote._session_id, remote.auth_notice = Client(), "sid", None
+    remote.client, remote._session_id, remote.auth_notice, remote.auth_qr = Client(), "sid", None, None
     remote.log = logging.getLogger("test")
     monkeypatch.setattr(remote_service.RemoteService, "local_cdm", None)
 
@@ -244,11 +244,31 @@ def test_a_quiet_remote_login_shows_its_last_server_lines_as_a_notice(monkeypatc
     assert remote.auth_notice is None
 
 
+def test_a_relayed_login_keeps_its_qr_code_until_the_login_ends(monkeypatch):
+    import logging
+
+    from unshackle.core import remote_channel
+
+    shown = []
+    monkeypatch.setattr(remote_channel, "show_notice", lambda message, qr=None: shown.append(message))
+    monkeypatch.setattr(remote_channel, "show_qr", lambda data: pytest.fail("a relaying serve has no terminal"))
+    monkeypatch.setattr(remote_service.RemoteService, "local_cdm", None)
+    remote = object.__new__(remote_service.RemoteService)
+    remote.auth_notice, remote.auth_qr, remote._input_bridge = None, None, object()
+    remote.log = logging.getLogger("test")
+    messages = remote_channel.ServerMessages(remote)
+    messages.show_logs([{"seq": 1, "level": "INFO", "message": "Scan the code", "qr": "https://login.example/scan"}])
+    assert remote.auth_qr == "https://login.example/scan"
+    messages.login_done()
+    assert remote.auth_qr is None and shown == [None]
+
+
 async def test_a_remote_login_prompt_waits_for_its_owners_answer(monkeypatch):
     import threading as th
 
     class Remote:
         auth_notice = None
+        auth_qr = None
 
     login = handlers.RemoteLogin("owner", "srv", "OTHER", "show", Remote())
     monkeypatch.setattr(handlers, "_remote_logins", {login.id: login})
@@ -256,13 +276,18 @@ async def test_a_remote_login_prompt_waits_for_its_owners_answer(monkeypatch):
     caller = {"key": "owner"}
     monkeypatch.setattr(handlers, "caller_key", lambda request: caller["key"])
     got = []
-    asker = th.Thread(target=lambda: got.append(login.bridge.request_input("Enter the code sent to your email")))
+    asker = th.Thread(
+        target=lambda: got.append(
+            login.bridge.request_input("Enter the code sent to your email", qr="https://login.example/scan")
+        )
+    )
     asker.start()
     while login.bridge.get_pending_prompt() is None:
         await asyncio.sleep(0.01)
 
     listed = json.loads((await handlers.remote_logins_handler(None)).text)["logins"]
     assert listed[0]["prompt"] == "Enter the code sent to your email"
+    assert listed[0]["qr"] == "https://login.example/scan"
 
     caller["key"] = "someone-else"
     assert json.loads((await handlers.remote_logins_handler(None)).text)["logins"] == []

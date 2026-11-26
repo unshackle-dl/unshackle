@@ -156,6 +156,8 @@ class DownloadJob:
     input_prompt: str | None = None
     # Message a service shows through show_notice() while it waits for an approval; needs no answer.
     notice: str | None = None
+    # Text of the QR code that goes with input_prompt or notice.
+    qr: str | None = None
 
     # Subtitles skipped under skip_subtitle_errors (non-fatal). Each entry is a dl.SkippedSubtitle
     # dict (id / language / title) so a client can report which weren't available.
@@ -196,6 +198,7 @@ class DownloadJob:
             "skipped_titles": self.skipped_titles,
             "input_prompt": self.input_prompt,
             "notice": self.notice,
+            "qr": self.qr,
         }
 
         if include_full_details:
@@ -952,6 +955,8 @@ class DownloadQueueManager:
                                 job.input_prompt = progress_data["input_prompt"]
                             if "notice" in progress_data:
                                 job.notice = progress_data["notice"]
+                            if "qr" in progress_data:
+                                job.qr = progress_data["qr"]
                             if progress_data.get("skipped_subtitles"):
                                 job.skipped_subtitles = progress_data["skipped_subtitles"]
                             if progress_data.get("skipped_titles"):
@@ -1045,6 +1050,7 @@ class DownloadQueueManager:
             self._download_processes.pop(job.job_id, None)
             job.input_prompt = None
             job.notice = None
+            job.qr = None
 
             temp_paths = self._job_temp_files.pop(job.job_id, {})
             for path in temp_paths.values():

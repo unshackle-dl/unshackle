@@ -227,6 +227,7 @@ class PromptReply(TypedDict, total=False):
 
     status: str
     prompt: str | None
+    qr: str
     cdm_call: dict[str, Any]
     error: str
 
@@ -236,10 +237,13 @@ class PromptAnswer(TypedDict):
 
 
 class LogRecord(TypedDict):
+    """One service log record; ``qr`` is the text of a QR code the client draws below the message."""
+
     seq: int
     level: str
     message: str
     ts: float
+    qr: NotRequired[str]
 
 
 class LogsReply(TypedDict):
@@ -274,11 +278,12 @@ class ChannelMessage(StrEnum):
 
 
 class ChannelPrompt(TypedDict):
-    """A prompt for the user; the answer names its ``id``."""
+    """A prompt for the user; the answer names its ``id``. ``qr`` is the text of a QR code to draw with it."""
 
     type: str
     id: str
     prompt: str
+    qr: NotRequired[str]
 
 
 class ChannelCdmCall(TypedDict):

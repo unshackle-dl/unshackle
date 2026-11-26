@@ -49,6 +49,18 @@ def test_logs_the_message_for_a_remote_session(caplog):
     assert "enter code" in caplog.messages
 
 
+@pytest.mark.parametrize("remote", [False, True])
+def test_draws_the_qr_code_here_only_without_a_remote_session(monkeypatch, caplog, remote):
+    drawn = []
+    monkeypatch.setattr("unshackle.core.service.show_qr", drawn.append)
+    with caplog.at_level(logging.INFO, logger="test"):
+        Service.wait_for_approval(
+            _service(InputBridge() if remote else None), "scan", lambda: "token", timeout=5, interval=0, qr="EXAMPLE"
+        )
+    assert drawn == ([] if remote else ["EXAMPLE"])
+    assert [getattr(r, "qr", None) for r in caplog.records] == ["EXAMPLE"]
+
+
 def test_a_request_with_no_user_fails_at_once():
     calls = []
     with pytest.raises(RuntimeError, match="needs the user"):
@@ -74,7 +86,7 @@ def test_no_user_message_is_an_authentication_error():
 )
 def test_shows_the_message_as_a_notice_and_clears_it(monkeypatch, check, expectation):
     notices = []
-    monkeypatch.setattr(console, "_notice_handler", notices.append)
+    monkeypatch.setattr(console, "_notice_handler", lambda message, qr: notices.append(message))
     with expectation:
         Service.wait_for_approval(_service(), "enter code", check, timeout=0.05, interval=0.01)
     assert notices == ["enter code", None]

@@ -530,7 +530,7 @@ thread, an `InputBridge` pauses that thread and exposes the prompt to the HTTP
 layer.
 
 - `AuthStatus` values: `authenticating`, `pending_input`, `authenticated`, `failed`.
-- `InputBridge.request_input(prompt, timeout=600)` blocks the sync auth thread on a
+- `InputBridge.request_input(prompt, timeout=600, qr=None)` blocks the sync auth thread on a
   `threading.Event` until `submit_response()` or `cancel()` fires.
 - A timeout raises `TimeoutError`. The remote session becomes `FAILED` when that error ends the login.
 - A prompt after authentication (in `get_titles()`, `get_tracks()` or licensing) goes to
@@ -549,6 +549,7 @@ layer.
 { "status": "authenticated" }
 { "status": "authenticating" }
 { "status": "pending_input", "prompt": "Enter code: " }
+{ "status": "pending_input", "prompt": "Scan the code, then press Enter", "qr": "https://login.example/scan" }
 { "status": "pending_input", "prompt": "...", "cdm_call": { "op": "challenge", "drm": "widevine", "init_data": "...", "license_type": "OFFLINE", "privacy_mode": true, "service_certificate": "..." } }
 { "status": "failed", "error": "...message..." }
 ```
@@ -576,9 +577,9 @@ Each message is a JSON text frame with a `type` field:
 
 | `type` | From | Fields | Meaning |
 |---|---|---|---|
-| `prompt` | server | `id`, `prompt` | The service asks the user for input |
+| `prompt` | server | `id`, `prompt`, `qr` | The service asks the user for input; `qr`, when present, is the text of a QR code to draw with it |
 | `cdm_call` | server | `id`, `call` | The service calls the client's CDM; `call` has the shape of the prompt route's `cdm_call` |
-| `log` | server | `seq`, `level`, `message`, `ts` | One record of the service log, with the same redaction as `GET /logs` |
+| `log` | server | `seq`, `level`, `message`, `ts`, `qr` | One record of the service log, with the same redaction as `GET /logs`; `qr`, when present, is the text of a QR code to draw under the message |
 | `status` | server | `status`, `error` | The login state, as the `status` of `GET /prompt` |
 | `drain` | server | `draining` | The operator started or stopped a drain before a restart |
 | `answer` | client | `id`, `response`, `error` | The answer to the `prompt` or `cdm_call` with this `id`; `error` says why the client cannot answer a prompt, and the service stops at once |

@@ -68,6 +68,7 @@ def relay_prompts(progress_callback: Callable[[dict[str, Any]], None]) -> None:
     uses unbuffered stdin: a daemon thread blocked in ``sys.stdin.buffer`` aborts the interpreter at shutdown.
     Prompts go out one at a time, and a prompt discards answers that arrived before it, such as a late
     answer to a prompt that timed out. A show_notice() message goes out as ``notice`` progress and needs no answer.
+    The QR code text of a prompt or notice goes out with it as ``qr``.
     """
     answers: queue.Queue[str] = queue.Queue()
     one_prompt = threading.Lock()
@@ -78,11 +79,11 @@ def relay_prompts(progress_callback: Callable[[dict[str, Any]], None]) -> None:
 
     threading.Thread(target=read_answers, name="prompt-answers", daemon=True).start()
 
-    def ask(prompt: str) -> str:
+    def ask(prompt: str, qr: str | None) -> str:
         with one_prompt:
             while not answers.empty():
                 answers.get_nowait()
-            progress_callback({"input_prompt": prompt})
+            progress_callback({"input_prompt": prompt, "qr": qr})
             try:
                 return answers.get(timeout=AUTH_INPUT_TIMEOUT)
             except queue.Empty:
@@ -92,10 +93,10 @@ def relay_prompts(progress_callback: Callable[[dict[str, Any]], None]) -> None:
                     APIErrorCode.AUTH_FAILED,
                 ) from None
             finally:
-                progress_callback({"input_prompt": None})
+                progress_callback({"input_prompt": None, "qr": None})
 
     set_prompt_handler(ask)
-    set_notice_handler(lambda message: progress_callback({"notice": message}))
+    set_notice_handler(lambda message, qr: progress_callback({"notice": message, "qr": qr}))
 
 
 def apply_payload_speed_limit(payload: dict[str, Any]) -> None:

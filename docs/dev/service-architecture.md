@@ -89,12 +89,13 @@ These are abstract. A service will not load unless it defines all three:
 - **DRM license hooks**: `get_widevine_service_certificate`, `get_widevine_license`,
   `get_playready_license` (delegates to Widevine by default), and
   `get_clearkey_license` (returns `None` by default). See [DRM hooks](#drm-hooks) below.
-- **`request_input(prompt)`**: prompts the user. It goes through the remote-dl input
+- **`request_input(prompt, qr=None)`**: prompts the user. It goes through the remote-dl input
   bridge, the REST download job relay, or the rich console.
-- **`wait_for_approval(message, check, timeout, interval=3.0)`**: shows a message, then
+- **`wait_for_approval(message, check, timeout, interval=3.0, qr=None)`**: shows a message, then
   calls `check` until it returns a value. Use it for a login that the user approves on
   another device, such as a pair code. A remote-dl session shows the message as a log
-  line, and a REST download job shows it as the job's `notice`.
+  line, and a REST download job shows it as the job's `notice`. Both methods take `qr`, the
+  text of a QR code to scan, and the terminal or UI that shows the user the message draws it.
 - **Event callbacks**: `on_segment_downloaded`, `on_track_downloaded`,
   `on_track_decrypted`, `on_track_repacked`, `on_track_multiplex` let a service react to
   pipeline events.

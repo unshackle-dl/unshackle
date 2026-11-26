@@ -3,6 +3,8 @@
 
 endpoints:
   login: https://api.domain.com/v1/login
+  device_code: https://api.domain.com/v1/device/code     # QR code login: start
+  device_token: https://api.domain.com/v1/device/token   # QR code login: poll until approved
   refresh: https://api.domain.com/v1/token/refresh
   search: https://api.domain.com/v1/search
   metadata: https://api.domain.com/v1/metadata/{title_id}.json

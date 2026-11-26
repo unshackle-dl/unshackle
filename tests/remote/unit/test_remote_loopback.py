@@ -27,9 +27,11 @@ from unshackle.core.api.handlers import api_key_authentication
 from unshackle.core.api.routes import cors_middleware, no_5xx_middleware, setup_routes
 from unshackle.core.cdm import client_relay
 from unshackle.core.config import config
+from unshackle.core.console import console, qr_text
 from unshackle.core.remote_channel import PollingChannel, WebSocketChannel
 from unshackle.core.remote_protocol import CHANNEL_ROUTE, LOGS_ROUTE, PROMPT_ROUTE, SESSION_ROUTE, APIErrorCode
 from unshackle.core.remote_service import RemoteError, RemoteService
+from unshackle.core.service import Service
 from unshackle.core.titles.movie import Movie, Movies
 from unshackle.core.tracks import Audio, Chapters, Tracks
 from unshackle.core.tracks.track import Track
@@ -174,7 +176,7 @@ def make_client(url: str, cdm: Any = None) -> RemoteService:
     parent.params = {"no_proxy": True}
     ctx = click.Context(click.Command("EXAMPLE"), parent=parent, obj=obj)
     service = RemoteService(ctx, "EXAMPLE", "example-1", url, KEY, {"_auth_headers": ["X-Api-Key", "X-Secret-Key"]})
-    service._input_bridge = SimpleNamespace(request_input=lambda prompt: CODE)
+    service._input_bridge = SimpleNamespace(request_input=lambda prompt, qr=None: CODE)
     return service
 
 
@@ -282,6 +284,65 @@ def test_a_remote_session_runs_end_to_end_over_http(
     logs = [json.loads(body) for path, body in server.bodies if path.endswith("/logs")]
     assert logs and all(list(reply) == ["session_id", "logs", "last_seq"] for reply in logs)
     assert [list(r) for reply in logs for r in reply["logs"]][:1] == [["seq", "level", "message", "ts"]]
+
+
+@pytest.mark.parametrize("channel", ["socket", "polling"])
+def test_a_qr_code_reaches_the_client_terminal_with_its_prompt(
+    server: SimpleNamespace, channel: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    payload = "https://login.example/scan?code=EXAMPLE"
+    if channel == "polling":
+        monkeypatch.setattr(WebSocketChannel, "open", lambda self, timeout=0: False)
+
+    def authenticate(self: StubService, cookies: Any, credential: Any) -> None:
+        if self._input_bridge.request_input("Scan the EXAMPLE code, then press Enter", qr=payload) != CODE:
+            raise ValueError("wrong code")
+
+    monkeypatch.setattr(StubService, "authenticate", authenticate)
+    printed: list[Any] = []
+    asked: list[str] = []
+    monkeypatch.setattr(console, "print", lambda *a, **k: printed.extend(a))
+    monkeypatch.setattr(console, "input", lambda prompt: asked.append(str(prompt)) or CODE)
+    service = make_client(server.url)
+    service._input_bridge = None
+    try:
+        service.authenticate()
+        assert isinstance(service.channel, WebSocketChannel if channel == "socket" else PollingChannel)
+    finally:
+        service.close()
+    assert [p.plain for p in printed if hasattr(p, "plain")] == [qr_text(payload).plain]
+    assert len(asked) == 1 and "Scan the EXAMPLE code" in asked[0]
+
+
+@pytest.mark.parametrize("channel", ["socket", "polling"])
+def test_a_qr_code_to_approve_reaches_the_client_with_its_log_line(
+    server: SimpleNamespace, channel: str, caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    caplog.set_level(logging.INFO)
+    payload = "https://login.example/approve?code=EXAMPLE"
+    if channel == "polling":
+        monkeypatch.setattr(WebSocketChannel, "open", lambda self, timeout=0: False)
+    printed: list[Any] = []
+    monkeypatch.setattr(console, "print", lambda *a, **k: printed.extend(a))
+
+    expected = qr_text(payload).plain
+
+    def drawn() -> bool | None:
+        return any(getattr(p, "plain", None) == expected for p in printed) or None
+
+    def authenticate(self: StubService, cookies: Any, credential: Any) -> None:
+        Service.wait_for_approval(self, "Scan the EXAMPLE code", drawn, 10, 0.01, payload)
+
+    monkeypatch.setattr(StubService, "authenticate", authenticate)
+    service = make_client(server.url)
+    service._input_bridge = None
+    try:
+        service.authenticate()
+        assert isinstance(service.channel, WebSocketChannel if channel == "socket" else PollingChannel)
+    finally:
+        service.close()
+    assert "Scan the EXAMPLE code" in example_messages(caplog)
+    assert [p.plain for p in printed if hasattr(p, "plain")] == [qr_text(payload).plain]
 
 
 def test_the_session_channel_carries_what_the_server_starts(
@@ -447,7 +508,7 @@ def test_a_cdm_call_made_while_the_channel_is_down_goes_through_polling(
 
 
 def test_a_prompt_the_client_cannot_answer_fails_the_login_at_once(server: SimpleNamespace) -> None:
-    def refuse(prompt: str) -> str:
+    def refuse(prompt: str, qr: str | None = None) -> str:
         raise RuntimeError("the EXAMPLE caller left")
 
     service = make_client(server.url)

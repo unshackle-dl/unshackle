@@ -41,6 +41,7 @@ class Ask:
     id: str
     prompt: str
     cdm_call: dict[str, Any] | None = None
+    qr: str | None = None
     owner: str | None = None  # CHANNEL or POLL: the path that carried the ask, and the only one that answers it
     response: str | None = None
     error: str | None = None  # the client could not answer, and says why
@@ -62,18 +63,18 @@ class InputBridge:
     _cancelled: bool = field(default=False, init=False, repr=False)
     _lock: threading.Lock = field(default_factory=threading.Lock, init=False, repr=False)
 
-    def _open(self, prompt: str, cdm_call: dict[str, Any] | None = None) -> Ask:
+    def _open(self, prompt: str, cdm_call: dict[str, Any] | None = None, qr: str | None = None) -> Ask:
         """Register an ask and offer it to the attached channel; call it with the lock held."""
         if self._cancelled:
             raise RuntimeError("Session was cancelled")
-        ask = Ask(uuid.uuid4().hex, prompt, cdm_call)
+        ask = Ask(uuid.uuid4().hex, prompt, cdm_call, qr)
         if self.channel is not None and self.channel.offer(ask):
             ask.owner = CHANNEL
             ask.picked_up.set()
         self._asks[ask.id] = ask
         return ask
 
-    def request_input(self, prompt: str, timeout: float = AUTH_INPUT_TIMEOUT) -> str:
+    def request_input(self, prompt: str, timeout: float = AUTH_INPUT_TIMEOUT, qr: str | None = None) -> str:
         """Block until the remote client submits a response for *prompt*.
 
         After authentication only an attached session channel can carry a prompt, as a polling client stops
@@ -88,7 +89,7 @@ class InputBridge:
                 if self._cancelled:
                     raise RuntimeError("Session was cancelled")
                 raise RuntimeError(f"Remote mode cannot relay a prompt after authentication: {prompt}")
-            ask = self._open(prompt)
+            ask = self._open(prompt, qr=qr)
         try:
             # cancel() and an answer both set the event, so a single wait returns on signal-or-cancel
             if not ask.answered.wait(timeout=timeout):
@@ -159,12 +160,16 @@ class InputBridge:
 
     def get_pending_prompt(self) -> str | None:
         """Return the prompt of the first ask the prompt routes can serve, and keep that ask on them."""
+        ask = self.get_pending_ask()
+        return ask.prompt if ask else None
+
+    def get_pending_ask(self) -> Ask | None:
+        """Return the first ask the prompt routes can serve, and keep that ask on them."""
         with self._lock:
             ask = next(iter(self._pollable()), None)
-            if ask is None:
-                return None
-            ask.owner = POLL
-            return ask.prompt
+            if ask is not None:
+                ask.owner = POLL
+            return ask
 
     def submit_response(self, response: str) -> bool:
         """Answer the oldest ask that the prompt routes served, else the oldest one they can serve.
@@ -257,7 +262,7 @@ NO_USER_MESSAGE = "This login needs the user, and only a download job or a remot
 class NoUserBridge(InputBridge):
     """Bridge for a request with no channel to the user: a login step that needs the user fails at once."""
 
-    def request_input(self, prompt: str, timeout: float = AUTH_INPUT_TIMEOUT) -> str:
+    def request_input(self, prompt: str, timeout: float = AUTH_INPUT_TIMEOUT, qr: str | None = None) -> str:
         raise coded(RuntimeError(NO_USER_MESSAGE), APIErrorCode.AUTH_FAILED)
 
     def ensure_active(self) -> None:

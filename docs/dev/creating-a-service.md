@@ -276,6 +276,22 @@ when the client deletes the remote session, so the loop does not continue on the
 server with no client. The message goes out as a log line, so a remote
 session shows it. A REST download job shows it in its `notice` field until the wait ends.
 
+For a login that the user scans with a phone, give the text of the QR code as `qr`. Both
+`wait_for_approval` and `request_input` take it. The terminal that shows the message draws
+the code under it, on the client for a remote session. Give the text that the login API puts in
+the code, such as the login URL, not an image. Keep the URL or code in the message too: a
+terminal that cannot draw the code, or a phone that cannot read it, still shows the text.
+`EXAMPLE.scan_login` in `unshackle/services/EXAMPLE/` shows the whole flow.
+
+```python
+token = self.wait_for_approval(
+    f"Scan the code with the app, or open {login_url}",
+    check=lambda: self.poll_login(session_id),
+    timeout=expires_in,
+    qr=login_url,
+)
+```
+
 The wait sees a cancel only between two `check` calls, so `check` must return within a few
 seconds. A `check` that reads a socket keeps the socket open across calls and returns `None`
 after each short idle wait.

@@ -31,10 +31,10 @@ class EXAMPLE(Service):
     every framework feature in one place. Music is the one exception: it has its
     own reference service, MUSIC_EXAMPLE.
 
-    Version: 2.1.0
+    Version: 2.2.0
     Author: sp4rk.y
-    Date: 2026-08-23
-    Authorization: Cookies + Credentials
+    Date: 2026-11-26
+    Authorization: Cookies, Credentials or a QR code scanned in the app
     Geofence: US, UK
     Robustness:
         Widevine:
@@ -53,6 +53,7 @@ class EXAMPLE(Service):
     Feature map (where to look):
         __init__              TrackRequest read/override, CDM-aware codec gating
         authenticate          cookies AND credentials, JWT decode, token cache+refresh
+        scan_login            QR code login: wait_for_approval(qr=...) hands the code to the client
         search                SearchResult generator
         get_titles            Movies / Series + data passthrough
         get_tracks            DASH variant fan-out (default) + HLS/ISM alternates
@@ -195,13 +196,36 @@ class EXAMPLE(Service):
                 otp = self.request_input("Enter the OTP sent to your device: ")
                 body = {"username": credential.username, "password": credential.password, "otp": otp}
             else:
-                raise OSError("Service requires either Cookies or Credentials.")
+                body = None
 
-            token = self.session.post(url=self.config["endpoints"]["login"], data=body).json()
+            if body:
+                token = self.session.post(url=self.config["endpoints"]["login"], data=body).json()
+            else:
+                token = self.scan_login()
             cache.set(data=token, expiration=token.get("expires_in"))
 
         self.token = cache.data["token"]
         self.user_id = cache.data.get("userId")
+
+    def scan_login(self) -> dict[str, Any]:
+        """Log in with a QR code the user scans in the app, for a run with no cookies or credentials."""
+        device = self.session.post(url=self.config["endpoints"]["device_code"]).json()
+        # Pass the QR code's TEXT as qr= (the URL the app encodes), never an image. The local
+        # terminal draws it, and over `serve` a --remote client or the REST job's UI draws it.
+        # Keep the URL and code in the message too, for a terminal that cannot draw the code.
+        # `request_input(prompt, qr=...)` takes the same argument when the user must type an answer.
+        return self.wait_for_approval(
+            f"Scan the QR code with the app, or open {device['verification_uri']} and enter {device['user_code']}",
+            check=lambda: self.poll_scan_login(device["device_code"]),
+            timeout=device.get("expires_in", 300),
+            interval=device.get("interval", 5),
+            qr=device["verification_uri_complete"],
+        )
+
+    def poll_scan_login(self, device_code: str) -> dict[str, Any] | None:
+        """The token once the user approves the scan, None while the approval is pending."""
+        res = self.session.post(url=self.config["endpoints"]["device_token"], data={"device_code": device_code})
+        return res.json() if res.ok else None
 
     def search(self) -> Generator[SearchResult, None, None]:
         results = self.session.get(

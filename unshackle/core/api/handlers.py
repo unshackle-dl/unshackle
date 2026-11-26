@@ -479,20 +479,24 @@ _remote_logins: dict[str, RemoteLogin] = {}
 
 
 async def remote_logins_handler(request: web.Request) -> web.Response:
-    """Answer the request for the caller's remote logins in progress, each with its prompt and notice."""
+    """Answer the request for the caller's remote logins in progress, each with its prompt, notice and QR code."""
     owner, admin = caller_key(request), request_policy(request).admin
-    logins = [
-        {
-            "id": login.id,
-            "remote": login.remote,
-            "service": login.service,
-            "title_id": login.title_id,
-            "prompt": login.bridge.get_pending_prompt(),
-            "notice": login.instance.auth_notice,
-        }
-        for login in list(_remote_logins.values())
-        if admin or login.owner == owner
-    ]
+    logins = []
+    for entry in list(_remote_logins.values()):
+        if not (admin or entry.owner == owner):
+            continue
+        ask = entry.bridge.get_pending_ask()
+        logins.append(
+            {
+                "id": entry.id,
+                "remote": entry.remote,
+                "service": entry.service,
+                "title_id": entry.title_id,
+                "prompt": ask.prompt if ask else None,
+                "notice": entry.instance.auth_notice,
+                "qr": ask.qr if ask else entry.instance.auth_qr,
+            }
+        )
     return web.json_response({"logins": logins})
 
 
@@ -3368,10 +3372,11 @@ async def session_prompt_get_handler(session_id: str, request: web.Request | Non
     if session.auth_status == AuthStatus.FAILED:
         return web.json_response(PromptReply(status=AuthStatus.FAILED, error=session.auth_error or "unknown error"))
 
-    if bridge:
-        prompt = bridge.get_pending_prompt()
-        if prompt:
-            return web.json_response(PromptReply(status=AuthStatus.PENDING_INPUT, prompt=prompt))
+    if bridge and (ask := bridge.get_pending_ask()) and ask.prompt:
+        reply = PromptReply(status=AuthStatus.PENDING_INPUT, prompt=ask.prompt)
+        if ask.qr:
+            reply["qr"] = ask.qr
+        return web.json_response(reply)
 
     return web.json_response(PromptReply(status=AuthStatus.AUTHENTICATING))
 

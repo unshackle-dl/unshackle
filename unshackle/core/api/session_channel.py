@@ -153,7 +153,10 @@ def log_message(record: LogRecord) -> ChannelLog:
 def ask_message(ask: Ask) -> ChannelPrompt | ChannelCdmCall:
     if ask.cdm_call is not None:
         return ChannelCdmCall(type=ChannelMessage.CDM_CALL, id=ask.id, call=ask.cdm_call)
-    return ChannelPrompt(type=ChannelMessage.PROMPT, id=ask.id, prompt=ask.prompt)
+    message = ChannelPrompt(type=ChannelMessage.PROMPT, id=ask.id, prompt=ask.prompt)
+    if ask.qr:
+        message["qr"] = ask.qr
+    return message
 
 
 def receive(text: str, bridge: Any) -> None:

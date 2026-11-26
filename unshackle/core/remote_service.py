@@ -890,6 +890,7 @@ class RemoteService(TitleSource):
         self._input_bridge: Any = None  # a serve relaying for a REST client sets one, as it does for a Service
         # what a login waiting on the user (a pair code, an approval link) last showed; None otherwise
         self.auth_notice: str | None = None
+        self.auth_qr: str | None = None
         self._reopen_lock = Lock()
         self._current_title: Title_T | None = None
         # client title and track id -> the id a reopened session gave the same title or track

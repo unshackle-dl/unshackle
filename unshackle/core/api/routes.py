@@ -1576,7 +1576,8 @@ async def download_job_input(request: web.Request) -> web.Response:
       Submit the answer to the prompt a running job waits on (an OTP code, a PIN, a device-code
       confirmation). The job shows the prompt in its `input_prompt` field and in its SSE `progress`
       events. The job fails if nobody answers within the prompt timeout. A job that waits for an
-      approval on another device shows the message in its `notice` field, which takes no answer.
+      approval on another device shows the message in its `notice` field, which takes no answer. A login
+      to scan with a phone also sets `qr` to the text of the QR code.
     parameters:
       - name: job_id
         in: path
@@ -3436,6 +3437,10 @@ async def remote_logins(request: web.Request) -> web.Response:
                       notice:
                         type: string
                         nullable: true
+                      qr:
+                        type: string
+                        nullable: true
+                        description: The text of a QR code to scan with the prompt or notice, or null
     """
     return await remote_logins_handler(request)
 

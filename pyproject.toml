@@ -66,6 +66,7 @@ dependencies = [
     "defusedxml>=0.7.1",
     "rich-click>=1.9.8",
     "mediaexport @ git+https://github.com/unshackle-dl/mediaexport@main",
+    "segno>=1.6.6,<2",
 ]
 
 [project.urls]

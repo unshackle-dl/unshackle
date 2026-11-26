@@ -23,7 +23,7 @@ import aiohttp
 import requests
 from aiohttp import WSMsgType
 
-from unshackle.core.console import prompt_user, show_notice
+from unshackle.core.console import prompt_user, show_notice, show_qr
 from unshackle.core.remote_protocol import (
     CHANNEL_ROUTE,
     CHANNEL_SESSION_GONE,
@@ -61,6 +61,11 @@ KEPT_ANSWERS = 64
 LEVELS = logging.getLevelNamesMapping()
 
 
+def server_qr(value: object) -> str | None:
+    """The QR code text the server sent, or None when it is not text."""
+    return value if isinstance(value, str) and value else None
+
+
 class ServerMessages:
     """What this client does with each message the server starts, whichever adapter brought it."""
 
@@ -86,6 +91,10 @@ class ServerMessages:
                     continue
                 message = sanitize_log(record.get("message", ""), keep_lines=True)
                 self.service.log.log(LEVELS.get(str(record.get("level", "INFO")), logging.INFO), message)
+                if qr := server_qr(record.get("qr")):
+                    self.service.auth_qr = qr
+                    if self.service._input_bridge is None:
+                        show_qr(qr)
                 self.recent_logs.append(message.strip())
                 self.log_seq = seq
 
@@ -100,14 +109,15 @@ class ServerMessages:
         )
         return answer
 
-    def ask_user(self, prompt: str) -> str:
+    def ask_user(self, prompt: str, qr: object = None) -> str:
         """Ask the user the server's prompt, with control characters stripped as the server text can hold any."""
         from unshackle.core.api.sanitize import sanitize_log
 
         prompt = sanitize_log(prompt, keep_lines=True)
+        code = server_qr(qr)
         bridge = self.service._input_bridge
         try:
-            return str(bridge.request_input(prompt) if bridge else prompt_user(prompt))
+            return str(bridge.request_input(prompt, qr=code) if bridge else prompt_user(prompt, code))
         except EOFError:
             raise RemoteError("Remote auth needs interactive input but stdin is closed", ClientErrorKind.AUTH) from None
 
@@ -117,7 +127,7 @@ class ServerMessages:
             notice = "\n".join(self.recent_logs)
             if notice != self.service.auth_notice:
                 self.service.auth_notice = notice
-                show_notice(notice)
+                show_notice(notice, self.service.auth_qr)
 
     def close_cdm_sessions(self) -> None:
         """Close the local CDM sessions that the server's calls opened; best effort."""
@@ -130,8 +140,8 @@ class ServerMessages:
 
     def login_done(self) -> None:
         self.close_cdm_sessions()
-        if self.service.auth_notice is not None:
-            self.service.auth_notice = None
+        if self.service.auth_notice is not None or self.service.auth_qr is not None:
+            self.service.auth_notice = self.service.auth_qr = None
             show_notice(None)
 
 
@@ -184,7 +194,7 @@ class PollingChannel:
         if status == AuthStatus.PENDING_INPUT and isinstance(resp.get("cdm_call"), dict):
             self.answer(json.dumps(self.messages.answer_cdm(resp["cdm_call"])))
         elif status == AuthStatus.PENDING_INPUT:
-            self.answer(self.messages.ask_user(resp.get("prompt") or "Enter input: "))
+            self.answer(self.messages.ask_user(resp.get("prompt") or "Enter input: ", resp.get("qr")))
         else:
             time.sleep(AUTH_POLL_INTERVAL)
         return False
@@ -414,7 +424,7 @@ class WebSocketChannel:
             if cdm_call:
                 answer["response"] = json.dumps(self.messages.answer_cdm(data.get("call") or {}))
             else:
-                answer["response"] = self.messages.ask_user(str(data.get("prompt") or "Enter input: "))
+                answer["response"] = self.messages.ask_user(str(data.get("prompt") or "Enter input: "), data.get("qr"))
         except (Exception, RemoteError) as e:  # an unanswered ask would hold the service thread until it times out
             if isinstance(e, RemoteError):
                 self.failure = e
