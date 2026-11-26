@@ -10,6 +10,7 @@ from click.core import ParameterSource
 
 from unshackle.commands.dl import dl
 from unshackle.core.api.errors import categorize_exception
+from unshackle.core.config import config
 from unshackle.core.remote_protocol import APIErrorCode
 from unshackle.core.run_plan import PlanError, api_plan, bitrate_range, check_options
 from unshackle.core.tracks import Video
@@ -101,6 +102,8 @@ def test_the_api_plan_records_where_each_value_came_from() -> None:
     assert ctx.params == plan.params
 
 
-def test_dl_checks_the_plan_before_the_service_loads() -> None:
+@pytest.mark.usefixtures("example_service")
+def test_dl_checks_the_plan_before_the_service_loads(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(config, "output_template", {"movies": "{title}"})
     with pytest.raises(PlanError, match="--sample and --include-sample"):
         dl.cli.main(["--sample", "--include-sample", "EXAMPLE", "t"], standalone_mode=False)

@@ -95,7 +95,8 @@ def test_api_refuses_two_ids(payload: dict) -> None:
 
 
 @pytest.mark.parametrize("payload", [{"tmdb_id": 27205}, {"imdb_id": "tt1375666"}, {"tvdb_id": 73871}, {}])
-def test_api_accepts_one_id(payload: dict) -> None:
+def test_api_accepts_one_id(payload: dict, monkeypatch: pytest.MonkeyPatch) -> None:
+    with_keys(monkeypatch, tmdb_api_key="k", tvdb_api_key="k")
     assert validate_download_parameters(payload) is None
 
 

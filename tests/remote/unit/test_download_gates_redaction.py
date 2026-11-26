@@ -4,6 +4,7 @@ and the secret redaction applied to job parameters and error/stderr fields."""
 from __future__ import annotations
 
 from datetime import datetime
+from pathlib import Path
 
 import pytest
 from aiohttp import web
@@ -163,7 +164,8 @@ async def test_credential_allowed_when_enabled(stub_handler):
     assert isinstance(resp, web.Response)
 
 
-def test_range_validation_accepts_hdr10p_and_alias():
+def test_range_validation_accepts_hdr10p_and_alias(monkeypatch):
+    monkeypatch.setattr("unshackle.core.binaries.DoviTool", Path("dovi_tool"))
     # canonical "HDR10P" and back-compat "HDR10+" both pass; mixed casing too
     assert handlers.validate_download_parameters({"range": ["HDR10P", "DV", "SDR"]}) is None
     assert handlers.validate_download_parameters({"range": ["hdr10+"]}) is None

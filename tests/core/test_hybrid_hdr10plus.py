@@ -781,7 +781,8 @@ def test_the_hybrid_step_gets_the_base_alone_when_there_is_no_dv(tmp_path: Path)
     assert len(tracks) == 1 and tracks[0].range == Video.Range.HDR10P
 
 
-def test_the_api_takes_generate_dv_with_any_range_as_dl_does() -> None:
+def test_the_api_takes_generate_dv_with_any_range_as_dl_does(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("unshackle.core.binaries.DoviTool", Path("dovi_tool"))
     for data in ({}, {"range": ["SDR"]}, {"range": ["DV"]}, {"range": ["HYBRID"]}, {"range": ["HDR10"]}):
         assert validate_download_parameters({"generate_dv": True, **data}) is None
     assert "boolean" in (validate_download_parameters({"generate_dv": "yes", "range": ["HYBRID"]}) or "")
