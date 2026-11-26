@@ -186,11 +186,12 @@ def test_tagging_ids_are_read_at_dispatch_not_snapshotted():
     import textwrap
 
     from unshackle.commands.dl import dl
+    from unshackle.core.title_metadata import TitleMetadata
 
-    holder = SimpleNamespace(tmdb_id=None, imdb_id="tt0000001", tvdb_id=None)
-    assert build_context(SimpleNamespace(), ids=dl.post_script_ids(holder))["tmdb"] == ""
-    holder.tmdb_id = 1396
-    assert build_context(SimpleNamespace(), ids=dl.post_script_ids(holder))["tmdb"] == "1396"
+    metadata = TitleMetadata(imdb_id="tt0000001")
+    assert build_context(SimpleNamespace(), ids=metadata.post_script_ids())["tmdb"] == ""
+    metadata.tmdb_id = 1396
+    assert build_context(SimpleNamespace(), ids=metadata.post_script_ids())["tmdb"] == "1396"
 
     body = ast.parse(textwrap.dedent(inspect.getsource(dl.result)))
     for node in ast.walk(body):

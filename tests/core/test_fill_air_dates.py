@@ -1,4 +1,4 @@
-"""The --daily air-date fill: dl.fill_air_dates and the daily_hint gate."""
+"""The --daily air-date fill: TitleMetadata.fill_air_dates and the daily_hint gate."""
 
 from __future__ import annotations
 
@@ -48,7 +48,7 @@ def fill(
     daily=True,
     service_daily=False,
 ):
-    from unshackle.commands.dl import dl
+    from unshackle.core.title_metadata import TitleMetadata
 
     fake = _FakeProvider(episodes) if provider else None
     monkeypatch.setattr(providers, "get_provider", lambda _name: fake)
@@ -58,10 +58,8 @@ def fill(
         info=lambda *a, **k: logged.append(("info", a)),
         warning=lambda *a, **k: logged.append(("warning", a)),
     )
-    stub = SimpleNamespace(tvdb_id=tvdb_id, log=logger, daily=daily, service_daily=service_daily)
-    stub.daily_hint = lambda title=None: dl.daily_hint(stub, title)
     series = Series(titles)
-    dl.fill_air_dates(stub, series, tvdb_id)
+    TitleMetadata(tvdb_id=tvdb_id, log=logger, daily=service_daily, force_daily=daily).fill_air_dates(series, tvdb_id)
     return series, logged
 
 

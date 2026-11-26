@@ -110,7 +110,6 @@ def run(
     cmd = Harness.__new__(Harness)
     cmd.log = logging.getLogger("test_kind_only")
     cmd.service = "FAKE"
-    cmd.tmdb_searched = True
     cmd.completed_files = []
     cmd.skipped_titles = []
     cmd.skipped_subtitles = []

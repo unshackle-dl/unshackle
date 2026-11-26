@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import pytest
 
-from unshackle.commands.dl import parse_language
 from unshackle.core.providers.imdb import primary_language as imdb_language
 from unshackle.core.providers.omdb import primary_language as omdb_language
 from unshackle.core.providers.tvdb import primary_language as tvdb_language
+from unshackle.core.title_metadata import parse_language
 
 
 @pytest.mark.parametrize(

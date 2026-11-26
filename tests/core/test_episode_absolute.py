@@ -133,7 +133,7 @@ class _FakeProvider:
 def fill(
     monkeypatch: pytest.MonkeyPatch, episodes: list, mapping: dict, tvdb_id=73871, provider=True, order="official"
 ):
-    from unshackle.commands.dl import dl
+    from unshackle.core.title_metadata import TitleMetadata
 
     fake = _FakeProvider(mapping, order) if provider else None
     monkeypatch.setattr(providers, "get_provider", lambda _name: fake)
@@ -143,9 +143,8 @@ def fill(
         info=lambda *a, **k: logged.append(("info", a)),
         warning=lambda *a, **k: logged.append(("warning", a)),
     )
-    stub = SimpleNamespace(tvdb_id=tvdb_id, log=logger)
     titles = Series(episodes)
-    dl.fill_absolute_numbers(stub, titles, tvdb_id)
+    TitleMetadata(tvdb_id=tvdb_id, log=logger).fill_absolute_numbers(titles, tvdb_id)
     return titles, fake, logged
 
 

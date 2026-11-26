@@ -212,18 +212,14 @@ class _FakeProvider:
 def renumber(monkeypatch: pytest.MonkeyPatch, episodes: list, mapping: dict):
     from types import SimpleNamespace
 
-    from unshackle.commands.dl import dl
+    from unshackle.core.title_metadata import TitleMetadata
     from unshackle.core.titles.episode import Series
 
     monkeypatch.setattr(providers, "get_provider", lambda _name: _FakeProvider(mapping))
     errors: list = []
-    stub = SimpleNamespace(
-        tvdb_id=73871,
-        tvdb_order="dvd",
-        service="STUB",
-        log=SimpleNamespace(warning=lambda *a, **k: None, info=lambda *a, **k: None, error=lambda *a: errors.append(a)),
-    )
-    return dl.apply_tvdb_order(stub, Series(episodes)), errors
+    log = SimpleNamespace(warning=lambda *a, **k: None, info=lambda *a, **k: None, error=lambda *a: errors.append(a))
+    metadata = TitleMetadata(tvdb_id=73871, service="EXAMPLE", log=log)
+    return metadata.apply_tvdb_order(Series(episodes), "dvd"), errors
 
 
 def ep(season: int, number: int, part=None):

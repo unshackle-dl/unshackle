@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from unshackle.commands.dl import dl
+from unshackle.core.title_metadata import TitleMetadata
 from unshackle.core.titles.episode import Episode, Series
 from unshackle.core.wire import apply_title_fields
 
@@ -25,8 +25,7 @@ def episode(season: int, number: int, part: int | None = None) -> Episode:
 
 
 def renumber(series: Series) -> Series:
-    stub = SimpleNamespace(log=SimpleNamespace(info=lambda *a, **k: None))
-    return dl.apply_continuous_episodes(stub, series)
+    return TitleMetadata(log=SimpleNamespace(info=lambda *a, **k: None)).apply_continuous_episodes(series)
 
 
 def numbers(slots: list[tuple[int, int]]) -> list[tuple[int, int]]:

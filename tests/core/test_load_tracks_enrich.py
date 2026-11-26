@@ -2,7 +2,8 @@ from types import SimpleNamespace
 
 from langcodes import Language
 
-from unshackle.commands.dl import apply_enrich, load_tracks
+from unshackle.commands.dl import load_tracks
+from unshackle.core.title_metadata import Enrichment, apply_enrich
 from unshackle.core.titles import Episode, Movie, Song
 from unshackle.core.tracks import Chapters, Tracks
 from unshackle.core.wire import apply_title_fields
@@ -21,14 +22,14 @@ def refreshing_service(info):
 def test_enrich_wins_over_a_movie_title_set_in_get_tracks():
     movie = Movie(id_="movie-0001", service=SERVICE, name="The Gold Seekers", year=2017)
     service = refreshing_service({"name": "Los Buscadores", "year": 2016, "language": "pt"})
-    load_tracks(service, movie, name="The Gold Seekers", year=2017, language=Language.get("es"))
+    load_tracks(service, movie, enrichment=Enrichment("The Gold Seekers", 2017, Language.get("es")))
     assert (movie.name, movie.year, str(movie.language)) == ("The Gold Seekers", 2017, "es")
 
 
 def test_enrich_wins_over_a_series_title_set_in_get_tracks():
     episode = Episode(id_="episode-0001", service=SERVICE, title="English", season=1, number=1, name="Pilot")
     service = refreshing_service({"series_title": "Local", "name": "Pilot", "year": 2016})
-    load_tracks(service, episode, name="English", year=2017)
+    load_tracks(service, episode, enrichment=Enrichment("English", 2017))
     assert (episode.title, episode.name, episode.year) == ("English", "Pilot", 2017)
 
 

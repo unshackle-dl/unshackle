@@ -8,15 +8,11 @@ import shutil
 import subprocess
 import sys
 import time
-from collections import Counter
 from collections.abc import Callable, Collection, Iterable, Sequence
 from concurrent import futures
 from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
-from datetime import date, timedelta
 from functools import partial
-from itertools import groupby
-from operator import attrgetter
 from pathlib import Path
 from threading import Lock
 from typing import TYPE_CHECKING, Any, TypedDict
@@ -24,7 +20,7 @@ from typing import TYPE_CHECKING, Any, TypedDict
 import click
 import mediaexport
 from click.core import ParameterSource
-from langcodes import Language, tag_is_valid
+from langcodes import Language
 from pymediainfo import MediaInfo
 from rich.console import Group
 from rich.padding import Padding
@@ -32,7 +28,7 @@ from rich.rule import Rule
 from rich.spinner import Spinner
 from rich.table import Table
 
-from unshackle.core import __version__, binaries, login, providers
+from unshackle.core import __version__, binaries, login
 from unshackle.core.cdm.choice import choose_cdm
 from unshackle.core.cdm.detect import cdm_system, cdm_type_stub, is_playready_cdm, is_remote_cdm
 from unshackle.core.config import cdm_entry_names_device, config, resolve_cdm_name, resolve_decryption
@@ -66,7 +62,7 @@ from unshackle.core.launch import LaunchKeys, launch, load_service_config
 from unshackle.core.manifests.snapshot import capture
 from unshackle.core.mux_step import mux_title
 from unshackle.core.placement import SAMPLE_DIR, Placement, sample_name
-from unshackle.core.providers.tvdb import SEASON_TYPES, parse_int
+from unshackle.core.providers.tvdb import SEASON_TYPES
 from unshackle.core.proxies.resolve import (
     REGION,
     describe_explicit_proxy,
@@ -82,6 +78,7 @@ from unshackle.core.run_plan import PlanError, RunOutcome, RunStopped, bitrate_r
 from unshackle.core.service import grow_session_pool
 from unshackle.core.services import ROUTING_PARAMS, Services
 from unshackle.core.temp import with_task_temp
+from unshackle.core.title_metadata import Enrichment, TitleMetadata, apply_enrich
 from unshackle.core.title_source import KeyArrival, TitleSource
 from unshackle.core.titles import Movie, Movies, Series, Song, Title_T
 from unshackle.core.titles.episode import Episode
@@ -96,7 +93,6 @@ from unshackle.core.tracks.track import (
     has_encrypted_sample_entry,
 )
 from unshackle.core.utilities import (
-    apply_original_language,
     find_font_with_fallbacks,
     get_debug_logger,
     get_system_fonts,
@@ -151,14 +147,6 @@ class SkippedSubtitle(TypedDict):
     id: str
     language: str
     title: str
-
-
-def parse_language(tag: str | None) -> Language | None:
-    """A provider's original-language tag as a Language, or None if it is absent or not a real tag."""
-    tag = (tag or "").strip()
-    if not tag or not tag_is_valid(tag) or tag.startswith("und"):
-        return None
-    return Language.get(tag)
 
 
 def normalize_dl_config(dl_config: dict[str, Any]) -> dict[str, Any]:
@@ -236,35 +224,19 @@ def latest_episode_keys(titles: Any, latest_episode: bool, latest_episodes: int 
     return list(dict.fromkeys((ep.season, ep.number) for ep in titles))[-count:]
 
 
-def apply_enrich(title: Title_T, name: str | None, year: int | None, language: Language | None) -> None:
-    """Set the --enrich name, year and original language on a title. A song takes only the language.
-
-    A service can set the title again in get_tracks, so dl applies them after that call too.
-    """
-    if isinstance(title, Episode):
-        title.title = name or title.title
-    elif isinstance(title, Movie):
-        title.name = name or title.name
-    if isinstance(title, (Episode, Movie)):
-        title.year = year or title.year
-    if language:
-        apply_original_language(title, language)
-
-
 def load_tracks(
     service: TitleSource,
     title: Title_T,
     *,
-    name: str | None = None,
-    year: int | None = None,
-    language: Language | None = None,
+    enrichment: Enrichment | None = None,
     workers: int | None = None,
     on_probe: Callable[[], None] | None = None,
 ) -> None:
     """Load the tracks and chapters of a title, then apply the --enrich name, year and language again."""
     title.tracks.add(probed_tracks(service, title, workers=workers, on_probe=on_probe), warn_only=True)
     title.tracks.chapters = service.get_chapters(title)
-    apply_enrich(title, name, year, language)
+    if enrichment:
+        apply_enrich(title, *enrichment)
 
 
 def server_url(server_name: str | None) -> str:
@@ -580,14 +552,6 @@ class dl:
             created_paths.append(sidecar_path)
 
         return created_paths
-
-    def post_script_ids(self) -> dict[str, Any]:
-        """Tagging IDs as they stand right now.
-
-        Read at each post-script call, never snapshotted: the search inside the title loop
-        finds an Episode's TMDB ID, so a snapshot taken before it is always empty.
-        """
-        return {"tmdb": self.tmdb_id, "imdb": self.imdb_id, "tvdb": self.tvdb_id}
 
     @click.command(
         short_help="Download, Decrypt, and Mux tracks for titles from a Service.",
@@ -1202,8 +1166,6 @@ class dl:
         self.enrich = enrich
         self.daily = daily
         self.output_dir = output_dir
-        self.service_anime = False
-        self.service_daily = False
 
         if self.daily and not self.enrich:
             self.log.warning("--daily takes TVDB air dates only with --enrich")
@@ -1536,10 +1498,6 @@ class dl:
         if continue_downloads:
             config.continue_downloads = True
         config.sample = sample
-        self.tmdb_searched = False
-        self.search_source = None
-        self.service_anime = service.ANIME
-        self.service_daily = service.DAILY
         # a remote session sends --cdm to the server, which can hand it the tracks above its cap
         if self.cdm_override and service.key_arrival is KeyArrival.EXPORT:
             self.log.warning("--cdm is ignored: an import uses the keys in the export")
@@ -1727,58 +1685,21 @@ class dl:
                     level="INFO", operation="get_titles", service=self.service, context={"titles": titles_info}
                 )
 
-        title_cacher, cache_title_id, cache_region, cache_account_hash = service.cache_identity()
-
-        enrich_lang: Language | None = None
-        enrich_title: str | None = None
-        enrich_year: int | None = None
-        if self.enrich:
-            sample_title = titles[0] if hasattr(titles, "__getitem__") else titles
-            kind = "tv" if isinstance(sample_title, Episode) else "movie"
-
-            enrich_result = providers.resolve_by_ids(
-                self.tmdb_id,
-                self.imdb_id,
-                self.tvdb_id,
-                self.anilist_id,
-                kind=kind,
-                title_cacher=title_cacher,
-                cache_title_id=cache_title_id,
-                cache_region=cache_region,
-                cache_account_hash=cache_account_hash,
-                anime=self.anime_hint(sample_title),
-            )
-            if enrich_result:
-                enrich_title = enrich_result.title
-                enrich_year = enrich_result.year
-                enrich_lang = parse_language(enrich_result.original_language)
-
-            if enrich_lang:
-                self.log.info(f"Original language from metadata: {enrich_lang}")
-            if not (enrich_title or enrich_year or enrich_lang):
-                self.log.warning("--enrich found no metadata")
-            elif missing := [
-                name
-                for name, value in (("title", enrich_title), ("year", enrich_year), ("language", enrich_lang))
-                if not value
-            ]:
-                self.log.warning(f"--enrich source gave no {', '.join(missing)}, kept the service's values")
-
-            if isinstance(titles, (Series, Movies)):
-                for t in titles:
-                    apply_enrich(t, enrich_title, enrich_year, enrich_lang)
-
-            if isinstance(titles, Series):
-                enrich_tvdb_id = self.tvdb_id or (enrich_result.external_ids.tvdb_id if enrich_result else None)
-                self.fill_absolute_numbers(titles, enrich_tvdb_id)
-                if any(self.daily_hint(t) for t in titles):
-                    self.fill_air_dates(titles, enrich_tvdb_id)
-
-        if self.tvdb_order and isinstance(titles, Series):
-            titles = self.apply_tvdb_order(titles, title_cacher, cache_title_id, cache_region, cache_account_hash)
-
-        if self.continuous_episodes and isinstance(titles, Series):
-            titles = self.apply_continuous_episodes(titles)
+        metadata = TitleMetadata(
+            self.tmdb_id,
+            self.imdb_id,
+            self.tvdb_id,
+            self.anilist_id,
+            cache=service.cache_identity(),
+            service=self.service,
+            anime=service.ANIME,
+            daily=service.DAILY,
+            force_daily=self.daily,
+            log=self.log,
+        )
+        titles = metadata.prepare(
+            titles, enrich=self.enrich, tvdb_order=self.tvdb_order, continuous=self.continuous_episodes
+        )
 
         console.print(Padding(Rule(f"[rule.text]{titles.__class__.__name__}: {titles}"), (1, 2)))
         print_listing(titles.tree(verbose=list_titles))
@@ -1991,76 +1912,7 @@ class dl:
             title_rule = f"Track {title.track:02}: {title.name}" if isinstance(title, Song) else str(title)
             console.print(Padding(Rule(f"[rule.text]{title_rule}"), (1, 2)))
 
-            if isinstance(title, Episode) and not self.tmdb_searched:
-                kind = "tv"
-                tmdb_title: str | None = None
-                has_ids = bool(self.tmdb_id or self.imdb_id or self.tvdb_id or self.anilist_id)
-                result = providers.resolve_by_ids(
-                    self.tmdb_id,
-                    self.imdb_id,
-                    self.tvdb_id,
-                    self.anilist_id,
-                    title=title.title,
-                    year=title.year,
-                    kind=kind,
-                    title_cacher=title_cacher,
-                    cache_title_id=cache_title_id,
-                    cache_region=cache_region,
-                    cache_account_hash=cache_account_hash,
-                    anime=self.anime_hint(title),
-                )
-                if result:
-                    if has_ids:
-                        tmdb_title = result.title
-                        if not self.tmdb_id:
-                            self.tmdb_id = result.external_ids.tmdb_id
-                    elif result.title and providers.fuzzy_match(result.title, title.title):
-                        self.tmdb_id = result.external_ids.tmdb_id
-                        tmdb_title = result.title
-                        self.search_source = result.source
-                if list_ or list_titles:
-                    if self.tmdb_id:
-                        console.print(
-                            Padding(
-                                f"Search -> {tmdb_title or '?'} [bright_black](ID {self.tmdb_id})",
-                                (0, 5),
-                            )
-                        )
-                    else:
-                        console.print(Padding("Search -> [bright_black]No match found[/]", (0, 5)))
-                self.tmdb_searched = True
-
-            if isinstance(title, Movie) and (list_ or list_titles) and not self.tmdb_id:
-                movie_result = providers.resolve_by_ids(
-                    None,
-                    self.imdb_id,
-                    self.tvdb_id,
-                    self.anilist_id,
-                    title=title.name,
-                    year=title.year,
-                    kind="movie",
-                    title_cacher=title_cacher,
-                    cache_title_id=cache_title_id,
-                    cache_region=cache_region,
-                    cache_account_hash=cache_account_hash,
-                    anime=self.anime_hint(title),
-                )
-                if movie_result and movie_result.external_ids.tmdb_id:
-                    console.print(
-                        Padding(
-                            f"Search -> {movie_result.title or '?'} "
-                            f"[bright_black](ID {movie_result.external_ids.tmdb_id})",
-                            (0, 5),
-                        )
-                    )
-                else:
-                    console.print(Padding("Search -> [bright_black]No match found[/]", (0, 5)))
-
-            if self.tmdb_id and getattr(self, "search_source", None) not in ("simkl", "imdb"):
-                kind = "tv" if isinstance(title, Episode) else "movie"
-                providers.fetch_external_ids(
-                    self.tmdb_id, kind, title_cacher, cache_title_id, cache_region, cache_account_hash
-                )
+            metadata.search(title, listing=list_ or list_titles)
 
             if slow and i != 0:
                 delay = random.randint(slow[0], slow[1])
@@ -2085,9 +1937,7 @@ class dl:
                     load_tracks(
                         service,
                         title,
-                        name=enrich_title,
-                        year=enrich_year,
-                        language=enrich_lang,
+                        enrichment=metadata.enrichment,
                         workers=workers,
                         on_probe=partial(tracks_spinner.update, text="Probing HDR10 tracks for HDR10+..."),
                     )
@@ -2437,7 +2287,7 @@ class dl:
                     build_context(
                         title,
                         service=self.service,
-                        ids=self.post_script_ids(),
+                        ids=metadata.post_script_ids(),
                         error=f"{type(e).__name__}: {e}",
                     ),
                     postscript,
@@ -2705,11 +2555,11 @@ class dl:
                         tags.tag_file(
                             final_path,
                             title,
-                            self.tmdb_id,
-                            self.imdb_id,
-                            self.tvdb_id,
-                            self.anilist_id,
-                            self.anime_hint(title),
+                            metadata.tmdb_id,
+                            metadata.imdb_id,
+                            metadata.tvdb_id,
+                            metadata.anilist_id,
+                            metadata.anime_hint(title),
                             session=service.session,
                         )
                         if include_sample:
@@ -2726,7 +2576,7 @@ class dl:
                             filepath=final_path,
                             sidecars=sidecar_files.get(muxed_path, []),
                             service=self.service,
-                            ids=self.post_script_ids(),
+                            ids=metadata.post_script_ids(),
                         )
                         dispatch("success", "file", post_script_context, postscript)
                         post_script_last.setdefault(post_script_group(title), {})[final_path.parent] = (
@@ -2807,214 +2657,6 @@ class dl:
         ).returncode
         if returncode > 1 or not output.exists():
             self.log.warning(f"mkvmerge wrote no sample for {source.name}")
-
-    def anime_hint(self, title: Title_T | None = None) -> bool:
-        """Whether metadata lookups for this title should prefer AniList."""
-        per_title = getattr(title, "anime", None)
-        return self.service_anime if per_title is None else bool(per_title)
-
-    def daily_hint(self, title: Title_T | None = None) -> bool:
-        """Whether this title is daily content named by air date."""
-        per_title = getattr(title, "daily", None)
-        return self.daily or (self.service_daily if per_title is None else bool(per_title))
-
-    def fill_air_dates(self, titles: Series, tvdb_id: int | None = None) -> None:
-        """Fill in missing episode air dates from TVDB.
-
-        Additive only: an air date the service already set is kept.
-        """
-        tvdb = providers.get_provider("tvdb")
-        if not tvdb:
-            self.log.debug("Air dates need a tvdb_api_key in your config, skipping.")
-            return
-
-        if not tvdb_id:
-            self.log.debug("Could not resolve a TVDB ID, skipping air dates.")
-            return
-
-        wanted = [t for t in titles if self.daily_hint(t)]
-        if not wanted:
-            return
-
-        keys = list(dict.fromkeys((t.season, t.number) for t in titles))
-        source_order = tvdb.detect_order(tvdb_id, keys)  # type: ignore[attr-defined]
-        episodes = tvdb.get_episodes(tvdb_id, source_order)  # type: ignore[attr-defined]
-        if not episodes:
-            self.log.debug("TVDB listed no episodes for series %s, skipping air dates.", tvdb_id)
-            return
-
-        aired_by_key: dict[tuple[int, int], str] = {}
-        for episode in episodes:
-            season, number = parse_int(episode.get("seasonNumber")), parse_int(episode.get("number"))
-            aired = episode.get("aired")
-            if season is None or number is None or not aired:
-                continue
-            aired_by_key[(season, number)] = str(aired)
-
-        # TVDB carries placeholder schedule dates for unaired episodes. Stamping one would
-        # name the file with a date the episode never aired on.
-        limit = date.today() + timedelta(days=1)
-
-        filled = 0
-        for title in wanted:
-            if title.air_date is not None:
-                continue
-            aired = aired_by_key.get((title.season, title.number))
-            if not aired:
-                continue
-            try:
-                air_date = date.fromisoformat(aired[:10])
-            except ValueError:
-                continue
-            if air_date.year < 1970 or air_date > limit:
-                continue
-            title.air_date = air_date
-            filled += 1
-
-        if filled:
-            self.log.info("Filled air dates for %d episode(s) from TVDB (ID %s).", filled, tvdb_id)
-
-    def fill_absolute_numbers(self, titles: Series, tvdb_id: int | None = None) -> None:
-        """Fill in missing absolute episode numbers from TVDB's absolute order.
-
-        Additive only: season and number are never written, and an absolute number the
-        service already set is kept.
-        """
-        tvdb = providers.get_provider("tvdb")
-        if not tvdb:
-            self.log.debug("Absolute episode numbers need a tvdb_api_key in your config, skipping.")
-            return
-
-        if not tvdb_id:
-            self.log.debug("Could not resolve a TVDB ID, skipping absolute episode numbers.")
-            return
-
-        keys = list(dict.fromkeys((t.season, t.number) for t in titles))
-        source_order = tvdb.detect_order(tvdb_id, keys)  # type: ignore[attr-defined]
-        if source_order == "absolute":
-            # the service already numbers in absolute order; get_order_map would return the
-            # empty same-order map, but here the episode numbers are their own fill
-            mapping = {key: (*key, None) for key in keys}
-        else:
-            mapping = tvdb.get_order_map(tvdb_id, "absolute", source_order)  # type: ignore[attr-defined]
-        if not mapping:
-            self.log.debug("TVDB has no absolute order for series %s, skipping absolute episode numbers.", tvdb_id)
-            return
-
-        filled = 0
-        for title in titles:
-            if title.absolute is not None:
-                continue
-            entry = mapping.get((title.season, title.number))
-            if not entry:
-                continue
-            title.absolute = entry[1]
-            filled += 1
-
-        if filled:
-            self.log.info("Filled absolute numbers for %d episode(s) from TVDB (ID %s).", filled, tvdb_id)
-
-    def apply_continuous_episodes(self, titles: Series) -> Series:
-        """Number each season on from the last episode of the season before it.
-
-        Season 0 and episode 0 keep their numbers, and a season that already starts past the season before it is kept.
-        The Series is rebuilt, as it does not re-sort an episode whose number changed.
-        """
-        last = 0
-        renumbered = 0
-        for season, group in groupby(titles, key=attrgetter("season")):
-            episodes = [t for t in group if t.number]
-            if not season or not episodes:
-                continue
-            if min(t.number for t in episodes) <= last:
-                for t in episodes:
-                    t.number += last
-                renumbered += len(episodes)
-            last = max(t.number for t in episodes)
-        self.log.info("Numbered %d episode(s) on from the season before.", renumbered)
-        return type(titles)(list(titles))
-
-    def apply_tvdb_order(
-        self,
-        titles: Series,
-        title_cacher: Any = None,
-        cache_title_id: str | None = None,
-        cache_region: str | None = None,
-        cache_account_hash: str | None = None,
-    ) -> Series:
-        """Renumber episodes from the service's own numbering into a TVDB season order."""
-        tvdb = providers.get_provider("tvdb")
-        if not tvdb:
-            self.log.warning("--tvdb-order needs a tvdb_api_key in your config, skipping renumber.")
-            return titles
-
-        tvdb_id = self.tvdb_id
-        if not tvdb_id:
-            show = titles[0]
-            result = providers.resolve_by_ids(
-                self.tmdb_id,
-                self.imdb_id,
-                None,
-                title=show.title,
-                year=show.year,
-                kind="tv",
-                title_cacher=title_cacher,
-                cache_title_id=cache_title_id,
-                cache_region=cache_region,
-                cache_account_hash=cache_account_hash,
-            )
-            tvdb_id = result.external_ids.tvdb_id if result else None
-        if not tvdb_id:
-            self.log.warning("Could not resolve a TVDB ID for %r, skipping %s renumber.", str(titles), self.tvdb_order)
-            return titles
-        self.tvdb_id = tvdb_id  # keep the mux tag on the series the renumbering used
-
-        # parts of one episode share a (season, number) slot; without the dedupe the
-        # collision check below reads them as several episodes clashing on one slot
-        keys = list(dict.fromkeys((t.season, t.number) for t in titles))
-        source_order = tvdb.detect_order(tvdb_id, keys)  # type: ignore[attr-defined]
-        if source_order == self.tvdb_order:
-            self.log.info("%s already lists this series in TVDB %s order.", self.service, self.tvdb_order)
-            return titles
-
-        mapping = tvdb.get_order_map(tvdb_id, self.tvdb_order, source_order)  # type: ignore[attr-defined]
-        if not mapping:
-            return titles
-
-        # an unmapped episode keeps its own numbering and can land on a remapped episode's slot
-        renumbered = [mapping.get(key, (*key, None))[:2] for key in keys]
-        unmapped = sum(1 for key in keys if key not in mapping)
-        collisions = [slot for slot, count in Counter(renumbered).items() if count > 1]
-        if collisions:
-            self.log.error(
-                "TVDB's %s order misses %d episode(s) and puts two in %d slot(s), keeping the %s numbering of %s",
-                self.tvdb_order,
-                unmapped,
-                len(collisions),
-                source_order,
-                self.service,
-            )
-            return titles
-
-        for title in titles:
-            entry = mapping.get((title.season, title.number))
-            if not entry:
-                continue
-            title.season, title.number, tvdb_name = entry
-            if tvdb_name and not title.name:
-                title.name = tvdb_name
-
-        if unmapped:
-            self.log.warning(
-                "%d episode(s) are not in TVDB's %s order and keep their %s numbering.",
-                unmapped,
-                self.tvdb_order,
-                source_order,
-            )
-        self.log.info("Renumbered episodes from TVDB %s to %s order (ID %s).", source_order, self.tvdb_order, tvdb_id)
-
-        # Series is a SortedKeyList; renumbering in place does not re-sort it
-        return type(titles)(list(titles))
 
     @staticmethod
     def title_to_meta(title: Title_T) -> dict[str, Any]:
