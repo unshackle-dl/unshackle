@@ -4,6 +4,8 @@ Covers the correctness guards on the whole-segment AES-128-CBC path:
 - ``ClearKey.decrypt`` passing mislabeled-clear / non-block-aligned segments through
   untouched instead of crashing or corrupting (WS1 / F1+F3)
 - ``ClearKey.from_m3u_key`` ``data:`` URI parsing and 16-byte key validation (WS5 / F4)
+- ``ClearKey.decrypt`` warning once when the PKCS7 unpad fails, and keeping the output
+- ``ClearKey.from_m3u_key`` rejecting a key URI body that is not exactly 16 bytes
 - the RFC 8216 §5.2 sequence-number IV deriving from a segment's absolute media
   sequence number rather than the post-filter download index (WS2 / F2)
 """
@@ -14,6 +16,7 @@ import base64
 
 import m3u8
 import pytest
+import requests
 from Cryptodome.Cipher import AES
 from Cryptodome.Util.Padding import pad
 from m3u8.model import Key
@@ -66,11 +69,14 @@ def test_non_block_aligned_passes_through(tmp_path) -> None:
     assert seg.read_bytes() == data
 
 
-def test_empty_segment_does_not_crash(tmp_path) -> None:
+def test_empty_segment_does_not_crash(tmp_path, caplog) -> None:
     seg = tmp_path / "0.ts"
     seg.write_bytes(b"")
 
-    ClearKey(key=KEY, iv=IV).decrypt(seg)
+    with caplog.at_level("WARNING"):
+        ClearKey(key=KEY, iv=IV).decrypt(seg)
+
+    assert not caplog.records
 
     assert seg.exists()
     assert seg.read_bytes() == b""
@@ -86,6 +92,50 @@ def test_warns_once_per_instance(tmp_path, caplog) -> None:
 
     warnings = [r for r in caplog.records if r.levelname == "WARNING"]
     assert len(warnings) == 1
+
+
+def test_unpad_failure_warns_once_and_keeps_output(tmp_path, caplog) -> None:
+    plaintext = b"\x00" * 32
+    drm = ClearKey(key=KEY, iv=IV)
+    for name in ("0.ts", "1.ts"):
+        seg = tmp_path / name
+        seg.write_bytes(AES.new(KEY, AES.MODE_CBC, IV).encrypt(plaintext))
+        with caplog.at_level("WARNING"):
+            drm.decrypt(seg)
+        assert seg.read_bytes() == plaintext
+
+    warnings = [r.getMessage() for r in caplog.records if r.levelname == "WARNING"]
+    assert len(warnings) == 1
+    assert "PKCS7" in warnings[0] and "0.ts" in warnings[0]
+
+
+def uri_key(monkeypatch, body: bytes) -> tuple[Key, requests.Session]:
+    response = requests.Response()
+    response.status_code = 200
+    response._content = body
+    session = requests.Session()
+    monkeypatch.setattr(session, "get", lambda url: response)
+    key = Key(
+        method="AES-128",
+        uri="key.bin",
+        base_uri="https://example.com/",
+        keyformat=None,
+        keyformatversions=None,
+        iv=None,
+    )
+    return key, session
+
+
+def test_uri_key_of_16_bytes_loads(monkeypatch) -> None:
+    key, session = uri_key(monkeypatch, KEY)
+    assert ClearKey.from_m3u_key(key, session).key == KEY
+
+
+@pytest.mark.parametrize("length", [0, 15, 17, 32])
+def test_uri_key_wrong_length_rejected(monkeypatch, length) -> None:
+    key, session = uri_key(monkeypatch, b"\x01" * length)
+    with pytest.raises(EOFError, match=f"Unexpected Length of Key \\({length} bytes\\)"):
+        ClearKey.from_m3u_key(key, session)
 
 
 def data_key(raw: bytes, base64_encoded: bool = True) -> Key:

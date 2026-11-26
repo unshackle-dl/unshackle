@@ -49,6 +49,7 @@ class ClearKey:
         self.key: bytes = key
         self.iv: bytes = iv
         self._warned_clear: bool = False
+        self._warned_unpad: bool = False
 
     def warn_clear(self, reason: str) -> None:
         """Warn once per track that unshackle passed a segment through undecrypted."""
@@ -57,11 +58,16 @@ class ClearKey:
             self._warned_clear = True
 
     def decrypt(self, path: Path) -> None:
-        """Decrypt a Track with AES-128 ClearKey (HLS) DRM."""
+        """Decrypt a Track with AES-128 ClearKey (HLS) DRM.
+
+        A segment that fails the PKCS7 unpad is kept as decrypted: some streams are block aligned with no padding.
+        """
         if not path or not path.exists():
             raise ValueError("Tried to decrypt a file that does not exist.")
 
         data = path.read_bytes()
+        if not data:
+            return
 
         # Mislabeled-clear guard: plaintext MPEG-TS the manifest wrongly tags AES-128. Require the
         # 0x47 sync byte at 4 consecutive packet boundaries plus an exact packet-count length, so
@@ -93,8 +99,9 @@ class ClearKey:
         try:
             decrypted = unpad(decrypted, AES.block_size)
         except ValueError:
-            # the decrypted data is likely already in the block size boundary
-            pass
+            if not self._warned_unpad:
+                log.warning("ClearKey: PKCS7 unpad failed for %s, the key may be wrong.", path.name)
+                self._warned_unpad = True
 
         decrypted_path = path.with_suffix(f".decrypted{path.suffix}")
         decrypted_path.write_bytes(decrypted)
@@ -153,9 +160,7 @@ class ClearKey:
             )
             res = session.get(url)
             res.raise_for_status()
-            if not res.content:
-                raise EOFError("Unexpected Empty Response by M3U Key URI.")
-            if len(res.content) < 16:
+            if len(res.content) != 16:
                 raise EOFError(f"Unexpected Length of Key ({len(res.content)} bytes) in M3U Key.")
             key = res.content
 

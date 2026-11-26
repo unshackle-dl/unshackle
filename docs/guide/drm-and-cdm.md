@@ -453,6 +453,10 @@ decrypts each segment in-process with AES-CBC. There is no device, no CDM, and n
 license challenge, so you do not set anything up. unshackle decrypts such tracks
 automatically during download.
 
+The `EXT-X-KEY` URI must return a content key of exactly 16 bytes, or the download stops with an error.
+If a decrypted segment has no valid PKCS7 padding, unshackle keeps the output and
+logs one warning for the track, because the content key is possibly wrong.
+
 ### ClearKey over CENC (W3C EME `org.w3.clearkey`)
 
 The CENC ClearKey scheme is a proper license flow, but the "license server"
