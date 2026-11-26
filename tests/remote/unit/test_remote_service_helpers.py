@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import base64
+import zlib
 from enum import Enum
 
 import pytest
@@ -28,6 +30,10 @@ from unshackle.core.wire import (
 )
 
 pytestmark = pytest.mark.unit
+
+
+def blob(text: str) -> str:
+    return base64.b64encode(zlib.compress(text.encode())).decode("ascii")
 
 
 class _Color(Enum):
@@ -384,6 +390,26 @@ def test_load_cache_files_warns_above_the_server_limit(tmp_path, monkeypatch, ca
     assert (f"has {count} files to send" in caplog.text) is warned
 
 
+@pytest.mark.parametrize("size, warned", [(10, False), (11, True)])
+def test_load_cache_files_warns_above_the_server_byte_limit(tmp_path, monkeypatch, caplog, size, warned) -> None:
+    import logging
+    from types import SimpleNamespace
+
+    from unshackle.core.config import config
+
+    (tmp_path / "TESTSVC").mkdir()
+    (tmp_path / "TESTSVC" / "state.json").write_text("a" * size)
+    monkeypatch.setattr("unshackle.core.api.sanitize.MAX_SESSION_CACHE_BYTES", 10)
+    monkeypatch.setattr(config.directories, "cache", tmp_path)
+    monkeypatch.setattr(config, "credentials", {})
+    stub = SimpleNamespace(service_tag="TESTSVC", log=logging.getLogger("test"))
+
+    with caplog.at_level(logging.WARNING, logger="test"):
+        RemoteService.load_cache_files(stub, None)
+
+    assert (f"has {size} bytes to send" in caplog.text) is warned
+
+
 def test_load_cache_files_forwards_nested_keys(tmp_path, monkeypatch) -> None:
     """A service that keeps its cache in subfolders (session_web/<sha1>.json) must have
     those files forwarded under the Cacher key, and the credential filter must still apply
@@ -434,9 +460,7 @@ def test_load_cache_files_forwards_nested_keys(tmp_path, monkeypatch) -> None:
 
 
 def test_save_returned_cache_writes_nested_keys_and_rejects_escapes(tmp_path, monkeypatch) -> None:
-    import base64
     import logging
-    import zlib
     from types import SimpleNamespace
 
     from unshackle.core.config import config
@@ -445,9 +469,6 @@ def test_save_returned_cache_writes_nested_keys_and_rejects_escapes(tmp_path, mo
     tag = "TESTSVC"
     monkeypatch.setattr(config.directories, "cache", tmp_path)
     stub = SimpleNamespace(service_tag=tag, log=logging.getLogger("test"))
-
-    def blob(text: str) -> str:
-        return base64.b64encode(zlib.compress(text.encode())).decode("ascii")
 
     RemoteService.save_returned_cache(
         stub,
@@ -495,6 +516,20 @@ def test_save_returned_cache_drops_other_profiles_files(tmp_path, monkeypatch) -
     RemoteService.save_returned_cache(stub, {"tokens_work": blob, "tokens_default": blob, "tokens": blob}, "work")
 
     assert sorted(p.name for p in (tmp_path / tag).iterdir()) == ["tokens.json", "tokens_work.json"]
+
+
+def test_save_returned_cache_stops_at_the_total_byte_limit(tmp_path, monkeypatch) -> None:
+    import logging
+    from types import SimpleNamespace
+
+    from unshackle.core.config import config
+
+    monkeypatch.setattr("unshackle.core.api.sanitize.MAX_SESSION_CACHE_BYTES", 10)
+    monkeypatch.setattr(config.directories, "cache", tmp_path)
+    monkeypatch.setattr(config, "credentials", {})
+    stub = SimpleNamespace(service_tag="TESTSVC", log=logging.getLogger("test"))
+    RemoteService.save_returned_cache(stub, {"first": blob('"1234"'), "second": blob('"5678"')})
+    assert sorted(p.name for p in tmp_path.rglob("*.json")) == ["first.json"]
 
 
 def test_save_returned_cache_ignores_oversized_payload(tmp_path, monkeypatch) -> None:
@@ -587,14 +622,44 @@ def test_resolve_manifest_data_matches_across_per_range_manifests() -> None:
     assert remote_hdr.data["ism"]["quality_level"].get("CodecPrivateData") == VIDEO_HEVC_PQ_CPD
 
 
-def test_session_create_writes_nested_cache_and_skips_colliding_keys(tmp_path, monkeypatch) -> None:
-    """The server writes a nested key under the session cache dir with the ``.json``
-    suffix appended, not substituted, and a key that collides with an existing file
-    (``x`` then ``x.json/y``) is skipped instead of failing the whole create."""
-    import asyncio
+def test_write_client_cache_writes_nested_keys_and_skips_colliding_keys(tmp_path, monkeypatch) -> None:
+    """A nested key gets the ``.json`` suffix appended, not substituted, and a key that collides with
+    an existing file (``x`` then ``x.json/y``) is skipped instead of failing the whole write."""
+    from unshackle.core.api import handlers
+
+    monkeypatch.setattr(handlers.config.directories, "cache", tmp_path)
+    handlers.write_client_cache(
+        {"x": blob('"flat"'), "x.json/y": blob('"collides"'), "MSL/keys.v2": blob('"dotted"')}, "t"
+    )
+
+    written = {p.name: p.read_text() for p in tmp_path.rglob("*.json") if p.is_file()}
+    assert written == {"x.json": '"flat"', "keys.v2.json": '"dotted"'}
+
+
+@pytest.mark.parametrize("last", ["over_total", "not_compressed"])
+def test_write_client_cache_refuses_a_bad_map_before_it_writes_a_file(tmp_path, monkeypatch, last) -> None:
     import base64
+
+    from unshackle.core.api import handlers
+    from unshackle.core.api.errors import APIError, APIErrorCode
+    from unshackle.core.api.sanitize import MAX_SESSION_CACHE_BYTES
+
+    monkeypatch.setattr(handlers.config.directories, "cache", tmp_path)
+    half = '"' + "a" * (MAX_SESSION_CACHE_BYTES // 2) + '"'
+    cache = {"first": blob('"ok"'), "big1": blob(half)}
+    cache["last"] = blob(half) if last == "over_total" else base64.b64encode(b"plain").decode()
+
+    with pytest.raises(APIError) as e:
+        handlers.write_client_cache(cache, "t")
+    assert e.value.error_code == APIErrorCode.INVALID_INPUT
+    assert ("inflate to more than" in e.value.message) is (last == "over_total")
+    assert not any(tmp_path.iterdir())
+
+
+@pytest.mark.parametrize("stop_at", ["write", "store", "after_insert"])
+def test_a_session_create_that_fails_after_the_cache_write_leaves_no_cache_dir(tmp_path, monkeypatch, stop_at) -> None:
+    import asyncio
     import logging
-    import zlib
     from types import SimpleNamespace
 
     from unshackle.core.api import handlers
@@ -602,10 +667,17 @@ def test_session_create_writes_nested_cache_and_skips_colliding_keys(tmp_path, m
     class Stop(Exception):
         pass
 
-    def blob(text: str) -> str:
-        return base64.b64encode(zlib.compress(text.encode())).decode("ascii")
+    real_write = handlers.write_client_cache
+    written: list[str] = []
+
+    def write_then_maybe_fail(cache_data, cache_tag):
+        real_write(cache_data, cache_tag)
+        written.extend(p.name for p in tmp_path.rglob("*.json"))
+        if stop_at == "write":
+            raise Stop()
 
     monkeypatch.setattr(handlers.config.directories, "cache", tmp_path)
+    monkeypatch.setattr(handlers, "write_client_cache", write_then_maybe_fail)
     monkeypatch.setattr(handlers, "validate_service", lambda service, request=None: service)
     monkeypatch.setattr(handlers, "resolve_handler_proxy", lambda *args: (None, []))
     monkeypatch.setattr(handlers, "server_account_for", lambda *args: False)
@@ -616,14 +688,21 @@ def test_session_create_writes_nested_cache_and_skips_colliding_keys(tmp_path, m
         lambda *args, **kwargs: (SimpleNamespace(log=logging.getLogger("Svc")), None, None),
     )
     monkeypatch.setattr("unshackle.core.api.session_store.refuse_while_draining", lambda: None)
-    monkeypatch.setattr("unshackle.core.api.session_store.get_session_store", lambda: (_ for _ in ()).throw(Stop()))
 
-    cache = {"x": blob('"flat"'), "x.json/y": blob('"collides"'), "MSL/keys.v2": blob('"dotted"')}
-    response = asyncio.run(handlers.session_create_handler({"service": "TESTSVC", "title_id": "t", "cache": cache}))
-    assert response.status == 422  # the Stop stand-in fired after the cache write
+    class RefusingStore:
+        async def create(self, *args, **kwargs):
+            raise Stop()
 
-    written = {p.name: p.read_text() for p in tmp_path.rglob("*.json") if p.is_file()}
-    assert written == {"x.json": '"flat"', "keys.v2.json": '"dotted"'}
+        def peek(self, session_id):
+            return object() if stop_at == "after_insert" else None
+
+    monkeypatch.setattr("unshackle.core.api.session_store.get_session_store", RefusingStore)
+
+    data = {"service": "TESTSVC", "title_id": "t", "cache": {"token": blob('"t"')}}
+    response = asyncio.run(handlers.session_create_handler(data))
+    assert response.status == 422
+    assert written == ["token.json"]
+    assert bool(list(tmp_path.rglob("*.json"))) is (stop_at == "after_insert")
 
 
 class _SentCreate(Exception):

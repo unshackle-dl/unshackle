@@ -1827,8 +1827,13 @@ class RemoteService(TitleSource):
         if not cache_data:
             return
 
-        from unshackle.core.api.compression import safe_inflate
-        from unshackle.core.api.sanitize import MAX_SESSION_CACHE_KEYS, safe_cache_key, safe_cache_payload
+        from unshackle.core.api.compression import InflateLimitError, safe_inflate
+        from unshackle.core.api.sanitize import (
+            MAX_SESSION_CACHE_BYTES,
+            MAX_SESSION_CACHE_KEYS,
+            safe_cache_key,
+            safe_cache_payload,
+        )
 
         if len(cache_data) > MAX_SESSION_CACHE_KEYS:
             self.log.warning(f"Ignoring {len(cache_data)} cache files from server: more than {MAX_SESSION_CACHE_KEYS}")
@@ -1839,6 +1844,7 @@ class RemoteService(TitleSource):
         relevant = cache_key_filter(self.service_tag, profile)
 
         saved = 0
+        budget = MAX_SESSION_CACHE_BYTES
         for key, content in cache_data.items():
             safe_name = safe_cache_key(key)
             if not safe_name:
@@ -1848,7 +1854,8 @@ class RemoteService(TitleSource):
                 self.log.debug(f"Ignoring cache file from the remote server for another profile: {safe_name}")
                 continue
             try:
-                decompressed = safe_inflate(base64.b64decode(content))
+                decompressed = safe_inflate(base64.b64decode(content), budget)
+                budget -= len(decompressed)
                 if not safe_cache_payload(decompressed.decode("utf-8")):
                     self.log.warning(
                         f"Rejecting cache file '{safe_name}' from the server: it holds a type a peer may not send"
@@ -1859,6 +1866,11 @@ class RemoteService(TitleSource):
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_bytes(decompressed)
                 saved += 1
+            except InflateLimitError:
+                self.log.warning(
+                    f"Ignoring the rest of the cache files from server: more than {MAX_SESSION_CACHE_BYTES} bytes"
+                )
+                break
             except Exception as e:
                 self.log.warning(f"Failed to save returned cache file '{safe_name}': {e}")
 
@@ -1878,7 +1890,7 @@ class RemoteService(TitleSource):
         """
         import zlib
 
-        from unshackle.core.api.sanitize import MAX_SESSION_CACHE_KEYS, safe_cache_key
+        from unshackle.core.api.sanitize import MAX_SESSION_CACHE_BYTES, MAX_SESSION_CACHE_KEYS, safe_cache_key
 
         cache_dir = config.directories.cache / self.service_tag
         if not cache_dir.is_dir():
@@ -1886,6 +1898,7 @@ class RemoteService(TitleSource):
 
         relevant = cache_key_filter(self.service_tag, profile)
         files: dict[str, str] = {}
+        size = 0
         for f in sorted(cache_dir.rglob("*.json")):
             key = f.relative_to(cache_dir).as_posix()[: -len(".json")]
             if f.stem.startswith("titles_") or not safe_cache_key(key):
@@ -1893,7 +1906,14 @@ class RemoteService(TitleSource):
             if not relevant(key):
                 self.log.debug(f"Withholding cache file from the remote server: {key}")
                 continue
-            files[key] = base64.b64encode(zlib.compress(f.read_bytes())).decode("ascii")
+            content = f.read_bytes()
+            size += len(content)
+            files[key] = base64.b64encode(zlib.compress(content)).decode("ascii")
+        if size > MAX_SESSION_CACHE_BYTES:
+            self.log.warning(
+                f"The {self.service_tag} cache has {size} bytes to send and a remote server takes "
+                f"{MAX_SESSION_CACHE_BYTES}: remove old files from {cache_dir}"
+            )
         if len(files) > MAX_SESSION_CACHE_KEYS:
             self.log.warning(
                 f"The {self.service_tag} cache has {len(files)} files to send and a remote server takes "

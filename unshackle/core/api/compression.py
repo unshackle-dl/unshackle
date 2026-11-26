@@ -15,15 +15,19 @@ MAX_INFLATE_BYTES = 64 * 1024 * 1024  # 64 MiB
 GZIP_THREAD_SIZE = 1024 * 1024
 
 
+class InflateLimitError(ValueError):
+    """The compressed payload expands beyond the allowed size."""
+
+
 def safe_inflate(data: bytes, max_size: int = MAX_INFLATE_BYTES) -> bytes:
-    """zlib-decompress *data*, raising ValueError if the result would exceed *max_size*."""
+    """zlib-decompress *data*, raising InflateLimitError if the result would exceed *max_size*."""
     decompressor = zlib.decompressobj()
     out = decompressor.decompress(data, max_size + 1)
     if len(out) > max_size or decompressor.unconsumed_tail:
-        raise ValueError("compressed payload expands beyond allowed size")
+        raise InflateLimitError("compressed payload expands beyond allowed size")
     out += decompressor.flush()
     if len(out) > max_size:
-        raise ValueError("compressed payload expands beyond allowed size")
+        raise InflateLimitError("compressed payload expands beyond allowed size")
     return out
 
 

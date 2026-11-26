@@ -24,12 +24,18 @@ import click
 from aiohttp import web
 
 from unshackle.core import login
-from unshackle.core.api.compression import safe_inflate
+from unshackle.core.api.compression import InflateLimitError, safe_inflate
 from unshackle.core.api.errors import APIError, categorize_exception, handle_api_exception
 from unshackle.core.api.input_bridge import InputBridge, NoUserBridge
 from unshackle.core.api.key_policy import KeyPolicy, api_keys, is_whole_number, named_services
 from unshackle.core.api.progress import track_log_label
-from unshackle.core.api.sanitize import MAX_SESSION_CACHE_KEYS, safe_cache_key, safe_cache_payload, sanitize_log
+from unshackle.core.api.sanitize import (
+    MAX_SESSION_CACHE_BYTES,
+    MAX_SESSION_CACHE_KEYS,
+    safe_cache_key,
+    safe_cache_payload,
+    sanitize_log,
+)
 from unshackle.core.api.session_channel import status_message
 from unshackle.core.api.session_log import SessionLogBuffer, SessionLogMirror, capture_service_logs
 from unshackle.core.api.session_store import SessionEntry, SessionStore
@@ -237,13 +243,14 @@ def write_client_cache(cache_data: Any, cache_tag: str) -> None:
 
     Each cache key is a file path relative to that directory, and each value is the file as
     base64 of zlib-compressed bytes. The function skips an unsafe key, a file that names a type
-    other than a datetime or a file it cannot write, and raises INVALID_INPUT for a map that is not an
-    object, has too many entries, or holds a value that is not a string.
+    other than a datetime or a file it cannot write. It raises INVALID_INPUT, before it writes a file, for a
+    map that is not an object, has too many entries, holds a value that is not compressed text, or inflates
+    to more than ``MAX_SESSION_CACHE_BYTES`` in total.
     """
     if not isinstance(cache_data, dict) or len(cache_data) > MAX_SESSION_CACHE_KEYS:
         raise APIError(APIErrorCode.INVALID_INPUT, f"cache must hold at most {MAX_SESSION_CACHE_KEYS} entries")
-    cache_dir = config.directories.cache / cache_tag
-    cache_dir.mkdir(parents=True, exist_ok=True)
+    files: dict[str, str] = {}
+    budget = MAX_SESSION_CACHE_BYTES
     for key, content in cache_data.items():
         safe_name = safe_cache_key(key)
         if not safe_name:
@@ -252,7 +259,13 @@ def write_client_cache(cache_data: Any, cache_tag: str) -> None:
         if not isinstance(content, str):
             raise APIError(APIErrorCode.INVALID_INPUT, "cache values must be base64 strings")
         try:
-            decompressed = safe_inflate(base64.b64decode(content)).decode("utf-8")
+            inflated = safe_inflate(base64.b64decode(content), budget)
+            budget -= len(inflated)
+            decompressed = inflated.decode("utf-8")
+        except InflateLimitError:
+            raise APIError(
+                APIErrorCode.INVALID_INPUT, f"cache files inflate to more than {MAX_SESSION_CACHE_BYTES} bytes"
+            ) from None
         except (ValueError, zlib.error):
             raise APIError(
                 APIErrorCode.INVALID_INPUT, f"cache value {sanitize_log(key)} is not compressed text"
@@ -260,12 +273,16 @@ def write_client_cache(cache_data: Any, cache_tag: str) -> None:
         if not safe_cache_payload(decompressed):
             log.warning(f"Rejecting session cache file {sanitize_log(key)}: it holds a type a peer may not send")
             continue
+        files[safe_name] = decompressed
+    cache_dir = config.directories.cache / cache_tag
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    for safe_name, decompressed in files.items():
         target = cache_dir / f"{safe_name}.json"
         try:
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text(decompressed, encoding="utf-8")
         except OSError as e:
-            log.warning(f"Skipping session cache key {sanitize_log(key)}: {e}")
+            log.warning(f"Skipping session cache key {sanitize_log(safe_name)}: {e}")
 
 
 def collect_cache_files(cache_tag: str) -> dict[str, str]:
@@ -2926,33 +2943,36 @@ async def session_create_handler(data: dict[str, Any], request: web.Request | No
         )
 
         cache_data = data.get("cache", {})
-        if cache_data and session_cache_tag:
-            await asyncio.to_thread(write_client_cache, cache_data, session_cache_tag)
-
         service_instance._input_bridge = bridge
-
         client = data.get("client")
         store = get_session_store()
-        session = await store.create(
-            normalized_service,
-            service_instance,
-            session_id=session_id,
-            owner_key=api_key,
-            creator_ip=request.remote if request else None,
-            server_account=(profile or "default") if server_account else None,
-            cache_tag=session_cache_tag,
-            policy=policy,
-            server_cdm=use_server_cdm,
-            server_cdm_max_height=max_height,
-            server_vault=client_device and policy.allows("server_vault", normalized_service),
-            server_device=server_device,
-            client_auth=not server_account
-            and (cookies is not None or credential is not None or bool(cache_data and session_cache_tag)),
-            # Echoed to every dashboard viewer, so cap what an arbitrary client can push into it.
-            client=client if isinstance(client, dict) and len(json.dumps(client, default=str)) <= 4096 else {},
-            input_bridge=bridge,
-            log_buffer=log_buffer,
-        )
+        try:
+            if cache_data and session_cache_tag:
+                await asyncio.to_thread(write_client_cache, cache_data, session_cache_tag)
+            session = await store.create(
+                normalized_service,
+                service_instance,
+                session_id=session_id,
+                owner_key=api_key,
+                creator_ip=request.remote if request else None,
+                server_account=(profile or "default") if server_account else None,
+                cache_tag=session_cache_tag,
+                policy=policy,
+                server_cdm=use_server_cdm,
+                server_cdm_max_height=max_height,
+                server_vault=client_device and policy.allows("server_vault", normalized_service),
+                server_device=server_device,
+                client_auth=not server_account
+                and (cookies is not None or credential is not None or bool(cache_data and session_cache_tag)),
+                # Echoed to every dashboard viewer, so cap what an arbitrary client can push into it.
+                client=client if isinstance(client, dict) and len(json.dumps(client, default=str)) <= 4096 else {},
+                input_bridge=bridge,
+                log_buffer=log_buffer,
+            )
+        except BaseException:
+            if store.peek(session_id) is None:
+                SessionStore.cleanup_cache_dir(session_cache_tag)
+            raise
 
         async def run_auth() -> None:
             try:
