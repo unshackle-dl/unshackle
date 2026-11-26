@@ -3,20 +3,25 @@
 from __future__ import annotations
 
 import base64
+import json
 import logging
+from collections.abc import AsyncIterator
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, cast
+from unittest.mock import Mock
 
 import pytest
 import requests
-from aiohttp import web
+from aiohttp import WSMsgType, web
 from click.testing import CliRunner
 
+from tests.remote.unit.test_session_reopen import make_service
 from unshackle.core import remote_service
 from unshackle.core.api import handlers
 from unshackle.core.api.errors import APIError, APIErrorCode
 from unshackle.core.api.routes import setup_routes
-from unshackle.core.remote_channel import PollingChannel, ServerMessages
+from unshackle.core.remote_channel import PollingChannel, ServerMessages, WebSocketChannel
+from unshackle.core.remote_protocol import AuthStatus
 from unshackle.core.remote_service import RemoteClient, RemoteError, RemoteService
 
 pytestmark = pytest.mark.unit
@@ -263,3 +268,57 @@ def test_a_relayed_qr_code_too_long_to_draw_still_logs_its_line(monkeypatch) -> 
     messages = ServerMessages(service)
     messages.show_logs([{"seq": 1, "level": "INFO", "message": "Scan", "qr": "\u20ac" * 1500}])
     assert seen == ["Scan"] and messages.log_seq == 1
+
+
+async def feed(channel: WebSocketChannel, *messages: dict[str, Any]) -> None:
+    """Read the given messages on the session channel, then end."""
+
+    async def socket() -> AsyncIterator[SimpleNamespace]:
+        for message in messages:
+            yield SimpleNamespace(type=WSMsgType.TEXT, data=json.dumps(message))
+
+    await channel.read(cast(Any, socket()))
+
+
+def channel_logging_to(seen: list[str]) -> WebSocketChannel:
+    service = make_service()
+    service.log = SimpleNamespace(log=lambda level, message: seen.append(message))  # type: ignore[assignment]
+    messages = ServerMessages(service)
+    return WebSocketChannel(messages, PollingChannel(messages))
+
+
+@pytest.mark.parametrize("seq", ["x", "2", None, [1], {"a": 1}, float("inf")])
+async def test_a_log_record_with_a_malformed_seq_is_skipped(seq: Any) -> None:
+    seen: list[str] = []
+    channel = channel_logging_to(seen)
+    await feed(channel, {"type": "log", "seq": seq, "message": "bad"}, {"type": "log", "seq": 1, "message": "good"})
+    assert seen == ["good"]
+    assert channel.messages.log_seq == 1
+
+
+@pytest.mark.parametrize(
+    ("logs", "shown"), [(["x", {"seq": 1, "message": "good"}], ["good"]), (None, []), (5, []), ("ab", [])]
+)
+def test_a_malformed_polled_log_reply_is_skipped(logs: Any, shown: list[str]) -> None:
+    seen: list[str] = []
+    channel = channel_logging_to(seen)
+    channel.service.client = SimpleNamespace(get_optional=lambda _: {"logs": logs})  # type: ignore[assignment]
+    channel.fallback.drain_logs()
+    assert seen == shown
+
+
+async def test_a_channel_message_that_fails_is_skipped(monkeypatch: pytest.MonkeyPatch) -> None:
+    channel = channel_logging_to([])
+    show_logs = Mock(side_effect=[RuntimeError("bad"), None])
+    monkeypatch.setattr(channel.messages, "show_logs", show_logs)
+    await feed(channel, {"type": "log", "seq": 1}, {"type": "log", "seq": 2})
+    assert show_logs.call_count == 2
+
+
+async def test_a_failed_login_status_shows_the_server_error_without_control_characters() -> None:
+    channel = channel_logging_to([])
+    await feed(channel, {"type": "status", "status": AuthStatus.FAILED, "error": "\x1b[2Jbad\r\nforged"})
+    channel.connected.set()
+    with pytest.raises(RemoteError) as caught:
+        channel.auth_step()
+    assert caught.value.message == "Remote auth failed: [2Jbadforged"

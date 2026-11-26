@@ -86,7 +86,10 @@ class ServerMessages:
 
         with self.log_lock:
             for record in records:
-                seq = int(record.get("seq", 0))
+                seq = record.get("seq") if isinstance(record, dict) else None
+                if not isinstance(seq, int):
+                    log.debug(f"Skipped a malformed server log record: {record!r:.200}")
+                    continue
                 if seq <= self.log_seq:
                     continue
                 message = sanitize_log(record.get("message", ""), keep_lines=True)
@@ -285,10 +288,10 @@ class PollingChannel:
                 with quiet():
                     endpoint = self.messages.route(LOGS_ROUTE) + f"?since={self.messages.log_seq}"
                     resp = cast(LogsReply, self.service.client.get_optional(endpoint))
+                if resp:
+                    self.messages.show_logs(resp.get("logs", []))
             except (Exception, SystemExit):
                 return
-            if resp:
-                self.messages.show_logs(resp.get("logs", []))
 
     def draining(self) -> bool:
         """Whether the server announced a restart."""
@@ -395,7 +398,10 @@ class WebSocketChannel:
             except ValueError:
                 continue
             if isinstance(data, dict):
-                await self.receive(ws, data)
+                try:
+                    await self.receive(ws, data)
+                except Exception as e:
+                    log.debug(f"Skipped a session channel message that failed: {e!r}")
 
     async def receive(self, ws: aiohttp.ClientWebSocketResponse, data: dict[str, Any]) -> None:
         kind = data.get("type")
