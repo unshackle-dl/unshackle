@@ -188,3 +188,25 @@ def test_segment_base_range_survives_a_skipped_probe(server, probes):
     assert segments == [(f"{base(server)}p1.mp4", f"{INIT_LEN}-{len(MEDIA) - 1}")]
     assert track_kid is None
     assert not probes
+
+
+def test_segment_base_init_on_another_file_is_not_fetched_without_a_probe(server, probes):
+    mpd = base_mpd(server).replace(f'range="0-{INIT_LEN - 1}"', 'sourceURL="p1/init.bin"')
+    tree = load_xml(mpd.encode())
+    period = tree.findall("Period")[1]
+    aset = period.find("AdaptationSet")
+
+    init_data, segments, *_ = DASH.get_period_segments(
+        period,
+        aset,
+        aset.find("Representation"),
+        tree,
+        Track(url=base(server), language="en"),
+        f"{base(server)}manifest.mpd",
+        requests.Session(),
+        probe_kid=False,
+    )
+
+    assert init_data is None
+    assert segments == [(f"{base(server)}p1.mp4", None)]
+    assert not server.requests

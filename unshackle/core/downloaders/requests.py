@@ -564,6 +564,16 @@ def range_clamped_to_end(content_range: tuple[int, int, int | None], slice_end: 
     return total is not None and end == total - 1 and slice_end >= total
 
 
+def range_answers(content_range: tuple[int, int, int | None] | None, slice_range: tuple[int, int | None]) -> bool:
+    """Whether a 206's parsed ``Content-Range`` carries the requested ``(start, end)`` slice."""
+    start, end = slice_range
+    return (
+        content_range is not None
+        and content_range[0] == start
+        and (end is None or content_range[1] == end or range_clamped_to_end(content_range, end))
+    )
+
+
 def request_range(headers: MutableMapping[str, Any]) -> tuple[int, int | None] | None:
     """
     The request's ``Range`` as ``(start, end)``. Gives None when absent or not ``bytes=start-...``.
@@ -1019,15 +1029,7 @@ def download(
                     content_range = parse_content_range(
                         stream.headers.get("Content-Range") or stream.headers.get("content-range")
                     )
-                    if (
-                        content_range is None
-                        or content_range[0] != slice_start
-                        or (
-                            slice_end is not None
-                            and content_range[1] != slice_end
-                            and not range_clamped_to_end(content_range, slice_end)
-                        )
-                    ):
+                    if content_range is None or not range_answers(content_range, slice_range):
                         raise OSError(
                             f"byte-range segment got Content-Range {content_range!r}, "
                             f"expected {slice_start}-{slice_end if slice_end is not None else ''}"

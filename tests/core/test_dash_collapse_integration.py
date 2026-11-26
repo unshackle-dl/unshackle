@@ -25,6 +25,7 @@ import threading
 from functools import partial
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+import click
 import pytest
 
 from unshackle.core.config import config
@@ -58,13 +59,13 @@ class _Handler(BaseHTTPRequestHandler):
             self.send_header("Content-Length", "0")
             self.end_headers()
             return
-        if rng:
+        if rng and not server.ignore_range:
             first, _, last = rng.removeprefix("bytes=").partition("-")
             start, end = int(first), int(last) if last else len(body) - 1
             chunk = body[start : end + 1]
             self.send_response(206)
             total = "*" if server.unknown_total else len(body)
-            self.send_header("Content-Range", f"bytes {start}-{end}/{total}")
+            self.send_header("Content-Range", server.content_range or f"bytes {start}-{end}/{total}")
             body = chunk
         else:
             self.send_response(200)
@@ -83,6 +84,8 @@ def server():
     srv.requests = []
     srv.routes = {}
     srv.unknown_total = False
+    srv.ignore_range = False
+    srv.content_range = None
     thread = threading.Thread(target=srv.serve_forever, daemon=True)
     thread.start()
     yield srv
@@ -246,6 +249,62 @@ def test_segment_base_unknown_total_fetches_the_rest_open_ended(server, tmp_path
 
     assert ctx.save_path.read_bytes() == PARENT
     assert ("/media.mp4", f"bytes={INIT_LEN}-") in server.requests
+
+
+def test_segment_base_init_refuses_a_server_that_ignores_range(server, tmp_path):
+    server.routes["/media.mp4"] = PARENT
+    server.ignore_range = True
+    ctx = make_ctx(tmp_path, "ignored-range.mp4")
+
+    with pytest.raises(click.ClickException, match="got 200"):
+        DASH.download_track(make_track(segment_base_mpd(server), server), ctx)
+
+    assert not ctx.save_path.exists()
+
+
+def test_segment_base_init_comes_from_its_source_url(server, tmp_path):
+    init, media = bytes([0x11]) * INIT_LEN, bytes([0xC0]) * 3000
+    server.routes["/init.bin"] = init
+    server.routes["/media.mp4"] = media
+    mpd = media_mpd(server, '<SegmentBase><Initialization sourceURL="init.bin"/></SegmentBase>')
+    ctx = make_ctx(tmp_path, "init-source.mp4")
+
+    DASH.download_track(make_track(mpd, server), ctx)
+
+    assert ctx.save_path.read_bytes() == init + media
+    assert server.requests[0] == ("/init.bin", None)
+    assert server.requests.count(("/media.mp4", None)) == 1
+
+
+def test_segment_base_init_refuses_a_206_for_another_range(server, tmp_path):
+    server.routes["/media.mp4"] = PARENT
+    server.content_range = f"bytes 1-{INIT_LEN}/{len(PARENT)}"
+
+    with pytest.raises(click.ClickException, match="got 206"):
+        DASH.download_track(make_track(segment_base_mpd(server), server), make_ctx(tmp_path))
+
+
+def test_segment_base_ranged_init_on_another_file_keeps_the_whole_media(server, tmp_path):
+    init, media = bytes([0x11]) * INIT_LEN, bytes([0xC0]) * 3000
+    server.routes["/init.bin"] = init + bytes(100)
+    server.routes["/media.mp4"] = media
+    initialization = f'<Initialization sourceURL="init.bin" range="0-{INIT_LEN - 1}"/>'
+    ctx = make_ctx(tmp_path, "ranged-init-source.mp4")
+
+    DASH.download_track(make_track(media_mpd(server, f"<SegmentBase>{initialization}</SegmentBase>"), server), ctx)
+
+    assert ctx.save_path.read_bytes() == init + media
+
+
+@pytest.mark.parametrize("initialization", ["<Initialization/>", '<Initialization sourceURL="media.mp4"/>'])
+def test_segment_base_init_that_is_the_whole_file_downloads_it_once(server, tmp_path, initialization):
+    server.routes["/media.mp4"] = PARENT
+    mpd = media_mpd(server, f"<SegmentBase>{initialization}</SegmentBase>")
+    ctx = make_ctx(tmp_path, "whole-init.mp4")
+
+    DASH.download_track(make_track(mpd, server), ctx)
+
+    assert ctx.save_path.read_bytes() == PARENT
 
 
 def test_leading_gap_that_is_not_a_sidx_takes_segmented_path(server, tmp_path):

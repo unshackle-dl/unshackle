@@ -373,11 +373,11 @@ def test_a_single_file_dash_track_is_cut_by_its_segment_index(monkeypatch: pytes
     box = sidx_box()
     requested: list[str] = []
 
-    def get(url: str, headers: dict[str, str] | None = None) -> MagicMock:
+    def get(url: str, headers: dict[str, str] | None = None, stream: bool = False) -> MagicMock:
         byte_range = (headers or {}).get("Range", "")
         requested.append(byte_range)
         content = box if byte_range == f"bytes=800-{800 + len(box) - 1}" else b"\x00" * 800
-        return MagicMock(content=content, headers={"Content-Range": "bytes 0-799/900000"})
+        return MagicMock(content=content, status_code=206, headers={"Content-Range": "bytes 0-799/900000"})
 
     tree = load_xml(SIDX_MPD.format(last=800 + len(box) - 1).encode())
     period = tree.find("Period")

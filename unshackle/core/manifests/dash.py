@@ -29,7 +29,7 @@ from requests import Session
 from unshackle.core import binaries
 from unshackle.core.config import config
 from unshackle.core.constants import DOWNLOAD_ALL_DRM, DOWNLOAD_LICENCE_ONLY, AnyTrack
-from unshackle.core.downloaders.requests import parse_content_range
+from unshackle.core.downloaders.requests import parse_content_range, range_answers, request_range
 from unshackle.core.drm import DRM_T, ClearKeyCENC, PlayReady, Widevine
 from unshackle.core.drm.segment_decrypt import SEGMENT_DRM_T, SegmentDecrypter, can_use
 from unshackle.core.drm.verify import walk
@@ -1215,19 +1215,28 @@ class DASH:
             media_range = None
             init_data = None
             initialization = segment_base.find("Initialization")
-            if initialization is not None:
-                if initialization.get("range"):
-                    init_range_header = {"Range": f"bytes={initialization.get('range')}"}
-                else:
-                    init_range_header = None
-
-                res = session.get(url=rep_base_url, headers=init_range_header)
+            init_attrs = initialization.attrib if initialization is not None else {}
+            init_range = (init_attrs.get("range") or "").strip()
+            init_url = urljoin(rep_base_url, init_attrs.get("sourceURL") or "")
+            same_file = init_url == rep_base_url
+            init_range_header = {"Range": f"bytes={init_range}"} if init_range else None
+            slice_range = request_range(init_range_header) if init_range_header else None
+            if (same_file and init_range) or (not same_file and probe_kid):
+                res = session.get(url=init_url, headers=init_range_header, stream=True)
                 res.raise_for_status()
+                content_range = parse_content_range(res.headers.get("Content-Range"))
+                if init_range_header and not (
+                    res.status_code == 206 and slice_range and range_answers(content_range, slice_range)
+                ):
+                    res.close()
+                    raise click.ClickException(
+                        f"Init range {init_range} of {safe_display_url(init_url)} got {res.status_code} "
+                        f"with Content-Range {res.headers.get('Content-Range')!r}"
+                    )
                 init_data = res.content
                 if probe_kid:
                     track_kid = track.get_key_id(init_data)
-                content_range = parse_content_range(res.headers.get("Content-Range"))
-                if content_range:
+                if content_range and same_file:
                     _, init_end, total = content_range
                     media_range = f"{init_end + 1}-{'' if total is None else total - 1}"
 
