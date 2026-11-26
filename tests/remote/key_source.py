@@ -5,6 +5,7 @@ from typing import Any
 from uuid import UUID
 
 from unshackle.core.remote_service import RemoteService, ServerVault
+from unshackle.core.title_source import KeyArrival
 
 
 def remote_keys(
@@ -31,7 +32,7 @@ class MemoryKeySource:
     A ``licence`` of None hands the track to this machine, as a capped server does.
     """
 
-    server_cdm = True
+    key_arrival = KeyArrival.SERVER
     server_cdm_type = "widevine"
     server_vault: Any = None
 

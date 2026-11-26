@@ -105,6 +105,28 @@ def hls_key_drm(key: Any, kid: UUID | None = None) -> Widevine | PlayReady | Non
     return Widevine(pssh=pssh, kid=tag_kid or kid, **extra_params)
 
 
+def drm_stub(drm_type: str, kid_hexes: list[str]) -> Widevine | PlayReady:
+    """A PlayReady (``drm_type`` ``playready``) or else Widevine DRM that names ``kid_hexes``, to hold content keys got without its PSSH.
+
+    The PSSH is built here, so it is for display only: the caller already has the content keys.
+    """
+    from unshackle.core.drm.playready import PlayReady
+    from unshackle.core.drm.widevine import Widevine
+
+    kids = [UUID(hex=k) for k in kid_hexes]
+    if drm_type != "playready":
+        # no kid: the stub names several KIDs, and the first is not the track's own
+        return Widevine(pssh=WV_PSSH.new(system_id=WIDEVINE_ID, key_ids=[*kids]))
+    wrm_header = (
+        '<WRMHEADER xmlns="http://schemas.microsoft.com/DRM/2007/03/PlayReadyHeader" version="4.0.0.0">'
+        "<DATA><PROTECTINFO><KEYLEN>16</KEYLEN><ALGID>AESCTR</ALGID></PROTECTINFO>"
+        f"<KID>{base64.b64encode(kids[0].bytes_le).decode()}</KID></DATA></WRMHEADER>"
+    )
+    drm = PlayReady.from_pssh_b64(base64.b64encode(wrm_header.encode("utf-16-le")).decode())
+    drm.kids.extend(kid for kid in kids if kid not in drm.kids)
+    return drm
+
+
 def tag_key_id(value: Any) -> UUID | None:
     """The KID of an EXT-X-KEY KEYID or KID attribute, or None when it is absent, a placeholder or not a KID."""
     try:

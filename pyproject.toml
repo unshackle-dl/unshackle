@@ -151,7 +151,7 @@ ignore = ["UP042"]
 # names in __all__ are intentionally not defined statically.
 "unshackle/core/binaries.py" = ["F822"]
 # Optional hooks with a no-op default: a service or vault overrides only the ones it needs.
-"unshackle/core/service.py" = ["B027"]
+"unshackle/core/title_source.py" = ["B027"]
 "unshackle/core/vault.py" = ["B027"]
 
 [tool.isort]

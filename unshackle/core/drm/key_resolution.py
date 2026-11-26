@@ -36,7 +36,7 @@ from unshackle.core.drm import (
     real_kids,
     verify,
 )
-from unshackle.core.service import Service
+from unshackle.core.title_source import TitleSource
 from unshackle.core.titles import Title_T
 from unshackle.core.tracks import Video
 from unshackle.core.utilities import declared_kwargs, log_event
@@ -46,7 +46,7 @@ from unshackle.core.vault import Vault
 from unshackle.core.vaults import Vaults
 
 if TYPE_CHECKING:
-    from unshackle.core.remote_service import ServerKeySource
+    from unshackle.core.title_source import ServerKeySource
     from unshackle.core.utilities import DebugLogger
 
 
@@ -90,7 +90,7 @@ class ContentKeyResolver:
         self,
         vaults: Vaults,
         cdms: CdmChooser,
-        service: Service,
+        service: TitleSource,
         tag: str,
         source: ServerKeySource | None = None,
         cdm_only: bool = False,
@@ -274,7 +274,7 @@ class ContentKeyResolver:
         def passes_left(done: int) -> bool:
             """One pass per source that can still answer: every loaded vault, the server's vaults as
             one source that walks them itself over --remote, and one for the CDM."""
-            remote = 1 if self.source and self.source.server_cdm else 0
+            remote = 1 if self.source and self.source.key_arrival.needs_no_cdm else 0
             return done < len(self.vaults) + remote + 1
 
         try:
@@ -832,7 +832,7 @@ class ContentKeyResolver:
         if not drm:
             return
         remote = self.source
-        server_cdm = bool(remote and remote.server_cdm)
+        server_cdm = bool(remote and remote.key_arrival.needs_no_cdm)
         licensed_locally = bool(remote and remote.licenses_locally(track))
 
         if server_cdm and not licensed_locally:

@@ -79,10 +79,10 @@ from unshackle.core.proxies.resolve import (
     split_proxy_query,
 )
 from unshackle.core.run_plan import PlanError, RunOutcome, RunStopped, bitrate_range, check_options
-from unshackle.core.service import Service, grow_session_pool
+from unshackle.core.service import grow_session_pool
 from unshackle.core.services import ROUTING_PARAMS, Services
 from unshackle.core.temp import with_task_temp
-from unshackle.core.title_cacher import get_account_hash
+from unshackle.core.title_source import KeyArrival, TitleSource
 from unshackle.core.titles import Movie, Movies, Series, Song, Title_T
 from unshackle.core.titles.episode import Episode
 from unshackle.core.tracks import Audio, Subtitle, Tracks, Video
@@ -134,7 +134,7 @@ from unshackle.core.vaults import Vaults, load_config_vaults
 if TYPE_CHECKING:
     import pysubs2
 
-    from unshackle.core.remote_service import ServerKeySource
+    from unshackle.core.title_source import ServerKeySource
 
 
 class SkippedTitle(TypedDict):
@@ -252,7 +252,7 @@ def apply_enrich(title: Title_T, name: str | None, year: int | None, language: L
 
 
 def load_tracks(
-    service: Service,
+    service: TitleSource,
     title: Title_T,
     *,
     name: str | None = None,
@@ -1124,6 +1124,7 @@ class dl:
     export_snapshots: dict[str, dict[str, Any] | None]
     keys: ContentKeyResolver
     _remote_service: ServerKeySource | None = None
+    export_service: TitleSource | None = None
     typed_params: frozenset[str] = frozenset()
 
     def __init__(
@@ -1451,7 +1452,7 @@ class dl:
     @with_task_temp
     def result(
         self,
-        service: Service,
+        service: TitleSource,
         quality: list[int],
         vcodec: list[Video.Codec],
         acodec: list[Audio.Codec],
@@ -1537,14 +1538,12 @@ class dl:
         config.sample = sample
         self.tmdb_searched = False
         self.search_source = None
-        self.service_anime = bool(getattr(service, "ANIME", False))
-        self.service_daily = bool(getattr(service, "DAILY", False))
-        from unshackle.core.import_service import SERVER_KEY_SOURCES, ImportService
-
+        self.service_anime = service.ANIME
+        self.service_daily = service.DAILY
         # a remote session sends --cdm to the server, which can hand it the tracks above its cap
-        if self.cdm_override and isinstance(service, ImportService):
+        if self.cdm_override and service.key_arrival is KeyArrival.EXPORT:
             self.log.warning("--cdm is ignored: an import uses the keys in the export")
-        self._remote_service = service if isinstance(service, SERVER_KEY_SOURCES) else None
+        self._remote_service = service.key_source
         start_time = time.time()
 
         lang, lang_excl = partition_exclusions(lang)
@@ -1560,7 +1559,7 @@ class dl:
         video_excl = inherited_exclusions(v_lang, v_lang_excl, lang_excl)
         audio_excl = inherited_exclusions(a_lang, a_lang_excl, lang_excl)
 
-        ctx = getattr(service, "ctx", None)
+        ctx = service.ctx
         parent_params = ctx.parent.params if ctx and ctx.parent else None
         if parent_params is not None:
             # services read the raw ctx params, they must never see a '-xx' token
@@ -1728,14 +1727,7 @@ class dl:
                     level="INFO", operation="get_titles", service=self.service, context={"titles": titles_info}
                 )
 
-        title_cacher = service.title_cache if hasattr(service, "title_cache") else None
-        cache_title_id = None
-        if hasattr(service, "title"):
-            cache_title_id = service.title
-        elif hasattr(service, "title_id"):
-            cache_title_id = service.title_id
-        cache_region = service.current_region if hasattr(service, "current_region") else None
-        cache_account_hash = get_account_hash(service.credential) if hasattr(service, "credential") else None
+        title_cacher, cache_title_id, cache_region, cache_account_hash = service.cache_identity()
 
         enrich_lang: Language | None = None
         enrich_title: str | None = None
@@ -2223,7 +2215,7 @@ class dl:
             elif proxy_download:
                 console.log(f"Using a separate proxy for downloads: {mask_proxy(proxy_download)}")
 
-            outcome = selection.select(title, bool(getattr(service, "NO_SUBTITLES", False)))
+            outcome = selection.select(title, service.NO_SUBTITLES)
             if isinstance(outcome, Skip):
                 skip_title(title, outcome.reason, outcome.kind_only)
                 continue
@@ -2266,12 +2258,10 @@ class dl:
             download_table.add_row(selected_tracks)
 
             server_cdm_type = None
-            if self._remote_service and self._remote_service.server_cdm:
+            if self._remote_service and self._remote_service.key_arrival.needs_no_cdm:
                 server_cdm_type = self._remote_service.server_cdm_type
                 self.cdm = cdm_type_stub(server_cdm_type)
-                from unshackle.core.import_service import ImportService
-
-                if isinstance(self._remote_service, ImportService):
+                if self._remote_service.key_arrival is KeyArrival.EXPORT:
                     self.log.info("Using keys from the export; no CDM required")
                 else:
                     self.log.info(f"Using server CDM ({server_cdm_type.title()}); no local CDM required")
@@ -2554,12 +2544,7 @@ class dl:
                         if has_decrypted:
                             self.log.info("Decrypted tracks")
 
-                if (
-                    not no_subs
-                    and not (hasattr(service, "NO_SUBTITLES") and service.NO_SUBTITLES)
-                    and not video_only
-                    and not no_video
-                ):
+                if not no_subs and not service.NO_SUBTITLES and not video_only and not no_video:
                     for video_track_n, video_track in enumerate(title.tracks.videos):
                         has_manifest_cc = bool(getattr(video_track, "closed_captions", None))
                         has_eia_cc = (
@@ -2764,14 +2749,13 @@ class dl:
                 if progress_sink:
                     progress_sink({"output_files": [str(p) for p in self.completed_files]})
 
-            if not hasattr(service, "close"):
+            if service.login_cookies is not None:
                 cookie_file = login.get_cookie_path(self.service, self.profile)
                 if cookie_file:
-                    login.save_cookies(cookie_file, service.session.cookies)
+                    login.save_cookies(cookie_file, service.login_cookies)
 
         self.keys.wait_vault_writes()
-        if hasattr(service, "close"):
-            service.close()
+        service.close()
 
         if post_script_folders and post_script_sample:
             run_context = dict.fromkeys(post_script_sample, "")
@@ -3072,7 +3056,7 @@ class dl:
             doc.generator.setdefault("app", "unshackle")
             doc.generator.setdefault("version", __version__)
             if not doc.region and getattr(self, "proxy_requested", False):
-                doc.region = getattr(getattr(self, "export_service", None), "current_region", None) or ""
+                doc.region = (self.export_service and self.export_service.current_region) or ""
 
             entry = doc.get(str(title.id))
             if entry is None:
@@ -3194,7 +3178,7 @@ class dl:
         manifest_type = next(
             (t.descriptor.name.lower() for t in all_tracks if t.descriptor != Video.Descriptor.URL), ""
         )
-        session = getattr(getattr(self, "export_service", None), "session", None)
+        session = self.export_service.session if self.export_service else None
         # mediaexport drops Cookie and Authorization itself, on write and on read
         headers = dict(getattr(session, "headers", None) or {})
         manifests = (
@@ -3310,7 +3294,7 @@ class dl:
         return [":x: Download Failed...", f"   {line}"]
 
     def start_key_resolution(
-        self, service: Service, *, cdm_only: bool, vaults_only: bool, best_available: bool, export: Path | None
+        self, service: TitleSource, *, cdm_only: bool, vaults_only: bool, best_available: bool, export: Path | None
     ) -> None:
         """Build the run's content-key resolution and make its verified decrypt the decrypt hook."""
         self.keys = ContentKeyResolver(

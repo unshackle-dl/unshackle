@@ -647,7 +647,7 @@ def _remote_service(parent_params: dict, service_params: dict) -> RemoteService:
     svc._server_accounts = {"global": True}
     svc._server_cdm = True
     svc._service_params = service_params
-    svc._session = requests.Session()
+    svc.session = requests.Session()
     svc.log = logging.getLogger("test")
     svc.client = SimpleNamespace(post=post, server_url="https://server.example")
     return svc
@@ -671,8 +671,8 @@ def test_the_client_session_downloads_through_the_proxy_it_sends(
     svc = _remote_service({"no_proxy": no_proxy, "proxy": "http://proxy.example:8080"}, {})
     with pytest.raises(_SentCreate) as exc:
         svc.authenticate()
-    assert dict(svc._session.proxies) == expected
-    assert svc._session.trust_env is no_proxy  # a proxied session ignores HTTP(S)_PROXY
+    assert dict(svc.session.proxies) == expected
+    assert svc.session.trust_env is no_proxy  # a proxied session ignores HTTP(S)_PROXY
     assert exc.value.args[0].get("proxy") == (None if no_proxy else "http://proxy.example:8080")
 
 

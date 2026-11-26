@@ -101,15 +101,9 @@ Declared at class level to configure framework behaviour:
 | `VAULT_TAG` | `Optional[str]` | Overrides the key-vault namespace so sibling services can share one vault. Default `None` (use the service's own tag). |
 | `AUTH_METHODS` | `Optional[tuple[str, ...]]` | Auth methods accepted (`"cookies"` / `"credentials"`). When `None`, the REST `/services` endpoint infers them from `authenticate()`. |
 | `ANONYMOUS_SEARCH` | `bool` | Set `True` when `search()` needs no login and no state from `authenticate()`. A search then skips the cookie load, `authenticate()` and the cookie save. Default `False`. |
-| `NO_SUBTITLES` | `bool` | Set `True` on a service with no subtitle tracks to skip subtitle handling entirely. |
+| `NO_SUBTITLES` | `bool` | Set `True` on a service with no subtitle tracks to skip subtitle handling entirely. Default `False`. |
 | `ANIME` | `bool` | Set `True` when the catalogue is anime, so metadata lookups prefer AniList. A title's own `anime` flag overrides it. |
 | `DAILY` | `bool` | Set `True` when the catalogue is daily/date-based (talk shows, news, sports), so unshackle names episodes by air date. A title's own `daily` flag overrides it. |
-
-!!! note "`NO_SUBTITLES` is a convention, not a base-class attribute"
-    `dl.py` uses `hasattr` to find `NO_SUBTITLES`, and the `Service` base class
-    deliberately does **not** declare it, so it only exists if your service
-    defines it. Setting `NO_SUBTITLES = True` is what makes the pipeline skip
-    subtitle work for services that never carry subtitles. Leave it off otherwise.
 
 `GEOFENCE` drives an automatic proxy: on startup, if you did not pass an
 explicit `--proxy`, the base class does a live IP check and, if your region is

@@ -14,7 +14,7 @@ from unshackle.core.session import RnetSession, utf8_text
 from unshackle.core.utils.bitrate import PROBE_TIMEOUT, ranged_get
 
 if TYPE_CHECKING:
-    from unshackle.core.service import Service
+    from unshackle.core.title_source import TitleSource
     from unshackle.core.titles import Title_T
     from unshackle.core.tracks import Audio, Track, Tracks, Video
 
@@ -331,7 +331,7 @@ def probe_audio_codecs(
 
 
 def probed_tracks(
-    service: Service,
+    service: TitleSource,
     title: Title_T,
     *,
     workers: int | None = None,

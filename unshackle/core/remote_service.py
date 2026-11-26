@@ -1,7 +1,7 @@
 """Remote service adapter for unshackle.
 
-Implements the Service interface by proxying authenticate, get_titles,
-get_tracks, get_chapters, and license methods to a remote unshackle server.
+A ``TitleSource`` that relays authenticate, get_titles, get_tracks,
+get_chapters, and license methods to a remote unshackle server.
 Everything else (track selection, download, decrypt, mux) runs locally.
 """
 
@@ -24,7 +24,6 @@ from threading import Lock, local
 from typing import (
     TYPE_CHECKING,
     Any,
-    Protocol,
     TypeVar,
     cast,
 )
@@ -46,6 +45,7 @@ from unshackle.core.constants import AnyTrack
 from unshackle.core.credential import Credential
 from unshackle.core.dl_options import remote_dl_params
 from unshackle.core.drm import cbcs, real_kids
+from unshackle.core.drm.cenc import drm_stub
 from unshackle.core.launch import launch_keys
 from unshackle.core.manifests.snapshot import match_track, restore
 from unshackle.core.proxies.resolve import is_loopback
@@ -82,6 +82,7 @@ from unshackle.core.remote_protocol import (
 )
 from unshackle.core.search_result import SearchResult
 from unshackle.core.session import MAX_BACKOFF
+from unshackle.core.title_source import KeyArrival, TitleSource
 from unshackle.core.titles import Title_T, Titles_T, remap_titles
 from unshackle.core.titles.episode import Episode, Series
 from unshackle.core.titles.movie import Movies
@@ -795,43 +796,6 @@ def cache_key_filter(service_tag: str, profile: str | None) -> Callable[[str], b
     return relevant
 
 
-class ServerKeySource(Protocol):
-    """A service whose content keys dl gets before ``prepare_drm``: a remote session or an import."""
-
-    @property
-    def server_cdm(self) -> bool:
-        """True when the keys come from the server CDM or the export, so dl licenses with no CDM of its own."""
-
-    @property
-    def server_cdm_type(self) -> str:
-        """``widevine`` or ``playready``: the DRM system the keys came from."""
-
-    @property
-    def local_cdm(self) -> Any:
-        """The CDM of this machine for a track ``licenses_locally`` names, or None."""
-
-    def resolve_server_keys(self, title: Title_T) -> None:
-        """Put the content keys the server or the export holds on the tracks of ``title``."""
-
-    def licenses_locally(self, track: AnyTrack) -> bool:
-        """True when this machine's own CDM licenses ``track`` instead of the server."""
-
-    def license_track(self, track: AnyTrack, drm: Any, kid: UUID | None = None) -> dict[UUID, str] | None:
-        """The content keys the server licenses for ``drm`` of ``track``, or None when it hands ``track`` to this machine's CDM.
-
-        Call it only for a track ``licenses_locally`` does not name; after None, it names the track. ``kid`` is
-        the KID the answer must hold. A failed request returns no keys. A refusal this machine cannot take over
-        raises ClickException.
-        """
-
-    def vault_source(self, kid: UUID, key: str) -> Vault | None:
-        """The server vault when it served ``key`` for ``kid``, else None. That content key must pass a decrypt check."""
-
-    @property
-    def server_vault(self) -> ServerVault | None:
-        """The server's vaults, which take the content keys a decrypt proved, or None."""
-
-
 class ServerVault(Vault):
     """The server's vaults as one source for the client, which reports bad pairs to it and pushes proven ones.
 
@@ -882,19 +846,12 @@ class ServerVault(Vault):
         self.service.report_bad_key(UUID(str(kid)), key)
 
 
-class RemoteService:
-    """Service adapter that proxies to a remote unshackle server.
+class RemoteService(TitleSource):
+    """The title source of a remote unshackle server: it relays titles, tracks, chapters and licences to it.
 
-    Implements the same interface dl.py's result() expects without
-    subclassing Service (avoids proxy/geofence setup in __init__).
+    It is not a Service, so it runs none of the proxy and geofence setup of ``Service.__init__``.
     """
 
-    ALIASES: tuple[str, ...] = ()
-    GEOFENCE: tuple[str, ...] = ()
-    GEOBLOCK: tuple[str, ...] = ()
-    NO_SUBTITLES: bool = False
-    ANIME: bool = False
-    DAILY: bool = False
     server_cdm_type: str = "widevine"
     channel: Channel | None = None
 
@@ -919,9 +876,6 @@ class RemoteService:
         self.ctx = ctx
         self._service_params = service_params or {}
         self.log = logging.getLogger(service_tag)
-        self.credential: Credential | None = None
-        self.current_region: str | None = None
-        self.title_cache = None
         self._titles: Titles_T | None = None
         self._tracks_by_title: dict[str, Tracks] = {}
         self._chapters_by_title: dict[str, list] = {}
@@ -942,9 +896,9 @@ class RemoteService:
         self._title_alias: dict[str, str] = {}
         self._track_alias: dict[str, str] = {}
 
-        self._session = requests.Session()
-        self._session.headers.update(config.headers)
-        self._session.mount(
+        self.session = requests.Session()
+        self.session.headers.update(config.headers)
+        self.session.mount(
             "https://",
             HTTPAdapter(
                 max_retries=Retry(
@@ -957,7 +911,7 @@ class RemoteService:
                 pool_block=True,
             ),
         )
-        self._session.mount("http://", self._session.adapters["https://"])
+        self.session.mount("http://", self.session.adapters["https://"])
 
         svc_config = services_config.get(service_tag, {})
         self._server_cdm: bool | None = services_config.get("_server_cdm")
@@ -998,10 +952,6 @@ class RemoteService:
                 else:
                     existing[key] = value
             config.services[self.service_tag] = existing
-
-    @property
-    def session(self) -> requests.Session:
-        return self._session
 
     @property
     def title(self) -> str:
@@ -1091,7 +1041,7 @@ class RemoteService:
             try:
                 from unshackle.core.utils.ip_info import get_ip_info
 
-                ip_info = get_ip_info(self._session, cached=True)
+                ip_info = get_ip_info(self.session, cached=True)
                 if ip_info and ip_info.get("country"):
                     client_region = ip_info["country"].lower()
             except Exception:
@@ -1124,8 +1074,8 @@ class RemoteService:
         self.require_reachable_proxy(create_data.get("proxy"))
         local_proxy = None if no_proxy else proxy if local else proxy or create_data.get("proxy")
         if local_proxy:
-            self._session.proxies["all"] = local_proxy
-            run_proxy.pin(self._session)
+            self.session.proxies["all"] = local_proxy
+            run_proxy.pin(self.session)
 
         if not no_proxy and not proxy and client_region:
             create_data["client_region"] = client_region
@@ -1480,8 +1430,8 @@ class RemoteService:
             session_fields = cast(TracksReply, result)
             for k, v in session_fields.get("session_headers", {}).items():
                 if k.lower() not in ("host", "content-length", "content-type"):
-                    self._session.headers[k] = v
-            apply_session_cookies(self._session, result)
+                    self.session.headers[k] = v
+            apply_session_cookies(self.session, result)
 
             restore(tracks, result)
             apply_service_track_data(tracks, result)
@@ -1624,7 +1574,7 @@ class RemoteService:
 
                 named = {kid.hex for drm in track.drm or [] for kid in real_kids(drm)} & track_keys.keys()
                 track_drm_type = drm_types_by_track.get(server_id, server_drm_type)
-                drm_obj = self.create_drm_stub(track_drm_type, sorted(named) or list(track_keys))
+                drm_obj = drm_stub(track_drm_type, sorted(named) or list(track_keys))
                 for kid_hex, key_hex in track_keys.items():
                     drm_obj.content_keys[UUID(hex=kid_hex)] = key_hex
                 track.drm = [drm_obj]
@@ -1700,9 +1650,14 @@ class RemoteService:
         self.log.info(f"{why}; licensing track {track_log_label(track)} with your own {drm_class} device")
 
     @property
-    def server_cdm(self) -> bool:
-        """True when the server CDM licenses this remote session, so dl licenses with no CDM of its own."""
-        return bool(self._server_cdm)
+    def key_arrival(self) -> KeyArrival:
+        """``SERVER`` when the server CDM licenses this remote session, else ``CALLBACK``: the challenge relay."""
+        return KeyArrival.SERVER if self._server_cdm else KeyArrival.CALLBACK
+
+    @property
+    def key_source(self) -> RemoteService:
+        """This remote session: the server CDM, the server vault or this machine's CDM give the keys."""
+        return self
 
     def licenses_locally(self, track: AnyTrack) -> bool:
         """True when the server handed ``track`` to this machine's own CDM to license."""
@@ -1734,52 +1689,6 @@ class RemoteService:
         except (Exception, RemoteError) as e:
             self.log.debug(f"Could not report the bad content key to the server: {e}")
 
-    @staticmethod
-    def create_drm_stub(drm_type: str, kid_hexes: list[str]) -> Any:
-        """Make a DRM object stub that matches the type the server used.
-
-        For server_cdm mode, unshackle uses this stub for display only, because it
-        already has the content keys. We assemble a minimal DRM object that holds
-        content_keys.
-        """
-        from uuid import UUID
-
-        if drm_type == "playready":
-            import base64 as b64
-            import struct
-
-            from pyplayready.system.pssh import PSSH as PlayReadyPSSH
-
-            from unshackle.core.drm import PlayReady
-
-            kid_uuids = [UUID(hex=k) for k in kid_hexes]
-            kid_b64 = b64.b64encode(kid_uuids[0].bytes_le).decode()
-            wrm_xml = (
-                '<WRMHEADER xmlns="http://schemas.microsoft.com/DRM/2007/03/PlayReadyHeader" version="4.0.0.0">'
-                f"<DATA><PROTECTINFO><KEYLEN>16</KEYLEN><ALGID>AESCTR</ALGID></PROTECTINFO>"
-                f"<KID>{kid_b64}</KID></DATA></WRMHEADER>"
-            )
-            wrm_bytes = wrm_xml.encode("utf-16-le")
-            record_length = len(wrm_bytes)
-            obj_length = 4 + 2 + 2 + 2 + record_length
-            pr_obj = struct.pack("<IHH", obj_length, 1, 1) + struct.pack("<H", record_length) + wrm_bytes
-            pr_pssh = PlayReadyPSSH(pr_obj)
-            pssh_b64 = b64.b64encode(pr_obj).decode("ascii")
-            drm = PlayReady(pssh=pr_pssh, pssh_b64=pssh_b64)
-            for kid_uuid in kid_uuids:
-                if kid_uuid not in drm.kids:
-                    drm.kids.append(kid_uuid)
-            return drm
-        else:
-            from pywidevine.pssh import PSSH as WvPSSH
-
-            from unshackle.core.drm import Widevine
-
-            WIDEVINE_SYSTEM_ID = UUID("edef8ba9-79d6-4ace-a3c8-27dcd51d21ed")
-            dummy_pssh = WvPSSH.new(system_id=WIDEVINE_SYSTEM_ID, key_ids=[UUID(hex=k) for k in kid_hexes])
-            # no kid: the stub names several KIDs, and the first is not the track's own
-            return Widevine(pssh=dummy_pssh)
-
     def get_chapters(self, title: Title_T) -> Chapters:
         title_id = str(title.id)
         if title_id not in self._chapters_by_title:
@@ -1792,9 +1701,6 @@ class RemoteService:
 
     def get_playready_license(self, *, challenge: bytes, title: Title_T, track: AnyTrack) -> bytes | str | None:
         return self.proxy_license(challenge, track, "playready")
-
-    def get_clearkey_license(self, *, challenge: bytes, title: Title_T, track: AnyTrack) -> bytes | str | dict | None:
-        return None
 
     def get_widevine_service_certificate(
         self,
@@ -1886,21 +1792,6 @@ class RemoteService:
         finally:
             self.drain_server_logs()
         return base64.b64decode(resp["license"])
-
-    def on_segment_downloaded(self, track: AnyTrack, segment: Any) -> None:
-        pass
-
-    def on_track_downloaded(self, track: AnyTrack) -> None:
-        pass
-
-    def on_track_decrypted(self, track: AnyTrack, drm: Any, segment: Any = None) -> None:
-        pass
-
-    def on_track_repacked(self, track: AnyTrack) -> None:
-        pass
-
-    def on_track_multiplex(self, track: AnyTrack) -> None:
-        pass
 
     def close(self) -> None:
         # a long-lived serve opens many of these; the atexit hook would keep every one alive

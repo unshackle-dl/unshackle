@@ -125,7 +125,7 @@ def test_remote_get_tracks_scopes_server_cookies():
         _title_alias={},
         _sample_decrypt_tracks=set(),
         _server_cdm=None,
-        _session=requests.Session(),
+        session=requests.Session(),
         _session_id="s",
         service_tag="EXAMPLE",
         log=logging.getLogger("test"),
@@ -133,9 +133,9 @@ def test_remote_get_tracks_scopes_server_cookies():
         drain_server_logs=lambda: None,
     )
     service.get_tracks(SimpleNamespace(id="t1"))
-    cdn = service._session.prepare_request(requests.Request("GET", "https://cdn.other.net/seg.mp4"))
+    cdn = service.session.prepare_request(requests.Request("GET", "https://cdn.other.net/seg.mp4"))
     assert "Cookie" not in cdn.headers
-    assert service._session.cookies.get("sid", domain=".example.com") == "secret"
+    assert service.session.cookies.get("sid", domain=".example.com") == "secret"
 
 
 def test_server_login_strips_auth():

@@ -11,16 +11,15 @@ from __future__ import annotations
 import inspect
 import logging
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 import pytest
-import requests
 
 from unshackle.commands.dl import dl
 from unshackle.core import binaries
 from unshackle.core.constants import DOWNLOAD_LICENCE_ONLY
 from unshackle.core.dl_options import DEFAULT_DOWNLOAD_PARAMS
-from unshackle.core.service import Service
+from unshackle.core.title_source import TitleSource
 from unshackle.core.titles import Episode, Series
 from unshackle.core.tracks import Audio, Subtitle, Tracks, Video
 
@@ -42,17 +41,18 @@ class Harness(dl):
         return None
 
 
-class FakeService:
+class FakeService(TitleSource):
     """One episode per entry; ``ad`` adds a descriptive track, ``forced`` a forced subtitle, ``ko`` Korean audio."""
 
     def __init__(self, episodes: dict[int, dict[str, bool]]) -> None:
         self.episodes = episodes
         self.session = None
+        self.ctx = None
 
     def authenticate(self, cookies: Any = None, credential: Any = None) -> None:
         pass
 
-    def get_titles_cached(self) -> Series:
+    def get_titles(self) -> Series:
         return Series(
             Episode(id_=f"show-s01-e{n:03}", service=FakeService, title="Show", season=1, number=n, language="en")
             for n in self.episodes
@@ -124,10 +124,8 @@ def run(
     kwargs.update(flags)
     caplog.set_level(logging.WARNING, logger="test_kind_only")
     service = service or FakeService(episodes)
-    if to_end:
-        service.session = requests.Session()
     try:
-        cmd.result(cast(Service, service), **kwargs)
+        cmd.result(service, **kwargs)
     except Selected as sel:
         return sel.ids
     except SystemExit as exc:

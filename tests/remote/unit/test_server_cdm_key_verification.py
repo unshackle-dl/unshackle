@@ -17,6 +17,7 @@ from tests.remote.sessions import session_entry
 from unshackle.core.api import handlers
 from unshackle.core.api.errors import APIError
 from unshackle.core.drm import BlowfishStripe
+from unshackle.core.drm.cenc import drm_stub
 from unshackle.core.remote_service import RemoteService
 
 pytestmark = pytest.mark.unit
@@ -286,7 +287,7 @@ def test_resolve_server_keys_names_only_the_manifest_kids():
     widevine = Widevine(pssh=PSSH.new(system_id=PSSH.SystemId.Widevine, key_ids=[KID]))
     assert resolve([widevine]).kids == [KID]
 
-    playready = RemoteService.create_drm_stub("playready", [KID.hex])
+    playready = drm_stub("playready", [KID.hex])
     assert resolve([playready], "playready").kids == [KID]
 
 

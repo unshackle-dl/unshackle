@@ -18,10 +18,12 @@ from unshackle.core.config import config
 from unshackle.core.constants import AnyTrack
 from unshackle.core.credential import Credential
 from unshackle.core.drm import ClearKey, MonaLisa, real_kids
+from unshackle.core.drm.cenc import drm_stub
 from unshackle.core.manifests import DASH, HLS, ISM, MissingLanguageError, snapshot
 from unshackle.core.remote_protocol import APIErrorCode, coded
-from unshackle.core.remote_service import RemoteService, ServerKeySource, resolve_proxy_arg, segment_uri_filter
+from unshackle.core.remote_service import resolve_proxy_arg, segment_uri_filter
 from unshackle.core.session import failure_response, utf8_text
+from unshackle.core.title_source import KeyArrival, TitleSource
 from unshackle.core.titles import Episode, Movies, Series, Title_T, Titles_T, remap_titles
 from unshackle.core.tracks import Audio, Chapter, Chapters, Subtitle, Tracks, Video
 from unshackle.core.tracks.attachment import Attachment
@@ -218,19 +220,14 @@ def int_or_none(value: Any) -> int | None:
         return None
 
 
-class ImportService:
+class ImportService(TitleSource):
     """Reconstructs a download from an export JSON.
 
     ImportService does not authenticate and does not license. It rebuilds the tracks from
-    the export and injects the keys directly. It is a ``ServerKeySource``, so dl takes the keys
+    the export and injects the keys directly. It is its own ``key_source``, so dl takes the keys
     from the tracks and licenses nothing itself.
     """
 
-    ALIASES: tuple[str, ...] = ()
-    GEOFENCE: tuple[str, ...] = ()
-    GEOBLOCK: tuple[str, ...] = ()
-    NO_SUBTITLES: bool = False
-    server_cdm = True
     local_cdm = None
 
     def __init__(self, ctx: click.Context, service_tag: str, title: str, import_file: str | None) -> None:
@@ -239,9 +236,6 @@ class ImportService:
         self.title_id = title
         self.ctx = ctx
         self.log = logging.getLogger(service_tag)
-        self.credential: Credential | None = None
-        self.current_region: str | None = None
-        self.title_cache = None
 
         if not import_file:
             raise click.ClickException("No export file was provided to import from.")
@@ -353,6 +347,16 @@ class ImportService:
     @property
     def title(self) -> str:
         return self.title_id
+
+    @property
+    def key_arrival(self) -> KeyArrival:
+        """``EXPORT``: the keys come in the export file, and nothing licenses."""
+        return KeyArrival.EXPORT
+
+    @property
+    def key_source(self) -> ImportService:
+        """This import, which puts the exported keys on the tracks."""
+        return self
 
     def authenticate(self, cookies: CookieJar | None = None, credential: Credential | None = None) -> None:
         self.credential = credential
@@ -682,7 +686,7 @@ class ImportService:
         stub_kids = list(keys) or sorted(row_kids or [])
         if drm_obj is None and stub_kids:
             drm_type = (drm_dicts[0].get("system", "Widevine").lower()) if drm_dicts else "widevine"
-            drm_obj = RemoteService.create_drm_stub(drm_type, stub_kids)
+            drm_obj = drm_stub(drm_type, stub_kids)
 
         if drm_obj is None:
             return None
@@ -745,7 +749,7 @@ class ImportService:
                 if isinstance(drm_obj, (ClearKey, MonaLisa)):
                     continue
             else:
-                drm_obj = RemoteService.create_drm_stub(system, [kid.hex for kid in (declared or pool)])
+                drm_obj = drm_stub(system, [kid.hex for kid in (declared or pool)])
             for kid, key in keys.items():
                 drm_obj.content_keys[kid] = key
             track.drm = [drm_obj]
@@ -823,9 +827,6 @@ class ImportService:
             ]
         )
 
-    def get_widevine_service_certificate(self, **_: Any) -> str | None:
-        return None
-
     def get_clearkey_license(self, *, challenge: bytes, title: Title_T, track: AnyTrack) -> bytes | str | dict | None:
         raise self.missing_key(track)
 
@@ -850,33 +851,8 @@ class ImportService:
             APIErrorCode.DRM_ERROR,
         )
 
-    def decrypts_samples(self, track: AnyTrack) -> bool:
-        return False
-
-    def get_sample_decrypter(self, track: AnyTrack, entry: int) -> bytes:
-        raise NotImplementedError("An import does not decrypt samples")
-
-    def on_segment_downloaded(self, track: AnyTrack, segment: Any) -> None:
-        pass
-
-    def on_track_downloaded(self, track: AnyTrack) -> None:
-        pass
-
-    def on_track_decrypted(self, track: AnyTrack, drm: Any, segment: Any = None) -> None:
-        pass
-
-    def on_track_repacked(self, track: AnyTrack) -> None:
-        pass
-
-    def on_track_multiplex(self, track: AnyTrack) -> None:
-        pass
-
     def close(self) -> None:
         try:
             self.session.close()
         except Exception:
             pass
-
-
-SERVER_KEY_SOURCES: tuple[type[ServerKeySource], ...] = (RemoteService, ImportService)
-"""The services dl takes content keys from before ``prepare_drm``; mypy checks each against ServerKeySource."""

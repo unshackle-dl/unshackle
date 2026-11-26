@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
 from unshackle.core.api.events import bus, publish_service_event
 from unshackle.core.api.sanitize import sanitize_log
@@ -23,7 +23,7 @@ from unshackle.core.credential import Credential
 from unshackle.core.utils.redact import REDACTED, URL_USERINFO_RE, redact_all, redact_path, redact_text
 
 if TYPE_CHECKING:
-    from unshackle.core.service import Service
+    from unshackle.core.title_source import TitleSource
 
 log = logging.getLogger("download_manager")
 
@@ -434,8 +434,7 @@ def perform_download(
         from unshackle.core.remote_service import make_remote_service
 
         service_ctx = click.Context(click.Command(service), parent=ctx, obj=ctx.obj)
-        # RemoteService duck-types Service for dl.result()
-        service_instance = cast("Service", make_remote_service(service_ctx, remote, service, title_id, params))
+        service_instance: TitleSource = make_remote_service(service_ctx, remote, service, title_id, params)
     else:
         service_instance = instantiate_service(ctx, Services.load(service), title_id, params, DL_TRANSPORT_KEYS)
 

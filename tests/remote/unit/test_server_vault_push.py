@@ -25,6 +25,7 @@ from unshackle.core.cdm.detect import cdm_type_stub
 from unshackle.core.config import config
 from unshackle.core.drm import Widevine, key_resolution
 from unshackle.core.remote_service import RemoteService
+from unshackle.core.title_source import KeyArrival
 from unshackle.core.vaults import Vaults
 from unshackle.vaults.SQLite import SQLite
 
@@ -134,7 +135,7 @@ def decrypt(
     assert vaults.get_key(VAULTED) == (OTHER_KEY, local)
     pushed: list = []
     source = SimpleNamespace(
-        server_cdm=False,
+        key_arrival=KeyArrival.CALLBACK,
         server_vault=SimpleNamespace(add_keys=lambda service, keys, track: pushed.append((keys, track))),
     )
     keys = resolver(vaults, tag="EXAMPLE", source=source)
@@ -306,7 +307,7 @@ def test_cdm_only_declines_the_server_cdm_and_its_vault(monkeypatch, tmp_path) -
     try:
         svc.authenticate()
         assert svc.posts[0]["server_cdm"] is False
-        assert (svc.server_cdm, svc._server_vault) == (False, False)
+        assert (svc.key_arrival, svc._server_vault) == (KeyArrival.CALLBACK, False)
         svc.resolve_server_keys(SimpleNamespace(tracks=SimpleNamespace(videos=["v"], audio=[])))
         assert len(svc.posts) == 1
     finally:
