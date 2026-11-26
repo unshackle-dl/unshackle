@@ -4566,10 +4566,10 @@ an HTTP caller would be remote code execution. You configure post-scripts only i
 </div>
 </div>
 <h3 id="post-apidownloadjobsjob_idretry"><code>POST /api/download/jobs/{job_id}/retry</code><a class="headerlink" href="#post-apidownloadjobsjob_idretry" title="Permanent link">&para;</a></h3>
-<p>Enqueue a <strong>new</strong> job that reuses a terminal job's service, title, and parameters. The service allowlist and parameter gates are re-checked. Returns <code>202</code> with the new job's ID.</p>
+<p>Enqueue a <strong>new</strong> job from the request that made a terminal job. The request goes through the same checks as a new submission: the service allowlist, the parameter checks and the download gates. A parameter that the request did not send takes the server default of the time of the retry. Returns <code>202</code> with the new job's ID.</p>
 <div class="admonition warning">
 <p class="admonition-title">Retry reuses the original, unredacted parameters</p>
-<p>A retry replays the finished job's stored parameters exactly as the original client submitted them, including any secrets such as <code>credential</code>/<code>credentials</code>. It does not use the redacted <code>parameters</code> view that <code>GET /api/download/jobs</code> and <code>GET /api/history</code> give. This is deliberate: it lets a retried job reproduce a credentialed download that the redacted job record alone never could. The API masks those credentials everywhere else. But anyone who can retry a job can operate it again with the original credentials.</p>
+<p>A retry sends again the parameters that the original client submitted, including any secrets such as <code>credential</code>/<code>credentials</code>. It does not use the redacted <code>parameters</code> view that <code>GET /api/download/jobs</code> and <code>GET /api/history</code> give. This is deliberate: it lets a retried job reproduce a credentialed download that the redacted job record alone never could. The API masks those credentials everywhere else. But anyone who can retry a job can operate it again with the original credentials.</p>
 </div>
 <div class="tabbed-set tabbed-alternate" data-tabs="11:1"><input checked="checked" id="__tabbed_11_1" name="__tabbed_11" type="radio" /><div class="tabbed-labels"><label for="__tabbed_11_1">Response <code>202</code></label></div>
 <div class="tabbed-content">
@@ -4611,6 +4611,11 @@ an HTTP caller would be remote code execution. You configure post-scripts only i
 <td><code>400</code></td>
 <td><code>INVALID_SERVICE</code></td>
 <td>Service is no longer allowed.</td>
+</tr>
+<tr>
+<td><code>400</code></td>
+<td><code>INVALID_PARAMETERS</code></td>
+<td>A parameter no longer passes the checks, for example an <code>output_dir</code> outside a moved downloads directory.</td>
 </tr>
 <tr>
 <td><code>403</code></td>

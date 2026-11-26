@@ -2809,9 +2809,13 @@ ID with <code>202</code>.</p>
 <li>You can retry only terminal jobs. A retry of a <code>queued</code> or <code>downloading</code> job returns
   <code>409</code> with error code <code>CONFLICT</code>.</li>
 <li>A missing job returns <code>404</code> (<code>JOB_NOT_FOUND</code>).</li>
-<li>The server examines the service allowlist and any download gates again for the new
-  job, exactly as for the original submission. Thus the server can reject a retry with
-  <code>INVALID_SERVICE</code> or <code>FORBIDDEN</code> if permissions changed.</li>
+<li>The server sends the original request through the same checks as a new submission:
+  the service allowlist, the parameter checks and the download gates. A retry that no
+  longer passes gets the same error as a new submission, for example
+  <code>INVALID_SERVICE</code>, <code>INVALID_PARAMETERS</code> or <code>FORBIDDEN</code> after a config change.</li>
+<li>Each parameter that the original request did not send takes the server default of
+  the time of the retry, from <code>serve:</code> and <code>services.&lt;TAG&gt;.dl</code>. A job for a
+  <code>remote</code> server takes no local service defaults.</li>
 </ul>
 <div class="language-json highlight"><span class="filename">202 Accepted, a fresh job</span><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="p">{</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">  </span><span class="nt">"job_id"</span><span class="p">:</span><span class="w"> </span><span class="s2">"c2f7d8ef-7e1b-5a3a-ae2f-4b3c5d6e7f80"</span><span class="p">,</span>
