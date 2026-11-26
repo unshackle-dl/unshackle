@@ -41,9 +41,7 @@ from unshackle.core.api.handlers import (
     download_job_events_handler,
     download_job_input_handler,
     env_check_handler,
-    get_allowed_services,
     get_download_job_handler,
-    is_admin,
     list_download_jobs_handler,
     list_titles_handler,
     list_tracks_handler,
@@ -53,10 +51,10 @@ from unshackle.core.api.handlers import (
     remote_login_input_handler,
     remote_logins_handler,
     remote_services_info,
+    request_policy,
     retry_download_job_handler,
     search_handler,
     server_account_regions,
-    server_accounts_allowed,
     server_config_handler,
     session_bad_key_handler,
     session_channel_handler,
@@ -568,7 +566,8 @@ async def services(request: web.Request) -> web.Response:
     """
     try:
         service_tags = Services.get_tags()
-        allowed = get_allowed_services(request)
+        policy = request_policy(request)
+        allowed = policy.services
         if allowed is not None:
             service_tags = [t for t in service_tags if t in allowed]
         if remote := request.query.get("remote"):
@@ -581,7 +580,7 @@ async def services(request: web.Request) -> web.Response:
             service_data: dict[str, Any] = {**catalogue[tag]}
             if tag in services_module.PENDING:
                 service_data["pending_update"] = True
-            if server_accounts_allowed(request, tag) and (server_accounts := server_account_regions(tag)) is not None:
+            if policy.allows("server_accounts", tag) and (server_accounts := server_account_regions(tag)) is not None:
                 service_data["server_accounts"] = server_accounts
 
             services_info.append(service_data)
@@ -589,7 +588,7 @@ async def services(request: web.Request) -> web.Response:
         # an import error names services outside the caller's allowlist
         load_errors = (
             [redact_path(re.sub(r" \([^()]*\)$", "", err)) for err in services_module.LOAD_ERRORS]
-            if is_admin(request)
+            if policy.admin
             else []
         )
         return web.json_response({"services": services_info, "load_errors": load_errors})

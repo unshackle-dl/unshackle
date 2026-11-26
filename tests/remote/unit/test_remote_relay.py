@@ -8,6 +8,7 @@ import pytest
 from unshackle.core import remote_service
 from unshackle.core.api import handlers
 from unshackle.core.api.errors import APIError
+from unshackle.core.api.key_policy import KeyPolicy
 from unshackle.core.config import config
 from unshackle.core.remote_protocol import APIErrorCode
 
@@ -106,7 +107,7 @@ async def test_client_region_splits_the_pool(pool):
 def remote_config(monkeypatch):
     monkeypatch.setattr(config, "remote_services", {"srv": {"url": "https://srv", "api_key": "k"}})
     monkeypatch.setattr(remote_service, "remote_service_list", lambda name: SERVICES)
-    monkeypatch.setattr(handlers, "get_allowed_services", lambda request=None: None)
+    monkeypatch.setattr(handlers, "request_policy", lambda request=None: KeyPolicy())
 
 
 def test_remote_server_resolves_case_and_aliases(remote_config):
@@ -130,7 +131,7 @@ def test_remote_server_rejects(remote_config, data, code):
 
 
 def test_remote_server_applies_the_allowlist_and_reports_an_unreachable_server(remote_config, monkeypatch):
-    monkeypatch.setattr(handlers, "get_allowed_services", lambda request=None: ["OTHER"])
+    monkeypatch.setattr(handlers, "request_policy", lambda request=None: KeyPolicy({"services": ["OTHER"]}))
     with pytest.raises(APIError) as e:
         handlers.remote_server({"remote": "srv", "service": "EXAMPLE"})
     assert e.value.error_code == APIErrorCode.INVALID_SERVICE
@@ -197,7 +198,7 @@ def test_an_unreachable_server_list_logs_one_warning(monkeypatch, caplog):
 
 
 def test_a_geofenced_remote_service_gets_its_first_allowed_region_as_proxy(monkeypatch):
-    monkeypatch.setattr(handlers, "server_proxy_allowed", lambda request=None: True)
+    monkeypatch.setattr(handlers, "request_policy", lambda request=None: KeyPolicy({"server_proxy": True}))
     fenced = {"tag": "EXAMPLE", "geofence": ["US", "ca"], "geoblock": ["us"]}
     assert handlers.geofence_proxy({}, {"tag": "EXAMPLE", "geofence": ["US", "ca"]}) == {"proxy": "us"}
     assert handlers.geofence_proxy({}, fenced) == {"proxy": "ca"}
@@ -205,7 +206,7 @@ def test_a_geofenced_remote_service_gets_its_first_allowed_region_as_proxy(monke
     assert handlers.geofence_proxy({"no_proxy": True}, fenced) == {}
     assert handlers.geofence_proxy({}, INFO) == {}
 
-    monkeypatch.setattr(handlers, "server_proxy_allowed", lambda request=None: False)
+    monkeypatch.setattr(handlers, "request_policy", lambda request=None: KeyPolicy({}))
     assert handlers.geofence_proxy({}, fenced) == {}
 
 
@@ -251,7 +252,7 @@ async def test_a_remote_login_prompt_waits_for_its_owners_answer(monkeypatch):
 
     login = handlers.RemoteLogin("owner", "srv", "OTHER", "show", Remote())
     monkeypatch.setattr(handlers, "_remote_logins", {login.id: login})
-    monkeypatch.setattr(handlers, "is_admin", lambda request: False)
+    monkeypatch.setattr(handlers, "request_policy", lambda request: KeyPolicy({}))
     caller = {"key": "owner"}
     monkeypatch.setattr(handlers, "caller_key", lambda request: caller["key"])
     got = []

@@ -142,7 +142,6 @@ async def test_batch_shares_full_bundle_per_pssh(monkeypatch):
         return dict(bundle_a) if pssh_str == pssh_a else dict(bundle_b)
 
     monkeypatch.setattr(handlers, "get_validated_session", fake_get_session)
-    monkeypatch.setattr(handlers, "server_cdm_allowed", lambda request, tag: True)
     monkeypatch.setattr(handlers, "ensure_track_drm", lambda track, session=None, init_data=None: None)
     monkeypatch.setattr(handlers, "find_title_for_track", lambda tid, session: SimpleNamespace())
     monkeypatch.setattr(handlers, "detect_cdm_type_for_service", lambda tag, cfg: "playready")

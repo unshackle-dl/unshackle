@@ -14,6 +14,7 @@ import pytest
 import unshackle.core.cdm as cdm_mod
 from unshackle.commands.dl import dl
 from unshackle.core.api import handlers
+from unshackle.core.api.key_policy import KeyPolicy
 from unshackle.core.cdm.choice import choose_cdm, drm_system
 from unshackle.core.cdm.detect import is_playready_cdm
 
@@ -98,7 +99,8 @@ def answers(monkeypatch: pytest.MonkeyPatch, cdm: dict, profile: str | None, key
     """What every ladder answers for one config row."""
     monkeypatch.setattr(handlers.config, "cdm", cdm, raising=False)
     user = {**TIER, **({"cdm": key_cdm} if key_cdm else {})}
-    view = handlers.key_cdm_config(user)
+    policy = KeyPolicy(user)
+    view = policy.cdm_config()
     cmd = dl.__new__(dl)
     cmd.vaults = None
     track = SimpleNamespace(drm_preference=None)
@@ -106,10 +108,10 @@ def answers(monkeypatch: pytest.MonkeyPatch, cdm: dict, profile: str | None, key
         "dl": each(LOCAL, lambda s: cmd.get_cdm("EXAMPLE", profile, drm=s)),
         "load": each(LOCAL, lambda s: handlers.load_full_cdm("EXAMPLE", profile, s, view)),
         "stub": each(LOCAL, lambda s: handlers.resolve_server_cdm("EXAMPLE", profile, s, view)),
-        "device": each(SERVER, lambda s: handlers.resolve_device_name(user, s, "EXAMPLE")),
+        "device": each(SERVER, lambda s: handlers.resolve_device_name(policy, s, "EXAMPLE")),
         "settled": attempt(lambda: handlers.detect_cdm_type_for_service("EXAMPLE", view)),
         "both": attempt(lambda: choose_cdm(view.cdm, "EXAMPLE").both),
-        "candidates": each(SERVER, lambda s: handlers.server_drm_candidates("EXAMPLE", user, s, track)),
+        "candidates": each(SERVER, lambda s: handlers.server_drm_candidates("EXAMPLE", policy, s, track)),
     }
 
 

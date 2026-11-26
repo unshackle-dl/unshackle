@@ -17,8 +17,9 @@ from tests.remote.key_source import CAPPED, PR_DEVICE, MemoryKeySource, one_titl
 from tests.remote.sessions import session_entry
 from unshackle.commands.dl import dl
 from unshackle.core import remote_channel
-from unshackle.core.api import handlers
+from unshackle.core.api import handlers, key_policy
 from unshackle.core.api.errors import APIError
+from unshackle.core.api.key_policy import KeyPolicy
 from unshackle.core.config import cdm_entry_names_device
 from unshackle.core.drm import Widevine
 from unshackle.core.remote_protocol import APIErrorCode
@@ -55,21 +56,6 @@ def video(height, width=None):
 
 
 @pytest.mark.parametrize(
-    ("key", "service", "cap"),
-    [
-        ("flat", "EXAMPLE1", 1080),
-        ("mapped", "EXAMPLE1", 720),
-        ("mapped", "EXAMPLE2", 1080),
-        ("partial", "EXAMPLE2", None),
-        ("open", "EXAMPLE1", None),
-        ("admin", "EXAMPLE1", None),
-    ],
-)
-def test_cap_per_key_and_service(key, service, cap):
-    assert handlers.server_cdm_max_height(request(key), service) == cap
-
-
-@pytest.mark.parametrize(
     ("key", "data", "expected"),
     [
         ("open", {"quality": [2160]}, (True, None)),
@@ -87,35 +73,44 @@ def test_cap_per_key_and_service(key, service, cap):
 )
 def test_session_mode(key, data, expected, monkeypatch):
     monkeypatch.setattr(handlers.Services, "load", lambda tag: type("Svc", (), {}))
-    assert handlers.choose_session_cdm(request(key), "EXAMPLE1", data) == expected
+    assert handlers.choose_session_cdm(KeyPolicy(USERS[key]), "EXAMPLE1", data) == expected
 
 
 def test_a_server_device_option_keeps_the_server_cdm_against_the_clients_choice(monkeypatch):
     svc = type("Svc", (), {"SERVER_DEVICE_OPTIONS": ("server_side",)})
     monkeypatch.setattr(handlers.Services, "load", lambda tag: svc)
     data = {"cdm_type": "widevine", "server_cdm": False, "server_side": True}
-    assert handlers.choose_session_cdm(request("flat"), "EXAMPLE1", data) == (True, 1080)
-    assert handlers.choose_session_cdm(request("flat"), "EXAMPLE1", {**data, "quality": [2160]}) == (False, 1080)
-    assert handlers.choose_session_cdm(request("flat"), "EXAMPLE1", {**data, "server_side": False}) == (False, None)
-    assert handlers.choose_session_cdm(request("flat"), "EXAMPLE1", {**data, "server_side": "yes"}) == (True, 1080)
+    assert handlers.choose_session_cdm(KeyPolicy(USERS["flat"]), "EXAMPLE1", data) == (True, 1080)
+    assert handlers.choose_session_cdm(KeyPolicy(USERS["flat"]), "EXAMPLE1", {**data, "quality": [2160]}) == (
+        False,
+        1080,
+    )
+    assert handlers.choose_session_cdm(KeyPolicy(USERS["flat"]), "EXAMPLE1", {**data, "server_side": False}) == (
+        False,
+        None,
+    )
+    assert handlers.choose_session_cdm(KeyPolicy(USERS["flat"]), "EXAMPLE1", {**data, "server_side": "yes"}) == (
+        True,
+        1080,
+    )
 
     nested = {"cdm_type": "widevine", "server_cdm": False, "service_params": {"server_side": True}}
-    assert handlers.choose_session_cdm(request("flat"), "EXAMPLE1", nested) == (True, 1080)
+    assert handlers.choose_session_cdm(KeyPolicy(USERS["flat"]), "EXAMPLE1", nested) == (True, 1080)
     # with service_params present a flat key is a dl value, as it is when the service is built
     nested["server_side"], nested["service_params"] = True, {}
-    assert handlers.choose_session_cdm(request("flat"), "EXAMPLE1", nested) == (False, None)
+    assert handlers.choose_session_cdm(KeyPolicy(USERS["flat"]), "EXAMPLE1", nested) == (False, None)
 
 
 def test_above_the_cap_without_a_device_is_refused_at_create():
     with pytest.raises(APIError) as ei:
-        handlers.choose_session_cdm(request("flat"), "EXAMPLE1", {"quality": [2160]})
+        handlers.choose_session_cdm(KeyPolicy(USERS["flat"]), "EXAMPLE1", {"quality": [2160]})
     assert ei.value.error_code is APIErrorCode.SERVER_CDM_CAPPED
     assert ei.value.details == {"reason": "server_cdm_max_height", "max_height": 1080}
 
 
 def test_bad_quality_is_invalid_input():
     with pytest.raises(APIError) as ei:
-        handlers.choose_session_cdm(request("flat"), "EXAMPLE1", {"quality": ["best"]})
+        handlers.choose_session_cdm(KeyPolicy(USERS["flat"]), "EXAMPLE1", {"quality": ["best"]})
     assert ei.value.error_code is APIErrorCode.INVALID_INPUT
 
 
@@ -183,21 +178,6 @@ def test_download_jobs_stay_inside_the_cap(quality, allowed):
         assert ei.value.error_code is APIErrorCode.SERVER_CDM_CAPPED
 
 
-@pytest.mark.parametrize(
-    ("value", "ok"),
-    [
-        (None, True),
-        (1080, True),
-        ({"EXAMPLE1": 720, "default": None}, True),
-        (True, False),
-        ("1080", False),
-        (-1, False),
-    ],
-)
-def test_config_shape(value, ok):
-    assert (handlers.server_cdm_max_height_error("serve.users.x", value) is None) is ok
-
-
 class _WV:
     pssh = SimpleNamespace(dumps=lambda: "WV")
 
@@ -257,12 +237,6 @@ def test_a_server_vault_miss_without_the_local_drm_system_fails_at_once():
     with pytest.raises(click.ClickException, match="server vault") as ei:
         svc.resolve_server_keys(one_title(track))
     assert "-q" not in ei.value.message
-
-
-def test_a_null_service_in_the_cap_map_falls_through_to_the_default(monkeypatch):
-    users = {"k": {"server_cdm": True, "server_cdm_max_height": {"EXAMPLE1": None, "default": 1080}}}
-    monkeypatch.setattr(handlers.config, "serve", {"users": users}, raising=False)
-    assert handlers.server_cdm_max_height(request("k"), "EXAMPLE1") == 1080
 
 
 def test_an_ultrawide_track_is_measured_as_the_smallest_quality_that_selects_it():
@@ -414,7 +388,6 @@ def licence_env(monkeypatch):
             raise refusal
         return {KID.hex: "k"}
 
-    monkeypatch.setattr(handlers, "server_cdm_allowed", lambda request, tag: True)
     monkeypatch.setattr(handlers, "ensure_track_drm", lambda track, session=None, init_data=None: None)
     monkeypatch.setattr(handlers, "find_title_for_track", lambda tid, session: SimpleNamespace())
     monkeypatch.setattr(handlers, "detect_cdm_type_for_service", lambda tag, cfg: "widevine")
@@ -478,7 +451,7 @@ def test_a_client_device_session_builds_the_service_on_a_stub_of_that_device(mon
     def no_server_device(*a, **k):
         raise AssertionError("a client-device session must not load the server's device")
 
-    monkeypatch.setattr(handlers, "load_service_config", lambda tag: {})
+    monkeypatch.setattr(key_policy, "load_service_config", lambda tag: {})
     monkeypatch.setattr(handlers, "load_full_cdm", no_server_device)
     monkeypatch.setattr(handlers, "served_context", lambda obj, *a: built.update(cdm=obj.cdm))
     monkeypatch.setattr(handlers.Services, "load", lambda tag: object)
@@ -497,7 +470,6 @@ def test_the_tracks_response_echoes_the_session_choice(monkeypatch):
     from unshackle.core.api import session_store as store_mod
     from unshackle.core.tracks import Tracks
 
-    monkeypatch.setattr(handlers, "server_cdm_allowed", lambda request, tag: True)
     monkeypatch.setattr(store_mod.bus, "publish", lambda topic, data: None)
 
     class StubService:

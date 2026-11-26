@@ -15,7 +15,7 @@ from pywidevine import DeviceTypes
 from pywidevine.pssh import PSSH
 
 from tests.remote.sessions import session_entry
-from unshackle.core.api import handlers
+from unshackle.core.api import handlers, key_policy
 from unshackle.core.api.errors import APIError
 from unshackle.core.api.input_bridge import InputBridge
 from unshackle.core.cdm.client_relay import ClientDeviceCdm, answer_cdm_call
@@ -170,7 +170,7 @@ def test_a_relaying_client_gets_a_stand_in_with_its_device_facts(monkeypatch: py
     class Declares:
         CLIENT_CONFIG = ("esn",)
 
-    monkeypatch.setattr(handlers, "load_service_config", lambda tag: {"esn": "SERVER"})
+    monkeypatch.setattr(key_policy, "load_service_config", lambda tag: {"esn": "SERVER"})
     monkeypatch.setattr(
         handlers,
         "served_context",
@@ -331,7 +331,7 @@ def test_a_lent_device_gives_the_service_the_server_config_back(monkeypatch: pyt
         CLIENT_CONFIG = ("esn", "esn_map")
 
     monkeypatch.setattr(
-        handlers, "load_service_config", lambda tag: {"esn": "SERVER", "esn_map": {7000: "s"}, "other": 1}
+        key_policy, "load_service_config", lambda tag: {"esn": "SERVER", "esn_map": {7000: "s"}, "other": 1}
     )
     monkeypatch.setattr(handlers, "load_full_cdm", lambda *a: server_device)
     monkeypatch.setattr(handlers, "served_context", lambda obj, *a: built.update(cdm=obj.cdm, config=obj.config))
@@ -474,7 +474,6 @@ def test_the_server_licence_route_follows_the_licensing_mode(
     monkeypatch: pytest.MonkeyPatch, fields: dict, forbidden: bool
 ) -> None:
     """A session that the client's device licenses reaches the server licence route only for the server vault."""
-    monkeypatch.setattr(handlers, "server_cdm_allowed", lambda request, service: True)
     with pytest.raises(APIError) as caught:
         handlers.license_response({"mode": "server_cdm", "track_id": "none"}, session_entry(**fields), "sess", None)
     assert (caught.value.error_code is APIErrorCode.FORBIDDEN) is forbidden

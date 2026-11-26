@@ -16,6 +16,7 @@ from aiohttp import web
 
 from unshackle.core import __code_hash__, __version__
 from unshackle.core.api.events import bus
+from unshackle.core.api.key_policy import KeyPolicy, api_keys
 from unshackle.core.config import config
 from unshackle.core.utils.redact import redact_secrets
 
@@ -36,16 +37,6 @@ CDM_SESSION_ID_LIMIT = 64
 CDM_DEVICE_LIMIT = 255
 
 
-def _users() -> dict[str, Any]:
-    users = (config.serve or {}).get("users")
-    return users if isinstance(users, dict) else {}
-
-
-def _user_config(key: str | None) -> dict[str, Any] | None:
-    user = _users().get(key) if key else None
-    return user if isinstance(user, dict) else None
-
-
 def configured_key(key: str | None) -> str | None:
     """``key`` when the config knows it (a user API key, the master secret or the dashboard API key), else None.
 
@@ -56,7 +47,7 @@ def configured_key(key: str | None) -> str | None:
         return None
     serve = config.serve or {}
     dashboard = serve.get("dashboard")
-    known = {str(k) for k in _users()} | {str(serve.get("api_secret") or "")}
+    known = set(api_keys()) | {str(serve.get("api_secret") or "")}
     if isinstance(dashboard, dict) and dashboard.get("key"):
         known.add(str(dashboard["key"]))
     return key if key in known else None
@@ -66,10 +57,7 @@ def mask_key(key: str | None) -> str:
     """A display label for an API key: its configured username, else a truncated prefix."""
     if not key:
         return "anonymous"
-    user = _user_config(key)
-    if user and user.get("username"):
-        return str(user["username"])
-    return key[:4] + "…"
+    return KeyPolicy.of(key).username or key[:4] + "…"
 
 
 def key_id(key: str | None) -> str:
@@ -78,47 +66,6 @@ def key_id(key: str | None) -> str:
     if not key:
         return "anonymous"
     return hashlib.sha256(key.encode()).hexdigest()[:12]
-
-
-def key_tier(key: str | None) -> str | None:
-    """The tier name an API key references, when it names one that exists."""
-    user = _user_config(key)
-    tier = user.get("tier") if user else None
-    return str(tier) if tier else None
-
-
-def key_rate_limit(key: str | None, serve: dict[str, Any] | None = None) -> int | None:
-    """Requests per hour allowed for a key: its own override, else its tier's, else unlimited.
-
-    ``serve`` reads a config block that is not yet the live one, as the reload validator does.
-    """
-    if serve is None:
-        serve = config.serve or {}
-    users = serve.get("users")
-    user = users.get(key) if isinstance(users, dict) and key else None
-    if not isinstance(user, dict):
-        return None
-    own = user.get("rate_limit")
-    if isinstance(own, int) and own > 0:
-        return own
-    tiers = serve.get("tiers")
-    tier = tiers.get(user.get("tier")) if isinstance(tiers, dict) and user.get("tier") else None
-    limit = tier.get("rate_limit") if isinstance(tier, dict) else None
-    return limit if isinstance(limit, int) and limit > 0 else None
-
-
-def rate_limit_error(where: str, value: Any) -> str | None:
-    """Why *value* cannot serve as a rate limit, or None when it can. Unset is fine.
-
-    ``key_rate_limit`` reads anything else as "no limit", so a mistyped value would silently
-    remove the cap the operator wrote down. It lives beside the reader so the two rules cannot
-    drift apart.
-    """
-    if value is None:
-        return None
-    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
-        return f"{where}.rate_limit must be a positive whole number of requests per hour, not {value!r}"
-    return None
 
 
 @dataclass
@@ -170,7 +117,7 @@ class ServerStats:
 
         A fixed window, not a sliding one: cheap, and an operator cap does not need the precision.
         """
-        limit = key_rate_limit(key)
+        limit = KeyPolicy.of(key).rate_limit
         if limit is None:
             return None
         entry = self.key_stats(key)
@@ -185,7 +132,7 @@ class ServerStats:
 
     def rate_limit_headers(self, key: str) -> dict[str, str]:
         """The ``X-RateLimit-*`` headers for ``key``'s current window; none for an API key with no limit."""
-        limit = key_rate_limit(key)
+        limit = KeyPolicy.of(key).rate_limit
         if limit is None:
             return {}
         entry = self.key_stats(key)

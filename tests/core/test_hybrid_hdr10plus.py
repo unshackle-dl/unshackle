@@ -20,7 +20,7 @@ import pytest
 import unshackle.commands.dl as dl_module
 from tests.remote.unit.test_remote_service_helpers import _sent_create_data
 from unshackle.core import mux_step
-from unshackle.core.api import download_manager, handlers
+from unshackle.core.api import download_manager, handlers, key_policy
 from unshackle.core.api.handlers import validate_download_parameters
 from unshackle.core.config import config
 from unshackle.core.mux_step import hybrid_plan, hybrid_source_tracks, hybrid_step_error, missing_hybrid_error
@@ -837,7 +837,7 @@ def test_a_remote_session_puts_the_flag_in_the_service_ctx(monkeypatch: pytest.M
         seen["ctx"] = parent_ctx
         return object()
 
-    monkeypatch.setattr(handlers, "load_service_config", lambda service: {})
+    monkeypatch.setattr(key_policy, "load_service_config", lambda service: {})
     monkeypatch.setattr(handlers, "load_full_cdm", lambda *args: None)
     monkeypatch.setattr(handlers.Services, "load", lambda service: None)
     monkeypatch.setattr(handlers, "instantiate_service", fake_instantiate)

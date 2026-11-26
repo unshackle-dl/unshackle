@@ -1,6 +1,5 @@
 import asyncio
 import base64
-import copy
 import functools
 import json
 import logging
@@ -28,6 +27,7 @@ from unshackle.core import login
 from unshackle.core.api.compression import safe_inflate
 from unshackle.core.api.errors import APIError, categorize_exception, handle_api_exception
 from unshackle.core.api.input_bridge import InputBridge, NoUserBridge
+from unshackle.core.api.key_policy import KeyPolicy, api_keys, is_whole_number, named_services
 from unshackle.core.api.progress import track_log_label
 from unshackle.core.api.sanitize import MAX_SESSION_CACHE_KEYS, safe_cache_key, safe_cache_payload, sanitize_log
 from unshackle.core.api.session_channel import status_message
@@ -45,7 +45,7 @@ from unshackle.core.dl_options import (
     forwarded_dl_params,
 )
 from unshackle.core.drm import BlowfishStripe, cbcs, is_null_key, real_kids
-from unshackle.core.launch import load_service_config, served_context
+from unshackle.core.launch import served_context
 from unshackle.core.manifests.snapshot import capture
 from unshackle.core.proxies.resolve import initialize_proxy_providers, is_loopback, resolve_proxy
 from unshackle.core.remote_protocol import (
@@ -86,7 +86,7 @@ from unshackle.core.tunnel import (
 )
 from unshackle.core.utilities import declared_kwargs
 from unshackle.core.utils.click_types import QUALITY_LIST, SEASON_RANGE, VIDEO_CODEC_LIST, ContextData
-from unshackle.core.utils.collections import ci_get, merge_dict
+from unshackle.core.utils.collections import ci_get
 from unshackle.core.utils.hdr10plus import probed_tracks
 from unshackle.core.utils.redact import REDACTED, URL_USERINFO_RE, redact_all, redact_secrets, redact_text
 from unshackle.core.utils.service_params import FLAT_DL_KEYS, cast_service_options, service_options
@@ -128,7 +128,7 @@ def load_full_cdm(service: str, profile: str | None, cdm_type: str | None = None
     for list_titles / list_tracks / search. :func:`choose_cdm` picks the device as for
     ``dl.get_cdm``, without the quality tiers (no track context yet). It falls back to the stub
     if the configuration has no device, or if loading fails. ``app_config`` is an API key's
-    view from :func:`key_cdm_config`; None reads the server's own ``cdm``.
+    view from :meth:`KeyPolicy.cdm_config`; None reads the server's own ``cdm``.
     """
     from unshackle.core.cdm import load_cdm
 
@@ -311,7 +311,7 @@ class RequestCache:
         normalized_service: str,
         request: web.Request | None,
         client_login: bool,
-        user_config: dict[str, Any],
+        policy: KeyPolicy,
     ) -> None:
         """Give the service a new cache directory, seeded from the client's ``cache``.
 
@@ -324,11 +324,11 @@ class RequestCache:
         api_key = caller_key(request)
         if stats.mode != "remote_only":
             tag = service_instance.cache.service_tag
-            service_instance.cache = keyed_cache(tag, service_instance, normalized_service, api_key, user_config)
+            service_instance.cache = keyed_cache(tag, service_instance, normalized_service, api_key, policy)
             return
         self.tag = f"_requests/{key_namespace(api_key)}/{uuid.uuid4()}/{normalized_service}"
         service_instance.cache = keyed_cache(
-            self.tag, service_instance, normalized_service, api_key, user_config, temporary=True
+            self.tag, service_instance, normalized_service, api_key, policy, temporary=True
         )
         cache_data = data.get("cache")
         if cache_data:
@@ -372,7 +372,7 @@ def remote_server(data: dict[str, Any], request: web.Request | None = None) -> t
         return None
     service = data.get("service")
     info = find_remote_service(remote_list(name), str(service or ""))
-    allowed = get_allowed_services(request)
+    allowed = request_policy(request).services
     if info is None or (allowed is not None and info["tag"] not in allowed):
         raise APIError(
             APIErrorCode.INVALID_SERVICE,
@@ -387,7 +387,7 @@ def geofence_proxy(data: dict[str, Any], info: dict, request: web.Request | None
 
     The remote counterpart of a local service's geofence auto-proxy, under the same ``server_proxy`` gate.
     """
-    if data.get("proxy") or data.get("no_proxy") or not server_proxy_allowed(request):
+    if data.get("proxy") or data.get("no_proxy") or not request_policy(request).allows("server_proxy"):
         return {}
     blocked = {str(r).lower() for r in info.get("geoblock") or []}
     fence = [str(r).lower() for r in info.get("geofence") or [] if r and str(r).lower() not in blocked]
@@ -483,7 +483,7 @@ _remote_logins: dict[str, RemoteLogin] = {}
 
 async def remote_logins_handler(request: web.Request) -> web.Response:
     """Answer the request for the caller's remote logins in progress, each with its prompt and notice."""
-    owner, admin = caller_key(request), is_admin(request)
+    owner, admin = caller_key(request), request_policy(request).admin
     logins = [
         {
             "id": login.id,
@@ -502,7 +502,7 @@ async def remote_logins_handler(request: web.Request) -> web.Response:
 async def remote_login_input_handler(login_id: str, data: dict[str, Any], request: web.Request) -> web.Response:
     """Answer the prompt (an OTP, a PIN) a remote login a list call waits on is asking."""
     login = _remote_logins.get(login_id)
-    if login is None or not (is_admin(request) or login.owner == caller_key(request)):
+    if login is None or not (request_policy(request).admin or login.owner == caller_key(request)):
         raise APIError(APIErrorCode.NOT_FOUND, "Remote login not found", details={"login_id": login_id})
     response = data.get("response")
     if response is None:
@@ -711,17 +711,17 @@ def setup_list_service(
     """
 
     api_key = caller_key(request)
-    user_config = serve_user_config(api_key)
-    service_config = key_service_yaml(normalized_service, user_config)
+    policy = request_policy(request)
+    service_config = policy.service_yaml(normalized_service)
 
     no_proxy = data.get("no_proxy", False)
     proxy_param, proxy_providers = resolve_handler_proxy(data, normalized_service, request)
 
-    account = resolve_server_account(request, normalized_service, data.get("client_region"))
+    account = resolve_server_account(policy, normalized_service, data.get("client_region"))
     if account:
         profile = None if account == "default" else account
 
-    cdm = load_full_cdm(normalized_service, profile, data.get("cdm_type"), key_cdm_config(user_config))
+    cdm = load_full_cdm(normalized_service, profile, data.get("cdm_type"), policy.cdm_config())
     cookies, credential = server_login_material(data, normalized_service, account, profile)
 
     parent_ctx = served_context(
@@ -734,10 +734,10 @@ def setup_list_service(
 
     if account:
         account_tag = f"_accounts/{normalized_service}/{account}"
-        service_instance.cache = keyed_cache(account_tag, service_instance, normalized_service, api_key, user_config)
+        service_instance.cache = keyed_cache(account_tag, service_instance, normalized_service, api_key, policy)
     elif request_cache is not None:
         client_login = cookies is not None or credential is not None
-        request_cache.attach(service_instance, data, normalized_service, request, client_login, user_config)
+        request_cache.attach(service_instance, data, normalized_service, request, client_login, policy)
     service_instance._input_bridge = NoUserBridge()
     service_instance.authenticate(cookies, credential)
     return service_instance
@@ -763,15 +763,15 @@ def run_service_search(
     no_proxy = data.get("no_proxy", False)
 
     api_key = caller_key(request)
-    user_config = serve_user_config(api_key)
-    service_config = key_service_yaml(normalized_service, user_config)
+    policy = request_policy(request)
+    service_config = policy.service_yaml(normalized_service)
     proxy_param, proxy_providers = resolve_handler_proxy(data, normalized_service, request)
 
-    account = resolve_server_account(request, normalized_service, data.get("client_region"))
+    account = resolve_server_account(policy, normalized_service, data.get("client_region"))
     if account:
         profile = None if account == "default" else account
 
-    cdm = load_full_cdm(normalized_service, profile, data.get("cdm_type"), key_cdm_config(user_config))
+    cdm = load_full_cdm(normalized_service, profile, data.get("cdm_type"), policy.cdm_config())
     service_module = Services.load(normalized_service)
     anonymous = getattr(service_module, "ANONYMOUS_SEARCH", False)
     cookies, credential = (
@@ -799,10 +799,10 @@ def run_service_search(
 
     if account:
         account_tag = f"_accounts/{normalized_service}/{account}"
-        service_instance.cache = keyed_cache(account_tag, service_instance, normalized_service, api_key, user_config)
+        service_instance.cache = keyed_cache(account_tag, service_instance, normalized_service, api_key, policy)
     elif request_cache is not None:
         client_login = cookies is not None or credential is not None
-        request_cache.attach(service_instance, data, normalized_service, request, client_login, user_config)
+        request_cache.attach(service_instance, data, normalized_service, request, client_login, policy)
     service_instance._input_bridge = NoUserBridge()
     if not anonymous:
         service_instance.authenticate(cookies, credential)
@@ -820,127 +820,16 @@ def run_service_search(
     return results
 
 
-def allowed_services_for_key(secret_key: str | None) -> list[str] | None:
-    """Effective service allowlist for an API key: the global list intersected with the key's.
-
-    Returns None when nothing restricts the services.
-    """
-    global_allowed = config.serve.get("services")
-    global_set: set[str] | None = None
-    if global_allowed:
-        global_set = {Services.get_tag(s) for s in global_allowed}
-
-    key_set: set[str] | None = None
-    if secret_key:
-        users = config.serve.get("users", {})
-        user_config = users.get(secret_key, {})
-        if isinstance(user_config, dict) and user_config.get("services"):
-            key_set = {Services.get_tag(s) for s in user_config["services"]}
-
-    if global_set and key_set:
-        result = global_set & key_set
-    elif global_set:
-        result = global_set
-    elif key_set:
-        result = key_set
-    else:
-        return None
-
-    return list(result)
-
-
-def get_allowed_services(request: web.Request | None = None) -> list[str] | None:
-    """The effective service allowlist for a request's API key, or None when unrestricted."""
-    return allowed_services_for_key(request_secret_key(request) if request else None)
-
-
-def is_admin(request: web.Request | None) -> bool:
-    """Whether the calling key is the admin secret (no ``users`` entry) or has ``admin: true``."""
-    if not request:
-        return True
-    user_config = (config.serve or {}).get("users", {}).get(request_secret_key(request))
-    return user_config is None or (isinstance(user_config, dict) and user_config.get("admin") is True)
+def request_policy(request: web.Request | None) -> KeyPolicy:
+    """The calling API key's policy; a call with no request gets the policy of a key with no entry."""
+    return KeyPolicy.of(request_secret_key(request) if request else None)
 
 
 def require_admin(request: web.Request | None) -> None:
     """FORBIDDEN unless the calling key is the admin secret or has ``admin: true`` in ``serve.users``."""
-    if is_admin(request):
+    if request_policy(request).admin:
         return
     raise APIError(APIErrorCode.FORBIDDEN, "This API key may not run server maintenance.")
-
-
-def serve_user_config(api_key: str) -> dict[str, Any]:
-    """The ``serve.users`` entry for an API key.
-
-    An API key absent from ``serve.users`` (the admin secret, or any caller in no-key mode) keeps
-    full access, so it gets every CDM device the server loaded.
-    """
-    user_config = ((config.serve or {}).get("users") or {}).get(api_key)
-    if isinstance(user_config, dict):
-        return user_config
-    serve_cfg = config.serve or {}
-    return {
-        kind: [d.stem if hasattr(d, "stem") else str(d) for d in (serve_cfg.get(kind) or [])]
-        for kind in ("devices", "playready_devices")
-    }
-
-
-class KeyCdmConfig:
-    """The app config as one API key sees it: ``cdm`` is the key's map, every other setting is the server's."""
-
-    def __init__(self, cdm: dict[str, Any]) -> None:
-        self.cdm = cdm
-
-    def __getattr__(self, name: str) -> Any:
-        return getattr(config, name)
-
-
-def own_cdm(user_config: dict[str, Any] | None) -> dict[str, Any]:
-    """The API key's own ``cdm`` map; empty when it sets none."""
-    own = (user_config or {}).get("cdm")
-    return own if isinstance(own, dict) else {}
-
-
-def key_cdm_config(user_config: dict[str, Any] | None) -> Any:
-    """The config the CDM lookups read for an API key: ``config`` itself unless the key maps a device of its own.
-
-    Each service entry of the key's own ``cdm`` replaces the server's whole entry for that service.
-    """
-    own = own_cdm(user_config)
-    if not own:
-        return config
-    tags = {str(tag).lower() for tag in own}
-    return KeyCdmConfig({**{t: e for t, e in (config.cdm or {}).items() if str(t).lower() not in tags}, **own})
-
-
-def key_service_config(user_config: dict[str, Any] | None, service: str) -> dict[str, Any]:
-    """The API key's own ``service_config`` block for ``service``; empty when it sets none."""
-    blocks = (user_config or {}).get("service_config")
-    block = ci_get(blocks, Services.get_tag(service)) if isinstance(blocks, dict) else None
-    return block if isinstance(block, dict) else {}
-
-
-def key_owns_identity(user_config: dict[str, Any] | None, service: str) -> bool:
-    """Whether the API key sets its own device or service config for ``service``."""
-    return bool(key_service_config(user_config, service)) or ci_get(own_cdm(user_config), service) is not None
-
-
-def key_service_yaml(normalized_service: str, user_config: dict[str, Any] | None) -> dict:
-    """:func:`load_service_config` with the API key's own block merged over it.
-
-    A top-level section that sets one of the block's plain values (a profile section with its own identity) takes
-    the key's value too, so a client cannot pick the server's identity back through the profile it names.
-    """
-    service_config = load_service_config(normalized_service)
-    block = key_service_config(user_config, normalized_service)
-    if block:
-        merge_dict(copy.deepcopy(block), service_config)
-        scalars = {key for key, value in block.items() if not isinstance(value, (dict, list))}
-        for name, section in service_config.items():
-            if isinstance(section, dict) and name not in block:
-                for key in scalars & section.keys():
-                    section[key] = block[key]
-    return service_config
 
 
 def keyed_cache(
@@ -948,7 +837,7 @@ def keyed_cache(
     service_instance: Any,
     service: str,
     api_key: str,
-    user_config: dict[str, Any],
+    policy: KeyPolicy,
     temporary: bool = False,
     client_identity: bool = False,
 ) -> Cacher:
@@ -959,7 +848,7 @@ def keyed_cache(
     receives an identity the server built and no other API key shares it.
     """
     prefixes = tuple(getattr(service_instance, "IDENTITY_CACHE", ()))
-    owns = key_owns_identity(user_config, service)
+    owns = policy.owns_identity(service)
     if owns and not prefixes:
         warn_no_identity_cache(service)
     if prefixes and (owns or (temporary and not client_identity)):
@@ -980,115 +869,6 @@ def drop_identity_cache(api_keys: Iterable[str]) -> None:
     if (config.directories.cache / "_identity").is_dir():
         for api_key in api_keys:
             SessionStore.cleanup_cache_dir(f"_identity/{key_namespace(api_key)}")
-
-
-def server_cdm_allowed(request: web.Request | None = None, service: str | None = None) -> bool:
-    """Whether the calling API key may have the server operate the CDM licensing for ``service``."""
-    return key_grant_allows(request, service, "server_cdm")
-
-
-def server_vault_allowed(request: web.Request | None = None, service: str | None = None) -> bool:
-    """Whether the calling API key may read the server vault in a remote session its own device licenses."""
-    return key_grant_allows(request, service, "server_vault") or server_cdm_allowed(request, service)
-
-
-def key_grant_allows(request: web.Request | None, service: str | None, name: str) -> bool:
-    """Whether the calling API key holds the ``name`` grant for ``service``.
-
-    Configured API keys opt in with ``<name>: true`` for every service, or with a list of
-    service tags for only those. An API key absent from ``serve.users`` (the admin secret) keeps
-    full access.
-    """
-    if not request:
-        return True
-    secret_key = request_secret_key(request)
-    user_config = config.serve.get("users", {}).get(secret_key)
-    if user_config is None:
-        return True
-    allowed = user_config.get(name, False)
-    if isinstance(allowed, str):
-        allowed = [allowed]
-    if isinstance(allowed, (list, tuple, set)):
-        return service is not None and Services.get_tag(service).upper() in {
-            Services.get_tag(s).upper() for s in allowed
-        }
-    return bool(allowed)
-
-
-def is_whole_number(value: Any) -> bool:
-    """True for a non-negative int that is not a bool."""
-    return isinstance(value, int) and not isinstance(value, bool) and value >= 0
-
-
-def server_cdm_max_height_error(where: str, value: Any) -> str | None:
-    """Why *value* cannot serve as ``server_cdm_max_height``, or None when it can (unset included)."""
-
-    def bad(height: Any) -> bool:
-        return height is not None and not is_whole_number(height)
-
-    if isinstance(value, dict):
-        if any(bad(height) for height in value.values()):
-            return f"{where}.server_cdm_max_height values must be whole numbers of pixels, not {value!r}"
-        return None
-    if bad(value):
-        return (
-            f"{where}.server_cdm_max_height must be a whole number of pixels or a map of service to one, not {value!r}"
-        )
-    return None
-
-
-def key_config_error(where: str, user_cfg: dict[str, Any], app_config: Any = None) -> str | None:
-    """Why the ``services``, ``cdm`` or ``service_config`` of one serve.users entry cannot work; None when it can.
-
-    Devices are looked up in ``app_config`` (a reload passes the new file). A tag that names no service the server
-    has is logged, not refused: a later services refresh can add it.
-    """
-    app_config = app_config or config
-    if isinstance(user_cfg.get("services"), dict):
-        return f"{where}.services must be a list of service tags; per-service settings go under service_config"
-    cdm, service_config = user_cfg.get("cdm") or {}, user_cfg.get("service_config") or {}
-    for name, entries in (("cdm", cdm), ("service_config", service_config)):
-        if not isinstance(entries, dict):
-            return f"{where}.{name} must be a mapping of service tag to settings"
-        if any(str(tag).lower() == "default" for tag in entries):
-            return f"{where}.{name}.default: name each service tag; a key has no default entry"
-    for tag, entry in cdm.items():
-        named = {"default": entry} if isinstance(entry, str) else entry if isinstance(entry, dict) else {}
-        named = {str(system).lower(): device for system, device in named.items()}
-        if (
-            not named
-            or not set(named) <= {"widevine", "playready", "default"}
-            or not all(isinstance(device, str) for device in named.values())
-        ):
-            return f"{where}.cdm.{tag} must be a device name or a widevine/playready/default mapping of device names"
-        for system, device in named.items():
-            found = device_system(device, app_config)
-            if found is None or system != "default" and found != system:
-                return f"{where}.cdm.{tag}: no {'CDM' if system == 'default' else system} device named '{device}'"
-    for tag, entry in service_config.items():
-        if not isinstance(entry, dict):
-            return f"{where}.service_config.{tag} must be a mapping of config key to value"
-    if not cdm and not service_config:
-        return None
-    known = {tag.lower() for tag in Services.get_tags()}
-    for tag in [*cdm, *service_config]:
-        if str(tag).lower() not in known:
-            log.warning(f"{where}: no service {tag} on this server")
-    return None
-
-
-def server_cdm_max_height(request: web.Request | None, service: str | None) -> int | None:
-    """The tallest video track the server CDM licenses live for this API key on ``service``; None for no cap.
-
-    The setting is one height, or a map of service tag to height where ``default`` covers a missing or null tag.
-    """
-    if not request:
-        return None
-    cap = serve_user_config(request_secret_key(request) or "").get("server_cdm_max_height")
-    if isinstance(cap, dict):
-        own = ci_get(cap, Services.get_tag(service)) if service else None
-        cap = own if own is not None else ci_get(cap, "default")
-    return cap if is_whole_number(cap) else None
 
 
 def capped_error(message: str, cap: int | None = None) -> APIError:
@@ -1114,7 +894,7 @@ def requested_height(quality: Any) -> int | None:
     return max(heights) if heights else None
 
 
-def choose_session_cdm(request: web.Request | None, service: str, data: dict[str, Any]) -> tuple[bool, int | None]:
+def choose_session_cdm(policy: KeyPolicy, service: str, data: dict[str, Any]) -> tuple[bool, int | None]:
     """``(server_cdm, max_height)`` for a new remote session.
 
     The service picks its manifest from the CDM it sees, so it decides once, before any tracks.
@@ -1122,13 +902,13 @@ def choose_session_cdm(request: web.Request | None, service: str, data: dict[str
     one of the service's ``SERVER_DEVICE_OPTIONS``.
     When ``-q`` asks for more than the cap, the client's own device licenses, and a client with no device gets a refusal.
     """
-    if not server_cdm_allowed(request, service):
+    if not policy.allows("server_cdm", service):
         return False, None
     if data.get("server_cdm") is False and data.get("cdm_type"):
         server_device_options = getattr(Services.load(service), "SERVER_DEVICE_OPTIONS", ())
         if not any(service_options(data, server_device_options).values()):
             return False, None
-    cap = server_cdm_max_height(request, service)
+    cap = policy.max_height(service)
     wanted = requested_height(data.get("quality"))
     if cap is None or wanted is None or wanted <= cap:
         return True, cap
@@ -1292,25 +1072,14 @@ def next_server_profile(service: str, region: str | None) -> str | None:
     return pool[n % len(pool)]
 
 
-def server_accounts_allowed(request: web.Request | None = None, service: str | None = None) -> bool:
-    """Whether the calling API key may authenticate ``service`` with one of the server's own accounts.
-
-    Same shape as ``server_cdm``: ``server_accounts: true`` on the ``serve.users`` entry for every
-    service, or a list of service tags. Off unless set. The admin secret (no ``users`` entry) keeps
-    full access. Combine with ``server_account_spec``: the server treats an API key without the
-    opt-in as a client-managed remote session for that service.
-    """
-    return key_grant_allows(request, service, "server_accounts")
-
-
-def resolve_server_account(request: web.Request | None, service: str, region: Any) -> str | None:
+def resolve_server_account(policy: KeyPolicy, service: str, region: Any) -> str | None:
     """Profile of the server account a search or list call runs on; None when the service is client-managed.
 
     Raises FORBIDDEN for an API key without the ``server_accounts`` opt-in.
     """
     if server_account_spec(service) is None:
         return None
-    if not server_accounts_allowed(request, service):
+    if not policy.allows("server_accounts", service):
         raise APIError(
             APIErrorCode.FORBIDDEN,
             f"Your API key may not use the server's accounts for {service}.",
@@ -1319,27 +1088,9 @@ def resolve_server_account(request: web.Request | None, service: str, region: An
     return next_server_profile(service, region if isinstance(region, str) else None) or "default"
 
 
-def server_account_for(request: web.Request | None, service: str) -> bool:
-    """True when this request's remote session for ``service`` should run on a server account."""
-    return server_account_spec(service) is not None and server_accounts_allowed(request, service)
-
-
-def server_proxy_allowed(request: web.Request | None = None) -> bool:
-    """Whether the calling API key may use the server's own configured proxy providers.
-
-    Configured API keys opt in with ``server_proxy: true``, a real yaml boolean, so a
-    quoted ``"true"`` or ``"no"`` does not count. It is a plain bool, not a per-service
-    list, because a proxy is not tied to a service. No API key has implicit access: an
-    API key absent from ``serve.users`` gets none, and neither does a call without a
-    request, so a handler that does not pass ``request`` through fails closed.
-    """
-    if not request:
-        return False
-    secret_key = request_secret_key(request)
-    user_config = (config.serve or {}).get("users", {}).get(secret_key)
-    if not isinstance(user_config, dict):
-        return False
-    return user_config.get("server_proxy") is True
+def server_account_for(policy: KeyPolicy, service: str) -> bool:
+    """True when this API key's remote session for ``service`` should run on a server account."""
+    return server_account_spec(service) is not None and policy.allows("server_accounts", service)
 
 
 JOB_EVENTS_ROUTE = "/api/download/jobs/{job_id}/events"
@@ -1474,7 +1225,7 @@ def validate_service(service_tag: str, request: web.Request | None = None) -> st
         service_path = Services.get_path(normalized)
         if not service_path.exists():
             return None
-        allowed = get_allowed_services(request)
+        allowed = request_policy(request).services
         if allowed is not None and normalized not in allowed:
             return None
         return normalized
@@ -1931,18 +1682,19 @@ def enforce_download_gates(params: dict[str, Any], request: web.Request | None =
     must set a quality at or under it, no ``best_available`` and no HYBRID range, as a job has no client device
     to fall back to. Pass the job's merged parameters, so the gate sees the values the job runs with.
     """
-    if not server_cdm_allowed(request, params.get("service")):
+    policy = request_policy(request)
+    if not policy.allows("server_cdm", params.get("service")):
         raise APIError(
             APIErrorCode.FORBIDDEN,
             "Download jobs license with the server CDM, which is not enabled for this API key on this service",
         )
     service = params.get("service")
-    if service and key_owns_identity(serve_user_config(caller_key(request)), service):
+    if service and policy.owns_identity(service):
         raise APIError(
             APIErrorCode.FORBIDDEN,
             "Download jobs run on the server's own device config, and this API key has its own for this service",
         )
-    cap = server_cdm_max_height(request, params.get("service"))
+    cap = policy.max_height(params.get("service"))
     if cap is not None:
         serve_defaults = config.serve or {}
 
@@ -1970,7 +1722,7 @@ def enforce_download_gates(params: dict[str, Any], request: web.Request | None =
             "A download job cannot use a tunnel: proxy, because a tunnel belongs to one --remote client run.",
         )
 
-    if not server_proxy_allowed(request):
+    if not policy.allows("server_proxy"):
         resolve_handler_proxy(params, params.get("service") or "", request)
         if params.get("proxy_download"):
             # the download proxy is gated like the main one: a full URI or nothing, never a server provider
@@ -2028,7 +1780,10 @@ async def enqueue_job(
     manager = get_download_manager()
     await manager.start_workers()
     job = manager.create_job(
-        service, title_id, owner_key=caller_key(request), **{**params, "server_proxy": server_proxy_allowed(request)}
+        service,
+        title_id,
+        owner_key=caller_key(request),
+        **{**params, "server_proxy": request_policy(request).allows("server_proxy")},
     )
     return web.json_response(
         {"job_id": job.job_id, "status": job.status.value, "created_time": job.created_time.isoformat()}, status=202
@@ -2288,11 +2043,7 @@ def configured_service_tags() -> list[str]:
     installed service. An API key with no ``services`` list does not widen the union, and a malformed entry is skipped.
     """
     tags = Services.get_tags()
-    allowed = allowed_services_for_key(None)
-    if allowed is None:
-        users = config.serve.get("users")
-        lists = [u.get("services") for u in users.values() if isinstance(u, dict)] if isinstance(users, dict) else []
-        allowed = [Services.get_tag(s) for lst in lists if isinstance(lst, list) for s in lst if isinstance(s, str)]
+    allowed = named_services()
     if not allowed:
         return tags
     named = set(allowed)
@@ -2418,26 +2169,26 @@ async def dashboard_keys_handler(request: web.Request) -> web.Response:
     bucket except ``anonymous`` has a row to attribute it to. Without the dashboard key's own
     row, a dashboard would render its own polling as traffic from an unknown caller.
     """
-    from unshackle.core.api.stats import key_id, key_rate_limit, key_tier, mask_key, stats
+    from unshackle.core.api.stats import key_id, mask_key, stats
 
-    users = config.serve.get("users") or {}
     api_secret = str(config.serve.get("api_secret") or "")
     dashboard = dashboard_key() or ""
 
     def row(secret_key: str, role: str) -> dict[str, Any]:
         entry = stats.keys.get(key_id(secret_key))
-        api_access = role != "dashboard" or secret_key in users
+        policy = KeyPolicy.of(secret_key)
+        api_access = role != "dashboard" or policy.configured
         return {
             "id": key_id(secret_key),
             "role": role,
             "label": mask_key(secret_key),
-            "services": allowed_services_for_key(secret_key) if api_access else [],
-            "server_cdm": user_grant(secret_key, "server_cdm") if api_access else False,
-            "server_cdm_max_height": serve_user_config(secret_key).get("server_cdm_max_height") if api_access else None,
-            "server_accounts": user_grant(secret_key, "server_accounts") if api_access else False,
-            "server_proxy": user_grant(secret_key, "server_proxy") is True if api_access else False,
-            "tier": key_tier(secret_key),
-            "rate_limit": key_rate_limit(secret_key),
+            "services": policy.services if api_access else [],
+            "server_cdm": policy.grant("server_cdm") if api_access else False,
+            "server_cdm_max_height": policy.max_height_setting if api_access else None,
+            "server_accounts": policy.grant("server_accounts") if api_access else False,
+            "server_proxy": policy.grant("server_proxy") if api_access else False,
+            "tier": policy.tier,
+            "rate_limit": policy.rate_limit,
             "window_used": entry.window_used if entry else 0,
             "requests": entry.requests if entry else 0,
             "rejected": entry.rejected if entry else 0,
@@ -2451,22 +2202,11 @@ async def dashboard_keys_handler(request: web.Request) -> web.Response:
             return "dashboard"
         return "admin" if secret_key == api_secret else "user"
 
-    keys = [str(k) for k in users]
+    keys = api_keys()
     for extra in (api_secret, dashboard):
         if extra and extra not in keys:
             keys.append(extra)
     return web.json_response([row(k, role_of(k)) for k in keys])
-
-
-def user_grant(secret_key: str, name: str) -> Any:
-    """A per-key grant as configured: False, True, or the list of service tags it covers.
-
-    An API key with no ``serve.users`` entry keeps implicit access, matching the resolvers.
-    """
-    user_config = (config.serve.get("users") or {}).get(secret_key)
-    if not isinstance(user_config, dict):
-        return name != "server_proxy"
-    return user_config.get(name, False)
 
 
 async def dashboard_services_handler(request: web.Request) -> web.Response:
@@ -2949,7 +2689,7 @@ def redact_config(value: Any) -> Any:
 async def profiles_handler(request: web.Request | None = None) -> web.Response:
     """Answer the request for the credential profiles."""
     try:
-        allowed = get_allowed_services(request)
+        allowed = request_policy(request).services
         profiles: dict[str, list[str]] = {}
         for service, creds in (config.credentials or {}).items():
             # a plain (non-dict) credential is unnamed; that service is omitted entirely
@@ -2977,7 +2717,8 @@ async def server_config_handler(request: web.Request | None = None) -> web.Respo
     try:
         manager = get_download_manager()
         serve_cfg = config.serve or {}
-        allowed = get_allowed_services(request)
+        policy = request_policy(request)
+        allowed = policy.services
         service_tags = Services.get_tags()
         if allowed is not None:
             service_tags = [t for t in service_tags if t in allowed]
@@ -2995,7 +2736,7 @@ async def server_config_handler(request: web.Request | None = None) -> web.Respo
                 "server_accounts": {
                     tag: server_account_regions(tag)
                     for tag in (serve_cfg.get("server_accounts") or {})
-                    if server_accounts_allowed(request, tag)
+                    if policy.allows("server_accounts", tag)
                 }
                 or None,
             },
@@ -3004,7 +2745,7 @@ async def server_config_handler(request: web.Request | None = None) -> web.Respo
             "remote_services": list(config.remote_services or {}),
         }
         # Server-local absolute paths are useless to a remote client and name the host layout.
-        if is_admin(request):
+        if policy.admin:
             payload["directories"] = {
                 "downloads": str(config.directories.downloads),
                 "temp": str(config.directories.temp),
@@ -3037,7 +2778,7 @@ async def download_history_handler(data: dict[str, Any], request: web.Request | 
             if limit < 1:
                 raise APIError(APIErrorCode.INVALID_PARAMETERS, "limit must be >= 1", details={"limit": limit_raw})
 
-        allowed = get_allowed_services(request)
+        allowed = request_policy(request).services
         if allowed is None:
             history = await asyncio.to_thread(
                 read_job_history, limit=limit, service=data.get("service"), owner=owner_id(caller_key(request))
@@ -3064,7 +2805,7 @@ async def delete_history_handler(job_id: str, request: web.Request | None = None
     from unshackle.core.api.download_manager import delete_job_history, owner_id
 
     try:
-        allowed = get_allowed_services(request)
+        allowed = request_policy(request).services
         allowed_upper = {a.upper() for a in allowed} if allowed is not None else None
         if not delete_job_history(job_id, allowed=allowed_upper, owner=owner_id(caller_key(request))):
             raise APIError(APIErrorCode.NOT_FOUND, "History entry not found", details={"job_id": job_id})
@@ -3267,11 +3008,11 @@ def create_service_instance(
     server_cdm: bool = False,
     client_device: bool = False,
     input_bridge: InputBridge | None = None,
-    user_config: dict[str, Any] | None = None,
+    policy: KeyPolicy | None = None,
 ) -> Any:
     """Make a service instance and resolve its credentials and cookies.
 
-    ``user_config`` is the calling API key's serve.users entry: its own ``cdm`` and ``service_config`` apply.
+    ``policy`` is the calling API key's: its own ``cdm`` and ``service_config`` apply.
 
     With ``client_device`` the service sees a stand-in for the client's device, which relays CDM calls
     through ``input_bridge`` when the client can answer them, and a config holding the client's own identity.
@@ -3283,9 +3024,10 @@ def create_service_instance(
     """
     from unshackle.core.tracks import Video
 
-    server_config = service_config = key_service_yaml(normalized_service, user_config)
+    policy = policy or KeyPolicy.of(None)
+    server_config = service_config = policy.service_yaml(normalized_service)
     service_module = Services.load(normalized_service)
-    key_config = key_cdm_config(user_config)
+    key_config = policy.cdm_config()
     cdm: Any
     client_identity = False
     if client_device:
@@ -3388,11 +3130,11 @@ async def session_create_handler(data: dict[str, Any], request: web.Request | No
 
         session_id = str(uuid_mod.uuid4())
         api_key = caller_key(request)
-        user_config = serve_user_config(api_key)
+        policy = request_policy(request)
         session_cache_dir = f"_sessions/{api_key_namespace(request)}/{session_id}/{normalized_service}"
         session_cache_tag: str | None = session_cache_dir
 
-        server_account = server_account_for(request, normalized_service)
+        server_account = server_account_for(policy, normalized_service)
         if server_account:
             region = data.get("proxy_region") or data.get("client_region")
             if region is not None and not (isinstance(region, str) and re.fullmatch(r"[A-Za-z]{2}", region)):
@@ -3402,7 +3144,7 @@ async def session_create_handler(data: dict[str, Any], request: web.Request | No
             profile = next_server_profile(normalized_service, region)
             log.info(f"Using server account '{sanitize_log(profile or 'default')}' for {normalized_service}")
 
-        use_server_cdm, max_height = choose_session_cdm(request, normalized_service, data)
+        use_server_cdm, max_height = choose_session_cdm(policy, normalized_service, data)
         # an old client without cdm_relay keeps the server's device outside a capped session
         client_device = (
             not use_server_cdm
@@ -3426,7 +3168,7 @@ async def session_create_handler(data: dict[str, Any], request: web.Request | No
                     server_cdm=use_server_cdm,
                     client_device=client_device,
                     input_bridge=bridge,
-                    user_config=user_config,
+                    policy=policy,
                 )
 
         service_instance, cookies, credential = await asyncio.to_thread(build_service)
@@ -3444,7 +3186,7 @@ async def session_create_handler(data: dict[str, Any], request: web.Request | No
             service_instance,
             normalized_service,
             api_key,
-            user_config,
+            policy,
             temporary=not server_account,
             client_identity=client_device and not server_device,
         )
@@ -3465,10 +3207,10 @@ async def session_create_handler(data: dict[str, Any], request: web.Request | No
             creator_ip=request.remote if request else None,
             server_account=(profile or "default") if server_account else None,
             cache_tag=session_cache_tag,
-            user_config=user_config,
+            policy=policy,
             server_cdm=use_server_cdm,
             server_cdm_max_height=max_height,
-            server_vault=client_device and server_vault_allowed(request, normalized_service),
+            server_vault=client_device and policy.allows("server_vault", normalized_service),
             server_device=server_device,
             client_auth=not server_account
             and (cookies is not None or credential is not None or bool(cache_data and session_cache_tag)),
@@ -3597,13 +3339,13 @@ def cookie_values(cookies: list[dict[str, Any]]) -> dict[str, str]:
     return {c["name"]: c["value"] for c in cookies}
 
 
-def session_user_config(session: Any, request: web.Request | None) -> dict[str, Any]:
-    """The serve.users entry a remote session was created with, so a reload cannot change it for that session.
+def session_policy(session: Any, request: web.Request | None) -> KeyPolicy:
+    """The API key policy a remote session was created with, so a reload cannot change it for that session.
 
     An API key with no ``cdm`` entry of its own for the service still follows the server's ``cdm`` after a reload.
     """
-    pinned = getattr(session, "user_config", None)
-    return pinned if isinstance(pinned, dict) else serve_user_config(caller_key(request))
+    pinned = getattr(session, "policy", None)
+    return pinned if isinstance(pinned, KeyPolicy) else request_policy(request)
 
 
 def client_owns_login(session: SessionEntry) -> bool:
@@ -3683,10 +3425,10 @@ async def session_tracks_handler(
 
             session_headers, session_cookies = client_session_auth(session)
 
-        user_cfg = session_user_config(session, request)
-        app_config = key_cdm_config(user_cfg)
-        has_wv = bool(user_cfg.get("devices"))
-        has_pr = bool(user_cfg.get("playready_devices"))
+        policy = session_policy(session, request)
+        app_config = policy.cdm_config()
+        has_wv = bool(policy.devices("devices"))
+        has_pr = bool(policy.devices("playready_devices"))
 
         service_tag = session.service_tag
         config_cdm_type = detect_cdm_type_for_service(service_tag, app_config)
@@ -4022,12 +3764,13 @@ def resolve_handler_proxy(
     proxy_param = data.get("proxy")
     no_proxy = data.get("no_proxy", False)
     proxy_providers: list = []
-    allowed = server_proxy_allowed(request)
+    policy = request_policy(request)
+    allowed = policy.allows("server_proxy")
 
     if (
         proxy_param
         and re.match(r"^(https?://|socks|controld://|tunnel:)", str(proxy_param))
-        and server_account_for(request, normalized_service)
+        and server_account_for(policy, normalized_service)
     ):
         raise APIError(
             APIErrorCode.FORBIDDEN,
@@ -4035,7 +3778,7 @@ def resolve_handler_proxy(
             details={"service": normalized_service},
         )
 
-    if isinstance(proxy_param, str) and not no_proxy and not (allowed or is_admin(request)):
+    if isinstance(proxy_param, str) and not no_proxy and not (allowed or policy.admin):
         refusal = local_proxy_refusal(proxy_param)
         if refusal:
             raise APIError(APIErrorCode.INVALID_PROXY, refusal, details={"service": normalized_service})
@@ -4256,23 +3999,23 @@ def ensure_track_drm(track: Any, session: Any = None, init_data: bytes | None = 
             log.warning(f"ISM DRM extraction failed for {track.id}: {e!r}")
 
 
-def resolve_device_name(user_config: dict, drm_type: str, service_tag: str = "") -> str:
+def resolve_device_name(policy: KeyPolicy, drm_type: str, service_tag: str = "") -> str:
     """Get the CDM device name, checking the service's cdm mapping first.
 
     Resolution order:
     1. the key's own ``cdm`` entry for the service, else ``config.cdm[service_tag]``
-    2. serve.users.{key}.devices / playready_devices (user device list)
+    2. the key's ``devices`` / ``playready_devices``
     """
-    cdm_name = choose_cdm(key_cdm_config(user_config).cdm, service_tag, drm=drm_type, view="licence").name
+    cdm_name = choose_cdm(policy.cdm_config().cdm, service_tag, drm=drm_type, view="licence").name
     if cdm_name:
         return cdm_name
 
     if drm_type == "playready":
-        device_name = (user_config.get("playready_devices") or [None])[0]
+        device_name = next(iter(policy.devices("playready_devices")), None)
         if not device_name:
             raise APIError(APIErrorCode.INVALID_INPUT, "No PlayReady device configured for this API key")
     else:
-        device_name = (user_config.get("devices") or [None])[0]
+        device_name = next(iter(policy.devices("devices")), None)
         if not device_name:
             raise APIError(APIErrorCode.INVALID_INPUT, "No Widevine device configured for this API key")
     return device_name
@@ -4286,7 +4029,7 @@ def vault_candidates(client_drm_type: str) -> list[str]:
 
 def server_drm_candidates(
     service_tag: str,
-    user_config: dict,
+    policy: KeyPolicy,
     client_drm_type: str,
     track: Any,
     warn: Callable[[str], None] = log.warning,
@@ -4298,13 +4041,13 @@ def server_drm_candidates(
     system, so the route never plans a licence that fails on the wrong device type. The
     track's own drm_preference moves its system to the front when the server has it.
     """
-    app_config = key_cdm_config(user_config)
+    app_config = policy.cdm_config()
     server_type = detect_cdm_type_for_service(service_tag, app_config)
     first = server_type or (client_drm_type if client_drm_type in ("widevine", "playready") else "widevine")
     candidates: list[str] = []
     for drm_type in (first, *(system for system in ("widevine", "playready") if system != first)):
         try:
-            device_name = resolve_device_name(user_config, drm_type, service_tag)
+            device_name = resolve_device_name(policy, drm_type, service_tag)
         except APIError:
             continue
         if device_system(device_name, app_config) in (None, drm_type):
@@ -4515,7 +4258,7 @@ def handle_single_server_cdm(
     vault_only: bool = False,
     shared: dict[str, Any] | None = None,
     track_kid: uuid.UUID | None = None,
-    user_config: dict[str, Any] | None = None,
+    policy: KeyPolicy | None = None,
 ) -> dict[str, str]:
     """Do the single-track server_cdm licensing with the DRM class get_content_keys() flow.
 
@@ -4552,8 +4295,8 @@ def handle_single_server_cdm(
             return vault_keys
         raise refusal or APIError(APIErrorCode.NO_CONTENT, "The server vault holds no content key for this track")
 
-    if user_config is None:
-        user_config = serve_user_config(caller_key(request))
+    if policy is None:
+        policy = request_policy(request)
 
     if drm_type == "playready":
         from pyplayready.system.pssh import PSSH as PlayReadyPSSH
@@ -4568,7 +4311,7 @@ def handle_single_server_cdm(
             pr_drm.absorb(*siblings)
 
         # Gate on the caller's CDM device first: no device, no keys from the vault or CDM.
-        device_name = resolve_device_name(user_config, drm_type, service_name)
+        device_name = resolve_device_name(policy, drm_type, service_name)
 
         if track_kid and (vault_keys := from_vaults(pr_drm.kids)):
             return vault_keys
@@ -4597,7 +4340,7 @@ def handle_single_server_cdm(
 
         # Gate on the caller's CDM device first so a caller with no device cannot
         # harvest server-side keys from the vault fallback below.
-        device_name = resolve_device_name(user_config, drm_type, service_name)
+        device_name = resolve_device_name(policy, drm_type, service_name)
 
         if vault_keys := from_vaults(wv_drm.kids):
             return vault_keys
@@ -4764,7 +4507,7 @@ async def session_samples_handler(
             details={"track_id": track_id, "session_id": session_id},
         )
     service = session.service_instance
-    if not server_cdm_allowed(request, session.service_tag):
+    if not request_policy(request).allows("server_cdm", session.service_tag):
         raise APIError(
             APIErrorCode.FORBIDDEN, f"This API key may not decrypt {session.service_tag} samples on the server"
         )
@@ -4825,7 +4568,7 @@ def license_response(data: LicenseRequest, session: Any, session_id: str, reques
     # a session the client's device licenses reaches the server vault only; its live licences stay client-side
     vault_only = not session.server_cdm
     if mode == "server_cdm" and not (
-        session.server_vault if vault_only else server_cdm_allowed(request, session.service_tag)
+        session.server_vault if vault_only else request_policy(request).allows("server_cdm", session.service_tag)
     ):
         raise APIError(
             APIErrorCode.FORBIDDEN,
@@ -4833,7 +4576,7 @@ def license_response(data: LicenseRequest, session: Any, session_id: str, reques
         )
 
     if mode == "server_cdm" and track_ids:
-        user_config = session_user_config(session, request)
+        policy = session_policy(session, request)
         service = session.service_instance
         service_tag = session.service_tag
 
@@ -4905,7 +4648,7 @@ def license_response(data: LicenseRequest, session: Any, session_id: str, reques
                         vault_only=vault_only,
                         shared=shared,
                         track_kid=track_kid,
-                        user_config=user_config,
+                        policy=policy,
                     )
                     if keys:
                         keys_by_pssh[cache_key] = {**keys_by_pssh[cache_key], **keys}
@@ -4938,7 +4681,7 @@ def license_response(data: LicenseRequest, session: Any, session_id: str, reques
             candidates = (
                 vault_candidates(drm_type)
                 if vault_only
-                else server_drm_candidates(service_tag, user_config, drm_type, track, warn)
+                else server_drm_candidates(service_tag, policy, drm_type, track, warn)
             )
 
             probed: uuid.UUID | None = None
@@ -5018,11 +4761,11 @@ def license_response(data: LicenseRequest, session: Any, session_id: str, reques
         if mode == "server_cdm":
             # The server's config.cdm mapping decides the DRM system, as in the batch path.
             # The client only knows its own local device, which the server never uses here.
-            user_config = session_user_config(session, request)
+            policy = session_policy(session, request)
             candidates = (
                 vault_candidates(drm_type)
                 if vault_only
-                else server_drm_candidates(session.service_tag, user_config, drm_type, track)
+                else server_drm_candidates(session.service_tag, policy, drm_type, track)
             )
             picked = pick_server_pssh(track, candidates)
             if not picked:
@@ -5054,7 +4797,7 @@ def license_response(data: LicenseRequest, session: Any, session_id: str, reques
                 live_licence_refusal(session, track),
                 vault_only=vault_only,
                 track_kid=asked_kid,
-                user_config=user_config,
+                policy=policy,
             )
             log.info(f"Server CDM resolved {len(keys)} key(s) for track {track_log_label(track)}")
             note_served_keys(session, keys, key_sources)
@@ -5266,7 +5009,7 @@ def shared_key_client(request: web.Request) -> str | None:
 
     Only a shared key reads the header, so a client that talks to the server directly cannot use it to pass a limit.
     """
-    if serve_user_config(request_secret_key(request) or "").get("shared") is not True:
+    if not request_policy(request).shared:
         return None
     return request.headers.get("X-Client-Id", "")[:64] or None
 

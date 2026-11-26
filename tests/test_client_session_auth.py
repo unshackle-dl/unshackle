@@ -260,20 +260,6 @@ def test_download_rejects_path_profile_and_bad_output_dir(tmp_path, monkeypatch)
     assert validate_download_parameters({"output_dir": "a\x00b"})
 
 
-def test_absent_key_keeps_server_devices(monkeypatch):
-    from pathlib import Path
-
-    from unshackle.core.api.handlers import config, serve_user_config
-
-    monkeypatch.setattr(
-        config,
-        "serve",
-        {"users": {"k1": {"devices": ["mine"]}}, "devices": [Path("/x/dev.wvd")], "playready_devices": []},
-    )
-    assert serve_user_config("k1") == {"devices": ["mine"]}
-    assert serve_user_config("admin-secret") == {"devices": ["dev"], "playready_devices": []}
-
-
 def test_safe_inflate_rejects_non_str_via_isinstance():
     # A non-string cache value must be caught before base64.b64decode raises a 500.
     # Mirror the guard used in session_create_handler.

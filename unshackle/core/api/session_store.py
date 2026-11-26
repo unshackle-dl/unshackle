@@ -15,7 +15,7 @@ import uuid
 from collections import Counter, deque
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from unshackle.core.api.events import bus
 from unshackle.core.api.input_bridge import AUTH_INPUT_TIMEOUT, InputBridge
@@ -24,6 +24,9 @@ from unshackle.core.api.session_channel import SessionChannel, drain_message
 from unshackle.core.config import config
 from unshackle.core.remote_protocol import AuthStatus
 from unshackle.core.tracks import Track, Tracks
+
+if TYPE_CHECKING:
+    from unshackle.core.api.key_policy import KeyPolicy
 
 log = logging.getLogger("api.session")
 
@@ -56,7 +59,7 @@ class SessionEntry:
     server_vault: bool = False  # a session the client's device licenses may still take keys from the server vault
     server_device: bool = False  # its service runs on the server's lent device, so keys come only from a vault
     client_auth: bool = False  # the login is the client's: it succeeded without a server account
-    user_config: dict[str, Any] | None = None  # the serve.users entry the session was created with
+    policy: KeyPolicy | None = field(default=None, repr=False)  # the API key policy the session was created with
     input_bridge: InputBridge | None = None
     log_buffer: Any | None = None  # SessionLogBuffer mirroring the service's self.log
     channel: SessionChannel = field(default_factory=SessionChannel, repr=False, compare=False)
@@ -190,7 +193,7 @@ class SessionStore:
         creator_ip: str | None = None,
         server_account: str | None = None,
         cache_tag: str | None = None,
-        user_config: dict[str, Any] | None = None,
+        policy: KeyPolicy | None = None,
         server_cdm: bool = False,
         server_cdm_max_height: int | None = None,
         server_vault: bool = False,
@@ -227,7 +230,7 @@ class SessionStore:
                 creator_ip=creator_ip,
                 server_account=server_account,
                 cache_tag=cache_tag,
-                user_config=user_config,
+                policy=policy,
                 server_cdm=server_cdm,
                 server_cdm_max_height=server_cdm_max_height,
                 server_vault=server_vault,

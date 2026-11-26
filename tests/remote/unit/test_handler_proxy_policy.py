@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from unshackle.core.api import handlers
+from unshackle.core.api import handlers, key_policy
 from unshackle.core.api.errors import APIError
 from unshackle.core.remote_protocol import APIErrorCode
 from unshackle.core.utils import ip_info
@@ -111,17 +111,6 @@ def test_no_proxy_short_circuits(monkeypatch):
     assert providers == []
 
 
-def test_server_proxy_allowed_entitlements():
-    assert handlers.server_proxy_allowed(request("proxykey")) is True
-    assert handlers.server_proxy_allowed(request("plainkey")) is False
-    # yaml string "true" is not the boolean opt-in
-    assert handlers.server_proxy_allowed(request("strkey")) is False
-    # no implicit admin access: a key absent from serve.users is denied
-    assert handlers.server_proxy_allowed(request("adminsecret")) is False
-    # no request (an internal call, or a handler that dropped it) fails closed
-    assert handlers.server_proxy_allowed(None) is False
-
-
 def test_opted_in_country_code_resolves(monkeypatch):
     patch_server_region(monkeypatch, "IN")
     provider = patch_providers(monkeypatch, "http://us.proxy:8080")
@@ -182,7 +171,7 @@ def test_setup_list_service_threads_request(monkeypatch):
         def authenticate(self, cookies, credential):
             seen["authenticated"] = True
 
-    monkeypatch.setattr(handlers, "load_service_config", lambda service: {})
+    monkeypatch.setattr(key_policy, "load_service_config", lambda service: {})
     monkeypatch.setattr(handlers, "resolve_handler_proxy", fake_resolve)
     monkeypatch.setattr(handlers, "load_full_cdm", lambda *args: None)
     monkeypatch.setattr(handlers.Services, "load", lambda service: None)
@@ -200,7 +189,7 @@ def test_search_reports_failed_proxy_check_as_invalid_proxy(monkeypatch):
     def failed_check(*args):
         raise ConnectionError("Proxy check failed: no IP lookup got through the proxy.")
 
-    monkeypatch.setattr(handlers, "load_service_config", lambda service: {})
+    monkeypatch.setattr(key_policy, "load_service_config", lambda service: {})
     monkeypatch.setattr(handlers, "resolve_handler_proxy", lambda *args: ("http://127.0.0.1:9", []))
     monkeypatch.setattr(handlers, "load_full_cdm", lambda *args: None)
     monkeypatch.setattr(handlers.Services, "load", lambda service: None)
@@ -219,7 +208,8 @@ class TestDownloadGates:
 
     @pytest.fixture(autouse=True)
     def cdm_gate_open(self, monkeypatch):
-        monkeypatch.setattr(handlers, "server_cdm_allowed", lambda request=None, service=None: True)
+        users = {key: {**entry, "server_cdm": True} for key, entry in USERS.items()}
+        monkeypatch.setattr(handlers.config, "serve", {"users": users}, raising=False)
 
     def test_country_code_rejected_when_denied(self, monkeypatch):
         with pytest.raises(APIError) as exc_info:

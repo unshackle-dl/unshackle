@@ -9,7 +9,7 @@ import click
 import pytest
 
 import unshackle.commands.dl as dl_module
-from unshackle.core.api import download_manager, handlers
+from unshackle.core.api import download_manager, handlers, key_policy
 from unshackle.core.api.handlers import validate_download_parameters
 from unshackle.core.services import Services
 
@@ -57,7 +57,7 @@ def session_params(monkeypatch: pytest.MonkeyPatch, data: dict) -> dict:
         seen["params"] = parent_ctx.params
         return object()
 
-    monkeypatch.setattr(handlers, "load_service_config", lambda service: {})
+    monkeypatch.setattr(key_policy, "load_service_config", lambda service: {})
     monkeypatch.setattr(handlers, "load_full_cdm", lambda *args: None)
     monkeypatch.setattr(handlers.Services, "load", lambda service: None)
     monkeypatch.setattr(handlers, "instantiate_service", fake_instantiate)

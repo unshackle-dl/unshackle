@@ -36,22 +36,6 @@ def request(key):
     return SimpleNamespace(headers={"X-Secret-Key": key} if key else {})
 
 
-@pytest.mark.parametrize(("key", "allowed"), ENTITLEMENTS)
-def test_server_cdm_allowed(serve_users, key, allowed):
-    assert handlers.server_cdm_allowed(request(key)) is allowed
-
-
-@pytest.mark.parametrize(("service", "allowed"), [("EXAMPLE1", True), ("EXAMPLE2", False), (None, False)])
-def test_server_cdm_service_list(serve_users, service, allowed):
-    assert handlers.server_cdm_allowed(request("tier2key"), service) is allowed
-
-
-@pytest.mark.parametrize(("service", "allowed"), [("EXAMPLE1", True), ("EXAMPLE2", False)])
-def test_server_cdm_bare_tag(serve_users, service, allowed):
-    # A bare tag gates one service. It must not read as a truthy value that opens every service.
-    assert handlers.server_cdm_allowed(request("tier2strkey"), service) is allowed
-
-
 def test_download_gate_uses_job_service(serve_users):
     handlers.enforce_download_gates({"service": "EXAMPLE1"}, request("tier2key"))
     with pytest.raises(APIError):
@@ -85,10 +69,6 @@ async def test_retry_gate_uses_job_service(serve_users, monkeypatch, service, al
         with pytest.raises(APIError) as ei:
             await handlers.retry_download_job_handler("job1", request("tier2key"))
         assert ei.value.error_code == APIErrorCode.FORBIDDEN
-
-
-def test_no_request_allows(serve_users):
-    assert handlers.server_cdm_allowed(None) is True
 
 
 @pytest.mark.parametrize(("key", "allowed"), ENTITLEMENTS)

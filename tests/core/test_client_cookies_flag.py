@@ -5,7 +5,7 @@ import zlib
 
 import pytest
 
-from unshackle.core.api import handlers
+from unshackle.core.api import handlers, key_policy
 from unshackle.core.api.errors import APIError
 from unshackle.core.api.handlers import load_client_cookies
 from unshackle.core.remote_protocol import APIErrorCode
@@ -59,7 +59,7 @@ def built_ctx(monkeypatch):
         seen["ctx"] = parent_ctx
         return object()
 
-    monkeypatch.setattr(handlers, "load_service_config", lambda service: {})
+    monkeypatch.setattr(key_policy, "load_service_config", lambda service: {})
     monkeypatch.setattr(handlers, "load_full_cdm", lambda *args: None)
     monkeypatch.setattr(handlers.Services, "load", lambda service: None)
     monkeypatch.setattr(handlers, "instantiate_service", fake_instantiate)

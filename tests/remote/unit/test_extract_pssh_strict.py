@@ -64,7 +64,6 @@ async def _run_batch(monkeypatch, tracks, cdm_type, calls):
         return {"00" * 16: "key"}
 
     monkeypatch.setattr(handlers, "get_validated_session", fake_get_session)
-    monkeypatch.setattr(handlers, "server_cdm_allowed", lambda request, tag: True)
     monkeypatch.setattr(handlers, "ensure_track_drm", lambda track, session=None, init_data=None: None)
     monkeypatch.setattr(handlers, "find_title_for_track", lambda tid, session: SimpleNamespace())
     monkeypatch.setattr(handlers, "detect_cdm_type_for_service", lambda tag, cfg: cdm_type)

@@ -21,8 +21,9 @@ import unshackle.core.cdm as cdm_mod
 import unshackle.core.cdm.detect as detect_mod
 import unshackle.core.drm as drm_mod
 from tests.remote.sessions import session_entry
-from unshackle.core.api import handlers
+from unshackle.core.api import handlers, key_policy
 from unshackle.core.api.errors import APIError
+from unshackle.core.api.key_policy import KeyPolicy
 from unshackle.core.cdm.choice import choose_cdm
 
 pytestmark = pytest.mark.unit
@@ -92,7 +93,6 @@ def env(monkeypatch):
     monkeypatch.setattr(handlers, "ensure_track_drm", lambda track, session=None, init_data=None: None)
     monkeypatch.setattr(handlers, "check_vaults", lambda kids, name, **_: None)
     monkeypatch.setattr(handlers, "cache_to_vaults", lambda keys, name, **_: None)
-    monkeypatch.setattr(handlers, "server_cdm_allowed", lambda request, tag: True)
     monkeypatch.setattr(handlers, "find_title_for_track", lambda tid, session: SimpleNamespace())
     monkeypatch.setattr(handlers.config, "serve", {"users": {}}, raising=False)
     # the device name says what the device is, in place of the .wvd / .prd file on disk
@@ -138,9 +138,8 @@ async def test_playready_only_track_licenses_with_widevine_server(env, monkeypat
 async def test_client_type_decides_without_server_mapping(env, monkeypatch):
     """No config.cdm entry for the service: the tier's devices answer in the client's order."""
     monkeypatch.setattr(handlers.config, "cdm", {}, raising=False)
-    monkeypatch.setattr(
-        handlers, "serve_user_config", lambda key: {"devices": ["wv_dev"], "playready_devices": ["pr_dev"]}
-    )
+    tier = KeyPolicy({"server_cdm": True, "devices": ["wv_dev"], "playready_devices": ["pr_dev"]})
+    monkeypatch.setattr(handlers, "request_policy", lambda request: tier)
 
     track = SimpleNamespace(id="vid", drm=[_pr_drm(), _wv_drm()])
     body = await _license(monkeypatch, track, {"drm_type": "playready"})
@@ -237,7 +236,7 @@ def test_the_server_device_follows_the_client_only_when_both_systems_are_mapped(
 ):
     asked: list = []
     monkeypatch.setattr(handlers.config, "cdm", mapping, raising=False)
-    monkeypatch.setattr(handlers, "load_service_config", lambda tag: {})
+    monkeypatch.setattr(key_policy, "load_service_config", lambda tag: {})
     monkeypatch.setattr(
         handlers, "load_full_cdm", lambda service, profile, cdm_type, app_config=None: asked.append(cdm_type)
     )

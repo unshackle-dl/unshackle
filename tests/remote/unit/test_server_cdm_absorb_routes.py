@@ -61,7 +61,6 @@ def env(monkeypatch):
     monkeypatch.setattr(handlers, "resolve_device_name", lambda *a, **k: "dev")
     monkeypatch.setattr(handlers, "check_vaults", lambda kids, name, **_: None)
     monkeypatch.setattr(handlers, "cache_to_vaults", lambda keys, name, **_: None)
-    monkeypatch.setattr(handlers, "server_cdm_allowed", lambda request, tag: True)
     monkeypatch.setattr(handlers, "find_title_for_track", lambda tid, session: SimpleNamespace())
     monkeypatch.setattr(handlers.config, "serve", {"users": {}}, raising=False)
 

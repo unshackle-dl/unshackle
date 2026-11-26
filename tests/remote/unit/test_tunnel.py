@@ -507,8 +507,6 @@ def test_a_download_job_refuses_a_tunnel_proxy(monkeypatch: pytest.MonkeyPatch) 
     from unshackle.core.api import handlers
     from unshackle.core.api.errors import APIError
 
-    monkeypatch.setattr(handlers, "server_cdm_allowed", lambda request, service: True)
-    monkeypatch.setattr(handlers, "server_cdm_max_height", lambda request, service: None)
     with pytest.raises(APIError, match="tunnel"):
         handlers.enforce_download_gates({"service": "EXAMPLE", "proxy": "tunnel:abc"}, None)
 

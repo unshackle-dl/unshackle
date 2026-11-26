@@ -27,18 +27,15 @@ from unshackle.core.api.handlers import (
     dashboard_authentication,
     dashboard_key,
     drop_identity_cache,
-    key_config_error,
     rate_limit_response,
     request_secret_key,
     server_account_regions,
-    server_cdm_max_height_error,
     validate_server_accounts,
 )
+from unshackle.core.api.key_policy import KeyPolicy, api_keys, rate_limit_error
 from unshackle.core.api.stats import (
     cdm_log_middleware,
     key_id,
-    key_rate_limit,
-    rate_limit_error,
     ring,
     stats,
     stats_middleware,
@@ -173,22 +170,14 @@ def _prepare_serve(serve: dict, no_key: bool, app_config: Any = None) -> str | N
             raise ValueError(f"serve.tiers.{tier_name} must be a mapping of setting to value")
         if problem := rate_limit_error(f"serve.tiers.{tier_name}", tier_cfg.get("rate_limit")):
             raise ValueError(problem)
-    for user_key, user_cfg in users.items() if isinstance(users, dict) else []:
-        user_services = user_cfg.get("services") if isinstance(user_cfg, dict) else None
-        username = user_cfg.get("username", user_key[:8] + "...") if isinstance(user_cfg, dict) else user_key[:8]
-        if user_services:
+    for user_key in api_keys(serve):
+        policy = KeyPolicy.of(user_key, serve)
+        username = policy.username or user_key[:8] + "..."
+        if user_services := (policy.entry or {}).get("services"):
             log.info(f"User '{username}' restricted to services: {', '.join(user_services)}")
-        tier = user_cfg.get("tier") if isinstance(user_cfg, dict) else None
-        if tier and tier not in tiers:
-            raise ValueError(f"serve.users.{username}.tier: no such tier '{tier}' under serve.tiers")
-        if isinstance(user_cfg, dict):
-            if problem := rate_limit_error(f"serve.users.{username}", user_cfg.get("rate_limit")):
-                raise ValueError(problem)
-            if problem := server_cdm_max_height_error(f"serve.users.{username}", user_cfg.get("server_cdm_max_height")):
-                raise ValueError(problem)
-            if problem := key_config_error(f"serve.users.{username}", user_cfg, app_config):
-                raise ValueError(problem)
-        limit = key_rate_limit(user_key, serve)
+        if problem := policy.entry_error(f"serve.users.{username}", app_config):
+            raise ValueError(problem)
+        limit = policy.rate_limit
         if limit:
             log.info(f"User '{username}' rate limited to {limit} requests/hour")
     return api_secret
