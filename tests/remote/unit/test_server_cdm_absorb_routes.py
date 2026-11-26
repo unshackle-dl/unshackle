@@ -138,7 +138,7 @@ async def test_no_pssh_tells_the_client_why(env, monkeypatch):
     monkeypatch.setattr(handlers, "detect_cdm_type_for_service", lambda tag, cfg: "playready")
     monkeypatch.setattr(handlers, "drm_preference_name", lambda track: None)
     monkeypatch.setattr(handlers, "fetch_init_segment", lambda track, sess: None)
-    monkeypatch.setattr(handlers, "extract_pssh_from_track", lambda track, drm: None)
+    monkeypatch.setattr(handlers, "track_pssh", lambda track, drm: None)
 
     await handlers.session_license_handler(
         {"mode": "server_cdm", "track_ids": ["vid"], "drm_type": "playready"}, "sess", None

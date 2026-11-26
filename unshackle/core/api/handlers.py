@@ -50,6 +50,7 @@ from unshackle.core.dl_options import (
     forwarded_dl_params,
 )
 from unshackle.core.drm import BlowfishStripe, cbcs, is_null_key, real_kids
+from unshackle.core.drm.discovery import drm_from_init_segment, ensure_track_drm, fetch_init_segment, track_pssh
 from unshackle.core.launch import served_context
 from unshackle.core.manifests.snapshot import capture
 from unshackle.core.proxies.resolve import initialize_proxy_providers, is_loopback, resolve_proxy
@@ -94,7 +95,6 @@ from unshackle.core.utils.hdr10plus import probed_tracks
 from unshackle.core.utils.redact import REDACTED, URL_USERINFO_RE, redact_all, redact_secrets, redact_text
 from unshackle.core.utils.service_params import FLAT_DL_KEYS, cast_service_options, service_options
 from unshackle.core.wire import (
-    descriptor_name,
     serialize_attachment,
     serialize_drm,
     serialize_title,
@@ -3626,134 +3626,6 @@ def find_title_for_track(track_id: str, session: Any) -> Any:
     return None
 
 
-def extract_pssh_from_track(track: Any, drm_type: str) -> str | None:
-    """The base64 PSSH of the track's DRM object for `drm_type`; None when the track has none of that system."""
-    for drm_obj in track.drm or []:
-        drm_class = drm_obj.__class__.__name__
-        if drm_type == "widevine" and drm_class == "Widevine":
-            pssh = getattr(drm_obj, "_pssh", None)
-            if pssh and hasattr(pssh, "dumps"):
-                return pssh.dumps()
-        elif drm_type == "playready" and drm_class == "PlayReady":
-            pssh_b64 = getattr(drm_obj, "data", {}).get("pssh_b64")
-            if pssh_b64:
-                return pssh_b64
-    return None
-
-
-def fetch_init_segment(track: Any, session: Any = None) -> bytes | None:
-    """The init segment of a DASH track, or the head of a one-file track with DRM; None otherwise, or when the fetch fails."""
-    from unshackle.core.manifests import DASH as DASHManifest
-
-    session = getattr(track, "session", None) or session
-    if session is None:
-        return None
-
-    dash = (getattr(track, "data", None) or {}).get("dash") or {}
-    if not all(dash.get(k) is not None for k in ("period", "adaptation_set", "representation", "manifest")):
-        if getattr(track, "descriptor", None) is not Video.Descriptor.URL or not getattr(track, "drm", None):
-            return None
-        try:
-            return track.get_init_segment(session=session)
-        except Exception as e:
-            log.debug(f"Init segment fetch failed for {track.id}: {e!r}")
-            return None
-
-    try:
-        return DASHManifest.get_period_segments(
-            period=dash["period"],
-            adaptation_set=dash["adaptation_set"],
-            representation=dash["representation"],
-            manifest=dash["manifest"],
-            track=track,
-            track_url=track.url,
-            session=session,
-        )[0]
-    except Exception as e:
-        log.warning(f"Init segment fetch failed for {track.id}: {e!r}")
-        return None
-
-
-def drm_from_init_segment(track: Any, session: Any = None, init_data: bytes | None = None) -> list:
-    """Read the DRM headers out of a DASH track's init segment.
-
-    Some manifests carry no ContentProtection PSSH; the real header reaches the player only
-    in the init segment, so the server must read it there too.
-    """
-    from unshackle.core.drm import PlayReady, Widevine
-
-    if init_data is None:
-        init_data = fetch_init_segment(track, session)
-    if not init_data:
-        return []
-
-    drms = []
-    for drm_cls in (Widevine, PlayReady):
-        try:
-            drms.append(drm_cls.from_init_data(init_data))
-        except Exception as e:
-            log.debug(f"No usable {drm_cls.__name__} PSSH in the init segment of {track.id}: {e!r}")
-    return drms
-
-
-def ensure_track_drm(track: Any, session: Any = None, init_data: bytes | None = None) -> None:
-    """Extract DRM from manifest data if track has none.
-
-    Supports DASH (ContentProtection elements, then the init segment), HLS
-    (EXT-X-KEY from playlist fetch), and ISM (ProtectionHeader elements).
-    """
-    if track.drm:
-        return
-
-    if track.data.get("dash"):
-        from unshackle.core.manifests import DASH as DASHManifest
-
-        rep = track.data["dash"].get("representation")
-        ada = track.data["dash"].get("adaptation_set")
-        if rep is not None and ada is not None:
-            track.drm = DASHManifest.get_drm(rep.findall("ContentProtection") + ada.findall("ContentProtection"))
-            if track.drm:
-                return
-
-        track.drm = drm_from_init_segment(track, session, init_data) or None
-        if track.drm:
-            return
-
-    if (track.data.get("hls") or descriptor_name(track) == "HLS") and track.url:
-        try:
-            import m3u8
-
-            from unshackle.core.drm import PlayReady, Widevine
-            from unshackle.core.manifests import HLS
-
-            http = getattr(track, "session", None) or session
-            playlist = m3u8.loads(utf8_text(http.get(track.url)), uri=track.url) if http else m3u8.load(track.url)
-            keys = [k for k in (playlist.keys or []) + (playlist.session_keys or []) if k is not None]
-            for key in keys:
-                try:
-                    drm = HLS.get_drm_or_probe(key, playlist, track, probe_session=http)
-                    if isinstance(drm, (Widevine, PlayReady)):
-                        track.drm = [drm]
-                        return
-                # EXT-X-KEY data is third-party input; skip keys we cannot turn into a DRM object
-                except Exception as e:
-                    log.debug(f"Skipping HLS key {key}: {e!r}")
-                    continue
-        except Exception as e:
-            log.debug(f"HLS DRM prefetch failed for {track.id}: {e!r}")
-
-    if track.data.get("ism"):
-        try:
-            from unshackle.core.manifests import ISM as ISMManifest
-
-            manifest = track.data["ism"].get("manifest")
-            if manifest is not None:
-                track.drm = ISMManifest.get_drm(manifest.xpath(".//ProtectionHeader"))
-        # a swallowed error here means the track silently gets no DRM, so it must be loud
-        except Exception as e:
-            log.warning(f"ISM DRM extraction failed for {track.id}: {e!r}")
-
-
 def resolve_device_name(policy: KeyPolicy, drm_type: str, service_tag: str = "") -> str:
     """Get the CDM device name, checking the service's cdm mapping first.
 
@@ -3828,9 +3700,9 @@ def pick_server_pssh(track: Any, candidates: list[str]) -> tuple[str, str] | Non
     Widevine DRM class converts the PlayReady PSSH on construction.
     """
     for candidate in candidates:
-        pssh_str = extract_pssh_from_track(track, candidate)
+        pssh_str = track_pssh(track, candidate)
         if not pssh_str and candidate == "widevine":
-            pssh_str = extract_pssh_from_track(track, "playready")
+            pssh_str = track_pssh(track, "playready")
             if pssh_str:
                 log.info(
                     f"Track {track_log_label(track)} has only a PlayReady PSSH, licensing it with the Widevine device"
@@ -3986,7 +3858,7 @@ def require_track_pssh(track: Any, pssh_b64: str, drm_type: str) -> None:
     unchecked PSSH would make the key vault answer with content keys for any title. The
     track's own PSSH passes as it is, so a header without KIDs still licenses.
     """
-    if pssh_b64 == extract_pssh_from_track(track, drm_type):
+    if pssh_b64 == track_pssh(track, drm_type):
         return
     try:
         client_kids = pssh_kids(pssh_b64, drm_type)
@@ -4034,7 +3906,7 @@ def handle_single_server_cdm(
     service_name = service.__class__.__name__
 
     if not pssh_b64:
-        pssh_b64 = extract_pssh_from_track(track, drm_type)
+        pssh_b64 = track_pssh(track, drm_type)
     if not pssh_b64:
         raise APIError(APIErrorCode.INVALID_INPUT, "No PSSH available for server_cdm licensing")
 

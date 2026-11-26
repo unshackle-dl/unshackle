@@ -28,7 +28,7 @@ from unshackle.core.config import config
 from unshackle.core.constants import DOWNLOAD_ALL_DRM, DOWNLOAD_CANCELLED, DOWNLOAD_LICENCE_ONLY, DownloadCancelled
 from unshackle.core.downloaders.requests import requests
 from unshackle.core.drm import DRM_T, BlowfishStripe, PlayReady, Widevine
-from unshackle.core.drm.cenc import init_kid, key_system
+from unshackle.core.drm.cenc import cenc_key, init_kid
 from unshackle.core.drm.verify import (
     children,
     decrypt_track,
@@ -1087,38 +1087,43 @@ class Track:
 
         return self.load_drm_from_playlist()
 
-    def load_drm_from_playlist(self) -> bool:
-        """
-        Fallback method to load DRM by fetching this track's individual playlist.
+    def load_drm_from_playlist(self, session: Any = None) -> bool:
+        """Load the Widevine and PlayReady DRM of the EXT-X-KEY and EXT-X-SESSION-KEY tags of this track's playlist.
+
+        It skips a tag that gives no DRM, and raises ValueError when the fetch fails or when every such tag fails.
         """
         if self.drm:
             self.needs_drm_loading = False
             return True
 
+        import m3u8
+
+        from unshackle.core.manifests.hls import HLS
+
+        session = self.session or session or run_proxy.fallback_session()
         try:
-            import m3u8
-
-            from unshackle.core.manifests.hls import HLS
-
-            session = getattr(self, "session", None) or run_proxy.fallback_session()
             assert isinstance(self.url, str)
-
-            response = session.get(self.url)
-            playlist = m3u8.loads(utf8_text(response), self.url)
-
-            drm_list: list[DRM_T] = [
-                HLS.get_drm_or_probe(key, playlist, self, probe_session=session)
-                for key in playlist.keys or []
-                if key_system(key)
-            ]
-            if drm_list:
-                self.drm = drm_list
-                self.needs_drm_loading = False
-                return True
-
+            playlist = m3u8.loads(utf8_text(session.get(self.url)), self.url)
         except Exception as e:
             raise ValueError(f"Failed to load DRM from playlist for track {self.id}: {e}")  # noqa: B904
 
+        drm_list: list[DRM_T] = []
+        error: Exception | None = None
+        keys = playlist.keys or []
+        for key in [*keys, *(k for k in playlist.session_keys or [] if k not in keys)]:
+            if not cenc_key(key):
+                continue
+            try:
+                drm_list.append(HLS.get_drm_or_probe(key, playlist, self, probe_session=session))
+            except Exception as e:
+                logging.getLogger("track").debug(f"Skipping HLS key {key} of track {self.id}: {e!r}")
+                error = e
+        if drm_list:
+            self.drm = drm_list
+            self.needs_drm_loading = False
+            return True
+        if error:
+            raise ValueError(f"Failed to load DRM from playlist for track {self.id}: {error}")
         return False
 
     def get_init_segment(

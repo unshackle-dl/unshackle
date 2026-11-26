@@ -51,6 +51,11 @@ def key_system(key: Any) -> UUID | None:
     return KEYFORMATS.get((getattr(key, "keyformat", None) or "").lower())
 
 
+def cenc_key(key: Any) -> bool:
+    """True when an EXT-X-KEY gives a CENC DRM: METHOD ISO-23001-7, or a Widevine or PlayReady KEYFORMAT."""
+    return bool(key) and (key.method == "ISO-23001-7" or key_system(key) is not None)
+
+
 def key_data(key: Any) -> str:
     """The base64 PSSH at the end of an EXT-X-KEY data URI."""
     return str(key.uri.split(",")[-1])

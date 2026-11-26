@@ -57,7 +57,7 @@ class _FakePlayReady:
         self.content_keys = {KID: "key_pr"}
 
 
-# extract_pssh_from_track matches on class name, so name the fakes after the DRM classes
+# track_pssh matches on class name, so name the fakes after the DRM classes
 _FakePlayReady.__name__ = "PlayReady"
 _FakeWidevine.__name__ = "Widevine"
 

@@ -46,6 +46,7 @@ from unshackle.core.credential import Credential
 from unshackle.core.dl_options import remote_dl_params
 from unshackle.core.drm import cbcs, real_kids
 from unshackle.core.drm.cenc import drm_stub
+from unshackle.core.drm.discovery import track_pssh
 from unshackle.core.launch import launch_keys
 from unshackle.core.manifests.snapshot import match_track, restore
 from unshackle.core.proxies.resolve import is_loopback
@@ -410,17 +411,6 @@ def sample_batches(samples: list[bytes]) -> Iterator[list[bytes]]:
         size += len(sample)
     if batch:
         yield batch
-
-
-def track_pssh(track: Any, drm_type: str, drm: Any = None) -> str | None:
-    """The base64 PSSH of one DRM system's header: ``drm``'s own when it is of that system, else the track's first."""
-    for drm_obj in [drm, *(track.drm or [])]:
-        drm_class = drm_obj.__class__.__name__
-        if drm_type == "playready" and drm_class == "PlayReady":
-            return drm_obj.data["pssh_b64"]
-        if drm_type == "widevine" and drm_class == "Widevine":
-            return drm_obj.pssh.dumps()
-    return None
 
 
 def apply_service_track_data(tracks: Tracks, data: dict[str, Any]) -> None:

@@ -19,6 +19,7 @@ from unshackle.core.constants import AnyTrack
 from unshackle.core.credential import Credential
 from unshackle.core.drm import ClearKey, MonaLisa, real_kids
 from unshackle.core.drm.cenc import drm_stub
+from unshackle.core.drm.discovery import drm_from_init_segment
 from unshackle.core.manifests import DASH, HLS, ISM, MissingLanguageError, snapshot
 from unshackle.core.remote_protocol import APIErrorCode, coded
 from unshackle.core.remote_service import resolve_proxy_arg, segment_uri_filter
@@ -795,8 +796,6 @@ class ImportService(TitleSource):
                     if kid and kid.int:
                         kids.add(kid)
                 return kids
-            from unshackle.core.api.handlers import drm_from_init_segment
-
             init_drm = drm_from_init_segment(track, session)
             if init_drm:
                 return {kid for drm in init_drm for kid in real_kids(drm)}

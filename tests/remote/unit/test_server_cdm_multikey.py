@@ -147,7 +147,7 @@ async def test_batch_shares_full_bundle_per_pssh(monkeypatch):
     monkeypatch.setattr(handlers, "detect_cdm_type_for_service", lambda tag, cfg: "playready")
     monkeypatch.setattr(handlers, "resolve_device_name", lambda *a, **k: "dev")
     monkeypatch.setattr(handlers, "drm_preference_name", lambda track: None)
-    monkeypatch.setattr(handlers, "extract_pssh_from_track", lambda track, drm: track_pssh[track.id])
+    monkeypatch.setattr(handlers, "track_pssh", lambda track, drm: track_pssh[track.id])
     monkeypatch.setattr(handlers, "handle_single_server_cdm", fake_single)
     monkeypatch.setattr(handlers.config, "serve", {"users": {}}, raising=False)
 

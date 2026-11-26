@@ -32,7 +32,7 @@ from unshackle.core.cdm.detect import cdm_type_stub, is_playready_cdm, is_widevi
 from unshackle.core.config import config
 from unshackle.core.constants import DOWNLOAD_ALL_DRM, DOWNLOAD_LICENCE_ONLY, AnyTrack
 from unshackle.core.drm import DRM_T, ClearKey, ClearKeyCENC, PlayReady, Widevine
-from unshackle.core.drm.cenc import PLAYREADY_ID, WIDEVINE_ID, hls_key_drm, key_data, key_system
+from unshackle.core.drm.cenc import PLAYREADY_ID, WIDEVINE_ID, cenc_key, hls_key_drm, key_data, key_system
 from unshackle.core.drm.segment_decrypt import SegmentDecrypter, can_use
 from unshackle.core.drm.verify import decrypt_track
 from unshackle.core.events import events
@@ -1336,7 +1336,7 @@ class HLS:
                     keyformat=item.get("keyformat"),
                     keyformatversions=",".join(item.get("keyformatversion") or item.get("keyformatversions") or []),
                 )
-                if key.method in {"AES-128", "ISO-23001-7"} or key_system(key):
+                if key.method == "AES-128" or cenc_key(key):
                     keys.append(key)
 
         return keys
@@ -1454,9 +1454,7 @@ class HLS:
             # TODO: Add support for 'SAMPLE-AES', 'AES-CTR', 'AES-CBC', 'ClearKey'
             elif key.method == "AES-128":
                 return key
-            elif key.method == "ISO-23001-7":
-                return key
-            elif key_system(key):
+            elif cenc_key(key):
                 return key
             else:
                 unsupported_systems.append(key.method + (f" ({key.keyformat})" if key.keyformat else ""))

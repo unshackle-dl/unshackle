@@ -354,7 +354,7 @@ CAP_DETAILS = {"reason": "server_cdm_max_height", "max_height": 1080}
 
 class _PSSHDrm:
     def __init__(self, b64, kids):
-        self._pssh = SimpleNamespace(dumps=lambda: b64)
+        self.pssh = SimpleNamespace(dumps=lambda: b64)
         self.kids = kids
 
 

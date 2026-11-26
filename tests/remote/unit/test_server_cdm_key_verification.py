@@ -103,7 +103,7 @@ async def test_server_does_not_flag_a_pair_its_cdm_licensed(session):
 
 class _WV:
     def __init__(self, b64, kids):
-        self._pssh = SimpleNamespace(dumps=lambda: b64)
+        self.pssh = SimpleNamespace(dumps=lambda: b64)
         self.kids = kids
 
 

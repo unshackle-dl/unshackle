@@ -246,7 +246,7 @@ def test_server_login_strips_nested_and_unlisted_secrets():
 def test_track_own_pssh_passes_without_kids(monkeypatch):
     from unshackle.core.api import handlers
 
-    monkeypatch.setattr(handlers, "extract_pssh_from_track", lambda track, drm_type: "OWN")
+    monkeypatch.setattr(handlers, "track_pssh", lambda track, drm_type: "OWN")
     monkeypatch.setattr(handlers, "pssh_kids", lambda pssh, drm_type: set())
     handlers.require_track_pssh(SimpleNamespace(id="t", drm=[]), "OWN", "widevine")
     with pytest.raises(APIError):

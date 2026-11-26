@@ -184,6 +184,50 @@ def test_load_drm_from_playlist_takes_the_init_kid_when_the_tag_and_pssh_have_no
     assert [drm.kids for drm in track.drm] == [[TRACK_KID]]
 
 
+def kid_pssh(kid: UUID) -> str:
+    return str(PSSH.new(system_id=PSSH.SystemId.Widevine, key_ids=[kid]).dumps())
+
+
+def test_load_drm_from_playlist_reads_the_session_keys_and_skips_a_bad_key() -> None:
+    bad = KEY_LINE.format(pssh="AAAA")
+    session = KEY_LINE.format(pssh=kid_pssh(TRACK_KID)).replace("#EXT-X-KEY", "#EXT-X-SESSION-KEY")
+    track = playlist_track(f"#EXTM3U\n{session}\n{bad}\n#EXTINF:6.0,\na.m4s\n#EXT-X-ENDLIST\n")
+
+    assert track.load_drm_from_playlist() is True
+    assert track.drm is not None
+    assert [drm.kids for drm in track.drm] == [[TRACK_KID]]
+    assert track.needs_drm_loading is False
+
+
+def test_load_drm_from_playlist_keeps_every_key_once() -> None:
+    line = KEY_LINE.format(pssh=kid_pssh(TRACK_KID))
+    other = KEY_LINE.format(pssh=kid_pssh(OTHER_KID))
+    iso = f'#EXT-X-KEY:METHOD=ISO-23001-7,URI="data:text/plain;base64,{base64.b64encode(OTHER_KID.bytes).decode()}"'
+    session = line.replace("#EXT-X-KEY", "#EXT-X-SESSION-KEY")
+    track = playlist_track(
+        f"#EXTM3U\n{session}\n{line}\n#EXTINF:6.0,\na.m4s\n{other}\n#EXTINF:6.0,\nb.m4s\n{iso}\n#EXTINF:6.0,\nc.m4s\n"
+    )
+
+    assert track.load_drm_from_playlist() is True
+    assert track.drm is not None
+    assert [drm.kids for drm in track.drm] == [[TRACK_KID], [OTHER_KID], [OTHER_KID]]
+
+
+def test_load_drm_from_playlist_raises_when_every_key_fails() -> None:
+    track = playlist_track(f"#EXTM3U\n{KEY_LINE.format(pssh='AAAA')}\n#EXTINF:6.0,\na.m4s\n#EXT-X-ENDLIST\n")
+
+    with pytest.raises(ValueError, match="Failed to load DRM from playlist"):
+        track.load_drm_from_playlist()
+
+
+def test_load_drm_from_playlist_uses_the_given_session_when_the_track_has_none() -> None:
+    track = playlist_track(f"#EXTM3U\n{KEY_LINE.format(pssh=kid_pssh(TRACK_KID))}\n#EXTINF:6.0,\na.m4s\n")
+    given, track.session = track.session, None
+
+    assert track.load_drm_from_playlist(given) is True
+    assert track.drm is not None
+
+
 def test_from_track_reads_the_playlist_pssh_and_the_init_kid() -> None:
     pssh_b64 = base64.b64encode(playready_box(OTHER_KID)).decode()
     line = (

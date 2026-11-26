@@ -20,7 +20,7 @@ KID = UUID("161219ec3df64e0eadbb3827c0ccc46d")
 
 class _PlayReady:
     def __init__(self):
-        self.data = {"pssh_b64": "PR"}
+        self.pssh_b64 = "PR"
         self.content_keys: dict = {}
 
 

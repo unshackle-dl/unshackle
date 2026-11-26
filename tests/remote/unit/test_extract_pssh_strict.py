@@ -1,4 +1,4 @@
-"""extract_pssh_from_track must answer for the requested DRM system only.
+"""track_pssh must answer for the requested DRM system only.
 
 A loose match made the batch candidate loop a no-op: the first candidate always won, so the
 loop licensed a PlayReady-only track as Widevine by accident. A Widevine device can still
@@ -12,13 +12,14 @@ import pytest
 
 from tests.remote.sessions import session_entry
 from unshackle.core.api import handlers
+from unshackle.core.drm.discovery import track_pssh
 
 pytestmark = pytest.mark.unit
 
 
 class _WV:
     def __init__(self, b64):
-        self._pssh = SimpleNamespace(dumps=lambda: b64)
+        self.pssh = SimpleNamespace(dumps=lambda: b64)
 
 
 _WV.__name__ = "Widevine"
@@ -26,7 +27,7 @@ _WV.__name__ = "Widevine"
 
 class _PR:
     def __init__(self, b64):
-        self.data = {"pssh_b64": b64}
+        self.pssh_b64 = b64
 
 
 _PR.__name__ = "PlayReady"
@@ -34,13 +35,25 @@ _PR.__name__ = "PlayReady"
 
 def test_extractor_is_type_strict():
     track = SimpleNamespace(drm=[_PR("pr")])
-    assert handlers.extract_pssh_from_track(track, "playready") == "pr"
-    assert handlers.extract_pssh_from_track(track, "widevine") is None
+    assert track_pssh(track, "playready") == "pr"
+    assert track_pssh(track, "widevine") is None
 
     track = SimpleNamespace(drm=[_WV("wv"), _PR("pr")])
-    assert handlers.extract_pssh_from_track(track, "widevine") == "wv"
-    assert handlers.extract_pssh_from_track(track, "playready") == "pr"
-    assert handlers.extract_pssh_from_track(SimpleNamespace(drm=None), "widevine") is None
+    assert track_pssh(track, "widevine") == "wv"
+    assert track_pssh(track, "playready") == "pr"
+    assert track_pssh(SimpleNamespace(drm=None), "widevine") is None
+
+
+def test_a_playready_header_without_a_pssh_is_skipped():
+    track = SimpleNamespace(drm=[_PR(None), _PR("pr")])
+    assert track_pssh(track, "playready") == "pr"
+    assert track_pssh(SimpleNamespace(drm=[_PR(None)]), "playready") is None
+
+
+def test_the_given_drm_goes_before_the_track_drm():
+    track = SimpleNamespace(drm=[_WV("track")])
+    assert track_pssh(track, "widevine", _WV("given")) == "given"
+    assert track_pssh(track, "widevine", _PR("pr")) == "track"
 
 
 async def _run_batch(monkeypatch, tracks, cdm_type, calls):

@@ -14,9 +14,9 @@ import pytest
 from pywidevine.pssh import PSSH as WvPSSH
 
 from tests.core.test_hls_kid_from_init import NO_KID_PSSH
-from unshackle.core.api import handlers
 from unshackle.core.drm import Widevine
-from unshackle.core.tracks import Track
+from unshackle.core.drm.discovery import ensure_track_drm, track_pssh
+from unshackle.core.tracks import Track, Video
 
 pytestmark = pytest.mark.unit
 
@@ -40,32 +40,45 @@ def _media_playlist(pssh: str | None = None) -> str:
     )
 
 
+def hls_track() -> Video:
+    track = Video.__new__(Video)
+    track.id = "vid"
+    track.url = "https://cdn.example.invalid/media.m3u8"
+    track.descriptor = Track.Descriptor.HLS
+    track.data = {}
+    track.drm = None
+    track.session = None
+    return track
+
+
 def test_hls_descriptor_alone_reaches_the_media_playlist_keys():
     session = SimpleNamespace(get=lambda url: SimpleNamespace(text=_media_playlist()))
-    track = SimpleNamespace(
-        id="vid", url="https://cdn.example.invalid/media.m3u8", descriptor=Track.Descriptor.HLS, data={}, drm=None
-    )
+    track = hls_track()
 
-    handlers.ensure_track_drm(track, session)
+    ensure_track_drm(track, session)
 
     assert track.drm and isinstance(track.drm[0], Widevine), "media playlist DRM not read"
     assert track.drm[0].kids == [KID]
-    assert base64.b64decode(handlers.extract_pssh_from_track(track, "widevine"))
+    assert base64.b64decode(track_pssh(track, "widevine"))
 
 
 def test_key_without_a_kid_takes_it_from_the_init_segment():
     """A PSSH that holds a content id and no Key ID is DRM, and the server must not call the track clear."""
     response = SimpleNamespace(text=_media_playlist(NO_KID_PSSH), ok=True, content=b"init")
     session = SimpleNamespace(get=lambda url, headers=None: response)
-    track = SimpleNamespace(
-        id="vid",
-        url="https://cdn.example.invalid/media.m3u8",
-        descriptor=Track.Descriptor.HLS,
-        data={},
-        drm=None,
-        get_key_id=lambda init: KID,
-    )
+    track = hls_track()
+    track.get_key_id = lambda init: KID  # type: ignore[method-assign]
 
-    handlers.ensure_track_drm(track, session)
+    ensure_track_drm(track, session)
 
     assert track.drm and track.drm[0].kids == [KID]
+
+
+def test_a_playlist_whose_keys_all_fail_leaves_the_track_without_drm():
+    """The server logs and goes on where dl raises."""
+    session = SimpleNamespace(get=lambda url: SimpleNamespace(text=_media_playlist("AAAA")))
+    track = hls_track()
+
+    ensure_track_drm(track, session)
+
+    assert not track.drm

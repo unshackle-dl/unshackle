@@ -1,7 +1,7 @@
 """The server CDM must license every WRM header a track carries, not only the first.
 
 A track can hold one `PlayReady` object per header: `ISM` shares a Protection list, `HLS`
-emits one per `EXT-X-KEY`. `extract_pssh_from_track` returns the first PSSH only, so the
+emits one per `EXT-X-KEY`. `track_pssh` returns the first PSSH only, so the
 server folds in the siblings. Without that it returns fewer content keys than a local CDM.
 """
 
