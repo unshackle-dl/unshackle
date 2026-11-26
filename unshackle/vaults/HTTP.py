@@ -1,15 +1,8 @@
 import json
 from collections.abc import Iterator
-from enum import Enum
 from uuid import UUID
 
 from unshackle.core.vault import RateLimited, Vault, is_null_key, vault_session
-
-
-class InsertResult(Enum):
-    FAILURE = 0
-    SUCCESS = 1
-    ALREADY_EXISTS = 2
 
 
 class HTTP(Vault):
@@ -365,69 +358,3 @@ class HTTP(Vault):
         This is optional and will be sent with add_key requests if available.
         """
         self.current_title = title
-
-    def insert_key_with_result(self, service: str, kid: UUID | str, key: str, title: str | None = None) -> InsertResult:
-        """
-        Insert a content key and return detailed result information.
-        This method provides more granular feedback than the standard add_key method.
-        Available in both API modes.
-        """
-        if is_null_key(key):
-            raise ValueError("You cannot add a NULL Content Key to a Vault.")
-
-        if self.api_mode == "decrypt_labs":
-            return InsertResult.FAILURE
-
-        if isinstance(kid, UUID):
-            kid = kid.hex
-
-        if title is None:
-            title = getattr(self, "current_title", None)
-
-        if self.api_mode == "json":
-            try:
-                res = self.request(
-                    "InsertKey",
-                    {
-                        "kid": kid,
-                        "key": key,
-                        "service": service.lower(),
-                        "title": title,
-                    },
-                )
-
-                if res.get("status") == "not_found":
-                    return InsertResult.FAILURE
-
-                if res.get("inserted", False):
-                    return InsertResult.SUCCESS
-                else:
-                    return InsertResult.ALREADY_EXISTS
-
-            except Exception:
-                return InsertResult.FAILURE
-        else:
-            response = self.session.get(
-                self.url,
-                params={
-                    "service": service.lower(),
-                    "username": self.username,
-                    "password": self.password,
-                    "kid": kid,
-                    "key": key,
-                    "title": title,
-                },
-                timeout=self.timeout,
-            )
-
-            try:
-                data = response.json()
-                if data.get("status_code") == 200:
-                    if data.get("inserted", True):
-                        return InsertResult.SUCCESS
-                    else:
-                        return InsertResult.ALREADY_EXISTS
-                else:
-                    return InsertResult.FAILURE
-            except Exception:
-                return InsertResult.FAILURE

@@ -150,19 +150,3 @@ class TemplateFormatter:
                 missing.append(var_name)
 
         return len(missing) == 0, missing
-
-    def get_required_variables(self) -> list[str]:
-        """Get list of required (non-conditional) variables."""
-        required = []
-        for variable in self.variables:
-            if not variable.endswith("?"):
-                required.append(variable)
-        return required
-
-    def get_optional_variables(self) -> list[str]:
-        """Get list of optional (conditional) variables."""
-        optional = []
-        for variable in self.variables:
-            if variable.endswith("?"):
-                optional.append(variable[:-1])  # Remove the ?
-        return optional

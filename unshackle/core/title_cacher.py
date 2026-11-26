@@ -139,29 +139,6 @@ class TitleCacher:
 
             raise
 
-    def clear_all_title_cache(self) -> None:
-        """Clear all title caches for this service."""
-        cache_dir = config.directories.cache / self.service_name
-        if cache_dir.exists():
-            for cache_file in cache_dir.glob("titles_*.json"):
-                cache_file.unlink()
-                self.log.info(f"Cleared cache file: {cache_file.name}")
-
-    def get_cache_stats(self) -> dict:
-        """Get cache statistics."""
-        total = sum(self.stats.values())
-        if total > 0:
-            hit_rate = (self.stats["hits"] / total) * 100
-        else:
-            hit_rate = 0
-
-        return {
-            "hits": self.stats["hits"],
-            "misses": self.stats["misses"],
-            "fallbacks": self.stats["fallbacks"],
-            "hit_rate": f"{hit_rate:.1f}%",
-        }
-
     def get_cached_provider(
         self,
         provider_name: str,

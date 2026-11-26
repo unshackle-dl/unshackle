@@ -14,7 +14,6 @@ import time
 import traceback
 import unicodedata
 import zlib
-from collections import defaultdict
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from datetime import UTC, datetime
 from fractions import Fraction
@@ -44,7 +43,6 @@ Utility functions for the unshackle media archival tool.
 This module provides various utility functions including:
 - Font discovery and fallback system for subtitle rendering
 - Cross-platform system font scanning with Windows → Linux font family mapping
-- Log file management and rotation
 - IP geolocation with caching and provider rotation
 - Language matching utilities
 - MP4/ISOBMFF box parsing
@@ -61,34 +59,6 @@ Main Font Functions:
     - find_font_with_fallbacks(): Match fonts with intelligent fallback strategies
     - suggest_font_packages(): Recommend packages to install for missing fonts
 """
-
-
-def rotate_log_file(log_path: Path, keep: int = 20) -> Path:
-    """
-    Update Log Filename and delete old log files.
-    It keeps only the 20 newest logs by default.
-    """
-    if not log_path:
-        raise ValueError("A log path must be provided")
-
-    try:
-        log_path.relative_to(Path(""))  # file name only
-    except ValueError:
-        pass
-    else:
-        log_path = config.directories.logs / log_path
-
-    log_path = log_path.parent / log_path.name.format_map(
-        defaultdict(str, name="root", time=datetime.now().strftime("%Y%m%d-%H%M%S"))
-    )
-
-    if log_path.parent.exists():
-        log_files = [x for x in log_path.parent.iterdir() if x.suffix == log_path.suffix]
-        for log_file in log_files[::-1][keep - 1 :]:
-            log_file.unlink()
-
-    log_path.parent.mkdir(parents=True, exist_ok=True)
-    return log_path
 
 
 def import_module_by_path(path: Path) -> ModuleType:
@@ -1272,55 +1242,6 @@ class DebugLogger:
             return str(data)
         except Exception:
             return f"[{type(data).__name__}]"
-
-    def log_operation_start(self, operation: str, **kwargs: Any) -> str:
-        """
-        Log the start of an operation and return an operation ID.
-
-        Args:
-            operation: Name of the operation
-            **kwargs: Additional context
-
-        Returns:
-            Operation ID you can use to log the end of the operation
-        """
-        op_id = str(uuid4())[:8]
-        self.log(
-            level="DEBUG",
-            operation=f"{operation}_start",
-            message=f"Starting operation: {operation}",
-            operation_id=op_id,
-            **kwargs,
-        )
-        return op_id
-
-    def log_operation_end(
-        self,
-        operation: str,
-        operation_id: str,
-        success: bool = True,
-        duration_ms: float | None = None,
-        **kwargs: Any,
-    ) -> None:
-        """
-        Log the end of an operation.
-
-        Args:
-            operation: Name of the operation
-            operation_id: Operation ID from log_operation_start
-            success: Whether the operation succeeded
-            duration_ms: Operation duration in milliseconds
-            **kwargs: Additional context
-        """
-        self.log(
-            level="INFO" if success else "ERROR",
-            operation=f"{operation}_end",
-            message=f"Finished operation: {operation}",
-            operation_id=operation_id,
-            success=success,
-            duration_ms=duration_ms,
-            **kwargs,
-        )
 
     def log_service_call(self, method: str, url: str, **kwargs: Any) -> None:
         """

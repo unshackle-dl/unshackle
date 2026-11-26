@@ -210,29 +210,6 @@ def get_year_by_id(
     return result.year
 
 
-def get_language_by_id(
-    tmdb_id: int,
-    kind: str,
-    title_cacher: TitleCacher | None = None,
-    cache_title_id: str | None = None,
-    cache_region: str | None = None,
-    cache_account_hash: str | None = None,
-) -> str | None:
-    """Get original language by TMDB ID."""
-    if title_cacher and cache_title_id:
-        cached = title_cacher.get_cached_provider("tmdb", cache_title_id, kind, cache_region, cache_account_hash)
-        language = ((cached or {}).get("detail") or {}).get("original_language")
-        if language:
-            log.debug("Using cached TMDB original language: %s", language)
-            return language
-
-    tmdb = get_provider("tmdb")
-    if not tmdb:
-        return None
-    result = tmdb.get_by_id(tmdb_id, kind)
-    return result.original_language if result else None
-
-
 def fetch_external_ids(
     tmdb_id: int,
     kind: str,
