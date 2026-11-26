@@ -99,7 +99,7 @@ class Cacher:
 
         if expiration is None:
             try:
-                expiration = jwt.decode(self.data, options={"verify_signature": False})["exp"]
+                expiration = jwt.decode(self.data, options={"verify_signature": False}).get("exp")
             except jwt.DecodeError:
                 pass
 

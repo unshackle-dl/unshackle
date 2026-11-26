@@ -78,6 +78,14 @@ def test_expired_jwt_is_stored_as_expired(cache: Cacher) -> None:
     assert entry.expired
 
 
+def test_jwt_without_exp_is_stored_with_no_expiration(cache: Cacher) -> None:
+    token = jwt.encode({"sub": "user"}, "k" * 32, algorithm="HS256")
+    cache.get("key").set(token)
+    stored = cache.get("key")
+    assert stored.data == token
+    assert stored.expiration is None
+
+
 def test_expiration_survives_a_change_of_time_zone(cache: Cacher, zone) -> None:  # type: ignore[no-untyped-def]
     zone("UTC")
     cache.get("key").set({"a": 1}, expiration=300)
