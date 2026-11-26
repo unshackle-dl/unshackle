@@ -83,7 +83,7 @@ Network-backed vaults (`HTTP` and `API`) accept an optional per-vault `timeout` 
 vault_timeout: 10.0   # default, in seconds
 ```
 
-A `timeout` set inline on an individual vault always wins over this global value. The `SQLite` and `MySQL` backends do not take a `timeout` field. `MySQL` uses `vault_timeout` as its `connect_timeout` instead, and falls back to the pymysql default of 10 seconds when `vault_timeout` is `0`. To use a different connect timeout, set `connect_timeout` on the vault.
+A `timeout` set inline on an individual vault always wins over this global value. The `SQLite` and `MySQL` backends do not take a `timeout` field. `MySQL` uses `vault_timeout` as its `connect_timeout`, `read_timeout` and `write_timeout` instead, and falls back to 10 seconds when `vault_timeout` is `0`. To use a different value, set that field on the vault.
 
 unshackle pushes content keys to all vaults at the same time, so one slow or unreachable vault costs only its own timeout and does not delay the others.
 
@@ -146,7 +146,9 @@ key_vaults:
 | `username` | yes | Login user. |
 | `no_push` | no | If `true`, keys are read but never written. |
 
-Any additional fields you provide (such as `password`, `port`, or `ssl`) are passed straight through to `pymysql.connect`, so you can use the full range of its connection options.
+Any additional fields you provide (such as `password`, `port`, or `ssl`) are passed straight through to `pymysql.connect`, so you can use the full range of its connection options. The one exception is `autocommit`, which is always on.
+
+Each `MySQL` vault keeps one connection open for the whole run and shares it between threads. If the server is down, unshackle skips the vault for the rest of the run.
 
 !!! warning "Account security is on you, not on unshackle"
     unshackle enforces none of this. It is operational policy for a database that may be shared with a group. Never connect with the `root` account, not even for yourself. Give every account a password, and never let two users share a username/password. Restrict each account's access to only the `unshackle` database, and grant normal users only `SELECT` and `INSERT`. Reserve the `CREATE` grant for a single trusted user who bootstraps the service tables (see [`kv prepare`](#kv-prepare-pre-create-service-tables)); everyone else can insert new keys but should not be creating tables.

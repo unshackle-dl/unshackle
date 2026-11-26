@@ -132,7 +132,7 @@ class SQLite(Vault):
                 placeholders = ",".join(["?"] * len(batch))
                 try:
                     cursor.execute(f"SELECT kid FROM `{service}` WHERE kid IN ({placeholders})", batch)
-                    existing_kids.update(row[0] for row in cursor.fetchall())
+                    existing_kids.update(row[0].lower() for row in cursor.fetchall())
                     i += batch_size
                 except sqlite3.OperationalError as e:
                     if "too many SQL variables" in str(e) and batch_size > 500:
@@ -140,14 +140,17 @@ class SQLite(Vault):
                         continue
                     raise
 
-            new_keys = {kid: key for kid, key in kid_keys.items() if kid not in existing_kids}
-
+            new_keys = {
+                (str(kid).lower(), key.lower()): (kid, key)
+                for kid, key in kid_keys.items()
+                if str(kid).lower() not in existing_kids
+            }
             if not new_keys:
                 return 0
 
             cursor.executemany(
                 f"INSERT INTO `{service}` (kid, key_) VALUES (?, ?)",
-                new_keys.items(),
+                new_keys.values(),
             )
             return len(new_keys)
         finally:
@@ -266,7 +269,7 @@ class SQLite(Vault):
         try:
             cursor.execute(
                 f"""
-                CREATE TABLE IF NOT EXISTS {name} (
+                CREATE TABLE IF NOT EXISTS `{name}` (
                   "id"        INTEGER NOT NULL UNIQUE,
                   "kid"       TEXT NOT NULL COLLATE NOCASE,
                   "key_"      TEXT NOT NULL COLLATE NOCASE,

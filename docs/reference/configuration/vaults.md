@@ -13,7 +13,7 @@ name) and a `name`, plus backend-specific keys.
 | `type` | Purpose | Required keys | Notes |
 |--------|---------|--------------|-------|
 | `SQLite` | Local SQLite database | `name`, `path` | Loaded **critically**; a failure aborts the run. |
-| `MySQL` | Remote MySQL database | `name`, `host`, `database`, `username` | Extra keys (e.g. `password`, `port`) forwarded to pymysql. `connect_timeout` defaults to `vault_timeout`. |
+| `MySQL` | Remote MySQL database | `name`, `host`, `database`, `username` | Extra keys (e.g. `password`, `port`) forwarded to pymysql. `connect_timeout`, `read_timeout` and `write_timeout` default to `vault_timeout`. `autocommit` is always on. |
 | `API` | RESTful JSON API | `name`, `uri`, `token` | Optional `headers` map is sent with every request. Honours `vault_timeout`. |
 | `HTTP` | HTTP API with modes | `name`, `host`, one of `password`/`api_key`, and `username` in query mode | `api_mode`: `query` (default), `json`, `decrypt_labs`. Honours `vault_timeout`. |
 
@@ -55,7 +55,7 @@ key_vaults:
 
 Timeout in seconds for vault operations. Injected automatically into any backend whose
 constructor accepts a `timeout` parameter (a per-vault `timeout` still wins). The `MySQL` backend
-uses it as the default `connect_timeout`.
+uses it as the default `connect_timeout`, `read_timeout` and `write_timeout`.
 
 The `API` and `HTTP` backends send a request again up to 3 times when the vault answers
 `429 Too Many Requests`. They wait the `Retry-After` time, but never longer than this timeout.

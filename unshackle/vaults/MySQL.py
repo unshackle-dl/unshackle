@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import threading
+import time
 from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import Any
 from uuid import UUID
 
@@ -24,7 +26,9 @@ class MySQL(Vault):
         """
         super().__init__(name, no_push)
         self.slug = f"{host}:{database}:{username}"
-        kwargs.setdefault("connect_timeout", config.vault_timeout or 10)
+        for timeout in ("connect_timeout", "read_timeout", "write_timeout"):
+            kwargs.setdefault(timeout, config.vault_timeout or 10)
+        kwargs["autocommit"] = True
         self.conn_factory = ConnectionFactory(
             dict(host=host, db=database, user=username, cursorclass=DictCursor, **kwargs)
         )
@@ -41,36 +45,27 @@ class MySQL(Vault):
         if not table:
             return None
 
-        conn = self.conn_factory.get()
-        cursor = conn.cursor()
-
-        try:
+        with self.conn_factory.cursor() as cursor:
             cursor.execute(
                 f"SELECT `id`, `key_` FROM `{table}` WHERE `kid`=%s AND `key_`!=%s",
                 (kid, "0" * 32),
             )
             cek = cursor.fetchone()
-            return cek["key_"] if cek else None
-        finally:
-            cursor.close()
+        return cek["key_"] if cek else None
 
     def get_keys(self, service: str) -> Iterator[tuple[str, str]]:
         table = self.resolve_table(service)
         if not table:
             return None
 
-        conn = self.conn_factory.get()
-        cursor = conn.cursor()
-
-        try:
+        with self.conn_factory.cursor() as cursor:
             cursor.execute(
                 f"SELECT `kid`, `key_` FROM `{table}` WHERE `key_`!=%s",
                 ("0" * 32,),
             )
-            for row in cursor.fetchall():
-                yield row["kid"], row["key_"]
-        finally:
-            cursor.close()
+            rows = cursor.fetchall()
+        for row in rows:
+            yield row["kid"], row["key_"]
 
     def add_key(self, service: str, kid: UUID | str, key: str) -> bool:
         if is_null_key(key):
@@ -90,24 +85,16 @@ class MySQL(Vault):
         if isinstance(kid, UUID):
             kid = kid.hex
 
-        conn = self.conn_factory.get()
-        cursor = conn.cursor()
-
-        try:
+        with self.conn_factory.cursor() as cursor:
             cursor.execute(
                 f"SELECT `id` FROM `{service}` WHERE `kid`=%s AND `key_`=%s",
                 (kid, key),
             )
-            if cursor.fetchone():
-                return True
-            cursor.execute(
-                f"INSERT INTO `{service}` (kid, key_) VALUES (%s, %s)",
-                (kid, key),
-            )
-        finally:
-            conn.commit()
-            cursor.close()
-
+            if not cursor.fetchone():
+                cursor.execute(
+                    f"INSERT INTO `{service}` (kid, key_) VALUES (%s, %s)",
+                    (kid, key),
+                )
         return True
 
     def add_keys(self, service: str, kid_keys: dict[UUID | str, str]) -> int:
@@ -137,43 +124,36 @@ class MySQL(Vault):
         if not kid_keys:
             return 0
 
-        conn = self.conn_factory.get()
-        cursor = conn.cursor()
-
-        try:
+        with self.conn_factory.cursor() as cursor:
             existing_kids: set[str] = set()
             kid_list = list(kid_keys)
             for i in range(0, len(kid_list), 10000):
                 batch = kid_list[i : i + 10000]
                 placeholders = ",".join(["%s"] * len(batch))
                 cursor.execute(f"SELECT kid FROM `{service}` WHERE kid IN ({placeholders})", batch)
-                existing_kids.update(row["kid"] for row in cursor.fetchall())
+                existing_kids.update(row["kid"].lower() for row in cursor.fetchall())
 
-            new_keys = {kid: key for kid, key in kid_keys.items() if kid not in existing_kids}
-
+            new_keys = {
+                (str(kid).lower(), key.lower()): (kid, key)
+                for kid, key in kid_keys.items()
+                if str(kid).lower() not in existing_kids
+            }
             if not new_keys:
                 return 0
 
             cursor.executemany(
                 f"INSERT INTO `{service}` (kid, key_) VALUES (%s, %s)",
-                new_keys.items(),
+                new_keys.values(),
             )
-            return len(new_keys)
-        finally:
-            conn.commit()
-            cursor.close()
+        return len(new_keys)
 
     def get_services(self) -> Iterator[str]:
-        conn = self.conn_factory.get()
-        cursor = conn.cursor()
-
-        try:
+        with self.conn_factory.cursor() as cursor:
             cursor.execute("SHOW TABLES")
-            for table in cursor.fetchall():
-                # each entry has a key named `Tables_in_<db name>`
-                yield list(table.values())[0]
-        finally:
-            cursor.close()
+            tables = cursor.fetchall()
+        for table in tables:
+            # each entry has a key named `Tables_in_<db name>`
+            yield list(table.values())[0]
 
     def resolve_table(self, name: str) -> str | None:
         """
@@ -182,18 +162,13 @@ class MySQL(Vault):
         The UPPER() comparison is explicit so the result does not depend on the server's
         `lower_case_table_names` setting. Where both spellings exist, exact case wins.
         """
-        conn = self.conn_factory.get()
-        cursor = conn.cursor()
-
-        try:
+        with self.conn_factory.cursor() as cursor:
             cursor.execute(
                 "SELECT TABLE_NAME FROM information_schema.TABLES"
                 " WHERE TABLE_SCHEMA=%s AND UPPER(TABLE_NAME)=UPPER(%s)",
-                (conn.db, name),
+                (cursor.connection.db, name),
             )
             names = [list(row.values())[0] for row in cursor.fetchall()]
-        finally:
-            cursor.close()
 
         if name in names:
             return name
@@ -201,19 +176,14 @@ class MySQL(Vault):
 
     def has_table(self, name: str) -> bool:
         """Return True if the Vault has a Table with the specified name."""
-        conn = self.conn_factory.get()
-        cursor = conn.cursor()
-
-        try:
+        with self.conn_factory.cursor() as cursor:
             cursor.execute(
                 "SELECT count(TABLE_NAME) FROM information_schema.TABLES WHERE TABLE_SCHEMA=%s AND TABLE_NAME=%s",
-                (conn.db, name),
+                (cursor.connection.db, name),
             )
             row = cursor.fetchone()
-            assert row is not None  # COUNT() always returns one row
-            return list(row.values())[0] == 1
-        finally:
-            cursor.close()
+        assert row is not None  # COUNT() always returns one row
+        return list(row.values())[0] == 1
 
     def create_table(self, name: str) -> None:
         """Make a Table with the specified name if it does not exist yet."""
@@ -223,13 +193,10 @@ class MySQL(Vault):
         if not self.has_permission("CREATE"):
             raise PermissionError(f"MySQL vault {self.slug} has no CREATE permission.")
 
-        conn = self.conn_factory.get()
-        cursor = conn.cursor()
-
-        try:
+        with self.conn_factory.cursor() as cursor:
             cursor.execute(
                 f"""
-                CREATE TABLE IF NOT EXISTS {name} (
+                CREATE TABLE IF NOT EXISTS `{name}` (
                   id          int AUTO_INCREMENT PRIMARY KEY,
                   kid         VARCHAR(64) NOT NULL,
                   key_        VARCHAR(64) NOT NULL,
@@ -237,30 +204,20 @@ class MySQL(Vault):
                 );
                 """
             )
-        finally:
-            conn.commit()
-            cursor.close()
 
     def get_permissions(self) -> list:
         """Get and parse Grants to a more usable list tuple array."""
-        conn = self.conn_factory.get()
-        cursor = conn.cursor()
-
-        try:
+        with self.conn_factory.cursor() as cursor:
             cursor.execute("SHOW GRANTS")
             grants = [next(iter(x.values())) for x in cursor.fetchall()]
-            grants = [tuple(x[6:].split(" TO ")[0].split(" ON ")) for x in list(grants)]
-            grants = [
-                (
-                    list(map(str.strip, perms.replace("ALL PRIVILEGES", "*").split(","))),
-                    location.replace("`", "").split("."),
-                )
-                for perms, location in grants
-            ]
-            return grants
-        finally:
-            conn.commit()
-            cursor.close()
+        grants = [tuple(x[6:].split(" TO ")[0].split(" ON ")) for x in grants]
+        return [
+            (
+                list(map(str.strip, perms.replace("ALL PRIVILEGES", "*").split(","))),
+                location.replace("`", "").split("."),
+            )
+            for perms, location in grants
+        ]
 
     def has_permission(self, operation: str, database: str | None = None, table: str | None = None) -> bool:
         """Return True if the current connection has a specific permission."""
@@ -273,14 +230,33 @@ class MySQL(Vault):
 
 
 class ConnectionFactory:
+    """One connection per vault, shared by every thread, because a vault lookup runs on a new thread each time.
+
+    A pymysql connection is not thread-safe, so each cursor holds the lock until it closes. The cursor pings a
+    connection idle for PING_AFTER seconds first, since a NAT or VPN can drop it silently. A failed connect raises
+    ConnectionError, so Vaults skips the vault for the rest of the run.
+    """
+
+    PING_AFTER = 10.0
+
     def __init__(self, con: dict) -> None:
         self._con = con
-        self._store = threading.local()
+        self._conn: pymysql.Connection[DictCursor] | None = None
+        self._lock = threading.RLock()
+        self._used = 0.0
 
-    def create_connection(self) -> pymysql.Connection[DictCursor]:
-        return pymysql.connect(**self._con)
-
-    def get(self) -> pymysql.Connection[DictCursor]:
-        if not hasattr(self._store, "conn"):
-            self._store.conn = self.create_connection()
-        return self._store.conn
+    @contextmanager
+    def cursor(self) -> Iterator[DictCursor]:
+        with self._lock:
+            try:
+                if self._conn is None:
+                    self._conn = pymysql.connect(**self._con)
+                elif time.monotonic() - self._used > self.PING_AFTER:
+                    self._conn.ping(reconnect=True)
+            except pymysql.err.OperationalError as e:
+                raise ConnectionError(str(e)) from e
+            try:
+                with self._conn.cursor() as cursor:
+                    yield cursor
+            finally:
+                self._used = time.monotonic()

@@ -206,3 +206,25 @@ def test_lookups_work_from_another_thread(vault: SQLite) -> None:
     thread.start()
     thread.join()
     assert found == [KEY]
+
+
+@pytest.mark.parametrize("service", ["9EXAMPLE", "EXAMPLE-OTHER"])
+def test_a_tag_that_is_not_a_bare_identifier_gets_a_table(tmp_path: Path, service: str) -> None:
+    v = SQLite("test", tmp_path / "kv.db")
+    assert v.add_keys(service, {KID: KEY}) == 1
+    assert v.add_key(service, "0" * 31 + "2", "b" * 32)
+    assert v.get_key(KID, service) == KEY
+    assert tables(v.path) == sorted([service, "sqlite_sequence"])
+
+
+def test_add_keys_skips_a_kid_stored_in_another_case(tmp_path: Path) -> None:
+    v = SQLite("test", tmp_path / "kv.db")
+    v.add_key("SVCA", "AB" * 16, KEY)
+    batch = {"ab" * 16: KEY, "cd" * 16: "b" * 32, "CD" * 16: "B" * 32, "EF" * 16: "c" * 32, "ef" * 16: "d" * 32}
+    assert v.add_keys("SVCA", batch) == 3
+    assert sorted(v.get_keys("SVCA")) == [
+        ("AB" * 16, KEY),
+        ("CD" * 16, "B" * 32),
+        ("EF" * 16, "c" * 32),
+        ("ef" * 16, "d" * 32),
+    ]
