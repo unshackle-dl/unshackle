@@ -2236,6 +2236,9 @@ have their own key: a user key or a tier key never opens them.</p>
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">    </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">a-long-random-string</span>
 </span></code></pre></div>
 <p>Without <code>dashboard.key</code> the server does not register the routes, and they answer <code>404</code>.
+A config reload that removes the dashboard key closes the dashboard: the routes answer <code>404</code> and
+an open <code>/api/dashboard/events</code> connection ends. To add a dashboard key to a server that started
+without one, restart it.
 <code>serve --no-key</code> turns off user authentication only; the dashboard key stays required.
 Once the dashboard key is set, every <code>/api/dashboard/</code> request must carry it in
 <code>X-Secret-Key</code>.

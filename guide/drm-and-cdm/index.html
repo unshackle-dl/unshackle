@@ -3021,6 +3021,9 @@ fetches the content key directly (from the given URI or an inline <code>data:</c
 decrypts each segment in-process with AES-CBC. There is no device, no CDM, and no
 license challenge, so you do not set anything up. unshackle decrypts such tracks
 automatically during download.</p>
+<p>The <code>EXT-X-KEY</code> URI must return a content key of exactly 16 bytes, or the download stops with an error.
+If a decrypted segment has no valid PKCS7 padding, unshackle keeps the output and
+logs one warning for the track, because the content key is possibly wrong.</p>
 <h3 id="clearkey-over-cenc-w3c-eme-orgw3clearkey">ClearKey over CENC (W3C EME <code>org.w3.clearkey</code>)<a class="headerlink" href="#clearkey-over-cenc-w3c-eme-orgw3clearkey" title="Permanent link">&para;</a></h3>
 <p>The CENC ClearKey scheme is a proper license flow, but the "license server"
 returns the keys as a JWK Set and not a DRM-wrapped blob. unshackle builds a W3C

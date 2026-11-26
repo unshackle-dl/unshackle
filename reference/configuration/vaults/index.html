@@ -2057,7 +2057,7 @@ name) and a <code>name</code>, plus backend-specific keys.</p>
 <td><code>MySQL</code></td>
 <td>Remote MySQL database</td>
 <td><code>name</code>, <code>host</code>, <code>database</code>, <code>username</code></td>
-<td>Extra keys (e.g. <code>password</code>, <code>port</code>) forwarded to pymysql. <code>connect_timeout</code> defaults to <code>vault_timeout</code>.</td>
+<td>Extra keys (e.g. <code>password</code>, <code>port</code>) forwarded to pymysql. <code>connect_timeout</code>, <code>read_timeout</code> and <code>write_timeout</code> default to <code>vault_timeout</code>. <code>autocommit</code> is always on.</td>
 </tr>
 <tr>
 <td><code>API</code></td>
@@ -2113,7 +2113,7 @@ supplied the pair gets a report. A <code>serve</code> instance with
 </ul>
 <p>Timeout in seconds for vault operations. Injected automatically into any backend whose
 constructor accepts a <code>timeout</code> parameter (a per-vault <code>timeout</code> still wins). The <code>MySQL</code> backend
-uses it as the default <code>connect_timeout</code>.</p>
+uses it as the default <code>connect_timeout</code>, <code>read_timeout</code> and <code>write_timeout</code>.</p>
 <p>The <code>API</code> and <code>HTTP</code> backends send a request again up to 3 times when the vault answers
 <code>429 Too Many Requests</code>. They wait the <code>Retry-After</code> time, but never longer than this timeout.
 A connection failure or a timeout is not tried again. The run does not use a vault again after a

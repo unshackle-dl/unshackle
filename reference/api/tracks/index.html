@@ -8763,12 +8763,13 @@ of <code>get_init_segment</code> to find the Key ID.</p>
 
 
 <a href="#unshackle.core.tracks.Track.load_drm_from_playlist" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">load_drm_from_playlist</span><span class="p">()</span>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">load_drm_from_playlist</span><span class="p">(</span><span class="n">session</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
 </span></code></pre></div>
 
     <div class="doc doc-contents ">
 
-        <p>Fallback method to load DRM by fetching this track's individual playlist.</p>
+        <p>Load the Widevine and PlayReady DRM of the EXT-X-KEY and EXT-X-SESSION-KEY tags of this track's playlist.</p>
+<p>It skips a tag that gives no DRM, and raises ValueError when the fetch fails or when every such tag fails.</p>
 
 
     </div>

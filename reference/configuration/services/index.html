@@ -2278,7 +2278,7 @@ is the <a href="../../../dev/rest-api/">REST API</a> section. These are the conf
 <td><code>dashboard</code></td>
 <td>dict</td>
 <td><em>(unset)</em></td>
-<td>Developer dashboard: <code>key</code> is the API key for the read-only <code>/api/dashboard/</code> endpoints (status, remote sessions, remote session logs, jobs, keys, services, health, logs, SSE events). Unset leaves those routes unregistered. See <a href="../../../dev/rest-api/dashboard/">dashboard endpoints</a>.</td>
+<td>Developer dashboard: <code>key</code> is the API key for the read-only <code>/api/dashboard/</code> endpoints (status, remote sessions, remote session logs, jobs, keys, services, health, logs, SSE events). Unset leaves those routes unregistered, and a reload that removes the key makes them answer <code>404</code>. See <a href="../../../dev/rest-api/dashboard/">dashboard endpoints</a>.</td>
 </tr>
 <tr>
 <td><code>session_ttl</code></td>
@@ -2367,8 +2367,10 @@ the whole file again, globs the device directories again, and swaps in the new <
 <code>tiers</code>, <code>services</code> and device lists in one step. Open CDM sessions and remote sessions
 continue; an API key you removed gets <code>401</code> on its next request. A file that does not parse
 or validate keeps the running settings and logs the reason. A change to <code>remote_only</code>,
-<code>services_refresh_interval</code>, the first PlayReady device, or any command-line flag needs
-a restart, and the log says so. A new <code>global_speed_limit</code> applies to jobs that start after the
+<code>services_refresh_interval</code>, the first PlayReady device, a <code>dashboard.key</code> on a server that
+started without one, or any command-line flag needs a restart, and the log says so. A reload
+that removes <code>dashboard.key</code> closes the dashboard: its routes answer <code>404</code> and an open
+<code>/api/dashboard/events</code> connection ends. A new <code>global_speed_limit</code> applies to jobs that start after the
 reload; running jobs keep their share. Windows has no <code>SIGHUP</code>: restart the server there.</p>
 </div>
 <p><code>server_cdm</code> decides whether the server runs the CDM licensing for that API key. Set it to
