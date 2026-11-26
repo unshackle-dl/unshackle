@@ -224,7 +224,7 @@ def test_a_capped_track_without_a_local_device_fails_clearly():
 def test_a_capped_track_without_the_local_drm_system_fails_clearly():
     fails_at_the_track_licence(
         PR_DEVICE,
-        r"1080p.*the 2160p track has only Widevine DRM for your PlayReady device; pass -q 2160 ",
+        r"1080p.*the 2160p track has only Widevine DRM, which your local PlayReady CDM cannot license; pass -q 2160 ",
     )
 
 

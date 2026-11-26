@@ -57,7 +57,8 @@ does not set the order.
 On a server, an entry that holds `widevine` and `playready` gives a remote session the server CDM
 of the DRM system of the client's local CDM. The service then makes its manifest for that system,
 so the client's vault keys and its own device apply to the tracks. A client with no local CDM gets
-the device that the entry lists first.
+the device that the entry lists first. A service option that runs the remote session on the server's
+device, such as a server-identity flag, always gets the device that the entry lists first.
 
 A quality key can also hold a dict of `widevine` / `playready` devices, and so can the
 top-level `default` entry:

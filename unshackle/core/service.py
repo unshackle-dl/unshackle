@@ -167,7 +167,8 @@ class Service(TitleSource):
     # such as an ESN); the server's own values for these keys are withheld from that session.
     CLIENT_CONFIG: tuple[str, ...] = ()
     # Every service option that makes the service call ``cdm.lend_server_device()``. A remote session with
-    # one of them set keeps the server CDM even when the remote client picked its own device.
+    # one of them set keeps the server CDM even when the remote client picked its own device, and the server
+    # loads the first-listed device of its cdm entry, whatever system the client's device is.
     SERVER_DEVICE_OPTIONS: tuple[str, ...] = ()
     # Cache key prefixes that hold state built from the device identity (a device ID, device session keys), never
     # login state. A remote session on the server's device keeps them on the server, per API key.

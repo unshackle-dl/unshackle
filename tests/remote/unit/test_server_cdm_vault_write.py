@@ -132,7 +132,7 @@ def test_a_capped_track_takes_a_local_vault_key_before_the_refusal():
 def test_a_capped_track_no_vault_holds_raises_the_refusal():
     import click
 
-    with pytest.raises(click.ClickException, match="only Widevine DRM for your PlayReady device"):
+    with pytest.raises(click.ClickException, match="only Widevine DRM, which your local PlayReady CDM cannot license"):
         capped_run(FakeVaults())
 
 

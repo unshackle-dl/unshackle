@@ -718,7 +718,9 @@ def setup_list_service(
     if account:
         profile = None if account == "default" else account
 
-    cdm = load_full_cdm(normalized_service, profile, data.get("cdm_type"), policy.cdm_config())
+    service_module = Services.load(normalized_service)
+    cdm_type = None if server_device_requested(service_module, data) else data.get("cdm_type")
+    cdm = load_full_cdm(normalized_service, profile, cdm_type, policy.cdm_config())
     cookies, credential = server_login_material(data, normalized_service, account, profile)
 
     parent_ctx = served_context(
@@ -726,7 +728,6 @@ def setup_list_service(
         {"proxy": proxy_param, "no_proxy": no_proxy, **forwarded_dl_params(data)},
         {"cookies_supplied": cookies is not None},
     )
-    service_module = Services.load(normalized_service)
     service_instance = instantiate_service(parent_ctx, service_module, title_id, data, LIST_HANDLER_TRANSPORT_KEYS)
 
     if account:
@@ -891,6 +892,16 @@ def requested_height(quality: Any) -> int | None:
     return max(heights) if heights else None
 
 
+def server_device_requested(service_module: Any, data: dict[str, Any]) -> bool:
+    """True when the request sets one of the service's ``SERVER_DEVICE_OPTIONS``, cast as the service's own options cast it."""
+    options = service_options(data, getattr(service_module, "SERVER_DEVICE_OPTIONS", ()))
+    params = getattr(getattr(service_module, "cli", None), "params", ())
+    try:
+        return any(cast_service_options(params, None, options).values())
+    except click.BadParameter:
+        return False
+
+
 def choose_session_cdm(policy: KeyPolicy, service: str, data: dict[str, Any]) -> tuple[bool, int | None]:
     """``(server_cdm, max_height)`` for a new remote session.
 
@@ -902,8 +913,7 @@ def choose_session_cdm(policy: KeyPolicy, service: str, data: dict[str, Any]) ->
     if not policy.allows("server_cdm", service):
         return False, None
     if data.get("server_cdm") is False and data.get("cdm_type"):
-        server_device_options = getattr(Services.load(service), "SERVER_DEVICE_OPTIONS", ())
-        if not any(service_options(data, server_device_options).values()):
+        if not server_device_requested(Services.load(service), data):
             return False, None
     cap = policy.max_height(service)
     wanted = requested_height(data.get("quality"))
@@ -2729,6 +2739,9 @@ def create_service_instance(
     With ``client_device`` the service sees a stand-in for the client's device, which relays CDM calls
     through ``input_bridge`` when the client can answer them, and a config holding the client's own identity.
 
+    A service option in ``SERVER_DEVICE_OPTIONS`` gets the server's device whatever device the client has: from an
+    entry with a device for both systems, the one the entry lists first.
+
     With ``server_account`` the service takes the server's own credential and cookie file for
     ``profile`` and drops anything the client sent. Otherwise only client-sent data counts: a
     client that sends nothing authenticates with nothing, because the server never lends its
@@ -2758,7 +2771,9 @@ def create_service_instance(
 
         cdm = client_device_cdm(data, input_bridge, lend_server_device)
     else:
-        follows_client = not server_cdm or choose_cdm(key_config.cdm, normalized_service).both
+        follows_client = not server_cdm or (
+            choose_cdm(key_config.cdm, normalized_service).both and not server_device_requested(service_module, data)
+        )
         cdm = load_full_cdm(normalized_service, profile, data.get("cdm_type") if follows_client else None, key_config)
 
     # Reconstruct enum track-selection params from client data so service code that reads

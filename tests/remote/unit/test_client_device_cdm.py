@@ -349,6 +349,81 @@ def test_a_lent_device_gives_the_service_the_server_config_back(monkeypatch: pyt
     assert service_config == {"esn": "SERVER", "esn_map": {7000: "s"}, "other": 1}
 
 
+@click.command()
+@click.option("--server-side", is_flag=True, default=False)
+def server_side_cli(server_side: bool) -> None: ...
+
+
+class ServerSideService:
+    SERVER_DEVICE_OPTIONS = ("server_side",)
+    cli = server_side_cli
+
+
+@pytest.mark.parametrize(
+    ("entry", "client_type", "server_side", "client_device", "loaded"),
+    [
+        pytest.param({"playready": "pr", "widevine": "wv"}, "widevine", True, False, "pr", id="server-cdm-session"),
+        pytest.param({"widevine": "wv", "playready": "pr"}, "playready", True, False, "wv", id="first-listed-wins"),
+        pytest.param({"playready": "pr", "widevine": "wv"}, "widevine", False, False, "wv", id="follows-the-client"),
+        pytest.param({"playready": "pr", "widevine": "wv"}, "widevine", True, True, "pr", id="lent-device"),
+    ],
+)
+def test_a_server_device_option_takes_the_first_listed_device_of_a_dual_entry(
+    monkeypatch: pytest.MonkeyPatch, entry: dict, client_type: str, server_side: bool, client_device: bool, loaded: str
+) -> None:
+    built: dict = {}
+    devices: list = []
+    monkeypatch.setattr(handlers.config, "cdm", {"EXAMPLE1": entry}, raising=False)
+    monkeypatch.setattr(handlers, "device_system", lambda name, cfg: {"wv": "widevine", "pr": "playready"}[name])
+    monkeypatch.setattr("unshackle.core.cdm.load_cdm", lambda name, **k: devices.append(name))
+    monkeypatch.setattr(handlers, "served_context", lambda obj, *a: built.update(cdm=obj.cdm))
+    monkeypatch.setattr(handlers.Services, "load", lambda tag: ServerSideService)
+    monkeypatch.setattr(handlers, "instantiate_service", lambda *a, **k: "service")
+
+    data = {"cdm_type": client_type, "cdm_relay": True, "service_params": {"server_side": server_side}}
+    handlers.create_service_instance(
+        "EXAMPLE1",
+        "t",
+        data,
+        None,
+        [],
+        None,
+        server_cdm=not client_device,
+        client_device=client_device,
+        input_bridge=InputBridge(),
+    )
+    if client_device:
+        built["cdm"].lend_server_device()
+    assert devices == [loaded]
+
+
+@pytest.mark.parametrize(
+    ("value", "requested"), [(True, True), ("false", False), ("0", False), ("yes", True), (False, False)]
+)
+def test_a_server_device_option_counts_as_the_service_casts_it(value: Any, requested: bool) -> None:
+    assert handlers.server_device_requested(ServerSideService, {"service_params": {"server_side": value}}) is requested
+
+
+@pytest.mark.parametrize(("server_side", "cdm_type"), [(True, None), (False, "widevine")])
+def test_a_track_listing_with_a_server_device_option_ignores_the_client_system(
+    monkeypatch: pytest.MonkeyPatch, server_side: bool, cdm_type: str | None
+) -> None:
+    loaded: list = []
+    service = SimpleNamespace(authenticate=lambda cookies, credential: None)
+    monkeypatch.setattr(key_policy, "load_service_config", lambda tag: {})
+    monkeypatch.setattr(handlers, "resolve_handler_proxy", lambda *a: (None, []))
+    monkeypatch.setattr(handlers, "resolve_server_account", lambda *a: None)
+    monkeypatch.setattr(handlers, "server_login_material", lambda *a: (None, None))
+    monkeypatch.setattr(handlers, "load_full_cdm", lambda service, profile, cdm_type, cfg: loaded.append(cdm_type))
+    monkeypatch.setattr(handlers, "served_context", lambda *a: None)
+    monkeypatch.setattr(handlers.Services, "load", lambda tag: ServerSideService)
+    monkeypatch.setattr(handlers, "instantiate_service", lambda *a, **k: service)
+
+    data = {"cdm_type": "widevine", "service_params": {"server_side": server_side}}
+    handlers.setup_list_service(data, "EXAMPLE1", None, "t")
+    assert loaded == [cdm_type]
+
+
 def test_a_client_map_entry_replaces_the_server_entry_of_the_same_number() -> None:
     merged, _ = handlers.client_config_overlay(
         {"esn_map": {4464: "server-template", 7000: "other"}}, ("esn_map",), {"esn_map": {"4464": "client-template"}}

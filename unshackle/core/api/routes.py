@@ -2048,7 +2048,8 @@ async def session_create(request: web.Request) -> web.Response:
                 description: |
                   DRM system of the client's local CDM; absent when the client has none.
                   A server CDM session loads the device of this system when the server's
-                  cdm entry for the service names both systems
+                  cdm entry for the service names both systems, unless the request sets one
+                  of the service's SERVER_DEVICE_OPTIONS: then the entry's first-listed device
               cdm_security_level:
                 type: integer
                 description: |

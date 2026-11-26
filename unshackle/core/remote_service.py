@@ -1641,7 +1641,9 @@ class RemoteService(TitleSource):
                 label = f"the {height}p track" if height else str(track)
                 hint = f"; pass -q {height} to start the session on your device" if cap and height else ""
                 have = " and ".join(sorted(systems))
-                raise click.ClickException(f"{why}, and {label} has only {have} DRM for your {drm_class} device{hint}")
+                raise click.ClickException(
+                    f"{why}, and {label} has only {have} DRM, which your local {drm_class} CDM cannot license{hint}"
+                )
             drm_class = other
         track.drm_preference = drm_class.lower()
         self.client_licensed.add(str(track.id))
