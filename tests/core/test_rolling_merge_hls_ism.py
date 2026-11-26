@@ -29,13 +29,13 @@ from unshackle.core import constants
 from unshackle.core.config import config
 from unshackle.core.constants import DOWNLOAD_CANCELLED
 from unshackle.core.drm import ClearKeyCENC, MonaLisa, Widevine
+from unshackle.core.drm import cenc as cenc_module
 from unshackle.core.manifests import DASH, HLS, ISM
 from unshackle.core.manifests import dash as dash_module
 from unshackle.core.manifests import hls as hls_module
 from unshackle.core.manifests import segment_pipeline
 from unshackle.core.manifests.ism_init import PIFF_SENC_UUID
 from unshackle.core.tracks import Video
-from unshackle.core.tracks import track as track_module
 from unshackle.core.tracks.track import DownloadContext
 
 INIT = bytes(range(100))
@@ -67,7 +67,7 @@ class _Handler(BaseHTTPRequestHandler):
 @pytest.fixture(autouse=True)
 def no_ffprobe(monkeypatch):
     """The fake init segments hold no stream for FFprobe to read, so the KID probe goes on to the boxes."""
-    monkeypatch.setattr(track_module, "ffprobe", lambda data: {})
+    monkeypatch.setattr(cenc_module, "ffprobe", lambda data: {})
 
 
 @pytest.fixture

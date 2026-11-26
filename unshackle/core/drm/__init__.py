@@ -2,6 +2,7 @@ from typing import Any
 from uuid import UUID
 
 from unshackle.core.drm.blowfish_stripe import BlowfishStripe
+from unshackle.core.drm.cenc import PLACEHOLDER_KIDS
 from unshackle.core.drm.clearkey import ClearKey
 from unshackle.core.drm.clearkey_cenc import ClearKeyCENC
 from unshackle.core.drm.monalisa import MonaLisa
@@ -23,14 +24,14 @@ def drop_null_keys(drm: Any) -> None:
 
 def real_kids(drm: Any) -> list[UUID]:
     """Return the KIDs a DRM object names, without the all-zero and test-pattern placeholders."""
-    return [kid for kid in getattr(drm, "kids", None) or [] if kid.int and kid not in Widevine.PLACEHOLDER_KIDS]
+    return [kid for kid in getattr(drm, "kids", None) or [] if kid not in PLACEHOLDER_KIDS]
 
 
 def own_kids(drm: Any) -> list[UUID]:
     """Return the real KIDs that identify the track's own content key, as the DRM object knows them."""
     own = getattr(drm, "own_kids", None)
     kids = own() if callable(own) else getattr(drm, "kids", None) or []
-    return [kid for kid in kids if kid.int and kid not in Widevine.PLACEHOLDER_KIDS]
+    return [kid for kid in kids if kid not in PLACEHOLDER_KIDS]
 
 
 __all__ = (

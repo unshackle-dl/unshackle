@@ -3,13 +3,11 @@ from __future__ import annotations
 import base64
 import re
 from collections.abc import Callable
-from pathlib import Path
 from threading import Lock
 from typing import Any
 from uuid import UUID
 
 import click
-import m3u8
 from construct import Container
 from pymp4.parser import Box
 from pyplayready.cdm import Cdm as PlayReadyCdm
@@ -18,19 +16,16 @@ from pyplayready.system.pssh import PSSH
 from pyplayready.system.wrmheader import WRMHeader
 
 from unshackle.core.cdm.http_cdm import HttpCdm
-from unshackle.core.config import config
-from unshackle.core.constants import AnyTrack
-from unshackle.core.drm import key_args as drm_key_args
-from unshackle.core.drm.decrypters import decrypt_cenc, mp4decrypt, shaka_decrypt
+from unshackle.core.drm.cenc import PLAYREADY_ID, CencDrm, as_kid
 from unshackle.core.remote_protocol import APIErrorCode
-from unshackle.core.session import AnySession, utf8_text
-from unshackle.core.utilities import call_licence, get_boxes, log_event
-from unshackle.core.utils import run_proxy
-from unshackle.core.utils.subprocess import ffprobe
+from unshackle.core.utilities import call_licence, log_event
 
 
-class PlayReady:
+class PlayReady(CencDrm):
     """PlayReady DRM System."""
+
+    SYSTEM_ID = PLAYREADY_ID
+    NAME = "PlayReady"
 
     _ABSORB_LOCK = Lock()
 
@@ -56,17 +51,9 @@ class PlayReady:
                 if extra_kid not in kids:
                     kids.append(extra_kid)
 
-        self._kid: UUID | None = None
-        if kid:
-            if isinstance(kid, str):
-                kid = UUID(hex=kid)
-            elif isinstance(kid, bytes):
-                kid = UUID(bytes=kid)
-            if not isinstance(kid, UUID):
-                raise ValueError(f"Expected kid to be a {UUID}, str, or bytes, not {kid!r}")
-            self._kid = kid
-            if kid not in kids:
-                kids.append(kid)
+        self._kid = as_kid(kid)
+        if self._kid and self._kid not in kids:
+            kids.append(self._kid)
 
         self._pssh = pssh
         self._kids = kids
@@ -189,76 +176,9 @@ class PlayReady:
         return cls(pssh=pssh, kid=kid, pssh_b64=pssh_b64)
 
     @classmethod
-    def from_track(cls, track: AnyTrack, session: AnySession | None = None) -> PlayReady:
-        if not session:
-            session = run_proxy.fallback_session()
-            session.headers.update(config.headers)
-
-        kid: UUID | None = None
-        pssh_boxes: list[Container] = []
-        tenc_boxes: list[Container] = []
-
-        if track.descriptor == track.Descriptor.HLS:
-            m3u_url = track.url
-            assert isinstance(m3u_url, str)
-            master = m3u8.loads(utf8_text(session.get(m3u_url)), uri=m3u_url)
-            pssh_boxes.extend(
-                Box.parse(base64.b64decode(x.uri.split(",")[-1]))
-                for x in (master.session_keys or master.keys)
-                if x
-                and x.keyformat
-                and x.keyformat.lower() in {f"urn:uuid:{PSSH.SYSTEM_ID}", "com.microsoft.playready"}
-            )
-
-        init_data = track.get_init_segment(session=session)
-        if init_data:
-            probe = ffprobe(init_data)
-            if probe:
-                for stream in probe.get("streams") or []:
-                    enc_key_id = stream.get("tags", {}).get("enc_key_id")
-                    if enc_key_id:
-                        kid = UUID(bytes=base64.b64decode(enc_key_id))
-            pssh_boxes.extend(list(get_boxes(init_data, b"pssh")))
-            tenc_boxes.extend(list(get_boxes(init_data, b"tenc")))
-
-        pssh = next((b for b in pssh_boxes if b.system_ID == PSSH.SYSTEM_ID), None)
-        if not pssh:
-            raise PlayReady.Exceptions.PSSHNotFound("PSSH was not found in track data.")
-
-        tenc = next(iter(tenc_boxes), None)
-        if not kid and tenc and tenc.key_ID.int != 0:
-            kid = tenc.key_ID
-
-        pssh_bytes = Box.build(pssh)
-        return cls(pssh=PSSH(pssh_bytes), kid=kid, pssh_b64=base64.b64encode(pssh_bytes).decode())
-
-    @classmethod
-    def from_init_data(cls, init_data: bytes) -> PlayReady:
-        if not init_data:
-            raise ValueError("Init data should be provided.")
-        if not isinstance(init_data, bytes):
-            raise TypeError(f"Expected init data to be bytes, not {init_data!r}")
-
-        kid: UUID | None = None
-        pssh_boxes: list[Container] = list(get_boxes(init_data, b"pssh"))
-        tenc_boxes: list[Container] = list(get_boxes(init_data, b"tenc"))
-
-        probe = ffprobe(init_data)
-        if probe:
-            for stream in probe.get("streams") or []:
-                enc_key_id = stream.get("tags", {}).get("enc_key_id")
-                if enc_key_id:
-                    kid = UUID(bytes=base64.b64decode(enc_key_id))
-
-        pssh = next((b for b in pssh_boxes if b.system_ID == PSSH.SYSTEM_ID), None)
-        if not pssh:
-            raise PlayReady.Exceptions.PSSHNotFound("PSSH was not found in track data.")
-
-        tenc = next(iter(tenc_boxes), None)
-        if not kid and tenc and tenc.key_ID.int != 0:
-            kid = tenc.key_ID
-
-        pssh_bytes = Box.build(pssh)
+    def from_pssh_box(cls, box: Container, kid: UUID | None) -> PlayReady:
+        """Make the DRM from a parsed PlayReady pssh box and the track's own KID."""
+        pssh_bytes = Box.build(box)
         return cls(pssh=PSSH(pssh_bytes), kid=kid, pssh_b64=base64.b64encode(pssh_bytes).decode())
 
     @property
@@ -268,16 +188,6 @@ class PlayReady:
     @property
     def pssh_b64(self) -> str | None:
         return self.data.get("pssh_b64")
-
-    @property
-    def kid(self) -> UUID | None:
-        return next(iter(self.kids), None)
-
-    def to_dict(self) -> dict[str, Any]:
-        """This DRM in the export form; see ``wire.drm_to_dict``."""
-        from unshackle.core.wire import drm_to_dict
-
-        return drm_to_dict(self)
 
     @property
     def kids(self) -> list[UUID]:
@@ -532,32 +442,6 @@ class PlayReady:
             if is_revocation(code):
                 return describe(code) or f"0x{code & 0xFFFFFFFF:08X}"
         return None
-
-    def decrypt(self, path: Path) -> None:
-        """Decrypt the file at ``path`` in place with this track's PlayReady content keys."""
-        decrypt_cenc(self, path, "PlayReady")
-
-    def own_kids(self) -> list[UUID]:
-        """Return the KIDs that identify this track's own content key.
-
-        The KID given to the constructor (from the manifest or the init segment) names the
-        track exactly. A PSSH can name the KIDs of other renditions too.
-        """
-        if self._kid and self._kid in self.content_keys:
-            return [self._kid]
-        return self.kids
-
-    def mp4decrypt_key_args(self, track_kids: dict[int, UUID] | None = None) -> list[str]:
-        """Build the mp4decrypt --key arguments for every content key, the zero-KID and the track ID fallbacks."""
-        return drm_key_args.mp4decrypt_key_args(self.content_keys, self.own_kids(), track_kids)
-
-    def decrypt_with_mp4decrypt(self, path: Path) -> None:
-        """Decrypt with mp4decrypt."""
-        mp4decrypt(path, self.mp4decrypt_key_args)
-
-    def decrypt_with_shaka_packager(self, path: Path) -> None:
-        """Decrypt with shaka-packager."""
-        shaka_decrypt(path, drm_key_args.shaka_keys(self.content_keys, self.own_kids()), "PlayReady")
 
     class Exceptions:
         class PSSHNotFound(Exception):

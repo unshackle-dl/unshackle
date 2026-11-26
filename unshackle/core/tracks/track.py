@@ -1,4 +1,3 @@
-import base64
 import contextlib
 import html
 import logging
@@ -29,6 +28,7 @@ from unshackle.core.config import config
 from unshackle.core.constants import DOWNLOAD_ALL_DRM, DOWNLOAD_CANCELLED, DOWNLOAD_LICENCE_ONLY, DownloadCancelled
 from unshackle.core.downloaders.requests import requests
 from unshackle.core.drm import DRM_T, BlowfishStripe, PlayReady, Widevine
+from unshackle.core.drm.cenc import init_kid, key_system
 from unshackle.core.drm.verify import (
     children,
     decrypt_track,
@@ -42,9 +42,8 @@ from unshackle.core.events import events
 from unshackle.core.session import MAX_BACKOFF, AnySession, RnetSession, utf8_text
 from unshackle.core.temp import restore_segments, stash_segments
 from unshackle.core.tracks import resume
-from unshackle.core.utilities import get_boxes, language_name, log_event, try_ensure_utf8
+from unshackle.core.utilities import language_name, log_event, try_ensure_utf8
 from unshackle.core.utils import run_proxy
-from unshackle.core.utils.subprocess import ffprobe
 
 DRM_PREFERENCE_TYPES: dict[str, type[Widevine] | type[PlayReady]] = {
     "wv": Widevine,
@@ -1055,23 +1054,7 @@ class Track:
         if not isinstance(init_data, bytes):
             raise TypeError(f"Expected init_data to be bytes, not {init_data!r}")
 
-        probe = ffprobe(init_data)
-        if probe:
-            for stream in probe.get("streams") or []:
-                enc_key_id = stream.get("tags", {}).get("enc_key_id")
-                if enc_key_id:
-                    return UUID(bytes=base64.b64decode(enc_key_id))
-
-        for tenc in get_boxes(init_data, b"tenc"):
-            if tenc.key_ID.int != 0:
-                return tenc.key_ID
-
-        for uuid_box in get_boxes(init_data, b"uuid"):
-            if uuid_box.extended_type == UUID("8974dbce-7be7-4c51-84f9-7148f9882554"):
-                tenc = uuid_box.data
-                if tenc.key_ID.int != 0:
-                    return tenc.key_ID
-        return None
+        return init_kid(init_data)
 
     def load_drm_if_needed(self, service: Any | None = None) -> bool:
         """
@@ -1114,9 +1097,8 @@ class Track:
 
         try:
             import m3u8
-            from pyplayready.system.pssh import PSSH as PR_PSSH
-            from pywidevine.cdm import Cdm as WidevineCdm
-            from pywidevine.pssh import PSSH as WV_PSSH
+
+            from unshackle.core.manifests.hls import HLS
 
             session = getattr(self, "session", None) or run_proxy.fallback_session()
             assert isinstance(self.url, str)
@@ -1124,22 +1106,11 @@ class Track:
             response = session.get(self.url)
             playlist = m3u8.loads(utf8_text(response), self.url)
 
-            drm_list = []
-
-            for key in playlist.keys or []:
-                if not key or not key.keyformat:
-                    continue
-
-                fmt = key.keyformat.lower()
-                if fmt == WidevineCdm.urn:
-                    pssh_b64 = key.uri.split(",")[-1]
-                    drm: DRM_T = Widevine(pssh=WV_PSSH(pssh_b64))
-                    drm_list.append(drm)
-                elif fmt in {f"urn:uuid:{PR_PSSH.SYSTEM_ID}", "com.microsoft.playready"}:
-                    pssh_b64 = key.uri.split(",")[-1]
-                    drm = PlayReady.from_pssh_b64(pssh_b64)
-                    drm_list.append(drm)
-
+            drm_list: list[DRM_T] = [
+                HLS.get_drm_or_probe(key, playlist, self, probe_session=session)
+                for key in playlist.keys or []
+                if key_system(key)
+            ]
             if drm_list:
                 self.drm = drm_list
                 self.needs_drm_loading = False

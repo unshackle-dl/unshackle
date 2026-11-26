@@ -24,8 +24,6 @@ import m3u8
 import requests
 from langcodes import Language, tag_is_valid
 from m3u8 import M3U8
-from pyplayready.system.pssh import PSSH as PR_PSSH
-from pywidevine.cdm import Cdm as WidevineCdm
 from pywidevine.pssh import PSSH as WV_PSSH
 from requests import Session
 
@@ -34,6 +32,7 @@ from unshackle.core.cdm.detect import cdm_type_stub, is_playready_cdm, is_widevi
 from unshackle.core.config import config
 from unshackle.core.constants import DOWNLOAD_ALL_DRM, DOWNLOAD_LICENCE_ONLY, AnyTrack
 from unshackle.core.drm import DRM_T, ClearKey, ClearKeyCENC, PlayReady, Widevine
+from unshackle.core.drm.cenc import PLAYREADY_ID, WIDEVINE_ID, hls_key_drm, key_data, key_system
 from unshackle.core.drm.segment_decrypt import SegmentDecrypter, can_use
 from unshackle.core.drm.verify import decrypt_track
 from unshackle.core.events import events
@@ -49,7 +48,7 @@ from unshackle.core.manifests.segment_pipeline import (
 )
 from unshackle.core.session import RnetResponse, RnetSession, utf8_text
 from unshackle.core.tracks import Audio, DownloadContext, Subtitle, Tracks, Video, resume
-from unshackle.core.tracks.track import DRM_PREFERENCE_TYPES, assert_fragments_decrypted
+from unshackle.core.tracks.track import DRM_PREFERENCE_TYPES, Track, assert_fragments_decrypted
 from unshackle.core.utilities import get_extension, is_close_match, log_event, try_ensure_utf8
 from unshackle.core.utils import run_proxy
 from unshackle.core.utils.redact import safe_display_url
@@ -1337,15 +1336,7 @@ class HLS:
                     keyformat=item.get("keyformat"),
                     keyformatversions=",".join(item.get("keyformatversion") or item.get("keyformatversions") or []),
                 )
-                if key.method in {"AES-128", "ISO-23001-7"} or (
-                    key.keyformat
-                    and key.keyformat.lower()
-                    in {
-                        WidevineCdm.urn,
-                        f"urn:uuid:{PR_PSSH.SYSTEM_ID}",
-                        "com.microsoft.playready",
-                    }
-                ):
+                if key.method in {"AES-128", "ISO-23001-7"} or key_system(key):
                     keys.append(key)
 
         return keys
@@ -1365,13 +1356,11 @@ class HLS:
         A track's drm_preference wins over the CDM. If the playlist has no EXT-X-KEY entry
         for it, the CDM decides as usual.
         """
-        playready_urn = f"urn:uuid:{PR_PSSH.SYSTEM_ID}"
-        playready_keyformats = {playready_urn, "com.microsoft.playready"}
         if drm_preference:
             if DRM_PREFERENCE_TYPES[drm_preference] is PlayReady:
-                preferred = [k for k in keys if k.keyformat and k.keyformat.lower() in playready_keyformats]
+                preferred = [k for k in keys if key_system(k) == PLAYREADY_ID]
             else:
-                preferred = [k for k in keys if k.keyformat and k.keyformat.lower() == WidevineCdm.urn]
+                preferred = [k for k in keys if key_system(k) == WIDEVINE_ID]
             if preferred:
                 return preferred
             logging.getLogger("HLS").warning(
@@ -1379,9 +1368,9 @@ class HLS:
                 "using the CDM's DRM instead"
             )
         if is_widevine_cdm(cdm):
-            return [k for k in keys if k.keyformat and k.keyformat.lower() == WidevineCdm.urn]
+            return [k for k in keys if key_system(k) == WIDEVINE_ID]
         elif is_playready_cdm(cdm):
-            return [k for k in keys if k.keyformat and k.keyformat.lower() in playready_keyformats]
+            return [k for k in keys if key_system(k) == PLAYREADY_ID]
         return keys
 
     @staticmethod
@@ -1408,7 +1397,7 @@ class HLS:
     @staticmethod
     def get_track_kid_from_init(
         master: M3U8,
-        track: AnyTrack,
+        track: Track,
         session: Session | RnetSession,
         init_section: m3u8.model.InitializationSection | None = None,
     ) -> UUID | None:
@@ -1467,12 +1456,7 @@ class HLS:
                 return key
             elif key.method == "ISO-23001-7":
                 return key
-            elif key.keyformat and key.keyformat.lower() == WidevineCdm.urn:
-                return key
-            elif key.keyformat and key.keyformat.lower() in {
-                f"urn:uuid:{PR_PSSH.SYSTEM_ID}",
-                "com.microsoft.playready",
-            }:
+            elif key_system(key):
                 return key
             else:
                 unsupported_systems.append(key.method + (f" ({key.keyformat})" if key.keyformat else ""))
@@ -1507,23 +1491,9 @@ class HLS:
         if key.method == "AES-128":
             drm = ClearKey.from_m3u_key(key, session)
         elif key.method == "ISO-23001-7":
-            drm = Widevine(pssh=WV_PSSH.new(key_ids=[key.uri.split(",")[-1]], system_id=WV_PSSH.SystemId.Widevine))
-        elif key.keyformat and key.keyformat.lower() == WidevineCdm.urn:
-            extra_params = dict(key._extra_params)  # noqa
-            pssh = WV_PSSH(key.uri.split(",")[-1])
-            if kid in Widevine.PLACEHOLDER_KIDS or any(k not in Widevine.PLACEHOLDER_KIDS for k in pssh.key_ids):
-                kid = None
-            # a v0 PSSH can carry no KID: the tag's own KEYID is the first source, the init segment the last
-            tag_kid = extra_params.pop("keyid", None) or extra_params.pop("kid", None)
-            if isinstance(tag_kid, str):
-                tag_kid = tag_kid.removeprefix("0x").removeprefix("0X")
-            drm = Widevine(
-                pssh=pssh,
-                kid=tag_kid or kid,
-                **extra_params,
-            )
-        elif key.keyformat and key.keyformat.lower() in {f"urn:uuid:{PR_PSSH.SYSTEM_ID}", "com.microsoft.playready"}:
-            drm = PlayReady.from_pssh_b64(key.uri.split(",")[-1])
+            drm = Widevine(pssh=WV_PSSH.new(key_ids=[key_data(key)], system_id=WV_PSSH.SystemId.Widevine))
+        elif cenc_drm := hls_key_drm(key, kid):
+            drm = cenc_drm
         else:
             raise NotImplementedError(f"The key system is not supported: {key}")
 
@@ -1533,7 +1503,7 @@ class HLS:
     def get_drm_or_probe(
         key: m3u8.model.SessionKey | m3u8.model.Key,
         master: M3U8,
-        track: AnyTrack,
+        track: Track,
         session: Session | RnetSession | None = None,
         init_section: m3u8.model.InitializationSection | None = None,
         probe_session: Any = None,
