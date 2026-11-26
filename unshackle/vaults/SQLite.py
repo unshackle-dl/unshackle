@@ -75,14 +75,12 @@ class SQLite(Vault):
 
         try:
             cursor.execute(
-                # TODO: SQL injection risk
                 f"SELECT `id` FROM `{service}` WHERE `kid`=? AND `key_`=?",
                 (kid, key),
             )
             if cursor.fetchone():
                 return True
             cursor.execute(
-                # TODO: SQL injection risk
                 f"INSERT INTO `{service}` (kid, key_) VALUES (?, ?)",
                 (kid, key),
             )
@@ -267,7 +265,6 @@ class SQLite(Vault):
 
         try:
             cursor.execute(
-                # TODO: SQL injection risk
                 f"""
                 CREATE TABLE IF NOT EXISTS {name} (
                   "id"        INTEGER NOT NULL UNIQUE,

@@ -46,7 +46,6 @@ class MySQL(Vault):
 
         try:
             cursor.execute(
-                # TODO: SQL injection risk
                 f"SELECT `id`, `key_` FROM `{table}` WHERE `kid`=%s AND `key_`!=%s",
                 (kid, "0" * 32),
             )
@@ -65,7 +64,6 @@ class MySQL(Vault):
 
         try:
             cursor.execute(
-                # TODO: SQL injection risk
                 f"SELECT `kid`, `key_` FROM `{table}` WHERE `key_`!=%s",
                 ("0" * 32,),
             )
@@ -97,14 +95,12 @@ class MySQL(Vault):
 
         try:
             cursor.execute(
-                # TODO: SQL injection risk
                 f"SELECT `id` FROM `{service}` WHERE `kid`=%s AND `key_`=%s",
                 (kid, key),
             )
             if cursor.fetchone():
                 return True
             cursor.execute(
-                # TODO: SQL injection risk
                 f"INSERT INTO `{service}` (kid, key_) VALUES (%s, %s)",
                 (kid, key),
             )
@@ -232,7 +228,6 @@ class MySQL(Vault):
 
         try:
             cursor.execute(
-                # TODO: SQL injection risk
                 f"""
                 CREATE TABLE IF NOT EXISTS {name} (
                   id          int AUTO_INCREMENT PRIMARY KEY,
