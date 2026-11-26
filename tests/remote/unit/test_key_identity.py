@@ -8,7 +8,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from unshackle.core.api import handlers, key_policy
+from unshackle.core.api import handlers, job_admission, key_policy
 from unshackle.core.api.errors import APIError
 from unshackle.core.api.key_policy import KeyPolicy
 from unshackle.core.api.session_store import get_session_store
@@ -87,7 +87,7 @@ def test_a_job_is_refused_for_a_key_with_its_own_identity(server, monkeypatch):
         handlers, "request_policy", lambda request: KeyPolicy({"server_cdm": True, "cdm": {"EXAMPLE": "own"}})
     )
     with pytest.raises(APIError, match="its own"):
-        handlers.enforce_download_gates({"service": "EXAMPLE"})
+        job_admission.enforce_download_gates({"service": "EXAMPLE"})
 
 
 @pytest.mark.parametrize(

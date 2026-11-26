@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from unshackle.core.api import handlers, key_policy
+from unshackle.core.api import handlers, job_admission, key_policy
 from unshackle.core.api.errors import APIError
 from unshackle.core.remote_protocol import APIErrorCode
 from unshackle.core.utils import ip_info
@@ -213,38 +213,38 @@ class TestDownloadGates:
 
     def test_country_code_rejected_when_denied(self, monkeypatch):
         with pytest.raises(APIError) as exc_info:
-            handlers.enforce_download_gates({"service": "EXAMPLE", "proxy": "us"}, request("plainkey"))
+            job_admission.enforce_download_gates({"service": "EXAMPLE", "proxy": "us"}, request("plainkey"))
         assert exc_info.value.error_code == APIErrorCode.INVALID_PROXY
 
     def test_provider_country_rejected_when_denied(self, monkeypatch):
         with pytest.raises(APIError) as exc_info:
-            handlers.enforce_download_gates({"service": "EXAMPLE", "proxy": "nordvpn:us"}, request("plainkey"))
+            job_admission.enforce_download_gates({"service": "EXAMPLE", "proxy": "nordvpn:us"}, request("plainkey"))
         assert exc_info.value.error_code == APIErrorCode.INVALID_PROXY
 
     def test_full_uri_passes_when_denied(self):
-        handlers.enforce_download_gates(
+        job_admission.enforce_download_gates(
             {"service": "EXAMPLE", "proxy": "socks5://user:pass@host:1080"}, request("plainkey")
         )
 
     def test_no_proxy_param_passes_when_denied(self):
-        handlers.enforce_download_gates({"service": "EXAMPLE"}, request("plainkey"))
+        job_admission.enforce_download_gates({"service": "EXAMPLE"}, request("plainkey"))
 
     def test_country_code_passes_when_opted_in(self, monkeypatch):
         # The gate must not even try to resolve for an opted-in key: dl resolves at run time,
         # exactly as before the gate existed.
         monkeypatch.setattr(handlers, "initialize_proxy_providers", lambda **_: pytest.fail("providers loaded"))
-        handlers.enforce_download_gates({"service": "EXAMPLE", "proxy": "us"}, request("proxykey"))
+        job_admission.enforce_download_gates({"service": "EXAMPLE", "proxy": "us"}, request("proxykey"))
 
     def test_region_mismatch_rejected_at_submit(self, monkeypatch):
         """A queued job reaches the same region verdict, at submission."""
         patch_server_region(monkeypatch, "IN")
         with pytest.raises(APIError) as exc_info:
-            handlers.enforce_download_gates({"service": "EXAMPLE", "client_region": "gb"}, request("plainkey"))
+            job_admission.enforce_download_gates({"service": "EXAMPLE", "client_region": "gb"}, request("plainkey"))
         assert exc_info.value.error_code == APIErrorCode.INVALID_PROXY
 
     def test_download_proxy_on_local_network_refused(self):
         with pytest.raises(APIError) as exc_info:
-            handlers.enforce_download_gates(
+            job_admission.enforce_download_gates(
                 {"service": "EXAMPLE", "proxy_download": "http://127.0.0.1:9"}, request("plainkey")
             )
         assert exc_info.value.error_code == APIErrorCode.INVALID_PROXY
@@ -275,7 +275,7 @@ class TestDownloadEnforcement:
 
         monkeypatch.setattr(dm, "get_download_manager", lambda: FakeManager())
         monkeypatch.setattr(handlers, "validate_service", lambda service, request=None: "EXAMPLE")
-        monkeypatch.setattr(handlers, "enforce_download_gates", lambda params, request=None: None)
+        monkeypatch.setattr(job_admission, "enforce_download_gates", lambda params, request=None: None)
         monkeypatch.setattr(handlers.Services, "load", lambda service: SimpleNamespace())
 
         def run(body, req):

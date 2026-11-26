@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
+from tests.admission import refusal
 from unshackle.commands.dl import latest_episode_keys
-from unshackle.core.api.handlers import validate_download_parameters
 from unshackle.core.titles import Movie, Movies, Series
 from unshackle.core.titles.episode import Episode
 
@@ -52,8 +52,8 @@ def test_titles_that_are_not_a_series_are_left_alone() -> None:
 
 @pytest.mark.parametrize("value", [0, -1, True, "3", 1.5])
 def test_a_non_positive_or_non_integer_count_is_refused(value: object) -> None:
-    assert validate_download_parameters({"latest_episodes": value}) == "latest_episodes must be a positive integer"
+    assert refusal({"latest_episodes": value}) == "latest_episodes must be a positive integer"
 
 
 def test_a_positive_count_is_accepted() -> None:
-    assert validate_download_parameters({"latest_episodes": 3}) is None
+    assert refusal({"latest_episodes": 3}) is None

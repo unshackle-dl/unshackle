@@ -41,7 +41,6 @@ from unshackle.core.cdm.loader import device_system
 from unshackle.core.config import config
 from unshackle.core.dl_options import (
     DEFAULT_DOWNLOAD_PARAMS,
-    DL_OPTION_API_NAMES,
     forwarded_dl_params,
 )
 from unshackle.core.drm import BlowfishStripe, cbcs, is_null_key, real_kids
@@ -69,7 +68,6 @@ from unshackle.core.remote_protocol import (
     TracksReply,
     TracksRequest,
 )
-from unshackle.core.run_plan import PlanError, api_plan
 from unshackle.core.services import Services
 from unshackle.core.session import RnetSession, utf8_text
 from unshackle.core.titles import Episode, Song
@@ -86,7 +84,6 @@ from unshackle.core.tunnel import (
 )
 from unshackle.core.utilities import declared_kwargs
 from unshackle.core.utils.click_types import QUALITY_LIST, SEASON_RANGE, VIDEO_CODEC_LIST, ContextData
-from unshackle.core.utils.collections import ci_get
 from unshackle.core.utils.hdr10plus import probed_tracks
 from unshackle.core.utils.redact import REDACTED, URL_USERINFO_RE, redact_all, redact_secrets, redact_text
 from unshackle.core.utils.service_params import FLAT_DL_KEYS, cast_service_options, service_options
@@ -1535,7 +1532,7 @@ async def list_tracks_handler(data: dict[str, Any], request: web.Request | None 
 def resolve_vcodec(value: Any) -> list | None:
     """Map a client's vcodec field to codec enums.
 
-    Session routes do not run validate_download_parameters, so this must answer junk with a 400
+    Session routes do not run the download job admission, so this must answer junk with a 400
     instead of letting click's UsageError surface as a 500.
     """
     if not value:
@@ -1555,302 +1552,24 @@ def wanted_refusal(wanted: Any) -> str | None:
     return None
 
 
-def validate_download_parameters(data: dict[str, Any]) -> str | None:
-    """
-    Validate download parameters and return error message if invalid.
-
-    Returns:
-        None if valid, error message string if invalid
-    """
-    for banned in ("postscript", "post_script", "post_scripts"):
-        if data.get(banned):
-            return f"'{banned}' is not accepted over the API, only from unshackle.yaml"
-
-    # The worker reads cookies/{service}/{profile}.txt, so a profile must not be able to name a path.
-    try:
-        client_profile(data)
-    except APIError as e:
-        return e.message
-
-    # The serve user would create and write any directory a client names; keep it under downloads.
-    if data.get("output_dir"):
-        root = config.directories.downloads.resolve()
-        raw = str(data["output_dir"])
-        if "\x00" in raw:
-            return "output_dir is not a usable path."
-        try:
-            target = (root / raw).resolve()
-        except (OSError, ValueError):
-            return "output_dir is not a usable path."
-        if not target.is_relative_to(root):
-            return "output_dir must be a path under the server's downloads directory."
-        data["output_dir"] = str(target)
-
-    if data.get("all_drm") and data.get("cdm"):
-        return "all_drm needs a CDM for each DRM system, so it cannot be used with cdm, which selects one device."
-
-    if "vbitrate" in data and data["vbitrate"] is not None:
-        if not isinstance(data["vbitrate"], int) or data["vbitrate"] <= 0:
-            return "vbitrate must be a positive integer"
-
-    if "abitrate" in data and data["abitrate"] is not None:
-        if not isinstance(data["abitrate"], int) or data["abitrate"] <= 0:
-            return "abitrate must be a positive integer"
-
-    if data.get("quality") is not None:
-        try:
-            heights = QUALITY_LIST.convert(data["quality"])
-        except click.BadParameter as e:
-            return f"Invalid quality: {e.message}"
-        if any(height <= 0 for height in heights):
-            return "quality heights must be above 0"
-
-    if "channels" in data and data["channels"] is not None:
-        if not isinstance(data["channels"], (int, float)) or data["channels"] <= 0:
-            return "channels must be a positive number"
-
-    if "workers" in data and data["workers"] is not None:
-        if not isinstance(data["workers"], int) or data["workers"] <= 0:
-            return "workers must be a positive integer"
-
-    if "download_processes" in data and data["download_processes"] is not None:
-        if not isinstance(data["download_processes"], int) or data["download_processes"] <= 0:
-            return "download_processes must be a positive integer"
-
-    if "downloads" in data and data["downloads"] is not None:
-        if not isinstance(data["downloads"], int) or data["downloads"] <= 0:
-            return "downloads must be a positive integer"
-
-    for name in ("tmdb_id", "tvdb_id", "latest_episodes"):
-        if data.get(name) is not None:
-            value = data[name]
-            if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
-                return f"{name} must be a positive integer"
-
-    if data.get("imdb_id") is not None:
-        if not isinstance(data["imdb_id"], str) or not re.fullmatch(r"tt\d+", data["imdb_id"]):
-            return "imdb_id must be an IMDB ID like 'tt1375666'"
-
-    for key, default in DEFAULT_DOWNLOAD_PARAMS.items():
-        if isinstance(default, bool) and data.get(key) is not None and not isinstance(data[key], bool):
-            return f"{key} must be a boolean"
-
-    for key in (
-        "lang",
-        "v_lang",
-        "a_lang",
-        "s_lang",
-        "forced_s_lang",
-        "require_audio",
-        "require_video",
-        "require_subs",
-    ):
-        value = data.get(key)
-        if value is not None and (not isinstance(value, list) or not all(isinstance(v, str) for v in value)):
-            return f"{key} must be an array of language strings"
-
-    from unshackle.commands.dl import subtitle_look
-
-    try:
-        params = api_plan(data).params
-    except PlanError as e:
-        return e.message
-
-    if params.get("sub_font"):
-        try:
-            subtitle_look(params.get("sub_format"), params["sub_font"], None)
-        except ValueError as e:
-            return f"Invalid sub_font: {e}"
-
-    return None
-
-
-def enforce_download_gates(params: dict[str, Any], request: web.Request | None = None) -> None:
-    """Enforce serve-config gates on per-job cdm overrides and client-supplied credentials.
-
-    A per-request `cdm` selects a server-side device, so this function gates it here rather than
-    honour it blindly. `serve.cdm_overrides` opts in: a list permits only those device names, or `true`
-    permits any (for a single trusted client). Unset/false rejects every override.
-    A per-request `credential` (or `credentials` map) authenticates the job with client-supplied
-    secrets instead of the server-side credentials. Gate it behind `serve.allow_job_credentials`
-    (default off) so a default deployment stays locked to its own credentials. This mirrors the
-    CDM gate. A download job licenses DRM in-process with the server's own CDM, so an API key without
-    ``server_cdm`` cannot submit or retry jobs. A job can also spend the server's proxy providers,
-    through an explicit ``proxy`` country code or through the geofence auto-proxy, so the
-    ``server_proxy`` policy from :func:`resolve_handler_proxy` applies here too: without the opt-in
-    the job must carry a full proxy URI or no proxy at all. Under a ``server_cdm_max_height`` the job
-    must set a quality at or under it, no ``best_available`` and no HYBRID range, as a job has no client device
-    to fall back to. Pass the job's merged parameters, so the gate sees the values the job runs with.
-    """
-    policy = request_policy(request)
-    if not policy.allows("server_cdm", params.get("service")):
-        raise APIError(
-            APIErrorCode.FORBIDDEN,
-            "Download jobs license with the server CDM, which is not enabled for this API key on this service",
-        )
-    service = params.get("service")
-    if service and policy.owns_identity(service):
-        raise APIError(
-            APIErrorCode.FORBIDDEN,
-            "Download jobs run on the server's own device config, and this API key has its own for this service",
-        )
-    cap = policy.max_height(params.get("service"))
-    if cap is not None:
-        serve_defaults = config.serve or {}
-
-        def effective(key: str) -> Any:
-            """The job's own value for this parameter, or the ``serve:`` dl default that the job falls back to."""
-            return params[key] if key in params else serve_defaults.get(key)
-
-        capped = f"Download jobs license with the server CDM, up to {cap}p for this API key"
-        wanted = requested_height(effective("quality"))
-        if wanted is None or wanted > cap:
-            raise capped_error(f"{capped}: pass a quality", cap)
-        if effective("best_available"):
-            raise capped_error(f"{capped}: drop best_available", cap)
-        ranges = effective("range") or []
-        ranges = [ranges] if isinstance(ranges, str) else ranges
-        if any(str(getattr(r, "value", r)).upper() == "HYBRID" for r in ranges):
-            raise capped_error(f"{capped}: drop HYBRID", cap)
-
-    if params.get("proxy_download") is not None and not isinstance(params["proxy_download"], str):
-        raise APIError(APIErrorCode.INVALID_INPUT, "proxy_download must be a string.")
-
-    if any(str(params.get(key) or "").startswith("tunnel:") for key in ("proxy", "proxy_download")):
-        raise APIError(
-            APIErrorCode.INVALID_PROXY,
-            "A download job cannot use a tunnel: proxy, because a tunnel belongs to one --remote client run.",
-        )
-
-    if not policy.allows("server_proxy"):
-        resolve_handler_proxy(params, params.get("service") or "", request)
-        if params.get("proxy_download"):
-            # the download proxy is gated like the main one: a full URI or nothing, never a server provider
-            resolve_handler_proxy(
-                {**params, "proxy": params["proxy_download"], "client_region": None},
-                params.get("service") or "",
-                request,
-            )
-
-    requested_cdm = params.get("cdm")
-    if requested_cdm:
-        allowed = (config.serve or {}).get("cdm_overrides")
-        permitted = allowed is True or (isinstance(allowed, (list, tuple, set)) and requested_cdm in allowed)
-        if not permitted:
-            raise APIError(
-                APIErrorCode.FORBIDDEN,
-                "The requested CDM is not permitted for API downloads.",
-                details={"cdm": requested_cdm},
-            )
-
-    if params.get("credential") or params.get("credentials"):
-        if not (config.serve or {}).get("allow_job_credentials"):
-            raise APIError(
-                APIErrorCode.FORBIDDEN,
-                "Per-request credentials are not permitted for API downloads.",
-            )
-
-
-def service_dl_defaults(service: str) -> dict[str, Any]:
-    """The ``services.<TAG>.dl`` values that name an API download parameter, keyed as the API names them."""
-    from unshackle.core.services import ROUTING_PARAMS
-
-    result: dict[str, Any] = {}
-    for key, value in ((ci_get(config.services, service) or {}).get("dl") or {}).items():
-        key = DL_OPTION_API_NAMES.get(key, key)
-        if value is None or key in ROUTING_PARAMS:
-            continue
-        if key not in DEFAULT_DOWNLOAD_PARAMS:
-            log.debug("Ignoring services.%s.dl key %r: not an API download parameter", service, key)
-            continue
-        result[key] = value
-    return result
-
-
-async def enqueue_job(
-    service: str, title_id: str, params: dict[str, Any], request: web.Request | None, gate_service: str
-) -> web.Response:
-    """Check the download gates for ``gate_service``, then queue a job with ``params`` and answer 202.
-
-    ``server_proxy`` is always stamped here, so a client-sent value cannot grant the server's proxy providers.
-    """
+async def enqueue_job(body: dict[str, Any], request: web.Request | None) -> web.Response:
+    """Admit the job that the request ``body`` asks for, queue it and answer 202."""
     from unshackle.core.api.download_manager import get_download_manager
+    from unshackle.core.api.job_admission import admit_job
 
-    await asyncio.to_thread(enforce_download_gates, {**params, "service": gate_service}, request)
+    spec = await admit_job(body, request)
     manager = get_download_manager()
     await manager.start_workers()
-    job = manager.create_job(
-        service,
-        title_id,
-        owner_key=caller_key(request),
-        **{**params, "server_proxy": request_policy(request).allows("server_proxy")},
-    )
+    job = manager.create_job(spec.service, spec.title_id, owner_key=caller_key(request), **spec.params)
     return web.json_response(
         {"job_id": job.job_id, "status": job.status.value, "created_time": job.created_time.isoformat()}, status=202
     )
 
 
 async def download_handler(data: dict[str, Any], request: web.Request | None = None) -> web.Response:
-    """Answer the download request: make a download job and add it to the queue."""
-
-    require_fields(data, "service", "title_id")
-    service_tag = data["service"]
-    title_id = data["title_id"]
-    if not isinstance(title_id, str):
-        raise APIError(APIErrorCode.INVALID_INPUT, "title_id must be a string", details={"title_id": title_id})
-    if refusal := wanted_refusal(data.get("wanted")):
-        raise APIError(APIErrorCode.INVALID_INPUT, refusal, details={"wanted": data.get("wanted")})
-
-    server, info, data = await relay_target(data, request)
-    normalized_service = info["tag"] if info else validate_service(service_tag, request)
-    if not normalized_service:
-        raise APIError(
-            APIErrorCode.INVALID_SERVICE,
-            f"Invalid or unavailable service: {service_tag}",
-            details={"service": service_tag},
-        )
-
-    validation_error = await asyncio.to_thread(validate_download_parameters, data)
-    if validation_error:
-        raise APIError(
-            APIErrorCode.INVALID_PARAMETERS,
-            validation_error,
-            details={"service": normalized_service, "title_id": title_id},
-        )
-
+    """Answer the download request: admit the job and add it to the queue."""
     try:
-        service_module = None if server else Services.load(normalized_service)
-        service_params: dict[str, Any] | None = None
-
-        # Service options travel nested, so a flat key the worker reads stays a dl value; click fills the defaults
-        # when the worker builds the service. A remote service applies its own on the remote server.
-        cli_params = getattr(getattr(service_module, "cli", None), "params", None)
-        if cli_params is not None:
-            sent = service_options(data, {param.name for param in cli_params}, DL_TRANSPORT_KEYS)
-            cast_or_refuse(cli_params, click.Context(click.Command(normalized_service)), sent)
-            service_params = sent
-
-        filtered_params = {k: v for k, v in data.items() if k not in ["service", "title_id", "owner_key"]}
-        # Overlay any dl-relevant keys from `serve:` config (e.g. downloads, workers) so the API
-        # respects server-side defaults without each client having to send them.
-        serve_overrides = {
-            k: v for k, v in (config.serve or {}).items() if k in DEFAULT_DOWNLOAD_PARAMS and v is not None
-        }
-        # A relayed job gets no local service overrides, so none of its keys may count as defaults.
-        service_dl = {} if server else service_dl_defaults(normalized_service)
-        params_with_defaults = {
-            **DEFAULT_DOWNLOAD_PARAMS,
-            **serve_overrides,
-            **service_dl,
-            **filtered_params,
-        }
-        if service_params is not None:
-            params_with_defaults["service_params"] = service_params
-        params_with_defaults["client_keys"] = sorted(
-            [*params_with_defaults, "server_proxy"] if server else filtered_params
-        )
-        return await enqueue_job(normalized_service, title_id, params_with_defaults, request, gate_service=service_tag)
-
+        return await enqueue_job(data, request)
     except APIError:
         raise
     except (Exception, SystemExit) as e:
@@ -1858,7 +1577,11 @@ async def download_handler(data: dict[str, Any], request: web.Request | None = N
         debug_mode = request.app.get("debug_api", False) if request else False
         return handle_api_exception(
             e,
-            context={"operation": "create_download_job", "service": normalized_service, "title_id": title_id},
+            context={
+                "operation": "create_download_job",
+                "service": data.get("service"),
+                "title_id": data.get("title_id"),
+            },
             debug_mode=debug_mode,
         )
 
@@ -2562,6 +2285,7 @@ async def clear_finished_download_jobs_handler(request: web.Request | None = Non
 async def retry_download_job_handler(job_id: str, request: web.Request | None = None) -> web.Response:
     """Answer the retry download job request: enqueue a new job with the original's parameters."""
     from unshackle.core.api.download_manager import TERMINAL_STATUSES, get_download_manager
+    from unshackle.core.api.job_admission import resubmission
 
     try:
         manager = get_download_manager()
@@ -2581,19 +2305,7 @@ async def retry_download_job_handler(job_id: str, request: web.Request | None = 
                 details={"job_id": job_id, "status": job.status.value},
             )
 
-        # Re-apply creation-time gates so retry cannot bypass the caller's service allowlist
-        # or currently-disabled cdm_overrides / allow_job_credentials config. A remote job is checked
-        # against its remote server, which must still be configured and offer the service.
-        if job.parameters.get("remote"):
-            await asyncio.to_thread(remote_server, {**job.parameters, "service": job.service}, request)
-        elif not validate_service(job.service, request):
-            raise APIError(
-                APIErrorCode.INVALID_SERVICE,
-                f"Invalid or unavailable service: {job.service}",
-                details={"service": job.service},
-            )
-        # Reuse the raw in-memory parameters; redaction only ever applies to serialized copies.
-        return await enqueue_job(job.service, job.title_id, job.parameters, request, gate_service=job.service)
+        return await enqueue_job(resubmission(job.service, job.title_id, job.parameters), request)
 
     except APIError:
         raise

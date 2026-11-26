@@ -8,13 +8,13 @@ import pytest
 import requests
 from langcodes import Language
 
+from tests.admission import refusal
 from unshackle.core.api.errors import APIError
 from unshackle.core.api.handlers import (
     drm_preference_name,
     listed_titles,
     sanitize_log,
     search_handler,
-    validate_download_parameters,
     validate_service,
 )
 from unshackle.core.config import config
@@ -288,7 +288,7 @@ def test_validate_service_unknown_returns_none() -> None:
 
 
 def test_validate_download_params_accepts_defaults() -> None:
-    assert validate_download_parameters({}) is None
+    assert refusal({}) is None
 
 
 @pytest.mark.parametrize(
@@ -304,7 +304,7 @@ def test_validate_download_params_accepts_defaults() -> None:
         ({"vbitrate": 5000, "vbitrate_range": "1-2"}, "--vbitrate and --vbitrate-range"),
         ({"abitrate": 128, "abitrate_range": "96-256"}, "--abitrate and --abitrate-range"),
         ({"abitrate_range": "1-2-3"}, "MIN-MAX"),
-        ({"quality": "4k"}, "Invalid quality"),
+        ({"quality": "4k"}, "quality: "),
         ({"quality": [0]}, "above 0"),
         ({"channels": -3}, "channels"),
         ({"workers": 0}, "workers"),
@@ -318,7 +318,7 @@ def test_validate_download_params_accepts_defaults() -> None:
     ],
 )
 def test_validate_download_params_errors(data: dict, fragment) -> None:
-    result = validate_download_parameters(data)
+    result = refusal(data)
     if fragment is None:
         assert result is None
     else:
@@ -328,7 +328,7 @@ def test_validate_download_params_errors(data: dict, fragment) -> None:
 
 def test_validate_download_params_accepts_valid_values() -> None:
     assert (
-        validate_download_parameters(
+        refusal(
             {
                 "vcodec": "H264,H265",
                 "acodec": ["AAC", "EAC3"],
@@ -347,7 +347,7 @@ def test_validate_download_params_accepts_valid_values() -> None:
 
 @pytest.mark.parametrize("vrange", ["6000-7000", "7000-6000", " 6000 - 7000 "])
 def test_validate_download_params_accepts_valid_bitrate_ranges(vrange: str) -> None:
-    assert validate_download_parameters({"vbitrate_range": vrange, "abitrate_range": "96-192"}) is None
+    assert refusal({"vbitrate_range": vrange, "abitrate_range": "96-192"}) is None
 
 
 async def test_search_missing_service_raises_invalid_input() -> None:
@@ -368,7 +368,7 @@ async def test_search_unknown_service_raises_invalid_service() -> None:
 
 
 def test_resolve_vcodec_rejects_junk_as_invalid_input() -> None:
-    """Session routes skip validate_download_parameters, so a bad codec must be a 400, not a 500."""
+    """Session routes skip the download job admission, so a bad codec must be a 400, not a 500."""
     from unshackle.core.api.handlers import resolve_vcodec
     from unshackle.core.remote_protocol import APIErrorCode
     from unshackle.core.tracks import Video

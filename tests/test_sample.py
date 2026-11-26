@@ -15,7 +15,7 @@ import click
 import pytest
 from requests import Session
 
-from unshackle.core.api.handlers import validate_download_parameters
+from tests.admission import refusal
 from unshackle.core.config import config
 from unshackle.core.manifests.dash import DASH
 from unshackle.core.placement import sample_name
@@ -287,16 +287,16 @@ def test_sample_range_reads_a_window() -> None:
 
 @pytest.mark.parametrize("sample", [True, "60-120", [60, 120]])
 def test_the_api_accepts_a_sample_window(sample: object) -> None:
-    assert validate_download_parameters({"sample": sample}) is None
+    assert refusal({"sample": sample}) is None
 
 
 @pytest.mark.parametrize("sample", ["abc", "120-60", [1, 2, 3], ["a", "b"], 5, {"start": 1}])
 def test_the_api_refuses_a_bad_sample_window(sample: object) -> None:
-    assert "sample" in (validate_download_parameters({"sample": sample}) or "")
+    assert "sample" in (refusal({"sample": sample}) or "")
 
 
 def test_the_api_refuses_sample_with_include_sample() -> None:
-    assert "--include-sample" in (validate_download_parameters({"sample": True, "include_sample": True}) or "")
+    assert "--include-sample" in (refusal({"sample": True, "include_sample": True}) or "")
 
 
 def test_sample_name_uses_the_separator_of_the_template(monkeypatch: pytest.MonkeyPatch) -> None:

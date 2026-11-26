@@ -5,9 +5,9 @@ from __future__ import annotations
 import pysubs2
 import pytest
 
+from tests.admission import refusal
 from unshackle.commands.dl import dl, set_subtitle_look, subtitle_look
 from unshackle.core import binaries
-from unshackle.core.api.handlers import validate_download_parameters
 from unshackle.core.tracks import subtitle_convert as sc
 from unshackle.core.tracks.subtitle import Subtitle
 from unshackle.core.tracks.video import Video
@@ -221,11 +221,11 @@ def test_a_font_from_config_is_ignored_with_another_format():
     ],
 )
 def test_the_api_refuses_a_sub_font_it_cannot_use(data, error):
-    assert (validate_download_parameters(data) or "").startswith(error)
+    assert (refusal(data) or "").startswith(error)
 
 
 def test_the_api_takes_a_sub_font_with_ass():
-    assert validate_download_parameters({"sub_font": "My Font", "sub_format": "ASS"}) is None
+    assert refusal({"sub_font": "My Font", "sub_format": "ASS"}) is None
 
 
 @pytest.mark.parametrize(

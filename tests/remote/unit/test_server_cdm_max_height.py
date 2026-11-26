@@ -17,7 +17,7 @@ from tests.remote.key_source import CAPPED, PR_DEVICE, MemoryKeySource, one_titl
 from tests.remote.sessions import session_entry
 from unshackle.commands.dl import dl
 from unshackle.core import remote_channel
-from unshackle.core.api import handlers, key_policy
+from unshackle.core.api import handlers, job_admission, key_policy
 from unshackle.core.api.errors import APIError
 from unshackle.core.api.key_policy import KeyPolicy
 from unshackle.core.config import cdm_entry_names_device
@@ -171,10 +171,10 @@ def test_a_vault_miss_raises_the_refusal_before_the_device_loads(widevine_env, m
 def test_download_jobs_stay_inside_the_cap(quality, allowed):
     params = {"service": "EXAMPLE1", "quality": quality}
     if allowed:
-        handlers.enforce_download_gates(params, request("flat"))
+        job_admission.enforce_download_gates(params, request("flat"))
     else:
         with pytest.raises(APIError) as ei:
-            handlers.enforce_download_gates(params, request("flat"))
+            job_admission.enforce_download_gates(params, request("flat"))
         assert ei.value.error_code is APIErrorCode.SERVER_CDM_CAPPED
 
 
@@ -251,13 +251,13 @@ def test_an_ultrawide_track_is_measured_as_the_smallest_quality_that_selects_it(
 @pytest.mark.parametrize("quality", [[-1], [0], [1080, 0]])
 def test_a_height_of_zero_or_less_is_invalid_input(quality):
     with pytest.raises(APIError) as ei:
-        handlers.enforce_download_gates({"service": "EXAMPLE1", "quality": quality}, request("flat"))
+        job_admission.enforce_download_gates({"service": "EXAMPLE1", "quality": quality}, request("flat"))
     assert ei.value.error_code is APIErrorCode.INVALID_INPUT
 
 
 def test_a_capped_download_job_cannot_set_best_available():
     with pytest.raises(APIError) as ei:
-        handlers.enforce_download_gates(
+        job_admission.enforce_download_gates(
             {"service": "EXAMPLE1", "quality": [1080], "best_available": True}, request("flat")
         )
     assert ei.value.error_code is APIErrorCode.SERVER_CDM_CAPPED
@@ -266,23 +266,31 @@ def test_a_capped_download_job_cannot_set_best_available():
 def test_the_download_gate_reads_the_serve_dl_defaults(monkeypatch):
     serve = {"users": USERS, "quality": [1080], "best_available": True}
     monkeypatch.setattr(handlers.config, "serve", serve, raising=False)
+    monkeypatch.setattr(handlers.Services, "load", lambda service: SimpleNamespace())
+
+    def admit(**body):
+        return job_admission.job_spec({"service": "EXAMPLE1", "title_id": "t1", **body}, None, request("flat"))
+
     with pytest.raises(APIError) as ei:
-        handlers.enforce_download_gates({"service": "EXAMPLE1"}, request("flat"))
+        admit()
     assert ei.value.error_code is APIErrorCode.SERVER_CDM_CAPPED
+    assert admit(best_available=False).params["quality"] == [1080]
 
     serve["best_available"] = False
-    handlers.enforce_download_gates({"service": "EXAMPLE1"}, request("flat"))
-    # the job's own value wins over the serve default
-    handlers.enforce_download_gates({"service": "EXAMPLE1", "best_available": False}, request("flat"))
+    admit()
 
 
 @pytest.mark.parametrize("hdr_range", ["HYBRID", ["SDR", "hybrid"], [Video.Range.HYBRID]])
 def test_a_capped_download_job_cannot_ask_for_hybrid(hdr_range):
     """HYBRID always keeps the lowest DV track, whatever the quality."""
     with pytest.raises(APIError) as ei:
-        handlers.enforce_download_gates({"service": "EXAMPLE1", "quality": [1080], "range": hdr_range}, request("flat"))
+        job_admission.enforce_download_gates(
+            {"service": "EXAMPLE1", "quality": [1080], "range": hdr_range}, request("flat")
+        )
     assert ei.value.error_code is APIErrorCode.SERVER_CDM_CAPPED
-    handlers.enforce_download_gates({"service": "EXAMPLE1", "quality": [1080], "range": ["HDR10"]}, request("flat"))
+    job_admission.enforce_download_gates(
+        {"service": "EXAMPLE1", "quality": [1080], "range": ["HDR10"]}, request("flat")
+    )
 
 
 def test_a_service_click_default_stays_out_of_the_download_gate(monkeypatch):

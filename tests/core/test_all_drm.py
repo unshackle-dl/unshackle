@@ -14,9 +14,10 @@ from pyplayready.system.pssh import PSSH as PR_PSSH
 from pywidevine.cdm import Cdm as WidevineCdm
 from pywidevine.pssh import PSSH
 
+from tests.admission import refusal
 from tests.core.key_resolver import NoVaults, key_table, resolver
 from unshackle.commands.dl import dl
-from unshackle.core.api.handlers import load_full_cdm, resolve_server_cdm, validate_download_parameters
+from unshackle.core.api.handlers import load_full_cdm, resolve_server_cdm
 from unshackle.core.cdm.detect import is_widevine_cdm
 from unshackle.core.drm import PlayReady, Widevine
 from unshackle.core.manifests import HLS
@@ -208,9 +209,9 @@ def test_the_other_drm_system_can_return_a_different_set_of_kids() -> None:
 
 
 def test_the_api_refuses_all_drm_with_one_device() -> None:
-    assert "cdm" in (validate_download_parameters({"all_drm": True, "cdm": "device"}) or "")
-    assert validate_download_parameters({"all_drm": True, "cdm_only": True}) is None
-    assert validate_download_parameters({"all_drm": True, "cdm_only": False}) is None
+    assert "cdm" in (refusal({"all_drm": True, "cdm": "device"}) or "")
+    assert refusal({"all_drm": True, "cdm_only": True}) is None
+    assert refusal({"all_drm": True, "cdm_only": False}) is None
 
 
 def test_a_content_key_in_a_vault_stops_the_challenge_of_each_drm_system() -> None:

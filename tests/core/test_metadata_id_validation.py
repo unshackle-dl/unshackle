@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from unshackle.core.api.handlers import validate_download_parameters
+from tests.admission import refusal
 from unshackle.core.config import config
 from unshackle.core.run_plan import PlanError, validate_metadata_ids
 
@@ -90,18 +90,18 @@ def test_one_kind_keeping_the_provider_is_enough(monkeypatch: pytest.MonkeyPatch
     ],
 )
 def test_api_refuses_two_ids(payload: dict) -> None:
-    err = validate_download_parameters(payload)
+    err = refusal(payload)
     assert err and "cannot be used together" in err
 
 
 @pytest.mark.parametrize("payload", [{"tmdb_id": 27205}, {"imdb_id": "tt1375666"}, {"tvdb_id": 73871}, {}])
 def test_api_accepts_one_id(payload: dict, monkeypatch: pytest.MonkeyPatch) -> None:
     with_keys(monkeypatch, tmdb_api_key="k", tvdb_api_key="k")
-    assert validate_download_parameters(payload) is None
+    assert refusal(payload) is None
 
 
 def test_api_still_reports_a_malformed_id_first() -> None:
-    err = validate_download_parameters({"tmdb_id": "12345", "imdb_id": "tt1"})
+    err = refusal({"tmdb_id": "12345", "imdb_id": "tt1"})
     assert err and "positive integer" in err
 
 
@@ -133,21 +133,21 @@ def test_a_malformed_anilist_value_is_refused(monkeypatch: pytest.MonkeyPatch, v
 
 @pytest.mark.parametrize("payload", [{"anilist_id": 21}, {"anilist_id": "mal:21"}, {"anilist_id": "21"}])
 def test_api_accepts_an_anilist_id(payload: dict) -> None:
-    assert validate_download_parameters(payload) is None
+    assert refusal(payload) is None
 
 
 def test_api_accepts_anilist_alongside_one_western_id() -> None:
-    assert validate_download_parameters({"imdb_id": "tt1375666", "anilist_id": 21}) is None
+    assert refusal({"imdb_id": "tt1375666", "anilist_id": 21}) is None
 
 
 def test_api_still_refuses_two_western_ids_with_anilist() -> None:
-    err = validate_download_parameters({"tmdb_id": 27205, "imdb_id": "tt1375666", "anilist_id": 21})
+    err = refusal({"tmdb_id": 27205, "imdb_id": "tt1375666", "anilist_id": 21})
     assert err and "cannot be used together" in err
 
 
 @pytest.mark.parametrize("value", [0, -3, True, "mal:", "tt1375666", "anilist:21", 1.5])
 def test_api_refuses_a_malformed_anilist_id(value: object) -> None:
-    err = validate_download_parameters({"anilist_id": value})
+    err = refusal({"anilist_id": value})
     assert err and "anilist" in err
 
 
@@ -162,17 +162,15 @@ def test_a_non_positive_or_non_decimal_anilist_value_is_refused(monkeypatch: pyt
 @pytest.mark.parametrize("payload", [{"anilist_id": "MAL:21"}, {"anilist_id": "007"}, {"anilist_id": " 21 "}])
 def test_api_accepts_what_the_cli_accepts(payload: dict) -> None:
     """Both surfaces share parse_anilist_ref, so their accept sets cannot drift."""
-    assert validate_download_parameters(payload) is None
+    assert refusal(payload) is None
 
 
 @pytest.mark.parametrize("value", ["0", "mal:0", "²"])
 def test_api_refuses_what_the_cli_refuses(value: str) -> None:
-    err = validate_download_parameters({"anilist_id": value})
+    err = refusal({"anilist_id": value})
     assert err and "anilist" in err
 
 
 def test_api_refuses_an_id_no_configured_provider_can_find(monkeypatch: pytest.MonkeyPatch) -> None:
     with_keys(monkeypatch)
-    assert validate_download_parameters({"tmdb_id": 27205}) == (
-        "--tmdb needs the tmdb provider: set tmdb_api_key in your config"
-    )
+    assert refusal({"tmdb_id": 27205}) == "--tmdb needs the tmdb provider: set tmdb_api_key in your config"

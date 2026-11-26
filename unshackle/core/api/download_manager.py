@@ -361,9 +361,24 @@ def delete_job_history(job_id: str, allowed: set | None = None, owner: str | Non
     return True
 
 
-def client_sent_keys(params: dict[str, Any]) -> set[str]:
-    """Pop the server's ``client_keys`` stamp; a job without one counts every parameter as client-sent."""
-    return set(params.pop("client_keys", params))
+def stamped_keys(params: dict[str, Any]) -> set[str]:
+    """The parameters the client sent, from the server's ``client_keys`` stamp; every parameter without one."""
+    return set(params.get("client_keys", params))
+
+
+def plan_keys(params: dict[str, Any]) -> set[str] | None:
+    """The parameters a job's dl plan counts as typed: :func:`stamped_keys`, or None (every one) for a relayed job.
+
+    The remote server's own defaults must never replace the values this server merged for a relayed job.
+    """
+    return None if params.get("remote") else stamped_keys(params)
+
+
+def client_sent_keys(params: dict[str, Any]) -> set[str] | None:
+    """Pop the ``client_keys`` stamp and give the :func:`plan_keys` it held."""
+    keys = plan_keys(params)
+    params.pop("client_keys", None)
+    return keys
 
 
 def perform_download(

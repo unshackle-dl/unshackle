@@ -93,11 +93,11 @@ def test_api_passes_the_flags_through(key):
 
 
 def test_api_accepts_the_require_flags():
-    from unshackle.core.api.handlers import validate_download_parameters
+    from tests.admission import refusal
 
     # unlike require_subs, these carry no conflict with a language selection
     assert (
-        validate_download_parameters(
+        refusal(
             {"service": "EXAMPLE", "title": "x", "require_audio": ["en"], "require_video": ["en"], "lang": ["en", "fr"]}
         )
         is None
@@ -121,22 +121,17 @@ def test_api_reaches_dl_result(key, default):
 @pytest.mark.parametrize("key", ["require_audio", "require_video"])
 def test_api_rejects_a_non_array_require_value(key, value):
     # a JSON string iterates character by character and blows up in langcodes, so it must 400 first
-    from unshackle.core.api.handlers import validate_download_parameters
+    from tests.admission import refusal
 
-    error = validate_download_parameters({"service": "EXAMPLE", "title": "x", key: value})
+    error = refusal({"service": "EXAMPLE", "title": "x", key: value})
     assert error == f"{key} must be an array of language strings"
 
 
 def test_require_subs_no_longer_conflicts_with_s_lang():
     # gate and selection are separate concerns: -sl decides what to keep, --require-subs only gates
-    from unshackle.core.api.handlers import validate_download_parameters
+    from tests.admission import refusal
 
-    assert (
-        validate_download_parameters(
-            {"service": "EXAMPLE", "title": "x", "s_lang": ["en", "ko", "ja"], "require_subs": ["en"]}
-        )
-        is None
-    )
+    assert refusal({"service": "EXAMPLE", "title": "x", "s_lang": ["en", "ko", "ja"], "require_subs": ["en"]}) is None
 
 
 def test_exact_lang_turns_off_the_bare_tag_fallback():

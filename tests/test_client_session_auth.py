@@ -177,13 +177,15 @@ def test_client_pssh_must_match_track(monkeypatch):
 
 
 def test_output_dir_stays_under_downloads(tmp_path, monkeypatch):
-    from unshackle.core.api.handlers import config, validate_download_parameters
+    from tests.admission import refusal
+    from unshackle.core.api.handlers import config
+    from unshackle.core.api.job_admission import check_parameters
 
     monkeypatch.setattr(config.directories, "downloads", tmp_path)
-    assert validate_download_parameters({"output_dir": "../../etc"})
+    assert refusal({"output_dir": "../../etc"})
     data = {"output_dir": "shows/x"}
-    assert validate_download_parameters(data) is None
-    assert data["output_dir"] == str((tmp_path / "shows/x").resolve())
+    assert check_parameters(data)["output_dir"] == str((tmp_path / "shows/x").resolve())
+    assert data == {"output_dir": "shows/x"}
 
 
 def test_history_scoped_by_owner(tmp_path, monkeypatch):
@@ -252,12 +254,13 @@ def test_track_own_pssh_passes_without_kids(monkeypatch):
 
 
 def test_download_rejects_path_profile_and_bad_output_dir(tmp_path, monkeypatch):
-    from unshackle.core.api.handlers import config, validate_download_parameters
+    from tests.admission import refusal
+    from unshackle.core.api.handlers import config
 
     monkeypatch.setattr(config.directories, "downloads", tmp_path)
-    assert validate_download_parameters({"profile": "../x"})
-    assert validate_download_parameters({"profile": "ok"}) is None
-    assert validate_download_parameters({"output_dir": "a\x00b"})
+    assert refusal({"profile": "../x"})
+    assert refusal({"profile": "ok"}) is None
+    assert refusal({"output_dir": "a\x00b"})
 
 
 def test_safe_inflate_rejects_non_str_via_isinstance():

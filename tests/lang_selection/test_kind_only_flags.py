@@ -10,9 +10,9 @@ from typing import Any
 
 import pytest
 
+from tests.admission import refusal
 from tests.lang_selection import test_kind_only_selection as harness
 from unshackle.commands.dl import dl
-from unshackle.core.api.handlers import validate_download_parameters
 from unshackle.core.utilities import kind_only_conflict
 
 KEYS = ["audio_description_only", "forced_subs_only"]
@@ -56,18 +56,18 @@ def test_kind_only_conflict(params, expected):
 
 
 def test_api_rejects_a_conflict():
-    assert validate_download_parameters({**BASE, "audio_description_only": True, "no_audio": True}) == (
+    assert refusal({**BASE, "audio_description_only": True, "no_audio": True}) == (
         "--audio-description-only cannot be used with --no-audio: --no-audio drops the tracks that "
         "--audio-description-only selects."
     )
-    assert validate_download_parameters({**BASE, "audio_description_only": True, "audio_only": True}) is None
+    assert refusal({**BASE, "audio_description_only": True, "audio_only": True}) is None
 
 
 @pytest.mark.parametrize("key", [*KEYS, "audio_description", "audio_only"])
 def test_api_rejects_a_non_boolean_flag(key):
     # the string "false" is truthy in dl.result, so it would turn the flag on
-    assert validate_download_parameters({**BASE, key: "false"}) == f"{key} must be a boolean"
-    assert validate_download_parameters({**BASE, key: None}) is None
+    assert refusal({**BASE, key: "false"}) == f"{key} must be a boolean"
+    assert refusal({**BASE, key: None}) is None
 
 
 @pytest.mark.parametrize("flags", [{"forced_subs_only": True}, {"forced_s_lang": ["en"]}, {"forced_s_lang": ["-en"]}])

@@ -504,11 +504,11 @@ def test_a_connection_that_stops_reading_is_dropped() -> None:
 
 
 def test_a_download_job_refuses_a_tunnel_proxy(monkeypatch: pytest.MonkeyPatch) -> None:
-    from unshackle.core.api import handlers
+    from unshackle.core.api import job_admission
     from unshackle.core.api.errors import APIError
 
     with pytest.raises(APIError, match="tunnel"):
-        handlers.enforce_download_gates({"service": "EXAMPLE", "proxy": "tunnel:abc"}, None)
+        job_admission.enforce_download_gates({"service": "EXAMPLE", "proxy": "tunnel:t1"}, None)
 
 
 @responses.activate

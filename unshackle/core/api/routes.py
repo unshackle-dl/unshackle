@@ -1493,7 +1493,7 @@ async def retry_download_job(request: web.Request) -> web.Response:
     Retry download job.
     ---
     summary: Retry download job
-    description: Enqueue a new job reusing a completed, failed, or cancelled job's service, title, and parameters
+    description: Enqueue a new job from the request that made a completed, failed, or cancelled job, checked as a new submission
     parameters:
       - name: job_id
         in: path
@@ -1514,6 +1514,10 @@ async def retry_download_job(request: web.Request) -> web.Response:
                   type: string
                 created_time:
                   type: string
+      '400':
+        description: The service or a parameter no longer passes the checks of a new submission
+      '403':
+        description: The API key may no longer run this job
       '404':
         description: Job not found
       '409':

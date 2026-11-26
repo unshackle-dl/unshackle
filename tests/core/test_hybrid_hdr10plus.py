@@ -18,10 +18,10 @@ from typing import Any
 import pytest
 
 import unshackle.commands.dl as dl_module
+from tests.admission import refusal
 from tests.remote.unit.test_remote_service_helpers import _sent_create_data
 from unshackle.core import mux_step
 from unshackle.core.api import download_manager, handlers, key_policy
-from unshackle.core.api.handlers import validate_download_parameters
 from unshackle.core.config import config
 from unshackle.core.mux_step import hybrid_plan, hybrid_source_tracks, hybrid_step_error, missing_hybrid_error
 from unshackle.core.service import Service, TrackRequest
@@ -784,8 +784,8 @@ def test_the_hybrid_step_gets_the_base_alone_when_there_is_no_dv(tmp_path: Path)
 def test_the_api_takes_generate_dv_with_any_range_as_dl_does(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("unshackle.core.binaries.DoviTool", Path("dovi_tool"))
     for data in ({}, {"range": ["SDR"]}, {"range": ["DV"]}, {"range": ["HYBRID"]}, {"range": ["HDR10"]}):
-        assert validate_download_parameters({"generate_dv": True, **data}) is None
-    assert "boolean" in (validate_download_parameters({"generate_dv": "yes", "range": ["HYBRID"]}) or "")
+        assert refusal({"generate_dv": True, **data}) is None
+    assert "boolean" in (refusal({"generate_dv": "yes", "range": ["HYBRID"]}) or "")
 
 
 class _Captured(Exception):

@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from unshackle.core.api import handlers
+from unshackle.core.api import handlers, job_admission
 from unshackle.core.api.errors import APIError
 from unshackle.core.remote_protocol import APIErrorCode
 
@@ -37,9 +37,9 @@ def request(key):
 
 
 def test_download_gate_uses_job_service(serve_users):
-    handlers.enforce_download_gates({"service": "EXAMPLE1"}, request("tier2key"))
+    job_admission.enforce_download_gates({"service": "EXAMPLE1"}, request("tier2key"))
     with pytest.raises(APIError):
-        handlers.enforce_download_gates({"service": "EXAMPLE2"}, request("tier2key"))
+        job_admission.enforce_download_gates({"service": "EXAMPLE2"}, request("tier2key"))
 
 
 @pytest.mark.parametrize(("service", "allowed"), [("EXAMPLE1", True), ("EXAMPLE2", False)])
@@ -61,6 +61,7 @@ async def test_retry_gate_uses_job_service(serve_users, monkeypatch, service, al
     monkeypatch.setattr(dm, "get_download_manager", lambda: manager)
     monkeypatch.setattr(handlers, "owns_job", lambda job, request: True)
     monkeypatch.setattr(handlers, "validate_service", lambda tag, request=None: tag)
+    monkeypatch.setattr(handlers.Services, "load", lambda tag: SimpleNamespace())
 
     if allowed:
         response = await handlers.retry_download_job_handler("job1", request("tier2key"))
@@ -75,12 +76,12 @@ async def test_retry_gate_uses_job_service(serve_users, monkeypatch, service, al
 def test_download_gate_follows_entitlement(serve_users, key, allowed):
     # A download job licenses with the server CDM, so submission obeys the same gate.
     if allowed:
-        handlers.enforce_download_gates({}, request(key))
+        job_admission.enforce_download_gates({}, request(key))
     else:
         with pytest.raises(APIError) as ei:
-            handlers.enforce_download_gates({}, request(key))
+            job_admission.enforce_download_gates({}, request(key))
         assert ei.value.error_code == APIErrorCode.FORBIDDEN
 
 
 def test_download_gate_without_request(serve_users):
-    handlers.enforce_download_gates({})
+    job_admission.enforce_download_gates({})

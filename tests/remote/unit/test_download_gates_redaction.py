@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 from aiohttp import web
 
+from tests.admission import refusal
 from unshackle.core.api import handlers
 from unshackle.core.api.download_manager import (
     DownloadJob,
@@ -167,11 +168,11 @@ async def test_credential_allowed_when_enabled(stub_handler):
 def test_range_validation_accepts_hdr10p_and_alias(monkeypatch):
     monkeypatch.setattr("unshackle.core.binaries.DoviTool", Path("dovi_tool"))
     # canonical "HDR10P" and back-compat "HDR10+" both pass; mixed casing too
-    assert handlers.validate_download_parameters({"range": ["HDR10P", "DV", "SDR"]}) is None
-    assert handlers.validate_download_parameters({"range": ["hdr10+"]}) is None
-    assert handlers.validate_download_parameters({"range": "HYBRID"}) is None
+    assert refusal({"range": ["HDR10P", "DV", "SDR"]}) is None
+    assert refusal({"range": ["hdr10+"]}) is None
+    assert refusal({"range": "HYBRID"}) is None
 
 
 def test_range_validation_rejects_unknown_and_lists_hdr10p():
-    err = handlers.validate_download_parameters({"range": ["HDR99"]})
+    err = refusal({"range": ["HDR99"]})
     assert err and "hdr10p" in err.lower() and "HDR99" in err

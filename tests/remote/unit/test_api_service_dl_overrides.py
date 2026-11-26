@@ -8,7 +8,7 @@ import click
 import pytest
 
 from unshackle.core.api import download_manager as dm
-from unshackle.core.api import handlers
+from unshackle.core.api import handlers, job_admission
 from unshackle.core.api.errors import APIError
 from unshackle.core.dl_options import DEFAULT_DOWNLOAD_PARAMS
 from unshackle.core.remote_protocol import APIErrorCode
@@ -35,7 +35,7 @@ def env(monkeypatch):
     monkeypatch.setattr(handlers, "validate_service", lambda service, request=None: "EXAMPLE1")
     monkeypatch.setattr(handlers.Services, "load", lambda service: SimpleNamespace())
     monkeypatch.setattr(dm, "get_download_manager", lambda: manager)
-    monkeypatch.setattr(handlers, "enforce_download_gates", lambda params, request: gate_input.update(params))
+    monkeypatch.setattr(job_admission, "enforce_download_gates", lambda params, request: gate_input.update(params))
     monkeypatch.setattr(handlers, "caller_key", lambda request: None)
     monkeypatch.setattr(handlers.config, "serve", {}, raising=False)
     monkeypatch.setattr(handlers.config, "services", {}, raising=False)
@@ -94,9 +94,10 @@ def test_relayed_job_skips_service_dl(env, monkeypatch):
 
     monkeypatch.setattr(handlers, "relay_target", relay)
     baseline_workers = DEFAULT_DOWNLOAD_PARAMS["workers"]
-    params = env(dl={"workers": 7})
+    params = env(body={"remote": "box"}, dl={"workers": 7})
     assert params["workers"] == baseline_workers
-    assert set(params["client_keys"]) >= set(DEFAULT_DOWNLOAD_PARAMS)
+    assert params["client_keys"] == ["remote"]
+    assert dm.client_sent_keys(params) is None
 
 
 def test_client_sent_keys_uses_the_stamp():

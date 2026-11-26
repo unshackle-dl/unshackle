@@ -707,10 +707,10 @@ Remove every terminal (completed/failed/cancelled) job from the manager. No requ
 
 ### `POST /api/download/jobs/{job_id}/retry`
 
-Enqueue a **new** job that reuses a terminal job's service, title, and parameters. The service allowlist and parameter gates are re-checked. Returns `202` with the new job's ID.
+Enqueue a **new** job from the request that made a terminal job. The request goes through the same checks as a new submission: the service allowlist, the parameter checks and the download gates. A parameter that the request did not send takes the server default of the time of the retry. Returns `202` with the new job's ID.
 
 !!! warning "Retry reuses the original, unredacted parameters"
-    A retry replays the finished job's stored parameters exactly as the original client submitted them, including any secrets such as `credential`/`credentials`. It does not use the redacted `parameters` view that `GET /api/download/jobs` and `GET /api/history` give. This is deliberate: it lets a retried job reproduce a credentialed download that the redacted job record alone never could. The API masks those credentials everywhere else. But anyone who can retry a job can operate it again with the original credentials.
+    A retry sends again the parameters that the original client submitted, including any secrets such as `credential`/`credentials`. It does not use the redacted `parameters` view that `GET /api/download/jobs` and `GET /api/history` give. This is deliberate: it lets a retried job reproduce a credentialed download that the redacted job record alone never could. The API masks those credentials everywhere else. But anyone who can retry a job can operate it again with the original credentials.
 
 === "Response `202`"
 
@@ -728,6 +728,7 @@ Enqueue a **new** job that reuses a terminal job's service, title, and parameter
 | `404` | `JOB_NOT_FOUND` | No such job. |
 | `409` | `CONFLICT` | Job is not in a terminal state. |
 | `400` | `INVALID_SERVICE` | Service is no longer allowed. |
+| `400` | `INVALID_PARAMETERS` | A parameter no longer passes the checks, for example an `output_dir` outside a moved downloads directory. |
 | `403` | `FORBIDDEN` | A gated parameter is no longer permitted. |
 | `403` | `SERVER_CDM_CAPPED` | The job is no longer inside the `server_cdm_max_height` of the API key. |
 

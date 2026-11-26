@@ -265,9 +265,13 @@ ID with `202`.
 - You can retry only terminal jobs. A retry of a `queued` or `downloading` job returns
   `409` with error code `CONFLICT`.
 - A missing job returns `404` (`JOB_NOT_FOUND`).
-- The server examines the service allowlist and any download gates again for the new
-  job, exactly as for the original submission. Thus the server can reject a retry with
-  `INVALID_SERVICE` or `FORBIDDEN` if permissions changed.
+- The server sends the original request through the same checks as a new submission:
+  the service allowlist, the parameter checks and the download gates. A retry that no
+  longer passes gets the same error as a new submission, for example
+  `INVALID_SERVICE`, `INVALID_PARAMETERS` or `FORBIDDEN` after a config change.
+- Each parameter that the original request did not send takes the server default of
+  the time of the retry, from `serve:` and `services.<TAG>.dl`. A job for a
+  `remote` server takes no local service defaults.
 
 ```json title="202 Accepted, a fresh job"
 {

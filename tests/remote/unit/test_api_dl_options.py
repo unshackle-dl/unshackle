@@ -7,9 +7,9 @@ import click
 import pytest
 import yaml
 
+from tests.admission import refusal
 from unshackle.commands.dl import dl
 from unshackle.core.api import routes
-from unshackle.core.api.handlers import validate_download_parameters
 from unshackle.core.dl_options import (
     DEFAULT_DOWNLOAD_PARAMS,
     DL_OPTION_ALIASES,
@@ -164,7 +164,7 @@ def test_no_forwarded_option_has_an_alias():
 @pytest.mark.parametrize("value", ["en", "en,fr", [1], {"x": "en"}])
 def test_api_rejects_a_non_array_language_value(key, value):
     """A string would reach dl.result and split into one-character language codes."""
-    assert validate_download_parameters({key: value}) == f"{key} must be an array of language strings"
+    assert refusal({key: value}) == f"{key} must be an array of language strings"
 
 
 @pytest.mark.parametrize(
@@ -176,7 +176,7 @@ def test_api_rejects_a_non_array_language_value(key, value):
     ],
 )
 def test_api_refuses_a_value_the_dl_option_cannot_take(data, error):
-    assert (validate_download_parameters(data) or "").startswith(error)
+    assert (refusal(data) or "").startswith(error)
 
 
 def test_no_dl_option_needs_a_parse_step_the_cast_skips():
@@ -196,7 +196,7 @@ def test_a_boolean_is_not_a_number(key):
 
 @pytest.mark.parametrize("value", [[1], [None], {"a": 1}])
 def test_a_non_string_range_is_a_validation_error(value):
-    assert (validate_download_parameters({"range": value}) or "").startswith("Invalid range")
+    assert (refusal({"range": value}) or "").startswith("Invalid range")
 
 
 def test_the_worker_keeps_the_code_of_an_api_error(tmp_path, monkeypatch):

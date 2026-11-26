@@ -9,8 +9,8 @@ import click
 import pytest
 
 import unshackle.commands.dl as dl_module
+from tests.admission import refusal
 from unshackle.core.api import download_manager, handlers, key_policy
-from unshackle.core.api.handlers import validate_download_parameters
 from unshackle.core.services import Services
 
 pytestmark = pytest.mark.unit
@@ -22,7 +22,7 @@ class _Captured(Exception):
 
 @pytest.mark.parametrize("quality", ["1080p", ["1080"], [1080, 720], "1080,720"])
 def test_the_api_accepts_the_quality_forms_the_cli_accepts(quality: Any) -> None:
-    assert validate_download_parameters({"quality": quality}) is None
+    assert refusal({"quality": quality}) is None
 
 
 def test_a_rest_job_converts_quality_and_passes_cdm_only(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
