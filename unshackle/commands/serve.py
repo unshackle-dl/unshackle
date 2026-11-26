@@ -262,6 +262,8 @@ def reload_config(app: web.Application, *, no_key: bool, serve_widevine: bool, s
     changed = [k for k in RESTART_KEYS if serve.get(k) != config.serve.get(k)]
     if serve_playready and bool(serve.get("playready_devices")) != ("playready_app" in app):
         changed.append("playready_devices (first device added or last removed)")
+    if dashboard_key(serve) and not any(r.canonical.startswith(DASHBOARD_PREFIX) for r in app.router.resources()):
+        changed.append("dashboard.key (dashboard off at startup)")
     if changed:
         log.warning(f"Config reload skipped, restart to apply: {', '.join(changed)}")
         return False

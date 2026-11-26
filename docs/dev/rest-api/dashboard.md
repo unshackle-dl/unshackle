@@ -20,6 +20,9 @@ serve:
 ```
 
 Without `dashboard.key` the server does not register the routes, and they answer `404`.
+A config reload that removes the dashboard key closes the dashboard: the routes answer `404` and
+an open `/api/dashboard/events` connection ends. To add a dashboard key to a server that started
+without one, restart it.
 `serve --no-key` turns off user authentication only; the dashboard key stays required.
 Once the dashboard key is set, every `/api/dashboard/` request must carry it in
 `X-Secret-Key`.

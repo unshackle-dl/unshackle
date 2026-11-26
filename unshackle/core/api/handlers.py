@@ -1128,16 +1128,16 @@ def request_secret_key(request: web.Request) -> str | None:
     return key
 
 
-def dashboard_key() -> str | None:
-    """The developer dashboard key from serve.dashboard.key, or None when the dashboard is off."""
-    dashboard = (config.serve or {}).get("dashboard")
+def dashboard_key(serve: dict | None = None) -> str | None:
+    """The developer dashboard key from serve.dashboard.key (of *serve*, else the live config), or None when off."""
+    dashboard = ((config.serve if serve is None else serve) or {}).get("dashboard")
     key = dashboard.get("key") if isinstance(dashboard, dict) else None
     return str(key) if key else None
 
 
 @web.middleware
 async def dashboard_authentication(request: web.Request, handler: Any) -> web.StreamResponse:
-    """Gate /api/dashboard/ behind serve.dashboard.key only; user and tier keys never pass.
+    """Gate /api/dashboard/ behind serve.dashboard.key only; user and tier keys never pass, and with no dashboard key set it answers 404.
 
     This middleware runs before the user-key middleware, so it answers the dashboard routes
     first and no other route ever accepts the dashboard key.
@@ -1148,7 +1148,7 @@ async def dashboard_authentication(request: web.Request, handler: Any) -> web.St
         return await handler(request)
     expected = dashboard_key()
     if not expected:
-        return await handler(request)  # routes are unregistered, so this 404s
+        raise web.HTTPNotFound()
     provided = request_secret_key(request)
     if not provided or not hmac.compare_digest(provided, expected):
         return web.json_response({"status": 401, "message": "Dashboard key is invalid."}, status=401)
@@ -2199,6 +2199,7 @@ async def dashboard_events_handler(request: web.Request) -> web.StreamResponse:
     async def send_stats() -> None:
         await send("stats", dashboard_status())
 
+    opened_with = dashboard_key()
     queue = bus.subscribe()
     get_task: asyncio.Task | None = None
     loop = asyncio.get_running_loop()
@@ -2215,6 +2216,8 @@ async def dashboard_events_handler(request: web.Request) -> web.StreamResponse:
             if get_task is None:
                 get_task = asyncio.create_task(queue.get())
             done, _ = await asyncio.wait({get_task}, timeout=max(0.0, next_stats - loop.time()))
+            if dashboard_key() != opened_with:
+                break
             if not done:
                 await send_stats()
                 next_stats = loop.time() + 5

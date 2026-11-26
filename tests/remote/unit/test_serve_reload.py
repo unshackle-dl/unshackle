@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from pathlib import Path
 
@@ -11,6 +12,9 @@ from aiohttp import web
 
 from unshackle.commands import serve as serve_cmd
 from unshackle.core import config as config_module
+from unshackle.core.api.events import bus
+from unshackle.core.api.handlers import dashboard_authentication
+from unshackle.core.api.routes import setup_routes
 from unshackle.core.config import config
 
 pytestmark = pytest.mark.unit
@@ -79,3 +83,36 @@ def test_restart_only_change_is_reported_not_applied(
         assert _reload(app) is False
     assert "restart" in caplog.text and "remote_only" in caplog.text
     assert set(app["config"]["users"]) == {"old", "api"}
+
+
+async def test_reload_that_drops_the_dashboard_key_closes_its_routes(
+    running: tuple[web.Application, Path], aiohttp_client
+) -> None:
+    app, path = running
+    config.serve["dashboard"] = {"key": "dash"}
+    app.middlewares.append(dashboard_authentication)
+    app["debug_api"] = False
+    setup_routes(app, remote_only=True, dashboard=True)
+    client = await aiohttp_client(app)
+    assert (await client.get("/api/dashboard/status", headers={"X-Secret-Key": "dash"})).status == 200
+    stream = await client.get("/api/dashboard/events", headers={"X-Secret-Key": "dash"})
+    assert b"event: stats" in await stream.content.readuntil(b"\n\n")
+
+    _write(path, users={"old": {"devices": ["dev"]}})
+    assert _reload(app) is True
+    assert (await client.get("/api/dashboard/status")).status == 404
+    assert (await client.get("/api/dashboard/status", headers={"X-Secret-Key": "dash"})).status == 404
+    bus.publish("job", {"after": "reload"})
+    assert b"after" not in await asyncio.wait_for(stream.content.read(), 2)
+
+
+def test_reload_that_adds_a_dashboard_key_needs_a_restart(
+    running: tuple[web.Application, Path], caplog: pytest.LogCaptureFixture
+) -> None:
+    app, path = running
+    _write(path, users={"new": {"devices": ["dev"]}}, dashboard={"key": "dash"})
+
+    with caplog.at_level(logging.WARNING, logger=LOG.name):
+        assert _reload(app) is False
+    assert "restart" in caplog.text and "dashboard.key" in caplog.text
+    assert "dashboard" not in config.serve
