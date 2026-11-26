@@ -2496,7 +2496,7 @@ Click <code>cli</code> entry point plus three abstract methods.</p>
 <tr>
 <td><code>NO_SUBTITLES</code></td>
 <td><code>bool</code></td>
-<td>Set <code>True</code> on a service with no subtitle tracks to skip subtitle handling entirely.</td>
+<td>Set <code>True</code> on a service with no subtitle tracks to skip subtitle handling entirely. Default <code>False</code>.</td>
 </tr>
 <tr>
 <td><code>ANIME</code></td>
@@ -2510,13 +2510,6 @@ Click <code>cli</code> entry point plus three abstract methods.</p>
 </tr>
 </tbody>
 </table>
-<div class="admonition note">
-<p class="admonition-title"><code>NO_SUBTITLES</code> is a convention, not a base-class attribute</p>
-<p><code>dl.py</code> uses <code>hasattr</code> to find <code>NO_SUBTITLES</code>, and the <code>Service</code> base class
-deliberately does <strong>not</strong> declare it, so it only exists if your service
-defines it. Setting <code>NO_SUBTITLES = True</code> is what makes the pipeline skip
-subtitle work for services that never carry subtitles. Leave it off otherwise.</p>
-</div>
 <p><code>GEOFENCE</code> drives an automatic proxy: on startup, if you did not pass an
 explicit <code>--proxy</code>, the base class does a live IP check and, if your region is
 blocked, fetches a proxy to <code>GEOFENCE[0]</code> from your configured proxy providers.</p>
