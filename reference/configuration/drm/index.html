@@ -2176,7 +2176,8 @@ does not set the order.</p>
 <p>On a server, an entry that holds <code>widevine</code> and <code>playready</code> gives a remote session the server CDM
 of the DRM system of the client's local CDM. The service then makes its manifest for that system,
 so the client's vault keys and its own device apply to the tracks. A client with no local CDM gets
-the device that the entry lists first.</p>
+the device that the entry lists first. A service option that runs the remote session on the server's
+device, such as a server-identity flag, always gets the device that the entry lists first.</p>
 <p>A quality key can also hold a dict of <code>widevine</code> / <code>playready</code> devices, and so can the
 top-level <code>default</code> entry:</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nt">cdm</span><span class="p">:</span>
