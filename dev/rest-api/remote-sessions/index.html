@@ -3048,7 +3048,7 @@ thread, an <code>InputBridge</code> pauses that thread and exposes the prompt to
 layer.</p>
 <ul>
 <li><code>AuthStatus</code> values: <code>authenticating</code>, <code>pending_input</code>, <code>authenticated</code>, <code>failed</code>.</li>
-<li><code>InputBridge.request_input(prompt, timeout=600)</code> blocks the sync auth thread on a
+<li><code>InputBridge.request_input(prompt, timeout=600, qr=None)</code> blocks the sync auth thread on a
   <code>threading.Event</code> until <code>submit_response()</code> or <code>cancel()</code> fires.</li>
 <li>A timeout raises <code>TimeoutError</code>. The remote session becomes <code>FAILED</code> when that error ends the login.</li>
 <li>A prompt after authentication (in <code>get_titles()</code>, <code>get_tracks()</code> or licensing) goes to
@@ -3065,8 +3065,9 @@ layer.</p>
 <div class="language-json highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="p">{</span><span class="w"> </span><span class="nt">"status"</span><span class="p">:</span><span class="w"> </span><span class="s2">"authenticated"</span><span class="w"> </span><span class="p">}</span>
 </span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="p">{</span><span class="w"> </span><span class="nt">"status"</span><span class="p">:</span><span class="w"> </span><span class="s2">"authenticating"</span><span class="w"> </span><span class="p">}</span>
 </span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="p">{</span><span class="w"> </span><span class="nt">"status"</span><span class="p">:</span><span class="w"> </span><span class="s2">"pending_input"</span><span class="p">,</span><span class="w"> </span><span class="nt">"prompt"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Enter code: "</span><span class="w"> </span><span class="p">}</span>
-</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="p">{</span><span class="w"> </span><span class="nt">"status"</span><span class="p">:</span><span class="w"> </span><span class="s2">"pending_input"</span><span class="p">,</span><span class="w"> </span><span class="nt">"prompt"</span><span class="p">:</span><span class="w"> </span><span class="s2">"..."</span><span class="p">,</span><span class="w"> </span><span class="nt">"cdm_call"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"op"</span><span class="p">:</span><span class="w"> </span><span class="s2">"challenge"</span><span class="p">,</span><span class="w"> </span><span class="nt">"drm"</span><span class="p">:</span><span class="w"> </span><span class="s2">"widevine"</span><span class="p">,</span><span class="w"> </span><span class="nt">"init_data"</span><span class="p">:</span><span class="w"> </span><span class="s2">"..."</span><span class="p">,</span><span class="w"> </span><span class="nt">"license_type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"OFFLINE"</span><span class="p">,</span><span class="w"> </span><span class="nt">"privacy_mode"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span><span class="w"> </span><span class="nt">"service_certificate"</span><span class="p">:</span><span class="w"> </span><span class="s2">"..."</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="p">}</span>
-</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="p">{</span><span class="w"> </span><span class="nt">"status"</span><span class="p">:</span><span class="w"> </span><span class="s2">"failed"</span><span class="p">,</span><span class="w"> </span><span class="nt">"error"</span><span class="p">:</span><span class="w"> </span><span class="s2">"...message..."</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="p">{</span><span class="w"> </span><span class="nt">"status"</span><span class="p">:</span><span class="w"> </span><span class="s2">"pending_input"</span><span class="p">,</span><span class="w"> </span><span class="nt">"prompt"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Scan the code, then press Enter"</span><span class="p">,</span><span class="w"> </span><span class="nt">"qr"</span><span class="p">:</span><span class="w"> </span><span class="s2">"https://login.example/scan"</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="p">{</span><span class="w"> </span><span class="nt">"status"</span><span class="p">:</span><span class="w"> </span><span class="s2">"pending_input"</span><span class="p">,</span><span class="w"> </span><span class="nt">"prompt"</span><span class="p">:</span><span class="w"> </span><span class="s2">"..."</span><span class="p">,</span><span class="w"> </span><span class="nt">"cdm_call"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"op"</span><span class="p">:</span><span class="w"> </span><span class="s2">"challenge"</span><span class="p">,</span><span class="w"> </span><span class="nt">"drm"</span><span class="p">:</span><span class="w"> </span><span class="s2">"widevine"</span><span class="p">,</span><span class="w"> </span><span class="nt">"init_data"</span><span class="p">:</span><span class="w"> </span><span class="s2">"..."</span><span class="p">,</span><span class="w"> </span><span class="nt">"license_type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"OFFLINE"</span><span class="p">,</span><span class="w"> </span><span class="nt">"privacy_mode"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span><span class="w"> </span><span class="nt">"service_certificate"</span><span class="p">:</span><span class="w"> </span><span class="s2">"..."</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="p">{</span><span class="w"> </span><span class="nt">"status"</span><span class="p">:</span><span class="w"> </span><span class="s2">"failed"</span><span class="p">,</span><span class="w"> </span><span class="nt">"error"</span><span class="p">:</span><span class="w"> </span><span class="s2">"...message..."</span><span class="w"> </span><span class="p">}</span>
 </span></code></pre></div>
 <p>A <code>cdm_call</code> comes first, in any auth state. The client answers it with a JSON object in
 <code>response</code>: <code>{"session": "...", "challenge": "&lt;base64&gt;"}</code> for <code>challenge</code>,
@@ -3097,8 +3098,8 @@ other remote session routes.</p>
 <tr>
 <td><code>prompt</code></td>
 <td>server</td>
-<td><code>id</code>, <code>prompt</code></td>
-<td>The service asks the user for input</td>
+<td><code>id</code>, <code>prompt</code>, <code>qr</code></td>
+<td>The service asks the user for input; <code>qr</code>, when present, is the text of a QR code to draw with it</td>
 </tr>
 <tr>
 <td><code>cdm_call</code></td>
@@ -3109,8 +3110,8 @@ other remote session routes.</p>
 <tr>
 <td><code>log</code></td>
 <td>server</td>
-<td><code>seq</code>, <code>level</code>, <code>message</code>, <code>ts</code></td>
-<td>One record of the service log, with the same redaction as <code>GET /logs</code></td>
+<td><code>seq</code>, <code>level</code>, <code>message</code>, <code>ts</code>, <code>qr</code></td>
+<td>One record of the service log, with the same redaction as <code>GET /logs</code>; <code>qr</code>, when present, is the text of a QR code to draw under the message</td>
 </tr>
 <tr>
 <td><code>status</code></td>
