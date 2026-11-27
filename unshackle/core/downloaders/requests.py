@@ -415,12 +415,16 @@ def is_requests_session(session: Any) -> bool:
 def no_retry_session(session: Session) -> Session:
     """A shallow copy of ``session`` whose adapters never retry, sharing its state and pools.
 
+    The view writes no debug_requests debug-log entry: segment and probe requests stay out of the record.
+
     download() owns segment retries, so a mounted urllib3 ``Retry`` nests inside a single
     attempt: one 429 carrying ``Retry-After: 60`` costs five one-minute sleeps before
     download() even sees the failure. requests takes no per-call retry override, and track
     threads share the caller's session, so remounting it is not an option.
     """
-    view = copy(session)
+    from unshackle.core.session import unrecorded_view
+
+    view = unrecorded_view(session)
     view.adapters = OrderedDict()
     for prefix, adapter in session.adapters.items():
         twin = copy(adapter)
@@ -475,6 +479,7 @@ def probe_ranged(url: str, session: Any, **kwargs: Any) -> tuple[int, bool]:
         rest.setdefault("read_timeout", rnet_read_timeout())
         # let download() own segment retries, with no nested session-level retry loop
         rest.setdefault("max_retries", 0)
+        rest.setdefault("record_request", False)
     else:
         rest.setdefault("timeout", (CONNECT_TIMEOUT, READ_TIMEOUT))
         session = no_retry_session(session)
@@ -891,6 +896,7 @@ def download(
                 request_kwargs.setdefault("read_timeout", rnet_read_timeout())
                 # own segment retries here, suppressing RnetSession's nested retry loop
                 request_kwargs.setdefault("max_retries", 0)
+                request_kwargs.setdefault("record_request", False)
             else:
                 request_kwargs.setdefault("timeout", (CONNECT_TIMEOUT, READ_TIMEOUT))
             req_headers = dict(request_kwargs.get("headers", {}) or {})

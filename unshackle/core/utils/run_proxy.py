@@ -132,11 +132,14 @@ def run_proxy_for(frame: FrameType | None) -> str | None:
 
 def fallback_session() -> requests.Session:
     """A new requests session for a core helper that got no session, on the proxy of the calling service."""
+    from unshackle.core.session import record_requests
+
     session = requests.Session()
     proxy = run_proxy_for(sys._getframe(1))
     if proxy:
         session.proxies.update({"all": proxy})
         pin(session)
+    record_requests(session)
     return session
 
 

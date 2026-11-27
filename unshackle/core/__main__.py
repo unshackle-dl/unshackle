@@ -15,7 +15,7 @@ from unshackle.core import __code_hash__, __version__
 from unshackle.core.commands import Commands
 from unshackle.core.config import config
 from unshackle.core.console import ComfyRichHandler, console
-from unshackle.core.constants import context_settings
+from unshackle.core.constants import HTTP_LOGGERS, context_settings
 from unshackle.core.update_checker import UpdateChecker
 from unshackle.core.utilities import close_debug_logger, init_debug_logger
 
@@ -77,7 +77,7 @@ def main(version: bool, debug: bool) -> None:
         init_debug_logger(enabled=True)
 
     if debug and not config.debug_requests:
-        for noisy in ("urllib3", "urllib3.connectionpool", "requests", "rnet", "httpx", "httpcore", "hpack", "h2"):
+        for noisy in HTTP_LOGGERS:
             logging.getLogger(noisy).setLevel(logging.WARNING)
 
     urllib3.disable_warnings(InsecureRequestWarning)

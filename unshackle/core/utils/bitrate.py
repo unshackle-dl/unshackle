@@ -15,7 +15,7 @@ from requests import Session
 
 from unshackle.core.binaries import FFProbe
 from unshackle.core.constants import TrackT
-from unshackle.core.session import RnetSession, utf8_text
+from unshackle.core.session import RnetSession, unrecorded, utf8_text
 from unshackle.core.utils.subprocess import log_tool_run
 
 if TYPE_CHECKING:
@@ -216,7 +216,7 @@ def pick_samples(segments: list[Segment], samples: int) -> list[Segment]:
 def probe_size(segment: Segment, session: Session | RnetSession) -> int | None:
     """Return a segment's byte size with a HEAD request, falling back to a ranged GET. Validates status."""
     try:
-        res = session.head(segment.url, allow_redirects=True, timeout=PROBE_TIMEOUT)
+        res = unrecorded(session, "head", segment.url, allow_redirects=True, timeout=PROBE_TIMEOUT)
         if getattr(res, "status_code", 0) in (200, 206):
             content_length = res.headers.get("Content-Length")
             if content_length:
@@ -228,7 +228,7 @@ def probe_size(segment: Segment, session: Session | RnetSession) -> int | None:
     # Require a 206 so a server that ignores Range (returning the whole 200 body)
     # is not mistaken for a valid size or downloaded wholesale.
     try:
-        res = session.get(segment.url, headers={"Range": "bytes=0-0"}, timeout=PROBE_TIMEOUT)
+        res = unrecorded(session, "get", segment.url, headers={"Range": "bytes=0-0"}, timeout=PROBE_TIMEOUT)
         if getattr(res, "status_code", 0) == 206:
             content_range = res.headers.get("Content-Range")
             if content_range and "/" in content_range:
@@ -414,7 +414,7 @@ def ffprobe_duration(url: str, session: Session | RnetSession, *, log: logging.L
 def ranged_get(url: str, session: Session | RnetSession, byte_range: str) -> bytes | None:
     """Fetch a byte range, only accepting a real 206 partial response (never a full 200 body)."""
     try:
-        res = session.get(url, headers={"Range": byte_range}, timeout=PROBE_TIMEOUT)
+        res = unrecorded(session, "get", url, headers={"Range": byte_range}, timeout=PROBE_TIMEOUT)
         if getattr(res, "status_code", 0) != 206:
             return None
         content = getattr(res, "content", None)

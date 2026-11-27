@@ -84,6 +84,30 @@ def test_log_event_emits_with_level_message_and_context(debug_log: Path):
     assert e["context"] == {"count": 3}
 
 
+def test_a_raw_entry_keeps_its_values_and_redacts_only_local_paths(debug_log: Path):
+    home = str(Path.home())
+    values = {"url": "https://h/x?access_token=T1", "password": "P1", "key": "K1", "file": f"{home}/a.txt"}
+    log_event("raw_event", raw=True, message=f"token=T1 {home}/m", context=values)
+    log_event("masked_event", message="token=T1", context=values)
+
+    entries = read_entries(debug_log)
+    raw, masked = find(entries, "raw_event"), find(entries, "masked_event")
+    assert raw["message"] == "token=T1 ~/m"
+    assert raw["context"] == {**values, "file": "~/a.txt"}
+    assert masked["message"] == "token=***"
+    assert masked["context"] == {"url": "redacted", "password": "[REDACTED]", "key": "[REDACTED]", "file": "~/a.txt"}
+
+
+def test_a_value_too_deep_for_the_log_never_raises(debug_log: Path):
+    deep: list = []
+    for _ in range(5000):
+        deep = [deep]
+    log_event("deep_event", raw=True, context={"body": deep})
+    log_event("after_event")
+
+    assert find(read_entries(debug_log), "after_event")
+
+
 def test_log_event_noop_when_disabled():
     close_debug_logger()
     assert get_debug_logger() is None

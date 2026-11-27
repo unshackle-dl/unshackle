@@ -585,7 +585,7 @@ A few configuration toggles help when a title will not decrypt:
 |------------|---------|--------|
 | `debug` | `false` | Global debug output. |
 | `debug_keys` | `false` | Log decryption keys. |
-| `debug_requests` | `false` | Log HTTP requests. |
+| `debug_requests` | `false` | Log HTTP requests to the console with `-d`, and each request with its response body to the [JSON debug log](troubleshooting.md#debug-requests). The log then holds tokens and content keys as received. |
 
 ```yaml title="unshackle.yaml"
 debug_keys: true

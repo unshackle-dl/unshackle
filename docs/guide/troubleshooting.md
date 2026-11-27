@@ -54,7 +54,7 @@ There are two independent ways to enable debug logging, and they do slightly dif
 
 ## The structured JSON debug log
 
-Beyond the console output, unshackle writes a structured log in [JSON Lines](https://jsonlines.org/) format: one complete JSON object per line. You can filter, examine, and analyse this file with standard tooling (`jq`, `grep`, a text editor). It is safe to attach to a bug report, because unshackle redacts it.
+Beyond the console output, unshackle writes a structured log in [JSON Lines](https://jsonlines.org/) format: one complete JSON object per line. You can filter, examine, and analyse this file with standard tooling (`jq`, `grep`, a text editor). It is safe to attach to a bug report, because unshackle redacts it, unless `debug_requests` is on (see [Debugging HTTP traffic](#debug-requests)).
 
 ### Where it is written
 
@@ -134,11 +134,15 @@ With `debug_keys: true`, the debug log stops masking content key fields. You can
 !!! warning "Keys are sensitive, turn this back off"
     `debug_keys` writes real content keys into the log file in cleartext. Only enable it while you diagnose a content key problem. Never share a log written with it on, and set it back to `false` when you are done. Note that `debug_keys` only affects the **JSON debug log file**. It does not change what the console prints.
 
-Fields that are *always* redacted regardless of `debug_keys` (anything whose name contains `password`, `token`, `secret`, `auth`, or `cookie`) stay masked, so credentials never leak even in a keys-on log.
+Fields that are *always* redacted regardless of `debug_keys` (anything whose name contains `password`, `token`, `secret`, `auth`, or `cookie`) stay masked, so credentials never leak even in a keys-on log. The `http_request` entries of [`debug_requests`](#debug-requests) are the exception.
 
 ---
 
-## Debugging HTTP traffic with `debug_requests`
+## Debugging HTTP traffic with `debug_requests` { #debug-requests }
+
+`debug_requests` does two things: it keeps the HTTP library logs in the console, and it writes a record of each HTTP request to the JSON debug log.
+
+### HTTP library logs in the console
 
 When you pass `-d`, unshackle raises its own modules to `DEBUG` but deliberately **silences** the noisy low-level HTTP libraries (`urllib3`, `requests`, `rnet`, `httpx`, `httpcore`, `hpack`, `h2`) back down to `WARNING`. Without this, a single download would bury the useful output under thousands of connection-pool and HTTP/2 frame messages.
 
@@ -154,8 +158,47 @@ unshackle cfg debug_requests true
 
 With `debug_requests: true`, unshackle leaves those libraries at `DEBUG` level when you operate it with `-d`, so their request/response chatter appears in the console.
 
-!!! note "`debug_requests` needs `-d` to have any effect"
-    The `debug_requests` toggle only decides whether unshackle silences the HTTP libraries when the `-d` flag is active. If you do not operate unshackle with `-d` (verbose console logging), it changes nothing. Combine them: `unshackle -d dl ...` with `debug_requests: true` in config.
+!!! note "The console logs need `-d`"
+    Without `-d` (verbose console logging), unshackle shows no HTTP library logs. Combine them: `unshackle -d dl ...` with `debug_requests: true` in config.
+
+### Request records in the JSON debug log
+
+`debug_requests` is the one switch that writes request records to the [JSON debug log](#the-structured-json-debug-log). With `debug_requests: true` and the JSON debug log on (`-d` or `debug: true`), unshackle writes one `http_request` entry for each HTTP attempt. With `debug_requests: false`, the default, a `-d` run writes no `http_request` entry. A request that unshackle retries gives one entry for each attempt. A redirect gives one entry for each hop.
+
+| Field | Content |
+|-------|---------|
+| `request.method` | The HTTP method. |
+| `request.host` | The host name and port, with no scheme and no user name or password. |
+| `request.path` | The URL path, as sent. |
+| `request.query` | The query string, as sent. |
+| `request.attempt` | The attempt number, from 1. |
+| `request.body` | The body of a JSON, form, XML or `text/*` request, as sent. A JSON body is an object. A binary body is not recorded. |
+| `response.status` | The HTTP status, or `null` when no response came back. |
+| `response.size` | The `Content-Length` of the response. When the server sent none, the length of the recorded body, else `null`. |
+| `response.body` | The text response body, as received. A JSON body is a JSON object, so `jq` can query it. Other text is a string. |
+| `response.body_size` | The full size of the decoded body in bytes, when unshackle cut it to `debug_requests_body_limit`. `response.size` is the size on the wire, which can be compressed. |
+| `response.body_error` | The failure, when unshackle could not read the body. |
+| `response.body_cut` | `true` when unshackle cut the body. A cut JSON body is a string. |
+| `duration_ms` | The time from the start of the attempt to the response headers. |
+| `failure` | The failure, without the URL, for an attempt that raised. |
+
+unshackle records the body of a JSON, XML or `text/*` response. It records no body for a manifest (MPD, M3U8 or ISM, by its content type, or by the suffix of the request path when the response is not JSON), a binary content type, an event stream, a request sent with `stream=True`, or a server process. A request body is recorded by the same rule, by the request `Content-Type`; a form body counts as text. The entries contain no headers. Core writes no entry for the media requests that it makes. These are the segment and range-probe requests of a track download, and the init segment, index and probe reads before it. A range read that service code makes still writes an entry. Playlist and manifest fetches write an entry.
+
+```console
+jq 'select(.operation == "http_request") | [.request.method, .request.host, .request.path, .response.status]' \
+  unshackle_debug_EXAMPLE_20260703-142530.jsonl
+jq 'select(.operation == "http_request" and .request.path == "/v1/titles") | .response.body' \
+  unshackle_debug_EXAMPLE_20260703-142530.jsonl
+```
+
+The record covers the HTTP sessions that unshackle builds: the session from the service's `get_session()`, the import and `--remote` sessions, and the sessions of core helpers. A separate `requests.Session` that service code makes itself writes no entry.
+
+On a `serve` server, the entries for the requests of a service stay on the server, with no body. A download job whose `dl` run has the JSON debug log on writes them to that log. A remote session writes none, because `serve` opens no JSON debug log for it. unshackle never sends them to a remote client: not in the remote session log, the remote session channel, an API reply or an error. A remote client with its own `debug_requests: true` records its own requests to the server, with the response bodies, in its own JSON debug log.
+
+On an HTTP session of the `requests` library, `urllib3` retries inside one send. The attempts before the last then have no `duration_ms` and no `response.size`. A request that fails after all its retries gives one entry for the last failure, with `request.attempt` set to `null`.
+
+!!! danger "A request record holds secrets"
+    unshackle writes the `http_request` entries as received. It masks only the local folder prefixes (`redact_paths`). With `debug_requests` on, the JSONL file holds tokens, passwords, cookies, content keys and account data, in the path, the query and the body. `debug_keys` does not apply to these entries. Keep the file on your computer. Never attach it to a report.
 
 ---
 
@@ -167,13 +210,15 @@ unshackle redacts logged strings so that debug output is safe to share. It appli
 - **URLs**: unshackle collapses every `http(s)` URL to `redacted`. It keeps only the file extension, so a manifest still shows as `redacted.mpd` and a segment as `redacted.m4s`. This hides the CDN, manifest, segment, and licence-server locations, but keeps the *type* of resource.
 - **Local paths**: unshackle replaces install-root, virtualenv, and home-directory prefixes with tokens, so your username and machine layout do not appear in logs.
 
+The [`http_request` entries](#debug-requests) of `debug_requests` get only the local path pass. Their secrets, URLs and bodies stay as received.
+
 The `redact_paths` config key controls path redaction, and it is **on by default**:
 
 ```yaml
 redact_paths: true   # default - mask local base directories in logged paths
 ```
 
-Set `redact_paths: false` if you debug a path problem locally and want to see full, unmasked paths in the console and logs. unshackle always applies secret and URL redaction in the JSON debug log, and this toggle does not change that.
+Set `redact_paths: false` if you debug a path problem locally and want to see full, unmasked paths in the console and logs. unshackle always applies secret and URL redaction in the JSON debug log, except in the `http_request` entries, and this toggle does not change that.
 
 ---
 
@@ -256,7 +301,7 @@ Each command reports how many files it removed and how much space it freed, then
 !!! example "A network request fails at the connection or TLS layer"
     **Symptom:** timeouts, connection resets, or handshake errors, and unshackle's own logs do not give the full cause.
 
-    **Inspect:** set `debug_requests: true` and operate unshackle with `-d` to show the underlying `urllib3` / `rnet` / `httpx` logs. In the JSON debug log, filter for `service_call` operations to see which request failed. If you use a proxy, also read [Proxies & VPN](proxies-and-vpn.md).
+    **Inspect:** set `debug_requests: true` and operate unshackle with `-d` to show the underlying `urllib3` / `rnet` / `httpx` logs. In the JSON debug log, filter for `http_request` operations to see which request failed, with its status, attempt number and failure. If you use a proxy, also read [Proxies & VPN](proxies-and-vpn.md).
 
 !!! example "A segment download fails after every retry"
     **Symptom:** the download stops with a line like `MaxRetriesError: GET <host> failed: RequestError (stream closed because of a broken pipe), gave up after 5 failed attempts over 30s`.
@@ -302,8 +347,8 @@ The debug log is tuned for **developers troubleshooting pipeline flow** (maximum
     jq 'select(.level == "INFO")' unshackle_debug_EXAMPLE_20260703-142530.jsonl
     ```
 
-!!! warning "No raw dumps"
-    Never log a full `Tracks` object, an MPD/manifest body, or a response payload. Log only **counts, ids, sizes, and `safe_display_url(url)`**. This keeps the log low-noise and prevents leaking title or manifest data into the file *before* redaction even runs. Redaction is a backstop, not a licence to dump raw objects.
+!!! warning "No request bodies and no raw dumps"
+    A `log_event` entry never holds a request body or a raw dump: no full `Tracks` object, no MPD/manifest body and no response payload. Only `debug_requests` records request and response bodies, in its `http_request` entries. Log only **counts, ids, sizes, and `safe_display_url(url)`**. This keeps the log low-noise and prevents leaking title or manifest data into the file *before* redaction even runs. Redaction is a backstop, not a licence to dump raw objects.
 
 !!! note "Operation names: `<area>_<event>`, no registry"
     Operation names are plain lowercase strings that follow an `<area>_<event>` convention: `manifest_dash_parse`, `drm_decrypt`, `vault_get_key`, `tool_run`. We write them inline at each call site on purpose. There is **no central registry or enum**. Do not look for one, and do not make one. The absence is a deliberate design choice, not an omission.

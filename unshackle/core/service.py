@@ -32,6 +32,7 @@ from unshackle.core.session import (
     READ_TIMEOUT,
     RETRY_METHODS,
     STATUS_FORCELIST,
+    record_requests,
 )
 from unshackle.core.title_cacher import TitleCacher
 from unshackle.core.title_source import TitleSource
@@ -164,6 +165,7 @@ class Service(TitleSource):
         self.log = logging.getLogger(self.__class__.__name__)
 
         self.session = self.get_session()
+        record_requests(self.session)
         self.cache = Cacher(self.__class__.__name__)
         self.title_cache: TitleCacher = TitleCacher(self.__class__.__name__)
         self.cache_dir = config.directories.cache / self.__class__.__name__

@@ -12,6 +12,7 @@ from typing import Any
 import pytest
 
 from unshackle.core import binaries
+from unshackle.core import session as http_session
 from unshackle.core.config import config
 from unshackle.core.proxies.proxy import CATALOGUES
 from unshackle.core.update_checker import UpdateChecker
@@ -43,6 +44,12 @@ def no_update_check(monkeypatch: pytest.MonkeyPatch) -> None:
     """Keep the release lookup of the health route off the network."""
 
     monkeypatch.setattr(UpdateChecker, "check_for_updates_sync", lambda *args, **kwargs: None)
+
+
+@pytest.fixture(autouse=True)
+def client_process(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Start as a client process, so a test that ran serve or a job worker cannot turn response bodies off."""
+    monkeypatch.setattr(http_session, "record_bodies", True)
 
 
 @pytest.fixture(autouse=True)

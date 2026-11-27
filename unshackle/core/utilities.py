@@ -35,7 +35,7 @@ from unidecode import unidecode
 
 from unshackle.core.config import config
 from unshackle.core.constants import LANGUAGE_EXACT_DISTANCE, LANGUAGE_MAX_DISTANCE
-from unshackle.core.utils.redact import redact_all
+from unshackle.core.utils.redact import redact_all, redact_path
 
 """
 Utility functions for the unshackle media archival tool.
@@ -1124,6 +1124,7 @@ class DebugLogger:
         response: dict[str, Any] | None = None,
         duration_ms: float | None = None,
         success: bool | None = None,
+        raw: bool = False,
         **kwargs: Any,
     ) -> None:
         """
@@ -1140,70 +1141,71 @@ class DebugLogger:
             response: Response details (status, headers, body)
             duration_ms: Operation duration in milliseconds
             success: Whether the operation succeeded
+            raw: True to write the values as received, with only the local folder prefixes redacted
             **kwargs: Additional fields to include in the log entry
         """
         if not self.enabled or not self.file_handle:
             return
 
-        entry: dict[str, Any] = {
-            "timestamp": datetime.now(UTC).isoformat(),
-            "session_id": self.session_id,
-            "level": level,
-        }
-
-        if operation:
-            entry["operation"] = operation
-        if message:
-            entry["message"] = redact_all(message)
-        if service:
-            entry["service"] = service
-        if context:
-            entry["context"] = self.sanitize_data(context)
-        if request:
-            entry["request"] = self.sanitize_data(request)
-        if response:
-            entry["response"] = self.sanitize_data(response)
-        if duration_ms is not None:
-            entry["duration_ms"] = duration_ms
-        if success is not None:
-            entry["success"] = success
-
-        if error:
-            entry["error"] = {
-                "type": type(error).__name__,
-                "message": redact_all(str(error)),
-                "traceback": [
-                    redact_all(line) for line in traceback.format_exception(type(error), error, error.__traceback__)
-                ],
+        try:
+            entry: dict[str, Any] = {
+                "timestamp": datetime.now(UTC).isoformat(),
+                "session_id": self.session_id,
+                "level": level,
             }
 
-        for key, value in kwargs.items():
-            if key not in entry:
-                entry[key] = self.sanitize_data(value)
+            if operation:
+                entry["operation"] = operation
+            if message:
+                entry["message"] = self.sanitize_data(message, raw)
+            if service:
+                entry["service"] = service
+            if context:
+                entry["context"] = self.sanitize_data(context, raw)
+            if request:
+                entry["request"] = self.sanitize_data(request, raw)
+            if response:
+                entry["response"] = self.sanitize_data(response, raw)
+            if duration_ms is not None:
+                entry["duration_ms"] = duration_ms
+            if success is not None:
+                entry["success"] = success
 
-        try:
+            if error:
+                entry["error"] = {
+                    "type": type(error).__name__,
+                    "message": redact_all(str(error)),
+                    "traceback": [
+                        redact_all(line) for line in traceback.format_exception(type(error), error, error.__traceback__)
+                    ],
+                }
+
+            for key, value in kwargs.items():
+                if key not in entry:
+                    entry[key] = self.sanitize_data(value, raw)
+
             self.file_handle.write(json.dumps(entry, default=str) + "\n")
             self.file_handle.flush()
         except Exception as e:
             print(f"Failed to write debug log: {e}", file=sys.stderr)
 
-    def sanitize_data(self, data: Any) -> Any:
+    def sanitize_data(self, data: Any, raw: bool = False) -> Any:
         """
         Sanitise data for JSON serialization.
-        Handles complex objects and removes sensitive information.
+        Handles complex objects and removes sensitive information. ``raw`` redacts only the local folder prefixes.
         """
         if data is None:
             return None
 
         if isinstance(data, str):
             # mask secrets, collapse content/CDN URLs, and strip local path prefixes
-            return redact_all(data)
+            return redact_path(data) if raw else redact_all(data)
 
         if isinstance(data, (int, float, bool)):
             return data
 
         if isinstance(data, (list, tuple)):
-            return [self.sanitize_data(item) for item in data]
+            return [self.sanitize_data(item, raw) for item in data]
 
         if isinstance(data, dict):
             sanitized = {}
@@ -1221,12 +1223,12 @@ class DebugLogger:
                     and not any(safe in key_lower for safe in ["_count", "_id", "_type", "kid", "keys_", "key_found"])
                 )
 
-                should_redact = is_always_sensitive or (is_key_field and not self.log_keys)
+                should_redact = not raw and (is_always_sensitive or (is_key_field and not self.log_keys))
 
                 if should_redact:
                     sanitized[key] = "[REDACTED]"
                 else:
-                    sanitized[key] = self.sanitize_data(value)
+                    sanitized[key] = self.sanitize_data(value, raw)
             return sanitized
 
         if isinstance(data, bytes):

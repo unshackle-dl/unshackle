@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import contextlib
 import http
+import json
 import logging
 import math
 import random
@@ -15,14 +17,16 @@ from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
 from http.cookiejar import Cookie, CookieJar
 from typing import Any
-from urllib.parse import urlencode, urlparse, urlunparse
+from urllib.parse import urlencode, urlparse, urlsplit, urlunparse
 
 import rnet
-from requests import HTTPError, Request, Response, Session
+from requests import HTTPError, PreparedRequest, Request, Response, Session
+from requests.adapters import BaseAdapter
 from requests.cookies import create_cookie
 from requests.structures import CaseInsensitiveDict
 
 from unshackle.core.config import config
+from unshackle.core.utilities import get_debug_logger, log_event
 from unshackle.core.utils import run_proxy
 
 # rnet's only distinguishing role is TLS fingerprinting; retry, backoff,
@@ -201,14 +205,13 @@ class RnetResponse:
             )
 
     def iter_content(self, chunk_size: int | None = None) -> Iterator[bytes]:
-        """Re-chunk rnet's variable-size data into fixed-size pieces."""
-        self._streamed = True
+        """Re-chunk rnet's variable-size data, or the body already read, into fixed-size pieces."""
         if chunk_size is None or chunk_size <= 0:
-            yield from self._resp.stream()
+            yield from self.stream()
             return
 
         buf = bytearray()
-        for chunk in self._resp.stream():
+        for chunk in self.stream():
             buf.extend(chunk)
             while len(buf) >= chunk_size:
                 yield bytes(buf[:chunk_size])
@@ -217,8 +220,11 @@ class RnetResponse:
             yield bytes(buf)
 
     def stream(self) -> Iterator[bytes]:
-        """Direct pass-through of rnet's native ``stream()`` iterator."""
+        """Direct pass-through of rnet's native ``stream()`` iterator, or the body already read."""
         self._streamed = True
+        if self._content is not None:
+            yield self._content
+            return
         yield from self._resp.stream()
 
     def close(self) -> None:
@@ -578,6 +584,216 @@ def failure_reason(exc: BaseException) -> str:
     return f"{type(inner).__name__} ({texts[-1]})" if texts else type(inner).__name__
 
 
+TEXT_TYPES = ("json", "xml", "text/")
+MANIFEST_TYPES = ("dash+xml", "mpegurl", "vnd.ms-sstr")
+MANIFEST_SUFFIXES = (".mpd", ".m3u8", ".m3u", "/manifest")
+FORM_TYPE = "x-www-form-urlencoded"
+
+record_bodies = True
+"""False in a server process (``serve`` and its download job worker): its http_request entries carry no body."""
+
+
+def text_fields(data: bytes, content_type: str) -> dict[str, Any]:
+    """A text body as entry fields: JSON parsed, other text as a string, cut to the body limit."""
+    limit = config.debug_requests_body_limit
+    if limit and len(data) > limit:
+        return {"body": data[:limit].decode("utf-8", errors="replace"), "body_size": len(data), "body_cut": True}
+    if "json" in content_type:
+        with contextlib.suppress(ValueError):
+            return {"body": json.loads(data)}
+    return {"body": data.decode("utf-8", errors="replace")}
+
+
+def request_body(content_type: str, data: Any) -> dict[str, Any]:
+    """The body fields of a sent request: a JSON, form, XML or text body as sent. A binary body has none."""
+    content_type = content_type.lower()
+    if isinstance(data, str):
+        data = data.encode("utf-8")
+    if not data or not isinstance(data, bytes):
+        return {}
+    if FORM_TYPE not in content_type and not any(t in content_type for t in TEXT_TYPES):
+        return {}
+    return text_fields(data, content_type)
+
+
+def rnet_sent(kwargs: dict[str, Any], headers: Any) -> tuple[str, Any] | None:
+    """The content type and body of an rnet request, for its http_request entry."""
+    if kwargs.get("json") is not None:
+        return "application/json", json.dumps(kwargs["json"])
+    if kwargs.get("form") is not None:
+        return FORM_TYPE, urlencode(kwargs["form"])
+    if kwargs.get("body") is None:
+        return None
+    merged = {k.lower(): v for k, v in dict(headers).items()}
+    merged.update({k.lower(): v for k, v in (kwargs.get("headers") or {}).items()})
+    return merged.get("content-type", ""), kwargs["body"]
+
+
+def response_body(response: Any, path: str) -> dict[str, Any]:
+    """The body fields of a response for its http_request entry.
+
+    Only a text content-type has its body read. A manifest has none: a manifest content-type, or a manifest
+    path suffix on a response that is not JSON.
+    """
+    content_type = (response.headers.get("content-type") or "").lower()
+    manifest = any(t in content_type for t in MANIFEST_TYPES) or (
+        "json" not in content_type and path.lower().endswith(MANIFEST_SUFFIXES)
+    )
+    if manifest or "event-stream" in content_type or not any(t in content_type for t in TEXT_TYPES):
+        return {}
+    data: bytes = response.content
+    if not data:
+        return {}
+    return text_fields(data, content_type)
+
+
+def record_request(
+    method: str,
+    url: str,
+    attempt: int | None,
+    *,
+    duration: float | None = None,
+    response: Any = None,
+    status: int | None = None,
+    error: BaseException | None = None,
+    body: bool = False,
+    sent: tuple[str, Any] | None = None,
+) -> None:
+    """Write one ``http_request`` debug-log entry for an HTTP attempt, with its values as received.
+
+    With ``body`` set, a text response body goes in the entry too, and ``sent`` (content type, body) adds a
+    text request body, except in a server process. A body read
+    that fails writes ``body_error``, and the caller's own read raises the error. The duration stops at the
+    response headers.
+    """
+    debug_logger = get_debug_logger()
+    if not debug_logger or not debug_logger.enabled:
+        return
+    parts = urlsplit(url)
+    size: Any = None
+    received: dict[str, Any] = {}
+    request_fields: dict[str, Any] = {}
+    if sent is not None and record_bodies:
+        try:
+            request_fields = request_body(*sent)
+        except Exception as e:
+            request_fields = {"body_error": failure_reason(e)}
+    if response is not None:
+        status = response.status_code
+        size = response.headers.get("content-length")
+        if body and record_bodies:
+            try:
+                received = response_body(response, parts.path)
+            except Exception as e:
+                received = {"body_error": failure_reason(e)}
+        if not str(size).isdigit() and "body" in received:
+            size = len(response.content)
+    log_event(
+        "http_request",
+        raw=True,
+        request={
+            "method": method,
+            "host": parts.netloc.rpartition("@")[2],
+            "path": parts.path or "/",
+            "query": parts.query or None,
+            "attempt": attempt,
+            **request_fields,
+        },
+        response={"status": status, "size": int(size) if str(size).isdigit() else None, **received},
+        duration_ms=None if duration is None else round(duration * 1000, 1),
+        failure=failure_reason(error) if error is not None else None,
+    )
+
+
+class RecordedAdapter:
+    """Wrap a transport adapter so that each send writes an ``http_request`` debug-log entry.
+
+    urllib3 retries inside one send, so the attempts before the last come from its retry history, with no
+    duration or size. A failed send records only its last failure. Attributes read through to the adapter,
+    but a write stays on the wrapper: change ``session.adapters`` instead.
+    """
+
+    def __init__(self, adapter: BaseAdapter) -> None:
+        self.adapter = adapter
+
+    def __getattr__(self, name: str) -> Any:
+        if name == "adapter":
+            raise AttributeError(name)
+        return getattr(self.adapter, name)
+
+    def send(self, request: PreparedRequest, **kwargs: Any) -> Response:
+        method, url = request.method or "", request.url or ""
+        sent = (request.headers.get("Content-Type") or "", request.body)
+        started = time.monotonic()
+        try:
+            response = self.adapter.send(request, **kwargs)
+        except Exception as e:
+            record_request(method, url, None, duration=time.monotonic() - started, error=e, sent=sent)
+            raise
+        history = getattr(getattr(response.raw, "retries", None), "history", None) or ()
+        for attempt, past in enumerate(history, 1):
+            record_request(method, url, attempt, status=past.status, error=past.error)
+        record_request(
+            method,
+            url,
+            len(history) + 1,
+            duration=time.monotonic() - started,
+            response=response,
+            body=not kwargs.get("stream"),
+            sent=sent,
+        )
+        return response
+
+
+class RecordedSession(Session):
+    """A requests.Session that writes an ``http_request`` debug-log entry for each request and redirect hop.
+
+    ``record_request = False`` turns it off.
+    """
+
+    record_request = True
+
+    def get_adapter(self, url: str) -> BaseAdapter:
+        adapter = super().get_adapter(url)
+        return RecordedAdapter(adapter) if self.record_request and config.debug_requests else adapter  # type: ignore[return-value]
+
+
+def record_requests(session: Any) -> None:
+    """With debug_requests on, make a requests.Session write an ``http_request`` debug-log entry per request.
+
+    The session gets a subclass made at run time, so it no longer pickles. Only the HTTP sessions that core builds
+    call this: a service's own extra requests.Session writes no entry.
+    """
+    if config.debug_requests and isinstance(session, Session) and not isinstance(session, RecordedSession):
+        cls: type = type(session)
+        if cls not in RECORDED_CLASSES:
+            RECORDED_CLASSES[cls] = type(cls.__name__, (RecordedSession, cls), {})
+        session.__class__ = RECORDED_CLASSES[cls]
+
+
+RECORDED_CLASSES: dict[type, type] = {}
+
+
+def unrecorded_view(session: Session) -> Session:
+    """A shallow copy of a requests ``session`` that writes no debug_requests entry.
+
+    copy() would keep only ``Session.__attrs__`` and drop the attributes that a subclass sets.
+    """
+    view = object.__new__(type(session))
+    view.__dict__.update(session.__dict__)
+    view.record_request = False  # type: ignore[attr-defined]
+    return view
+
+
+def unrecorded(session: Any, method: str, url: str, **kwargs: Any) -> Any:
+    """Call ``session.<method>(url)`` with no debug_requests debug-log entry, for a range read or probe of media bytes."""
+    if isinstance(session, RnetSession):
+        kwargs["record_request"] = False
+    elif isinstance(session, RecordedSession):
+        session = unrecorded_view(session)
+    return getattr(session, method)(url, **kwargs)
+
+
 class RnetSession:
     """TLS-fingerprinted HTTP session powered by rnet (Rust/BoringSSL).
 
@@ -844,13 +1060,58 @@ class RnetSession:
             pass
         return response
 
+    def send_attempt(
+        self,
+        client: Any,
+        rnet_method: Any,
+        method: str,
+        url: str,
+        attempt: int,
+        record: bool,
+        body: bool,
+        sent: tuple[str, Any] | None,
+        kwargs: dict[str, Any],
+    ) -> RnetResponse:
+        """Send one HTTP attempt. With debug_requests on, log it, and when ``record`` is set write its debug-log entry.
+
+        ``body`` puts the response body in the entry, and ``sent`` the request body.
+        """
+        started = time.monotonic()
+        try:
+            response = self.absorb_cookies(RnetResponse(client.request(rnet_method, url, **kwargs)))
+        except Exception as e:
+            if record:
+                record_request(method, url, attempt, duration=time.monotonic() - started, error=e, sent=sent)
+            raise
+        if config.debug_requests:
+            parsed_url = urlsplit(url)
+            port_str = f":{parsed_url.port}" if parsed_url.port else ""
+            if not port_str:
+                port_str = ":443" if parsed_url.scheme == "https" else ":80"
+            host_url = f"{parsed_url.scheme}://{parsed_url.hostname}{port_str}"
+            path_and_query = parsed_url.path + (f"?{parsed_url.query}" if parsed_url.query else "")
+            if not path_and_query:
+                path_and_query = "/"
+            content_length = response.headers.get("content-length") or response.content_length
+
+            log_msg = (
+                f'{host_url} "{method} {path_and_query} {response.version}" {response.status_code} {content_length}'
+            )
+            self.log.debug(log_msg)
+        if record:
+            record_request(
+                method, url, attempt, duration=time.monotonic() - started, response=response, body=body, sent=sent
+            )
+        return response
+
     def request(self, method: str, url: str, **kwargs: Any) -> RnetResponse:
         """Send a request, retrying on the status forcelist and on the caught exception types.
 
         This method retries only the methods in allowed_methods. Any other method gets one try.
         A max_retries kwarg overrides the HTTP session retry budget for this call alone, where 0
         means one try with no retries. Once the budget is spent, this method raises
-        MaxRetriesError with the last failure as its cause.
+        MaxRetriesError with the last failure as its cause. A record_request=False kwarg keeps
+        this call out of the debug_requests debug-log entries.
         """
         client = self.ensure_client()
         method_upper = method.upper() if isinstance(method, str) else str(method).upper()
@@ -876,7 +1137,7 @@ class RnetSession:
             kwargs.setdefault("verify", False)
 
         # Remove kwargs rnet doesn't understand
-        kwargs.pop("stream", None)  # rnet responses are always lazy
+        stream = kwargs.pop("stream", None)  # rnet responses are always lazy
 
         data = kwargs.pop("data", None)
         if data is not None:
@@ -895,29 +1156,21 @@ class RnetSession:
         if kwargs.get("headers") is not None:
             kwargs["headers"] = dict(kwargs["headers"])
 
+        record = kwargs.pop("record_request", True) and config.debug_requests
+        body = record and not stream
+        sent = rnet_sent(kwargs, self.headers) if record else None
+
         if method_upper not in self.allowed_methods:
-            return self.absorb_cookies(RnetResponse(client.request(rnet_method, url, **kwargs)))
+            return self.send_attempt(client, rnet_method, method_upper, url, 1, record, body, sent, kwargs)
 
         last_exception: Exception | None = None
         response: RnetResponse | None = None
 
         for attempt in range(max_retries + 1):
             try:
-                response = self.absorb_cookies(RnetResponse(client.request(rnet_method, url, **kwargs)))
-
-                if config.debug_requests:
-                    parsed_url = urlparse(url)
-                    port_str = f":{parsed_url.port}" if parsed_url.port else ""
-                    if not port_str:
-                        port_str = ":443" if parsed_url.scheme == "https" else ":80"
-                    host_url = f"{parsed_url.scheme}://{parsed_url.hostname}{port_str}"
-                    path_and_query = parsed_url.path + (f"?{parsed_url.query}" if parsed_url.query else "")
-                    if not path_and_query:
-                        path_and_query = "/"
-                    content_length = response.headers.get("content-length") or response.content_length
-
-                    log_msg = f'{host_url} "{method_upper} {path_and_query} {response.version}" {response.status_code} {content_length}'
-                    self.log.debug(log_msg)
+                response = self.send_attempt(
+                    client, rnet_method, method_upper, url, attempt + 1, record, body, sent, kwargs
+                )
 
                 if response.status_code not in self.status_forcelist:
                     return response

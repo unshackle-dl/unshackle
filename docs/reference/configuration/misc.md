@@ -157,7 +157,8 @@ calls.
 | `redact_paths` | bool | `true` | Mask install-root / venv / home prefixes in logged paths (`<unshackle>`, `<venv>`, `~`). Set `false` to show full paths. |
 | `debug` | bool | `false` | Global debug mode. |
 | `debug_keys` | bool | `false` | Log decryption keys. |
-| `debug_requests` | bool | `false` | Log HTTP requests. |
+| `debug_requests` | bool | `false` | The one switch that writes an `http_request` entry for each HTTP attempt to the JSON debug log, with the text response body as received; `-d` and `debug` alone write none. With `-d` it also keeps the HTTP library logs in the console. See [Debugging HTTP traffic](../../guide/troubleshooting.md#debug-requests). |
+| `debug_requests_body_limit` | int | `0` | The maximum number of bytes of a response body in an `http_request` entry. `0` or unset records the full body. unshackle cuts a longer body and records its full size. |
 | `set_terminal_bg` | bool | `false` | Append the theme's background colour to output styling. |
 
 !!! note "Effect of `set_terminal_bg`"
@@ -174,6 +175,12 @@ calls.
     `debug_keys` affects **only** content-encryption keys (the `content_key`/`key` fields).
     Passwords, tokens, cookies, and session tokens are **always** redacted regardless of this
     setting, and KIDs, content key counts, and other metadata are always logged either way.
+    The `http_request` entries of `debug_requests` are the exception.
+
+!!! danger "`debug_requests` writes secrets"
+    With `debug_requests` on, the JSONL file holds tokens, passwords, cookies, content keys and account data
+    as the servers sent them. unshackle masks only the local folder prefixes in these entries. Keep the file on
+    your computer. Never attach it to a report.
 
 ---
 

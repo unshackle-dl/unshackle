@@ -17,6 +17,7 @@ from aiohttp import web
 
 import unshackle.core.config as config_module
 from unshackle.core import binaries
+from unshackle.core import session as http_session
 from unshackle.core.api import cors_middleware, no_5xx_middleware, setup_routes
 from unshackle.core.api.compression import compression_middleware
 from unshackle.core.api.events import publish_refresh_events, publish_service_event
@@ -42,7 +43,7 @@ from unshackle.core.api.stats import (
 )
 from unshackle.core.config import Config, config
 from unshackle.core.console import console
-from unshackle.core.constants import context_settings
+from unshackle.core.constants import HTTP_LOGGERS, context_settings
 from unshackle.core.downloaders import format_speed, parse_speed_limit, set_speed_limit
 from unshackle.core.remote_protocol import HEALTH_ROUTE
 
@@ -401,6 +402,8 @@ def serve(
     from pyplayready.remote import serve as pyplayready_serve
     from pywidevine import serve as pywidevine_serve
 
+    http_session.record_bodies = False
+
     if quiet:
         logging.basicConfig(
             force=True,
@@ -429,6 +432,12 @@ def serve(
         logging.getLogger("api").setLevel(logging.WARNING)
         logging.getLogger("api.remote").setLevel(logging.WARNING)
     ring.setFormatter(logging.Formatter("%(message)s"))
+    ring.addFilter(
+        lambda record: (
+            record.levelno > logging.DEBUG
+            or not (record.name == "RnetSession" or record.name.split(".")[0] in HTTP_LOGGERS)
+        )
+    )
     if not debug:
         ring.addFilter(lambda record: record.name != "aiohttp.access")
     logging.getLogger().addHandler(ring)

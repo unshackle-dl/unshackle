@@ -8,6 +8,7 @@ DOWNLOAD_CANCELLED = Event()
 DOWNLOAD_LICENCE_ONLY = Event()
 
 DEFAULT_SAMPLE = (120, 180)
+HTTP_LOGGERS = ("urllib3", "urllib3.connectionpool", "requests", "rnet", "httpx", "httpcore", "hpack", "h2")
 DOWNLOAD_ALL_DRM = Event()
 
 

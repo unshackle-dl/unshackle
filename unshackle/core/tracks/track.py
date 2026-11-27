@@ -39,7 +39,7 @@ from unshackle.core.drm.verify import (
     walk,
 )
 from unshackle.core.events import events
-from unshackle.core.session import MAX_BACKOFF, AnySession, RnetSession, utf8_text
+from unshackle.core.session import MAX_BACKOFF, AnySession, RnetSession, unrecorded, utf8_text
 from unshackle.core.temp import restore_segments, stash_segments
 from unshackle.core.tracks import resume
 from unshackle.core.utilities import language_name, log_event, try_ensure_utf8
@@ -545,7 +545,7 @@ class Track:
         def read_to(end: int) -> None:
             nonlocal head
             if end > len(head):
-                res = session.get(url, headers={"Range": f"bytes={len(head)}-{end - 1}"})
+                res = unrecorded(session, "get", url, headers={"Range": f"bytes={len(head)}-{end - 1}"})
                 if res.ok:
                     head += res.content
 
@@ -1197,23 +1197,23 @@ class Track:
             if start > end:
                 raise ValueError(f"The start range cannot be greater than the end range: {start}>{end}")
         else:
-            size_test = session.head(url)
+            size_test = unrecorded(session, "head", url)
             if "Content-Length" in size_test.headers:
                 content_length_header = int(size_test.headers["Content-Length"])
                 if content_length_header > 0:
                     content_length = min(content_length_header, maximum_size)
-            range_test = session.head(url, headers={"Range": "bytes=0-1"})
+            range_test = unrecorded(session, "head", url, headers={"Range": "bytes=0-1"})
             if range_test.status_code == 206:
                 byte_range = f"0-{content_length - 1}"
 
         init_data: bytes | None
         if byte_range:
-            res = session.get(url=url, headers={"Range": f"bytes={byte_range}"})
+            res = unrecorded(session, "get", url, headers={"Range": f"bytes={byte_range}"})
             res.raise_for_status()
             init_data = res.content
         else:
             init_data = None
-            s = session.get(url, stream=True)
+            s = unrecorded(session, "get", url, stream=True)
             if not s.ok:
                 s.close()
                 raise ValueError(f"Track URI returned HTTP {s.status_code}")

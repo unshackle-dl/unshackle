@@ -8,6 +8,8 @@ import logging
 import threading
 from collections.abc import Callable, Iterator
 from datetime import UTC, datetime
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from threading import Event, Semaphore, Thread
 from types import SimpleNamespace
 from typing import Any
@@ -32,9 +34,11 @@ from unshackle.core.remote_channel import PollingChannel, WebSocketChannel
 from unshackle.core.remote_protocol import CHANNEL_ROUTE, LOGS_ROUTE, PROMPT_ROUTE, SESSION_ROUTE, APIErrorCode
 from unshackle.core.remote_service import RemoteError, RemoteService
 from unshackle.core.service import Service
+from unshackle.core.session import RnetSession, record_requests
 from unshackle.core.titles.movie import Movie, Movies
 from unshackle.core.tracks import Audio, Chapters, Tracks
 from unshackle.core.tracks.track import Track
+from unshackle.core.utilities import close_debug_logger, init_debug_logger
 
 pytestmark = pytest.mark.unit
 
@@ -59,6 +63,8 @@ class StubService:
         self._input_bridge: Any = None
         StubService.logins += 1
         self.login = StubService.logins
+        if hook := self.hooks.get("init"):
+            hook(self)
 
     def authenticate(self, cookies: Any, credential: Any) -> None:
         if self._input_bridge.request_input("Enter the EXAMPLE code") != CODE:
@@ -402,6 +408,80 @@ def test_the_session_channel_carries_what_the_server_starts(
     finally:
         release.set()
         service.close()
+
+
+class Origin(BaseHTTPRequestHandler):
+    protocol_version = "HTTP/1.1"
+
+    def log_message(self, *_: Any) -> None:
+        pass
+
+    def do_GET(self) -> None:
+        self.send_response(200)
+        self.send_header("Content-Length", "2")
+        self.end_headers()
+        self.wfile.write(b"{}")
+
+
+@pytest.mark.parametrize("channel", ["socket", "polling"])
+def test_server_request_records_never_reach_the_remote_client(
+    server: SimpleNamespace,
+    channel: str,
+    caplog: pytest.LogCaptureFixture,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """The http_request entries of the service's requests stay in the server's JSONL, out of the session log."""
+    caplog.set_level(logging.DEBUG)
+    if channel == "polling":
+        monkeypatch.setattr(WebSocketChannel, "open", lambda self, timeout=0: False)
+    origin = ThreadingHTTPServer(("127.0.0.1", 0), Origin)
+    origin.daemon_threads = True
+    Thread(target=origin.serve_forever, daemon=True).start()
+    base = f"127.0.0.1:{origin.server_address[1]}"
+    monkeypatch.setattr(config, "debug_requests", True)
+    debug_log = tmp_path / "server.jsonl"
+    init_debug_logger(log_path=debug_log, enabled=True)
+
+    def fetch(step: str) -> None:
+        plain = requests.Session()
+        record_requests(plain)
+        plain.get(f"http://{base}/v1/{step}?access_token=EXAMPLE")
+        RnetSession().get(f"http://{base}/v1/{step}-rnet?access_token=EXAMPLE")
+
+    def init(stub: StubService) -> None:
+        fetch("init")
+        logging.getLogger("StubService").info("EXAMPLE init done")
+
+    def titles(stub: StubService) -> None:
+        fetch("titles")
+        stub.log.info("EXAMPLE titles fetched")
+
+    StubService.hooks.update(init=init, titles=titles)
+    service = make_client(server.url)
+    try:
+        service.authenticate()
+        assert len(service.get_titles()) == 3
+        service.drain_server_logs()
+        assert wait_until(lambda: {"EXAMPLE init done", "EXAMPLE titles fetched"} <= set(example_messages(caplog)), 10)
+        (entry,) = session_store.get_session_store()._sessions.values()
+        buffered = [r["message"] for r in entry.log_buffer.since(0)]
+    finally:
+        service.close()
+        origin.shutdown()
+        origin.server_close()
+        close_debug_logger()
+
+    assert {"EXAMPLE init done", "EXAMPLE titles fetched"} <= set(buffered)
+    sent = [*buffered, *example_messages(caplog), *(body.decode("utf-8", "replace") for _, body in server.bodies)]
+    for text in sent:
+        assert "http_request" not in text and base not in text and "/v1/" not in text
+    records = [json.loads(line) for line in debug_log.read_text(encoding="utf-8").splitlines()]
+    entries = [e for e in records if e.get("operation") == "http_request"]
+    assert {"/v1/init", "/v1/init-rnet", "/v1/titles", "/v1/titles-rnet"} <= {e["request"]["path"] for e in entries}
+    server_host = server.url.split("://")[1].rstrip("/")
+    own = [e for e in entries if e["request"]["host"] == server_host and e["request"]["path"].endswith("/titles")]
+    assert own and all(isinstance(e["response"]["body"], dict) for e in own)
 
 
 def test_an_open_channel_keeps_the_session_alive(server: SimpleNamespace, monkeypatch: pytest.MonkeyPatch) -> None:

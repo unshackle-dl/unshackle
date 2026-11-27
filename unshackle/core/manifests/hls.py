@@ -46,7 +46,7 @@ from unshackle.core.manifests.segment_pipeline import (
     licensing,
     remove_segment_dir,
 )
-from unshackle.core.session import RnetResponse, RnetSession, utf8_text
+from unshackle.core.session import RnetResponse, RnetSession, unrecorded, utf8_text
 from unshackle.core.tracks import Audio, DownloadContext, Subtitle, Tracks, Video, resume
 from unshackle.core.tracks.track import DRM_PREFERENCE_TYPES, Track, assert_fragments_decrypted
 from unshackle.core.utilities import get_extension, is_close_match, log_event, try_ensure_utf8
@@ -409,7 +409,7 @@ class HLS:
         seg_uri = urljoin(variant_url, variant.segments[0].uri)
 
         # Download only the first 8KB: SPS is always near the start of the first TS packet
-        res = session.get(seg_uri, headers={"Range": "bytes=0-8191"})
+        res = unrecorded(session, "get", seg_uri, headers={"Range": "bytes=0-8191"})
         data = res.content
 
         return HLS.parse_ts_video_info(data)
@@ -595,10 +595,7 @@ class HLS:
         else:
             init_range_header = {}
 
-        res = session.get(
-            url=urljoin(init_section.base_uri, init_section.uri),
-            headers=init_range_header,
-        )
+        res = unrecorded(session, "get", urljoin(init_section.base_uri, init_section.uri), headers=init_range_header)
 
         if not isinstance(res, (requests.Response, RnetResponse)):
             raise TypeError(f"Expected response to be requests.Response or rnet.Response, not {type(res)}")
@@ -1418,7 +1415,7 @@ class HLS:
                 headers = {"Range": f"bytes={byte_range}"}
             else:
                 headers = {}
-            map_res = session.get(url=map_uri, headers=headers)
+            map_res = unrecorded(session, "get", map_uri, headers=headers)
             if map_res.ok:
                 return track.get_key_id(map_res.content)
             logging.getLogger("HLS").warning(

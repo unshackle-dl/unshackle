@@ -237,6 +237,7 @@ class Config:
         self.debug: bool = kwargs.get("debug", False)
         self.debug_keys: bool = kwargs.get("debug_keys", False)
         self.debug_requests: bool = kwargs.get("debug_requests", False)
+        self.debug_requests_body_limit: int = max(int(kwargs.get("debug_requests_body_limit") or 0), 0)
 
     def validate_output_templates(self) -> None:
         """Validate output template configurations and warn about potential issues."""

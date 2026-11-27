@@ -85,7 +85,7 @@ from unshackle.core.remote_protocol import (
     coded,
 )
 from unshackle.core.search_result import SearchResult
-from unshackle.core.session import MAX_BACKOFF
+from unshackle.core.session import MAX_BACKOFF, record_requests
 from unshackle.core.title_source import KeyArrival, TitleSource
 from unshackle.core.titles import Title_T, Titles_T, remap_titles
 from unshackle.core.titles.episode import Episode, Series
@@ -247,6 +247,7 @@ class RemoteClient:
             from unshackle.core import __version__
 
             self._session = requests.Session()
+            record_requests(self._session)
             self._session.headers["User-Agent"] = f"unshackle/{__version__}"
             if self.api_key:
                 self._session.headers[self.auth_headers[self._auth_header_index]] = self.api_key
@@ -896,6 +897,7 @@ class RemoteService(TitleSource):
             ),
         )
         self.session.mount("http://", self.session.adapters["https://"])
+        record_requests(self.session)
 
         svc_config = services_config.get(service_tag, {})
         self._server_cdm: bool | None = services_config.get("_server_cdm")

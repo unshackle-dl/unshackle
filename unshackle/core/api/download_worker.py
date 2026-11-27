@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+from unshackle.core import session as http_session
 from unshackle.core.api.input_bridge import AUTH_INPUT_TIMEOUT
 from unshackle.core.console import set_notice_handler, set_prompt_handler
 from unshackle.core.downloaders import format_speed, set_speed_limit
@@ -116,6 +117,7 @@ def main(argv: list[str]) -> int:
         )
         return 2
 
+    http_session.record_bodies = False
     payload_path = Path(argv[1])
     result_path = Path(argv[2])
     progress_path = Path(argv[3]) if len(argv) > 3 else None

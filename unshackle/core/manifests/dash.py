@@ -41,7 +41,7 @@ from unshackle.core.manifests.segment_pipeline import (
     license_drm,
 )
 from unshackle.core.manifests.trim import trim_overlaps
-from unshackle.core.session import RnetSession
+from unshackle.core.session import RnetSession, unrecorded
 from unshackle.core.tracks import Audio, DownloadContext, Subtitle, Tracks, Video, resume
 from unshackle.core.tracks.track import DRM_PREFERENCE_TYPES, Track, parse_sidx
 from unshackle.core.utilities import is_close_match, log_event, try_ensure_utf8
@@ -1085,10 +1085,12 @@ class DASH:
 
             init_url = segment_template.get("initialization")
             if init_url and probe_kid:
-                res = session.get(
+                res = unrecorded(
+                    session,
+                    "get",
                     DASH.replace_fields(
                         init_url, Bandwidth=representation.get("bandwidth"), RepresentationID=representation.get("id")
-                    )
+                    ),
                 )
                 res.raise_for_status()
                 init_data = res.content
@@ -1192,7 +1194,7 @@ class DASH:
                 else:
                     init_range_header = None
 
-                res = session.get(url=source_url, headers=init_range_header)
+                res = unrecorded(session, "get", source_url, headers=init_range_header)
                 res.raise_for_status()
                 init_data = res.content
                 track_kid = track.get_key_id(init_data)
@@ -1222,7 +1224,7 @@ class DASH:
             init_range_header = {"Range": f"bytes={init_range}"} if init_range else None
             slice_range = request_range(init_range_header) if init_range_header else None
             if (same_file and init_range) or (not same_file and probe_kid):
-                res = session.get(url=init_url, headers=init_range_header, stream=True)
+                res = unrecorded(session, "get", init_url, headers=init_range_header, stream=True)
                 res.raise_for_status()
                 content_range = parse_content_range(res.headers.get("Content-Range"))
                 if init_range_header and not (
@@ -1243,7 +1245,7 @@ class DASH:
             subsegments: list[tuple[int, int, int]] = []
             index_range = segment_base.get("indexRange")
             if window and index_range and not isinstance(track, Subtitle):
-                res = session.get(url=rep_base_url, headers={"Range": f"bytes={index_range}"})
+                res = unrecorded(session, "get", rep_base_url, headers={"Range": f"bytes={index_range}"})
                 res.raise_for_status()
                 segment_timescale, subsegments = parse_sidx(res.content, int(index_range.split("-")[0]))
 
