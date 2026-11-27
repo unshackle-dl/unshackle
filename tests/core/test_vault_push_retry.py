@@ -146,11 +146,15 @@ def test_a_json_vault_that_is_down_fails_the_service_list(monkeypatch: pytest.Mo
         list(vault.get_services())
 
 
+def rate_limited(*args: object, **kw: object) -> requests.Response:
+    return fake_response(429, b"{}", "application/json")
+
+
 def test_an_api_vault_still_rate_limited_fails_the_key_list_and_kv_copy_skips_it(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
     api = API("api", "https://api.example/", "tok")
-    monkeypatch.setattr(api.session, "get", lambda *a, **kw: fake_response(429, b"{}", "application/json"))
+    monkeypatch.setattr(api.session, "get", rate_limited)
     with pytest.raises(RateLimited):
         list(api.get_keys("SVC"))
 
@@ -159,6 +163,71 @@ def test_an_api_vault_still_rate_limited_fails_the_key_list_and_kv_copy_skips_it
     assert [r.getMessage() for r in caplog.records] == [
         "SVC: Could not read from api API (still rate limited after 3 retries), skipped"
     ]
+
+
+def query_vault() -> HTTP:
+    return HTTP("EXAMPLE", "https://vault.example/", password="tok", username="user")
+
+
+@pytest.mark.parametrize(
+    "vault, call",
+    [
+        pytest.param(query_vault(), lambda v: v.get_key(KID, "SVC"), id="query-get_key"),
+        pytest.param(query_vault(), lambda v: list(v.get_keys("SVC")), id="query-get_keys"),
+        pytest.param(query_vault(), lambda v: v.add_key("SVC", KID, KEY), id="query-add_key"),
+        pytest.param(query_vault(), lambda v: v.add_keys("SVC", {KID: KEY}), id="query-add_keys"),
+        pytest.param(query_vault(), lambda v: list(v.get_services()), id="query-get_services"),
+        pytest.param(
+            HTTP("EXAMPLE", "https://vault.example/", api_key="tok", api_mode="decrypt_labs"),
+            lambda v: v.get_key(KID, "SVC"),
+            id="decrypt_labs-get_key",
+        ),
+        pytest.param(API("api", "https://api.example/", "tok"), lambda v: v.add_key("SVC", KID, KEY), id="api-add_key"),
+    ],
+)
+def test_a_vault_still_rate_limited_after_the_retries_raises(
+    vault: HTTP | API, call: Callable[[Any], object], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(vault.session, "get", rate_limited)
+    monkeypatch.setattr(vault.session, "post", rate_limited)
+    with pytest.raises(RateLimited):
+        call(vault)
+
+
+def answers(*replies: bytes) -> Callable[..., requests.Response]:
+    queue = list(replies)
+    return lambda *a, **kw: fake_response(200, queue.pop(0), "application/json")
+
+
+REFUSED = b'{"status_code": 401, "message": "bad login"}'
+EXISTS = b'{"status_code": 200, "inserted": false}'
+INSERTED = b'{"status_code": 200, "inserted": true}'
+
+
+@pytest.mark.parametrize(
+    "vault, method, status",
+    [
+        pytest.param(query_vault(), "get", 200, id="query-refused"),
+        pytest.param(one_json_vault()[0], "post", 200, id="json-refused"),
+        pytest.param(one_json_vault()[0], "post", 404, id="json-not-found"),
+    ],
+)
+def test_a_push_the_vault_refuses_for_every_key_fails(
+    vault: HTTP, method: str, status: int, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    vaults = vaults_of(vault, service="SVC")
+    monkeypatch.setattr(vault.session, method, lambda *a, **kw: fake_response(status, REFUSED, "application/json"))
+    assert vaults.add_keys({KID: KEY, KID2: KEY}) == 0
+    assert vault not in vaults.unreachable
+
+
+@pytest.mark.parametrize("replies, count", [((EXISTS, EXISTS), 0), ((REFUSED, INSERTED), 1)])
+def test_a_query_push_counts_the_keys_the_vault_inserted(
+    replies: tuple[bytes, ...], count: int, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    vault = query_vault()
+    monkeypatch.setattr(vault.session, "get", answers(*replies))
+    assert vault.add_keys("SVC", {KID: KEY, KID2: KEY}) == count
 
 
 def test_server_does_not_push_a_pair_it_already_stored(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -7,6 +7,11 @@ from requests import RequestException
 from unshackle.core.vault import RateLimited, Vault, is_null_key, json_body, vault_session
 
 
+def refusal(answer: dict) -> ValueError:
+    """The error answer of a vault that refused the call."""
+    return ValueError(f"API returned an error: {answer.get('status_code')} - {answer.get('message')}")
+
+
 class HTTP(Vault):
     """
     Key Vault using HTTP API that can operate in several API modes.
@@ -93,12 +98,21 @@ class HTTP(Vault):
         res = json_body(r)
 
         if res.get("status_code") != 200:
-            raise ValueError(f"API returned an error: {res['status_code']} - {res['message']}")
+            raise refusal(res)
 
         if session_id := res.get("message", {}).get("session_id"):
             self.api_session_id = session_id
 
         return res.get("message", res)
+
+    def _query(self, params: dict) -> dict:
+        """A query-mode GET with the credentials. A 429 that remains after the retries raises RateLimited."""
+        response = self.session.get(
+            self.url, params={**params, "username": self.username, "password": self.password}, timeout=self.timeout
+        )
+        if response.status_code == 429:
+            raise RateLimited()
+        return json_body(response)
 
     def get_key(self, kid: UUID | str, service: str) -> str | None:
         if isinstance(kid, UUID):
@@ -106,6 +120,8 @@ class HTTP(Vault):
 
         if self.api_mode == "decrypt_labs":
             response = self.session.post(self.url, json={"service": service.lower(), "kid": kid}, timeout=self.timeout)
+            if response.status_code == 429:
+                raise RateLimited()
             if not response.ok:
                 return None
 
@@ -160,13 +176,7 @@ class HTTP(Vault):
                         return key_entry.get("key")
             return None
         else:  # query mode
-            response = self.session.get(
-                self.url,
-                params={"service": service.lower(), "username": self.username, "password": self.password, "kid": kid},
-                timeout=self.timeout,
-            )
-
-            data = json_body(response)
+            data = self._query({"service": service.lower(), "kid": kid})
 
             if not data.get("keys"):
                 return None
@@ -181,13 +191,7 @@ class HTTP(Vault):
             # This will cause the copy command to rely on the API's internal duplicate handling
             return
         else:
-            response = self.session.get(
-                self.url,
-                params={"service": service.lower(), "username": self.username, "password": self.password},
-                timeout=self.timeout,
-            )
-
-            data = json_body(response)
+            data = self._query({"service": service.lower()})
 
             if data.get("status_code") != 200 or not data.get("keys"):
                 return
@@ -226,21 +230,7 @@ class HTTP(Vault):
             except ValueError:  # an error answer from the vault
                 return False
         else:
-            response = self.session.get(
-                self.url,
-                params={
-                    "service": service.lower(),
-                    "username": self.username,
-                    "password": self.password,
-                    "kid": kid,
-                    "key": key,
-                    "title": title,
-                },
-                timeout=self.timeout,
-            )
-
-            data = json_body(response)
-
+            data = self._query({"service": service.lower(), "kid": kid, "key": key, "title": title})
             return data.get("status_code") == 200
 
     def add_keys(self, service: str, kid_keys: dict[UUID | str, str]) -> int:
@@ -283,33 +273,21 @@ class HTTP(Vault):
                         },
                     )
                     if res.get("status") == "not_found":
-                        continue
-                    if res.get("inserted", False):
+                        failures.append(ValueError("API returned HTTP Error 404: Not Found"))
+                    elif res.get("inserted", False):
                         inserted_count += 1
                 except ValueError as e:
                     failures.append(e)
-            if failures and len(failures) == len(processed_kid_keys):
-                raise failures[-1]
         else:
             for kid, key in processed_kid_keys.items():
-                response = self.session.get(
-                    self.url,
-                    params={
-                        "service": service.lower(),
-                        "username": self.username,
-                        "password": self.password,
-                        "kid": kid,
-                        "key": key,
-                        "title": title,
-                    },
-                    timeout=self.timeout,
-                )
-
-                data = json_body(response)
-
-                if data.get("status_code") == 200 and data.get("inserted", True):
+                data = self._query({"service": service.lower(), "kid": kid, "key": key, "title": title})
+                if data.get("status_code") != 200:
+                    failures.append(refusal(data))
+                elif data.get("inserted", True):
                     inserted_count += 1
 
+        if failures and len(failures) == len(processed_kid_keys):
+            raise failures[-1]
         return inserted_count
 
     def get_services(self) -> Iterator[str]:
@@ -318,13 +296,7 @@ class HTTP(Vault):
         elif self.api_mode == "json":
             yield from self.request("GetServices").get("services", [])
         else:
-            response = self.session.get(
-                self.url,
-                params={"username": self.username, "password": self.password, "list_services": True},
-                timeout=self.timeout,
-            )
-
-            data = json_body(response)
+            data = self._query({"list_services": True})
 
             if data.get("status_code") != 200:
                 return
