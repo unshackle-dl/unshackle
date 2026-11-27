@@ -5,7 +5,6 @@ import subprocess
 import tempfile
 import time
 from pathlib import Path
-from typing import Any
 from xml.sax.saxutils import escape
 
 from unshackle.core import binaries
@@ -17,6 +16,7 @@ from unshackle.core.providers import (
     get_available_providers,
     resolve_by_ids,
 )
+from unshackle.core.session import AnySession
 from unshackle.core.titles.episode import Episode
 from unshackle.core.titles.movie import Movie
 from unshackle.core.titles.music import Song
@@ -92,7 +92,7 @@ def tag_file(
     tvdb_id: int | None = None,
     anilist_id: int | str | None = None,
     anime: bool = False,
-    session: Any = None,
+    session: AnySession | None = None,
 ) -> None:
     log.debug("Tagging file %s with title %r", path, title)
 

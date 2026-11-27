@@ -12,6 +12,7 @@ from typing import Any
 
 from unshackle.core import binaries
 from unshackle.core.config import config
+from unshackle.core.session import AnySession
 from unshackle.core.titles.music import song_metadata
 from unshackle.core.utils.collections import as_list
 from unshackle.core.utils.subprocess import log_tool_run
@@ -76,7 +77,9 @@ class MusicMetadataResult:
         }
 
 
-def write_music_metadata(path: Path, song: Any, *, session: Any = None, source_md5: str = "") -> MusicMetadataResult:
+def write_music_metadata(
+    path: Path, song: Any, *, session: AnySession | None = None, source_md5: str = ""
+) -> MusicMetadataResult:
     """Write normalized music metadata for FLAC, Ogg, Opus, MP3, WAV, and M4A/MP4 audio files.
 
     Opus files get no ``REPLAYGAIN_*`` tags, because RFC 7845 section 5.2.1 says an Opus file should not carry them.
@@ -324,7 +327,7 @@ def write_mp4_tags(path: Path, tags: TagValues, cover_data: bytes | None, mime_t
     audio.save()
 
 
-def download_cover(session: Any, artwork_url: str) -> tuple[bytes | None, str]:
+def download_cover(session: AnySession | None, artwork_url: str) -> tuple[bytes | None, str]:
     if not session or not artwork_url:
         return None, ""
     try:

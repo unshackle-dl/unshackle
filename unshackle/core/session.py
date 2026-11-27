@@ -118,7 +118,11 @@ class RnetResponseHeaders(MutableMapping):
 
 
 class RnetResponse:
-    """Wraps rnet.BlockingResponse with a requests-compatible API."""
+    """Wraps rnet.BlockingResponse with a requests-compatible API.
+
+    A ``with`` block gives this response and closes it at the end. Read the body inside the block:
+    a body left unread cannot be read after it.
+    """
 
     def __init__(self, resp: Any) -> None:
         self._resp = resp
@@ -232,6 +236,12 @@ class RnetResponse:
             self._resp.close()
         except Exception:
             pass
+
+    def __enter__(self) -> RnetResponse:
+        return self
+
+    def __exit__(self, *exc: Any) -> None:
+        self.close()
 
 
 def utf8_text(res: Response | RnetResponse) -> str:
