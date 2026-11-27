@@ -2849,7 +2849,8 @@ them in this order.</p>
 <li><strong>An explicit URI.</strong> unshackle uses anything shaped like <code>http://...</code>,
    <code>https://...</code>, or a <code>socks...</code> URI exactly as you give it. unshackle logs
    <code>Using explicit Proxy: ...</code> and does no lookup. A <code>host:port</code> value such as
-   <code>localhost:8080</code> is also an explicit proxy.</li>
+   <code>localhost:8080</code> is also an explicit proxy. A server (<code>--remote</code> or the REST API)
+   refuses a proxy that has no <code>http</code>, <code>https</code> or <code>socks</code> scheme.</li>
 <li><strong>A provider-prefixed query</strong>: <code>provider:query</code>, for example <code>nordvpn:us</code> or
    <code>gluetun:windscribe:us</code>. unshackle finds the proxy provider whose name matches
    the prefix (case-insensitive). It then asks <em>only</em> that proxy provider to find a
@@ -3957,9 +3958,10 @@ sure that a username and a password are present (there is no 48-character rule).
 providers through <code>load_proxy_providers()</code> in <code>unshackle/core/proxies/resolve.py</code>.
 The REST API, its download jobs and the remote-service client call it through
 <code>initialize_proxy_providers()</code>, which leaves out Gluetun because Gluetun starts a
-local Docker container. All paths accept the same query grammar: a direct URI, a
-<code>provider:query</code>, a bare query tried against providers in order, or a <code>controld://</code>
-resolver.</p>
+local Docker container. All paths read a value through <code>resolve_proxy_value()</code>, which
+returns the proxy URI with the proxy provider, the query and the log line: a
+<code>controld://</code> resolver, a <code>provider:query</code> or a bare query tried against providers in
+order, or else an explicit proxy URI or <code>host:port</code>.</p>
 <p>The remote-service client resolves <code>--proxy</code> with its own
 <code>resolve_remote_proxy_arg()</code>. It changes a <code>controld:</code> query to a <code>controld://</code>
 resolver for the server with <code>get_remote_proxy()</code>, and it removes Control D from a bare

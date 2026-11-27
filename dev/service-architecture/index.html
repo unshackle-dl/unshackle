@@ -2818,9 +2818,8 @@ up the objects your methods rely on:</p>
 </tr>
 </tbody>
 </table>
-<p>The constructor also resolves proxies: it reads <code>--proxy</code> and the <code>proxy_query</code> and
-<code>proxy_provider</code> context params that <code>dl</code> and <code>search</code> derive from it, consults the per-service
-<code>proxy_map</code>, and, if <code>GEOFENCE</code> is set and you did not give an explicit proxy, does a live
+<p>The constructor also resolves proxies: it reads <code>--proxy</code>, which <code>dl</code> and <code>search</code> have already
+resolved through the per-service <code>proxy_map</code>, and, if <code>GEOFENCE</code> is set and you did not give an explicit proxy, does a live
 IP check and auto-fetches a proxy to <code>GEOFENCE[0]</code> when it detects a geoblock. A
 <code>GEOBLOCK</code> hit with no <code>GEOFENCE</code> stops the run with a "not available in your region"
 error, because there is no main region to fetch a proxy for; pass <code>--proxy</code> yourself.

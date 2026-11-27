@@ -2102,9 +2102,10 @@
 <p>Per-service configuration, keyed by the service tag in any case (for example <code>EXAMPLE1</code>, <code>EXAMPLE2</code>,
 <code>EXAMPLE3</code>). unshackle reads several well-known sub-keys out of each service's block:</p>
 <ul>
-<li><strong><code>proxy_map</code></strong>: remaps the region query you passed to <code>-p/--proxy</code> for this service.
-  A config key is that query, or <code>"provider:query"</code> when the flag also named a proxy provider. The value is
-  the query asked of the proxy provider instead. It has no effect when you give <code>-p</code> a full proxy URL.
+<li><strong><code>proxy_map</code></strong>: remaps the region query you passed to <code>--proxy</code> for this service.
+  A config key is that query, or <code>"provider:query"</code> when the flag also named a proxy provider, in any case. The value is
+  the query asked of the proxy provider instead. When no proxy provider answers it, unshackle logs a warning and asks
+  the original query. It has no effect when you give <code>--proxy</code> a full proxy URL.
   <code>dl</code>, <code>search</code> and a REST API download job apply it. The other REST API routes and a <code>--remote</code> remote session do not.</li>
 <li><strong><code>title_map</code></strong>: an exact-match rename map applied to fetched titles (source name →
   desired name), so a service that names a title differently from your library still matches.</li>
