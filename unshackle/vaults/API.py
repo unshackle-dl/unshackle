@@ -75,6 +75,8 @@ class API(Vault):
                 timeout=self.timeout,
                 allow_redirects=False,
             )
+            if response.status_code == 429:
+                raise Exceptions.TooManyRequests()
             response.raise_for_status()
             data = json_body(response)
 

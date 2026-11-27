@@ -2,16 +2,20 @@
 
 import logging
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 from uuid import UUID
 
 import pytest
 import requests
 
+from unshackle.commands.kv import copy_service_data
 from unshackle.core.api import handlers
-from unshackle.core.vault import json_body
+from unshackle.core.vault import RateLimited, json_body
 from unshackle.core.vaults import Vaults
+from unshackle.vaults.API import API
 from unshackle.vaults.HTTP import HTTP
+from unshackle.vaults.SQLite import SQLite
 
 KID = UUID("11111111-2222-3333-4444-555555555555")
 KID2 = UUID("66666666-7777-8888-9999-000000000000")
@@ -95,6 +99,65 @@ def test_an_html_answer_fails_the_json_push_without_a_single_key_fallback(monkey
     with pytest.raises(ConnectionError):
         vault.add_keys("SVC", {KID: KEY, KID2: KEY})
     assert len(calls) == 1
+
+
+def no_answer(*args: object, **kw: object) -> requests.Response:
+    raise requests.ConnectTimeout("no answer")
+
+
+def one_json_vault(host: str = "https://vault.example/") -> tuple[HTTP, Vaults]:
+    vault = HTTP("EXAMPLE", host, password="tok", api_mode="json")
+    vaults = Vaults("SVC")
+    vaults.vaults = [vault]
+    return vault, vaults
+
+
+def test_a_json_vault_that_is_down_on_a_single_push_is_skipped(monkeypatch: pytest.MonkeyPatch) -> None:
+    vault, vaults = one_json_vault()
+    monkeypatch.setattr(vault.session, "post", no_answer)
+    assert vaults.add_key(KID, KEY) == 0
+    assert vault in vaults.unreachable
+
+
+def test_a_json_vault_error_reply_to_a_single_push_stays_a_quiet_false(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    vault, vaults = one_json_vault()
+    reply = b'{"status_code": 409, "message": "key already exists"}'
+    monkeypatch.setattr(vault.session, "post", lambda *a, **kw: fake_response(200, reply, "application/json"))
+    with caplog.at_level(logging.WARNING):
+        assert vaults.add_key(KID, KEY) == 0
+    assert vault not in vaults.unreachable
+    assert not caplog.records
+
+
+def test_a_json_vault_with_a_broken_url_warns_on_a_single_push(caplog: pytest.LogCaptureFixture) -> None:
+    _, vaults = one_json_vault("vault.example/rpc")
+    with caplog.at_level(logging.WARNING):
+        assert vaults.add_key(KID, KEY) == 0
+    assert [r.getMessage().split(":")[0] for r in caplog.records] == ["Failed to add key to Vault 'EXAMPLE'"]
+
+
+def test_a_json_vault_that_is_down_fails_the_service_list(monkeypatch: pytest.MonkeyPatch) -> None:
+    vault, _ = one_json_vault()
+    monkeypatch.setattr(vault.session, "post", no_answer)
+    with pytest.raises(requests.ConnectTimeout):
+        list(vault.get_services())
+
+
+def test_an_api_vault_still_rate_limited_fails_the_key_list_and_kv_copy_skips_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    api = API("api", "https://api.example/", "tok")
+    monkeypatch.setattr(api.session, "get", lambda *a, **kw: fake_response(429, b"{}", "application/json"))
+    with pytest.raises(RateLimited):
+        list(api.get_keys("SVC"))
+
+    with caplog.at_level(logging.WARNING, logger="kv"):
+        assert copy_service_data(SQLite("to", tmp_path / "to.db"), api, "SVC", logging.getLogger("kv")) == 0
+    assert [r.getMessage() for r in caplog.records] == [
+        "SVC: Could not read from api API (still rate limited after 3 retries), skipped"
+    ]
 
 
 class FakeVault:

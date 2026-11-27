@@ -2,6 +2,8 @@ import json
 from collections.abc import Iterator
 from uuid import UUID
 
+from requests import RequestException
+
 from unshackle.core.vault import RateLimited, Vault, is_null_key, json_body, vault_session
 
 
@@ -219,7 +221,9 @@ class HTTP(Vault):
                 if res.get("status") == "not_found":
                     return False
                 return res.get("inserted", False)
-            except Exception:
+            except RequestException:  # MissingSchema and InvalidURL are ValueErrors too
+                raise
+            except ValueError:  # an error answer from the vault
                 return False
         else:
             response = self.session.get(
@@ -312,13 +316,7 @@ class HTTP(Vault):
         if self.api_mode == "decrypt_labs":
             return
         elif self.api_mode == "json":
-            try:
-                res = self.request("GetServices")
-                services = res.get("services", [])
-                for service in services:
-                    yield service
-            except Exception:
-                return
+            yield from self.request("GetServices").get("services", [])
         else:
             response = self.session.get(
                 self.url,
@@ -331,9 +329,7 @@ class HTTP(Vault):
             if data.get("status_code") != 200:
                 return
 
-            services = data.get("services", [])
-            for service in services:
-                yield service
+            yield from data.get("services", [])
 
     def set_title(self, title: str) -> None:
         """
