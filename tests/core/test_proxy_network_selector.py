@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import datetime
-import re
 import socket
 import ssl
 import threading
@@ -19,7 +18,7 @@ from cryptography.x509.oid import NameOID
 
 from unshackle.core.proxies import asn, surfsharkvpn
 from unshackle.core.proxies.nordvpn import NordVPN
-from unshackle.core.proxies.resolve import REGION
+from unshackle.core.proxies.resolve import REGION_QUERY
 from unshackle.core.proxies.surfsharkvpn import SurfsharkVPN
 from unshackle.core.proxies.windscribevpn import WindscribeVPN
 from unshackle.core.remote_service import resolve_remote_proxy_arg
@@ -54,7 +53,7 @@ def known_networks(monkeypatch: pytest.MonkeyPatch) -> None:
 )
 def test_region_grammar_takes_the_selector_but_not_a_uri(value: str, is_query: bool) -> None:
     """dl and search send a value to the proxy providers only when it matches; anything else is an explicit URI."""
-    assert bool(re.fullmatch(rf"(?:[a-z]+:)?{REGION}", value, re.IGNORECASE)) is is_query
+    assert bool(REGION_QUERY.fullmatch(value)) is is_query
 
 
 @pytest.mark.parametrize(

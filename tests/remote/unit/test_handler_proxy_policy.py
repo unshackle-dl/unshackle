@@ -384,6 +384,23 @@ def test_local_proxy_uri_allowed_with_server_proxy_or_admin(monkeypatch, key):
     assert proxy == "http://127.0.0.1:8080"
 
 
+@pytest.mark.parametrize("key", ["plainkey", "proxykey"])
+@pytest.mark.parametrize("proxy", ["127.0.0.1:8080", "localhost:3128", "ftp://127.0.0.1:21"])
+def test_a_proxy_without_an_http_or_socks_scheme_is_refused(monkeypatch, key, proxy):
+    monkeypatch.setattr(handlers, "initialize_proxy_providers", lambda **_: [])
+    with pytest.raises(APIError) as exc_info:
+        handlers.resolve_handler_proxy({"proxy": proxy}, "EXAMPLE", request(key))
+    assert exc_info.value.error_code == APIErrorCode.INVALID_PROXY
+
+
+@pytest.mark.parametrize("client_region", ["localhost:8080", "ftp://127.0.0.1:21", "United States"])
+def test_a_client_region_that_is_no_region_code_gets_no_proxy(monkeypatch, client_region):
+    patch_server_region(monkeypatch, "IN")
+    monkeypatch.setattr(handlers, "initialize_proxy_providers", lambda **_: [SimpleNamespace(get_proxy=lambda q: None)])
+    proxy, _ = handlers.resolve_handler_proxy({"client_region": client_region}, "EXAMPLE", request("proxykey"))
+    assert proxy is None
+
+
 def test_hostname_resolving_to_a_private_address_refused(monkeypatch):
     monkeypatch.setattr(handlers.socket, "getaddrinfo", lambda host, port: [(2, 1, 6, "", ("10.0.0.7", 0))])
     with pytest.raises(APIError) as exc_info:

@@ -53,7 +53,7 @@ from unshackle.core.drm import WHOLE_FILE_DRM, cbcs, is_null_key, real_kids, who
 from unshackle.core.drm.discovery import drm_from_init_segment, ensure_track_drm, fetch_init_segment, track_pssh
 from unshackle.core.launch import served_context
 from unshackle.core.manifests.snapshot import capture
-from unshackle.core.proxies.resolve import initialize_proxy_providers, is_loopback, resolve_proxy
+from unshackle.core.proxies.resolve import REGION_QUERY, initialize_proxy_providers, is_loopback, resolve_proxy
 from unshackle.core.remote_protocol import (
     HEALTH_ROUTE,
     APIErrorCode,
@@ -3474,13 +3474,16 @@ async def get_validated_session(session_id: str, request: web.Request | None) ->
     return session
 
 
+PROXY_URI = re.compile(r"^(https?://|socks)")
+
+
 def local_proxy_refusal(proxy: str) -> str | None:
     """Why an http(s) or socks proxy URI may reach the server's own machine or network, or None when it cannot.
 
     The host must be a plain DNS name or an IP literal: an HTTP client that follows the WHATWG URL standard
     reads a backslash or a percent-escape in the authority differently from ``urlsplit``.
     """
-    if not re.match(r"^(https?://|socks)", proxy):
+    if not PROXY_URI.match(proxy):
         return None
     try:
         host = urlsplit(proxy).hostname or ""
@@ -3524,7 +3527,7 @@ def resolve_handler_proxy(
 
     if (
         proxy_param
-        and re.match(r"^(https?://|socks|controld://|tunnel:)", str(proxy_param))
+        and (PROXY_URI.match(str(proxy_param)) or str(proxy_param).startswith(("controld://", "tunnel:")))
         and server_account_for(policy, normalized_service)
     ):
         raise APIError(
@@ -3567,6 +3570,12 @@ def resolve_handler_proxy(
                 "This server does not resolve country codes into proxies, pass a full proxy URI",
                 details={"service": normalized_service},
             ) from None
+        if not PROXY_URI.match(proxy_param or ""):
+            raise APIError(
+                APIErrorCode.INVALID_PROXY,
+                "Proxy URI has no http, https or socks scheme",
+                details={"service": normalized_service},
+            )
 
     client_region = data.get("client_region")
     if client_region is not None and not isinstance(client_region, str):
@@ -3606,7 +3615,7 @@ def resolve_handler_proxy(
                 )
         elif in_client_region:
             log.info(f"Server already in client region '{sanitize_log(client_region)}', no proxy needed")
-        else:
+        elif REGION_QUERY.fullmatch(client_region):
             try:
                 proxy_param = resolve_proxy(client_region, proxy_providers)
                 log.info(f"Using server proxy for client region '{sanitize_log(client_region)}'")

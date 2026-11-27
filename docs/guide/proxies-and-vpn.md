@@ -98,7 +98,8 @@ flowchart TD
 1. **An explicit URI.** unshackle uses anything shaped like `http://...`,
    `https://...`, or a `socks...` URI exactly as you give it. unshackle logs
    `Using explicit Proxy: ...` and does no lookup. A `host:port` value such as
-   `localhost:8080` is also an explicit proxy.
+   `localhost:8080` is also an explicit proxy. A server (`--remote` or the REST API)
+   refuses a proxy that has no `http`, `https` or `socks` scheme.
 2. **A provider-prefixed query**: `provider:query`, for example `nordvpn:us` or
    `gluetun:windscribe:us`. unshackle finds the proxy provider whose name matches
    the prefix (case-insensitive). It then asks *only* that proxy provider to find a
@@ -1055,9 +1056,10 @@ The returned proxy is HTTPS on **port 443**.
     providers through `load_proxy_providers()` in `unshackle/core/proxies/resolve.py`.
     The REST API, its download jobs and the remote-service client call it through
     `initialize_proxy_providers()`, which leaves out Gluetun because Gluetun starts a
-    local Docker container. All paths accept the same query grammar: a direct URI, a
-    `provider:query`, a bare query tried against providers in order, or a `controld://`
-    resolver.
+    local Docker container. All paths read a value through `resolve_proxy_value()`, which
+    returns the proxy URI with the proxy provider, the query and the log line: a
+    `controld://` resolver, a `provider:query` or a bare query tried against providers in
+    order, or else an explicit proxy URI or `host:port`.
 
     The remote-service client resolves `--proxy` with its own
     `resolve_remote_proxy_arg()`. It changes a `controld:` query to a `controld://`

@@ -7,7 +7,6 @@ from __future__ import annotations
 import base64
 import http.server
 import logging
-import re
 import socket
 import socketserver
 import threading
@@ -31,7 +30,7 @@ from unshackle.core.proxies.controld import (
     local_proxy,
     parse_a_records,
 )
-from unshackle.core.proxies.resolve import REGION, resolve_proxy
+from unshackle.core.proxies.resolve import REGION_QUERY, resolve_proxy, resolve_proxy_value
 from unshackle.core.utilities import get_free_port
 
 pytestmark = pytest.mark.unit
@@ -462,10 +461,10 @@ def test_a_server_gets_the_typed_proxy_only_when_this_machine_resolved_it_to_loo
 
 @pytest.mark.parametrize("query", ["ca", "us:seattle", "us-ny", "uk1", "yul", "jfk", "res_yyz", "nordvpn:ca"])
 def test_a_region_query_matches(query: str) -> None:
-    assert re.fullmatch(rf"(?:[a-z]+:)?{REGION}", query, re.IGNORECASE)
-    assert re.fullmatch(rf"(?:[a-z]+:){{0,2}}{REGION}", f"gluetun:{query}", re.IGNORECASE)
+    assert REGION_QUERY.fullmatch(query)
 
 
 @pytest.mark.parametrize("uri", ["nas:3128", "localhost:8080", "proxy.example.com:8080", "1.2.3.4:8080", "us:1080"])
 def test_a_host_and_port_is_never_a_region_query(uri: str) -> None:
-    assert not re.fullmatch(rf"(?:[a-z]+:){{0,2}}{REGION}", uri, re.IGNORECASE)
+    resolved = resolve_proxy_value(uri, [])
+    assert resolved.uri == uri and resolved.query is None

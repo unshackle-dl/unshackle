@@ -3,7 +3,6 @@ from __future__ import annotations
 import logging
 import os
 import random
-import re
 import shutil
 import subprocess
 import sys
@@ -65,16 +64,13 @@ from unshackle.core.mux_step import mux_title
 from unshackle.core.placement import SAMPLE_DIR, Placement, sample_name
 from unshackle.core.providers.tvdb import SEASON_TYPES
 from unshackle.core.proxies.resolve import (
-    REGION,
-    describe_explicit_proxy,
-    describe_proxy,
     is_loopback,
     load_proxy_providers,
-    pick_proxy,
     require_alone_local_proxy,
     resolve_proxy,
-    split_proxy_query,
+    resolve_proxy_value,
 )
+from unshackle.core.remote_protocol import APIErrorCode, coded
 from unshackle.core.run_plan import PlanError, RunOutcome, RunStopped, bitrate_range, check_options
 from unshackle.core.service import grow_session_pool
 from unshackle.core.services import ROUTING_PARAMS, Services
@@ -1352,37 +1348,17 @@ class dl:
                     self.proxy_providers = load_proxy_providers()
 
             keys["proxy_arg"] = proxy
-            if proxy and proxy.startswith("controld://"):
-                proxy = ctx.params["proxy"] = resolve_proxy(proxy, [])
             if proxy:
                 try:
-                    requested_provider, query = split_proxy_query(proxy, self.proxy_providers)
-                except ValueError as e:
-                    raise PlanError(str(e)) from None
-                # Match region codes (us, ca, uk1, us:ny, yul) or provider:region (nordvpn:ca, protonvpn:us:ny).
-                if re.fullmatch(rf"(?:[a-z]+:)?{REGION}", query, re.IGNORECASE):
-                    # Kept apart from ctx.params["proxy"], which becomes the URI: a service proxy_map keys on it.
-                    proxy_query = query.lower()
-                    status_msg = (
-                        f"Connecting to VPN ({proxy_query})..."
-                        if requested_provider == "gluetun"
-                        else f"Getting a Proxy to {proxy_query}..."
+                    resolved = resolve_proxy_value(
+                        proxy, self.proxy_providers, status=partial(console.status, spinner="dots")
                     )
-                    with console.status(status_msg, spinner="dots"):
-                        try:
-                            proxy_provider, proxy_uri = pick_proxy(
-                                self.proxy_providers, proxy_query, requested_provider
-                            )
-                        except ValueError as e:
-                            raise click.ClickException(str(e)) from None
-                        ctx.params["proxy"] = proxy_uri
-                        self.log.info(describe_proxy(proxy_provider, proxy_uri, proxy_query))
-                    keys["proxy_query"] = proxy_query
-                    keys["proxy_provider"] = requested_provider
-                else:
-                    self.log.info(describe_explicit_proxy(ctx.params["proxy"]))
-                    keys["proxy_query"] = None
-                    keys["proxy_provider"] = None
+                except ValueError as e:
+                    raise coded(PlanError(str(e)), APIErrorCode.INVALID_PROXY) from None
+                ctx.params["proxy"] = resolved.uri
+                self.log.info(resolved.line)
+                keys["proxy_query"] = resolved.query
+                keys["proxy_provider"] = resolved.provider
 
         launch(
             ctx,
@@ -1553,13 +1529,9 @@ class dl:
 
         if no_proxy or no_proxy_download:
             proxy_download = None
-        elif proxy_download and (
-            proxy_download.startswith("controld://")
-            or re.fullmatch(rf"(?:[a-z]+:){{0,2}}{REGION}", proxy_download, re.I)
-        ):
-            # same shapes --proxy resolves against providers (two prefixes for gluetun:nordvpn:ca); else an explicit URI
+        else:
             try:
-                proxy_download = resolve_proxy(proxy_download.lower(), self.proxy_providers)
+                proxy_download = resolve_proxy(proxy_download, self.proxy_providers)
             except ValueError as e:
                 raise click.ClickException(f"--proxy-download: {e}") from None
 

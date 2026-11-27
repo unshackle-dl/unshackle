@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import logging
-import re
 import sys
+from functools import partial
 from typing import Any
 
 import click
@@ -15,15 +15,7 @@ from unshackle.core.console import console
 from unshackle.core.constants import context_settings
 from unshackle.core.launch import LaunchKeys, launch, load_service_config
 from unshackle.core.proxies.proxy import Proxy
-from unshackle.core.proxies.resolve import (
-    REGION,
-    describe_explicit_proxy,
-    describe_proxy,
-    load_proxy_providers,
-    pick_proxy,
-    require_alone_local_proxy,
-    split_proxy_query,
-)
+from unshackle.core.proxies.resolve import load_proxy_providers, require_alone_local_proxy, resolve_proxy_value
 from unshackle.core.service import Service
 from unshackle.core.services import Services
 from unshackle.core.utils.click_types import ContextData
@@ -104,24 +96,14 @@ def search(
         keys["proxy_arg"] = proxy
         if proxy:
             try:
-                requested_provider, query = split_proxy_query(proxy, proxy_providers)
+                resolved = resolve_proxy_value(proxy, proxy_providers, status=partial(console.status, spinner="dots"))
             except ValueError as e:
                 log.error(str(e))
                 sys.exit(1)
-            if re.fullmatch(rf"(?:[a-z]+:)?{REGION}", query, re.IGNORECASE):
-                query = query.lower()
-                with console.status(f"Getting a Proxy to {query}...", spinner="dots"):
-                    try:
-                        proxy_provider, proxy_uri = pick_proxy(proxy_providers, query, requested_provider)
-                    except ValueError as e:
-                        log.error(str(e))
-                        sys.exit(1)
-                    ctx.params["proxy"] = proxy_uri
-                    log.info(describe_proxy(proxy_provider, proxy_uri, query))
-                keys["proxy_query"] = query
-                keys["proxy_provider"] = requested_provider
-            else:
-                log.info(describe_explicit_proxy(ctx.params["proxy"]))
+            ctx.params["proxy"] = resolved.uri
+            log.info(resolved.line)
+            keys["proxy_query"] = resolved.query
+            keys["proxy_provider"] = resolved.provider
 
     launch(ctx, keys, ContextData(config=service_config, cdm=None, proxy_providers=proxy_providers, profile=profile))
 

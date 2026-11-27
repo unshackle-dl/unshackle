@@ -6,6 +6,9 @@ import ipaddress
 import json
 import logging
 import re
+from collections.abc import Callable
+from contextlib import AbstractContextManager, nullcontext
+from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlparse
 
@@ -20,6 +23,7 @@ from unshackle.core.utils.redact import mask_proxy
 log = logging.getLogger("proxies")
 
 REGION = r"[a-z]{2,4}(?:_[a-z0-9]{2,4})?(?:-[a-z0-9]+|:[a-z][a-z0-9]*)*\d*(?:@-?[a-z0-9][a-z0-9._-]*)?"
+REGION_QUERY = re.compile(rf"(?:[a-z]+:)?{REGION}", re.IGNORECASE)
 
 
 class Unavailable(Proxy):
@@ -247,30 +251,58 @@ def describe_explicit_proxy(uri: str) -> str:
     return f"Using explicit Proxy: {mask_proxy(uri)}"
 
 
-def resolve_proxy(proxy: str, proxy_providers: list[Any]) -> str | None:
-    """Change a proxy parameter to a real proxy URI.
+@dataclass(frozen=True)
+class ResolvedProxy:
+    """A ``--proxy`` value resolved to a proxy URI.
 
-    Accepts:
-      - Direct URI: "https://...", "socks5://..."
-      - Country code: "us", "uk"
-      - Provider:country: "nordvpn:us"
-      - A Control D resolver sent by a client: "controld://<resolver>@dns.controld.com"
+    *provider* and *query* are the proxy provider that the value names and its lowercase region query.
+    Both are None for a proxy URI, a ``host:port`` value or a Control D resolver.
     """
-    if not proxy:
-        return None
 
-    if proxy.startswith("controld://"):
+    uri: str
+    provider: str | None
+    query: str | None
+    line: str
+
+
+def resolve_proxy_value(
+    value: str,
+    proxy_providers: list[Any],
+    allow_debug: bool = True,
+    status: Callable[[str], AbstractContextManager[Any]] | None = None,
+) -> ResolvedProxy:
+    """Resolve a ``--proxy`` value: a Control D resolver, a region query for a proxy provider, or a proxy URI.
+
+    *status* wraps the proxy provider lookup, for a console spinner. Raises a coded ValueError.
+    """
+    if value.startswith("controld://"):
         from unshackle.core.proxies.controld import local_proxy
 
-        return local_proxy(proxy)
+        uri = local_proxy(value)
+        return ResolvedProxy(uri, None, None, describe_explicit_proxy(uri))
+    provider_name, query = split_proxy_query(value, proxy_providers)
+    if not REGION_QUERY.fullmatch(query):
+        return ResolvedProxy(value, None, None, describe_explicit_proxy(value))
+    query = query.lower()
+    message = (
+        f"Connecting to VPN ({query})..."
+        if (provider_name or "").lower() == "gluetun"
+        else f"Getting a Proxy to {query}..."
+    )
+    with status(message) if status else nullcontext():
+        provider, uri = pick_proxy(proxy_providers, query, provider_name)
+        line = describe_proxy(provider, uri, query, allow_debug)
+    return ResolvedProxy(uri, provider_name, query, line)
 
-    if re.match(r"^(https?://|socks)", proxy):
-        return proxy
 
-    provider_name, query = split_proxy_query(proxy, proxy_providers)
-    provider, uri = pick_proxy(proxy_providers, query, provider_name)
-    log.info(describe_proxy(provider, uri, query, allow_debug=False))
-    return uri
+def resolve_proxy(proxy: str | None, proxy_providers: list[Any]) -> str | None:
+    """Get the proxy URI for a ``--proxy`` value, and log the proxy provider that answered a region query."""
+    if not proxy:
+        return None
+    resolved = resolve_proxy_value(proxy, proxy_providers, allow_debug=False)
+    if resolved.query:
+        log.info(resolved.line)
+    return resolved.uri
 
 
 def is_loopback(uri: str) -> bool:

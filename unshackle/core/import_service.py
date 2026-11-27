@@ -21,6 +21,7 @@ from unshackle.core.drm import ClearKey, MonaLisa, real_kids
 from unshackle.core.drm.cenc import drm_stub
 from unshackle.core.drm.discovery import drm_from_init_segment
 from unshackle.core.manifests import DASH, HLS, ISM, MissingLanguageError, snapshot
+from unshackle.core.proxies.resolve import REGION_QUERY
 from unshackle.core.remote_protocol import APIErrorCode, coded
 from unshackle.core.remote_service import resolve_proxy_arg, segment_uri_filter
 from unshackle.core.session import failure_response, utf8_text
@@ -330,6 +331,9 @@ class ImportService(TitleSource):
         if not proxy_query:
             return session
 
+        if not explicit and not REGION_QUERY.fullmatch(proxy_query):
+            log.warning(f"No proxy for export region '{region}', continuing without one")
+            return session
         try:
             proxy = resolve_proxy_arg(proxy_query)
         except Exception as e:
