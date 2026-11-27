@@ -210,7 +210,7 @@ class EXAMPLE(Service):
     def scan_login(self) -> dict[str, Any]:
         """Log in with a QR code the user scans in the app, for a run with no cookies or credentials."""
         device = self.session.post(url=self.config["endpoints"]["device_code"]).json()
-        # Pass the QR code's TEXT as qr= (the URL the app encodes), never an image. The local
+        # Pass the QR code's TEXT as qr= (the URL the app encodes); for a PNG, read_qr_image(png). The local
         # terminal draws it, and over `serve` a --remote client or the REST job's UI draws it.
         # Keep the URL and code in the message too, for a terminal that cannot draw the code.
         # `request_input(prompt, qr=...)` takes the same argument when the user must type an answer.

@@ -539,6 +539,13 @@ def qr_text(data: str, indent: int = 5) -> Text:
     return text
 
 
+def read_qr_image(data: bytes) -> str | None:
+    """Give the text of the QR code in a PNG image, to pass as ``qr=``. None when the image holds no code that reads."""
+    from unshackle.core.utils.qr_read import read_qr_image
+
+    return read_qr_image(data)
+
+
 def show_qr(data: str) -> None:
     """Draw *data* as a QR code on the shared console, unless a prompt handler stands in for the terminal.
 
@@ -597,6 +604,7 @@ __all__ = (
     "print_listing",
     "print_wide",
     "prompt_user",
+    "read_qr_image",
     "set_notice_handler",
     "set_prompt_handler",
     "show_notice",

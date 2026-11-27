@@ -96,6 +96,8 @@ These are abstract. A service will not load unless it defines all three:
   another device, such as a pair code. A remote-dl session shows the message as a log
   line, and a REST download job shows it as the job's `notice`. Both methods take `qr`, the
   text of a QR code to scan, and the terminal or UI that shows the user the message draws it.
+  When the login API gives only a PNG, `read_qr_image(data)` in `unshackle.core.console`
+  gives the text.
 - **Event callbacks**: `on_segment_downloaded`, `on_track_downloaded`,
   `on_track_decrypted`, `on_track_repacked`, `on_track_multiplex` let a service react to
   pipeline events.

@@ -279,7 +279,7 @@ session shows it. A REST download job shows it in its `notice` field until the w
 For a login that the user scans with a phone, give the text of the QR code as `qr`. Both
 `wait_for_approval` and `request_input` take it. The terminal that shows the message draws
 the code under it, on the client for a remote session. Give the text that the login API puts in
-the code, such as the login URL, not an image. Keep the URL or code in the message too: a
+the code, such as the login URL. Keep the URL or code in the message too: a
 terminal that cannot draw the code, or a phone that cannot read it, still shows the text.
 `EXAMPLE.scan_login` in `unshackle/services/EXAMPLE/` shows the whole flow.
 
@@ -289,6 +289,25 @@ token = self.wait_for_approval(
     check=lambda: self.poll_login(session_id),
     timeout=expires_in,
     qr=login_url,
+)
+```
+
+When the login API gives only a PNG of the QR code, read the text from the image with
+`read_qr_image` from `unshackle.core.console`, and give that text as `qr`. It reads a clean,
+axis-aligned code, dark on a light background, as a login API renders it. Decode a base64 data URI
+to bytes first. It does no error correction, so a code with a logo or other mark over it does not
+read. It returns `None` for such a code, for an interlaced PNG or another image format, and for a
+photo of a code. The terminal then shows only the message.
+
+```python
+from unshackle.core.console import read_qr_image
+
+png = self.session.get(login["qr_image_url"]).content
+token = self.wait_for_approval(
+    f"Scan the code with the app, or open {login_url}",
+    check=lambda: self.poll_login(session_id),
+    timeout=expires_in,
+    qr=read_qr_image(png),
 )
 ```
 
