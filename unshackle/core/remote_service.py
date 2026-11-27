@@ -19,6 +19,7 @@ import shlex
 import sys
 import time
 from collections.abc import Callable, Iterable, Iterator, Mapping
+from functools import partial
 from http.cookiejar import CookieJar
 from threading import Lock, local
 from typing import (
@@ -58,6 +59,7 @@ from unshackle.core.remote_protocol import (
     SAMPLES_ROUTE,
     SEARCH_ROUTE,
     SEGMENT_FILTER_ROUTE,
+    SEGMENTS_ROUTE,
     SERVICES_ROUTE,
     SESSION_CREATE_ROUTE,
     SESSION_ROUTE,
@@ -72,6 +74,7 @@ from unshackle.core.remote_protocol import (
     LicenseRequest,
     SegmentFilterReply,
     SegmentFilterRequest,
+    SegmentsRequest,
     SessionClosed,
     SessionCreate,
     SessionCreated,
@@ -1439,6 +1442,8 @@ class RemoteService(TitleSource):
         for track in [*tracks.videos, *tracks.audio, *tracks.subtitles]:
             if track.descriptor == Track.Descriptor.HLS:
                 track.OnSegmentFilter = self.remote_segment_filter(str(track.id))
+            if not track.url:
+                track.resolve_url = partial(self.track_url, track)
 
         self._tracks_by_title[title_id] = tracks
         self._chapters_by_title[title_id] = result.get("chapters", [])
@@ -1793,6 +1798,24 @@ class RemoteService(TitleSource):
                 click.ClickException(f"The server sent no content key for track {track.id}"), APIErrorCode.DRM_ERROR
             )
         return str(key)
+
+    def track_url(self, track: Track) -> str:
+        """The URL that the server looks up for a track it sent with ``resolve_url``, or raise ClickException."""
+        server_id = self.server_track_id(track.id)
+        try:
+            with quiet():
+                resp = self.session_call(
+                    lambda sid: self.client.post(
+                        SEGMENTS_ROUTE.format(session_id=sid), SegmentsRequest(track_ids=[server_id])
+                    )
+                )
+        except RemoteError as e:
+            raise click.ClickException(e.message) from None
+        finally:
+            self.drain_server_logs()
+        if not (url := ((resp.get("tracks") or {}).get(server_id) or {}).get("url")):
+            raise click.ClickException(f"The server sent no URL for track {track.id}")
+        return str(url)
 
     def proxy_license(self, challenge: bytes | str, track: AnyTrack, drm_type: str) -> bytes:
         """Relay a licence challenge to the server. A failed relay raises ClickException, so dl's licence fallbacks see it."""

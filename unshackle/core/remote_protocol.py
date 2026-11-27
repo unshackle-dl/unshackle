@@ -173,6 +173,10 @@ class TracksReply(TypedDict, total=False):
     sample_decrypt_tracks: list[str]
 
 
+class SegmentsRequest(TypedDict):
+    track_ids: list[str]
+
+
 class SegmentFilterRequest(TypedDict):
     track_id: str
 

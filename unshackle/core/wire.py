@@ -506,6 +506,29 @@ def original_audio_ids(tracks: list[Audio], title: Title_T) -> set:
     return {t.id for t in Tracks.by_language(tracks, [original_tag(language)])}
 
 
+def url_fields(track: Any) -> dict[str, Any]:
+    """The URL of a track for the track list, or ``resolve_url`` for a track that resolves its URL on use.
+
+    Such a track keeps its lookup until a client asks the segments route for its URL.
+    """
+    url = getattr(track, "url", None)
+    if not url and getattr(track, "resolve_url", None):
+        return {"resolve_url": True}
+    return {"url": str(url)} if url else {}
+
+
+def served_url(track: Any) -> str | None:
+    """The URL of a track for the segments route; a track that resolves its URL on use resolves it here."""
+    if hasattr(track, "ensure_url"):
+        try:
+            track.ensure_url()
+        except Exception as e:
+            server_log.warning(f"Could not resolve the URL of track {track.id}: {e}")
+            return None
+    url = getattr(track, "url", None)
+    return str(url) if url else None
+
+
 def serialize_video_track(track: Video, include_url: bool = False) -> dict[str, Any]:
     """Convert video track to JSON-serializable dict."""
     codec_name = enum_name(track.codec)
@@ -532,8 +555,8 @@ def serialize_video_track(track: Video, include_url: bool = False) -> dict[str, 
         "stereo": bool(getattr(track, "stereo", False)),
     }
     result.update(serialize_track_common(track))
-    if include_url and hasattr(track, "url") and track.url:
-        result["url"] = str(track.url)
+    if include_url:
+        result.update(url_fields(track))
     return result
 
 
@@ -559,8 +582,8 @@ def serialize_audio_track(track: Audio, include_url: bool = False, is_original: 
         "descriptive": track.descriptive if hasattr(track, "descriptive") else False,
     }
     result.update(serialize_track_common(track))
-    if include_url and hasattr(track, "url") and track.url:
-        result["url"] = str(track.url)
+    if include_url:
+        result.update(url_fields(track))
     return result
 
 
@@ -574,8 +597,8 @@ def serialize_subtitle_track(track: Subtitle, include_url: bool = False) -> dict
         "cc": track.cc if hasattr(track, "cc") else False,
     }
     result.update(serialize_track_common(track))
-    if include_url and hasattr(track, "url") and track.url:
-        result["url"] = str(track.url)
+    if include_url:
+        result.update(url_fields(track))
     return result
 
 
@@ -681,6 +704,8 @@ def build_tracks(data: dict[str, Any]) -> Tracks:
         *zip(data.get("audio", []), tracks.audio, strict=False),
         *zip(data.get("subtitles", []), tracks.subtitles, strict=False),
     ]:
+        if track_data.get("resolve_url"):
+            track_obj.url = ""
         drm_objs = reconstruct_drm(track_data.get("drm"))
         if drm_objs:
             track_obj.drm = drm_objs

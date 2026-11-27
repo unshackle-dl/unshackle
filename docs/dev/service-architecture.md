@@ -272,6 +272,12 @@ The main attributes include `url` (a string or list of strings), `language` (a
 descriptor-specific state stashed in `track.data["hls"]` / `track.data["dash"]`. If you
 do not give a `name`, unshackle derives a human-readable name from the language.
 
+When each URL of a `URL` track costs a request, give the track an empty `url` and set
+`track.resolve_url` to a callable that returns the URL. unshackle calls it only for a
+track that it downloads. Over `--remote`, the client asks the server for the URL of
+each track it downloads, and the server calls the callable then. A track whose callable
+fails gets no URL, and its download fails.
+
 ### `Video`
 
 `Video` adds `codec`, `range`, `bitrate`, `width`, `height`, `fps`, `scan_type`, and

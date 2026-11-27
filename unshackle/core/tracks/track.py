@@ -480,6 +480,7 @@ class Track:
 
         self.path: Path | None = None
         self.url = url
+        self.resolve_url: Callable[[], str] | None = None
         self.language = language
         self.is_original_lang = is_original_lang
         self.descriptor = descriptor
@@ -704,6 +705,15 @@ class Track:
                 continue
         log.debug(f"No {systems[0].__name__} or {systems[1].__name__} PSSH was found for this track, is it DRM free?")
 
+    def ensure_url(self) -> None:
+        """Set the URL from ``resolve_url`` when the track has none.
+
+        A service sets ``resolve_url`` when each URL costs a request, so only a track that is downloaded or sent to a
+        remote client asks for its URL.
+        """
+        if not self.url and self.resolve_url:
+            self.url = self.resolve_url()
+
     def download(
         self,
         session: AnySession,
@@ -820,6 +830,7 @@ class Track:
                 manifest_parsers[self.descriptor].download_track(track=self, ctx=ctx)
             elif self.descriptor == self.Descriptor.URL:
                 try:
+                    self.ensure_url()
                     if (
                         DOWNLOAD_ALL_DRM.is_set()
                         and track_type in ("Video", "Audio")

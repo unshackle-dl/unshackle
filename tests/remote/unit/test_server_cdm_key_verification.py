@@ -326,6 +326,46 @@ def test_a_cipher_the_server_does_not_license_raises(grants, answer, message):
     assert stopped.value.error_code == "DRM_ERROR"
 
 
+def test_track_url_asks_the_segments_route_for_the_url_of_one_track():
+    """A track the server sent with resolve_url gets its URL from the server when it is downloaded."""
+    svc = remote_service()
+    svc.drain_server_logs = lambda: None
+    sent = []
+    svc.client = SimpleNamespace(
+        post=lambda ep, data, **kw: sent.append((ep, data)) or {"tracks": {"a-1": {"url": "https://cdn.example/a"}}}
+    )
+
+    assert svc.track_url(SimpleNamespace(id="a-1")) == "https://cdn.example/a"
+
+    assert [data for _, data in sent] == [{"track_ids": ["a-1"]}]
+    assert sent[0][0].endswith("/segments")
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        {"tracks": {"a-1": {"url": None}}},
+        {"tracks": {}},
+        RemoteError("Track not found in session: a-1", "TRACK_NOT_FOUND"),
+    ],
+    ids=["no-url", "no-track", "refused"],
+)
+def test_a_track_the_server_gives_no_url_raises(answer):
+    """A track with no URL from the server stops at its download with one line."""
+    svc = remote_service()
+    svc.drain_server_logs = lambda: None
+
+    def post(ep, data, **kw):
+        if isinstance(answer, BaseException):
+            raise answer
+        return answer
+
+    svc.client = SimpleNamespace(post=post)
+
+    with pytest.raises(click.ClickException, match="no URL for track a-1|Track not found"):
+        svc.track_url(SimpleNamespace(id="a-1"))
+
+
 def resolve(manifest_drm, drm_type="widevine"):
     """Run resolve_server_keys for one track the server answers with its own key and a sibling."""
     svc = remote_service()

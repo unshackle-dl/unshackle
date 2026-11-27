@@ -99,6 +99,7 @@ from unshackle.core.wire import (
     serialize_drm,
     serialize_title,
     serialize_tracks,
+    served_url,
 )
 
 log = logging.getLogger("api")
@@ -3287,7 +3288,7 @@ async def session_segments_handler(
 
             track_info: dict[str, Any] = {
                 "descriptor": descriptor_name,
-                "url": str(track.url) if track.url else None,
+                "url": await asyncio.to_thread(served_url, track),
                 "drm": serialize_drm(track.drm) if hasattr(track, "drm") and track.drm else None,
                 "headers": headers,
                 "cookies": cookie_values(cookies),

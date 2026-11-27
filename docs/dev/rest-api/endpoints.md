@@ -954,7 +954,7 @@ POST /api/session/create        → returns session_id, status "authenticating"
 GET  /api/session/{id}/channel  → WebSocket: prompts, CDM calls, logs, login state, drain
 GET  /api/session/{id}/prompt   → without the channel: poll until authenticated (submit answers via POST)
 GET  /api/session/{id}/titles   → list titles
-POST /api/session/{id}/tracks   → tracks + chapters (with URLs) for one title
+POST /api/session/{id}/tracks   → tracks + chapters (with URLs) for one title; a track that resolves its URL on use has resolve_url true and no URL
 POST /api/session/{id}/segments → resolve segment URLs / DRM / headers per track
 POST /api/session/{id}/segment_filter → HLS segments the service drops (ads, bumpers)
 POST /api/session/{id}/samples  → decrypt cbcs samples of a track on the server
