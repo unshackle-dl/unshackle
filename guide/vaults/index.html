@@ -2395,7 +2395,7 @@
 <p>A content key made entirely of zeroes (<code>00000000000000000000000000000000</code>) is treated as "no key". Vault lookups skip it, and every backend raises an error if you try to add one. This prevents a placeholder key from masking a real one.</p>
 </div>
 <h2 id="how-lookups-and-caching-work">How lookups and caching work<a class="headerlink" href="#how-lookups-and-caching-work" title="Permanent link">&para;</a></h2>
-<p>When unshackle needs a content key during a download it asks your vaults <strong>in the order they appear in your config</strong>. It returns the first non-null key it finds and stops searching. If a vault raises a permission error or is unreachable, unshackle skips it and continues the search with the next one.</p>
+<p>When unshackle needs a content key during a download it asks your vaults <strong>in the order they appear in your config</strong>. It returns the first non-null key it finds and stops searching. If a vault raises a permission error or is unreachable, unshackle skips it and continues the search with the next one. unshackle does not ask a remote vault again for the rest of the run when it is unreachable or answers with a body that is not a JSON object. It always asks a local SQLite vault. Each failure of a vault shows one warning with the host and the reason; the same failure again goes to the debug log.</p>
 <p>A track needs no licence when a vault holds the content key of the KID that encrypts it. The DRM header of the track can name more KIDs, for example those of other tracks. Before the decrypt, unshackle reads the downloaded file, and licenses each of those KIDs that the file uses and no vault holds. When unshackle cannot read which KIDs the file uses, it licenses all of them.</p>
 <p>When unshackle recovers new keys from a license, it pushes them to <strong>all</strong> configured vaults, so every vault gradually converges on the same set of keys. Two rules apply to pushing:</p>
 <ul>
@@ -2683,6 +2683,7 @@
 </tbody>
 </table>
 <p>You must supply either <code>password</code> or <code>api_key</code>, or the vault will fail to load.</p>
+<p>A host that answers with a body that is not a JSON object, for example a parked domain or a login page, is unreachable. unshackle logs one warning, skips the vault for the rest of the run, and the <code>serve</code> health check reports the vault as failed. In json mode, HTTP 404 is the exception: it means that the vault has no entry. In decrypt_labs mode, an error status is a miss.</p>
 <hr />
 <h2 id="api-backend">API backend<a class="headerlink" href="#api-backend" title="Permanent link">&para;</a></h2>
 <p>A simple RESTful HTTP vault with a fixed, well-defined protocol. Authentication is a bearer token.</p>
