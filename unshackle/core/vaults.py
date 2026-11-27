@@ -10,7 +10,7 @@ from uuid import UUID
 
 from unshackle.core.config import config
 from unshackle.core.utilities import get_debug_logger, import_module_by_path
-from unshackle.core.vault import UNREACHABLE, RateLimited, Vault, brief, is_null_key
+from unshackle.core.vault import UNREACHABLE, RateLimited, Refused, Vault, brief, is_null_key
 
 log = logging.getLogger(__name__)
 
@@ -76,9 +76,9 @@ class Vaults:
         and the first one with the content key wins.
         """
         local = [v for v in self.vaults if v.local]
-        remote = [v for v in self.live() if not v.local]
+        remote = [v for v in self._live() if not v.local]
         for vault in local:
-            key = self.query_vault(vault, kid)
+            key = self._query_vault(vault, kid)
             if key:
                 return self.supplied(kid, key, vault)
         with self.lock:
@@ -90,7 +90,7 @@ class Vaults:
             return None, None
         pool = ThreadPoolExecutor(len(remote))
         try:
-            futures = {pool.submit(self.query_vault, vault, kid): vault for vault in remote}
+            futures = {pool.submit(self._query_vault, vault, kid): vault for vault in remote}
             for future, vault in futures.items():
                 future.add_done_callback(partial(self.remember_candidate, kid, vault))
             for future in as_completed(futures):
@@ -139,7 +139,7 @@ class Vaults:
         """True when a local vault has flagged the KID:KEY as wrong."""
         return any(v.is_bad_key(kid, key) for v in self.vaults if v.local)
 
-    def query_vault(self, vault: Vault, kid: UUID | str) -> str | None:
+    def _query_vault(self, vault: Vault, kid: UUID | str) -> str | None:
         """Ask one vault for a content key. A failure logs a warning and returns None.
 
         A flagged pair counts as no content key, so no vault can serve one again.
@@ -189,11 +189,11 @@ class Vaults:
             if remote and not remote.report_now:
                 self.unreported[kid, key] = remote
         name = source[1].name if source else "unknown"
-        for vault in self.live():
+        for vault in self._live():
             if vault.local:
-                self.tell(vault, kid, key, name)
+                self._tell(vault, kid, key, name)
         if remote and remote.report_now:
-            self.tell(remote, kid, key, name)
+            self._tell(remote, kid, key, name)
 
     def proven(self, content_keys: dict[UUID | str, str], checked: dict[UUID, KeySource]) -> None:
         """A track decrypted with ``content_keys``, and a decode check passed the content key of each KID in ``checked``.
@@ -205,7 +205,7 @@ class Vaults:
         for proven_kid, source in checked.items():
             if not self.proved_wrong(proven_kid, content_keys[proven_kid]):
                 self.add_key(proven_kid, content_keys[proven_kid], excluding=source)
-        live = self.live()
+        live = self._live()
         with self.lock:
             due = [
                 (kid, key, vault)
@@ -216,14 +216,14 @@ class Vaults:
                 del self.unreported[kid, key]
         for kid, key, vault in due:
             if vault in live:
-                self.tell(vault, kid, key, vault.name)
+                self._tell(vault, kid, key, vault.name)
 
-    def tell(self, vault: KeySource, kid: UUID | str, key: str, source: str) -> None:
+    def _tell(self, vault: KeySource, kid: UUID | str, key: str, source: str) -> None:
         """Flag one pair in one vault; a failure is only a debug line."""
         try:
             vault.flag_bad_key(self.service, kid, key, source)
         except Exception as e:
-            log.debug(f"Could not flag {key} as bad in Vault '{vault.name}': {e!r}")
+            log.debug(f"Could not flag {key} as bad in Vault '{vault.name}': {brief(e)}")
 
     def clear_licensed_flags(self, content_keys: dict[UUID, str]) -> list[UUID]:
         """Unflag each pair a licence returned, since the decode check was wrong. Returns their KIDs."""
@@ -242,7 +242,7 @@ class Vaults:
         with self.lock:
             self.flagged.discard((kid, key))
             self.unreported.pop((kid, key), None)
-        for vault in self.live():
+        for vault in self._live():
             try:
                 vault.unflag_bad_key(kid, key)
             except Exception as e:
@@ -254,7 +254,7 @@ class Vaults:
         This method pushes to all Vaults at the same time, so one unreachable Vault costs only its
         own timeout and does not delay the others.
         """
-        vaults = [v for v in self.live() if v != excluding and not v.no_push]
+        vaults = [v for v in self._live() if v != excluding and not v.no_push]
         if not vaults:
             return 0
         with ThreadPoolExecutor(len(vaults), thread_name_prefix="vault-push") as pool:
@@ -277,9 +277,10 @@ class Vaults:
                 dl.log_vault_query(vault.name, "add_key", kid=str(kid), success=False, error=e)
             return 0
 
-    def add_keys(self, kid_keys: dict[UUID | str, str]) -> int:
+    def add_keys(self, kid_keys: dict[UUID | str, str], local: bool | None = None) -> int:
         """
-        Add multiple KID:KEYs to all Vaults. The Vaults skip duplicate Content Keys.
+        Add multiple KID:KEYs to all Vaults, or with ``local`` only to the local or only to the remote ones.
+        The Vaults skip duplicate Content Keys.
         This method absorbs and ignores the PermissionError a Vault raises when it cannot make Tables.
         This method also skips Vaults with no_push=True.
 
@@ -288,13 +289,13 @@ class Vaults:
         rejects the whole batch when it contains one.
         """
         kid_keys = {kid: key for kid, key in kid_keys.items() if not is_null_key(key)}
-        vaults = [vault for vault in self.live() if not vault.no_push]
+        vaults = [vault for vault in self._live() if not vault.no_push and local in (None, vault.local)]
         if not vaults or not kid_keys:
             return 0
         with ThreadPoolExecutor(len(vaults), thread_name_prefix="vault-push") as pool:
-            return sum(pool.map(lambda vault: self.push_keys(vault, kid_keys), vaults))
+            return sum(pool.map(lambda vault: self._push_keys(vault, kid_keys), vaults))
 
-    def push_keys(self, vault: Vault, kid_keys: dict[UUID | str, str]) -> int:
+    def _push_keys(self, vault: Vault, kid_keys: dict[UUID | str, str]) -> int:
         """Push Content Keys to one Vault. Returns 1 if the Vault accepted them, 0 on any failure."""
         try:
             vault.add_keys(self.service, kid_keys)
@@ -306,13 +307,47 @@ class Vaults:
             self.mark_unreachable(vault, e)
             return 0
 
-    def live(self) -> list[Vault]:
+    def _live(self) -> list[Vault]:
         """The vaults this run still uses."""
         return [vault for vault in self.vaults if vault not in self.unreachable]
 
     def held_locally(self, kid: UUID | str, key: str) -> bool:
         """True when a local vault already holds this KID:KEY."""
-        return any(self.query_vault(vault, kid) == key for vault in self.vaults if vault.local)
+        return any(self._query_vault(vault, kid) == key for vault in self.vaults if vault.local)
+
+    def holds(self, kid: UUID | str) -> bool:
+        """True when a local vault holds a content key for ``kid`` or cannot answer; a vault with no read access holds none.
+
+        A client may add a missing content key but never replace one, so a vault that cannot answer is not taken as empty.
+        """
+        for vault in (v for v in self.vaults if v.local):
+            try:
+                if vault.get_key(kid, self.service):
+                    return True
+            except (PermissionError, NotImplementedError):
+                continue
+            except Exception:
+                return True
+        return False
+
+    def stored_everywhere(self, stored: int) -> bool:
+        """True when ``stored``, a count from ``add_keys``, is every vault that takes a push, unreachable ones included."""
+        return stored == sum(not vault.no_push for vault in self.vaults)
+
+    def flag_served(self, kid: UUID | str, key: str, source: str) -> None:
+        """Flag a served KID:KEY a client proved wrong in every local vault and in ``source``, the vault that served it."""
+        for vault in self._live():
+            if vault.local or vault.name == source:
+                self._tell(vault, kid, key, source)
+
+    def probe(self, kid: UUID | str) -> str:
+        """Ask each vault for ``kid`` and raise its failure; a vault that refuses the query answered, so it passes."""
+        for vault in self.vaults:
+            try:
+                vault.get_key(kid, self.service)
+            except Refused:
+                pass
+        return ", ".join(map(str, self.vaults))
 
     def warn_failure(self, vault: Vault, action: str, error: Exception) -> None:
         """Warn once per vault for each distinct failure; a repeat goes to the debug log."""
@@ -338,7 +373,16 @@ class Vaults:
             return True
 
 
-__all__ = ("KeySource", "Vaults", "load_config_vaults")
+__all__ = ("KeySource", "Vaults", "flag_stores", "load_config_vaults")
+
+
+def flag_stores(configs: Iterable[dict[str, Any]]) -> list[str]:
+    """The names of the vault configs whose vault type stores bad-key flags, read from the class without a load."""
+    return [
+        str(cfg.get("name") or cfg.get("type"))
+        for cfg in configs
+        if getattr(MODULES.get(str(cfg.get("type"))), "stores_flags", False)
+    ]
 
 
 def load_config_vaults(

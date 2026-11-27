@@ -173,7 +173,7 @@ def test_a_server_that_goes_down_is_skipped_for_the_rest_of_the_run(
     monkeypatch.setattr(mysql_module.ConnectionFactory, "PING_AFTER", -1.0)
     server.down = True
     assert vaults.get_key(KID) == (None, None)
-    assert vaults.live() == []
+    assert vaults.unreachable == set(vaults.vaults)
     server.down = False
     assert vaults.vaults[0].get_key(KID, "EXAMPLE") == KEY
 

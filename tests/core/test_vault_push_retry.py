@@ -9,6 +9,7 @@ from uuid import UUID
 import pytest
 import requests
 
+from tests.core.key_resolver import BrokenVault, MemoryVault, vaults_of
 from unshackle.commands.kv import copy_service_data
 from unshackle.core.api import handlers
 from unshackle.core.vault import RateLimited, json_body
@@ -160,56 +161,35 @@ def test_an_api_vault_still_rate_limited_fails_the_key_list_and_kv_copy_skips_it
     ]
 
 
-class FakeVault:
-    no_push = False
-
-    def __init__(self, ok: bool) -> None:
-        self.ok = ok
-
-
-def fake_server_vaults(pushes: list, vault_list: list[FakeVault]) -> Any:
-    class FakeVaults:
-        vaults = vault_list
-
-        def __len__(self) -> int:
-            return len(vault_list)
-
-        def clear_licensed_flags(self, content_keys: dict) -> list:
-            return []
-
-        def add_keys(self, key_map: dict) -> int:
-            pushes.append(key_map)
-            return sum(vault.ok for vault in vault_list)
-
-    return FakeVaults()
-
-
 def test_server_does_not_push_a_pair_it_already_stored(monkeypatch: pytest.MonkeyPatch) -> None:
-    pushes: list = []
-    monkeypatch.setattr(handlers, "load_server_vaults", lambda name: fake_server_vaults(pushes, [FakeVault(True)]))
+    vault = MemoryVault()
+    monkeypatch.setattr(handlers, "load_server_vaults", lambda name: vaults_of(vault, service="SVC"))
     monkeypatch.setattr(handlers, "CACHED_PAIRS", set())
     handlers.cache_to_vaults({KID.hex: KEY}, "SVC")
     handlers.cache_to_vaults({KID.hex: KEY}, "SVC")
-    assert pushes == [{KID: KEY}]
+    assert vault.pushes == [{KID: KEY}]
 
 
 def test_server_pushes_again_after_one_vault_failed(monkeypatch: pytest.MonkeyPatch) -> None:
-    pushes: list = []
-    vault_list = [FakeVault(True), FakeVault(False)]
-    monkeypatch.setattr(handlers, "load_server_vaults", lambda name: fake_server_vaults(pushes, vault_list))
+    vault = MemoryVault()
+    monkeypatch.setattr(
+        handlers,
+        "load_server_vaults",
+        lambda name: vaults_of(vault, BrokenVault(OSError("EXAMPLE vault down")), service="SVC"),
+    )
     monkeypatch.setattr(handlers, "CACHED_PAIRS", set())
     handlers.cache_to_vaults({KID.hex: KEY}, "SVC")
     handlers.cache_to_vaults({KID.hex: KEY}, "SVC")
-    assert len(pushes) == 2
+    assert len(vault.pushes) == 2
 
 
 def test_one_licence_request_builds_the_server_vaults_once(monkeypatch: pytest.MonkeyPatch) -> None:
     builds: list = []
-    pushes: list = []
+    down = BrokenVault(OSError("EXAMPLE vault down"))
 
     def build(name: str) -> Any:
         builds.append(name)
-        return fake_server_vaults(pushes, [FakeVault(False)])
+        return vaults_of(down, service="SVC")
 
     monkeypatch.setattr(handlers, "load_server_vaults", build)
     monkeypatch.setattr(handlers, "CACHED_PAIRS", set())
@@ -217,4 +197,4 @@ def test_one_licence_request_builds_the_server_vaults_once(monkeypatch: pytest.M
     handlers.cache_to_vaults({KID.hex: KEY}, "SVC", shared=shared)
     handlers.cache_to_vaults({KID.hex: KEY}, "SVC", shared=shared)
     assert len(builds) == 1
-    assert len(pushes) == 2
+    assert len(down.pushes) == 2

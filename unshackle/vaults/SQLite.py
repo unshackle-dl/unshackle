@@ -12,6 +12,7 @@ class SQLite(Vault):
     """Key Vault using a locally-accessed sqlite DB file."""
 
     local = True
+    stores_flags = True
 
     def __init__(self, name: str, path: str | Path, no_push: bool = False) -> None:
         super().__init__(name, no_push)

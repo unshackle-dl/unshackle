@@ -86,10 +86,15 @@ def vault_session(timeout: float) -> Session:
     return session
 
 
+class Refused(Exception):
+    """The vault answered and refused the query, so it is up."""
+
+
 class Vault(metaclass=ABCMeta):
     # a vault on this machine; Vaults.get_key tries these first, before the network ones
     local: bool = False
     report_now: bool = False
+    stores_flags: bool = False
 
     def __init__(self, name: str, no_push: bool = False) -> None:
         self.name = name
@@ -148,4 +153,4 @@ class Vault(metaclass=ABCMeta):
         """Forget a flagged KID:KEY, for example when a CDM licence confirmed it."""
 
 
-__all__ = ("Vault", "brief", "json_body")
+__all__ = ("Refused", "Vault", "brief", "json_body")

@@ -52,6 +52,24 @@ class MemoryVault(Vault):
         self.told.append((kid, key))
 
 
+class BrokenVault(MemoryVault):
+    """A memory vault whose every lookup and flag raises ``error``, and whose every push is recorded and then raises it."""
+
+    def __init__(self, error: Exception, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self.error = error
+
+    def get_key(self, kid: UUID | str, service: str) -> str | None:
+        raise self.error
+
+    def add_keys(self, service: str, kid_keys: dict[UUID | str, str]) -> int:
+        self.pushes.append(dict(kid_keys))
+        raise self.error
+
+    def flag_bad_key(self, service: str, kid: UUID | str, key: str, source: str) -> None:
+        raise self.error
+
+
 def vaults_of(*loaded: Vault, service: str = "TEST") -> Vaults:
     """A Vaults over ``loaded``, with no config."""
     vaults = Vaults(service)

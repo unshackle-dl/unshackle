@@ -796,7 +796,7 @@ def test_flagged_pair_warns_once_per_vault(tmp_path: Path, caplog: pytest.LogCap
     vaults.vaults = [local, poisoned]
     with caplog.at_level(logging.WARNING, logger="unshackle.core.vaults"):
         for _ in range(3):
-            assert vaults.query_vault(poisoned, KID) is None
+            assert vaults.get_key(KID) == (None, None)
     assert sum("flagged bad, skipping" in r.getMessage() for r in caplog.records) == 1
 
 

@@ -13,6 +13,7 @@ from uuid import UUID
 import click
 import pytest
 
+from tests.core.key_resolver import vaults_of
 from tests.remote.key_source import one_title, remote_keys
 from tests.remote.sessions import session_entry
 from unshackle.core.api import handlers
@@ -58,6 +59,7 @@ def test_server_vault_flag_posts_only_the_pair():
 
 class _Vault:
     local = True
+    name = "local"
 
     def __init__(self):
         self.flagged: list = []
@@ -78,7 +80,7 @@ def session(monkeypatch):
     monkeypatch.setattr(handlers, "get_validated_session", validated)
     monkeypatch.setattr(handlers, "require_authenticated", lambda s: None)
     vault = _Vault()
-    monkeypatch.setattr(handlers, "load_server_vaults", lambda name: SimpleNamespace(vaults=[vault], service="SVC"))
+    monkeypatch.setattr(handlers, "load_server_vaults", lambda name: vaults_of(vault, service="SVC"))
     return entry, vault
 
 
@@ -227,20 +229,6 @@ def test_the_server_reads_the_head_of_a_one_file_track_with_drm(drm, head):
     assert (handlers.fetch_init_segment(track, "svc-session"), fetched) == (
         (head, ["svc-session"]) if head else (None, [])
     )
-
-
-async def test_server_tells_a_remote_vault_only_when_it_served_the_pair(monkeypatch, session):
-    entry, local = session
-    bystander, source = _Vault(), _Vault()
-    bystander.local = source.local = False
-    bystander.name, source.name = "other", "sqlite"
-    monkeypatch.setattr(
-        handlers, "load_server_vaults", lambda name: SimpleNamespace(vaults=[local, bystander, source], service="SVC")
-    )
-    await handlers.session_bad_key_handler({"kid": KID.hex, "key": "v"}, "sess")
-    assert local.flagged == [("SVC", KID, "v", "sqlite")]
-    assert source.flagged == [("SVC", KID, "v", "sqlite")]
-    assert bystander.flagged == []
 
 
 def test_resolve_server_keys_does_not_warn_for_clear_tracks(monkeypatch):

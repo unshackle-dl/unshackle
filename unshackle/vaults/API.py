@@ -3,7 +3,7 @@ from uuid import UUID
 
 from requests import HTTPError, Response
 
-from unshackle.core.vault import RateLimited, Vault, json_body, vault_session
+from unshackle.core.vault import RateLimited, Refused, Vault, json_body, vault_session
 
 
 class API(Vault):
@@ -283,10 +283,10 @@ class Exceptions:
     class PageInvalid(Exception):
         """Requested page does not exist."""
 
-    class ServiceTagInvalid(Exception):
+    class ServiceTagInvalid(Refused):
         """The Service Tag is invalid."""
 
-    class KeyIdInvalid(Exception):
+    class KeyIdInvalid(Refused):
         """The Key ID is invalid."""
 
     class ContentKeyInvalid(Exception):
