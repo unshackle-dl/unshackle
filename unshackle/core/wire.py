@@ -28,7 +28,7 @@ from pywidevine.pssh import PSSH as WidevinePSSH
 
 from unshackle.core.config import config
 from unshackle.core.constants import AUDIO_CODEC_MAP, DYNAMIC_RANGE_MAP, VIDEO_CODEC_MAP
-from unshackle.core.drm import BlowfishStripe, ClearKeyCENC, PlayReady, Widevine
+from unshackle.core.drm import WHOLE_FILE_DRM, BlowfishStripe, ClearKeyCENC, ClearKeyCTR, PlayReady, Widevine
 from unshackle.core.titles import Episode, Movie, Song, Title_T
 from unshackle.core.titles.availability import availability_metadata
 from unshackle.core.titles.music import MUSIC_DATA_KEYS, SONG_FIELDS, song_metadata
@@ -309,8 +309,10 @@ def serialize_drm(drm_list: Any) -> list[dict[str, Any]] | None:
         drm_info = {}
         drm_class = drm.__class__.__name__
         drm_info["type"] = drm_class.lower()
-        if isinstance(drm, BlowfishStripe):
+        if isinstance(drm, WHOLE_FILE_DRM) and drm.key is not None:
             drm_info["key"] = drm.key.hex()
+        if isinstance(drm, ClearKeyCTR):
+            drm_info.update(iv=drm.iv.hex(), magic=drm.magic.hex(), skip=drm.skip)
 
         # pywidevine exposes dumps(); pyplayready's PSSH does not, so PlayReady falls back
         # to the base64 it was built from. Without it the client drops every PlayReady
@@ -355,11 +357,17 @@ def reconstruct_drm(drm_list: list | None) -> list:
     for drm_info in drm_list:
         drm_type = drm_info.get("type", "")
         pssh_str = drm_info.get("pssh")
-        if not pssh_str and drm_type != "blowfishstripe":
+        if not pssh_str and drm_type not in ("blowfishstripe", "clearkeyctr"):
             continue
         try:
             if drm_type == "blowfishstripe":
                 result.append(BlowfishStripe(drm_info["key"]))
+            elif drm_type == "clearkeyctr":
+                result.append(
+                    ClearKeyCTR(
+                        None, drm_info["iv"], drm_info["magic"], drm_info.get("skip", 0), key=drm_info.get("key")
+                    )
+                )
             elif drm_type in ("widevine", "playready"):
                 result.append(pssh_drm(drm_type, pssh_str, drm_info.get("kids")))
         # a dropped entry can leave the track with no DRM, so never skip silently

@@ -268,7 +268,7 @@ download. For example, `dovi_tool` only matters if you download Dolby Vision vid
 | Tool | Binary looked up | Why it is needed |
 | --- | --- | --- |
 | Bento4 (`mp4decrypt`) | `mp4decrypt` | Alternative DRM decryptor to shaka-packager |
-| MP4Box (GPAC) | `MP4Box` | Muxing DTS:X Profile 2 (DTS-UHD) and MPEG-H audio, and 3D video; remuxing AC-4, MPEG-H and DTS-UHD music |
+| MP4Box (GPAC) | `MP4Box` | Muxing DTS:X Profile 2 (DTS-UHD) and MPEG-H audio, and 3D video; remuxing AC-4, MPEG-H and DTS-UHD music; trimming the coder delay of AAC files in a paged container |
 | dovi_tool | `dovi_tool` | Dolby Vision metadata handling |
 | HDR10Plus_tool | `hdr10plus_tool` | HDR10+ metadata handling |
 | SubtitleEdit | `seconv`, `SubtitleEdit` | Subtitle conversion (the `SeConv` CLI from 5.x) |
@@ -280,9 +280,12 @@ download. For example, `dovi_tool` only matters if you download Dolby Vision vid
 | Docker | `docker` | Gluetun VPN proxy support |
 | Git | `git` | Fetching and updating remote service repositories |
 
-!!! info "MP4Box is only used for DTS:X Profile 2, MPEG-H, AC-4 music and 3D video"
+!!! info "MP4Box is only used for DTS:X Profile 2, MPEG-H, AC-4 music, 3D video and paged AAC"
     Titles with DTS:X Profile 2 (DTS-UHD) or MPEG-H audio, or a stereoscopic 3D video track, mux to
     MP4; everything else muxes to MKV with `mkvmerge`. Install with `apt install gpac`.
+
+    AAC files that come in a paged container need MP4Box only to lose the coder delay of the encoder
+    and to declare HE-AACv2, see [DRM and CDM](../guide/drm-and-cdm.md). Without MP4Box they keep the delay.
 
 !!! tip "SubtitleEdit specifics"
     unshackle looks for `seconv` first, the batch CLI shipped with

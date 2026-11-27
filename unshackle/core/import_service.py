@@ -704,6 +704,10 @@ class ImportService(TitleSource):
         """Raise the error that names the KIDs of ``track`` neither the export nor a vault holds."""
         raise self.missing_key(track)
 
+    def license_file(self, track: AnyTrack) -> str:
+        """Raise the error that names the track: an export holds no content key of a whole-file cipher."""
+        raise self.missing_key(track)
+
     def vault_source(self, kid: UUID, key: str) -> None:
         """Always None: no server vault serves an import."""
         return None

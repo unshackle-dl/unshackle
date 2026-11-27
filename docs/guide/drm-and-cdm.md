@@ -41,7 +41,7 @@ then decrypts the file with those keys.
 
 ## Supported DRM systems
 
-unshackle implements six DRM systems. Only the first two need a device file and a
+unshackle implements seven DRM systems. Only the first two need a device file and a
 license-server handshake. The rest are special cases.
 
 | System | Device file | License flow | Decryption |
@@ -52,13 +52,15 @@ license-server handshake. The rest are special cases.
 | **ClearKey (HLS)**, AES-128 `EXT-X-KEY` | none | Key fetched directly from a URI or `data:` URL. No CDM, no challenge. | in-process AES-CBC |
 | **MonaLisa** (proprietary, WASM) | `.mld` | Ticket from the service API; keys extracted locally via WASM. No license server. | ML-Worker binary + AES-ECB, per segment |
 | **Blowfish stripe** | none | The service gives the per-track key. No CDM, no license server. | in-process Blowfish-CBC on every third 2048-byte chunk |
+| **ClearKey (CTR)**, AES-128-CTR | none | The service gives the per-track key and IV. No CDM, no license server. | in-process AES-CTR over the whole file |
 
-!!! warning "Two different ClearKeys"
-    "ClearKey (HLS)" and "ClearKey (CENC)" are entirely different systems that happen
-    to share a name. The HLS variant is the AES-128 content key that an `EXT-X-KEY`
+!!! warning "Three different ClearKeys"
+    "ClearKey (HLS)", "ClearKey (CENC)" and "ClearKey (CTR)" are entirely different systems that
+    happen to share a name. The HLS variant is the AES-128 content key that an `EXT-X-KEY`
     tag references, and unshackle decrypts it in-process. The CENC variant is the W3C
     EME `org.w3.clearkey` scheme. It delivers keys as a JWK Set, and shaka-packager or
-    mp4decrypt decrypts it like Widevine. Neither involves a device file.
+    mp4decrypt decrypts it like Widevine. The CTR variant is one AES-CTR stream over a
+    whole file, with the content key and the IV that the service gives. None of them involves a device file.
 
 ### Widevine vs PlayReady
 
@@ -471,6 +473,27 @@ It sends this to the manifest's license URL (or to whatever a service's ClearKey
 license hook returns) and reads the JSON Web Key set back. You do not need a device
 file. The decrypted file still goes through shaka-packager or mp4decrypt like any
 other CENC track, so the `decryption` setting applies.
+
+### ClearKey over a whole file (AES-CTR)
+
+Some services encrypt one whole audio file with AES-128-CTR and give the content key and
+the IV with the track. unshackle decrypts the file in-process after the download. There is
+no device, no CDM and no license challenge. The licence step of a download or of a `--skip-dl` run licenses
+the content key, so `--list` asks for none. The IV, the length of the header in front of the media and the
+signature the file must start with travel with the track list.
+
+Over `--remote` the track list carries no content key. After the track selection the client asks the server
+for the content key of each chosen track, and then it decrypts the file itself. The server licenses only for an
+API key with the `server_cdm` grant for the service. Without it, or in a remote session on the server's device, the
+track stops with one error before its download. A decrypted file with another
+signature raises an error and stays encrypted. A decrypted file in a paged AAC container (`SpAC`) becomes an
+`.m4a` file that declares HE-AACv2 and whose edit list removes the coder delay, so the file has the length of the
+track. This needs [MP4Box](../getting-started/installation.md#recommended-and-optional-tools) on the machine that
+decrypts, the client over `--remote`. Without it the file becomes one ADTS stream, which the mux step packs into
+an `.m4a` file that keeps the coder delay.
+
+The client must know this cipher as well as the server: a client without it drops the DRM entry without a
+log and saves the encrypted file.
 
 ## Widevine and PlayReady on the same title
 

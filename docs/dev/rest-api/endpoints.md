@@ -1235,9 +1235,10 @@ A slow answer arrives as a [slow response](#slow-responses).
 | `track_id` / `track_ids` | Single track, or a batch of tracks. |
 | `challenge` | Base64 CDM challenge (proxy mode). |
 | `pssh` | Base64 PSSH (server-CDM mode). |
-| `drm_type` | `widevine` (default) or `playready`. In server-CDM mode the server's `cdm` mapping for the service decides the DRM system and the response `drm_type` names the system that licensed. The client's value decides only when the server has no mapping for the service. |
+| `drm_type` | `widevine` (default) or `playready`. In server-CDM mode the server's `cdm` mapping for the service decides the DRM system and the response `drm_type` names the system that licensed. The client's value decides only when the server has no mapping for the service. A track whose DRM is a whole-file cipher takes `clearkeyctr` with no `pssh`: the service on the server licenses it. |
 | `mode` | `proxy` (default) or `server_cdm`. |
 | `clear_tracks` (response) | Requested track ids that carry no DRM, so they have no keys. Absent when every requested track is encrypted. |
+| `file_keys` (response) | Content keys of whole-file ciphers, by track id, for a single track and for a batch. Absent when no requested track holds such a cipher. |
 | `vault_keys` (response) | KIDs whose content key came from a server vault, not the CDM. The client proves such a content key with a decode before it trusts it; the field is absent when every content key came from the CDM. |
 
 | Status | Error code | Meaning |

@@ -21,7 +21,7 @@ from tests.core.test_zero_kid_fallback import _playready_pssh
 from unshackle.commands.dl import dl
 from unshackle.core import wire
 from unshackle.core.config import config
-from unshackle.core.drm import BlowfishStripe, ClearKeyCENC, PlayReady, Widevine
+from unshackle.core.drm import BlowfishStripe, ClearKeyCENC, ClearKeyCTR, PlayReady, Widevine
 from unshackle.core.import_service import ImportService
 from unshackle.core.titles import Episode, Movie, Song
 from unshackle.core.titles.music import SONG_FIELDS
@@ -58,6 +58,7 @@ VIDEO_KID = UUID("00112233-4455-6677-8899-aabbccddeeff")
 AUDIO_KID = UUID("ffeeddcc-bbaa-9988-7766-554433221100")
 VIDEO_KEY = "0123456789abcdef0123456789abcdef"
 BLOWFISH_KEY = bytes(range(16))
+CTR_CIPHER = ClearKeyCTR(None, bytes(range(16, 32)), b"OggS", skip=7, key=bytes(range(16)))
 
 
 class EXAMPLE:
@@ -995,11 +996,28 @@ def test_build_tracks_attaches_drm_preference_and_attachments() -> None:
     assert [(a.name, a.url) for a in tracks.attachments] == [("P", "https://img.example/p.jpg")]
 
 
+def every_drm() -> list:
+    return [
+        widevine(VIDEO_KID, keys=True),
+        playready(VIDEO_KID, AUDIO_KID),
+        BlowfishStripe(BLOWFISH_KEY),
+        CTR_CIPHER,
+        clearkey(),
+    ]
+
+
 def test_rest_drm_of_each_system() -> None:
-    drm = [widevine(VIDEO_KID, keys=True), playready(VIDEO_KID, AUDIO_KID), BlowfishStripe(BLOWFISH_KEY), clearkey()]
+    drm = every_drm()
     assert serialize_drm(drm) == [
         *REST_VIDEO["drm"],
         {"type": "blowfishstripe", "key": "000102030405060708090a0b0c0d0e0f"},
+        {
+            "type": "clearkeyctr",
+            "key": BLOWFISH_KEY.hex(),
+            "iv": bytes(range(16, 32)).hex(),
+            "magic": "4f676753",
+            "skip": 7,
+        },
         {"type": "clearkeycenc", "kids": ["00112233-4455-6677-8899-aabbccddeeff"]},
     ]
 
@@ -1023,12 +1041,13 @@ def test_export_drm_of_each_system() -> None:
 
 
 def test_reconstruct_rest_drm() -> None:
-    drm = [widevine(VIDEO_KID, keys=True), playready(VIDEO_KID, AUDIO_KID), BlowfishStripe(BLOWFISH_KEY), clearkey()]
+    drm = every_drm()
     rebuilt = reconstruct_drm(json_copy(serialize_drm(drm)))
     assert [drm_fields(d) for d in rebuilt] == [
         WIDEVINE_FIELDS,
         PLAYREADY_FIELDS,
         {"class": "BlowfishStripe", "kids": [], "content_keys": {}, "key": "000102030405060708090a0b0c0d0e0f"},
+        {"class": "ClearKeyCTR", "kids": [], "content_keys": {}},
     ]
 
 

@@ -16,7 +16,7 @@ from typing import Any, BinaryIO
 from uuid import UUID
 
 from unshackle.core.constants import DOWNLOAD_CANCELLED, AnyTrack
-from unshackle.core.drm import DRM_T, ClearKeyCENC, MonaLisa, PlayReady, Widevine
+from unshackle.core.drm import DRM_T, ClearKeyCENC, ClearKeyCTR, MonaLisa, PlayReady, Widevine
 from unshackle.core.drm.segment_decrypt import SegmentDecrypter
 from unshackle.core.drm.verify import decrypt_track
 from unshackle.core.events import events
@@ -96,7 +96,7 @@ def licensing(ctx: DownloadContext) -> Iterator[None]:
 
 
 LICENSABLE: dict[Track.Descriptor, tuple[type, ...]] = {
-    Track.Descriptor.URL: (Widevine, PlayReady, ClearKeyCENC),
+    Track.Descriptor.URL: (Widevine, PlayReady, ClearKeyCENC, ClearKeyCTR),
     Track.Descriptor.DASH: (Widevine, PlayReady, ClearKeyCENC),
     Track.Descriptor.HLS: (Widevine, PlayReady, MonaLisa),
     Track.Descriptor.ISM: (Widevine, PlayReady),

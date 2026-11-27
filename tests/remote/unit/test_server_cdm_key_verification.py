@@ -10,20 +10,22 @@ import json
 from types import SimpleNamespace
 from uuid import UUID
 
+import click
 import pytest
 
-from tests.remote.key_source import remote_keys
+from tests.remote.key_source import one_title, remote_keys
 from tests.remote.sessions import session_entry
 from unshackle.core.api import handlers
 from unshackle.core.api.errors import APIError
-from unshackle.core.drm import BlowfishStripe
+from unshackle.core.drm import BlowfishStripe, ClearKeyCTR
 from unshackle.core.drm.cenc import drm_stub
-from unshackle.core.remote_service import RemoteService
+from unshackle.core.remote_service import RemoteError, RemoteService
 
 pytestmark = pytest.mark.unit
 
 KID = UUID("161219ec3df64e0eadbb3827c0ccc46d")
 CDM_KID = UUID("43de497c6d1945f49acc2951696ec628")
+KEYED_CIPHER = ClearKeyCTR(None, bytes(range(16, 32)), b"OggS", key=bytes(16))
 
 
 def remote_service() -> RemoteService:
@@ -205,8 +207,12 @@ async def test_batch_asks_again_when_a_cached_vault_answer_lacks_the_track_kid(m
     assert payload["keys"]["c"] == {KID.hex: "v", CDM_KID.hex: "c"}
 
 
-@pytest.mark.parametrize("drm", [["drm"], []], ids=["with-drm", "clear"])
-def test_the_server_reads_the_head_of_a_one_file_track_with_drm(drm):
+@pytest.mark.parametrize(
+    ("drm", "head"),
+    [(["drm"], b"head"), ([], None), ([BlowfishStripe(bytes(16))], None), ([KEYED_CIPHER], None)],
+    ids=["with-drm", "clear", "stripe", "ctr"],
+)
+def test_the_server_reads_the_head_of_a_one_file_track_with_drm(drm, head):
     from unshackle.core.tracks import Video
 
     fetched: list = []
@@ -218,9 +224,9 @@ def test_the_server_reads_the_head_of_a_one_file_track_with_drm(drm):
         get_init_segment=lambda session: fetched.append(session) or b"head",
     )
 
-    head = handlers.fetch_init_segment(track, "svc-session")
-
-    assert (head, fetched) == ((b"head", ["svc-session"]) if drm else (None, []))
+    assert (handlers.fetch_init_segment(track, "svc-session"), fetched) == (
+        (head, ["svc-session"]) if head else (None, [])
+    )
 
 
 async def test_server_tells_a_remote_vault_only_when_it_served_the_pair(monkeypatch, session):
@@ -257,6 +263,67 @@ def test_resolve_server_keys_does_not_warn_for_clear_tracks(monkeypatch):
     svc.resolve_server_keys(SimpleNamespace(tracks=Tracks([video_track, audio_track])))
 
     assert warnings == ["Server CDM returned no content keys for track simplenamespace (v-1)"]
+
+
+def test_resolve_server_keys_takes_the_key_of_a_whole_file_cipher():
+    """The server licensed the track's whole-file cipher: the client takes its key and keeps the cipher."""
+    svc = remote_service()
+    svc.log = SimpleNamespace(warning=lambda msg, *a, **k: pytest.fail(msg), debug=lambda *a, **k: None)
+    svc._server_cdm = True
+    svc.drain_server_logs = lambda: None
+    svc.client = SimpleNamespace(post=lambda ep, data: {"keys": {}, "file_keys": {"v-1": "aa" * 16}})
+    cipher = ClearKeyCTR(None, bytes(range(16)), b"OggS")
+    track = SimpleNamespace(id="v-1", drm=[cipher])
+
+    svc.resolve_server_keys(one_title(track))
+
+    assert track.drm == [cipher] and cipher.key == bytes.fromhex("aa" * 16)
+
+
+def test_license_file_asks_the_server_for_the_key_of_a_whole_file_cipher():
+    """A whole-file cipher can only be licensed by the service on the server."""
+    svc = remote_service()
+    svc.log = SimpleNamespace(warning=lambda *a, **k: None, debug=lambda *a, **k: None)
+    svc._server_cdm = True
+    sent = []
+    svc.client = SimpleNamespace(post=lambda ep, data, **kw: sent.append(data) or {"file_keys": {"v-1": "bb" * 16}})
+    cipher = ClearKeyCTR(None, bytes(range(16)), b"OggS")
+    track = SimpleNamespace(id="v-1", drm=[cipher])
+
+    assert svc.license_file(track) == "bb" * 16
+
+    assert sent == [{"mode": "server_cdm", "drm_type": "clearkeyctr", "track_id": "v-1"}]
+
+
+@pytest.mark.parametrize(
+    ("grants", "answer", "message"),
+    [
+        ({"_server_cdm": False}, None, "needs a server licence"),
+        ({"_local_vaults_only": True}, None, "needs a server licence"),
+        ({}, {"keys": {}}, "sent no content key"),
+        ({}, RemoteError("Content key tool not found: tool", "SERVICE_ERROR"), "Content key tool not found"),
+    ],
+    ids=["no-grant", "server-device", "no-key", "refused"],
+)
+def test_a_cipher_the_server_does_not_license_raises(grants, answer, message):
+    """A whole-file cipher the server gives no key for stops the track with one DRM error before its download."""
+    svc = remote_service()
+    svc._server_cdm = True
+    for name, value in grants.items():
+        setattr(svc, name, value)
+
+    def post(ep, data, **kw):
+        if isinstance(answer, BaseException):
+            raise answer
+        return answer if answer is not None else pytest.fail("asked the server")
+
+    svc.client = SimpleNamespace(post=post)
+    cipher = ClearKeyCTR(None, bytes(range(16)), b"OggS")
+
+    with pytest.raises(click.ClickException, match=message) as stopped:
+        svc.license_file(SimpleNamespace(id="v-1", drm=[cipher]))
+
+    assert stopped.value.error_code == "DRM_ERROR"
 
 
 def resolve(manifest_drm, drm_type="widevine"):
@@ -324,10 +391,11 @@ def test_a_cdm_licence_unflags_a_pair_a_client_reported(monkeypatch, tmp_path):
     assert local.get_key(KID, "SVC") == "ab" * 16
 
 
-async def test_a_stripe_cipher_track_is_clear_and_never_licensed(monkeypatch):
-    """A track whose only DRM needs no licence goes to clear_tracks and keeps its DRM for the client."""
-    track = SimpleNamespace(id="aud", drm=[BlowfishStripe(bytes(16))])
+async def batch_answer(monkeypatch, track, vault_only=False, request=None, server_device=False):
+    """The server's licence answer for one track, with every CDM call stubbed out."""
     session = session_entry(service_tag="SVC", tracks={"aud": track})
+    session.server_cdm, session.server_vault = not vault_only, vault_only
+    session.server_device = server_device
 
     async def validated(sid, req):
         return session
@@ -340,13 +408,80 @@ async def test_a_stripe_cipher_track_is_clear_and_never_licensed(monkeypatch):
     monkeypatch.setattr(handlers, "fetch_init_segment", lambda track, sess: None)
     monkeypatch.setattr(handlers, "handle_single_server_cdm", lambda *a, **k: pytest.fail("licensed a clear track"))
     monkeypatch.setattr(handlers.config, "serve", {"users": {}}, raising=False)
-
     resp = await handlers.session_license_handler(
-        {"mode": "server_cdm", "track_ids": ["aud"], "drm_type": "widevine"}, "sess", None
+        request or {"mode": "server_cdm", "track_ids": ["aud"], "drm_type": "widevine"}, "sess", None
     )
+    return json.loads(resp.body)
 
-    assert json.loads(resp.body)["clear_tracks"] == ["aud"]
-    assert isinstance(track.drm[0], BlowfishStripe)
+
+async def test_a_stripe_cipher_that_holds_its_key_is_never_licensed(monkeypatch):
+    """A track whose only DRM is a stripe cipher that holds its key is named as clear and licensed by nothing."""
+    cipher = BlowfishStripe(bytes(16))
+    track = SimpleNamespace(id="aud", drm=[cipher])
+
+    body = await batch_answer(monkeypatch, track)
+
+    assert body == {"keys": {}, "clear_tracks": ["aud"]}
+    assert track.drm[0] is cipher
+
+
+async def test_the_server_batch_licenses_a_cipher_that_holds_no_key(monkeypatch):
+    """A track whose whole-file cipher holds no key yet is licensed on the server and answered under file_keys."""
+    cipher = ClearKeyCTR(lambda: "aa" * 16, bytes(range(16)), b"OggS")
+    track = SimpleNamespace(id="aud", drm=[cipher])
+
+    body = await batch_answer(monkeypatch, track)
+
+    assert (body["keys"], body["file_keys"], "clear_tracks" in body) == ({}, {"aud": "aa" * 16}, False)
+    assert cipher.key == bytes.fromhex("aa" * 16)
+
+
+async def test_the_server_batch_answers_a_cipher_that_already_holds_its_key(monkeypatch):
+    """A track the server licensed before answers its key again and licenses nothing."""
+    cipher = ClearKeyCTR(lambda: pytest.fail("licensed a second time"), bytes(range(16)), b"OggS")
+    cipher.take_key("dd" * 16)
+    track = SimpleNamespace(id="aud", drm=[cipher])
+
+    body = await batch_answer(monkeypatch, track)
+
+    assert (body["file_keys"], "clear_tracks" in body) == ({"aud": "dd" * 16}, False)
+
+
+@pytest.mark.parametrize("refusal", ["vault_only", "server_device"])
+async def test_a_session_without_live_licences_licenses_no_cipher(monkeypatch, refusal):
+    """A session the server makes no live licence for gets no key of a whole-file cipher and no clear mark."""
+    cipher = ClearKeyCTR(lambda: pytest.fail("licensed a cipher"), bytes(range(16)), b"OggS")
+    track = SimpleNamespace(id="aud", drm=[cipher])
+
+    body = await batch_answer(monkeypatch, track, **{refusal: True})
+
+    assert body == {"keys": {}}
+
+
+@pytest.mark.parametrize("refusal", ["vault_only", "server_device"])
+async def test_one_licence_request_refuses_a_cipher_without_live_licences(monkeypatch, refusal):
+    """The single-track route answers FORBIDDEN for a cipher with no key in a session without live licences."""
+    cipher = ClearKeyCTR(lambda: pytest.fail("licensed a cipher"), bytes(range(16)), b"OggS")
+    track = SimpleNamespace(id="aud", drm=[cipher])
+    request = {"mode": "server_cdm", "track_id": "aud", "drm_type": "clearkeyctr"}
+
+    with pytest.raises(APIError) as refused:
+        await batch_answer(monkeypatch, track, request=request, **{refusal: True})
+
+    assert refused.value.error_code == "FORBIDDEN"
+
+
+@pytest.mark.parametrize("mode", ["server_cdm", "proxy"])
+async def test_one_licence_request_answers_the_key_of_a_cipher(monkeypatch, mode):
+    """The single-track licence route answers the key of a whole-file cipher, licensed or not, and calls no CDM."""
+    cipher = ClearKeyCTR(lambda: "bb" * 16, bytes(range(16)), b"OggS")
+    if mode == "proxy":
+        cipher.take_key("cc" * 16)
+    track = SimpleNamespace(id="aud", drm=[cipher])
+
+    body = await batch_answer(monkeypatch, track, request={"mode": mode, "track_id": "aud", "drm_type": "clearkeyctr"})
+
+    assert body == {"file_keys": {"aud": ("cc" if mode == "proxy" else "bb") * 16}}
 
 
 def test_the_server_licence_drops_a_null_key():

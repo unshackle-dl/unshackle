@@ -201,10 +201,12 @@ class LicenseReply(TypedDict, total=False):
 
     ``keys`` maps KID to content key for one ``track_id``, and track id to that map for ``track_ids``. A capped
     track gets no content keys: ``capped_tracks`` holds its refusal details, ``reason`` and ``max_height``.
+    ``file_keys`` maps track id to the content key the server licensed for a track's whole-file cipher.
     """
 
     license: str | None
     keys: dict[str, Any]
+    file_keys: dict[str, str]
     vault_keys: list[str]
     clear_tracks: list[str]
     drm_type: str

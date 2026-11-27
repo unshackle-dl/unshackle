@@ -44,7 +44,7 @@ from unshackle.core.console import SyncLive, console
 from unshackle.core.constants import AnyTrack
 from unshackle.core.credential import Credential
 from unshackle.core.dl_options import remote_dl_params
-from unshackle.core.drm import cbcs, real_kids
+from unshackle.core.drm import cbcs, real_kids, whole_file_cipher
 from unshackle.core.drm.cenc import drm_stub
 from unshackle.core.drm.discovery import track_pssh
 from unshackle.core.launch import launch_keys
@@ -1543,6 +1543,7 @@ class RemoteService(TitleSource):
             track_ids = [self.server_track_id(t.id) for t in keyed]
             self.drain_server_logs()
             keys_by_track = resp.get("keys", {})
+            file_keys = resp.get("file_keys", {})
             clear_tracks = set(resp.get("clear_tracks", []))
             vault_kids = set(resp.get("vault_keys", []))
             for track_keys in keys_by_track.values():
@@ -1555,6 +1556,11 @@ class RemoteService(TitleSource):
 
             for track in title.tracks:
                 server_id = self.server_track_id(track.id)
+                cipher = whole_file_cipher(track)
+                if cipher is not None:
+                    if server_id in file_keys:
+                        cipher.take_key(file_keys[server_id])
+                    continue
                 track_keys = keys_by_track.get(server_id, {})
                 if not track_keys:
                     if server_id in track_ids and server_id not in clear_tracks | set(capped):
@@ -1760,6 +1766,33 @@ class RemoteService(TitleSource):
             return {}
         self.license_locally(track, resp.get("details") or {})
         return None
+
+    def license_file(self, track: AnyTrack) -> str:
+        """The content key the server licenses for the whole-file cipher of ``track``, or raise ClickException."""
+        if self.local_vaults_only or not self._server_cdm:
+            raise coded(
+                click.ClickException(f"Track {track.id} needs a server licence that this session does not allow"),
+                APIErrorCode.DRM_ERROR,
+            )
+        try:
+            with quiet():
+                resp = self.session_call(
+                    lambda sid: self.client.post(
+                        LICENSE_ROUTE.format(session_id=sid),
+                        LicenseRequest(
+                            mode="server_cdm", drm_type="clearkeyctr", track_id=self.server_track_id(track.id)
+                        ),
+                    )
+                )
+        except RemoteError as e:
+            raise coded(click.ClickException(e.message), APIErrorCode.DRM_ERROR) from None
+        finally:
+            self.drain_server_logs()
+        if not (key := (resp.get("file_keys") or {}).get(self.server_track_id(track.id))):
+            raise coded(
+                click.ClickException(f"The server sent no content key for track {track.id}"), APIErrorCode.DRM_ERROR
+            )
+        return str(key)
 
     def proxy_license(self, challenge: bytes | str, track: AnyTrack, drm_type: str) -> bytes:
         """Relay a licence challenge to the server. A failed relay raises ClickException, so dl's licence fallbacks see it."""

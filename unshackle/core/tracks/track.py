@@ -27,7 +27,7 @@ from unshackle.core.cdm.detect import is_playready_cdm, is_widevine_cdm
 from unshackle.core.config import config
 from unshackle.core.constants import DOWNLOAD_ALL_DRM, DOWNLOAD_CANCELLED, DOWNLOAD_LICENCE_ONLY, DownloadCancelled
 from unshackle.core.downloaders.requests import requests
-from unshackle.core.drm import DRM_T, BlowfishStripe, PlayReady, Widevine
+from unshackle.core.drm import DRM_T, WHOLE_FILE_DRM, PlayReady, Widevine
 from unshackle.core.drm.cenc import cenc_key, init_kid
 from unshackle.core.drm.verify import (
     children,
@@ -824,6 +824,7 @@ class Track:
                         DOWNLOAD_ALL_DRM.is_set()
                         and track_type in ("Video", "Audio")
                         and not {Widevine, PlayReady} <= {type(d) for d in self.drm or []}
+                        and all(type(d) in (Widevine, PlayReady) for d in self.drm or [])
                     ):
                         self.add_init_drm(self.get_init_segment(session=session), cdm)
                     elif not self.drm and track_type in ("Video", "Audio"):
@@ -831,7 +832,7 @@ class Track:
 
                     if self.drm:
                         drm = self.get_drm_for_cdm(cdm)
-                        track_kid = None if isinstance(drm, BlowfishStripe) else self.get_key_id(session=session)
+                        track_kid = None if isinstance(drm, WHOLE_FILE_DRM) else self.get_key_id(session=session)
                         license_drm(self, drm, ctx, track_kid)
                     else:
                         drm = None
@@ -882,7 +883,7 @@ class Track:
                         if drm:
                             progress(downloaded="Decrypting", completed=0, total=None)
                             decrypt_track(drm, save_path, prepare_drm, track_kid, track=self)
-                            if not isinstance(drm, BlowfishStripe):
+                            if not isinstance(drm, WHOLE_FILE_DRM):
                                 assert_fragments_decrypted(save_path)
                             self.drm = None
                             events.emit(events.Types.TRACK_DECRYPTED, track=self, drm=drm, segment=None)

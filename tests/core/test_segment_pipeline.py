@@ -14,7 +14,7 @@ import pytest
 
 from tests.core.test_all_drm import playready, widevine
 from unshackle.core.constants import DOWNLOAD_CANCELLED
-from unshackle.core.drm import ClearKey, ClearKeyCENC, MonaLisa, verify
+from unshackle.core.drm import ClearKey, ClearKeyCENC, ClearKeyCTR, MonaLisa, verify
 from unshackle.core.events import events
 from unshackle.core.manifests.segment_pipeline import (
     RollingMerge,
@@ -199,7 +199,7 @@ def test_a_short_rolling_merge_raises_and_removes_the_output(tmp_path):
     check_merged(merger, 0, SimpleNamespace(id="EXAMPLE"), ctx, "EXAMPLE")  # type: ignore[arg-type]
 
 
-WV, PR, CKC, ML, AES = "Widevine", "PlayReady", "ClearKeyCENC", "MonaLisa", "ClearKey"
+WV, PR, CKC, ML, AES, CTR = "Widevine", "PlayReady", "ClearKeyCENC", "MonaLisa", "ClearKey", "ClearKeyCTR"
 PSSH_KID = UUID(hex="22222222222222222222222222222222")
 PROBED_KID = UUID(hex="33333333333333333333333333333333")
 URL, DASH_, HLS_, ISM_ = (Track.Descriptor.URL, Track.Descriptor.DASH, Track.Descriptor.HLS, Track.Descriptor.ISM)
@@ -216,6 +216,8 @@ def make_drm(system: str, monkeypatch: pytest.MonkeyPatch) -> Any:
     if system == ML:
         monkeypatch.setattr(MonaLisa, "extract_keys", lambda self: None)
         return MonaLisa("EXAMPLE", Path("unused.mld"))
+    if system == CTR:
+        return ClearKeyCTR(None, bytes(16), b"OggS")
     return ClearKey(key=bytes(16))
 
 
@@ -224,11 +226,11 @@ def licence_calls(tmp_path: Path) -> tuple[DownloadContext, list[tuple[Any, Any]
     return make_ctx(tmp_path, license_widevine=lambda drm, track_kid: calls.append((drm, track_kid))), calls
 
 
-LICENSED = {URL: {WV, PR, CKC}, DASH_: {WV, PR, CKC}, HLS_: {WV, PR, ML}, ISM_: {WV, PR}}
+LICENSED = {URL: {WV, PR, CKC, CTR}, DASH_: {WV, PR, CKC}, HLS_: {WV, PR, ML}, ISM_: {WV, PR}}
 
 
 @pytest.mark.parametrize("descriptor", list(LICENSED), ids=lambda d: d.name)
-@pytest.mark.parametrize("system", [WV, PR, CKC, ML, AES])
+@pytest.mark.parametrize("system", [WV, PR, CKC, ML, AES, CTR])
 def test_the_licence_step_licenses_the_systems_each_manifest_kind_licensed(tmp_path, monkeypatch, descriptor, system):
     ctx, calls = licence_calls(tmp_path)
     drm = make_drm(system, monkeypatch)

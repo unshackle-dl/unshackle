@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from unshackle.core.drm import WHOLE_FILE_DRM
 from unshackle.core.drm.playready import PlayReady
 from unshackle.core.drm.widevine import Widevine
 from unshackle.core.manifests import DASH, ISM
@@ -28,14 +29,22 @@ def track_pssh(track: Any, drm_type: str, drm: Any = None) -> str | None:
 
 
 def fetch_init_segment(track: Any, session: Any = None) -> bytes | None:
-    """The init segment of a DASH track, or the head of a one-file track with DRM; None otherwise, or when the fetch fails."""
+    """The init segment of a DASH track, or the head of a one-file track with DRM; None otherwise, or when the fetch fails.
+
+    A track whose DRM is all whole-file ciphers has no KID to read, so its head is not fetched.
+    """
     session = getattr(track, "session", None) or session
     if session is None:
         return None
 
     dash = (getattr(track, "data", None) or {}).get("dash") or {}
     if not all(dash.get(k) is not None for k in ("period", "adaptation_set", "representation", "manifest")):
-        if getattr(track, "descriptor", None) is not Track.Descriptor.URL or not getattr(track, "drm", None):
+        drm = getattr(track, "drm", None)
+        if (
+            getattr(track, "descriptor", None) is not Track.Descriptor.URL
+            or not drm
+            or all(isinstance(d, WHOLE_FILE_DRM) for d in drm)
+        ):
             return None
         try:
             return track.get_init_segment(session=session)

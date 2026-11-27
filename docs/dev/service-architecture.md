@@ -390,7 +390,7 @@ A typical `get_tracks` therefore looks like fetching the manifest text with
 ## DRM hooks
 
 If a track carries DRM, the framework licenses and decrypts it, but it needs your
-service to talk to the platform's license server. unshackle recognizes six DRM systems:
+service to talk to the platform's license server. unshackle recognizes seven DRM systems:
 
 | DRM class | System | License flow |
 |---|---|---|
@@ -400,6 +400,7 @@ service to talk to the platform's license server. unshackle recognizes six DRM s
 | `ClearKey` | HLS AES-128 | content key fetched directly from a URI; no CDM, no challenge |
 | `MonaLisa` | Proprietary WASM DRM | keys extracted locally; no license server |
 | `BlowfishStripe` | Blowfish CBC stripe cipher | the service gives the per-track key; no CDM, no license server |
+| `ClearKeyCTR` | AES-128-CTR over a whole file | the service gives the IV and licenses the content key at the licence step; no CDM, no license server |
 
 !!! warning "`ClearKey` vs `ClearKeyCENC`"
     Despite the shared prefix these are entirely different systems. `ClearKey` is HLS

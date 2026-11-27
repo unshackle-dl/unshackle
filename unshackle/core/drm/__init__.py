@@ -5,13 +5,17 @@ from unshackle.core.drm.blowfish_stripe import BlowfishStripe
 from unshackle.core.drm.cenc import PLACEHOLDER_KIDS
 from unshackle.core.drm.clearkey import ClearKey
 from unshackle.core.drm.clearkey_cenc import ClearKeyCENC
+from unshackle.core.drm.clearkey_ctr import ClearKeyCTR, whole_file_cipher
 from unshackle.core.drm.monalisa import MonaLisa
+from unshackle.core.drm.paged_aac import PAGED_AAC
 from unshackle.core.drm.playready import PlayReady
 from unshackle.core.drm.widevine import Widevine
 from unshackle.core.vault import is_null_key
 
-# BlowfishStripe stays out: the licensing paths typed on DRM_T never receive a DRM that needs no licence
+# BlowfishStripe stays out: it holds its key from the start, so no licensing path receives it
 DRM_T = ClearKey | ClearKeyCENC | Widevine | PlayReady | MonaLisa
+# A whole-file cipher has no KID to probe and no fragment to check
+WHOLE_FILE_DRM = (BlowfishStripe, ClearKeyCTR)
 
 
 def drop_null_keys(drm: Any) -> None:
@@ -38,10 +42,14 @@ __all__ = (
     "BlowfishStripe",
     "ClearKey",
     "ClearKeyCENC",
+    "ClearKeyCTR",
     "Widevine",
     "PlayReady",
     "MonaLisa",
+    "PAGED_AAC",
     "DRM_T",
+    "WHOLE_FILE_DRM",
+    "whole_file_cipher",
     "drop_null_keys",
     "is_null_key",
     "real_kids",

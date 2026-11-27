@@ -49,7 +49,7 @@ from unshackle.core.dl_options import (
     DEFAULT_DOWNLOAD_PARAMS,
     forwarded_dl_params,
 )
-from unshackle.core.drm import BlowfishStripe, cbcs, is_null_key, real_kids
+from unshackle.core.drm import WHOLE_FILE_DRM, cbcs, is_null_key, real_kids, whole_file_cipher
 from unshackle.core.drm.discovery import drm_from_init_segment, ensure_track_drm, fetch_init_segment, track_pssh
 from unshackle.core.launch import served_context
 from unshackle.core.manifests.snapshot import capture
@@ -4210,6 +4210,7 @@ def license_response(data: LicenseRequest, session: Any, session_id: str, reques
         all_keys: dict[str, dict[str, str]] = {}
         vault_keys: list[str] = []
         clear_tracks: list[str] = []
+        file_keys: dict[str, str] = {}
         drm_types: dict[str, str] = {}
         keys_by_pssh: dict[tuple, dict[str, str]] = {}
         shared: dict[str, Any] = {}
@@ -4298,7 +4299,15 @@ def license_response(data: LicenseRequest, session: Any, session_id: str, reques
             svc_session = getattr(service, "session", None)
             init_data = fetch_init_segment(track, svc_session)
             ensure_track_drm(track, svc_session, init_data)
-            if not track.drm or all(isinstance(d, BlowfishStripe) for d in track.drm):
+            cipher = whole_file_cipher(track)
+            if cipher is not None:
+                if not (vault_only or session.server_device):
+                    try:
+                        file_keys[tid] = cipher.content_key().hex()
+                    except (Exception, SystemExit) as e:
+                        warn(f"Failed to license track {track_log_label(track)}: {redact_all(str(e))}")
+                continue
+            if not track.drm or all(isinstance(d, WHOLE_FILE_DRM) for d in track.drm):
                 log.info(f"Track {track_log_label(track)} needs no licence, so it has no keys to resolve")
                 clear_tracks.append(tid)
                 continue
@@ -4356,6 +4365,8 @@ def license_response(data: LicenseRequest, session: Any, session_id: str, reques
         response = LicenseReply(keys=all_keys)
         if clear_tracks:
             response["clear_tracks"] = clear_tracks
+        if file_keys:
+            response["file_keys"] = file_keys
         if vault_keys:
             response["vault_keys"] = vault_keys
         if actual_drm_type:
@@ -4380,6 +4391,20 @@ def license_response(data: LicenseRequest, session: Any, session_id: str, reques
     try:
         title = find_title_for_track(track_id, session)
         service = session.service_instance
+
+        cipher = whole_file_cipher(track)
+        if cipher is not None and (mode == "server_cdm" or cipher.key is not None):
+            if (vault_only or session.server_device) and cipher.key is None:
+                raise APIError(
+                    APIErrorCode.FORBIDDEN, "Server licensing is not enabled for this session on this service"
+                )
+            try:
+                key = cipher.content_key().hex()
+            except Exception as e:
+                raise APIError(
+                    APIErrorCode.SERVICE_ERROR, redact_all(str(e)) or "Could not license the track"
+                ) from None
+            return web.json_response(LicenseReply(file_keys={track_id: key}))
 
         pssh_b64 = data.get("pssh")
         if pssh_b64 or mode == "server_cdm":

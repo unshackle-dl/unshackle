@@ -28,6 +28,7 @@ from unshackle.core.drm import (
     DRM_T,
     ClearKey,
     ClearKeyCENC,
+    ClearKeyCTR,
     MonaLisa,
     PlayReady,
     Widevine,
@@ -829,6 +830,16 @@ class ContentKeyResolver:
         ``force`` skips the content keys of earlier tracks in this run. The CDM then licenses
         again for each KID the DRM holds no content key for.
         """
+        if isinstance(drm, ClearKeyCTR):
+            if drm.key is None:
+                with self.LICENCE_LOCK:
+                    if DOWNLOAD_CANCELLED.is_set():
+                        raise DownloadCancelled()
+                    if self.source is None:
+                        drm.content_key()
+                    else:
+                        drm.take_key(self.source.license_file(track))
+            return
         if not drm:
             return
         remote = self.source
