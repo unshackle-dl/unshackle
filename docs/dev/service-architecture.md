@@ -116,9 +116,8 @@ up the objects your methods rely on:
 | `self.credential` | The active `Credential`, or `None` until authenticated. |
 | `self.track_request` | A `TrackRequest` describing the requested codecs, ranges, and best-available flag (see below). |
 
-The constructor also resolves proxies: it reads `--proxy` and the `proxy_query` and
-`proxy_provider` context params that `dl` and `search` derive from it, consults the per-service
-`proxy_map`, and, if `GEOFENCE` is set and you did not give an explicit proxy, does a live
+The constructor also resolves proxies: it reads `--proxy`, which `dl` and `search` have already
+resolved through the per-service `proxy_map`, and, if `GEOFENCE` is set and you did not give an explicit proxy, does a live
 IP check and auto-fetches a proxy to `GEOFENCE[0]` when it detects a geoblock. A
 `GEOBLOCK` hit with no `GEOFENCE` stops the run with a "not available in your region"
 error, because there is no main region to fetch a proxy for; pass `--proxy` yourself.

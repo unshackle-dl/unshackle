@@ -7,9 +7,10 @@
 Per-service configuration, keyed by the service tag in any case (for example `EXAMPLE1`, `EXAMPLE2`,
 `EXAMPLE3`). unshackle reads several well-known sub-keys out of each service's block:
 
-- **`proxy_map`**: remaps the region query you passed to `-p/--proxy` for this service.
-  A config key is that query, or `"provider:query"` when the flag also named a proxy provider. The value is
-  the query asked of the proxy provider instead. It has no effect when you give `-p` a full proxy URL.
+- **`proxy_map`**: remaps the region query you passed to `--proxy` for this service.
+  A config key is that query, or `"provider:query"` when the flag also named a proxy provider, in any case. The value is
+  the query asked of the proxy provider instead. When no proxy provider answers it, unshackle logs a warning and asks
+  the original query. It has no effect when you give `--proxy` a full proxy URL.
   `dl`, `search` and a REST API download job apply it. The other REST API routes and a `--remote` remote session do not.
 - **`title_map`**: an exact-match rename map applied to fetched titles (source name →
   desired name), so a service that names a title differently from your library still matches.

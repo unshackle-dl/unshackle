@@ -1351,14 +1351,16 @@ class dl:
             if proxy:
                 try:
                     resolved = resolve_proxy_value(
-                        proxy, self.proxy_providers, status=partial(console.status, spinner="dots")
+                        proxy,
+                        self.proxy_providers,
+                        status=partial(console.status, spinner="dots"),
+                        proxy_map=None if self.is_remote else service_config.get("proxy_map"),
                     )
                 except ValueError as e:
                     raise coded(PlanError(str(e)), APIErrorCode.INVALID_PROXY) from None
                 ctx.params["proxy"] = resolved.uri
                 self.log.info(resolved.line)
                 keys["proxy_query"] = resolved.query
-                keys["proxy_provider"] = resolved.provider
 
         launch(
             ctx,

@@ -18,6 +18,7 @@ from click.core import ParameterSource
 
 from unshackle.core.proxies.proxy import Proxy
 from unshackle.core.remote_protocol import APIErrorCode, coded
+from unshackle.core.utils.collections import ci_get
 from unshackle.core.utils.redact import mask_proxy
 
 log = logging.getLogger("proxies")
@@ -255,12 +256,10 @@ def describe_explicit_proxy(uri: str) -> str:
 class ResolvedProxy:
     """A ``--proxy`` value resolved to a proxy URI.
 
-    *provider* and *query* are the proxy provider that the value names and its lowercase region query.
-    Both are None for a proxy URI, a ``host:port`` value or a Control D resolver.
+    *query* is the lowercase region query, or None for a proxy URI, a ``host:port`` value or a Control D resolver.
     """
 
     uri: str
-    provider: str | None
     query: str | None
     line: str
 
@@ -270,29 +269,46 @@ def resolve_proxy_value(
     proxy_providers: list[Any],
     allow_debug: bool = True,
     status: Callable[[str], AbstractContextManager[Any]] | None = None,
+    proxy_map: dict[str, str] | None = None,
 ) -> ResolvedProxy:
     """Resolve a ``--proxy`` value: a Control D resolver, a region query for a proxy provider, or a proxy URI.
 
+    *proxy_map* is a service's ``proxy_map``: it swaps a region query, keyed ``provider:query`` else ``query``,
+    for the query to ask instead, in any case. When no proxy provider answers the swapped query, it asks the original query.
     *status* wraps the proxy provider lookup, for a console spinner. Raises a coded ValueError.
     """
     if value.startswith("controld://"):
         from unshackle.core.proxies.controld import local_proxy
 
         uri = local_proxy(value)
-        return ResolvedProxy(uri, None, None, describe_explicit_proxy(uri))
+        return ResolvedProxy(uri, None, describe_explicit_proxy(uri))
     provider_name, query = split_proxy_query(value, proxy_providers)
     if not REGION_QUERY.fullmatch(query):
-        return ResolvedProxy(value, None, None, describe_explicit_proxy(value))
+        return ResolvedProxy(value, None, describe_explicit_proxy(value))
     query = query.lower()
+    key = f"{provider_name}:{query}" if provider_name else query
+    mapped = ci_get(proxy_map or {}, key)
+    if mapped:
+        log.info(f"Found service-specific proxy mapping: {key} -> {mask_proxy(mapped, allow_debug=False)}")
+    asked = mapped or query
     message = (
-        f"Connecting to VPN ({query})..."
+        f"Connecting to VPN ({asked})..."
         if (provider_name or "").lower() == "gluetun"
-        else f"Getting a Proxy to {query}..."
+        else f"Getting a Proxy to {asked}..."
     )
     with status(message) if status else nullcontext():
-        provider, uri = pick_proxy(proxy_providers, query, provider_name)
-        line = describe_proxy(provider, uri, query, allow_debug)
-    return ResolvedProxy(uri, provider_name, query, line)
+        try:
+            provider, uri = pick_proxy(proxy_providers, asked, provider_name)
+        except ValueError as e:
+            if not mapped:
+                raise
+            log.warning(
+                f"The mapped proxy query {mask_proxy(mapped, allow_debug=False)} failed, so {query} is used: {e}"
+            )
+            asked = query
+            provider, uri = pick_proxy(proxy_providers, asked, provider_name)
+        line = describe_proxy(provider, uri, asked, allow_debug)
+    return ResolvedProxy(uri, query, line)
 
 
 def resolve_proxy(proxy: str | None, proxy_providers: list[Any]) -> str | None:

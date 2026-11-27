@@ -20,8 +20,7 @@ class LaunchKeys(TypedDict, total=False):
     - ``client_identity``: the service config holds the device identity that the remote client sent.
     - ``client_argv``: the command line that the remote server's dashboard shows for this client.
     - ``proxy_arg``: the ``--proxy`` value as given, before it resolves to a URI.
-    - ``proxy_query``: the region part of ``--proxy``, which a service ``proxy_map`` keys on.
-    - ``proxy_provider``: the proxy provider that ``--proxy`` names, or None.
+    - ``proxy_query``: the region part of ``--proxy``.
     """
 
     served: bool
@@ -31,7 +30,6 @@ class LaunchKeys(TypedDict, total=False):
     client_argv: str
     proxy_arg: str | None
     proxy_query: str | None
-    proxy_provider: str | None
 
 
 def launch(ctx: click.Context, keys: LaunchKeys, obj: ContextData | None = None) -> None:

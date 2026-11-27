@@ -230,18 +230,17 @@ class Gluetun(Alpha):
         (
             "US",
             ResolvedProxy(
-                "http://a:b@alpha.example:80", None, "us", "Using Alpha Proxy: http://xxxxx:xxxxx@alpha.example:80"
+                "http://a:b@alpha.example:80", "us", "Using Alpha Proxy: http://xxxxx:xxxxx@alpha.example:80"
             ),
         ),
         (
             "Beta:CA",
-            ResolvedProxy("http://c:d@beta-ca.example:80", "Beta", "ca", "Using Beta Proxy via Dallas (server 12)"),
+            ResolvedProxy("http://c:d@beta-ca.example:80", "ca", "Using Beta Proxy via Dallas (server 12)"),
         ),
         (
             "alpha:beta:ca",
             ResolvedProxy(
                 "http://a:b@alpha-beta.example:80",
-                "alpha",
                 "beta:ca",
                 "Using Alpha Proxy: http://xxxxx:xxxxx@alpha-beta.example:80",
             ),
@@ -251,13 +250,12 @@ class Gluetun(Alpha):
             ResolvedProxy(
                 "http://user:pass@proxy.example:8080",
                 None,
-                None,
                 "Using explicit Proxy: http://xxxxx:xxxxx@proxy.example:8080",
             ),
         ),
-        ("localhost:8080", ResolvedProxy("localhost:8080", None, None, "Using a local proxy on port 8080")),
-        ("1.2.3.4:3128", ResolvedProxy("1.2.3.4:3128", None, None, "Using explicit Proxy: 1.2.3.4:3128")),
-        ("us:1080", ResolvedProxy("us:1080", None, None, "Using explicit Proxy: us:1080")),
+        ("localhost:8080", ResolvedProxy("localhost:8080", None, "Using a local proxy on port 8080")),
+        ("1.2.3.4:3128", ResolvedProxy("1.2.3.4:3128", None, "Using explicit Proxy: 1.2.3.4:3128")),
+        ("us:1080", ResolvedProxy("us:1080", None, "Using explicit Proxy: us:1080")),
     ],
 )
 def test_resolve_proxy_value_reads_each_form(providers: list, value: str, expected: ResolvedProxy) -> None:
@@ -270,7 +268,7 @@ def test_resolve_proxy_value_starts_a_forwarder_for_a_control_d_resolver(monkeyp
 
     monkeypatch.setattr(controld, "local_proxy", lambda uri: "http://127.0.0.1:4000")
     resolved = resolve_proxy_value("controld://efgh456@dns.controld.com", [])
-    assert resolved == ResolvedProxy("http://127.0.0.1:4000", None, None, "Using a local proxy on port 4000")
+    assert resolved == ResolvedProxy("http://127.0.0.1:4000", None, "Using a local proxy on port 4000")
 
 
 @pytest.mark.parametrize(
@@ -292,3 +290,30 @@ def test_the_status_wraps_only_the_provider_lookup(providers: list, value: str, 
 @pytest.mark.parametrize("value", ["localhost:8080", "1.2.3.4:3128"])
 def test_resolve_proxy_passes_a_host_and_port_through(providers: list, value: str) -> None:
     assert resolve_proxy(value, providers) == value
+
+
+class Recorder(Alpha):
+    def __init__(self, **answers: str) -> None:
+        super().__init__(**answers)
+        self.asked: list[str] = []
+
+    def get_proxy(self, query: str) -> str | None:
+        self.asked.append(query)
+        return super().get_proxy(query)
+
+
+@pytest.mark.parametrize(
+    ("value", "asked", "uri"),
+    [
+        ("us", ["ca"], "http://ca.example:8080"),
+        ("recorder:us", ["uk"], "http://uk.example:8080"),
+        ("US", ["ca"], "http://ca.example:8080"),
+        ("Recorder:US", ["uk"], "http://uk.example:8080"),
+        ("fr", ["zz", "fr"], "http://fr.example:8080"),
+        ("de", ["de"], "http://de.example:8080"),
+    ],
+)
+def test_a_proxy_map_swaps_the_query_and_falls_back_to_it(value: str, asked: list, uri: str) -> None:
+    recorder = Recorder(**{x: f"http://{x}.example:8080" for x in ("ca", "uk", "fr", "de")})
+    resolved = resolve_proxy_value(value, [recorder], proxy_map={"US": "ca", "recorder:us": "uk", "fr": "zz"})
+    assert (recorder.asked, resolved.uri) == (asked, uri)

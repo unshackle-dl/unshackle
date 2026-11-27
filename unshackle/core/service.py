@@ -20,7 +20,6 @@ from unshackle.core.config import config
 from unshackle.core.console import console, prompt_user, show_notice, show_qr
 from unshackle.core.credential import Credential
 from unshackle.core.launch import launch_keys
-from unshackle.core.proxies.basic import Basic
 from unshackle.core.proxies.resolve import pick_proxy
 from unshackle.core.remote_protocol import APIErrorCode, coded
 from unshackle.core.search_result import SearchResult
@@ -40,9 +39,7 @@ from unshackle.core.titles import Title_T, Titles_T, remap_titles
 from unshackle.core.tracks import Chapters, Tracks
 from unshackle.core.tracks.video import Video
 from unshackle.core.utils import run_proxy
-from unshackle.core.utils.collections import ci_get
 from unshackle.core.utils.ip_info import get_ip_info, verify_proxy_exit
-from unshackle.core.utils.redact import mask_proxy
 
 # Default (connect, read) timeout for the requests path, mirroring RnetSession's
 # connect_timeout / read_timeout construction defaults. A per-request timeout= wins.
@@ -127,21 +124,6 @@ class TrackRequest:
     generate_dv: bool = False
 
 
-def sanitize_proxy_for_log(uri: str | None, mask_host: bool = False) -> str | None:
-    """
-    Sanitise a proxy URI for logs by masking any embedded userinfo (username/password).
-
-    ``serve`` sends these log lines to the client of a remote session, so the mask is
-    unconditional and debug mode never lifts it. ``mask_host`` hides the hostname as
-    well, for a proxy that came from the user-supplied ``Basic`` proxy provider.
-    """
-    if uri is None:
-        return None
-    if not isinstance(uri, str):
-        return str(uri)
-    return mask_proxy(uri, mask_host=mask_host, allow_debug=False)
-
-
 T = TypeVar("T")
 
 
@@ -207,35 +189,6 @@ class Service(TitleSource):
         whose = "the server's" if keys.get("served") else "your"
         if not ctx.parent or not ctx.parent.params.get("no_proxy"):
             proxy = ctx.parent.params["proxy"] if ctx.parent else None
-            proxy_query = keys.get("proxy_query")
-            proxy_provider_name = keys.get("proxy_provider")
-
-            service_name = self.__class__.__name__
-            service_config_dict = ci_get(config.services, service_name) or {}
-            proxy_map = service_config_dict.get("proxy_map", {})
-
-            if proxy_map and proxy_query:
-                if proxy_provider_name:
-                    full_proxy_key = f"{proxy_provider_name}:{proxy_query}"
-                else:
-                    full_proxy_key = proxy_query
-
-                mapped_value = proxy_map.get(full_proxy_key)
-                if mapped_value:
-                    self.log.info(
-                        f"Found service-specific proxy mapping: {full_proxy_key} -> {sanitize_proxy_for_log(mapped_value)}"
-                    )
-                    try:
-                        proxy_provider, proxy = pick_proxy(ctx.obj.proxy_providers, mapped_value, proxy_provider_name)
-                        self.log.info(
-                            f"Using mapped proxy from {proxy_provider.__class__.__name__}: "
-                            f"{sanitize_proxy_for_log(proxy, mask_host=isinstance(proxy_provider, Basic))}"
-                        )
-                    except ValueError:
-                        self.log.warning(
-                            f"No provider could resolve mapped value '{sanitize_proxy_for_log(mapped_value)}', using default"
-                        )
-
             if not proxy:
                 # don't override the explicit proxy set by the user, even if they may be geoblocked
                 with console.status("Checking if current region is Geoblocked...", spinner="dots"):

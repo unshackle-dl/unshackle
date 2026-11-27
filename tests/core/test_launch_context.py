@@ -127,8 +127,8 @@ SERVED_LOGIN: LaunchKeys = {"served": True, "cookies_supplied": False}
 @pytest.mark.parametrize(
     ("build", "expected"),
     [
-        (cli_dl, {"proxy_arg": "us", "proxy_query": "us", "proxy_provider": None}),
-        (cli_search, {"proxy_arg": "us", "proxy_query": "us", "proxy_provider": None}),
+        (cli_dl, {"proxy_arg": "us", "proxy_query": "us"}),
+        (cli_search, {"proxy_arg": "us", "proxy_query": "us"}),
         (rest_relay, {"served": True, "client_argv": "serve (REST API)"}),
         (rest_list, SERVED_LOGIN),
         (rest_search, SERVED_LOGIN),
