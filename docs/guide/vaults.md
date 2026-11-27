@@ -222,6 +222,8 @@ A flexible HTTP vault that speaks one of three wire protocols, selected with `ap
 
 You must supply either `password` or `api_key`, or the vault will fail to load.
 
+A host that answers with a body that is not a JSON object, for example a parked domain or a login page, is unreachable. unshackle logs one warning, skips the vault for the rest of the run, and the `serve` health check reports the vault as failed. In json mode, HTTP 404 is the exception: it means that the vault has no entry. In decrypt_labs mode, an error status is a miss.
+
 ---
 
 ## API backend

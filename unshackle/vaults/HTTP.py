@@ -1,6 +1,9 @@
 import json
+import re
 from collections.abc import Iterator
 from uuid import UUID
+
+from requests import Response
 
 from unshackle.core.vault import RateLimited, Vault, is_null_key, vault_session
 
@@ -62,6 +65,19 @@ class HTTP(Vault):
         elif self.api_mode not in ["query", "json", "decrypt_labs"]:
             raise ValueError("api_mode must be either 'query', 'json', or 'decrypt_labs'")
 
+    @staticmethod
+    def parse_json(r: Response) -> dict:
+        """The response body as a JSON object. Any other body means the host is not a vault, so it is unreachable."""
+        try:
+            data = r.json()
+        except ValueError:
+            data = None
+        if not isinstance(data, dict):
+            mime = re.match(r"[\w.+-]{1,64}/[\w.+-]{1,64}", r.headers.get("Content-Type", ""))
+            content_type = mime.group() if mime else "unknown"
+            raise ConnectionError(f"HTTP {r.status_code} {content_type} response is not a JSON object")
+        return data
+
     def request(self, method: str, params: dict | None = None) -> dict:
         """Make a request to the JSON API vault."""
         if self.api_mode != "json":
@@ -85,18 +101,10 @@ class HTTP(Vault):
             raise RateLimited()
 
         if not r.ok:
-            try:
-                detail = r.json().get("message") or r.reason.title()
-            except (json.JSONDecodeError, AttributeError):
-                detail = r.reason.title()
+            detail = self.parse_json(r).get("message") or r.reason.title()
             raise ValueError(f"API returned HTTP Error {r.status_code}: {detail}")
 
-        try:
-            res = r.json()
-        except json.JSONDecodeError:
-            if r.status_code == 404:
-                return {"status": "not_found"}
-            raise ValueError(f"API returned an invalid response: {r.text}") from None
+        res = self.parse_json(r)
 
         if res.get("status_code") != 200:
             raise ValueError(f"API returned an error: {res['status_code']} - {res['message']}")
@@ -112,67 +120,58 @@ class HTTP(Vault):
 
         if self.api_mode == "decrypt_labs":
             response = self.session.post(self.url, json={"service": service.lower(), "kid": kid}, timeout=self.timeout)
-            try:
-                if not response.ok:
-                    return None
-
-                data = response.json()
-
-                if data.get("message") != "success":
-                    return None
-
-                cached_keys = data.get("cached_keys")
-                if not cached_keys:
-                    return None
-
-                if isinstance(cached_keys, str):
-                    try:
-                        cached_keys = json.loads(cached_keys)
-                    except json.JSONDecodeError:
-                        return cached_keys
-
-                if isinstance(cached_keys, dict):
-                    if cached_keys.get("kid") == kid:
-                        return cached_keys.get("key")
-                    if kid in cached_keys:
-                        return cached_keys[kid]
-                elif isinstance(cached_keys, list):
-                    for entry in cached_keys:
-                        if isinstance(entry, dict):
-                            if entry.get("kid") == kid:
-                                return entry.get("key")
-                        elif isinstance(entry, str) and ":" in entry:
-                            entry_kid, entry_key = entry.split(":", 1)
-                            if entry_kid == kid:
-                                return entry_key
-
-            except Exception as e:
-                print(f"Failed to get key from DecryptLabs ({e.__class__.__name__}: {e})")
+            if not response.ok:
                 return None
+
+            data = self.parse_json(response)
+
+            if data.get("message") != "success":
+                return None
+
+            cached_keys = data.get("cached_keys")
+            if not cached_keys:
+                return None
+
+            if isinstance(cached_keys, str):
+                try:
+                    cached_keys = json.loads(cached_keys)
+                except json.JSONDecodeError:
+                    return cached_keys
+
+            if isinstance(cached_keys, dict):
+                if cached_keys.get("kid") == kid:
+                    return cached_keys.get("key")
+                if kid in cached_keys:
+                    return cached_keys[kid]
+            elif isinstance(cached_keys, list):
+                for entry in cached_keys:
+                    if isinstance(entry, dict):
+                        if entry.get("kid") == kid:
+                            return entry.get("key")
+                    elif isinstance(entry, str) and ":" in entry:
+                        entry_kid, entry_key = entry.split(":", 1)
+                        if entry_kid == kid:
+                            return entry_key
             return None
 
         elif self.api_mode == "json":
-            try:
-                params = {
-                    "kid": kid,
-                    "service": service.lower(),
-                }
+            params = {
+                "kid": kid,
+                "service": service.lower(),
+            }
 
-                res = self.request("GetKey", params)
-                if res.get("status") == "not_found":
-                    return None
-                keys = res.get("keys", [])
-                for key_entry in keys:
-                    if isinstance(key_entry, str) and ":" in key_entry:
-                        entry_kid, entry_key = key_entry.split(":", 1)
-                        if entry_kid == kid:
-                            return entry_key
-                    elif isinstance(key_entry, dict):
-                        if key_entry.get("kid") == kid:
-                            return key_entry.get("key")
-            except ValueError as e:
-                print(f"Failed to get key ({e.__class__.__name__}: {e})")
+            res = self.request("GetKey", params)
+            if res.get("status") == "not_found":
                 return None
+            keys = res.get("keys", [])
+            for key_entry in keys:
+                if isinstance(key_entry, str) and ":" in key_entry:
+                    entry_kid, entry_key = key_entry.split(":", 1)
+                    if entry_kid == kid:
+                        return entry_key
+                elif isinstance(key_entry, dict):
+                    if key_entry.get("kid") == kid:
+                        return key_entry.get("key")
             return None
         else:  # query mode
             response = self.session.get(
@@ -181,7 +180,7 @@ class HTTP(Vault):
                 timeout=self.timeout,
             )
 
-            data = response.json()
+            data = self.parse_json(response)
 
             if not data.get("keys"):
                 return None
@@ -202,7 +201,7 @@ class HTTP(Vault):
                 timeout=self.timeout,
             )
 
-            data = response.json()
+            data = self.parse_json(response)
 
             if data.get("status_code") != 200 or not data.get("keys"):
                 return
@@ -252,7 +251,7 @@ class HTTP(Vault):
                 timeout=self.timeout,
             )
 
-            data = response.json()
+            data = self.parse_json(response)
 
             return data.get("status_code") == 200
 
@@ -318,7 +317,7 @@ class HTTP(Vault):
                     timeout=self.timeout,
                 )
 
-                data = response.json()
+                data = self.parse_json(response)
 
                 if data.get("status_code") == 200 and data.get("inserted", True):
                     inserted_count += 1
@@ -343,7 +342,7 @@ class HTTP(Vault):
                 timeout=self.timeout,
             )
 
-            data = response.json()
+            data = self.parse_json(response)
 
             if data.get("status_code") != 200:
                 return
