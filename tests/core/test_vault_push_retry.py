@@ -9,6 +9,7 @@ import pytest
 import requests
 
 from unshackle.core.api import handlers
+from unshackle.core.vault import json_body
 from unshackle.core.vaults import Vaults
 from unshackle.vaults.HTTP import HTTP
 
@@ -83,7 +84,7 @@ def test_a_vault_that_answers_html_is_skipped_after_one_request(
 def test_a_hostile_content_type_stays_out_of_the_error() -> None:
     r = fake_response(content_type="text/html\r\n INJECTED" + "x" * 1000)
     with pytest.raises(ConnectionError) as error:
-        HTTP.parse_json(r)
+        json_body(r)
     assert str(error.value) == "HTTP 200 text/html response is not a JSON object"
 
 

@@ -23,7 +23,7 @@ A vault stores every content key as a **KID → KEY** pair, grouped by **service
 
 ## How lookups and caching work
 
-When unshackle needs a content key during a download it asks your vaults **in the order they appear in your config**. It returns the first non-null key it finds and stops searching. If a vault raises a permission error or is unreachable, unshackle skips it and continues the search with the next one.
+When unshackle needs a content key during a download it asks your vaults **in the order they appear in your config**. It returns the first non-null key it finds and stops searching. If a vault raises a permission error or is unreachable, unshackle skips it and continues the search with the next one. unshackle does not ask a remote vault again for the rest of the run when it is unreachable or answers with a body that is not a JSON object. It always asks a local SQLite vault. Each failure of a vault shows one warning with the host and the reason; the same failure again goes to the debug log.
 
 A track needs no licence when a vault holds the content key of the KID that encrypts it. The DRM header of the track can name more KIDs, for example those of other tracks. Before the decrypt, unshackle reads the downloaded file, and licenses each of those KIDs that the file uses and no vault holds. When unshackle cannot read which KIDs the file uses, it licenses all of them.
 

@@ -9,7 +9,7 @@ from uuid import UUID
 
 from unshackle.core.config import config
 from unshackle.core.utilities import get_debug_logger, import_module_by_path
-from unshackle.core.vault import UNREACHABLE, RateLimited, Vault, is_null_key
+from unshackle.core.vault import UNREACHABLE, RateLimited, Vault, brief, is_null_key
 
 log = logging.getLogger(__name__)
 
@@ -30,6 +30,7 @@ class Vaults:
         self.flagged: set[tuple[UUID | str, str]] = set()
         self.candidates: dict[UUID | str, list[tuple[str, Vault]]] = {}
         self.warned: set[tuple[str, UUID | str, str]] = set()
+        self.failed: set[tuple[str, str]] = set()
         self.unreachable: set[Vault] = set()
         self.unreported: dict[tuple[UUID | str, str], Vault] = {}
 
@@ -110,7 +111,7 @@ class Vaults:
         except (PermissionError, NotImplementedError):
             return None
         except Exception as e:
-            log.warning(f"Failed to get key from Vault '{vault.name}': {e}")
+            self.warn_failure(vault, "get key from", e)
             self.mark_unreachable(vault, e)
             if dl:
                 dl.log_vault_query(
@@ -209,7 +210,7 @@ class Vaults:
         except (PermissionError, NotImplementedError):
             return 0
         except Exception as e:
-            log.warning(f"Failed to add key to Vault '{vault.name}': {e}")
+            self.warn_failure(vault, "add key to", e)
             self.mark_unreachable(vault, e)
             if dl:
                 dl.log_vault_query(vault.name, "add_key", kid=str(kid), success=False, error=e)
@@ -240,7 +241,7 @@ class Vaults:
         except (PermissionError, NotImplementedError):
             return 0
         except Exception as e:
-            log.warning(f"Failed to add keys to Vault '{vault.name}': {e}")
+            self.warn_failure(vault, "add keys to", e)
             self.mark_unreachable(vault, e)
             return 0
 
@@ -251,6 +252,16 @@ class Vaults:
     def held_locally(self, kid: UUID | str, key: str) -> bool:
         """True when a local vault already holds this KID:KEY."""
         return any(self.query_vault(vault, kid) == key for vault in self.vaults if vault.local)
+
+    def warn_failure(self, vault: Vault, action: str, error: Exception) -> None:
+        """Warn once per vault for each distinct failure; a repeat goes to the debug log."""
+        text = brief(error)
+        message = f"Failed to {action} Vault '{vault.name}': {text}"
+        if (vault.name, text) in self.failed:
+            log.debug(message)
+        else:
+            self.failed.add((vault.name, text))
+            log.warning(message)
 
     def mark_unreachable(self, vault: Vault, error: Exception) -> None:
         """Skip a vault that is down or still rate limited for the rest of the run, so it costs one

@@ -1,11 +1,8 @@
 import json
-import re
 from collections.abc import Iterator
 from uuid import UUID
 
-from requests import Response
-
-from unshackle.core.vault import RateLimited, Vault, is_null_key, vault_session
+from unshackle.core.vault import RateLimited, Vault, is_null_key, json_body, vault_session
 
 
 class HTTP(Vault):
@@ -65,19 +62,6 @@ class HTTP(Vault):
         elif self.api_mode not in ["query", "json", "decrypt_labs"]:
             raise ValueError("api_mode must be either 'query', 'json', or 'decrypt_labs'")
 
-    @staticmethod
-    def parse_json(r: Response) -> dict:
-        """The response body as a JSON object. Any other body means the host is not a vault, so it is unreachable."""
-        try:
-            data = r.json()
-        except ValueError:
-            data = None
-        if not isinstance(data, dict):
-            mime = re.match(r"[\w.+-]{1,64}/[\w.+-]{1,64}", r.headers.get("Content-Type", ""))
-            content_type = mime.group() if mime else "unknown"
-            raise ConnectionError(f"HTTP {r.status_code} {content_type} response is not a JSON object")
-        return data
-
     def request(self, method: str, params: dict | None = None) -> dict:
         """Make a request to the JSON API vault."""
         if self.api_mode != "json":
@@ -101,10 +85,10 @@ class HTTP(Vault):
             raise RateLimited()
 
         if not r.ok:
-            detail = self.parse_json(r).get("message") or r.reason.title()
+            detail = json_body(r).get("message") or r.reason.title()
             raise ValueError(f"API returned HTTP Error {r.status_code}: {detail}")
 
-        res = self.parse_json(r)
+        res = json_body(r)
 
         if res.get("status_code") != 200:
             raise ValueError(f"API returned an error: {res['status_code']} - {res['message']}")
@@ -123,7 +107,7 @@ class HTTP(Vault):
             if not response.ok:
                 return None
 
-            data = self.parse_json(response)
+            data = json_body(response)
 
             if data.get("message") != "success":
                 return None
@@ -180,7 +164,7 @@ class HTTP(Vault):
                 timeout=self.timeout,
             )
 
-            data = self.parse_json(response)
+            data = json_body(response)
 
             if not data.get("keys"):
                 return None
@@ -201,7 +185,7 @@ class HTTP(Vault):
                 timeout=self.timeout,
             )
 
-            data = self.parse_json(response)
+            data = json_body(response)
 
             if data.get("status_code") != 200 or not data.get("keys"):
                 return
@@ -251,7 +235,7 @@ class HTTP(Vault):
                 timeout=self.timeout,
             )
 
-            data = self.parse_json(response)
+            data = json_body(response)
 
             return data.get("status_code") == 200
 
@@ -317,7 +301,7 @@ class HTTP(Vault):
                     timeout=self.timeout,
                 )
 
-                data = self.parse_json(response)
+                data = json_body(response)
 
                 if data.get("status_code") == 200 and data.get("inserted", True):
                     inserted_count += 1
@@ -342,7 +326,7 @@ class HTTP(Vault):
                 timeout=self.timeout,
             )
 
-            data = self.parse_json(response)
+            data = json_body(response)
 
             if data.get("status_code") != 200:
                 return

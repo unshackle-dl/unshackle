@@ -24,7 +24,7 @@ from unshackle.core.config import config
 from unshackle.core.console import GradientPulseBarColumn, console
 from unshackle.core.constants import context_settings
 from unshackle.core.services import Services
-from unshackle.core.vault import Vault, is_null_key
+from unshackle.core.vault import Vault, brief, is_null_key
 from unshackle.core.vaults import Vaults, load_config_vaults
 
 
@@ -114,7 +114,7 @@ def copy_service_data(
     try:
         content_keys = process_service_keys(from_vault, service, log)
     except Exception as e:
-        log.warning(f"{service}: Could not read from {from_vault} ({e}), skipped")
+        log.warning(f"{service}: Could not read from {from_vault} ({brief(e)}), skipped")
         return 0
 
     content_keys = {kid: key for kid, key in content_keys.items() if not to_vault.is_bad_key(kid, key)}
@@ -129,6 +129,8 @@ def copy_service_data(
     except PermissionError:
         log.warning(f"{service}: No permission to create table in {to_vault}, skipped")
         return 0
+    except Exception as e:
+        raise click.ClickException(f"Could not write to {to_vault} ({brief(e)})") from None
 
     existed = total_count - added
 
@@ -213,7 +215,7 @@ def copy(
             try:
                 services_to_copy = list(from_vault.get_services())
             except Exception as e:
-                log.debug(f"{from_vault.name}: cannot list services ({e}), skipped")
+                log.debug(f"{from_vault.name}: cannot list services ({brief(e)}), skipped")
                 continue
 
         if installed is not None:
@@ -313,7 +315,10 @@ def add(file: Path, service: str, vaults: list[str]) -> None:
 
     for vault in vaults_:
         log.info(f"Adding {total_count} Content Keys to {vault}")
-        added_count = add_keys_with_progress(vault, service, kid_keys, log)
+        try:
+            added_count = add_keys_with_progress(vault, service, kid_keys, log)
+        except Exception as e:
+            raise click.ClickException(f"Could not write to {vault} ({brief(e)})") from None
         existed_count = total_count - added_count
         log.info(f"{vault}: {added_count} newly added, {existed_count} already existed (skipped)")
 
@@ -327,7 +332,7 @@ def search_vault(vault: Vault, kid: str, services: list[str], log: logging.Logge
         try:
             key = vault.get_key(kid, svc)
         except Exception as e:
-            log.debug(f"{vault} [{svc}]: lookup error ({e})")
+            log.debug(f"{vault} [{svc}]: lookup error ({brief(e)})")
             return None
         if key and not is_null_key(key):
             return svc, key
@@ -392,7 +397,7 @@ def search(kid: str, service: str | None, vault_name: str | None) -> None:
             try:
                 services_to_check = list(vault.get_services())
             except Exception as e:
-                log.debug(f"{vault}: get_services() failed ({e})")
+                log.debug(f"{vault}: get_services() failed ({brief(e)})")
                 services_to_check = []
             if not services_to_check:
                 services_to_check = list(Services.get_tags())

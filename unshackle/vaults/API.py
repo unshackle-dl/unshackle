@@ -3,7 +3,7 @@ from uuid import UUID
 
 from requests import HTTPError, Response
 
-from unshackle.core.vault import RateLimited, Vault, vault_session
+from unshackle.core.vault import RateLimited, Vault, json_body, vault_session
 
 
 class API(Vault):
@@ -40,7 +40,7 @@ class API(Vault):
         if response.status_code == 429:
             raise Exceptions.TooManyRequests()
         response.raise_for_status()
-        data = response.json()
+        data = json_body(response)
 
         code = int(data.get("code", 0))
         message = data.get("message")
@@ -76,7 +76,7 @@ class API(Vault):
                 allow_redirects=False,
             )
             response.raise_for_status()
-            data = response.json()
+            data = json_body(response)
 
             code = int(data.get("code", 0))
             message = data.get("message")
@@ -116,7 +116,7 @@ class API(Vault):
             allow_redirects=False,
         )
         response.raise_for_status()
-        data = response.json()
+        data = json_body(response)
 
         code = int(data.get("code", 0))
         message = data.get("message")
@@ -173,9 +173,8 @@ class API(Vault):
                 if response.status_code == 429:
                     raise Exceptions.TooManyRequests()
                 response.raise_for_status()
-                data = response.json()
-            except (ValueError, HTTPError):
-                # an HTTP error or a broken JSON reply - try smaller batch
+                data = json_body(response)
+            except HTTPError:
                 if batch_size > 1:
                     if batch_size > 100:
                         batch_size -= 100
@@ -239,7 +238,7 @@ class API(Vault):
         if response.status_code in (404, 405, 501):
             return
         response.raise_for_status()
-        data = response.json()
+        data = json_body(response)
         code = int(data.get("code", 0))
         if not code or code in ignore:
             return
@@ -251,7 +250,7 @@ class API(Vault):
             url=self.uri, headers={"Accept": "application/json"}, timeout=self.timeout, allow_redirects=False
         )
         response.raise_for_status()
-        data = response.json()
+        data = json_body(response)
 
         code = int(data.get("code", 0))
         message = data.get("message")
