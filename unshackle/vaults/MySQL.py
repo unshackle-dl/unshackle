@@ -17,6 +17,9 @@ from unshackle.core.vault import Vault, is_null_key
 class MySQL(Vault):
     """Key Vault using a remotely-accessed mysql database connection."""
 
+    bulk_writes = True
+    has_tables = True
+
     def __init__(
         self, name: str, host: str, database: str, username: str, no_push: bool = False, **kwargs: Any
     ) -> None:

@@ -54,7 +54,6 @@ class HTTP(Vault):
 
         self.username = username
         self.api_mode = api_mode.lower()
-        self.batch_insert = True
         self.current_title: str | None = None
         self.session = vault_session(timeout)
         self.api_session_id = None

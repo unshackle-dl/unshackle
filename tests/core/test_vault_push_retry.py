@@ -9,7 +9,7 @@ from uuid import UUID
 import pytest
 import requests
 
-from tests.core.key_resolver import BrokenVault, MemoryVault, vaults_of
+from tests.core.key_resolver import PARKED_PAGE, BrokenVault, MemoryVault, fake_response, vaults_of
 from unshackle.commands.kv import copy_service_data
 from unshackle.core.api import handlers
 from unshackle.core.vault import RateLimited, json_body
@@ -21,19 +21,6 @@ from unshackle.vaults.SQLite import SQLite
 KID = UUID("11111111-2222-3333-4444-555555555555")
 KID2 = UUID("66666666-7777-8888-9999-000000000000")
 KEY = "a" * 32
-
-
-PARKED_PAGE = b"<!DOCTYPE html><html><body>This domain may be for sale.</body></html>"
-
-
-def fake_response(
-    status: int = 200, body: bytes = PARKED_PAGE, content_type: str = "text/html; charset=utf-8"
-) -> requests.Response:
-    r = requests.Response()
-    r.status_code = status
-    r.headers["Content-Type"] = content_type
-    r._content = body
-    return r
 
 
 def parked_host(calls: list, status: int = 200, body: bytes = PARKED_PAGE) -> Callable[..., requests.Response]:
@@ -183,6 +170,17 @@ def query_vault() -> HTTP:
             id="decrypt_labs-get_key",
         ),
         pytest.param(API("api", "https://api.example/", "tok"), lambda v: v.add_key("SVC", KID, KEY), id="api-add_key"),
+        pytest.param(
+            API("api", "https://api.example/", "tok"), lambda v: list(v.get_services()), id="api-get_services"
+        ),
+        pytest.param(
+            API("api", "https://api.example/", "tok"),
+            lambda v: v.flag_bad_key("SVC", KID, KEY, "api"),
+            id="api-flag_bad_key",
+        ),
+        pytest.param(
+            API("api", "https://api.example/", "tok"), lambda v: v.unflag_bad_key(KID, KEY), id="api-unflag_bad_key"
+        ),
     ],
 )
 def test_a_vault_still_rate_limited_after_the_retries_raises(
@@ -190,6 +188,7 @@ def test_a_vault_still_rate_limited_after_the_retries_raises(
 ) -> None:
     monkeypatch.setattr(vault.session, "get", rate_limited)
     monkeypatch.setattr(vault.session, "post", rate_limited)
+    monkeypatch.setattr(vault.session, "delete", rate_limited)
     with pytest.raises(RateLimited):
         call(vault)
 

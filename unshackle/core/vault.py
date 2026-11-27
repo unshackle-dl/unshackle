@@ -91,10 +91,20 @@ class Refused(Exception):
 
 
 class Vault(metaclass=ABCMeta):
+    """A key vault of KID:KEY pairs.
+
+    Its class flags tell kv what it can do: bulk_writes (add_keys takes a whole service in one call),
+    batch_insert (add_keys takes more than one content key; HTTP clears it when the server refuses
+    batches) and has_tables (one table per service, with resolve_table and create_table).
+    """
+
     # a vault on this machine; Vaults.get_key tries these first, before the network ones
     local: bool = False
     report_now: bool = False
     stores_flags: bool = False
+    bulk_writes: bool = False
+    batch_insert: bool = True
+    has_tables: bool = False
 
     def __init__(self, name: str, no_push: bool = False) -> None:
         self.name = name
@@ -151,6 +161,14 @@ class Vault(metaclass=ABCMeta):
 
     def unflag_bad_key(self, kid: UUID | str, key: str) -> None:
         """Forget a flagged KID:KEY, for example when a CDM licence confirmed it."""
+
+    def resolve_table(self, name: str) -> str | None:
+        """The stored name of the table of a service, or None. Only a vault with has_tables has tables."""
+        return None
+
+    def create_table(self, name: str) -> None:
+        """Make the table of a service. Only a vault with has_tables has tables."""
+        raise NotImplementedError
 
 
 __all__ = ("Refused", "Vault", "brief", "json_body")

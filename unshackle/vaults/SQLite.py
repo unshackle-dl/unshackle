@@ -13,6 +13,8 @@ class SQLite(Vault):
 
     local = True
     stores_flags = True
+    bulk_writes = True
+    has_tables = True
 
     def __init__(self, name: str, path: str | Path, no_push: bool = False) -> None:
         super().__init__(name, no_push)

@@ -66,6 +66,11 @@ def test_a_vault_type_stores_flags_only_when_it_reads_them_back() -> None:
         assert module.stores_flags == (module.is_bad_key is not Vault.is_bad_key), module
 
 
+def test_a_vault_type_has_tables_only_when_it_can_make_them() -> None:
+    for module in MODULES.values():
+        assert module.has_tables == (module.create_table is not Vault.create_table), module
+
+
 def test_flag_stores_names_the_configs_whose_vault_type_keeps_flags() -> None:
     configs = [
         {"type": "SQLite", "name": "local"},

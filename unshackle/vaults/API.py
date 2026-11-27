@@ -21,6 +21,7 @@ class API(Vault):
         super().__init__(name, no_push)
         self.uri = uri.rstrip("/")
         self.timeout = timeout
+        self.batch_size = 500
         self.session = vault_session(timeout)
         self.session.headers.update({"Authorization": f"Bearer {token}"})
 
@@ -142,14 +143,20 @@ class API(Vault):
         return added or updated
 
     def add_keys(self, service: str, kid_keys: dict[UUID | str, str]) -> int:
+        """Post the keys in batches. A failed batch is sent again 100 content keys smaller, down to 1.
+
+        When a call shrank its batch because the server found it too large (400, 413, 414) and then
+        stored every batch, later calls start at that size, so a server with a lower cap costs its
+        failed posts once per vault, not once per call.
+        """
         normalized_keys = {str(kid).replace("-", ""): key for kid, key in kid_keys.items()}
         kid_list = list(normalized_keys.keys())
 
         if not kid_list:
             return 0
 
-        # Try batches starting at 500, stepping down by 100 on failure, fallback to 1
-        batch_size = 500
+        batch_size = self.batch_size
+        too_large = False
         total_added = 0
         i = 0
 
@@ -172,6 +179,7 @@ class API(Vault):
                         batch_size -= 100
                     else:
                         batch_size = 1
+                    too_large = True
                     continue
 
                 if response.status_code == 429:
@@ -207,6 +215,9 @@ class API(Vault):
             total_added += added + updated
             i += batch_size
 
+        if too_large and batch_size > 1:
+            self.batch_size = batch_size
+
         return total_added
 
     def flag_bad_key(self, service: str, kid: UUID | str, key: str, source: str) -> None:
@@ -241,6 +252,8 @@ class API(Vault):
     def _check(response: Response, ignore: frozenset[int] = frozenset()) -> None:
         if response.status_code in (404, 405, 501):
             return
+        if response.status_code == 429:
+            raise Exceptions.TooManyRequests()
         response.raise_for_status()
         data = json_body(response)
         code = int(data.get("code", 0))
@@ -253,6 +266,8 @@ class API(Vault):
         response = self.session.post(
             url=self.uri, headers={"Accept": "application/json"}, timeout=self.timeout, allow_redirects=False
         )
+        if response.status_code == 429:
+            raise Exceptions.TooManyRequests()
         response.raise_for_status()
         data = json_body(response)
 
@@ -291,5 +306,5 @@ class Exceptions:
     class KeyIdInvalid(Refused):
         """The Key ID is invalid."""
 
-    class ContentKeyInvalid(Exception):
+    class ContentKeyInvalid(Refused):
         """The Content Key is invalid."""

@@ -7,12 +7,25 @@ from types import SimpleNamespace
 from typing import Any
 from uuid import UUID
 
+import requests
 from rich.table import Table
 
 from unshackle.core.cdm.detect import cdm_type_stub
 from unshackle.core.drm.key_resolution import ContentKeyResolver
 from unshackle.core.vault import Vault
 from unshackle.core.vaults import Vaults
+
+PARKED_PAGE = b"<!DOCTYPE html><html><body>This domain may be for sale.</body></html>"
+
+
+def fake_response(
+    status: int = 200, body: bytes = PARKED_PAGE, content_type: str = "text/html; charset=utf-8"
+) -> requests.Response:
+    r = requests.Response()
+    r.status_code = status
+    r.headers["Content-Type"] = content_type
+    r._content = body
+    return r
 
 
 class MemoryVault(Vault):

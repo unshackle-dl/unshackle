@@ -6,6 +6,7 @@ import click
 import pytest
 import requests
 
+from tests.core.key_resolver import fake_response
 from unshackle.commands.kv import copy_service_data
 from unshackle.core.utilities import close_debug_logger, init_debug_logger
 from unshackle.core.vault import brief
@@ -176,6 +177,21 @@ def test_a_broken_sqlite_file_warns_once_and_is_still_used(
     assert len([m for m in records(caplog, logging.DEBUG) if "file is not a database" in m]) == 2
     assert vault not in vaults.unreachable
     assert queried == [KID, SIBLING]
+
+
+def test_kv_copy_skips_a_service_whose_content_key_an_api_vault_refuses(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    source = SQLite("source", tmp_path / "source.db")
+    source.add_key("EXAMPLE", KID, "bb" * 16)
+    vault = API("api", "https://api.example/", "tok")
+    reply = fake_response(200, b'{"code": 5, "message": "bad content key"}', "application/json")
+    monkeypatch.setattr(vault.session, "post", lambda *a, **kw: reply)
+    with caplog.at_level(logging.WARNING, logger="kv"):
+        assert copy_service_data(vault, source, "EXAMPLE", logging.getLogger("kv")) == 0
+    assert [r.getMessage() for r in caplog.records] == [
+        "EXAMPLE: Could not write to api API (bad content key (5)), skipped"
+    ]
 
 
 def test_kv_copy_names_the_vault_it_cannot_write_to_without_its_password(tmp_path: Path) -> None:

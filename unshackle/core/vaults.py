@@ -246,7 +246,7 @@ class Vaults:
             try:
                 vault.unflag_bad_key(kid, key)
             except Exception as e:
-                log.debug(f"Could not unflag {key} in Vault '{vault.name}': {e!r}")
+                log.debug(f"Could not unflag {key} in Vault '{vault.name}': {brief(e)}")
 
     def add_key(self, kid: UUID | str, key: str, excluding: KeySource | None = None) -> int:
         """Add a KID:KEY to all Vaults, optionally with an exclusion.
