@@ -15,7 +15,7 @@ from tests.lang_selection import test_kind_only_selection as harness
 from tests.lang_selection.test_kind_only_selection import FakeService
 from tests.remote.key_source import MemoryKeySource, remote_keys
 from unshackle.commands import dl as dl_module
-from unshackle.core.drm import PlayReady, Widevine
+from unshackle.core.drm import BlowfishStripe, ClearKeyCTR, PlayReady, Widevine
 from unshackle.core.drm.cenc import drm_stub
 from unshackle.core.import_service import ImportService
 from unshackle.core.service import Service
@@ -156,6 +156,59 @@ def test_dl_licenses_with_no_cdm_of_its_own_when_the_keys_arrive_from_the_source
     assert harness.run(monkeypatch, caplog, {1: {}}, service=source, to_end=True, skip_dl=True) is None
     assert line in lines
     assert (source.closed, saved) == (1, [])
+
+
+class CipheredSource(KeyedSource):
+    """A server-keyed source whose video and audio tracks carry the DRM of ``drm``."""
+
+    def __init__(self, drm: dict[str, Any], server_cdm_type: str) -> None:
+        super().__init__(KeyArrival.SERVER)
+        self.drm = drm
+        self.keys.server_cdm_type = server_cdm_type
+
+    def get_tracks(self, title: Any) -> Any:
+        tracks = super().get_tracks(title)
+        for track in tracks:
+            track.drm = self.drm.get(track.id)
+        return tracks
+
+
+def ctr() -> ClearKeyCTR:
+    return ClearKeyCTR(licence=None, iv=bytes(16), magic=b"EX")
+
+
+@pytest.mark.parametrize(
+    ("drm", "server_cdm_type", "line"),
+    [
+        ({"v": [ctr()], "a": [ctr()]}, "widevine", "Using keys from the server; no local CDM required"),
+        (
+            {"v": [BlowfishStripe(key=bytes(8))], "a": [ctr()]},
+            "playready",
+            "Using keys from the server; no local CDM required",
+        ),
+        ({"a": [ctr()]}, "widevine", "Using server CDM (Widevine); no local CDM required"),
+        (
+            {"v": [drm_stub("widevine", KIDS)], "a": [ctr()]},
+            "widevine",
+            "Using server CDM (Widevine); no local CDM required",
+        ),
+        ({"v": [drm_stub("playready", KIDS)]}, "playready", "Using server CDM (PlayReady); no local CDM required"),
+    ],
+    ids=["whole-file", "whole-file-playready-server", "video-drm-not-loaded", "mixed", "playready"],
+)
+def test_dl_names_the_server_cdm_only_for_a_title_that_needs_one(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    drm: dict[str, Any],
+    server_cdm_type: str,
+    line: str,
+) -> None:
+    lines: list[str] = []
+    monkeypatch.setattr(logging.getLogger("test_kind_only"), "info", lambda msg, *a, **k: lines.append(msg))
+    monkeypatch.setattr(dl_module.login, "save_cookies", lambda *a: None)
+    source = CipheredSource(drm, server_cdm_type)
+    assert harness.run(monkeypatch, caplog, {1: {}}, service=source, to_end=True, skip_dl=True) is None
+    assert [msg for msg in lines if "no local CDM required" in msg] == [line]
 
 
 def test_dl_saves_the_login_cookies_of_a_service(

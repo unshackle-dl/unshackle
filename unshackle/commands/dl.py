@@ -50,6 +50,7 @@ from unshackle.core.downloaders import (
     set_speed_limit,
 )
 from unshackle.core.drm import (
+    WHOLE_FILE_DRM,
     MonaLisa,
     cbcs,
     own_kids,
@@ -2113,8 +2114,13 @@ class dl:
                 self.cdm = cdm_type_stub(server_cdm_type)
                 if self._remote_service.key_arrival is KeyArrival.EXPORT:
                     self.log.info("Using keys from the export; no CDM required")
+                elif (keyed := [*title.tracks.videos, *title.tracks.audio]) and all(
+                    track.drm and all(isinstance(drm, WHOLE_FILE_DRM) for drm in track.drm) for track in keyed
+                ):
+                    self.log.info("Using keys from the server; no local CDM required")
                 else:
-                    self.log.info(f"Using server CDM ({server_cdm_type.title()}); no local CDM required")
+                    server_system = "PlayReady" if server_cdm_type == "playready" else "Widevine"
+                    self.log.info(f"Using server CDM ({server_system}); no local CDM required")
 
             video_tracks = title.tracks.videos
             if video_tracks and not server_cdm_type:
