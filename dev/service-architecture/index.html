@@ -2991,6 +2991,11 @@ delivery method in <code>Track.Descriptor</code>, which tells unshackle how to d
 <code>langcodes.Language</code>), <code>drm</code> (an optional iterable of DRM objects), <code>needs_repack</code>, and
 descriptor-specific state stashed in <code>track.data["hls"]</code> / <code>track.data["dash"]</code>. If you
 do not give a <code>name</code>, unshackle derives a human-readable name from the language.</p>
+<p>When each URL of a <code>URL</code> track costs a request, give the track an empty <code>url</code> and set
+<code>track.resolve_url</code> to a callable that returns the URL. unshackle calls it only for a
+track that it downloads. Over <code>--remote</code>, the client asks the server for the URL of
+each track it downloads, and the server calls the callable then. A track whose callable
+fails gets no URL, and its download fails.</p>
 <h3 id="video"><code>Video</code><a class="headerlink" href="#video" title="Permanent link">&para;</a></h3>
 <p><code>Video</code> adds <code>codec</code>, <code>range</code>, <code>bitrate</code>, <code>width</code>, <code>height</code>, <code>fps</code>, <code>scan_type</code>, and
 closed-caption descriptors. The relevant enums:</p>
@@ -3120,7 +3125,7 @@ because HLS variants carry no language.</p>
 </ul>
 <h2 id="drm-hooks">DRM hooks<a class="headerlink" href="#drm-hooks" title="Permanent link">&para;</a></h2>
 <p>If a track carries DRM, the framework licenses and decrypts it, but it needs your
-service to talk to the platform's license server. unshackle recognizes six DRM systems:</p>
+service to talk to the platform's license server. unshackle recognizes seven DRM systems:</p>
 <table>
 <thead>
 <tr>
@@ -3159,6 +3164,11 @@ service to talk to the platform's license server. unshackle recognizes six DRM s
 <td><code>BlowfishStripe</code></td>
 <td>Blowfish CBC stripe cipher</td>
 <td>the service gives the per-track key; no CDM, no license server</td>
+</tr>
+<tr>
+<td><code>ClearKeyCTR</code></td>
+<td>AES-128-CTR over a whole file</td>
+<td>the service gives the IV and licenses the content key at the licence step; no CDM, no license server</td>
 </tr>
 </tbody>
 </table>

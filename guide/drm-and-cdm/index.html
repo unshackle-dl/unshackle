@@ -1012,6 +1012,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#clearkey-over-a-whole-file-aes-ctr" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ClearKey over a whole file (AES-CTR)
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2476,6 +2487,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#clearkey-over-a-whole-file-aes-ctr" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ClearKey over a whole file (AES-CTR)
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2622,7 +2644,7 @@ from the track, asks the CDM for a license challenge, sends that challenge to th
 service's license server, hands the response back to the CDM to extract the keys, and
 then decrypts the file with those keys.</p>
 <h2 id="supported-drm-systems">Supported DRM systems<a class="headerlink" href="#supported-drm-systems" title="Permanent link">&para;</a></h2>
-<p>unshackle implements six DRM systems. Only the first two need a device file and a
+<p>unshackle implements seven DRM systems. Only the first two need a device file and a
 license-server handshake. The rest are special cases.</p>
 <table>
 <thead>
@@ -2670,15 +2692,22 @@ license-server handshake. The rest are special cases.</p>
 <td>The service gives the per-track key. No CDM, no license server.</td>
 <td>in-process Blowfish-CBC on every third 2048-byte chunk</td>
 </tr>
+<tr>
+<td><strong>ClearKey (CTR)</strong>, AES-128-CTR</td>
+<td>none</td>
+<td>The service gives the per-track key and IV. No CDM, no license server.</td>
+<td>in-process AES-CTR over the whole file</td>
+</tr>
 </tbody>
 </table>
 <div class="admonition warning">
-<p class="admonition-title">Two different ClearKeys</p>
-<p>"ClearKey (HLS)" and "ClearKey (CENC)" are entirely different systems that happen
-to share a name. The HLS variant is the AES-128 content key that an <code>EXT-X-KEY</code>
+<p class="admonition-title">Three different ClearKeys</p>
+<p>"ClearKey (HLS)", "ClearKey (CENC)" and "ClearKey (CTR)" are entirely different systems that
+happen to share a name. The HLS variant is the AES-128 content key that an <code>EXT-X-KEY</code>
 tag references, and unshackle decrypts it in-process. The CENC variant is the W3C
 EME <code>org.w3.clearkey</code> scheme. It delivers keys as a JWK Set, and shaka-packager or
-mp4decrypt decrypts it like Widevine. Neither involves a device file.</p>
+mp4decrypt decrypts it like Widevine. The CTR variant is one AES-CTR stream over a
+whole file, with the content key and the IV that the service gives. None of them involves a device file.</p>
 </div>
 <h3 id="widevine-vs-playready">Widevine vs PlayReady<a class="headerlink" href="#widevine-vs-playready" title="Permanent link">&para;</a></h3>
 <p>These are the two "real" DRMs, and in unshackle they behave almost identically: the
@@ -3034,6 +3063,23 @@ EME request of the form:</p>
 license hook returns) and reads the JSON Web Key set back. You do not need a device
 file. The decrypted file still goes through shaka-packager or mp4decrypt like any
 other CENC track, so the <code>decryption</code> setting applies.</p>
+<h3 id="clearkey-over-a-whole-file-aes-ctr">ClearKey over a whole file (AES-CTR)<a class="headerlink" href="#clearkey-over-a-whole-file-aes-ctr" title="Permanent link">&para;</a></h3>
+<p>Some services encrypt one whole audio file with AES-128-CTR and give the content key and
+the IV with the track. unshackle decrypts the file in-process after the download. There is
+no device, no CDM and no license challenge. The licence step of a download or of a <code>--skip-dl</code> run licenses
+the content key, so <code>--list</code> asks for none. The IV, the length of the header in front of the media and the
+signature the file must start with travel with the track list.</p>
+<p>Over <code>--remote</code> the track list carries no content key. After the track selection the client asks the server
+for the content key of each chosen track, and then it decrypts the file itself. The server licenses only for an
+API key with the <code>server_cdm</code> grant for the service. Without it, or in a remote session on the server's device, the
+track stops with one error before its download. A decrypted file with another
+signature raises an error and stays encrypted. A decrypted file in a paged AAC container (<code>SpAC</code>) becomes an
+<code>.m4a</code> file that declares HE-AACv2 and whose edit list removes the coder delay, so the file has the length of the
+track. This needs <a href="../../getting-started/installation/#recommended-and-optional-tools">MP4Box</a> on the machine that
+decrypts, the client over <code>--remote</code>. Without it the file becomes one ADTS stream, which the mux step packs into
+an <code>.m4a</code> file that keeps the coder delay.</p>
+<p>The client must know this cipher as well as the server: a client without it drops the DRM entry without a
+log and saves the encrypted file.</p>
 <h2 id="widevine-and-playready-on-the-same-title">Widevine and PlayReady on the same title<a class="headerlink" href="#widevine-and-playready-on-the-same-title" title="Permanent link">&para;</a></h2>
 <p>A single manifest can advertise both Widevine and PlayReady. unshackle picks the CDM
 per track: if a track needs a system that your loaded CDM cannot supply, it

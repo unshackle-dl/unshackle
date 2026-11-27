@@ -2176,6 +2176,56 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#unshackle.core.drm.ClearKeyCTR" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;ClearKeyCTR
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" ClearKeyCTR">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#unshackle.core.drm.ClearKeyCTR.take_key" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;take_key
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unshackle.core.drm.ClearKeyCTR.content_key" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;content_key
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unshackle.core.drm.ClearKeyCTR.decrypt" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;decrypt
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#unshackle.core.drm.MonaLisa" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2598,6 +2648,17 @@
         
       </ul>
     </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#unshackle.core.drm.whole_file_cipher" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;whole_file_cipher
+      
+    </span>
+  </a>
   
 </li>
       
@@ -2943,6 +3004,56 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#unshackle.core.drm.ClearKeyCTR" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;ClearKeyCTR
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" ClearKeyCTR">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#unshackle.core.drm.ClearKeyCTR.take_key" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;take_key
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unshackle.core.drm.ClearKeyCTR.content_key" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;content_key
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unshackle.core.drm.ClearKeyCTR.decrypt" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;decrypt
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#unshackle.core.drm.MonaLisa" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3365,6 +3476,17 @@
         
       </ul>
     </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#unshackle.core.drm.whole_file_cipher" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;whole_file_cipher
+      
+    </span>
+  </a>
   
 </li>
       
@@ -4107,6 +4229,119 @@ challenge there directly instead.</p>
     <div class="doc doc-contents ">
 
         <p>Decrypt with shaka-packager.</p>
+
+
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="unshackle.core.drm.ClearKeyCTR" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <span class="doc doc-object-name doc-class-name">ClearKeyCTR</span>
+
+
+<a href="#unshackle.core.drm.ClearKeyCTR" class="headerlink" title="Permanent link">&para;</a></h2>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">ClearKeyCTR</span><span class="p">(</span><span class="n">licence</span><span class="p">,</span> <span class="n">iv</span><span class="p">,</span> <span class="n">magic</span><span class="p">,</span> <span class="n">skip</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">key</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+
+
+        <p>AES-128-CTR over a whole file: the service gives the IV and returns the content key through <code>licence</code>.</p>
+<p>The key resolver asks <code>licence</code> at the licence step of a download or of a <code>--skip-dl</code> run, so listing tracks costs no request.
+A cipher built with <code>key</code> holds its content key from the start.
+<code>magic</code> is the signature the decrypted file must start with; a mismatch raises and keeps the input.
+<code>skip</code> drops that many decrypted bytes from the start of the file: a header that sits in front of the media.
+<code>rewrite_paged</code> rewrites a decrypted file in the paged AAC container (<code>PAGED_AAC</code>).</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="unshackle.core.drm.ClearKeyCTR.take_key" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">take_key</span>
+
+
+<a href="#unshackle.core.drm.ClearKeyCTR.take_key" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">take_key</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Hold and return a content key: the one the licence callback returned, or one another source licensed.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="unshackle.core.drm.ClearKeyCTR.content_key" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">content_key</span>
+
+
+<a href="#unshackle.core.drm.ClearKeyCTR.content_key" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">content_key</span><span class="p">()</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>The content key, licensed on first use.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="unshackle.core.drm.ClearKeyCTR.decrypt" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">decrypt</span>
+
+
+<a href="#unshackle.core.drm.ClearKeyCTR.decrypt" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">decrypt</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Decrypt the file to a new file that then replaces it.</p>
+<p>The dropped header goes through the cipher too, so the keystream stays aligned with the file.</p>
 
 
     </div>
@@ -5683,6 +5918,26 @@ the challenge and the session ID.</p>
 
 </div>
 
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="unshackle.core.drm.whole_file_cipher" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <span class="doc doc-object-name doc-function-name">whole_file_cipher</span>
+
+
+<a href="#unshackle.core.drm.whole_file_cipher" class="headerlink" title="Permanent link">&para;</a></h2>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">whole_file_cipher</span><span class="p">(</span><span class="n">track</span><span class="p">)</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>The whole-file cipher of a track, with or without a content key.</p>
+
+
+    </div>
+
+</div>
 
 <div class="doc doc-object doc-function">
 

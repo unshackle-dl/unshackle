@@ -4950,7 +4950,7 @@ answers the prompt within 10 minutes.</p>
 </span><span id="__span-30-2"><a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a>GET  /api/session/{id}/channel  → WebSocket: prompts, CDM calls, logs, login state, drain
 </span><span id="__span-30-3"><a id="__codelineno-30-3" name="__codelineno-30-3" href="#__codelineno-30-3"></a>GET  /api/session/{id}/prompt   → without the channel: poll until authenticated (submit answers via POST)
 </span><span id="__span-30-4"><a id="__codelineno-30-4" name="__codelineno-30-4" href="#__codelineno-30-4"></a>GET  /api/session/{id}/titles   → list titles
-</span><span id="__span-30-5"><a id="__codelineno-30-5" name="__codelineno-30-5" href="#__codelineno-30-5"></a>POST /api/session/{id}/tracks   → tracks + chapters (with URLs) for one title
+</span><span id="__span-30-5"><a id="__codelineno-30-5" name="__codelineno-30-5" href="#__codelineno-30-5"></a>POST /api/session/{id}/tracks   → tracks + chapters (with URLs) for one title; a track that resolves its URL on use has resolve_url true and no URL
 </span><span id="__span-30-6"><a id="__codelineno-30-6" name="__codelineno-30-6" href="#__codelineno-30-6"></a>POST /api/session/{id}/segments → resolve segment URLs / DRM / headers per track
 </span><span id="__span-30-7"><a id="__codelineno-30-7" name="__codelineno-30-7" href="#__codelineno-30-7"></a>POST /api/session/{id}/segment_filter → HLS segments the service drops (ads, bumpers)
 </span><span id="__span-30-8"><a id="__codelineno-30-8" name="__codelineno-30-8" href="#__codelineno-30-8"></a>POST /api/session/{id}/samples  → decrypt cbcs samples of a track on the server
@@ -5415,7 +5415,7 @@ A slow answer arrives as a <a href="#slow-responses">slow response</a>.</p>
 </tr>
 <tr>
 <td><code>drm_type</code></td>
-<td><code>widevine</code> (default) or <code>playready</code>. In server-CDM mode the server's <code>cdm</code> mapping for the service decides the DRM system and the response <code>drm_type</code> names the system that licensed. The client's value decides only when the server has no mapping for the service.</td>
+<td><code>widevine</code> (default) or <code>playready</code>. In server-CDM mode the server's <code>cdm</code> mapping for the service decides the DRM system and the response <code>drm_type</code> names the system that licensed. The client's value decides only when the server has no mapping for the service. A track whose DRM is a whole-file cipher takes <code>clearkeyctr</code> with no <code>pssh</code>: the service on the server licenses it.</td>
 </tr>
 <tr>
 <td><code>mode</code></td>
@@ -5424,6 +5424,10 @@ A slow answer arrives as a <a href="#slow-responses">slow response</a>.</p>
 <tr>
 <td><code>clear_tracks</code> (response)</td>
 <td>Requested track ids that carry no DRM, so they have no keys. Absent when every requested track is encrypted.</td>
+</tr>
+<tr>
+<td><code>file_keys</code> (response)</td>
+<td>Content keys of whole-file ciphers, by track id, for a single track and for a batch. Absent when no requested track holds such a cipher.</td>
 </tr>
 <tr>
 <td><code>vault_keys</code> (response)</td>

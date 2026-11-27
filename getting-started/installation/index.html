@@ -2703,7 +2703,7 @@ download. For example, <code>dovi_tool</code> only matters if you download Dolby
 <tr>
 <td>MP4Box (GPAC)</td>
 <td><code>MP4Box</code></td>
-<td>Muxing DTS:X Profile 2 (DTS-UHD) and MPEG-H audio, and 3D video; remuxing AC-4, MPEG-H and DTS-UHD music</td>
+<td>Muxing DTS:X Profile 2 (DTS-UHD) and MPEG-H audio, and 3D video; remuxing AC-4, MPEG-H and DTS-UHD music; trimming the coder delay of AAC files in a paged container</td>
 </tr>
 <tr>
 <td>dovi_tool</td>
@@ -2758,9 +2758,11 @@ download. For example, <code>dovi_tool</code> only matters if you download Dolby
 </tbody>
 </table>
 <div class="admonition info">
-<p class="admonition-title">MP4Box is only used for DTS:X Profile 2, MPEG-H, AC-4 music and 3D video</p>
+<p class="admonition-title">MP4Box is only used for DTS:X Profile 2, MPEG-H, AC-4 music, 3D video and paged AAC</p>
 <p>Titles with DTS:X Profile 2 (DTS-UHD) or MPEG-H audio, or a stereoscopic 3D video track, mux to
 MP4; everything else muxes to MKV with <code>mkvmerge</code>. Install with <code>apt install gpac</code>.</p>
+<p>AAC files that come in a paged container need MP4Box only to lose the coder delay of the encoder
+and to declare HE-AACv2, see <a href="../../guide/drm-and-cdm/">DRM and CDM</a>. Without MP4Box they keep the delay.</p>
 </div>
 <div class="admonition tip">
 <p class="admonition-title">SubtitleEdit specifics</p>
