@@ -2768,7 +2768,9 @@ Two kinds of members matter: <strong>class variables</strong> that give the deta
   calls <code>check</code> until it returns a value. Use it for a login that the user approves on
   another device, such as a pair code. A remote-dl session shows the message as a log
   line, and a REST download job shows it as the job's <code>notice</code>. Both methods take <code>qr</code>, the
-  text of a QR code to scan, and the terminal or UI that shows the user the message draws it.</li>
+  text of a QR code to scan, and the terminal or UI that shows the user the message draws it.
+  When the login API gives only a PNG, <code>read_qr_image(data)</code> in <code>unshackle.core.console</code>
+  gives the text.</li>
 <li><strong>Event callbacks</strong>: <code>on_segment_downloaded</code>, <code>on_track_downloaded</code>,
   <code>on_track_decrypted</code>, <code>on_track_repacked</code>, <code>on_track_multiplex</code> let a service react to
   pipeline events.</li>
