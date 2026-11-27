@@ -2745,7 +2745,7 @@
 <p>The backend talks to endpoints under <code>uri</code> (for example <code>GET {uri}/{service}/{kid}</code> to look up a single key). It interprets a numeric <code>code</code> field in each JSON response to detect errors such as an invalid token, rate limiting, or an invalid service tag.</p>
 <div class="admonition warning">
 <p class="admonition-title">This is unshackle's own protocol, not a generic vault client</p>
-<p>The <code>API</code> backend expects unshackle's specific HTTP request and response shape. An API or HTTP key-vault endpoint built for a different project or service will generally <em>not</em> be compatible. You cannot point this at an arbitrary third-party vault API and expect it to work. To bridge another service, put an adapter in front of it that speaks this format, or use the <code>HTTP</code> backend if one of its wire protocols matches. When pushing many keys at once it batches requests and automatically shrinks the batch size if the server rejects an over-large request.</p>
+<p>The <code>API</code> backend expects unshackle's specific HTTP request and response shape. An API or HTTP key-vault endpoint built for a different project or service will generally <em>not</em> be compatible. You cannot point this at an arbitrary third-party vault API and expect it to work. To bridge another service, put an adapter in front of it that speaks this format, or use the <code>HTTP</code> backend if one of its wire protocols matches. When pushing many keys at once it batches requests and automatically shrinks the batch size if the server rejects an over-large request. After a push that succeeds at a smaller size, later pushes to that vault start at that size.</p>
 </div>
 <div class="admonition tip">
 <p class="admonition-title">DecryptLabs shortcut</p>
@@ -2764,6 +2764,7 @@
 </span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>0e7cc1a4e2f9411db0f24a3fbb8f8b21:00112233445566778899aabbccddeeff
 </span></code></pre></div>
 <p>The service argument (<code>EXAMPLE</code> above) is normalized to its canonical tag automatically. Keys that already exist in a vault are reported as skipped.</p>
+<p>If a vault answers and refuses the content keys, <code>kv add</code> shows one warning and continues with the next vault. If a vault is unreachable or still rate limited, <code>kv add</code> stops with an error.</p>
 <h3 id="kv-search-find-a-content-key-by-kid"><code>kv search</code>: find a content key by KID<a class="headerlink" href="#kv-search-find-a-content-key-by-kid" title="Permanent link">&para;</a></h3>
 <p>Search your vaults for a KID and print any matching content key.</p>
 <div class="language-console highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="gp">$ </span>unshackle<span class="w"> </span>kv<span class="w"> </span>search<span class="w"> </span>9a04f07998404286ab92e65be0885f95
@@ -2822,6 +2823,7 @@
 </span></code></pre></div>
 <p><code>kv copy</code> only reads from a source, so the file stays unchanged. <code>kv sync</code> also accepts a path, but it writes content keys into that file.</p>
 <p>With <code>--service</code>, <code>kv copy</code> reads the table named by the service's vault tag and the table named by its plain tag. It writes both into the vault-tag table, which is the table a download reads. Without <code>--service</code>, each table keeps its name.</p>
+<p>If the destination vault answers and refuses the content keys of a service, <code>kv copy</code> shows one warning and continues with the next service. If the destination vault is unreachable or still rate limited, <code>kv copy</code> stops with an error.</p>
 <p>A pair the destination vault has flagged in <code>bad_keys</code> is left behind, so a copy does not undo a flag. <code>bad_keys</code> is never treated as a service, so its rows are never copied into a service table.</p>
 <h3 id="kv-sync-mirror-vaults-both-ways"><code>kv sync</code>: mirror vaults both ways<a class="headerlink" href="#kv-sync-mirror-vaults-both-ways" title="Permanent link">&para;</a></h3>
 <p>Make each of two or more vaults hold every content key the others have. This is effectively a two-way <code>copy</code> between each pair, so afterwards all listed vaults hold the same set of keys.</p>
