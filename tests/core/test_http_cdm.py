@@ -10,6 +10,7 @@ import pytest
 from pywidevine.cdm import Cdm as WidevineCdm
 from pywidevine.pssh import PSSH
 
+from tests.core.key_resolver import MemoryVault, vaults_of
 from unshackle.core.cdm.custom_remote_cdm import CustomRemoteCDM, CustomRemoteCDMExceptions
 from unshackle.core.cdm.decrypt_labs_remote_cdm import DecryptLabsRemoteCDM, DecryptLabsRemoteCDMExceptions
 from unshackle.core.cdm.http_cdm import HttpCdm, HttpCdmExceptions
@@ -20,21 +21,6 @@ pytestmark = pytest.mark.unit
 KID_A = UUID("00112233445566778899aabbccddeeff")
 KID_B = UUID("ffeeddccbbaa99887766554433221100")
 KEY_A, KEY_B, KEY_X = "01" * 16, "02" * 16, "0f" * 16
-
-
-class FakeVaults:
-    def __init__(self, keys: dict[UUID, str]) -> None:
-        self.keys = dict(keys)
-        self.added: dict[Any, str] = {}
-
-    def __len__(self) -> int:
-        return 1
-
-    def get_key(self, kid: UUID) -> tuple[str | None, None]:
-        return self.keys.get(kid), None
-
-    def add_keys(self, keys: dict[Any, str]) -> None:
-        self.added.update(keys)
 
 
 class StubCdm(HttpCdm):
@@ -85,16 +71,16 @@ def licensed(cdm: StubCdm, *kids: UUID) -> dict[UUID, str]:
 
 
 def test_vaults_holding_every_kid_skip_the_api() -> None:
-    cdm = StubCdm(vaults=FakeVaults({KID_A: KEY_A, KID_B: KEY_B}))
+    cdm = StubCdm(vaults=vaults_of(MemoryVault({KID_A: KEY_A, KID_B: KEY_B})))
     assert licensed(cdm, KID_A, KID_B) == {KID_A: KEY_A, KID_B: KEY_B}
     assert cdm.challenges == 0
 
 
 def test_a_vault_key_wins_over_the_licence_and_licence_keys_go_to_the_vaults() -> None:
-    vaults = FakeVaults({KID_A: KEY_A})
-    cdm = StubCdm(licence=[key(KID_A, KEY_X), key(KID_B, KEY_B), key(KID_B, KEY_X)], vaults=vaults)
+    vault = MemoryVault({KID_A: KEY_A})
+    cdm = StubCdm(licence=[key(KID_A, KEY_X), key(KID_B, KEY_B), key(KID_B, KEY_X)], vaults=vaults_of(vault))
     assert licensed(cdm, KID_A, KID_B) == {KID_A: KEY_A, KID_B: KEY_B}
-    assert vaults.added == {KID_A: KEY_A, KID_B: KEY_B}
+    assert vault.added == {KID_A: KEY_A, KID_B: KEY_B}
 
 
 def test_cached_keys_covering_every_kid_need_no_licence() -> None:

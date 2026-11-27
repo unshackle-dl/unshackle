@@ -139,7 +139,8 @@ def decrypt(
         server_vault=SimpleNamespace(add_keys=lambda service, keys, track: pushed.append((keys, track))),
     )
     keys = resolver(vaults, tag="EXAMPLE", source=source)
-    vaults.flagged.update((flagged or {}).items())
+    for kid, key in (flagged or {}).items():
+        vaults.flag_bad_key(kid, key)
     path = tmp_path / "video.mp4"
     path.write_bytes(b"cipher")
     content_keys = {LICENSED: KEY, VAULTED: OTHER_KEY, NULL: "0" * 32, **(flagged or {})}

@@ -25,7 +25,6 @@ from unshackle.core.utilities import declared_kwargs
 if TYPE_CHECKING:
     from unshackle.core.drm.cbcs import SampleDecrypter
     from unshackle.core.remote_service import ServerVault
-    from unshackle.core.vault import Vault
 
 
 class KeyArrival(Enum):
@@ -86,7 +85,7 @@ class ServerKeySource(Protocol):
     def license_file(self, track: AnyTrack) -> str:
         """The content key the server licenses for the whole-file cipher of ``track``; a refusal raises."""
 
-    def vault_source(self, kid: UUID, key: str) -> Vault | None:
+    def vault_source(self, kid: UUID, key: str) -> ServerVault | None:
         """The server vault when it served ``key`` for ``kid``, else None. That content key must pass a decrypt check."""
 
     @property

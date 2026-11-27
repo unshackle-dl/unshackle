@@ -1,13 +1,12 @@
 import logging
 import threading
-import time
 from pathlib import Path
 from types import SimpleNamespace
 from uuid import UUID
 
 import pytest
 
-from tests.core.key_resolver import NoVaults, key_table, resolver
+from tests.core.key_resolver import MemoryVault, key_table, resolver, vaults_of
 from unshackle.core.drm import key_resolution
 from unshackle.core.drm.key_resolution import ContentKeyResolver
 from unshackle.core.vault import RateLimited, vault_session
@@ -37,7 +36,7 @@ def test_flagged_pair_is_skipped_and_named(tmp_path: Path) -> None:
     vaults.vaults = [local, poisoned]
 
     assert vaults.get_key(KID) == (BAD, poisoned)
-    assert vaults.sources[KID] == (BAD, poisoned)
+    assert vaults.source_of(KID, BAD) is poisoned
     local.add_key("SVC", KID, BAD)  # the cross-vault copy that happened before verification
 
     vaults.flag_bad_key(KID, BAD)
@@ -273,13 +272,20 @@ def test_retry_takes_the_next_parallel_answer_without_a_new_request(tmp_path: Pa
     fast, slow = Fast("fast", BAD), Slow("slow", GOOD)
     vaults = Vaults("SVC")
     vaults.vaults = [local, fast, slow]
+    landed = threading.Event()
+    offer = vaults.offer
+
+    def offered(kid: UUID | str, key: str, source: object) -> None:
+        offer(kid, key, source)  # type: ignore[arg-type]
+        if source is slow:
+            landed.set()
+
+    vaults.offer = offered  # type: ignore[method-assign]
 
     assert vaults.get_key(KID) == (BAD, fast)
     vaults.flag_bad_key(KID, BAD)
-    release.set()  # the slow answer lands in candidates after the first call returned
-    deadline = time.monotonic() + 5
-    while len(vaults.candidates.get(KID, [])) < 2 and time.monotonic() < deadline:
-        time.sleep(0.01)
+    release.set()
+    assert landed.wait(5)
     assert vaults.get_key(KID) == (GOOD, slow)
     assert fast.calls == 1 and slow.calls == 1
 
@@ -308,8 +314,10 @@ def test_cdm_returning_the_flagged_key_clears_the_flag(
             drm.content_keys[KID] = BAD  # the CDM answers with the same key
 
     keys.decrypt_verified(drm, path, licence, KID)
+    keys.wait_vault_writes()
     assert path.read_bytes() == b"plain:" + BAD.encode()
     assert not local.is_bad_key(KID, BAD)
+    assert local.get_key(KID, "SVC") == BAD
 
 
 def test_a_replacement_key_in_a_new_dict_is_checked_and_stored(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -476,27 +484,15 @@ def test_a_licence_with_no_new_keys_sends_no_vault_write(monkeypatch: pytest.Mon
     """A PSSH KID the licence never answers forces a licence on every run; the vaults must not get an empty push."""
     from unshackle.core.drm import ClearKeyCENC
 
-    pushes: list[dict] = []
-
-    class PushVaults(NoVaults):
-        def __bool__(self) -> bool:
-            return True
-
-        def clear_licensed_flags(self, content_keys: dict) -> None:
-            pass
-
-        def add_keys(self, kid_keys: dict) -> int:
-            pushes.append(kid_keys)
-            return 1
-
+    vault = MemoryVault()
     monkeypatch.setattr(ClearKeyCENC, "get_content_keys", lambda self, **_: None)
-    keys = resolver(PushVaults())
+    keys = resolver(vaults_of(vault))
     drm = ClearKeyCENC(kids=[KID])
 
     keys.licence_for(SimpleNamespace(drm=[drm]), None, key_table())(drm, track_kid=None)
     keys.wait_vault_writes()
 
-    assert pushes == []
+    assert vault.pushes == []
 
 
 def test_the_cached_key_count_is_unique_and_skipped_without_vaults(
@@ -704,6 +700,7 @@ def test_a_remote_vault_is_told_only_when_another_key_replaces_its_pair(
         drm.content_keys[KID] = GOOD
 
     keys.decrypt_verified(drm, path, licence, KID)
+    keys.wait_vault_writes()
     assert drm.content_keys == {KID: GOOD}
     assert remote.is_bad_key(KID, served) is told
 
@@ -719,7 +716,7 @@ def test_the_server_vault_is_told_at_once(tmp_path: Path, monkeypatch: pytest.Mo
     )
     vaults = Vaults("SVC")
     vaults.vaults = [SQLite("local", tmp_path / "local.db")]
-    vaults.sources[KID] = (BAD, server)
+    vaults.supplied(KID, BAD, server)  # type: ignore[arg-type]
     keys = make_resolver(monkeypatch, vaults)
     drm = FakeDRM({KID: BAD})
     path = tmp_path / "video.mp4"
@@ -819,7 +816,7 @@ def test_a_sibling_verdict_during_the_decrypt_still_triggers_the_retry(
     local = SQLite("local", tmp_path / "local.db")
     vaults = Vaults("SVC")
     vaults.vaults = [local]
-    vaults.sources[KID] = (BAD, local)
+    vaults.supplied(KID, BAD, local)
     keys = make_resolver(monkeypatch, vaults)
     ContentKeyResolver.LICENSE_KEY_CACHE[KID] = GOOD  # the sibling's retry already licensed the good key
 
@@ -855,10 +852,10 @@ def test_api_vault_reports_the_pair_upstream(monkeypatch: pytest.MonkeyPatch, ca
 
     vaults = Vaults("SVC")
     vaults.vaults = [api]
-    vaults.sources[KID] = (BAD, api)
+    vaults.supplied(KID, BAD, api)
     vaults.flag_bad_key(KID, BAD)
     assert not calls
-    vaults.report_replaced({KID: GOOD})
+    vaults.proven({KID: GOOD}, {})
     vaults.unflag_bad_key(KID, BAD)
 
     assert calls == [
@@ -867,9 +864,9 @@ def test_api_vault_reports_the_pair_upstream(monkeypatch: pytest.MonkeyPatch, ca
     ]
 
     def flag_and_replace(source: object) -> None:
-        vaults.sources[KID] = (BAD, source)
+        vaults.supplied(KID, BAD, source)  # type: ignore[arg-type]
         vaults.flag_bad_key(KID, BAD)
-        vaults.report_replaced({KID: GOOD})
+        vaults.proven({KID: GOOD}, {})
 
     calls.clear()
     flag_and_replace(SimpleNamespace(name="other", local=False, report_now=False))
@@ -896,20 +893,11 @@ def test_api_vault_reports_the_pair_upstream(monkeypatch: pytest.MonkeyPatch, ca
 
 
 def test_prefer_vault_keys_queries_each_named_kid_once() -> None:
-    asked: list[UUID] = []
-
-    class AskedVaults(NoVaults):
-        def get_key(self, kid: UUID) -> tuple[None, None]:
-            asked.append(kid)
-            return None, None
-
-        def held_locally(self, kid: UUID, key: str) -> bool:
-            return False
-
-    keys = resolver(AskedVaults(), source=SERVER)
+    remote = MemoryVault(local=False)
+    keys = resolver(vaults_of(remote), source=SERVER)
     keys.take_server_keys(batch_title({KID: GOOD, SIBLING: BAD}, {KID: GOOD, SIBLING: BAD}, kids=[KID]))
 
-    assert asked == [KID]
+    assert remote.asked == [KID]
 
 
 def test_cache_resolved_keys_skips_a_key_a_local_vault_holds(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:

@@ -98,7 +98,6 @@ from unshackle.core.utils import run_proxy
 from unshackle.core.utils.collections import ci_get
 from unshackle.core.utils.redact import redact_path, redact_text, safe_display_url
 from unshackle.core.utils.service_params import service_options
-from unshackle.core.vault import Vault
 from unshackle.core.wire import apply_title_fields, build_title, build_tracks
 
 if TYPE_CHECKING:
@@ -789,29 +788,23 @@ def cache_key_filter(service_tag: str, profile: str | None) -> Callable[[str], b
     return relevant
 
 
-class ServerVault(Vault):
-    """The server's vaults as one source for the client, which reports bad pairs to it and pushes proven ones.
+class ServerVault:
+    """The server's vaults as one content-key source for the client, which reports bad pairs to it and pushes proven ones.
 
-    ``decrypt_verified`` needs a Vault to hold in ``Vaults.sources`` so a server-supplied
-    content key gets the same decode check as a local vault key. The client never learns
-    which server vault answered and cannot read it. A bad verdict goes to the server at once,
-    so its next licence skips the pair. ``add_keys`` pushes the proven keys the server did not serve.
+    A content key the server's vaults supplied gets the same decode check as a local vault key, with this
+    source on record in ``Vaults``. The client never learns which server vault answered and cannot read
+    it. A bad verdict goes to the server at once, so its next licence skips the pair.
     """
 
+    name = "server_cdm"
+    local = False
     report_now = True
 
     def __init__(self, service: RemoteService) -> None:
-        super().__init__("server_cdm", no_push=True)
         self.service = service
 
-    def get_key(self, kid: UUID | str, service: str) -> str | None:
-        return None
-
-    def get_keys(self, service: str) -> Iterator[tuple[str, str]]:
-        return iter(())
-
-    def add_key(self, service: str, kid: UUID | str, key: str) -> bool:
-        return False
+    def __str__(self) -> str:
+        return f"{self.name} {type(self).__name__}"
 
     def add_keys(self, service: str, kid_keys: dict[UUID | str, str], track: AnyTrack | None = None) -> int:
         """Post the pairs of ``track`` the server neither served nor accepted; always 0, as it does not say what it stored.
@@ -831,9 +824,6 @@ class ServerVault(Vault):
                 ).ok:
                     remote.served_keys.update((UUID(hex=kid), key) for kid, key in keys.items())
         return 0
-
-    def get_services(self) -> Iterator[str]:
-        return iter(())
 
     def flag_bad_key(self, service: str, kid: UUID | str, key: str, source: str) -> None:
         self.service.report_bad_key(UUID(str(kid)), key)
@@ -1667,7 +1657,7 @@ class RemoteService(TitleSource):
         """True when the server handed ``track`` to this machine's own CDM to license."""
         return str(track.id) in self.client_licensed
 
-    def vault_source(self, kid: UUID, key: str) -> Vault | None:
+    def vault_source(self, kid: UUID, key: str) -> ServerVault | None:
         """The server vault when it served ``key`` for ``kid``, else None."""
         return self.server_vault if self.server_vault_keys.get(kid) == key else None
 

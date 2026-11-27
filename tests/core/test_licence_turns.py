@@ -14,7 +14,7 @@ from pywidevine.pssh import PSSH
 from rich.table import Table
 from rich.tree import Tree
 
-from tests.core.key_resolver import NoVaults, key_table, resolver
+from tests.core.key_resolver import MemoryVault, key_table, resolver, vaults_of
 from tests.core.test_all_drm import playready
 from unshackle.core.cdm.detect import cdm_type_stub
 from unshackle.core.constants import DOWNLOAD_CANCELLED, DownloadCancelled
@@ -53,16 +53,17 @@ def licences(monkeypatch: pytest.MonkeyPatch) -> Licences:
     DOWNLOAD_CANCELLED.clear()
 
 
-class TrackVaults(NoVaults):
-    """No key vault, but a lookup by the second track sets ``looked_up``."""
+class TrackVault(MemoryVault):
+    """An empty key vault; a lookup by the second track sets ``looked_up``."""
 
     def __init__(self, looked_up: threading.Event) -> None:
+        super().__init__()
         self.looked_up = looked_up
 
-    def get_key(self, kid: UUID) -> tuple[None, None]:
+    def get_key(self, kid: UUID | str, service: str) -> str | None:
         if threading.current_thread().name == "track-1":
             self.looked_up.set()
-        return None, None
+        return super().get_key(kid, service)
 
 
 def widevine(*kids: UUID) -> Widevine:
@@ -97,7 +98,7 @@ def tree_labels(table: Table, kid: UUID) -> list[str]:
 
 
 def test_one_licence_for_two_pssh_with_different_kids(licences: Licences) -> None:
-    keys = resolver(TrackVaults(licences.second_track_looked_up))
+    keys = resolver(vaults_of(TrackVault(licences.second_track_looked_up)))
     first, second = widevine(KID_A, KID_B), widevine(KID_C)
 
     table, errors = run_together(keys, (first, KID_A), (second, KID_C))
@@ -167,17 +168,12 @@ def test_an_all_zero_licence_key_is_dropped(
 
 
 def test_vaults_only_stops_at_the_first_kid_no_vault_holds(licences: Licences) -> None:
-    asked: list[UUID] = []
-
-    class EmptyVaults(NoVaults):
-        def get_key(self, kid: UUID) -> tuple[None, None]:
-            asked.append(kid)
-            return None, None
+    empty = MemoryVault()
 
     with pytest.raises(Widevine.Exceptions.CEKNotFound, match=KID_A.hex):
-        prepare(resolver(EmptyVaults(), vaults_only=True), widevine(KID_A, KID_B), KID_A, key_table())
+        prepare(resolver(vaults_of(empty), vaults_only=True), widevine(KID_A, KID_B), KID_A, key_table())
 
-    assert asked == [KID_A]
+    assert empty.asked == [KID_A]
     assert licences == []
 
 

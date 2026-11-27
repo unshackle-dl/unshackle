@@ -43,8 +43,7 @@ from unshackle.core.tracks import Video
 from unshackle.core.utilities import declared_kwargs, log_event
 from unshackle.core.utils.redact import redact_secrets
 from unshackle.core.utils.subprocess import ffmpeg_decodes
-from unshackle.core.vault import Vault
-from unshackle.core.vaults import Vaults
+from unshackle.core.vaults import KeySource, Vaults
 
 if TYPE_CHECKING:
     from unshackle.core.title_source import ServerKeySource
@@ -169,7 +168,7 @@ class ContentKeyResolver:
 
         def flagged_kids() -> list[UUID]:
             """The KIDs on this track whose content key another track already proved wrong."""
-            return [kid for kid, key in keys.items() if (kid, key) in self.vaults.flagged]
+            return [kid for kid, key in keys.items() if self.vaults.proved_wrong(kid, key)]
 
         def drop(kid: UUID) -> str:
             key = keys.pop(kid)
@@ -177,7 +176,7 @@ class ContentKeyResolver:
                 self.LICENSE_KEY_CACHE.pop(kid)
             return key
 
-        def relicense(bad: dict[UUID, str], kids: dict[UUID, Vault]) -> None:
+        def relicense(bad: dict[UUID, str], kids: dict[UUID, KeySource]) -> None:
             """Licence again for each dropped KID, then settle each dropped pair against the new key.
 
             _prepare_drm licenses only for a KID it is told to need, so without the second call a
@@ -197,14 +196,13 @@ class ContentKeyResolver:
                 new = keys.get(kid)
                 if new is None:
                     continue
-                source = self.vaults.sources.get(kid)
+                source = self.vaults.source_of(kid, new)
                 if source is None:
                     if new == key:
                         self.vaults.unflag_bad_key(kid, key)
-                        self._flush_vault_writes([partial(self.vaults.add_key, kid, key)])
-                    elif not self.vaults.held_locally(kid, new):
-                        self._flush_vault_writes([partial(self.vaults.add_key, kid, new)])
-                elif new == key and kid in kids and source[1] is kids[kid]:
+                    if new == key or not self.vaults.held_locally(kid, new):
+                        self._flush_vault_writes([partial(self._cache_keys_to_vaults, {kid: new})])
+                elif new == key and source is kids.get(kid):
                     raise ValueError(f"{key} from {kids[kid].name} was bad and no other source has the key")
 
         known_bad = flagged_kids()
@@ -220,10 +218,10 @@ class ContentKeyResolver:
                     licence(drm, track_kid=kid)
             keys = getattr(drm, "content_keys", keys)
 
-        def vault_kids() -> dict[UUID, Vault]:
+        def vault_kids() -> dict[UUID, KeySource]:
             """The KIDs whose key on the track came from a vault, with that vault."""
-            found = {kid: self.vaults.sources.get(kid) for kid in keys}
-            return {kid: src[1] for kid, src in found.items() if src and src[0] == keys[kid]}
+            found = {kid: self.vaults.source_of(kid, key) for kid, key in keys.items()}
+            return {kid: source for kid, source in found.items() if source is not None}
 
         backup = path.with_name(path.name + ".enc")
         backup.unlink(missing_ok=True)  # a killed run leaves one behind; its bytes may not match
@@ -237,7 +235,7 @@ class ContentKeyResolver:
         windows = kid_map.windows if kid_map else {}
         video = kid_map.video if kid_map else None
 
-        def proven(passed: dict[UUID, Vault]) -> dict[UUID | str, str]:
+        def proven(passed: dict[UUID, KeySource]) -> dict[UUID | str, str]:
             """The licence keys and the vault keys in ``passed``, without null keys; a flagged pair never gets here."""
             sourced = vault_kids()
             return {
@@ -247,14 +245,14 @@ class ContentKeyResolver:
         def window_decodes(start: float, end: float) -> bool:
             return ffmpeg_decodes(path, start=start, seconds=end - start if end > start else 0.5, video=video)
 
-        def judged_kids() -> dict[UUID, Vault]:
+        def judged_kids() -> dict[UUID, KeySource]:
             """The vault KIDs this file can judge. A map whose KIDs all have keys skips the KIDs it lacks."""
             kids = vault_kids()
             if kid_map is not None and all(kid in keys for kid in windows):
                 return {kid: vault for kid, vault in kids.items() if kid in windows}
             return kids
 
-        def failed_kids(kids: dict[UUID, Vault]) -> set[UUID]:
+        def failed_kids(kids: dict[UUID, KeySource]) -> set[UUID]:
             """The vault KIDs whose content key did not decode.
 
             A KID in the KID map fails when one of its windows fails. The KIDs that are not in the
@@ -291,19 +289,11 @@ class ContentKeyResolver:
                     checked = bool(kids and binaries.FFMPEG and path.exists())
                     failed = failed_kids(kids) if checked else set()
                     if not failed:
-                        if checked:
-                            self._flush_vault_writes(
-                                [
-                                    partial(self.vaults.add_key, kid, keys[kid], excluding=vault)
-                                    for kid, vault in kids.items()
-                                ]
-                            )
-                        self.vaults.report_replaced(keys)
+                        passed = kids if checked else {}
+                        self._flush_vault_writes([partial(self.vaults.proven, dict(keys), passed)])
                         server_vault = self.source.server_vault if self.source and track is not None else None
                         if server_vault is not None:
-                            self._flush_vault_writes(
-                                [partial(server_vault.add_keys, self.tag, proven(kids if checked else {}), track)]
-                            )
+                            self._flush_vault_writes([partial(server_vault.add_keys, self.tag, proven(passed), track)])
                         return
                 bad = {kid: drop(kid) for kid in {*failed, *stale}}
                 for kid, key in bad.items():
@@ -361,8 +351,8 @@ class ContentKeyResolver:
         answered. A vault key still goes first, so ``decrypt_verified`` proves it and flags a
         poisoned row; the server key waits as the next candidate. A server CDM key is trusted
         like a local CDM key: it goes to the run cache and the vaults, and a retry after a
-        flagged vault key takes it before any vault. A server vault key is unproven, so it
-        waits in ``Vaults.candidates`` and gets the same check when its turn comes. Only the KIDs
+        flagged vault key takes it before any vault. A server vault key is unproven, so
+        ``Vaults`` holds it as an offer and it gets the same check when its turn comes. Only the KIDs
         the DRM names are looked up, each once, so sibling keys add no remote vault requests.
         """
         looked_up: dict[UUID, tuple[str | None, Any]] = {}
@@ -381,7 +371,7 @@ class ContentKeyResolver:
                     drm.content_keys[kid] = vault_key
                     server_vault = source.vault_source(kid, server_key)
                     if server_vault is not None:
-                        self.vaults.candidates.setdefault(kid, []).append((server_key, server_vault))
+                        self.vaults.offer(kid, server_key, server_vault)
                     elif kid not in self.LICENSE_KEY_CACHE:
                         self.LICENSE_KEY_CACHE[kid] = server_key
                         self._flush_vault_writes([partial(self._cache_keys_to_vaults, {kid: server_key})])
@@ -399,7 +389,7 @@ class ContentKeyResolver:
             for kid, key in getattr(drm, "content_keys", {}).items()
             if kid not in self.LICENSE_KEY_CACHE
             and source.vault_source(kid, key) is None
-            and self.vaults.sources.get(kid, (None,))[0] != key
+            and self.vaults.source_of(kid, key) is None
         }
         keys = {kid: key for kid, key in resolved.items() if not self.vaults.held_locally(kid, key)}
         if keys:
@@ -411,8 +401,7 @@ class ContentKeyResolver:
         flag came from a decode check that was wrong, and a local vault refuses a flagged pair."""
         if not content_keys or not self.vaults:
             return
-        self.vaults.clear_licensed_flags(content_keys)
-        successful_caches = self.vaults.add_keys(cast(dict[UUID | str, str], content_keys))
+        successful_caches = self.vaults.licensed(content_keys)
         kids, caches = self.vault_cache_tally or (set(), successful_caches)
         self.vault_cache_tally = (kids | content_keys.keys(), min(caches, successful_caches))
 
@@ -872,7 +861,7 @@ class ContentKeyResolver:
                 for kid, key in drm.content_keys.items():
                     source = None if cdm_only else remote.vault_source(kid, key)
                     if source is not None:
-                        self.vaults.sources[kid] = (key, source)
+                        self.vaults.supplied(kid, key, source)
                     elif kid not in known_keys:
                         new_keys[kid] = key
                 if new_keys:

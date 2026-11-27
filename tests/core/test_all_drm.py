@@ -15,7 +15,7 @@ from pywidevine.cdm import Cdm as WidevineCdm
 from pywidevine.pssh import PSSH
 
 from tests.admission import refusal
-from tests.core.key_resolver import NoVaults, key_table, resolver
+from tests.core.key_resolver import MemoryVault, key_table, resolver, vaults_of
 from unshackle.commands.dl import dl
 from unshackle.core.api.handlers import load_full_cdm, resolve_server_cdm
 from unshackle.core.cdm.detect import is_widevine_cdm
@@ -57,15 +57,9 @@ class Run:
     def __init__(self, vault: dict[UUID, str] | None = None, **flags: Any) -> None:
         self.requests: list[str] = []
         self.held: list[dict[UUID, str]] = []
-        self.vault_queries: list[UUID] = []
-        self.keys = resolver(Vault(self.get_key(vault or {})), tag="EXAMPLE", **flags)
-
-    def get_key(self, vault: dict[UUID, str]) -> Any:
-        def get_key(kid: UUID) -> tuple[str | None, str | None]:
-            self.vault_queries.append(kid)
-            return vault.get(kid), "vault" if kid in vault else None
-
-        return get_key
+        self.vault = MemoryVault(vault, no_push=True)
+        self.vault_queries = self.vault.asked
+        self.keys = resolver(vaults_of(self.vault), tag="EXAMPLE", **flags)
 
     def drm(self, drm: Any, keys: dict[UUID, str] | None = None, fail: bool = False) -> Any:
         """Give ``drm`` a licence that returns ``keys`` (KID:KEY by default), or that is refused."""
@@ -83,13 +77,6 @@ class Run:
     def run(self, drm: Any, *others: Any, track_kid: UUID | None = KID) -> None:
         track = SimpleNamespace(drm=[drm, *others], id="track", height=None)
         self.keys.licence_for(track, None, key_table(), all_drm=True)(drm, track_kid=track_kid)
-
-
-class Vault(NoVaults):
-    """A key vault that answers from ``get_key`` and stores nothing."""
-
-    def __init__(self, get_key: Any) -> None:
-        self.get_key = get_key  # type: ignore[method-assign]
 
 
 def test_cdm_only_licenses_each_drm_system_although_a_content_key_is_held() -> None:

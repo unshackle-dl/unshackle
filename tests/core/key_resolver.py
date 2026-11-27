@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from types import SimpleNamespace
 from typing import Any
 from uuid import UUID
@@ -11,22 +11,52 @@ from rich.table import Table
 
 from unshackle.core.cdm.detect import cdm_type_stub
 from unshackle.core.drm.key_resolution import ContentKeyResolver
+from unshackle.core.vault import Vault
+from unshackle.core.vaults import Vaults
 
 
-class NoVaults:
-    """No key vault: every lookup misses and nothing is stored."""
+class MemoryVault(Vault):
+    """A key vault in memory that records each lookup in ``asked``, each push in ``pushes`` and ``added``, and each flag in ``told``."""
 
-    sources: dict = {}
-    flagged: set = set()
+    def __init__(
+        self, keys: dict[UUID, str] | None = None, local: bool = True, name: str = "memory", no_push: bool = False
+    ) -> None:
+        super().__init__(name, no_push)
+        self.local = local
+        self.keys: dict[UUID | str, str] = dict(keys or {})
+        self.asked: list[UUID | str] = []
+        self.pushes: list[dict[UUID | str, str]] = []
+        self.added: dict[UUID | str, str] = {}
+        self.told: list[tuple[UUID | str, str]] = []
 
-    def __bool__(self) -> bool:
-        return False
+    def get_key(self, kid: UUID | str, service: str) -> str | None:
+        self.asked.append(kid)
+        return self.keys.get(kid)
 
-    def __len__(self) -> int:
-        return 0
+    def get_keys(self, service: str) -> Iterator[tuple[str, str]]:
+        return iter((str(kid), key) for kid, key in self.keys.items())
 
-    def get_key(self, kid: UUID) -> tuple[None, None]:
-        return None, None
+    def add_key(self, service: str, kid: UUID | str, key: str) -> bool:
+        return bool(self.add_keys(service, {kid: key}))
+
+    def add_keys(self, service: str, kid_keys: dict[UUID | str, str]) -> int:
+        self.pushes.append(dict(kid_keys))
+        self.added.update(kid_keys)
+        self.keys.update(kid_keys)
+        return len(kid_keys)
+
+    def get_services(self) -> Iterator[str]:
+        return iter(())
+
+    def flag_bad_key(self, service: str, kid: UUID | str, key: str, source: str) -> None:
+        self.told.append((kid, key))
+
+
+def vaults_of(*loaded: Vault, service: str = "TEST") -> Vaults:
+    """A Vaults over ``loaded``, with no config."""
+    vaults = Vaults(service)
+    vaults.vaults = list(loaded)
+    return vaults
 
 
 def stand_in_service() -> SimpleNamespace:
@@ -50,14 +80,14 @@ def resolver(
     tag: str = "TEST",
     **flags: Any,
 ) -> ContentKeyResolver:
-    """A ContentKeyResolver over ``vaults`` (none by default) and a Widevine CDM, with an empty run key cache."""
+    """A ContentKeyResolver over ``vaults`` (no vault by default) and a Widevine CDM, with an empty run key cache."""
     ContentKeyResolver.LICENSE_KEY_CACHE.clear()
     ContentKeyResolver.DRM_LOCKS.clear()
     cdms = SimpleNamespace(
         cdm=cdm,
         cdm_for=cdm_for or (lambda system, quality=None: cdm_type_stub(system)),
     )
-    return ContentKeyResolver(NoVaults() if vaults is None else vaults, cdms, stand_in_service(), tag, **flags)
+    return ContentKeyResolver(vaults_of() if vaults is None else vaults, cdms, stand_in_service(), tag, **flags)
 
 
 def key_table() -> Table:

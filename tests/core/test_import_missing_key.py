@@ -16,7 +16,7 @@ import click
 import pytest
 from pywidevine.pssh import PSSH
 
-from tests.core.key_resolver import NoVaults, key_table, resolver
+from tests.core.key_resolver import key_table, resolver, vaults_of
 from unshackle.commands.dl import dl
 from unshackle.core.drm import Widevine, key_resolution
 from unshackle.core.drm.key_resolution import ContentKeyResolver
@@ -85,7 +85,7 @@ def test_the_error_names_the_kids_without_a_content_key() -> None:
 def test_the_server_cdm_branch_lets_the_import_error_through(monkeypatch: pytest.MonkeyPatch) -> None:
     drm = FakeDRM({})
     track = SimpleNamespace(id="vid", drm=[drm])
-    keys = make_resolver(monkeypatch, NoVaults(), track, [])
+    keys = make_resolver(monkeypatch, vaults_of(), track, [])
 
     with pytest.raises(click.ClickException, match=KID.hex):
         keys.licence_for(track, None, key_table())(drm, track_kid=None)
