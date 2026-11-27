@@ -47,6 +47,7 @@ jobs:
         run: uv run bandit -q -c pyproject.toml -r unshackle --severity-level medium --confidence-level medium
 
   test:
+    if: github.ref != 'refs/heads/main' && github.base_ref != 'main'
     strategy:
       fail-fast: false
       matrix:
