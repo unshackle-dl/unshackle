@@ -1229,6 +1229,28 @@ class RnetSession:
     def patch(self, url: str, **kwargs: Any) -> RnetResponse:
         return self.request("PATCH", url, **kwargs)
 
+    def websocket(self, url: str, headers: dict[str, Any] | None = None) -> rnet.BlockingWebSocket:
+        """Open a websocket at a ``ws://`` or ``wss://`` URL, with the TLS profile and the proxy of this HTTP session.
+
+        A new rnet client makes the handshake with ``headers``, so the default headers of the HTTP session stay out of it.
+        """
+        if run_proxy.watched and not self.proxy_exempt and not self._client_kwargs.get("proxies"):
+            try:
+                run_proxy.check(urlparse(url).hostname, sys._getframe(1))
+            except Exception:  # nosec B110 - the proxy check only warns, it must never fail a handshake
+                pass
+        record = config.debug_requests
+        started = time.monotonic()
+        try:
+            socket = rnet.BlockingClient(**self._client_kwargs).websocket(url, headers=dict(headers or {}))
+        except Exception as error:
+            if record:
+                record_request("GET", url, 1, duration=time.monotonic() - started, error=error)
+            raise
+        if record:
+            record_request("GET", url, 1, duration=time.monotonic() - started, status=socket.status)
+        return socket
+
     def prepare_request(self, req: Request) -> Request:
         """Compatibility shim for services using prepared requests."""
         # Merge session headers into request headers

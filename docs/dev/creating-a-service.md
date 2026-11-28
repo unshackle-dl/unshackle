@@ -171,7 +171,11 @@ class TrackRequest:
     streaming platform blocks you on TLS fingerprint alone, override it to return
     `session("Chrome131")` (any `rnet.Impersonate` preset). `RnetSession` is a
     drop-in `requests.Session` replacement (same `.get`/`.post`/cookie-jar
-    interface), so nothing else in the service changes. If instead you need
+    interface), so nothing else in the service changes. For a websocket,
+    `self.session.websocket(url, headers)` opens one with the same preset and
+    proxy, and sends only the headers you give. Its `recv()` has no read
+    timeout and gives each ping to you, so the thread that reads answers the
+    pings and closes the socket. If instead you need
     specific SSL *cipher* behaviour, mount
     `unshackle.core.utils.sslciphers.SSLCiphers` onto a plain `requests.Session`.
 
