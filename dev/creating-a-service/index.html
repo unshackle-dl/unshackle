@@ -2604,7 +2604,11 @@ retry adapter) and <strong>deliberately does not</strong> do TLS impersonation. 
 streaming platform blocks you on TLS fingerprint alone, override it to return
 <code>session("Chrome131")</code> (any <code>rnet.Impersonate</code> preset). <code>RnetSession</code> is a
 drop-in <code>requests.Session</code> replacement (same <code>.get</code>/<code>.post</code>/cookie-jar
-interface), so nothing else in the service changes. If instead you need
+interface), so nothing else in the service changes. For a websocket,
+<code>self.session.websocket(url, headers)</code> opens one with the same preset and
+proxy, and sends only the headers you give. Its <code>recv()</code> has no read
+timeout and gives each ping to you, so the thread that reads answers the
+pings and closes the socket. If instead you need
 specific SSL <em>cipher</em> behaviour, mount
 <code>unshackle.core.utils.sslciphers.SSLCiphers</code> onto a plain <code>requests.Session</code>.</p>
 </div>

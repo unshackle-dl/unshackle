@@ -2435,7 +2435,13 @@ result in <code>directories.cache/update_check.json</code>.</p>
 <td><code>debug_requests</code></td>
 <td>bool</td>
 <td><code>false</code></td>
-<td>Log HTTP requests.</td>
+<td>The one switch that writes an <code>http_request</code> entry for each HTTP attempt to the JSON debug log, with the text response body as received; <code>-d</code> and <code>debug</code> alone write none. With <code>-d</code> it also keeps the HTTP library logs in the console. See <a href="../../../guide/troubleshooting/#debug-requests">Debugging HTTP traffic</a>.</td>
+</tr>
+<tr>
+<td><code>debug_requests_body_limit</code></td>
+<td>int</td>
+<td><code>0</code></td>
+<td>The maximum number of bytes of a response body in an <code>http_request</code> entry. <code>0</code> or unset records the full body. unshackle cuts a longer body and records its full size.</td>
 </tr>
 <tr>
 <td><code>set_terminal_bg</code></td>
@@ -2459,7 +2465,14 @@ INFO level during the DRM handshake. Treat <code>debug</code>, <code>debug_keys<
 sensitive, and keep <code>redact_paths</code> enabled when sharing logs.</p>
 <p><code>debug_keys</code> affects <strong>only</strong> content-encryption keys (the <code>content_key</code>/<code>key</code> fields).
 Passwords, tokens, cookies, and session tokens are <strong>always</strong> redacted regardless of this
-setting, and KIDs, content key counts, and other metadata are always logged either way.</p>
+setting, and KIDs, content key counts, and other metadata are always logged either way.
+The <code>http_request</code> entries of <code>debug_requests</code> are the exception.</p>
+</div>
+<div class="admonition danger">
+<p class="admonition-title"><code>debug_requests</code> writes secrets</p>
+<p>With <code>debug_requests</code> on, the JSONL file holds tokens, passwords, cookies, content keys and account data
+as the servers sent them. unshackle masks only the local folder prefixes in these entries. Keep the file on
+your computer. Never attach it to a report.</p>
 </div>
 <hr />
 <h2 id="deprecated-removed-keys">Deprecated &amp; removed keys<a class="headerlink" href="#deprecated-removed-keys" title="Permanent link">&para;</a></h2>

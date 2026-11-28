@@ -1002,13 +1002,41 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#debugging-http-traffic-with-debug_requests" class="md-nav__link">
+  <a href="#debug-requests" class="md-nav__link">
     <span class="md-ellipsis">
       
         Debugging HTTP traffic with debug_requests
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="Debugging HTTP traffic with debug_requests">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#http-library-logs-in-the-console" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        HTTP library logs in the console
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#request-records-in-the-json-debug-log" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Request records in the JSON debug log
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -2220,13 +2248,41 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#debugging-http-traffic-with-debug_requests" class="md-nav__link">
+  <a href="#debug-requests" class="md-nav__link">
     <span class="md-ellipsis">
       
         Debugging HTTP traffic with debug_requests
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="Debugging HTTP traffic with debug_requests">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#http-library-logs-in-the-console" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        HTTP library logs in the console
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#request-records-in-the-json-debug-log" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Request records in the JSON debug log
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -2395,7 +2451,7 @@
 </div>
 <hr />
 <h2 id="the-structured-json-debug-log">The structured JSON debug log<a class="headerlink" href="#the-structured-json-debug-log" title="Permanent link">&para;</a></h2>
-<p>Beyond the console output, unshackle writes a structured log in <a href="https://jsonlines.org/">JSON Lines</a> format: one complete JSON object per line. You can filter, examine, and analyse this file with standard tooling (<code>jq</code>, <code>grep</code>, a text editor). It is safe to attach to a bug report, because unshackle redacts it.</p>
+<p>Beyond the console output, unshackle writes a structured log in <a href="https://jsonlines.org/">JSON Lines</a> format: one complete JSON object per line. You can filter, examine, and analyse this file with standard tooling (<code>jq</code>, <code>grep</code>, a text editor). It is safe to attach to a bug report, because unshackle redacts it, unless <code>debug_requests</code> is on (see <a href="#debug-requests">Debugging HTTP traffic</a>).</p>
 <h3 id="where-it-is-written">Where it is written<a class="headerlink" href="#where-it-is-written" title="Permanent link">&para;</a></h3>
 <p>unshackle makes the debug log during a <code>dl</code> run, and during <a href="../cli-reference/#import"><code>import</code></a>, which wraps <code>dl</code>. The path is:</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>&lt;logs directory&gt;/unshackle_debug_&lt;service&gt;_&lt;timestamp&gt;.jsonl
@@ -2492,9 +2548,11 @@
 <p class="admonition-title">Keys are sensitive, turn this back off</p>
 <p><code>debug_keys</code> writes real content keys into the log file in cleartext. Only enable it while you diagnose a content key problem. Never share a log written with it on, and set it back to <code>false</code> when you are done. Note that <code>debug_keys</code> only affects the <strong>JSON debug log file</strong>. It does not change what the console prints.</p>
 </div>
-<p>Fields that are <em>always</em> redacted regardless of <code>debug_keys</code> (anything whose name contains <code>password</code>, <code>token</code>, <code>secret</code>, <code>auth</code>, or <code>cookie</code>) stay masked, so credentials never leak even in a keys-on log.</p>
+<p>Fields that are <em>always</em> redacted regardless of <code>debug_keys</code> (anything whose name contains <code>password</code>, <code>token</code>, <code>secret</code>, <code>auth</code>, or <code>cookie</code>) stay masked, so credentials never leak even in a keys-on log. The <code>http_request</code> entries of <a href="#debug-requests"><code>debug_requests</code></a> are the exception.</p>
 <hr />
-<h2 id="debugging-http-traffic-with-debug_requests">Debugging HTTP traffic with <code>debug_requests</code><a class="headerlink" href="#debugging-http-traffic-with-debug_requests" title="Permanent link">&para;</a></h2>
+<h2 id="debug-requests">Debugging HTTP traffic with <code>debug_requests</code><a class="headerlink" href="#debug-requests" title="Permanent link">&para;</a></h2>
+<p><code>debug_requests</code> does two things: it keeps the HTTP library logs in the console, and it writes a record of each HTTP request to the JSON debug log.</p>
+<h3 id="http-library-logs-in-the-console">HTTP library logs in the console<a class="headerlink" href="#http-library-logs-in-the-console" title="Permanent link">&para;</a></h3>
 <p>When you pass <code>-d</code>, unshackle raises its own modules to <code>DEBUG</code> but deliberately <strong>silences</strong> the noisy low-level HTTP libraries (<code>urllib3</code>, <code>requests</code>, <code>rnet</code>, <code>httpx</code>, <code>httpcore</code>, <code>hpack</code>, <code>h2</code>) back down to <code>WARNING</code>. Without this, a single download would bury the useful output under thousands of connection-pool and HTTP/2 frame messages.</p>
 <p>Sometimes a request fails at the TLS or connection layer, and you need the underlying library's own logs. If you need that low-level traffic, enable <code>debug_requests</code>:</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="nt">debug_requests</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
@@ -2503,8 +2561,89 @@
 </span></code></pre></div>
 <p>With <code>debug_requests: true</code>, unshackle leaves those libraries at <code>DEBUG</code> level when you operate it with <code>-d</code>, so their request/response chatter appears in the console.</p>
 <div class="admonition note">
-<p class="admonition-title"><code>debug_requests</code> needs <code>-d</code> to have any effect</p>
-<p>The <code>debug_requests</code> toggle only decides whether unshackle silences the HTTP libraries when the <code>-d</code> flag is active. If you do not operate unshackle with <code>-d</code> (verbose console logging), it changes nothing. Combine them: <code>unshackle -d dl ...</code> with <code>debug_requests: true</code> in config.</p>
+<p class="admonition-title">The console logs need <code>-d</code></p>
+<p>Without <code>-d</code> (verbose console logging), unshackle shows no HTTP library logs. Combine them: <code>unshackle -d dl ...</code> with <code>debug_requests: true</code> in config.</p>
+</div>
+<h3 id="request-records-in-the-json-debug-log">Request records in the JSON debug log<a class="headerlink" href="#request-records-in-the-json-debug-log" title="Permanent link">&para;</a></h3>
+<p><code>debug_requests</code> is the one switch that writes request records to the <a href="#the-structured-json-debug-log">JSON debug log</a>. With <code>debug_requests: true</code> and the JSON debug log on (<code>-d</code> or <code>debug: true</code>), unshackle writes one <code>http_request</code> entry for each HTTP attempt. With <code>debug_requests: false</code>, the default, a <code>-d</code> run writes no <code>http_request</code> entry. A request that unshackle retries gives one entry for each attempt. A redirect gives one entry for each hop.</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Content</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>request.method</code></td>
+<td>The HTTP method.</td>
+</tr>
+<tr>
+<td><code>request.host</code></td>
+<td>The host name and port, with no scheme and no user name or password.</td>
+</tr>
+<tr>
+<td><code>request.path</code></td>
+<td>The URL path, as sent.</td>
+</tr>
+<tr>
+<td><code>request.query</code></td>
+<td>The query string, as sent.</td>
+</tr>
+<tr>
+<td><code>request.attempt</code></td>
+<td>The attempt number, from 1.</td>
+</tr>
+<tr>
+<td><code>request.body</code></td>
+<td>The body of a JSON, form, XML or <code>text/*</code> request, as sent. A JSON body is an object. A binary body is not recorded.</td>
+</tr>
+<tr>
+<td><code>response.status</code></td>
+<td>The HTTP status, or <code>null</code> when no response came back.</td>
+</tr>
+<tr>
+<td><code>response.size</code></td>
+<td>The <code>Content-Length</code> of the response. When the server sent none, the length of the recorded body, else <code>null</code>.</td>
+</tr>
+<tr>
+<td><code>response.body</code></td>
+<td>The text response body, as received. A JSON body is a JSON object, so <code>jq</code> can query it. Other text is a string.</td>
+</tr>
+<tr>
+<td><code>response.body_size</code></td>
+<td>The full size of the decoded body in bytes, when unshackle cut it to <code>debug_requests_body_limit</code>. <code>response.size</code> is the size on the wire, which can be compressed.</td>
+</tr>
+<tr>
+<td><code>response.body_error</code></td>
+<td>The failure, when unshackle could not read the body.</td>
+</tr>
+<tr>
+<td><code>response.body_cut</code></td>
+<td><code>true</code> when unshackle cut the body. A cut JSON body is a string.</td>
+</tr>
+<tr>
+<td><code>duration_ms</code></td>
+<td>The time from the start of the attempt to the response headers.</td>
+</tr>
+<tr>
+<td><code>failure</code></td>
+<td>The failure, without the URL, for an attempt that raised.</td>
+</tr>
+</tbody>
+</table>
+<p>unshackle records the body of a JSON, XML or <code>text/*</code> response. It records no body for a manifest (MPD, M3U8 or ISM, by its content type, or by the suffix of the request path when the response is not JSON), a binary content type, an event stream, a request sent with <code>stream=True</code>, or a server process. A request body is recorded by the same rule, by the request <code>Content-Type</code>; a form body counts as text. The entries contain no headers. Core writes no entry for the media requests that it makes. These are the segment and range-probe requests of a track download, and the init segment, index and probe reads before it. A range read that service code makes still writes an entry. Playlist and manifest fetches write an entry.</p>
+<div class="language-console highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="go">jq 'select(.operation == "http_request") | [.request.method, .request.host, .request.path, .response.status]' \</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="go">  unshackle_debug_EXAMPLE_20260703-142530.jsonl</span>
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="go">jq 'select(.operation == "http_request" and .request.path == "/v1/titles") | .response.body' \</span>
+</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="go">  unshackle_debug_EXAMPLE_20260703-142530.jsonl</span>
+</span></code></pre></div>
+<p>The record covers the HTTP sessions that unshackle builds: the session from the service's <code>get_session()</code>, the import and <code>--remote</code> sessions, and the sessions of core helpers. A separate <code>requests.Session</code> that service code makes itself writes no entry.</p>
+<p>On a <code>serve</code> server, the entries for the requests of a service stay on the server, with no body. A download job whose <code>dl</code> run has the JSON debug log on writes them to that log. A remote session writes none, because <code>serve</code> opens no JSON debug log for it. unshackle never sends them to a remote client: not in the remote session log, the remote session channel, an API reply or an error. A remote client with its own <code>debug_requests: true</code> records its own requests to the server, with the response bodies, in its own JSON debug log.</p>
+<p>On an HTTP session of the <code>requests</code> library, <code>urllib3</code> retries inside one send. The attempts before the last then have no <code>duration_ms</code> and no <code>response.size</code>. A request that fails after all its retries gives one entry for the last failure, with <code>request.attempt</code> set to <code>null</code>.</p>
+<div class="admonition danger">
+<p class="admonition-title">A request record holds secrets</p>
+<p>unshackle writes the <code>http_request</code> entries as received. It masks only the local folder prefixes (<code>redact_paths</code>). With <code>debug_requests</code> on, the JSONL file holds tokens, passwords, cookies, content keys and account data, in the path, the query and the body. <code>debug_keys</code> does not apply to these entries. Keep the file on your computer. Never attach it to a report.</p>
 </div>
 <hr />
 <h2 id="what-gets-redacted">What gets redacted<a class="headerlink" href="#what-gets-redacted" title="Permanent link">&para;</a></h2>
@@ -2514,16 +2653,17 @@
 <li><strong>URLs</strong>: unshackle collapses every <code>http(s)</code> URL to <code>redacted</code>. It keeps only the file extension, so a manifest still shows as <code>redacted.mpd</code> and a segment as <code>redacted.m4s</code>. This hides the CDN, manifest, segment, and licence-server locations, but keeps the <em>type</em> of resource.</li>
 <li><strong>Local paths</strong>: unshackle replaces install-root, virtualenv, and home-directory prefixes with tokens, so your username and machine layout do not appear in logs.</li>
 </ul>
+<p>The <a href="#debug-requests"><code>http_request</code> entries</a> of <code>debug_requests</code> get only the local path pass. Their secrets, URLs and bodies stay as received.</p>
 <p>The <code>redact_paths</code> config key controls path redaction, and it is <strong>on by default</strong>:</p>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="nt">redact_paths</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w">   </span><span class="c1"># default - mask local base directories in logged paths</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="nt">redact_paths</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w">   </span><span class="c1"># default - mask local base directories in logged paths</span>
 </span></code></pre></div>
-<p>Set <code>redact_paths: false</code> if you debug a path problem locally and want to see full, unmasked paths in the console and logs. unshackle always applies secret and URL redaction in the JSON debug log, and this toggle does not change that.</p>
+<p>Set <code>redact_paths: false</code> if you debug a path problem locally and want to see full, unmasked paths in the console and logs. unshackle always applies secret and URL redaction in the JSON debug log, except in the <code>http_request</code> entries, and this toggle does not change that.</p>
 <hr />
 <h2 id="checking-your-environment">Checking your environment<a class="headerlink" href="#checking-your-environment" title="Permanent link">&para;</a></h2>
 <p>Many "download failed" problems are really missing external tools or a config file that is not where you think it is. The <a href="../cli-reference/#env"><code>unshackle env</code></a> command group answers both questions before you dig into logs.</p>
 <h3 id="env-check"><code>env check</code><a class="headerlink" href="#env-check" title="Permanent link">&para;</a></h3>
 <p><code>unshackle env check</code> verifies every external binary unshackle can use and prints a table of what's installed:</p>
-<div class="language-console highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="go">unshackle env check</span>
+<div class="language-console highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="go">unshackle env check</span>
 </span></code></pre></div>
 <p>It reports each tool's status (<code>✓</code> installed / <code>✗</code> missing), whether it is <strong>required</strong> or optional, and what it is for. A summary line tells you the installed-vs-total count and, if anything mandatory is absent, exactly which required tools are missing.</p>
 <p>The required tools (unshackle will not get far without them) are:</p>
@@ -2564,7 +2704,7 @@
 </div>
 <h3 id="env-info"><code>env info</code><a class="headerlink" href="#env-info" title="Permanent link">&para;</a></h3>
 <p><code>unshackle env info</code> shows where unshackle reads configuration from and where every working directory lives:</p>
-<div class="language-console highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="go">unshackle env info</span>
+<div class="language-console highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="go">unshackle env info</span>
 </span></code></pre></div>
 <ul>
 <li>If unshackle found a config file, it prints the path it was <strong>loaded from</strong>. If it found none, it shows every location it <em>would</em> accept one (see <a href="#why-is-my-config-not-being-picked-up">Config file discovery</a> below). You can then make the file in the right place.</li>
@@ -2573,9 +2713,9 @@
 <p>This is the authoritative way to answer "where do my logs, downloads and cookies go?" The defaults are relative to the installed package. The table also shows any <code>directories:</code> overrides from your config.</p>
 <h3 id="env-clear"><code>env clear</code><a class="headerlink" href="#env-clear" title="Permanent link">&para;</a></h3>
 <p>Stale cache or leftover temp files can cause confusing behaviour (an old cached title list, a half-written temp file). <code>env clear</code> wipes those directories safely:</p>
-<div class="language-console highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="go">unshackle env clear cache            # clear the whole cache directory</span>
-</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="go">unshackle env clear cache EXAMPLE    # clear just one service's cache subdirectory</span>
-</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="go">unshackle env clear temp             # clear the temp working directory</span>
+<div class="language-console highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="go">unshackle env clear cache            # clear the whole cache directory</span>
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="go">unshackle env clear cache EXAMPLE    # clear just one service's cache subdirectory</span>
+</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="go">unshackle env clear temp             # clear the temp working directory</span>
 </span></code></pre></div>
 <p>Each command reports how many files it removed and how much space it freed, then recreates the empty directory.</p>
 <div class="admonition tip">
@@ -2602,7 +2742,7 @@
 <div class="admonition example">
 <p class="admonition-title">A network request fails at the connection or TLS layer</p>
 <p><strong>Symptom:</strong> timeouts, connection resets, or handshake errors, and unshackle's own logs do not give the full cause.</p>
-<p><strong>Inspect:</strong> set <code>debug_requests: true</code> and operate unshackle with <code>-d</code> to show the underlying <code>urllib3</code> / <code>rnet</code> / <code>httpx</code> logs. In the JSON debug log, filter for <code>service_call</code> operations to see which request failed. If you use a proxy, also read <a href="../proxies-and-vpn/">Proxies &amp; VPN</a>.</p>
+<p><strong>Inspect:</strong> set <code>debug_requests: true</code> and operate unshackle with <code>-d</code> to show the underlying <code>urllib3</code> / <code>rnet</code> / <code>httpx</code> logs. In the JSON debug log, filter for <code>http_request</code> operations to see which request failed, with its status, attempt number and failure. If you use a proxy, also read <a href="../proxies-and-vpn/">Proxies &amp; VPN</a>.</p>
 </div>
 <div class="admonition example">
 <p class="admonition-title">A segment download fails after every retry</p>
@@ -2638,13 +2778,13 @@
 <div class="admonition tip">
 <p class="admonition-title">Log levels are a flow skeleton, not just severity</p>
 <p>Treat <code>level</code> as structure, not decoration. Send exactly <strong>one <code>INFO</code> milestone per pipeline stage</strong> so that <code>jq 'select(.level=="INFO")'</code> reads back the whole end-to-end flow of a run. Everything internal goes to <code>DEBUG</code>. Failures go to <code>ERROR</code>. A sparse <code>INFO</code> is the whole point. It is the line a developer skims first to see where a run got to before it broke.</p>
-<div class="language-console highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="gp"># </span>Read<span class="w"> </span>the<span class="w"> </span>pipeline<span class="err">'</span>s<span class="w"> </span>high-level<span class="w"> </span>flow,<span class="w"> </span>one<span class="w"> </span>line<span class="w"> </span>per<span class="w"> </span>stage
-</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="go">jq 'select(.level == "INFO")' unshackle_debug_EXAMPLE_20260703-142530.jsonl</span>
+<div class="language-console highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="gp"># </span>Read<span class="w"> </span>the<span class="w"> </span>pipeline<span class="err">'</span>s<span class="w"> </span>high-level<span class="w"> </span>flow,<span class="w"> </span>one<span class="w"> </span>line<span class="w"> </span>per<span class="w"> </span>stage
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="go">jq 'select(.level == "INFO")' unshackle_debug_EXAMPLE_20260703-142530.jsonl</span>
 </span></code></pre></div>
 </div>
 <div class="admonition warning">
-<p class="admonition-title">No raw dumps</p>
-<p>Never log a full <code>Tracks</code> object, an MPD/manifest body, or a response payload. Log only <strong>counts, ids, sizes, and <code>safe_display_url(url)</code></strong>. This keeps the log low-noise and prevents leaking title or manifest data into the file <em>before</em> redaction even runs. Redaction is a backstop, not a licence to dump raw objects.</p>
+<p class="admonition-title">No request bodies and no raw dumps</p>
+<p>A <code>log_event</code> entry never holds a request body or a raw dump: no full <code>Tracks</code> object, no MPD/manifest body and no response payload. Only <code>debug_requests</code> records request and response bodies, in its <code>http_request</code> entries. Log only <strong>counts, ids, sizes, and <code>safe_display_url(url)</code></strong>. This keeps the log low-noise and prevents leaking title or manifest data into the file <em>before</em> redaction even runs. Redaction is a backstop, not a licence to dump raw objects.</p>
 </div>
 <div class="admonition note">
 <p class="admonition-title">Operation names: <code>&lt;area&gt;_&lt;event&gt;</code>, no registry</p>
